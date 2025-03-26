@@ -1,0 +1,21 @@
+info:
+  name: 'execution_agent'
+  description: 'Execution agent that carries out the final plan from the debate'
+profile:
+  prompt_version: execution_agent.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.2
+  expert_framework:
+    context:
+    selector:
+action:
+  tool:
+    - 'markdown_writer_tool'
+memory:
+  name: 'debate_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.enhanced_executing_agent_template'
+  class: 'EnhancedExecutingAgentTemplate'

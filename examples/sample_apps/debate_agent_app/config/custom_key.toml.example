@@ -1,0 +1,4 @@
+# Example file for using Qwen via DashScope API
+[KEY_LIST]
+# DashScope API key for Qwen models - 请替换为您的实际API密钥
+DASHSCOPE_API_KEY='DashScope API key'

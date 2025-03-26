@@ -1,0 +1,22 @@
+info:
+  name: 'debate_agent'
+  description: 'Debate agent that evaluates consensus between planning and critique agents'
+profile:
+  planning: 'planning_agent'
+  critique: 'critique_agent'
+  executing: 'execution_agent'
+  debate_rounds: 3
+  consensus_threshold: 0.7
+  execute_result: true
+  expert_framework:
+    context:
+      planning:
+      critique:
+      executing:
+    selector:
+memory:
+  name: 'debate_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.debate_agent_template'
+  class: 'DebateAgentTemplate'
