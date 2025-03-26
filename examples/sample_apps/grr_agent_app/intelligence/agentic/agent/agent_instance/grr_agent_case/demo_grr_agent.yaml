@@ -1,0 +1,13 @@
+info:
+  name: 'demo_grr_agent'
+  description: 'demo grr agent'
+profile:
+  rag: 'demo_rag_agent'
+  reviewing: 'demo_reviewing_agent'
+  rewriting: 'demo_rewriting_agent'
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.grr_agent_template'
+  class: 'GrrAgentTemplate'

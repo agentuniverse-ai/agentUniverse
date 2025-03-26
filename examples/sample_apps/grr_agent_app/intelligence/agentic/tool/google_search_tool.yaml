@@ -1,0 +1,12 @@
+name: 'google_search_tool'
+description: |
+  该工具可以用来进行谷歌搜索，工具的输入是你想搜索的内容。
+  工具输入示例：
+    示例1: 你想要搜索上海的天气时，工具的输入应该是：上海今天的天气
+    示例2: 你想要搜索日本的天气时，工具的输入应该是：日本的天气
+tool_type: 'api'
+input_keys: ['input']
+metadata:
+  type: 'TOOL'
+  module: 'grr_agent_app.intelligence.agentic.tool.google_search_tool'
+  class: 'GoogleSearchTool'
