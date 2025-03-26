@@ -13,8 +13,13 @@ We will detail the various components within the configuration.
 * `name`: The name of the LLM, the name of the LLM instance. You can set any name as per your preference.
 * `description`: Description of the LLM, fill in according to your actual needs.
 * `model_name`: The official name of the accessed LLM model, such as `gpt-4o`, `gpt-3.5-turbo` etc., from the OpenAI series.
-* `max_retries`: The maximum number of retries for accessing the LLM.
-* `max_tokens`: The maximum number of tokens that the LLM model instance supports. This attribute must be less than the maximum number of tokens that the official model_name can handle.
+* `streaming`: Whether the LLM is streaming (optional, default is False)  
+* `max_retries`: The maximum number of retries for LLM access (optional)  
+* `max_tokens`: The maximum number of tokens for the LLM model instance output (optional)  
+* `api_key`: The API key for the LLM model instance (optional)  
+* `api_base`: The endpoint for the LLM model instance request (optional)  
+* `organization`: The organization for the LLM model instance (optional)  
+* `proxy`: The proxy address for the LLM model instance request (optional)
 
 ### Setting LLM Component Metadata
 **`metadata` - metadata of component**
@@ -26,18 +31,53 @@ All the provided LLM components will include the corresponding `module` and `cla
 
 ### An actual example of an LLM configuration definition.
 ```yaml
-name: 'demo_llm'
-description: 'demo openai'
-model_name: 'gpt-3.5-turbo'
+name: 'demo_customized_llm'
+description: 'demo customized llm'
+model_name: 'gpt-4o'
 max_tokens: 1000
 max_retries: 2
+temperature: 0.5
+streaming: True
+api_key: '${OPENAI_API_KEY}'
+api_base: 'https://api.openai.com/v1'
+organization: '${OPENAI_ORGANIZATION}'
+proxy: '${OPENAI_PROXY}'
 metadata:
   type: 'LLM'
   module: 'agentuniverse.llm.default.default_openai_llm'
   class: 'DefaultOpenAILLM'
 ```
 
-The above is an actual example of an LLM configuration. In addition to the standard configuration items introduced above, you can find more examples of LLM configuration YAMLs in our sample project under the path `sample_standard_app.intelligence.agentic.llm`.
+The above is an actual example of an LLM configuration. 
+
+**Note:**
+
+The model parameters such as `api_key`, `api_base`, `organization`, and `proxy` can be configured in three ways:
+
+1. Direct String Value: Enter the API key string directly in the configuration file.
+
+    ```yaml
+    api_key: 'sk-xxx'
+    ```
+
+2. Environment Variable Placeholder: Use the `${VARIABLE_NAME}` syntax to load from environment variables. When `agentUniverse` is launched, it will automatically read the corresponding value from the environment variables.
+
+    ```yaml
+    api_key: '${OPENAI_API_KEY}'
+    ```
+
+3. Custom Function Loading: Use the `@FUNC` annotation to dynamically load the API key via a custom function at runtime.
+
+    ```yaml
+    api_key: '@FUNC(load_api_key(model_name="openai"))'
+    ```
+
+    The function needs to be defined in the `YamlFuncExtension` class within the `yaml_func_extension.py` file. You can refer to the example in the sample project's [YamlFuncExtension](../../../../../../examples/sample_standard_app/config/yaml_func_extension.py). When `agentUniverse` loads this configuration:
+   - It parses the `@FUNC` annotation.
+   - Executes the `load_api_key` function with the corresponding parameters.
+   - Replaces the annotation content with the function's return value.
+
+In addition to the standard configuration items introduced above, you can find more examples of LLM configuration YAMLs in our sample project under the path `sample_standard_app.intelligence.agentic.llm`.
 
 Furthermore, agentuniverse does not restrict users from extending the LLM YAML configuration content. You can create any custom configuration keys according to your requirements, but please be careful not to duplicate the default configuration keywords mentioned above.
 
@@ -450,6 +490,9 @@ Below is an actual configuration of `custom_key.toml`:
 # Perform a full component scan and registration for all the paths under this list.
 SERPER_API_KEY='xxx'
 OPENAI_API_KEY='xxx'
+OPENAI_API_BASE ='xxx'
+OPENAI_ORGANIZATION = 'xxx'
+OPENAI_PROXY = 'xxx'
 ```
 
 ## Other Tips for Creating LLM Model Components
@@ -467,13 +510,18 @@ module: 'agentuniverse.llm.default.default_openai_llm'
 class: 'DefaultOpenAILLM'
 ```
 
-If we need to configure and define an LLM instance based on the `gpt-3.5-turbo model`, with a maximum token limit of 1000 and a retry count is 2, the configuration would be as follows:
+If we need to configure and define an LLM instance based on the `gpt-4o`, with a maximum token limit of 1000 and a retry count is 2, the configuration would be as follows:
 ```yaml
 name: 'demo_llm'
 description: 'demo openai'
-model_name: 'gpt-3.5-turbo'
+model_name: 'gpt-4o'
 max_tokens: 1000
 max_retries: 2
+streaming: True
+api_key: '${OPENAI_API_KEY}'
+api_base: 'https://api.openai.com/v1'
+organization: '${OPENAI_ORGANIZATION}'
+proxy: '${OPENAI_PROXY}'
 metadata:
   type: 'LLM'
   module: 'agentuniverse.llm.default.default_openai_llm'
@@ -486,7 +534,7 @@ You can find more LLM metadata in the [Understanding More Existing LLM Component
 ## Configure for use in an Agent
 You can set up any LLM you have created in the llm_model of your agent according to the contents of [Agent Creation and Usage section](../Agent/Agent_Create_And_Use.md).
 
-Refer to the example: `demo_multillm_agent`, with the specific file path being `sample_standard_app/intelligence/agentic/agent/agent_instance/rag_agent_case/demo_multillm_agent.yaml`.
+Refer to the example: `demo_agent`, with the specific file path being `agentUniverse/examples/sample_standard_app/intelligence/agentic/agent/agent_instance/demo_agent.yaml`.
 
 ## Using the LLM Manager
 You can obtain an LLM instance with the specified name through the `.get_instance_obj(xx_llm_name)` method in the LLM Manager.
