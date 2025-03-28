@@ -1,0 +1,8 @@
+name: tavily_tool
+description: tavily search and extract information from website.
+tool_type: api
+input_keys: [input, mode, api_key]
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.tavily_tool
+  class: TavilyTool
