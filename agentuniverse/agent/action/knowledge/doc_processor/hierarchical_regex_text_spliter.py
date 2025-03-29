@@ -19,6 +19,7 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 
 class HierarchicalRegexTextSplitter(DocProcessor):
+    """Splits text into hierarchical structure based on regex patterns."""
     merge_first: bool = False
     hierarchical_index: List[dict] = [
         {
@@ -34,6 +35,14 @@ class HierarchicalRegexTextSplitter(DocProcessor):
     llm: Optional[dict] = None
 
     def _hierarchical_split_single_doc(self, doc: Document) -> List[Document]:
+        """Splits a single document into hierarchical structure using regex patterns.
+        
+        Args:
+            doc: Document to be split hierarchically.
+            
+        Returns:
+            List of hierarchically structured documents.
+        """
         hierarchy = {}
         levels = [(f"item_{i}", re.compile(index['reg_exp'])) for i, index in enumerate(self.hierarchical_index)]
         current_level = {level[0]: None for level in levels}
@@ -103,6 +112,15 @@ class HierarchicalRegexTextSplitter(DocProcessor):
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> \
             List[Document]:
+        """Processes documents by splitting them into hierarchical structure.
+        
+        Args:
+            origin_docs: List of documents to be processed.
+            query: Optional query object (not used in this processor).
+            
+        Returns:
+            List of hierarchically structured documents.
+        """
         # merge all documents first
         merged_docs = origin_docs
         if self.merge_first and len(origin_docs) > 0:
@@ -116,6 +134,14 @@ class HierarchicalRegexTextSplitter(DocProcessor):
 
     def _initialize_by_component_configer(self,
                                          doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
+        """Initializes the splitter with configuration parameters.
+        
+        Args:
+            doc_processor_configer: Configuration object containing splitter parameters.
+            
+        Returns:
+            Initialized document processor instance.
+        """
         super()._initialize_by_component_configer(doc_processor_configer)
         if hasattr(doc_processor_configer, "hierarchical_index"):
             self.hierarchical_index = doc_processor_configer.hierarchical_index

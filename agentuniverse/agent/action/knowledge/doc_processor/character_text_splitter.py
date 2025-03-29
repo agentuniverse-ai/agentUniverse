@@ -17,6 +17,17 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 
 class CharacterTextSplitter(DocProcessor):
+    """Character-based text splitter for document processing.
+    
+    This class splits documents into smaller chunks based on character separators,
+    with configurable chunk size and overlap parameters.
+    
+    Attributes:
+        chunk_size: The size of each text chunk.
+        chunk_overlap: The number of characters to overlap between chunks.
+        separator: The character sequence used to split text.
+        splitter: The underlying LangChain text splitter instance.
+    """
     chunk_size: int = 200
     chunk_overlap: int = 20
     separator: str = "/n/n"
@@ -30,6 +41,15 @@ class CharacterTextSplitter(DocProcessor):
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> \
             List[Document]:
+        """Process documents by splitting them into smaller chunks.
+        
+        Args:
+            origin_docs: List of original documents to be processed.
+            query: Optional query object that may influence the processing.
+            
+        Returns:
+            List[Document]: List of processed document chunks.
+        """
         lc_doc_list = self.splitter.split_documents(Document.as_langchain_list(
             origin_docs
         ))
@@ -37,6 +57,14 @@ class CharacterTextSplitter(DocProcessor):
 
     def _initialize_by_component_configer(self,
                                          doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
+        """Initialize the splitter using configuration from a ComponentConfiger.
+        
+        Args:
+            doc_processor_configer: Configuration object containing splitter parameters.
+            
+        Returns:
+            DocProcessor: The initialized document processor instance.
+        """
         super()._initialize_by_component_configer(doc_processor_configer)
         if hasattr(doc_processor_configer, "chunk_size"):
             self.chunk_size = doc_processor_configer.chunk_size

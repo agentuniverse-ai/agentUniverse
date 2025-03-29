@@ -52,10 +52,20 @@ chinese_stopwords = {'的', '了', '在', '是', '我', '有', '和', '就', '�
 
 
 class JiebaKeywordExtractor(DocProcessor):
+    """Extracts keywords from documents using Jieba Chinese text segmentation."""
     top_k: int = 3
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) \
             -> List[Document]:
+        """Extracts top keywords from documents after filtering stopwords.
+        
+        Args:
+            origin_docs: List of documents to extract keywords from.
+            query: Optional query object (not used in this processor).
+            
+        Returns:
+            The original documents with keywords added to their metadata.
+        """
         for _doc in origin_docs:
             words = jieba.lcut(_doc.text)
             filtered_words = [word for word in words if word not in
@@ -68,6 +78,14 @@ class JiebaKeywordExtractor(DocProcessor):
 
     def _initialize_by_component_configer(self,
                                          doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
+        """Initializes the extractor with configuration parameters.
+        
+        Args:
+            doc_processor_configer: Configuration object containing extractor parameters.
+            
+        Returns:
+            Initialized document processor instance.
+        """
         super()._initialize_by_component_configer(doc_processor_configer)
         if hasattr(doc_processor_configer, "top_k"):
             self.top_k = doc_processor_configer.top_k
