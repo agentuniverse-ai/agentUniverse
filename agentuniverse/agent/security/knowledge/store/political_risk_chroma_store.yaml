@@ -1,0 +1,8 @@
+name: 'political_risk_chroma_store'
+description: '政治风险关键词向量库'
+embedding_model: 'dashscope_embedding'
+similarity_top_k: 100
+metadata_filters:
+  - key: "risk_level"
+    values: ["高危"]
+persist_path: '../../intelligence/db/political_risk_chroma_store.db'
