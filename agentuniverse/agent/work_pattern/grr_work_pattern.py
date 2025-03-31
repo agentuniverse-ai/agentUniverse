@@ -1,12 +1,14 @@
 from agentuniverse.agent.input_object import InputObject
-from agentuniverse.agent.template import generate_agent_template, critique_agent_template, rewrite_agent_template
+from agentuniverse.agent.template.critique_agent_template import CritiqueAgentTemplate
+from agentuniverse.agent.template.generate_agent_template import GenerateAgentTemplate
+from agentuniverse.agent.template.rewrite_agent_template import RewriteAgentTemplate
 from agentuniverse.agent.work_pattern.work_pattern import WorkPattern
 
 
 class GrrWorkPattern(WorkPattern):
-    generate: generate_agent_template = None
-    critique: critique_agent_template = None
-    rewrite: rewrite_agent_template = None
+    generate: GenerateAgentTemplate = None
+    critique: CritiqueAgentTemplate = None
+    rewrite: RewriteAgentTemplate = None
 
     def invoke(self, input_object: InputObject, work_pattern_input: dict, **kwargs) -> dict:
         print("test grr work flow")

@@ -1,0 +1,6 @@
+name: 'grr_work_pattern'
+description: 'grr work pattern'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.grr_work_pattern'
+  class: 'GrrWorkPattern'
