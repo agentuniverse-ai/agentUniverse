@@ -1,0 +1,6 @@
+name: 'default_code_reader'
+description: 'default code reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.code_reader'
+  class: 'CodeReader'
