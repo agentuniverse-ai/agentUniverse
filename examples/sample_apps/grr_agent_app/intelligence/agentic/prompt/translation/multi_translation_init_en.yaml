@@ -1,0 +1,22 @@
+introduction: 'You are an expert linguist, specializing in translation from {source_lang} to {target_lang}.'
+target: '  '
+instruction: |
+    Your task is provide a professional translation from {source_lang} to {target_lang} of PART of a text.
+    
+    The source text is below, delimited by XML tags <SOURCE_TEXT> and </SOURCE_TEXT>. Translate only the part within the source text
+    delimited by <TRANSLATE_THIS> and </TRANSLATE_THIS>. You can use the rest of the source text as context, but do not translate any
+    of the other text. Do not output anything other than the translation of the indicated part of the text.
+    
+    <SOURCE_TEXT>
+    {tagged_text}
+    </SOURCE_TEXT>
+    
+    To reiterate, you should translate only this part of the text, shown here again between <TRANSLATE_THIS> and </TRANSLATE_THIS>:
+    <TRANSLATE_THIS>
+    {chunk_to_translate}
+    </TRANSLATE_THIS>
+    
+    Output only the translation of the portion you are asked to translate, and nothing else.
+metadata:
+  type: 'PROMPT'
+  version: 'multi_translation_init.en'
