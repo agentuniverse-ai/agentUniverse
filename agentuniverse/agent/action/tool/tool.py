@@ -63,6 +63,13 @@ class Tool(ComponentBase):
     def __init__(self, **kwargs):
         super().__init__(component_type=ComponentEnum.TOOL, **kwargs)
 
+    @property
+    def prompt(self) -> str:
+        return f"""- tool name: {self.name}
+- description: {self.description}
+- input_keys: {','.join(self.input_keys)}
+"""
+
     @trace_tool
     def run(self, **kwargs):
         """The callable method that runs the tool."""
@@ -75,7 +82,9 @@ class Tool(ComponentBase):
         if self.input_keys:
             for key in self.input_keys:
                 if key not in kwargs.keys():
-                    raise Exception(f'{self.get_instance_code()} - The input must include key: {key}.')
+                    raise Exception(
+                        f'{self.get_instance_code()} - The input must include key: {key}.'
+                    )
 
     @trace_tool
     def langchain_run(self, *args, callbacks=None, **kwargs):
@@ -92,9 +101,7 @@ class Tool(ComponentBase):
             parse react string to you input
             you can define your own logic here by override this function
         """
-        return {
-            self.input_keys[0]: input_str
-        }
+        return {self.input_keys[0]: input_str}
 
     @abstractmethod
     def execute(self, tool_input: ToolInput):
@@ -111,7 +118,8 @@ class Tool(ComponentBase):
         appname = ApplicationConfigManager().app_configer.base_info_appname
         return f'{appname}.{self.component_type.value.lower()}.{self.name}'
 
-    def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'Tool':
+    def initialize_by_component_configer(
+            self, component_configer: ToolConfiger) -> 'Tool':
         """Initialize the LLM by the ComponentConfiger object.
         Args:
             component_configer(LLMConfiger): the ComponentConfiger object
@@ -130,7 +138,9 @@ class Tool(ComponentBase):
         if component_configer.description:
             self.description = component_configer.description
         if component_configer.tool_type:
-            self.tool_type = next((member for member in ToolTypeEnum if member.value == component_configer.tool_type))
+            self.tool_type = next(
+                (member for member in ToolTypeEnum
+                 if member.value == component_configer.tool_type))
         if component_configer.input_keys:
             self.input_keys = component_configer.input_keys
         if hasattr(component_configer, "tracing"):

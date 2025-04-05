@@ -1,0 +1,27 @@
+name: 'markdown_writer_tool'
+description: |
+  该工具可以用来将格式化的markdown内容写入文件。
+  工具输入需要包含以下两个字段:
+    - title: str 文档标题（将用于生成文件名）
+    - content: str 要写入的markdown格式内容
+  
+  使用示例:
+    title: "最终执行方案"
+    content: "|
+      # 执行方案: 解决问题XYZ
+      
+      ## 背景
+      问题XYZ涉及...
+      
+      ## 执行步骤
+      1. 首先...
+      2. 其次...
+      
+      ## 预期结果
+      完成后，我们预计..."
+tool_type: 'func'
+input_keys: ['title', 'content']
+metadata:
+  type: 'TOOL'
+  module: 'debate_agent_app.intelligence.agentic.tool.markdown_writer_tool'
+  class: 'MarkdownWriterTool'

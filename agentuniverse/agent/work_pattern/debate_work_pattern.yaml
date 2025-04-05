@@ -1,0 +1,6 @@
+name: 'debate_work_pattern'
+description: 'debate work pattern'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.debate_work_pattern'
+  class: 'DebateWorkPattern'
