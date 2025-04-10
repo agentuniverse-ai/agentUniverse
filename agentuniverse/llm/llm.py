@@ -98,6 +98,7 @@ class LLM(ComponentBase):
 
     def as_langchain(self) -> BaseLanguageModel:
         """Convert to the langchain llm class."""
+        self.init_channel()
         if self._channel_instance:
             return self._channel_instance.as_langchain()
         pass
@@ -139,7 +140,6 @@ class LLM(ComponentBase):
             self._max_context_length = component_configer.configer.value['max_context_length']
         if 'channel' in component_configer.configer.value:
             self.channel = component_configer.configer.value.get('channel')
-        self.init_channel()
         return self
 
     def set_by_agent_model(self, **kwargs):
