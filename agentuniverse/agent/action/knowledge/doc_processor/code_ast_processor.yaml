@@ -1,0 +1,13 @@
+name: 'code_ast_processor'
+description: 'Tree-sitter based code AST processor for code retrieval and analysis'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.code_ast_processor'
+  class: 'CodeAstProcessor'
+config:
+  language_dir: '/path/to/tree-sitter/libraries'  
+  max_depth: 8   
+  max_node_len: 100  
+
+  chunk_size: 1000   
+  chunk_overlap: 200  
