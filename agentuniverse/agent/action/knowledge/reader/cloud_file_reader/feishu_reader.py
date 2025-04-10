@@ -1,9 +1,17 @@
+#!/usr/bin/env python3
+# -*- coding:utf-8 -*-
+
+# @Time    : 2025/4/10 17:40
+# @Author  : zhaoyifei
+# @Email   : 2179709293@qq.com
+# @FileName: feishu_reader.py
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import time
-from typing import Dict
-
+from typing import Dict,List
+from agentuniverse.agent.action.knowledge.store.document import Document
 
 class PublicFeishuReader:
     """Feishu public document reader using Selenium
@@ -102,18 +110,25 @@ class PublicFeishuReader:
         unique_content = list(dict.fromkeys(content))
         return "\n".join(unique_content) if unique_content else "No meaningful content found"
 
-    def load_data(self, url: str) -> Dict:
+    def load_data(self, url: str) -> List[Document]:
         """Load and process Feishu document data
 
         Args:
             url (str): URL of the target document
 
         Returns:
-            dict: Dictionary containing 'content' and 'summary' keys
+            List[Document]: List of documents containing feishu online file content
         """
         content = self._fetch_document_content(url)
-        summary = content[:300] + "..." if content else "Empty summary"
-        return {"content": content, "summary": summary}
+        # If the content is empty, return an empty list
+        if not content:
+            return []
+        # Construct metadata
+        metadata = {"source": url}
+        # Create a Document object
+        document = Document(text=content, metadata=metadata)
+        # Return a list containing a single Document
+        return [document]
 
     def __del__(self):
         """Cleanup resources by closing browser instance"""
@@ -126,6 +141,6 @@ if __name__ == "__main__":
     test_url = "https://www.feishu.cn/docx/SV2JdR5P4odO8AxIhpBcVo1Xncg"
     reader = PublicFeishuReader()
     data = reader.load_data(test_url)
-    print("Document Summary:", data["summary"])
-    print("\nFull Content:\n", data["content"])
+    print(data)
+    print("Document Summary:", data[0].text)
 """
