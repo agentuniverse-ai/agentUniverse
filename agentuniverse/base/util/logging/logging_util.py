@@ -110,9 +110,13 @@ def _add_sls_log_handler():
                            LoggingConfig.sls_log_queue_max_size,
                            LoggingConfig.sls_log_send_interval)
     sls_sender.start_batch_send_thread()
+
+    def _sls_filter(record):
+        return record["extra"].get('log_type') == LogTypeEnum.default or record["extra"].get('log_type') == LogTypeEnum.sls
     loguru.logger.add(
         sink=SlsSink(sls_sender),
         format=LoggingConfig.log_format,
+        filter=_sls_filter,
         level=LoggingConfig.log_level,
         enqueue=True
     )

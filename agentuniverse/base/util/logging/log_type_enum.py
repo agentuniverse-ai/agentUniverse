@@ -10,6 +10,7 @@ from enum import Enum
 
 class LogTypeEnum(str, Enum):
     default = 'default'
+    sls = 'sls'
     flask_request = 'flask_request'
     flask_response = 'flask_response'
     agent_input = 'agent_input'
