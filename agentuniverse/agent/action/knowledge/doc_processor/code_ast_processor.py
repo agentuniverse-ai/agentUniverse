@@ -8,6 +8,8 @@
 import json
 from typing import List, Dict, Any, Optional, cast
 
+from sqlalchemy import false
+
 from agentuniverse.agent.action.knowledge.doc_processor.types.ast_types import AstNode, AstNodePoint, CodeBoundary
 from agentuniverse.agent.action.knowledge.doc_processor.types.code_types import CodeFeatures, CodeRepresentation, ChunkRepresentation
 from agentuniverse.agent.action.knowledge.doc_processor.types.metrics_types import CodeMetrics
@@ -283,6 +285,10 @@ class CodeAstProcessor(DocProcessor):
 
     def _initialize_by_component_configer(
             self, doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
+        # enable code ast processor
+        if hasattr(doc_processor_configer, "enable") and not doc_processor_configer.enable:
+            return self
+
         super()._initialize_by_component_configer(doc_processor_configer)
         try:
             from tree_sitter import Parser

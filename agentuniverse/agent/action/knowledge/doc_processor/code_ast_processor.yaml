@@ -4,10 +4,12 @@ metadata:
   type: 'DOC_PROCESSOR'
   module: 'agentuniverse.agent.action.knowledge.doc_processor.code_ast_processor'
   class: 'CodeAstProcessor'
-config:
-  language_dir: '/path/to/tree-sitter/libraries'  
-  max_depth: 8   
-  max_node_len: 100  
 
-  chunk_size: 1000   
-  chunk_overlap: 200  
+enable: false
+
+language_dir: '/path/to/tree-sitter/libraries'
+max_depth: 8
+max_node_len: 100
+
+chunk_size: 1000
+chunk_overlap: 200
