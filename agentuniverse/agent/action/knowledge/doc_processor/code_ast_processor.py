@@ -8,8 +8,6 @@
 import json
 from typing import List, Dict, Any, Optional, cast
 
-from sqlalchemy import false
-
 from agentuniverse.agent.action.knowledge.doc_processor.types.ast_types import AstNode, AstNodePoint, CodeBoundary
 from agentuniverse.agent.action.knowledge.doc_processor.types.code_types import CodeFeatures, CodeRepresentation, ChunkRepresentation
 from agentuniverse.agent.action.knowledge.doc_processor.types.metrics_types import CodeMetrics
