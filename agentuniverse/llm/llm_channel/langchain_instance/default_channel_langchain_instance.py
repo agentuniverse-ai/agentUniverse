@@ -147,7 +147,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
     ) -> Any:
         """Use tenacity to retry the async completion call."""
         if is_openai_v1():
-            return await llm.llm.acall(**kwargs)
+            return await llm.llm_channel.acall(**kwargs)
 
         retry_decorator = _create_retry_decorator(llm, run_manager=run_manager)
 

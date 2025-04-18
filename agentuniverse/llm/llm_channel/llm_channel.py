@@ -105,7 +105,7 @@ class LLMChannel(ComponentBase):
     @trace_llm
     async def acall(self, *args: Any, **kwargs: Any):
         """Asynchronously run the LLM."""
-        return self._acall(*args, **kwargs)
+        return await self._acall(*args, **kwargs)
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.channel_model_config.get('streaming')
