@@ -1,0 +1,13 @@
+info:
+  name: 'GrrAgent'
+  description: 'grr agent'
+profile:
+  generate: 'GenerateAgent'
+  critique: 'CritiqueAgent'
+  rewrite: 'RewriteAgent'
+memory:
+  name: ''
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.grr_agent_template'
+  class: 'GrrAgentTemplate'
