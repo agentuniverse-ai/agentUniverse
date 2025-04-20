@@ -1,3 +1,4 @@
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
