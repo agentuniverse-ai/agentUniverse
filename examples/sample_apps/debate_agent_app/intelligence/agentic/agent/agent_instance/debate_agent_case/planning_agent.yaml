@@ -1,0 +1,18 @@
+info:
+  name: 'planning_agent'
+  description: 'Planning agent for debate scenario that proposes solutions'
+profile:
+  prompt_version: planning_agent.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.3
+action:
+  tool:
+    - 'google_search_tool'
+memory:
+  name: 'debate_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.planning_agent_template'
+  class: 'PlanningAgentTemplate'

@@ -26,6 +26,7 @@ class PlanningAgentTemplate(AgentTemplate):
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         agent_input['input'] = input_object.get_data('input')
+        agent_input['debate_history'] = input_object.get_data('debate_history', [])
         agent_input['expert_framework'] = input_object.get_data('expert_framework', {}).get('planning')
         return agent_input
 
@@ -34,7 +35,7 @@ class PlanningAgentTemplate(AgentTemplate):
 
         output = agent_result.get('output')
         output = parse_json_markdown(output)
-        final_result['framework'] = output.get('framework')
+        final_result['framework'] = output.get('framework',[])
         final_result['thought'] = output.get('thought', '')
 
         # add planning agent log info.

@@ -1,0 +1,40 @@
+[BASE_INFO]
+appname = 'debate_agent_app'
+
+[CORE_PACKAGE]
+default = ['examples.sample_apps.debate_agent_app.intelligence.agentic']
+agent = ['examples.sample_apps.debate_agent_app.intelligence.agentic.agent']
+knowledge = []
+llm = ['examples.sample_apps.debate_agent_app.intelligence.agentic.llm']
+tool = ['examples.sample_apps.debate_agent_app.intelligence.agentic.tool']
+memory = ['examples.sample_apps.debate_agent_app.intelligence.agentic.memory']
+service = []
+prompt = ['examples.sample_apps.debate_agent_app.intelligence.agentic.prompt']
+product = []
+workflow = []
+store = []
+rag_router = []
+doc_processor = []
+query_paraphraser = []
+memory_compressor = ['examples.sample_apps.debate_agent_app.intelligence.agentic.memory.memory_compressor']
+memory_storage = ['examples.sample_apps.debate_agent_app.intelligence.agentic.memory.memory_storage']
+
+[SUB_CONFIG_PATH]
+log_config_path = './log_config.toml'
+custom_key_path = './custom_key.toml'
+
+[DB]
+system_db_uri = 'sqlite:///./debate_agent_db.sqlite'
+
+[GUNICORN]
+activate = 'false'
+gunicorn_config_path = './gunicorn_config.toml'
+
+[GRPC]
+activate = 'false'
+max_workers = 10
+server_port = 50051
+
+[MONITOR]
+activate = false
+dir = './monitor'

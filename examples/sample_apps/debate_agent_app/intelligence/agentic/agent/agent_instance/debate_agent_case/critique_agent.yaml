@@ -1,0 +1,18 @@
+info:
+  name: 'critique_agent'
+  description: 'Critique agent for debate scenario that evaluates proposed solutions'
+profile:
+  prompt_version: critique_agent.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.2
+action:
+  tool:
+    - 'google_search_tool'
+memory:
+  name: 'debate_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.critique_agent_template'
+  class: 'CritiqueAgentTemplate'
