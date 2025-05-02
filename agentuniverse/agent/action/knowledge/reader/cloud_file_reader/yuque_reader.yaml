@@ -1,0 +1,6 @@
+name: 'default_yuque_reader'
+description: 'default yuque document reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.cloud_document.yuque_reader'
+  class: 'YuqueReader'
