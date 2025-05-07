@@ -1,0 +1,204 @@
+id: demo_workflow
+name: workflow示例
+description:
+graph:
+  nodes:
+  - id: '1'
+    name: 开始节点
+    description:
+    type: start
+    position:
+      x: -1330.905282101635
+      y: 152.28549219848512
+    data:
+      outputs:
+      - name: input
+        type: string
+  - id: '2'
+    name: 条件判断
+    description:
+    type: ifelse
+    position:
+      x: -652.7418910634103
+      y: 97.80700127653421
+    data:
+      inputs:
+        branches:
+        - name: branch-1
+          conditions:
+          - left:
+              value:
+                type: reference
+                content:
+                - '1'
+                - input
+            compare: equal
+            right:
+              value:
+                type: reference
+                content:
+                - '1'
+                - input
+  - id: '3'
+    name: 谷歌搜索工具
+    description:
+    type: tool
+    position:
+      x: 231.19094445748067
+      y: -602.2866867947636
+    data:
+      inputs:
+        tool_param:
+        - type: string
+          name: id
+          value: google_search_tool
+        input_param:
+        - type: string
+          name: input
+          value:
+            type: reference
+            content:
+            - '1'
+            - input
+      outputs:
+      - name: output
+        type: string
+  - id: '4'
+    name: 千问模型
+    description:
+    type: llm
+    position:
+      x: 1100.9613728387906
+      y: -754.2884138553064
+    data:
+      inputs:
+        llm_param:
+        - name: prompt
+          type: string
+          value:
+            type: value
+            content: "你是一位精通信息分析的ai助手。你的目标是使用中文结合查询的背景信息及你所拥有的知识回答用户提出的问题。\n你需要遵守的规则是:\n
+              1. 必须使用中文结合查询的背景信息结合你所拥有的知识回答用户提出的问题。\n2. 结构化答案生成，必要时通过空行提升阅读体验。\n3.
+              不采用背景信息中的错误信息。\n4. 要考虑答案和问题的相关性，不做对问题没有帮助的回答。\n5. 详尽回答问题，重点突出，不过多花哨词藻。\n
+              6. 不说模糊的推测。\n7. 尽量多的使用数值类信息。\n\n背景信息是:\n{{background}}\n\n开始!\n需要回答的问题是:
+              {{input}}\n"
+        - name: id
+          type: string
+          value:
+            type: value
+            content: qwen_llm
+        - name: temperature
+          type: string
+          value:
+            type: value
+            content: 0.5
+        - name: model_name
+          type: string
+          value:
+            type: value
+            content: qwen-max
+        input_param:
+        - type: string
+          name: input
+          value:
+            type: reference
+            content:
+            - '1'
+            - input
+        - type: string
+          name: background
+          value:
+            type: reference
+            content:
+            - '3'
+            - output
+      outputs:
+      - type: string
+        name: output
+  - id: '6'
+    name: rag智能体
+    description:
+    type: agent
+    position:
+      x: 561.6832958205491
+      y: 336.28244369703157
+    data:
+      inputs:
+        agent_param:
+        - type: string
+          name: id
+          value: demo_rag_agent
+        - type: string
+          name: prompt
+          value:
+            type: value
+            content: '{{input}}'
+        input_param:
+        - type: string
+          name: input
+          value:
+            type: reference
+            content:
+            - '1'
+            - input
+      outputs:
+      - name: output
+        type: string
+  - id: '7'
+    name: 结束节点
+    description:
+    type: end
+    position:
+      x: 2338.342324226776
+      y: 22.21126722945681
+    data:
+      inputs:
+        input_param:
+        - type: string
+          name: input1
+          value:
+            type: reference
+            content:
+            - '4'
+            - output
+        - type: string
+          name: input2
+          value:
+            type: reference
+            content:
+            - '6'
+            - output
+        prompt:
+          type: string
+          name: input
+          value:
+            type: value
+            content: 答案是 {{input1}} 或者 {{input2}}
+      outputs:
+      - name: output
+        type: string
+  edges:
+  - id: 1-2
+    source_node_id: '1'
+    target_node_id: '2'
+  - id: 2-3
+    source_handler: branch-1
+    source_node_id: '2'
+    target_node_id: '3'
+  - id: 3-4
+    source_node_id: '3'
+    target_node_id: '4'
+  - id: 4-7
+    source_node_id: '4'
+    target_node_id: '7'
+  - id: 6-7
+    source_node_id: '6'
+    target_node_id: '7'
+  - id: 2-6
+    source_handler: branch-default
+    source_node_id: '2'
+    target_node_id: '6'
+metadata:
+  class: Workflow
+  module: agentuniverse.workflow.workflow
+  type: WORKFLOW

@@ -1,0 +1,7 @@
+id: law_knowledge
+nickname: 民法/刑法知识库，可以查询民法典/刑法典法律相关内容
+type: KNOWLEDGE
+metadata:
+  type: 'PRODUCT'
+  module: 'agentuniverse_product.base.product'
+  class: 'Product'

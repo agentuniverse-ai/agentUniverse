@@ -24,8 +24,7 @@ class PythonREPLTool(Tool):
     """
     client: PythonREPL = Field(default_factory=lambda: PythonREPL())
 
-    def execute(self, tool_input: ToolInput):
-        input = tool_input.get_data("input")
+    def execute(self, input: str):
         """Demonstrates the execute method of the Tool class."""
         pattern = re.compile(r"```python(.*?)``", re.DOTALL)
         matches = pattern.findall(input)

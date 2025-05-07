@@ -67,7 +67,7 @@ GOOGLE_PROXY=''
 #Google search
 SERPER_API_KEY=''
 
-#bing seacrh
+#bing search
 BING_SUBSCRIPTION_KEY=''
 
 #search.io api

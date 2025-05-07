@@ -64,6 +64,8 @@ jieba = "^0.42.1"
 networkx = "^3.3"
 httpx = "0.27.2"
 tomli = "^2.2"
+mcp = "^1.6.0"
+opentracing = ">=2.4.0,<3.0.0"
 
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]

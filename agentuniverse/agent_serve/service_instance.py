@@ -15,7 +15,7 @@ class ServiceInstance(object):
 
     def __init__(self, service_code: str):
         """Initialize a service instance. Raise an ServiceNotFoundError when
-        service code can't be found by servie manager.
+        service code can't be found by service manager.
 
         Args:
             service_code (`str`):

@@ -15,6 +15,7 @@ class ComponentEnum(Enum):
     LLM = "LLM"
     PLANNER = "PLANNER"
     TOOL = "TOOL"
+    TOOLKIT = "TOOLKIT"
     DEFAULT = "DEFAULT"
     SERVICE = "SERVICE"
     MEMORY = "MEMORY"

@@ -54,7 +54,7 @@ class Store(ComponentBase):
 ```
 - `_new_client`和`_new_async_client`用于创建数据库链接，在组件注册阶段会被添加到[post_fork](../../技术组件/服务化/Web_Server.md)执行列表中，保证创建的数据库连接在Gunicorn模式下的子进程中是独立的。
 - `query`函数是知识组件在查询时调用的函数，负责根据传入的Query实例在store中查找相关的内容并以document的形式返回
-- `Store`的还包括对`Docuemnt`类型数据的增删改查，作为知识存储的管理接口。
+- `Store`的还包括对`Document`类型数据的增删改查，作为知识存储的管理接口。
 
 在编写完对应代码后，可以参考下面的yaml将你的Store注册为aU组件：
 ```yaml

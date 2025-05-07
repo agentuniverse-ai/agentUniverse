@@ -35,24 +35,31 @@ class JinaAITool(Tool):
     max_read_content_length: int = Field(10000, description="Maximum content length in characters")
     remove_image: bool = Field(True, description="Remove image from content")
     headers: Dict[str, str] = None
-    def execute(self, tool_input: ToolInput):
-        if tool_input.get_data("input") is None:
+    def execute(self,
+                input: str = None,
+                mode: str = None,
+                timeout: int = None,
+                api_key: str = None,
+                max_read_content_length: int = None,
+                remove_image: bool = None,
+                headers: Dict[str, str] = None
+                ):
+        if not input:
             return None
-        input = tool_input.get_data("input")
         
         # Update optional configurations
-        if tool_input.get_data("mode") is not None:
-            self.mode = tool_input.get_data("mode")
-        if tool_input.get_data("timeout") is not None:
-            self.timeout = tool_input.get_data("timeout")
-        if tool_input.get_data("api_key") is not None:
-            self.api_key = tool_input.get_data("api_key")
-        if tool_input.get_data("max_read_content_length") is not None:
-            self.max_read_content_length = tool_input.get_data("max_read_content_length")
-        if tool_input.get_data("remove_image") is not None:
-            self.remove_image = tool_input.get_data("remove_image")
-        if tool_input.get_data("headers") is not None:
-            self.headers = tool_input.get_data("headers")
+        if mode:
+            self.mode = mode
+        if timeout:
+            self.timeout = timeout
+        if api_key:
+            self.api_key = api_key
+        if max_read_content_length:
+            self.max_read_content_length = max_read_content_length
+        if remove_image is not None:
+            self.remove_image = remove_image
+        if headers:
+            self.headers = headers
 
         # print(f"mode: {self.mode}, max_read_content_length: {self.max_read_content_length}, headers: {self.headers}")
 

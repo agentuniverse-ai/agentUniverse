@@ -13,11 +13,11 @@ from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 
 
 class ViewFileTool(Tool):
-    def execute(self, tool_input: ToolInput) -> str:
-        file_path = tool_input.get_data("file_path")
-        start_line = tool_input.get_data("start_line", 0)
-        end_line = tool_input.get_data("end_line", None)
-
+    def execute(self,
+                file_path: str,
+                start_line: int = 0,
+                end_line: int = None
+                ) -> str:
         if not file_path or not os.path.isfile(file_path):
             return json.dumps({
                 "error": f"File not found: {file_path}",

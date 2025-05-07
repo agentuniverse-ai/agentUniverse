@@ -183,7 +183,7 @@ metadata:
 ```
 Parameter Description:
     method: the method of the request, such as GET, POST, PUT, etc.
-    headers: the HTTP headers neccessary for sending the request.
+    headers: the HTTP headers necessary for sending the request.
     json_parse: indicates whether the input parameters should be serialized as JSON and sent in the request body (True for POST requests) or not (False for GET requests, where parameters are typically sent as a query string).
     response_content_type: the output format for the HTTP request result. If set to 'json', the result will be returned in JSON format; if set to 'text', it will be returned as plain text.
 This tool can be used directly without  requiring any keys.

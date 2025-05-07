@@ -15,7 +15,7 @@ from langchain_core.language_models import BaseLanguageModel
 from langchain_core.prompts import BasePromptTemplate
 from langchain_core.runnables import RunnableConfig, RunnablePassthrough, Runnable
 from langchain_core.tools import BaseTool, ToolsRenderer, render_text_description
-
+from datetime import datetime
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
 from agentuniverse.base.util.agent_util import assemble_memory_input, assemble_memory_output
@@ -51,6 +51,9 @@ class ReActAgentTemplate(AgentTemplate):
         agent_input['tools'] = tools_context[0]
         agent_input['tool_names'] = tools_context[1]
         agent_input['agent_scratchpad'] = ''
+        current_time = datetime.now()
+        current_time_formatted = current_time.strftime("%Y-%m-%d %H:%M:%S")
+        agent_input['current_time'] = current_time_formatted
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:

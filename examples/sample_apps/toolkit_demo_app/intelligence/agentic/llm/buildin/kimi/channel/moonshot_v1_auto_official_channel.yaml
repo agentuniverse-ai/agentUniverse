@@ -1,0 +1,7 @@
+channel_name: 'moonshot-v1-auto-official'
+channel_api_key: '${KIMI_API_KEY}'
+channel_api_base: 'https://api.moonshot.cn/v1/'
+channel_model_name: 'moonshot-v1-auto'
+model_support_stream: True
+model_is_openai_protocol_compatible: True
+meta_class: 'agentuniverse.llm.llm_channel.kimi_official_llm_channel.KimiOfficialLLMChannel'

@@ -20,6 +20,8 @@ llm = ['${ROOT_PACKAGE}.intelligence.agentic.llm']
 planner = []
 # Scan and register tool components for all paths under this list, with priority over the default.
 tool = ['${ROOT_PACKAGE}.intelligence.agentic.tool']
+# Scan and register toolkit components for all paths under this list, with priority over the default.
+toolkit = ['${ROOT_PACKAGE}.intelligence.agentic.toolkit']
 # Scan and register memory components for all paths under this list, with priority over the default.
 memory = ['${ROOT_PACKAGE}.intelligence.agentic.memory']
 # Scan and register service components for all paths under this list, with priority over the default.

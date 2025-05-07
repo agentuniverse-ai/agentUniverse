@@ -35,9 +35,9 @@ profile:
   #
   # Note: The current configuration uses Way 1, as shown below
   llm_model:
-    name: 'deepseek-chat'
+    name: 'qwen3-32b'
 action:
-  # Please select the tools and knowledge base.
+  # Please select the tools, toolkits and knowledge base.
   tool:
     # here we use a mock_search_tool to mock a search result
     # you can change to customized search tool
@@ -45,6 +45,9 @@ action:
     # for using demo_search_tool, you need to get either /Google/Bing/search.io search API key
     # and config it into /config/custom_key.toml
     - 'mock_search_tool'
+  toolkit:
+    # This toolkit only contains the mock search tool.
+    - 'search_toolkit'
   knowledge:
   # advantage feature，please refer to doc
 memory:

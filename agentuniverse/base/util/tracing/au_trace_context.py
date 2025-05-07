@@ -9,7 +9,6 @@
 import threading
 import uuid
 from typing import Optional
-from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 
 
 class AuTraceContext:
@@ -18,7 +17,7 @@ class AuTraceContext:
                  span_id: Optional[str] = None):
         self._session_id = session_id
         self._trace_id = trace_id or self._generate_id()
-        self._span_id = '0'
+        self._span_id = span_id or '0'
         self._span_id_counter = 0
         self._lock = threading.Lock()
 

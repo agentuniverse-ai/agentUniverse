@@ -28,8 +28,8 @@ class RequestTool(Tool):
         """Strips quotes from the url."""
         return url.strip("\"'")
 
-    def execute(self, tool_input: ToolInput):
-        input_params: str = tool_input.get_data('input')
+    def execute(self, input: str):
+        input_params: str = input
         if self.json_parser:
             try:
                 parse_data = parse_json_markdown(input_params)

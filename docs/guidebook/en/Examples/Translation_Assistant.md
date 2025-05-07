@@ -45,7 +45,7 @@ The [configuration file](../../../../examples/sample_apps/traslation_agent_app/i
 [Translation Of Short Text](../../../../examples/sample_apps/traslation_agent_app/intelligence/test/translation_data/long_text_result.txt)  
 
 ### Demonstration Results
-We can see that using agentUniverse maintains consistency with the results of the orginal translation_agent project, which hasa been successfully replicated.
+We can see that using agentUniverse maintains consistency with the results of the original translation_agent project, which hasa been successfully replicated.
 agentUniverse Results:  
 
 ![](../../_picture/long_translation_au.png)    

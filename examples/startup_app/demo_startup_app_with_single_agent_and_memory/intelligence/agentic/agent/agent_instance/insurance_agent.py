@@ -14,7 +14,7 @@ from agentuniverse.base.util.agent_util import assemble_memory_input, assemble_m
 from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
 from agentuniverse.prompt.prompt import Prompt
-from demo_startup_app_with_single_agent.intelligence.utils.constant.prod_description import \
+from demo_startup_app_with_single_agent_and_memory.intelligence.utils.constant.prod_description import \
     PROD_DESCRIPTION_A
 
 

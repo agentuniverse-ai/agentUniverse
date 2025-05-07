@@ -57,7 +57,7 @@ class TavilyTool(Tool):
     # 提取模式可选参数
     extract_depth: Literal["basic", "advanced"] = Field(default="advanced", description="提取深度")
 
-    def execute(self, tool_input: ToolInput):
+    def execute(self, input: str | list = None, **kwargs):
         """执行Tavily工具。
         
         Args:
@@ -78,8 +78,8 @@ class TavilyTool(Tool):
         ]
         
         for param in possible_params:
-            if tool_input.get_data(param) is not None:
-                setattr(self, param, tool_input.get_data(param))
+            if kwargs.get(param) is not None:
+                setattr(self, param, kwargs.get(param))
 
         try:
             # 初始化Tavily客户端
@@ -88,7 +88,7 @@ class TavilyTool(Tool):
             # 根据操作模式执行不同的操作
             if self.mode == "extract":
                 # 提取模式
-                urls = tool_input.get_data("input")
+                urls = input
                 if not urls:
                     return {"error": "未提供要提取内容的URL"}
                 
@@ -111,7 +111,7 @@ class TavilyTool(Tool):
                 return result
             else:
                 # 搜索模式
-                query = tool_input.get_data("input")
+                query = input
                 if not query:
                     return {"error": "未提供搜索查询"}
                 

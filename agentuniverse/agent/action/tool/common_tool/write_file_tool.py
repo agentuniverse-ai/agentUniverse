@@ -13,11 +13,10 @@ from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 
 
 class WriteFileTool(Tool):
-    def execute(self, tool_input: ToolInput) -> str:
-        file_path = tool_input.get_data("file_path")
-        content = tool_input.get_data("content", "")
-        append = tool_input.get_data("append", False)
-
+    def execute(self,
+                file_path: str,
+                content: str = '',
+                append: bool = False) -> str:
         directory = os.path.dirname(file_path)
         if directory and not os.path.exists(directory):
             try:

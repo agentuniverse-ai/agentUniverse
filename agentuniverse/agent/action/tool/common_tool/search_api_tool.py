@@ -44,15 +44,14 @@ class SearchAPITool(Tool):
             self.search_api_wrapper = SearchApiAPIWrapper(searchapi_api_key=self.search_api_key, engine=self.engine)
         return self.search_api_wrapper
 
-    def execute(self, tool_input: ToolInput):
+    def execute(self, input: str, **kwargs):
         self._load_api_wapper()
         search_params = {}
         for k, v in self.search_params.items():
-            if k in tool_input.to_dict():
-                search_params[k] = tool_input.get_data(k)
+            if k in kwargs:
+                search_params[k] = kwargs.get(k)
                 continue
             search_params[k] = v
-        input = tool_input.get_data("input")
         if self.search_type == "json":
             return self.search_api_wrapper.results(query=input, **search_params)
         return self.search_api_wrapper.run(query=input, **search_params)

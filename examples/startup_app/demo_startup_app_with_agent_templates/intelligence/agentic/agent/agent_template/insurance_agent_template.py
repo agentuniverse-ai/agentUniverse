@@ -32,7 +32,7 @@ class InsuranceAgentTemplate(AgentTemplate):
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         agent_input['input'] = input_object.get_data('input')
         detail_tool = ToolManager().get_instance_obj('insurance_info_tool')
-        tool_res = detail_tool.run(query='保险产品A')
+        tool_res = detail_tool.run(ins_name='保险产品A')
         input_object.add_data('prod_description', tool_res)
         return agent_input
 

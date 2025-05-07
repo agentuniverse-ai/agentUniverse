@@ -1,0 +1,9 @@
+name: 'search_toolkit'
+description: |
+  这是一个搜索工具的工具包
+include:
+  - 'mock_search_tool'
+metadata:
+  type: 'TOOLKIT'
+  module: 'agentuniverse.agent.action.toolkit.toolkit'
+  class: 'Toolkit'

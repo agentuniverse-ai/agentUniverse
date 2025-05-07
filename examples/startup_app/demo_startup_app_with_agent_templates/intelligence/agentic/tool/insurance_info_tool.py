@@ -6,13 +6,12 @@
 # @FileName: insurance_tool.py
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 
-from demo_startup_app_with_single_agent_and_actions.intelligence.utils.constant.prod_description import \
+from demo_startup_app_with_agent_templates.intelligence.utils.constant.prod_description import \
     PROD_A_DESCRIPTION, PROD_B_DESCRIPTION
 
 
 class InsuranceInfoTool(Tool):
-    def execute(self, tool_input: ToolInput):
-        ins_name = tool_input.get_data('ins_name')
+    def execute(self, ins_name: str):
         if ins_name == '保险产品A':
             return PROD_A_DESCRIPTION
         if ins_name == '保险产品B':

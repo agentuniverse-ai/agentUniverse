@@ -1,13 +1,14 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 import asyncio
+import inspect
 # @Time    : 2024/3/13 14:29
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: tool.py
 from abc import abstractmethod
 import json
-from typing import List, Optional
+from typing import List, Optional, get_type_hints, Any
 
 from pydantic import BaseModel
 from langchain.tools import Tool as LangchainTool
@@ -18,6 +19,7 @@ from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
+from agentuniverse.base.util.common_util import parse_and_check_json_markdown
 
 
 class ToolInput(BaseModel):
@@ -60,6 +62,10 @@ class Tool(ComponentBase):
     input_keys: Optional[List] = None
     tracing: Optional[bool] = None
 
+    # tool's arg model and schema in dict form
+    args_model: Any = None
+    args_model_schema: Optional[dict] = None
+
     def __init__(self, **kwargs):
         super().__init__(component_type=ComponentEnum.TOOL, **kwargs)
 
@@ -67,15 +73,15 @@ class Tool(ComponentBase):
     def run(self, **kwargs):
         """The callable method that runs the tool."""
         self.input_check(kwargs)
-        tool_input = ToolInput(kwargs)
-        return self.execute(tool_input)
+        if self.check_execute_signature_deprecated():
+            return self.execute(ToolInput(kwargs))
+        return self.execute(**kwargs)
 
     @trace_tool
     async def async_run(self, **kwargs):
         """The callable method that runs the tool."""
         self.input_check(kwargs)
-        tool_input = ToolInput(kwargs)
-        return await self.async_execute(tool_input)
+        return await self.async_execute(**kwargs)
 
     def input_check(self, kwargs: dict) -> None:
         """Check whether the input parameters of the tool contain input keys of the tool"""
@@ -87,21 +93,28 @@ class Tool(ComponentBase):
     @trace_tool
     def langchain_run(self, *args, callbacks=None, **kwargs):
         """The callable method that runs the tool."""
-        kwargs["callbacks"] = callbacks
-        tool_input = ToolInput(kwargs)
-        parse_result = self.parse_react_input(args[0])
-        for key in self.input_keys:
-            tool_input.add_data(key, parse_result[key])
-        return self.execute(tool_input)
+        if self.check_execute_signature_deprecated():
+            """Deprecated in future, use kwargs as tool input instead of ToolInput."""
+            tool_input = ToolInput(kwargs)
+            parse_result = self.parse_react_input(args[0])
+            for key in self.input_keys:
+                tool_input.add_data(key, parse_result[key])
+            return self.execute(tool_input)
+        else:
+            try:
+                parse_result = parse_and_check_json_markdown(args[0],
+                                                            self.input_keys)
+            except Exception as e:
+                return str(e)
+            return self.execute(**parse_result)
 
     @trace_tool
     async def async_langchain_run(self, *args, callbacks=None, **kwargs):
-        kwargs["callbacks"] = callbacks
-        tool_input = ToolInput(kwargs)
-        parse_result = self.parse_react_input(args[0])
-        for key in self.input_keys:
-            tool_input.add_data(key, parse_result[key])
-        return await self.async_execute(tool_input)
+        try:
+            parse_result = parse_and_check_json_markdown(args[0], self.input_keys)
+        except Exception as e:
+            return str(e)
+        return await self.async_execute(**parse_result)
 
     def parse_react_input(self, input_str: str):
         """
@@ -113,12 +126,12 @@ class Tool(ComponentBase):
         }
 
     @abstractmethod
-    def execute(self, tool_input: ToolInput):
+    def execute(self, **kwargs):
         raise NotImplementedError
 
-    async def async_execute(self, tool_input: ToolInput):
+    async def async_execute(self, **kwargs):
         """The callable method that runs the tool."""
-        return await asyncio.to_thread(self.execute, tool_input)
+        return await asyncio.to_thread(self.execute, **kwargs)
 
     def as_langchain(self) -> LangchainTool:
         """Convert the agentUniverse(aU) tool class to the langchain tool class."""
@@ -151,14 +164,12 @@ class Tool(ComponentBase):
                     setattr(self, key, value)
         except Exception as e:
             print(f"Error during configuration initialization: {str(e)}")
-        if component_configer.name:
-            self.name = component_configer.name
-        if component_configer.description:
-            self.description = component_configer.description
+        self.name = component_configer.name
+        self.description = component_configer.description
         if component_configer.tool_type:
-            self.tool_type = next((member for member in ToolTypeEnum if member.value == component_configer.tool_type))
-        if component_configer.input_keys:
-            self.input_keys = component_configer.input_keys
+            self.tool_type = next((member for member in ToolTypeEnum if
+                                   member.value == component_configer.tool_type))
+        self.input_keys = component_configer.input_keys
         if hasattr(component_configer, "tracing"):
             self.tracing = component_configer.tracing
         return self
@@ -168,3 +179,35 @@ class Tool(ComponentBase):
         if self.input_keys is not None:
             copied.input_keys = self.input_keys.copy()
         return copied
+
+    def check_execute_signature_deprecated(self) -> bool:
+        """Check if the tool use deprecated execute definition which use
+        ToolInput as input args."""
+        if not hasattr(self, 'execute'):
+            return False
+
+        execute_method = getattr(self, 'execute')
+        if not callable(execute_method):
+            return False
+
+        try:
+            sig = inspect.signature(execute_method)
+            params = sig.parameters
+            if len(params) != 1:
+                return False
+            first_param = list(params.values())[0]
+            try:
+                type_hints = get_type_hints(execute_method)
+                param_name = first_param.name
+                if param_name not in type_hints:
+                    return False
+                param_type = type_hints[param_name]
+                if param_type is not ToolInput:
+                    return False
+            except Exception as e:
+                return False
+            return True
+        except ValueError:
+            return False
+        except TypeError:
+            return False

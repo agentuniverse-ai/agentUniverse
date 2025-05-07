@@ -1,0 +1,12 @@
+name: 'duckduckgo_search_tool'
+server_name: 'ddg-search'
+origin_tool_name: 'search'
+transport: 'stdio'
+command: 'uvx'
+args:
+  - 'duckduckgo-mcp-server'
+
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.mcp_tool'
+  class: 'MCPTool'

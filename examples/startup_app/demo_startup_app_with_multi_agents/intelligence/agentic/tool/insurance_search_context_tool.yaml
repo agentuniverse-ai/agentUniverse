@@ -27,5 +27,5 @@ tool_type: 'api'
 input_keys: ['input']
 metadata:
   type: 'TOOL'
-  module: 'demo_startup_app_with_single_agent_and_actions.intelligence.agentic.tool.insurance_search_context_tool'
+  module: 'demo_startup_app_with_multi_agents.intelligence.agentic.tool.insurance_search_context_tool'
   class: 'SearchContextTool'

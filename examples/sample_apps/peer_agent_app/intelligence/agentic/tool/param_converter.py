@@ -11,7 +11,7 @@ from agentuniverse.agent.output_object import OutputObject
 
 class ParamConverterTool(Tool):
 
-    def execute(self, tool_input: ToolInput):
+    def execute(self, params: dict):
         """
         Convert input parameters to a specific dictionary format.
 
@@ -19,7 +19,7 @@ class ParamConverterTool(Tool):
           If there are no other parameters, use the original parameters as the inner dictionary.
 
           Args:
-              tool_input (ToolInput): Input object containing parameters to be converted
+              params (dict): Input object containing parameters to be converted
 
           Returns:
               dict: Converted dictionary structure in format:
@@ -31,8 +31,6 @@ class ParamConverterTool(Tool):
                   }
               Returns empty dict if no key ending with 'result' is found
           """
-        params = tool_input.to_dict()
-
         result_key = next((k for k in params.keys() if k.endswith('result')), None)
 
         if result_key is None:

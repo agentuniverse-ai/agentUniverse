@@ -16,6 +16,8 @@ import uuid
 from datetime import datetime, timedelta
 from threading import Thread
 from typing import Optional, AsyncIterator
+
+from flask import copy_current_request_context
 from loguru import logger
 
 from .dal.request_library import RequestLibrary
@@ -245,7 +247,7 @@ class RequestTask:
     def async_run(self):
         """Run the service in async mode."""
         self.kwargs['output_stream'] = self.queue
-        self.thread = ThreadWithReturnValue(target=self.func,
+        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func),
                                             kwargs=self.kwargs)
         self.thread.start()
         Thread(target=self.append_steps).start()
@@ -255,14 +257,14 @@ class RequestTask:
         """Run the service in a separate thread and yield result stream."""
         self.kwargs['output_stream'] = self.queue
 
-        self.thread = ThreadWithReturnValue(target=self.func,
+        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func),
                                             kwargs=self.kwargs)
         self.thread.start()
         return self.receive_steps()
 
     def user_stream_run(self):
         self.kwargs['output_stream'] = self.queue
-        self.thread = ThreadWithReturnValue(target=self.func,
+        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func),
                                             kwargs=self.kwargs)
         self.thread.start()
         return self.user_receive_steps()

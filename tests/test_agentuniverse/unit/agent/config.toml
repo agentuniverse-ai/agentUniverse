@@ -31,5 +31,5 @@ gunicorn_config_path = './gunicorn_config.toml'
 #custom_key_path = './custom_key.toml'
 
 [DB]
-# A mysql db uri used to save web request task status. Status will be saved in sqllite if the uri is empty all not exist.
+# A mysql db uri used to save web request task status. Status will be saved in sqlite if the uri is empty all not exist.
 system_db_uri = ''

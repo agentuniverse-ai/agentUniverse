@@ -11,8 +11,8 @@ from basic_sop_app.intelligence.utils.constant import product_b_info, product_c_
 
 class SearchProductInfoTool(Tool):
 
-    def execute(self, tool_input: ToolInput):
-        product_info_item_list = tool_input.get_data('input')
+    def execute(self, input: list):
+        product_info_item_list = input
 
         product_b_description = product_b_info.BASE_PRODUCT_DESCRIPTION
         product_c_description = product_c_info.BASE_PRODUCT_DESCRIPTION

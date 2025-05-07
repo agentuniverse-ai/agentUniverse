@@ -44,6 +44,7 @@ class AgentUniverse(object):
         self.__system_default_agent_package = ['agentuniverse.agent.default']
         self.__system_default_llm_package = ['agentuniverse.llm.default']
         self.__system_default_tool_package = ['agentuniverse.agent.action.tool']
+        self.__system_default_toolkit_package = ['agentuniverse.agent.action.toolkit']
         self.__system_default_planner_package = ['agentuniverse.agent.plan.planner']
         self.__system_default_memory_package = ['agentuniverse.agent.memory.default']
         self.__system_default_prompt_package = ['agentuniverse.agent', 'agentuniverse.base.util']
@@ -144,6 +145,8 @@ class AgentUniverse(object):
                                      + self.__system_default_planner_package)
         core_tool_package_list = ((app_configer.core_tool_package_list or app_configer.core_default_package_list)
                                     + self.__system_default_tool_package)
+        core_toolkit_package_list = ((app_configer.core_toolkit_package_list or app_configer.core_tool_package_list or app_configer.core_default_package_list)
+                                  + self.__system_default_tool_package)
         core_service_package_list = app_configer.core_service_package_list or app_configer.core_default_package_list
         core_sqldb_wrapper_package_list = app_configer.core_sqldb_wrapper_package_list or app_configer.core_default_package_list
         core_memory_package_list = ((app_configer.core_memory_package_list or app_configer.core_default_package_list)
@@ -180,6 +183,7 @@ class AgentUniverse(object):
             ComponentEnum.LLM: core_llm_package_list,
             ComponentEnum.PLANNER: core_planner_package_list,
             ComponentEnum.TOOL: core_tool_package_list,
+            ComponentEnum.TOOLKIT: core_toolkit_package_list,
             ComponentEnum.SERVICE: core_service_package_list,
             ComponentEnum.SQLDB_WRAPPER: core_sqldb_wrapper_package_list,
             ComponentEnum.MEMORY: core_memory_package_list,
@@ -278,6 +282,10 @@ class AgentUniverse(object):
                     tool_name_list = configer_instance.action.get('tool')
                     if tool_name_list and isinstance(tool_name_list, list):
                         self.__config_container.app_configer.agent_tool_set.update(tool_name_list)
+                    toolkit_name_list = configer_instance.action.get('toolkit')
+                    if toolkit_name_list and isinstance(toolkit_name_list, list):
+                        self.__config_container.app_configer.agent_toolkit_set.update(
+                            toolkit_name_list)
             elif component_enum.value == ComponentEnum.LLM.value:
                 # Register LLM components only if llm names are already in the agent LLM set
                 if hasattr(configer_instance, 'name') and configer_instance.name:
@@ -290,6 +298,13 @@ class AgentUniverse(object):
                 if hasattr(configer_instance, 'name') and configer_instance.name:
                     if configer_instance.name not in self.__config_container.app_configer.agent_tool_set:
                         self.__config_container.app_configer.tool_configer_map[
+                            configer_instance.name] = configer_instance
+                        continue
+            elif component_enum.value == ComponentEnum.TOOLKIT.value:
+                # Register TOOL components only if tool names are already in the agent tool set
+                if hasattr(configer_instance, 'name') and configer_instance.name:
+                    if configer_instance.name not in self.__config_container.app_configer.agent_toolkit_set:
+                        self.__config_container.app_configer.toolkit_configer_map[
                             configer_instance.name] = configer_instance
                         continue
             component_clz = ComponentConfigerUtil.get_component_object_clz_by_component_configer(configer_instance)

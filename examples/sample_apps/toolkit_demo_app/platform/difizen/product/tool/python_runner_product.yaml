@@ -1,0 +1,8 @@
+id: python_runner
+nickname: 执行python代码工具
+type: TOOL
+avatar: ../../../resources/python_tool.png
+metadata:
+  type: 'PRODUCT'
+  module: 'agentuniverse_product.base.product'
+  class: 'Product'

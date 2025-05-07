@@ -17,10 +17,10 @@ class SqlLangchainTool(LangChainTool):
     db_wrapper_name: Optional[str] = ""
     clz: Type[BaseTool] = BaseTool
 
-    def execute(self, tool_input: ToolInput):
+    def execute(self, input: str, callbacks):
         if self.tool is None:
             self.get_sql_database()
-        return super().execute(tool_input)
+        return super().execute(input, callbacks)
 
     def get_sql_database(self):
         db_wrapper = SQLDBWrapperManager().get_instance_obj(self.db_wrapper_name)

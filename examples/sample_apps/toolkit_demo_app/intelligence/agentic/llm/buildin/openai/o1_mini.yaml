@@ -1,0 +1,9 @@
+name: 'o1-mini'
+description: 'openai o1-mini model'
+model_name: 'o1-mini'
+temperature: 0.5
+max_tokens: 2000
+streaming: True
+max_context_length: 128000
+channel: o1-mini-official
+meta_class: 'agentuniverse.llm.default.default_openai_llm.DefaultOpenAILLM'

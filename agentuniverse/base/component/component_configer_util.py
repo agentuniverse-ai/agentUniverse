@@ -10,6 +10,7 @@ from typing import Type, Callable
 
 from agentuniverse.agent.action.knowledge.knowledge_manager import KnowledgeManager
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
+from agentuniverse.agent.action.toolkit.toolkit_manager import ToolkitManager
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.memory.memory_compressor.memory_compressor_manager import MemoryCompressorManager
 from agentuniverse.agent.memory.memory_manager import MemoryManager
@@ -37,7 +38,7 @@ from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.prompt.prompt_manager import PromptManager
 from agentuniverse.workflow.workflow_manager import WorkflowManager
 from agentuniverse.base.util.logging.log_sink.log_sink_manager import LogSinkManager
-
+from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor_manager import DocProcessorManager
 from agentuniverse.agent.action.knowledge.reader.reader_manager import ReaderManager
@@ -55,6 +56,7 @@ class ComponentConfigerUtil(object):
         ComponentEnum.LLM: LLMConfiger,
         ComponentEnum.PLANNER: PlannerConfiger,
         ComponentEnum.TOOL: ToolConfiger,
+        ComponentEnum.TOOLKIT: ComponentConfiger,
         ComponentEnum.MEMORY: MemoryConfiger,
         ComponentEnum.SERVICE: ServiceConfiger,
         ComponentEnum.PROMPT: PromptConfiger,
@@ -80,6 +82,7 @@ class ComponentConfigerUtil(object):
         ComponentEnum.LLM: LLMManager,
         ComponentEnum.PLANNER: PlannerManager,
         ComponentEnum.TOOL: ToolManager,
+        ComponentEnum.TOOLKIT: ToolkitManager,
         ComponentEnum.MEMORY: MemoryManager,
         ComponentEnum.SERVICE: ServiceManager,
         ComponentEnum.SQLDB_WRAPPER: SQLDBWrapperManager,
@@ -121,15 +124,23 @@ class ComponentConfigerUtil(object):
             object: the component object
         """
         if component_configer.meta_class:
-            metadata_module = '.'.join(component_configer.meta_class.split('.')[:-1])
-            metadata_class = component_configer.meta_class.split('.')[-1]
-            module = importlib.import_module(metadata_module)
-            clz = getattr(module, metadata_class)
-            return clz
+            try:
+                metadata_module = '.'.join(component_configer.meta_class.split('.')[:-1])
+                metadata_class = component_configer.meta_class.split('.')[-1]
+                module = importlib.import_module(metadata_module)
+                clz = getattr(module, metadata_class)
+                return clz
+            except Exception as ex:
+                LOGGER.error(f"Please check your config file, load configer module error! module name: {metadata_class},error info: {ex} ")
+                raise ex
         else:
-            module = importlib.import_module(component_configer.metadata_module)
-            clz = getattr(module, component_configer.metadata_class)
-            return clz
+            try:
+                module = importlib.import_module(component_configer.metadata_module)
+                clz = getattr(module, component_configer.metadata_class)
+                return clz
+            except Exception as ex:
+                LOGGER.error(f"Please check your config file, load configer module error! module name: {component_configer.metadata_module},error info: {ex} ")
+                raise ex
 
     @classmethod
     def get_component_manager_clz_by_type(cls, component_type_enum: ComponentEnum) -> Callable:

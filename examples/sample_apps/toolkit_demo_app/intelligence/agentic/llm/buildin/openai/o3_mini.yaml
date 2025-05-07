@@ -1,0 +1,9 @@
+name: 'o3-mini'
+description: 'o3-mini'
+model_name: 'o3-mini'
+temperature: 0.5
+max_tokens: 2000
+max_context_length: 2000000
+streaming: True
+channel: o3-mini-official
+meta_class: 'agentuniverse.llm.default.default_openai_llm.DefaultOpenAILLM'

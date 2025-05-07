@@ -45,7 +45,7 @@ example_key = 'AnExampleKey'
 #Google search
 #SERPER_API_KEY='xxxxxx'
 #
-##bing seacrh
+##bing search
 #BING_SUBSCRIPTION_KEY='xxxxxx'
 #
 # You could sign up for a free account at https://www.searchapi.io/

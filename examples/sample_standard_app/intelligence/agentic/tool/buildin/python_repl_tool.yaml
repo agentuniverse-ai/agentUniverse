@@ -1,16 +1,9 @@
 name: 'python_runner'
-description: '使用该工具可以执行python代码，可以在pycharm中直接运行的代码.工具的输入必须时一段有效的python代码. 如何你想要查看工具的执行结果, 必须在python代码中使用print(...)打印你想查看的内容。
-    工具输入示例：
-      你想要计算1+3等于多少时，工具的输入应该是：
-        ```py 
-        print(1+3)
-        ```
-      你想要获取百度页面的信息时，工具的输入应该是: 
-        ```py 
-        import requests
-        resp=requests.get("https://www.baidu.com")
-        print(resp.content)
-        ```'
+description: '使用该工具可以执行python代码，可以在pycharm中直接运行的代码.你的输入必须是json格式。如果你想要查看工具的执行结果, 必须在python代码中使用print(...)打印你想查看的内容。
+
+    Args:
+        input: 完整代码
+  '
 tool_type: 'api'
 input_keys: ['input']
 metadata:
