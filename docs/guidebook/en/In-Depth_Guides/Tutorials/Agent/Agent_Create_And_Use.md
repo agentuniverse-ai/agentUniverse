@@ -13,7 +13,7 @@ We will provide detailed descriptions of each component within the configuration
 ### Setting the basic information of the agent.
 **`info` - basic information of the agent**
 * `name`:  the name of the agent
-* `description`:  a description of the agent's purpose or funtion 
+* `description`:  a description of the agent's purpose or function 
 
 ### Setting the global configurations for the agent.
 **`profile` - Agent global settings.**

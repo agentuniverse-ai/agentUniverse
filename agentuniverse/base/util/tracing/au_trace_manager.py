@@ -59,3 +59,11 @@ class AuTraceManager:
 
     def get_span_id(self):
         return self.trace_context.span_id
+
+    def set_scene_code(self,scene_code):
+        self.trace_context.set_scene_code(scene_code)
+
+    def get_scene_code(self):
+        return self.trace_context.scene_code
+
+

@@ -42,6 +42,7 @@ from agentuniverse.base.context.framework_context_manager import FrameworkContex
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.base.util.memory_util import generate_messages, get_memory_string
 from agentuniverse.base.util.system_util import process_dict_with_funcs, is_system_builtin
+from agentuniverse.base.util.tracing.au_trace_manager import AuTraceManager
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.prompt.chat_prompt import ChatPrompt
@@ -54,6 +55,7 @@ class Agent(ComponentBase, ABC):
     """The parent class of all agent models, containing only attributes."""
 
     agent_model: Optional[AgentModel] = None
+    scene_code: Optional[str] = None
 
     def __init__(self):
         """Initialize the AgentModel with the given keyword arguments."""
@@ -92,6 +94,15 @@ class Agent(ComponentBase, ABC):
         """
         pass
 
+    def update_trace_context(self, input_object: InputObject):
+        session_id = input_object.get_data("session_id")
+        if session_id:
+            AuTraceManager().trace_context.set_session_id(session_id)
+
+        trace_id = input_object.get_data("trace_id")
+        if trace_id:
+            AuTraceManager().trace_context.set_trace_id(trace_id)
+
     @trace_agent
     def run(self, **kwargs) -> OutputObject:
         """Agent instance running entry.
@@ -101,6 +112,8 @@ class Agent(ComponentBase, ABC):
         """
         self.input_check(kwargs)
         input_object = InputObject(kwargs)
+
+        self.update_trace_context(input_object)
 
         agent_input = self.pre_parse_input(input_object)
 
@@ -116,6 +129,7 @@ class Agent(ComponentBase, ABC):
     async def async_run(self, **kwargs) -> OutputObject:
         self.input_check(kwargs)
         input_object = InputObject(kwargs)
+        self.update_trace_context(input_object)
 
         agent_input = self.pre_parse_input(input_object)
 

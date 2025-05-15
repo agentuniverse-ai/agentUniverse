@@ -8,6 +8,8 @@
 from abc import abstractmethod
 from copy import deepcopy
 from typing import Optional, Any, AsyncIterator, Iterator, Union
+
+import tiktoken
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.runnables import Runnable
 
@@ -177,10 +179,17 @@ class LLM(ComponentBase):
 
         Args:
             text: The string input to tokenize.
+            model: The model you want to calculate
+
 
         Returns:
             The integer number of tokens in the text.
         """
+        try:
+            encoding = tiktoken.encoding_for_model(self.model_name)
+        except KeyError:
+            encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
 
     def as_langchain_runnable(self, params=None) -> Runnable:
         """Get the langchain llm class."""
@@ -194,7 +203,7 @@ class LLM(ComponentBase):
         try:
             self.init_channel()
             if self._channel_instance:
-                return self._channel_instance.call(*args, **kwargs)
+                return self._channel_instance._call(*args, **kwargs)
             return self._call(*args, **kwargs)
         except Exception as e:
             LOGGER.error(f'Error in LLM call: {e}')
@@ -206,7 +215,7 @@ class LLM(ComponentBase):
         try:
             self.init_channel()
             if self._channel_instance:
-                return await self._channel_instance.acall(*args, **kwargs)
+                return await self._channel_instance._acall(*args, **kwargs)
             return await self._acall(*args, **kwargs)
         except Exception as e:
             LOGGER.error(f'Error in LLM acall: {e}')

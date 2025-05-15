@@ -70,4 +70,4 @@ def connect_to_next_port(self, minimum: int) -> int:
 ```
 
 #### Contributing to article & examples
-If you have used the agentUniverse project and are satisfied with it, we welcome you to share your case studies in the project community or on any media platform. We will periodically hold community events to commend, encourage, and promote outstanding cases and developers.
+If you have used the agentUniverse project and are satisfied with it, we welcome you to share your case studies in the project community or on any media platform. We will periodically hold community events to comment, encourage, and promote outstanding cases and developers.

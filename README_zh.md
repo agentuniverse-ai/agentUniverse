@@ -24,6 +24,22 @@
 
 更多模式组件持续推出中...
 
+The LLM model integration can be accomplished with simple configuration, currently agentUniverse supported models include:
+
+|-|供应商|                                                        模型                                                         |
+|:-----:|:--------:|:-----------------------------------------------------------------------------------------------------------------:|
+|<img src="https://github.com/user-attachments/assets/b7b0f2ce-3250-4008-b6d7-4712a983deb9" height="25">|Qwen| <img src="https://img.shields.io/badge/%E2%9C%A8new-black" alt="new" width="30" height="13" style="vertical-align: text-bottom;"> **qwen3 Series**（qwen3-235b-a22b、qwen3-32b、qwen3-30b-a3b, etc.） 、qwen2.5-72b-instruct、qwq-32b-preview、qwen-max、… |
+|<img src="https://github.com/user-attachments/assets/5a997feb-bef4-4e53-ac3e-d38221e5399c" height="25">|Deepseek|                              deepseek-r1、deepseek-v3、deepseek-r1-distill-qwen-32b、…                               |
+|<img src="https://github.com/user-attachments/assets/0b50e555-65e8-49b2-b725-f3f71ee7daed" height="25">|OpenAI|                                   GPT-4o、GPT-4o mini、OpenAI o1、OpenAI o3-mini、…                                   |
+|<img src="https://github.com/user-attachments/assets/60fe0a70-0b47-4ac7-9bc9-8e860732ace9" height="25">|Claude|                                         Claude 3.5 Sonnet、Claude 3 Opus、…                                         |
+|<img src="https://github.com/user-attachments/assets/334c7f09-7eae-4a65-a70f-2e6531964224" height="25">|Gemini|                            Gemini 2.0 Flash、Gemini 2.0 Flash Thinking、Gemini 1.5 Pro、…                            |
+|<img src="https://github.com/user-attachments/assets/8e41c73f-3103-4305-ad1f-56116ea55523" height="25">|Llama|                         llama3.3-70b-instruct、llama3.2-3b-instruct、llama3.2-1b-instruct、…                         |
+|<img src="https://github.com/user-attachments/assets/19d264c6-e499-4913-9d6d-314d392f2246" height="25">|KIMI|                                 moonshot-v1-128k、moonshot-v1-32k、moonshot-v1-8k、…                                 |
+|<img src="https://github.com/user-attachments/assets/79572d9a-29d5-4c0e-a336-ce3f8018fb05" height="25">|WenXin|                                       ERNIE 4.0、ERNIE 4.0 Turbo、ERNIE 3.5、…                                       |
+|<img src="https://github.com/user-attachments/assets/abb5311e-4d70-4e9c-8fca-e5129ae912fc" height="25">|chatglm|                                            chatglm3-6b、chatglm-6b-v2、…                                            |
+|<img src="https://github.com/user-attachments/assets/fe265f24-4ea6-4ff2-9b50-58ab6706a5f5" height="25">|BaiChuan|                                      baichuan2-turbo、baichuan2-13b-chat-v1、…                                      |
+|<img src="https://github.com/user-attachments/assets/41ffe268-392f-4ab9-b42d-e30dbd70d66b" height="25">|Doubao|                                 Doubao-pro-128k、Doubao-pro-32k、Doubao-lite-128k、…                                 |
+
 ****************************************
 
 ## 目录

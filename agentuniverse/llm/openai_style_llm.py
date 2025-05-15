@@ -41,29 +41,32 @@ class OpenAIStyleLLM(LLM):
     api_base: Optional[str] = None
     proxy: Optional[str] = None
     client_args: Optional[dict] = None
+    ext_params: Optional[dict] = {}
+    ext_headers: Optional[dict] = {}
 
-    def _new_client(self):
+    def _new_client(self, api_base=None):
         """Initialize the openai client."""
         if self.client is not None:
             return self.client
         return OpenAI(
             api_key=self.api_key,
             organization=self.organization,
-            base_url=self.api_base,
+            base_url=api_base if api_base else self.api_base,
             timeout=self.request_timeout,
             max_retries=self.max_retries,
             http_client=httpx.Client(proxy=self.proxy) if self.proxy else None,
+
             **(self.client_args or {}),
         )
 
-    def _new_async_client(self):
+    def _new_async_client(self, api_base: str = None):
         """Initialize the openai async client."""
         if self.async_client is not None:
             return self.async_client
         return AsyncOpenAI(
             api_key=self.api_key,
             organization=self.organization,
-            base_url=self.api_base,
+            base_url=api_base if api_base else self.api_base,
             timeout=self.request_timeout,
             max_retries=self.max_retries,
             http_client=httpx.AsyncClient(proxy=self.proxy) if self.proxy else None,
@@ -80,7 +83,12 @@ class OpenAIStyleLLM(LLM):
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
         if 'stream' in kwargs:
             streaming = kwargs.pop('stream')
-        self.client = self._new_client()
+        self.client = self._new_client(kwargs.pop("api_base", None))
+        ext_params = self.ext_params.copy()
+        if streaming and "stream_options" not in ext_params:
+            ext_params["stream_options"] = {
+                "include_usage": True
+            }
         client = self.client
         chat_completion = client.chat.completions.create(
             messages=messages,
@@ -88,6 +96,8 @@ class OpenAIStyleLLM(LLM):
             temperature=kwargs.pop('temperature', self.temperature),
             stream=kwargs.pop('stream', streaming),
             max_tokens=kwargs.pop('max_tokens', self.max_tokens),
+            extra_headers=kwargs.pop("extra_headers", self.ext_headers),
+            extra_body=ext_params,
             **kwargs,
         )
         if not streaming:
@@ -105,14 +115,21 @@ class OpenAIStyleLLM(LLM):
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
         if 'stream' in kwargs:
             streaming = kwargs.pop('stream')
-        self.async_client = self._new_async_client()
+        self.async_client = self._new_async_client(kwargs.pop("api_base", None))
         async_client = self.async_client
+        ext_params = self.ext_params.copy()
+        if streaming and "stream_options" not in ext_params:
+            ext_params["stream_options"] = {
+                "include_usage": True
+            }
         chat_completion = await async_client.chat.completions.create(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
             temperature=kwargs.pop('temperature', self.temperature),
             stream=kwargs.pop('stream', streaming),
             max_tokens=kwargs.pop('max_tokens', self.max_tokens),
+            extra_headers=kwargs.pop("extra_headers", self.ext_headers),
+            extra_body=ext_params,
             **kwargs,
         )
         if not streaming:
@@ -147,7 +164,7 @@ class OpenAIStyleLLM(LLM):
         if not isinstance(chunk, dict):
             chunk = chunk.dict()
         if len(chunk["choices"]) == 0:
-            return
+            return LLMOutput(text="", raw=chat_completion.model_dump())
         choice = chunk["choices"][0]
         message = choice.get("delta")
         text = message.get("content")
@@ -186,6 +203,11 @@ class OpenAIStyleLLM(LLM):
         if 'proxy' in component_configer.configer.value:
             proxy = component_configer.configer.value.get('proxy')
             self.proxy = process_yaml_func(proxy, component_configer.yaml_func_instance)
+        if component_configer.configer.value.get("ext_headers"):
+            self.ext_headers = component_configer.configer.value.get("ext_headers")
+        if component_configer.configer.value.get("ext_params"):
+            self.ext_params = component_configer.configer.value.get("ext_params")
+
         return super().initialize_by_component_configer(component_configer)
 
     def get_num_tokens(self, text: str) -> int:

@@ -1,6 +1,6 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-
+import datetime
 # @Time    : 2024/4/1 14:32
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
@@ -28,7 +28,7 @@ class DemoAgentTest(unittest.TestCase):
                 res = output_stream.get()
                 if res == '{"type": "EOF"}':
                     break
-                print(res)
+                print(datetime.datetime.now().isoformat(),res)
             except queue.Empty:
                 break
 
@@ -36,7 +36,7 @@ class DemoAgentTest(unittest.TestCase):
         output_stream = queue.Queue(10)
         instance: Agent = AgentManager().get_instance_obj('demo_agent')
         Thread(target=self.read_output, args=(output_stream,)).start()
-        result = instance.run(input='你来自哪里，名字是什么', output_stream=output_stream)
+        result = instance.run(input='你来自哪里，名字是什么,请详细介绍一下数据库', output_stream=output_stream,scene_code="billing_center_test")
         print(result)
 
 

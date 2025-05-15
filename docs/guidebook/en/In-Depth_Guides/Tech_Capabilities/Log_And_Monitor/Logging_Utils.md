@@ -1,6 +1,6 @@
 # Logging Utils
 
-The log component of agentUniverse is implemented based on loguru, offering a well-packaged global log component and customizable log components. This tutorial will first introduce the usage of the log configuration file within agentUniverse, then sequentially explain the utilization of the global log component and customizable log components, and finally describe how to intergrate with external log service components.
+The log component of agentUniverse is implemented based on loguru, offering a well-packaged global log component and customizable log components. This tutorial will first introduce the usage of the log configuration file within agentUniverse, then sequentially explain the utilization of the global log component and customizable log components, and finally describe how to integrate with external log service components.
     
 ## Log Configuration
 

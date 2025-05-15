@@ -74,7 +74,7 @@ def as_langchain(self) -> BaseLanguageModel:
 In agentUniverse, the Model Channel (LLMChannel) class inherits from ComponentBase and includes the following configurable parameters:
 
 1. `channel_name`: (Required) Corresponds to the aU channel component instance name
-2. `channel_api_key`: (Required) Corresponds to the specific channel's key, e.g., dashscope key for Baichuan platform; qianfan key for Qianfan platform
+2. `channel_api_key`: (Required) Corresponds to the specific channel's key, e.g., DASHSCOPE_API_KEY for Aliyun Dashscope platform; QIANFAN_API_KEY for Baidu Qianfan platform
 3. `channel_api_base`: (Required) Corresponds to the specific channel's endpoint
 4. `channel_organization`: (Optional) Corresponds to the specific channel's organization
 5. `channel_proxy`: (Optional) Corresponds to the specific channel's proxy
@@ -111,7 +111,7 @@ meta_class: 'agentuniverse.llm.default.deep_seek_openai_style_llm.DefaultDeepSee
 
 ```yaml
 channel_name: 'deepseek-r1-official'
-channel_api_key: '${DEEPSEEK_OFFICIAL_CHANNEL_API_KEY}' # deepseek-r1 official website key
+channel_api_key: '${DEEPSEEK_API_KEY}' # deepseek-r1 official website key
 channel_api_base: 'https://api.deepseek.com/v1' # deepseek-r1 official website url
 channel_model_name: 'deepseek-reasoner' # deepseek-r1 official website model name
 model_support_stream: True # Whether deepseek-r1 official channel supports streaming
@@ -142,7 +142,7 @@ meta_class: 'agentuniverse.llm.default.deep_seek_openai_style_llm.DefaultDeepSee
 
 ```yaml
 channel_name: 'deepseek-r1-dashscope'
-channel_api_key: '${DASHSCOPE_CHANNEL_API_KEY}' # Alibaba Cloud Baichuan platform key
+channel_api_key: '${DASHSCOPE_API_KEY}' # Alibaba Cloud Baichuan platform key
 channel_api_base: 'https://dashscope.aliyuncs.com/compatible-mode/v1' # Alibaba Cloud Baichuan platform url
 channel_model_name: deepseek-r1 # Alibaba Cloud Baichuan platform model name
 model_support_stream: True # Whether Alibaba Cloud Baichuan platform model supports streaming
