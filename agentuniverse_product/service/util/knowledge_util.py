@@ -21,7 +21,7 @@ from agentuniverse_product.service.model.knowledge_dto import KnowledgeDTO
 
 
 def assemble_knowledge_product_config_data(knowledge_dto: KnowledgeDTO) -> Dict:
-    """Asemble the knowledge product configuration data.
+    """Assemble the knowledge product configuration data.
 
     Args:
         knowledge_dto (KnowledgeDTO): The knowledge DTO.
@@ -43,7 +43,7 @@ def assemble_knowledge_product_config_data(knowledge_dto: KnowledgeDTO) -> Dict:
 
 
 def assemble_knowledge_config(knowledge_dto: KnowledgeDTO) -> Dict:
-    """Asemble the knowledge configuration data.
+    """Assemble the knowledge configuration data.
 
     Args:
         knowledge_dto (KnowledgeDTO): The knowledge DTO object containing the knowledge parameters.

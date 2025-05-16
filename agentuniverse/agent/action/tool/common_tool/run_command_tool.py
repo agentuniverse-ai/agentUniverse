@@ -75,10 +75,7 @@ class RunCommandTool(Tool):
     Tool for executing shell commands either synchronously or asynchronously.
     """
 
-    def execute(self, tool_input: ToolInput) -> str:
-        command = tool_input.get_data("command")
-        cwd = tool_input.get_data("cwd", os.getcwd())
-        blocking = tool_input.get_data("blocking", True)
+    def execute(self, command: str, cwd: str, blocking: bool = True) -> str:
         return self._run_command(command, cwd, blocking)
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:

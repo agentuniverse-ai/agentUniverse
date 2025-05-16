@@ -11,8 +11,8 @@ from demo_startup_app_with_single_agent_and_actions.intelligence.utils.constant.
 
 
 class InsuranceInfoTool(Tool):
-    def execute(self, tool_input: ToolInput):
-        ins_name = tool_input.get_data('ins_name')
+    def execute(self, input: str):
+        ins_name = input
         if ins_name == '保险产品A':
             return PROD_A_DESCRIPTION
         if ins_name == '保险产品B':

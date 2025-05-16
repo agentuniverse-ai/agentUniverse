@@ -1,0 +1,11 @@
+id: python_runner_plugin
+nickname: python代码相关插件
+avatar: ../../../resources/python_tool.png
+description: python代码相关插件
+type: PLUGIN
+toolset:
+- python_runner
+metadata:
+  class: PluginProduct
+  module: agentuniverse_product.base.plugin_product
+  type: PRODUCT

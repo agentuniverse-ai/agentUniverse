@@ -62,7 +62,7 @@ The operational process is illustrated in the figure below:
 
 ## Custom Knowledge Insertion Feature
 ### Create Custom Knowledge
-On the product homepage, naviagte to the Knowledge tab, and click the 'Add Knowledge' button located to the right to create a custom knowledge base.
+On the product homepage, navigate to the Knowledge tab, and click the 'Add Knowledge' button located to the right to create a custom knowledge base.
 
 agentUniverse will automatically generate the corresponding knowledge and storage YAML files locally, thereby assisting users in completing their development tasks.
 

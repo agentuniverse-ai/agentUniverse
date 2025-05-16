@@ -1,0 +1,23 @@
+info:
+  name: 'demo_agent_with_multiple_tool_types'
+  description: 'A simple demonstration react agent designed to showcase 
+  the integration and usage of multiple tool types.'
+profile:
+  prompt_version: qwen_react_agent.cn
+  llm_model:
+    name: 'qwen3-32b'
+    stop: 'Observation'
+    temperature: 0.1
+action:
+  toolkit:
+    - 'docx_toolkit'
+    - 'simple_math_toolkit'
+  tool:
+    - 'duckduckgo_search_tool'
+    - 'python_runner'
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.react_agent_template'
+  class: 'ReActAgentTemplate'

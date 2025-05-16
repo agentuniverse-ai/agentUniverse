@@ -58,8 +58,8 @@ class SearchContextTool(Tool):
     当前通过MOCK_URL(www.xxxx.com/query_knowledge)和MOCK_API的请求和返回结果做工具检索样例展示。
     """
 
-    def execute(self, tool_input: ToolInput):
-        question = tool_input.get_data('input')
+    def execute(self, input: str, top_k: int = 2):
+        question = input
         try:
             headers = {
                 "Content-Type": "application/json"
@@ -79,7 +79,6 @@ class SearchContextTool(Tool):
                 }
             }
             # 检索数据top_k
-            top_k = tool_input.get_data('top_k') if tool_input.get_data('top_k') else 2
             LOGGER.info(f"search context tool input: {data}")
             # 请求mock api，真实场景请求http request.
             response = MockAPI().post(API_URL, headers=headers, data=json.dumps(data, ensure_ascii=False))

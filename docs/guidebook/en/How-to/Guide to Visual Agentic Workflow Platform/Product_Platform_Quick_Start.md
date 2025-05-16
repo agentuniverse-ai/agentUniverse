@@ -8,7 +8,7 @@ In this section, we will show you how to:
 
 ## Environment and Application Engineering Preparation
 ### Application Engineering Preparation
-We have placed the sample of product module within the sample_standard_app project of agentUniverse. You can access and view them [here](../../../../../examples/sample_standard_app/platform/difizen/product). These modules can be configured in the background using YAML file, and additionally, the functions can be automatically created and managed via the product page.
+We have placed the sample of product module within the sample_standard_app project of agentUniverse. You can access and view them [here](../../../../../examples/sample_apps/difizen_app). These modules can be configured in the background using YAML file, and additionally, the functions can be automatically created and managed via the product page.
 
 
 ### Installing Dependencies
@@ -34,7 +34,7 @@ Of course, when utilizing the agent, you need to preconfigure the various LLM mo
 
 ## Using the agentUniverse Product Platform
 ### Starting the Product Service
-To start the product service with a single click, run the [product_application](../../../../../examples/sample_standard_app/bootstrap/platform/product_application.py) file located in `sample_standard_app/bootstrap/platform` .
+To start the product service with a single click, run the [product_application](../../../../../examples/sample_apps/difizen_app/bootstrap/platform/product_application.py) file located in `sample_standard_app/bootstrap/platform` .
 ![img.png](../../../_picture/product_start.png)
 
 Upon successful initiation, it will automatically redirect you to the product homepage, which features system presets as well as your customized Agent, Tool and Knowledge product modules.

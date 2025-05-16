@@ -1,0 +1,21 @@
+name: 'subtract_tool'
+description: |
+  使用该工具可以执行进行两个数的加法
+  
+  工具输入参数说明：
+    - a: 第一个数字
+    - b: 第二个数字
+  
+  示例工具输入:
+      ```json
+      {
+        "a": 1,
+        "b": 2.0
+      }
+      ```
+tool_type: 'api'
+input_keys: ['a', 'b']
+metadata:
+  type: 'TOOL'
+  module: '${ROOT_PACKAGE}.intelligence.agentic.tool.simple_math_tool.simple_math_tool'
+  class: 'SubtractTool'

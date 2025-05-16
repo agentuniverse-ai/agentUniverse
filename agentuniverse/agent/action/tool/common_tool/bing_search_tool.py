@@ -25,10 +25,10 @@ class BingSearchTool(Tool):
     bing_subscription_key: Optional[str] = Field(default_factory=lambda: get_from_env("BING_SUBSCRIPTION_KEY"))
     bing_search_url: Optional[str] = Field(default='https://api.bing.microsoft.com/v7.0/search')
 
-    def execute(self, tool_input: ToolInput):
+    def execute(self, input: str):
         if self.bing_subscription_key is None:
-            return MockSearchTool().execute(tool_input)
-        query = tool_input.get_data("input")
+            return MockSearchTool().execute(input)
+        query = input
         # get top5 results from Bing search.
         search = BingSearchAPIWrapper(bing_subscription_key=self.bing_subscription_key, k=5,
                                       bing_search_url=self.bing_search_url)

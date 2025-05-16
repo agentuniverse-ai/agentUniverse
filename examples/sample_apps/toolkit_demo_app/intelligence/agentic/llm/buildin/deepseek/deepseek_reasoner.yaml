@@ -1,0 +1,9 @@
+name: 'deepseek-reasoner'
+description: 'deepseek-reasoner'
+model_name: 'deepseek-reasoner'
+temperature: 0.5
+max_tokens: 2000
+max_context_length: 65792
+streaming: True
+channel: deepseek-r1-dashscope
+meta_class: 'agentuniverse.llm.default.deep_seek_openai_style_llm.DefaultDeepSeekLLM'

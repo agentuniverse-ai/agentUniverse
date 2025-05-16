@@ -102,7 +102,10 @@ class FrameworkContextManager:
         context_values = {}
         with self.__dict_edit_lock:
             for var_name in self.context_dict.keys():
-                context_values[var_name] = copy.deepcopy(self.get_context(var_name))
+                try:
+                    context_values[var_name] = copy.deepcopy(self.get_context(var_name))
+                except:
+                    context_values[var_name] = self.get_context(var_name)
         return context_values
 
     def set_all_contexts(self, context_values: Dict[str, Any]):

@@ -1,0 +1,13 @@
+name: 'simple_math_toolkit'
+description: |
+  这是一个包含基础四则运算工具的工具包
+include:
+  - 'add_tool'
+  - 'subtract_tool'
+  - 'multiply_tool'
+  - 'divide_tool'
+
+metadata:
+  type: 'TOOLKIT'
+  module: 'agentuniverse.agent.action.toolkit.toolkit'
+  class: 'Toolkit'

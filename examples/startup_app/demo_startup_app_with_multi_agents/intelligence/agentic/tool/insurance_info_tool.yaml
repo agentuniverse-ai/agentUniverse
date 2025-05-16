@@ -5,8 +5,8 @@ description: |
     输入: 保险产品A
     输出: "保险产品A"，保障期限12个月，是付费版商业险，有三个保障版本：基础版、升级版、尊享版。
 tool_type: 'api'
-input_keys: ['query']
+input_keys: ['ins_name']
 metadata:
   type: 'TOOL'
-  module: 'demo_startup_app_with_single_agent_and_actions.intelligence.agentic.tool.insurance_info_tool'
+  module: 'demo_startup_app_with_multi_agents.intelligence.agentic.tool.insurance_info_tool'
   class: 'InsuranceInfoTool'

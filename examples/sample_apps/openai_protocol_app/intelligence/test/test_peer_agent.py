@@ -4,6 +4,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: test_peer_agent.py
+import queue
 import unittest
 
 from agentuniverse.agent.agent import Agent
@@ -22,9 +23,12 @@ class PeerAgentTest(unittest.TestCase):
 
         The overall process of peer agents (demo_planning_agent/demo_executing_agent/demo_expressing_agent/demo_reviewing_agent).
         """
-
-        instance: Agent = AgentManager().get_instance_obj('demo_peer_agent')
-        instance.run(input='分析下巴菲特减持比亚迪的原因')
+        instance: Agent = AgentManager().get_instance_obj(
+            'openai_protocol_peer_agent')
+        messages = [
+            {"role": "user", "content": '分析下巴菲特减持比亚迪的原因'},
+        ]
+        instance.run(messages=messages, stream=queue.Queue())
 
 
 if __name__ == '__main__':

@@ -66,7 +66,7 @@ class ContextualIterationAgentTemplate(AgentTemplate):
         })
         agent_input['chat_history'] = json.dumps(conversation_history, ensure_ascii=False)
 
-        # build interation chain
+        # build iteration chain
         continue_prompt: Prompt = super(AgentTemplate, self).process_prompt(
             agent_input, prompt_version=self.continue_prompt_version)
         continue_chain = continue_prompt.as_langchain() | llm.as_langchain_runnable(
@@ -138,7 +138,7 @@ class ContextualIterationAgentTemplate(AgentTemplate):
         agent_input['chat_history'] = json.dumps(conversation_history,
                                                  ensure_ascii=False)
 
-        # build interation chain
+        # build iteration chain
         continue_prompt: Prompt = super(AgentTemplate, self).process_prompt(
             agent_input, prompt_version=self.continue_prompt_version)
         continue_chain = continue_prompt.as_langchain() | llm.as_langchain_runnable(

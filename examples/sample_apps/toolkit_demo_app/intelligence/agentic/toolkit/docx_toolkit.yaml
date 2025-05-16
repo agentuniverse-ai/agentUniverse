@@ -1,0 +1,12 @@
+name: 'docx_toolkit'
+description: |
+  这是一个docx相关的工具集
+transport: 'stdio'
+command: 'uvx'
+args:
+  - 'mcp-server-office'
+
+metadata:
+  type: 'TOOLKIT'
+  module: 'agentuniverse.agent.action.toolkit.mcp_toolkit'
+  class: 'MCPToolkit'

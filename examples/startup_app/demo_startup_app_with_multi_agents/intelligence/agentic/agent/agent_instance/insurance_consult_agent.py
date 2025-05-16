@@ -32,7 +32,7 @@ class InsuranceConsultAgent(Agent):
 
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
         detail_tool = ToolManager().get_instance_obj('insurance_info_tool')
-        tool_res = detail_tool.run(query='保险产品A')
+        tool_res = detail_tool.run(ins_name='保险产品A')
         agent_input['prod_description'] = tool_res
 
         # 1. planning agent.

@@ -1,0 +1,9 @@
+name: 'qwen2.5-72b-instruct'
+description: 'qwen2.5-72b-instruct'
+model_name: 'qwen2.5-72b-instruct'
+temperature: 0.5
+max_tokens: 2000
+max_context_length: 131072
+streaming: True
+channel: qwen2.5-72b-official
+meta_class: 'agentuniverse.llm.default.qwen_openai_style_llm.QWenOpenAIStyleLLM'

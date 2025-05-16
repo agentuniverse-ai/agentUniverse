@@ -11,7 +11,7 @@ agentUniverse automatically registers SQLDBWrapper configuration files by scanni
 default = ['default_scan_path']
 sqldb_wrapper = ['sqldb_wrapper_scan_path']
 ```
-By default, AgentUniverse scans all paths under either `default` or `sqldb_wrapper`sections in the configurtion, with paths under `sqldb_wrapper` having a higher priority than those under `default`.
+By default, AgentUniverse scans all paths under either `default` or `sqldb_wrapper`sections in the configuration, with paths under `sqldb_wrapper` having a higher priority than those under `default`.
 
 
 ### Step Two: Configuration File

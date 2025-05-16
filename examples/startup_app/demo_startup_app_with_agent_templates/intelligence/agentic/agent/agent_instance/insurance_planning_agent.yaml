@@ -60,5 +60,5 @@ profile:
     temperature: 0.3
 metadata:
   type: 'AGENT'
-  module: 'demo_startup_app_with_multi_agents.intelligence.agentic.agent.agent_instance.insurance_planning_agent'
+  module: 'demo_startup_app_with_agent_templates.intelligence.agentic.agent.agent_instance.insurance_planning_agent'
   class: 'InsurancePlanningAgent'

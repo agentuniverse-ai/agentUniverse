@@ -1,0 +1,8 @@
+channel_name: 'deepseek-r1-qianfan'
+channel_api_key: '${QIANFAN_API_KEY}'
+channel_api_base: 'https://qianfan.baidubce.com/v2/'
+channel_model_name: deepseek-r1
+model_support_stream: True
+model_support_max_context_length: 65536
+model_is_openai_protocol_compatible: True
+meta_class: 'agentuniverse.llm.llm_channel.qianfan_llm_channel.QianfanLLMChannel'

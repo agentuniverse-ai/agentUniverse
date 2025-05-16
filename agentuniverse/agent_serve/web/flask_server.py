@@ -1,20 +1,22 @@
-import traceback
 import time
-from flask import Flask, Response, g, request, make_response, jsonify
-from werkzeug.exceptions import HTTPException
-from loguru import logger
+import traceback
 from concurrent.futures import TimeoutError
-import opentracing
-from ..service_instance import ServiceInstance, ServiceNotFoundError
-from .request_task import RequestTask
-from .web_util import request_param, service_run_queue, make_standard_response, FlaskServerManager
-from .thread_with_result import ThreadPoolExecutorWithReturnValue
-from ...base.util.logging.logging_util import LOGGER
-from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
-from agentuniverse.base.util.logging.general_logger import get_context_prefix
-from agentuniverse.base.util.tracing.au_trace_manager import AuTraceManager
 
+from flask import Flask, Response, g, request, make_response, \
+    copy_current_request_context
+from loguru import logger
+from werkzeug.exceptions import HTTPException
 from werkzeug.local import LocalProxy
+
+from agentuniverse.base.util.logging.general_logger import get_context_prefix
+from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
+from .request_task import RequestTask
+from .thread_with_result import ThreadPoolExecutorWithReturnValue
+from .web_util import request_param, service_run_queue, make_standard_response, \
+    FlaskServerManager
+from ..service_instance import ServiceInstance, ServiceNotFoundError
+from ...base.context.context_coordinator import ContextCoordinator
+from ...base.util.logging.logging_util import LOGGER
 
 
 # Patch original flask request so it can be dumped by loguru.
@@ -42,11 +44,8 @@ LocalProxy.__reduce_ex__ = localproxy_reduce_ex
 
 
 # log stream response
-def timed_generator(generator, start_time, span):
+def timed_generator(generator, start_time, context_prefix):
     try:
-        opentracing.tracer.scope_manager.activate(
-            span, finish_on_close=False
-        )
         for data in generator:
             yield data
     finally:
@@ -55,7 +54,7 @@ def timed_generator(generator, start_time, span):
             log_type=LogTypeEnum.flask_response,
             flask_response="Stream finished",
             elapsed_time=elapsed_time,
-            context_prefix=get_context_prefix()
+            context_prefix=context_prefix
         ).info("Stream finished.")
 
 
@@ -84,6 +83,13 @@ def after_request(response):
             context_prefix=get_context_prefix()
         ).info("After request.")
     return response
+
+@app.teardown_request
+def teardown_resource(exception):
+    """
+    Clear the context
+    """
+    ContextCoordinator.end_context()
 
 
 @app.route("/echo")
@@ -119,7 +125,7 @@ def service_run(service_id: str, params: dict, saved: bool = False):
         request_task = RequestTask(ServiceInstance(service_id).run, saved,
                                    **params)
         with ThreadPoolExecutorWithReturnValue() as executor:
-            future = executor.submit(request_task.run)
+            future = executor.submit(copy_current_request_context(request_task.run))
             result = future.result(timeout=FlaskServerManager().sync_service_timeout)
     except TimeoutError:
         return make_standard_response(success=False,
@@ -147,10 +153,9 @@ def service_run_stream(service_id: str, params: dict, saved: bool = False):
     params['service_id'] = service_id
     params['streaming'] = True
     task = RequestTask(service_run_queue, saved, **params)
-    span = opentracing.tracer.active_span
-    response = Response(timed_generator(task.stream_run(), g.start_time, span), mimetype="text/event-stream")
+    context_prefix = get_context_prefix()
+    response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
     response.headers['X-Request-ID'] = task.request_id
-    LOGGER.info("au_test")
     return response
 
 
@@ -238,11 +243,10 @@ def openai_protocol_chat(model: str, messages: list):
         "messages": messages,
         "stream": stream
     }
-    span = opentracing.tracer.active_span
     if stream:
-        span = opentracing.tracer.active_span
         task = RequestTask(service_run_queue, False, **params)
-        response = Response(timed_generator(task.user_stream_run(), g.start_time,span), mimetype="text/event-stream")
+        context_prefix = get_context_prefix()
+        response = Response(timed_generator(task.user_stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
         response.headers['X-Request-ID'] = task.request_id
         return response
     try:

@@ -1,0 +1,8 @@
+id: google_search_tool
+nickname: 谷歌web搜索工具
+type: TOOL
+avatar: ../../../resources/google_search.png
+metadata:
+  type: 'PRODUCT'
+  module: 'agentuniverse_product.base.product'
+  class: 'Product'

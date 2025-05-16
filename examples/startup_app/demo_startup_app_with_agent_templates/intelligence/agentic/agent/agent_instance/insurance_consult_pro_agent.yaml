@@ -7,5 +7,5 @@ profile:
   expressing: 'insurance_expressing_agent'
 metadata:
   type: 'AGENT'
-  module: 'examples.startup_app.demo_startup_app_with_agent_templates.intelligence.agentic.agent.agent_template.insurance_agent_template'
+  module: 'demo_startup_app_with_agent_templates.intelligence.agentic.agent.agent_template.insurance_agent_template'
   class: 'InsuranceAgentTemplate'

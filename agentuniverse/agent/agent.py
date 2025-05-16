@@ -16,10 +16,12 @@ from langchain_core.runnables import RunnableSerializable, RunnableConfig
 from langchain_core.utils.json import parse_json_markdown
 
 from agentuniverse.agent.action.knowledge.knowledge import Knowledge
-from agentuniverse.agent.action.knowledge.knowledge_manager import KnowledgeManager
+from agentuniverse.agent.action.knowledge.knowledge_manager import \
+    KnowledgeManager
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
+from agentuniverse.agent.action.toolkit.toolkit_manager import ToolkitManager
 from agentuniverse.agent.agent_model import AgentModel
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
@@ -28,7 +30,8 @@ from agentuniverse.agent.memory.message import Message
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.plan.planner.planner import Planner
 from agentuniverse.agent.plan.planner.planner_manager import PlannerManager
-from agentuniverse.agent.plan.planner.react_planner.stream_callback import InvokeCallbackHandler
+from agentuniverse.agent.plan.planner.react_planner.stream_callback import \
+    InvokeCallbackHandler
 from agentuniverse.base.annotation.trace import trace_agent
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
@@ -36,12 +39,15 @@ from agentuniverse.base.config.application_configer.application_config_manager \
     import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.agent_configer \
     import AgentConfiger
+from agentuniverse.base.context.framework_context_manager import \
+    FrameworkContextManager
 from agentuniverse.base.util.agent_util import process_agent_llm_config
 from agentuniverse.base.util.common_util import stream_output
-from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 from agentuniverse.base.util.logging.logging_util import LOGGER
-from agentuniverse.base.util.memory_util import generate_messages, get_memory_string
-from agentuniverse.base.util.system_util import process_dict_with_funcs, is_system_builtin
+from agentuniverse.base.util.memory_util import generate_messages, \
+    get_memory_string
+from agentuniverse.base.util.system_util import process_dict_with_funcs, \
+    is_system_builtin
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.prompt.chat_prompt import ChatPrompt
@@ -355,8 +361,21 @@ class Agent(ComponentBase, ABC):
             'reasoning_content': "".join(reasoning_content)
         }
 
+    @property
+    def tool_names(self) -> list:
+        return self._get_tool_names()
+
+    def _get_tool_names(self) -> list:
+        tool_name_list = self.agent_model.action.get('tool', [])
+        if tool_name_list is None:
+            tool_name_list = []
+        for toolkit_name in self.agent_model.action.get('toolkit', []):
+            toolkit = ToolkitManager().get_instance_obj(toolkit_name)
+            tool_name_list.extend(toolkit.tool_names)
+        return tool_name_list
+
     def invoke_tools(self, input_object: InputObject, **kwargs) -> str:
-        tool_names = kwargs.get('tool_names') or self.agent_model.action.get('tool', [])
+        tool_names = kwargs.get('tool_names') or self.tool_names
         if not tool_names:
             return ''
 
@@ -366,8 +385,11 @@ class Agent(ComponentBase, ABC):
             tool: Tool = ToolManager().get_instance_obj(tool_name)
             if tool is None:
                 continue
-            tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
-            tool_results.append(str(tool.run(**tool_input)))
+            try:
+                tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
+                tool_results.append(str(tool.run(**tool_input)))
+            except:
+                pass
         return "\n\n".join(tool_results)
 
     async def async_invoke_tools(self, input_object: InputObject, **kwargs) -> str:
@@ -536,6 +558,22 @@ class Agent(ComponentBase, ABC):
             else:
                 return memory_messages[-1].content
         return "Up to Now, No Summarize Memory"
+
+    def get_tool_descriptions(self) -> List[str]:
+        description_list = []
+        if self.agent_model.action.get('tool', []):
+            for tool in self.agent_model.action.get('tool', []):
+                tool_ins = ToolManager().get_instance_obj(tool)
+                description_list.append(f'tool name:{tool_ins.name}\ntool description:{tool_ins.description}\n')
+
+        if self.agent_model.action.get('toolkit', []):
+            for toolkit in self.agent_model.action.get('toolkit', []):
+                description_list.extend(ToolkitManager().get_instance_obj(toolkit).tool_descriptions)
+
+        return description_list
+
+    def get_func_call_list(self) -> List[str]:
+        pass
 
     def create_copy(self):
         copied = self.model_copy()

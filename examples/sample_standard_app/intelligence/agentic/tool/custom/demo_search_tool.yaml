@@ -21,6 +21,8 @@ description: |
 tool_type: 'api'
 input_keys: ['input']
 serper_api_key: '${SERPER_API_KEY}'
+as_mcp_tool:
+  server_name: mcp_search_server
 # The placeholder "${ROOT_PACKAGE}" is mapped to the value of "ROOT_PACKAGE" defined in the config.toml file.
 # It allows you to conveniently manage multiple different agent applications by configuring the root package value.
 meta_class: '${ROOT_PACKAGE}.intelligence.agentic.tool.custom.demo_search_tool.DemoSearchTool'

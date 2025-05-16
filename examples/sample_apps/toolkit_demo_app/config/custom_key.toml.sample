@@ -1,0 +1,46 @@
+# Example file of custom_key.toml. Rename to custom_key.toml while using.
+[KEY_LIST]
+# Perform a full component scan and registration for all the paths under this list.
+example_key = 'AnExampleKey'
+
+# models
+#kimi default name: default_kimi_llm
+#KIMI_API_KEY='sk-xxxxxxxx'
+#
+##Qwen default name: default_qwen_llm
+#DASHSCOPE_API_KEY='sk-xxxxxx'
+#
+##Opean default name: default_openai_llm
+#OPENAI_API_KEY='sk-xxxxxx'
+#
+##DEEPSEEK default name: default_deepseek_llm
+#DEEPSEEK_API_KEY='sk-xxxxxxx'
+#DEEPSEEK_API_BASE='https://api.deepseek.com/v1'
+#
+## WenXin default name: default_wenxin_llm
+#QIANFAN_AK='xxxx'
+#QIANFAN_SK='xxxx'
+#
+##Ollama default name: default_ollama_llm
+#OLLAMA_BASE_URL='xxxxxx'
+#
+##claude default name: default_claude_llm
+#ANTHROPIC_API_KEY='xxxxxx'
+#ANTHROPIC_API_URL='xxxxxx'
+#
+##baichuan default name: default_baichuan_llm
+#BAICHUAN_API_KEY='xxxxxx'
+#
+##ZHIPU default name: default_zhipu_llm
+#ZHIPU_API_KEY='xxxxxx'
+#ZHIPU_API_BASE='https://open.bigmodel.cn/api/paas/v4/'
+
+# search
+#Google search
+#SERPER_API_KEY='xxxxxx'
+#
+##search api
+#SEARCHAPI_API_KEY='xxxxxx'
+#
+##bing seacrh
+#BING_SUBSCRIPTION_KEY='xxxxxx'

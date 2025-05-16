@@ -10,7 +10,7 @@ max_workers = 10
 server_port = 50051
 ```
 - **activate**: The gRPC server will only start when this value is set to `true`.
-- **max_workers**: TThe maximum number of threads in the gRPC server thread pool, with a default of 10.
+- **max_workers**: The maximum number of threads in the gRPC server thread pool, with a default of 10.
 - **server_port**: The service port of the gRPC server, with a default of 50051.
 
 And then，proceed to start the gRPC server:
