@@ -17,7 +17,7 @@ def chat(question: str, session_id=None):
 
     The peer agents in agentUniverse become a chatbot and can ask questions to get the answer.
     """
-    instance: Agent = AgentManager().get_instance_obj('demo_agent')
+    instance: Agent = AgentManager().get_instance_obj('GrrAgent')
     output_object = instance.run(input=question, session_id=session_id)
     res_info = f"\nDemo agent execution result is :\n"
     res_info += output_object.get_data('output').get('text')
