@@ -1,0 +1,18 @@
+info:
+  name: 'demo_rag_agent'
+  description: 'demo rag agent'
+profile:
+  prompt_version: demo_rag_agent.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.1
+memory:
+  name: 'demo_memory'
+action:
+  tool:
+    - 'google_search_tool'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.rag_agent_template'
+  class: 'RagAgentTemplate'

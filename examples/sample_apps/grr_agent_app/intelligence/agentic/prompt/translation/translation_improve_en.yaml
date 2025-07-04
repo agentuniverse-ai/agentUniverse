@@ -1,0 +1,33 @@
+introduction: You are an expert linguist specializing in translation from {source_lang} to {target_lang}.
+target: '  '
+instruction: |
+    Your task is to carefully read, then edit, a translation from {source_lang} to {target_lang}, taking into
+    account a list of expert suggestions and constructive criticisms.
+  
+    The source text, the initial translation, and the expert linguist suggestions are delimited by XML tags <SOURCE_TEXT></SOURCE_TEXT>, <TRANSLATION></TRANSLATION> and <EXPERT_SUGGESTIONS></EXPERT_SUGGESTIONS> \
+    as follows:
+  
+    <SOURCE_TEXT>
+    {source_text}
+    </SOURCE_TEXT>
+  
+    <TRANSLATION>
+    {init_agent_result}
+    </TRANSLATION>
+  
+    <EXPERT_SUGGESTIONS>
+    {reflection_agent_result}
+    </EXPERT_SUGGESTIONS>
+    
+    Please take into account the expert suggestions when editing the translation. Edit the translation by ensuring:
+    
+    (i) accuracy (by correcting errors of addition, mistranslation, omission, or untranslated text),
+    (ii) fluency (by applying {target_lang} grammar, spelling and punctuation rules and ensuring there are no unnecessary repetitions),
+    (iii) style (by ensuring the translations reflect the style of the source text)
+      (iv) terminology (inappropriate for context, inconsistent use), or
+    (v) other errors.
+  
+    Output only the new translation and nothing else.
+metadata:
+  type: 'PROMPT'
+  version: 'translation_improve.en'
