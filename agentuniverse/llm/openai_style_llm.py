@@ -14,11 +14,15 @@ import tiktoken
 from langchain_core.language_models.base import BaseLanguageModel
 from openai import OpenAI, AsyncOpenAI
 
-from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
+from agentuniverse.agent.memory.message import Message
+from agentuniverse.base.config.component_configer.configers.llm_configer import \
+    LLMConfiger
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.base.util.system_util import process_yaml_func
-from agentuniverse.llm.llm import LLM, LLMOutput
-from agentuniverse.llm.openai_style_langchain_instance import LangchainOpenAIStyleInstance
+from agentuniverse.llm.llm import LLM
+from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
+from agentuniverse.llm.openai_style_langchain_instance import \
+    LangchainOpenAIStyleInstance
 
 
 class OpenAIStyleLLM(LLM):
@@ -203,9 +207,15 @@ class OpenAIStyleLLM(LLM):
         choice = chunk["choices"][0]
         message = choice.get("delta")
         text = message.get("content")
+        role = message.get("role")
         if text is None:
             text = ""
-        return LLMOutput(text=text, raw=chat_completion.model_dump())
+        return LLMOutput(
+            text=text,
+            raw=chat_completion.model_dump(),
+            message=Message(content=text, type=role),
+            usage=TokenUsage.from_openai(chunk.get('usage', {}))
+        )
 
     def generate_stream_result(self, stream: openai.Stream):
         """Generate the result of the stream."""
