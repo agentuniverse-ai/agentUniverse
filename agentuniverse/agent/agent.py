@@ -64,6 +64,9 @@ class Agent(ComponentBase, ABC):
         """Initialize the AgentModel with the given keyword arguments."""
         super().__init__(component_type=ComponentEnum.AGENT)
 
+    class Config:
+        arbitrary_types_allowed = True
+
     @abstractmethod
     def input_keys(self) -> list[str]:
         """Return the input keys of the Agent."""
@@ -589,5 +592,6 @@ class Agent(ComponentBase, ABC):
     def create_copy(self):
         copied = self.model_copy()
         if self.agent_model is not None:
-            copied.agent_model = self.agent_model.model_copy(deep=True)
+            js = self.agent_model.to_json(indent=2)
+            copied.agent_model = AgentModel.from_json(js)
         return copied

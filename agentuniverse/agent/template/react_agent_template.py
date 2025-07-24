@@ -190,8 +190,13 @@ class ReActAgentTemplate(AgentTemplate):
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'ReActAgentTemplate':
         super().initialize_by_component_configer(component_configer)
-        self.prompt_version = self.agent_model.profile.get('prompt_version', 'default_react_agent.cn')
         self.stop_sequence = self.agent_model.profile.get('stop_sequence')
         self.max_iterations = self.agent_model.profile.get('max_iterations', 10)
         self.agent_names = self.agent_model.action.get('agent', [])
         return self
+
+    @AgentTemplate.prompt_version.getter
+    def prompt_version(self) -> str:
+        return self.agent_model.profile.get('prompt_version',
+                                            'default_react_agent.cn')
+

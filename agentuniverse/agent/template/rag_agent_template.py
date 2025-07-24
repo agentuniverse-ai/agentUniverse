@@ -46,5 +46,8 @@ class RagAgentTemplate(AgentTemplate):
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'RagAgentTemplate':
         super().initialize_by_component_configer(component_configer)
-        self.prompt_version = self.agent_model.profile.get('prompt_version', 'default_rag_agent.cn')
         return self
+
+    @AgentTemplate.prompt_version.getter
+    def prompt_version(self):
+        return self.agent_model.profile.get('prompt_version', 'default_rag_agent.cn')
