@@ -53,5 +53,8 @@ class NluRagRouteAgent(RagAgentTemplate):
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'NluRagRouteAgent':
         super().initialize_by_component_configer(component_configer)
-        self.prompt_version = self.agent_model.profile.get('prompt_version', 'nlu_rag_route_prompt.cn')
         return self
+
+    @RagAgentTemplate.prompt_version.getter
+    def prompt_version(self):
+        return self.agent_model.profile.get('prompt_version', 'nlu_rag_route_prompt.cn')

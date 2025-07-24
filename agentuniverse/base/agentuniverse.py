@@ -2,38 +2,49 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/4/2 15:27
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: agentuniverse.py
 import importlib
 import sys
 from pathlib import Path
-from typing import List
 
+from agentuniverse.agent.agent_model import set_property_loader_cls
+from agentuniverse.agent_serve.web.after_register_queue import \
+    AFTER_REGISTER_QUEUE
 from agentuniverse.agent_serve.web.mcp.mcp_server_manager import \
     MCPServerManager
+from agentuniverse.agent_serve.web.post_fork_queue import POST_FORK_QUEUE
+from agentuniverse.agent_serve.web.request_task import RequestLibrary
+from agentuniverse.agent_serve.web.rpc.grpc.grpc_server_booster import \
+    set_grpc_config
+from agentuniverse.agent_serve.web.web_booster import ACTIVATE_OPTIONS
+from agentuniverse.agent_serve.web.web_util import FlaskServerManager
 from agentuniverse.base.annotation.singleton import singleton
-from agentuniverse.base.component.application_component_manager import ApplicationComponentManager
+from agentuniverse.base.component.application_component_manager import \
+    ApplicationComponentManager
 from agentuniverse.base.component.component_base import ComponentBase
-from agentuniverse.base.config.application_configer.app_configer import AppConfiger
-from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
-from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
-from agentuniverse.base.component.component_configer_util import ComponentConfigerUtil
+from agentuniverse.base.component.component_configer_util import \
+    ComponentConfigerUtil
+from agentuniverse.base.component.component_enum import ComponentEnum
+from agentuniverse.base.config.application_configer.app_configer import \
+    AppConfiger
+from agentuniverse.base.config.application_configer.application_config_manager import \
+    ApplicationConfigManager
+from agentuniverse.base.config.component_configer.component_configer import \
+    ComponentConfiger
 from agentuniverse.base.config.config_type_enum import ConfigTypeEnum
 from agentuniverse.base.config.configer import Configer
-from agentuniverse.base.config.custom_configer.default_llm_configer import DefaultLLMConfiger
-from agentuniverse.base.config.custom_configer.custom_key_configer import CustomKeyConfiger
-from agentuniverse.base.component.component_enum import ComponentEnum
-from agentuniverse.base.util.monitor.monitor import Monitor
-from agentuniverse.base.util.system_util import get_project_root_path, is_api_key_missing, \
-    is_system_builtin, find_default_llm_config
-from agentuniverse.base.util.logging.logging_util import init_loggers
-from agentuniverse.agent_serve.web.request_task import RequestLibrary
-from agentuniverse.agent_serve.web.rpc.grpc.grpc_server_booster import set_grpc_config
-from agentuniverse.agent_serve.web.web_booster import ACTIVATE_OPTIONS
-from agentuniverse.agent_serve.web.post_fork_queue import POST_FORK_QUEUE
-from agentuniverse.agent_serve.web.web_util import FlaskServerManager
+from agentuniverse.base.config.custom_configer.custom_key_configer import \
+    CustomKeyConfiger
+from agentuniverse.base.config.custom_configer.default_llm_configer import \
+    DefaultLLMConfiger
 from agentuniverse.base.tracing.otel.telemetry_manager import TelemetryManager
+from agentuniverse.base.util.logging.logging_util import init_loggers
+from agentuniverse.base.util.monitor.monitor import Monitor
+from agentuniverse.base.util.system_util import get_project_root_path, \
+    find_default_llm_config
+
 
 @singleton
 class AgentUniverse(object):
@@ -133,7 +144,13 @@ class AgentUniverse(object):
         Monitor(configer=configer)
 
         # scan and register the components
+        agent_model_property_loader = configer.value.get('AGENT_MODEL', {}).get('agent_model_property_loader')
+        if agent_model_property_loader:
+            set_property_loader_cls(agent_model_property_loader)
         self.__scan_and_register(self.__config_container.app_configer)
+
+        for _func, args, kwargs in AFTER_REGISTER_QUEUE:
+            _func(*args, **kwargs)
         if core_mode:
             for _func, args, kwargs in POST_FORK_QUEUE:
                 _func(*args, **kwargs)

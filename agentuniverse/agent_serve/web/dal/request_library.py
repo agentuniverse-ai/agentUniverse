@@ -67,6 +67,9 @@ class RequestLibrary:
         # create a sqldb_wrapper_instance
         _configer = SQLDBWrapperConfiger()
         _configer.db_uri = system_db_uri
+        _configer.sql_database_args = {
+            'lazy_table_reflection': True
+        }
         self.sqldb_wrapper = SQLDBWrapper(
             name="__system_db__",
             db_wrapper_configer=_configer

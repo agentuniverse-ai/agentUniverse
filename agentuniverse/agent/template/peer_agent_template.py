@@ -193,5 +193,4 @@ class PeerAgentTemplate(AgentTemplate):
         if self.agent_model.profile.get('expert_framework') or planner_config.get('expert_framework'):
             self.expert_framework = \
                 self.agent_model.profile.get('expert_framework') or planner_config.get('expert_framework')
-        self.memory_name = self.agent_model.memory.get('name')
         return self

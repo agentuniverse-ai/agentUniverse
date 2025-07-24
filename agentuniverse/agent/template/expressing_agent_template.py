@@ -48,9 +48,13 @@ class ExpressingAgentTemplate(AgentTemplate):
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'ExpressingAgentTemplate':
         super().initialize_by_component_configer(component_configer)
-        self.prompt_version = self.agent_model.profile.get('prompt_version', 'default_expressing_agent.cn')
         self.validate_required_params()
         return self
+
+    @AgentTemplate.prompt_version.getter
+    def prompt_version(self) -> str:
+        return self.agent_model.profile.get('prompt_version',
+                                            'default_expressing_agent.cn')
 
     def validate_required_params(self):
         if not self.llm_name:

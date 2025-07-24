@@ -25,11 +25,6 @@ from agentuniverse.prompt.prompt import Prompt
 
 
 class AgentTemplate(Agent, ABC):
-    llm_name: Optional[str] = ''
-    memory_name: Optional[str] = None
-    knowledge_names: Optional[list[str]] = None
-    prompt_version: Optional[str] = None
-    conversation_memory_name: Optional[str] = None
 
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
         memory: Memory = self.process_memory(agent_input, **kwargs)
@@ -76,11 +71,47 @@ class AgentTemplate(Agent, ABC):
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'AgentTemplate':
         super().initialize_by_component_configer(component_configer)
-        self.llm_name = self.agent_model.profile.get('llm_model', {}).get('name')
-        self.memory_name = self.agent_model.memory.get('name')
-        self.knowledge_names = self.agent_model.action.get('knowledge', [])
-        self.conversation_memory_name = self.agent_model.memory.get('conversation_memory', '')
         return self
+
+    @property
+    def llm_name(self):
+        return self.agent_model.profile.get('llm_model', {}).get('name')
+
+    @llm_name.setter
+    def llm_name(self, value):
+        self.agent_model.profile.get('llm_model', {})['name'] = value
+
+    @property
+    def memory_name(self):
+        return self.agent_model.memory.get('name')
+
+    @memory_name.setter
+    def memory_name(self, value):
+        self.agent_model.memory['name'] = value
+
+    @property
+    def knowledge_names(self):
+        return self.agent_model.action.get('knowledge', [])
+
+    @knowledge_names.setter
+    def knowledge_names(self, value):
+        self.agent_model.action['knowledge'] = value
+
+    @property
+    def prompt_version(self):
+        return self.agent_model.profile.get('prompt_version')
+
+    @prompt_version.setter
+    def prompt_version(self, value):
+        self.agent_model.profile['prompt_version'] = value
+
+    @property
+    def conversation_memory_name(self):
+        return self.agent_model.memory.get('conversation_memory', '')
+
+    @conversation_memory_name.setter
+    def conversation_memory_name(self, value):
+        self.agent_model.memory['conversation_memory'] = value
 
     def process_llm(self, **kwargs) -> LLM:
         return super().process_llm(llm_name=self.llm_name)

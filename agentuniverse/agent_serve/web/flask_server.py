@@ -3,7 +3,7 @@ import traceback
 from concurrent.futures import TimeoutError
 
 from flask import Flask, Response, g, request, make_response, \
-    copy_current_request_context
+    copy_current_request_context, jsonify
 from loguru import logger
 from werkzeug.exceptions import HTTPException
 from werkzeug.local import LocalProxy
@@ -99,8 +99,13 @@ def echo():
 
 @app.route("/liveness")
 def liveness():
-    return make_standard_response(success=True,
-                                  result="liveness health check pass!")
+    response_data = {
+        "success": True,
+        "result": "liveness health check pass!",
+        "message": None,
+        "request_id": None
+    }
+    return make_response(jsonify(response_data), 200)
 
 
 @app.route("/service_run", methods=['POST'])
