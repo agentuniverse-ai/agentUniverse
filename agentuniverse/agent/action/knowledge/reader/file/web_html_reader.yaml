@@ -1,0 +1,6 @@
+name: 'default_web_html_reader'
+description: 'default web html reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.web_html_reader'
+  class: 'HtmlReader'
