@@ -18,5 +18,6 @@ class LogTypeEnum(str, Enum):
     agent_first_token = 'agent_first_token'
     llm_input = 'llm_input'
     llm_invocation = 'llm_invocation'
+    llm_token_usage = 'llm_token_usage'
     tool_input = 'tool_input'
     tool_invocation = 'tool_invocation'

@@ -53,13 +53,19 @@ class Monitor(BaseModel):
     @staticmethod
     def trace_llm_invocation(source: str, llm_input: Union[str, dict], llm_output: Union[str, dict],
                              cost_time: float = None) -> None:
+        # 获取当前的 token usage
+        current_token_usage = Monitor.get_token_usage()
+        
+        # 增强的日志输出，包含详细的 token usage 信息
         logger.bind(
             log_type=LogTypeEnum.llm_invocation,
-            used_token=Monitor.get_token_usage(),
+            used_token=current_token_usage,
+            token_details=Monitor._format_token_usage_details(current_token_usage),
             cost_time=cost_time,
             llm_output=llm_output,
             context_prefix=get_context_prefix()
-        ).info("Trace llm invocation.")
+        ).info(f"LLM Invocation - Source: {source}, "
+               f"Token Usage: {Monitor._format_token_usage_summary(current_token_usage)}")
 
     def trace_llm_token_usage(self, llm_obj: object, llm_input: dict, output: LLMOutput) -> None:
         """ Trace the token usage of the given LLM object.
@@ -78,6 +84,15 @@ class Monitor(BaseModel):
             if old_token_usage is not None:
                 if token_usage:
                     Monitor.add_token_usage(token_usage)
+                    
+                    # 新增：输出当前的 token usage 信息
+                    if self.log_activate:
+                        logger.bind(
+                            log_type=LogTypeEnum.llm_token_usage,
+                            current_token_usage=token_usage,
+                            cumulative_token_usage=Monitor.get_token_usage(),
+                            context_prefix=get_context_prefix()
+                        ).info(f"LLM Token Usage Updated: {self._format_token_usage_summary(token_usage)}")
 
     def trace_agent_input(self, source: str, agent_input: Union[str, dict]) -> None:
         """Trace the agent input."""
@@ -351,3 +366,34 @@ class Monitor(BaseModel):
                 return o
 
         return recursive_filter(obj)
+
+    @staticmethod
+    def _format_token_usage_summary(token_usage: dict) -> str:
+        """Format token usage into a concise summary string."""
+        if not token_usage:
+            return "No token usage data"
+        
+        # 支持两种格式：旧格式 (text_in/text_out) 和新格式 (prompt_tokens/completion_tokens)
+        input_tokens = token_usage.get('text_in', token_usage.get('prompt_tokens', 0))
+        output_tokens = token_usage.get('text_out', token_usage.get('completion_tokens', 0))
+        total_tokens = input_tokens + output_tokens
+        
+        return f"Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}"
+
+    @staticmethod
+    def _format_token_usage_details(token_usage: dict) -> dict:
+        """Format token usage into detailed dictionary for logging."""
+        if not token_usage:
+            return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        
+        # 支持两种格式：旧格式 (text_in/text_out) 和新格式 (prompt_tokens/completion_tokens)
+        input_tokens = token_usage.get('text_in', token_usage.get('prompt_tokens', 0))
+        output_tokens = token_usage.get('text_out', token_usage.get('completion_tokens', 0))
+        total_tokens = input_tokens + output_tokens
+        
+        return {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "raw_usage": token_usage
+        }
