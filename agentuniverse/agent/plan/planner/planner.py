@@ -38,6 +38,8 @@ class Planner(ComponentBase):
     Base class for all planners.
 
     All planners should inherit from this class
+
+    Note: This class is deprecated in version v0.0.14 and later.
     """
     name: Optional[str] = None
     description: Optional[str] = None
