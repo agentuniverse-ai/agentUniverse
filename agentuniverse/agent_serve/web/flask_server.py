@@ -14,6 +14,7 @@ from .request_task import RequestTask
 from .thread_with_result import ThreadPoolExecutorWithReturnValue
 from .web_util import request_param, service_run_queue, make_standard_response, \
     FlaskServerManager
+from agentuniverse.base.context.mcp_session_manager import MCPSessionManager
 from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
 from ...base.util.logging.logging_util import LOGGER
@@ -71,6 +72,7 @@ def before():
         context_prefix=get_context_prefix()
     ).info("Before request.")
     g.start_time = time.time()
+    MCPSessionManager().init_session()
 
 
 @app.after_request
