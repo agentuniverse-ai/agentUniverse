@@ -28,8 +28,18 @@ from ...agent.output_object import OutputObject
 from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
+from ...base.context.context_coordinator import ContextCoordinator
+
 
 EOF_SIGNAL = '{"type": "EOF"}'
+
+
+class CleanableThread(ThreadWithReturnValue):
+    def run(self):
+        try:
+            super().run()      # 这里内部会捕获并存储 return / exception
+        finally:
+            ContextCoordinator().end_context()    # 一定执行，且 **不影响** 已捕获的异常
 
 
 @enum.unique
@@ -247,8 +257,8 @@ class RequestTask:
     def async_run(self):
         """Run the service in async mode."""
         self.kwargs['output_stream'] = self.queue
-        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func),
-                                            kwargs=self.kwargs)
+        self.thread = CleanableThread(target=copy_current_request_context(self.func),
+                                      kwargs=self.kwargs)
         self.thread.start()
         Thread(target=self.append_steps).start()
         Thread(target=self.check_state).start()

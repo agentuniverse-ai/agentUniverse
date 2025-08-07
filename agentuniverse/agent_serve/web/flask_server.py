@@ -8,13 +8,13 @@ from loguru import logger
 from werkzeug.exceptions import HTTPException
 from werkzeug.local import LocalProxy
 
+from agentuniverse.base.context.mcp_session_manager import MCPSessionManager
 from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 from .request_task import RequestTask
 from .thread_with_result import ThreadPoolExecutorWithReturnValue
 from .web_util import request_param, service_run_queue, make_standard_response, \
     FlaskServerManager
-from agentuniverse.base.context.mcp_session_manager import MCPSessionManager
 from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
 from ...base.util.logging.logging_util import LOGGER
@@ -50,6 +50,7 @@ def timed_generator(generator, start_time, context_prefix):
         for data in generator:
             yield data
     finally:
+        ContextCoordinator.end_context()
         elapsed_time = time.time() - start_time
         logger.bind(
             log_type=LogTypeEnum.flask_response,
@@ -86,13 +87,6 @@ def after_request(response):
         ).info("After request.")
     return response
 
-@app.teardown_request
-def teardown_resource(exception):
-    """
-    Clear the context
-    """
-    ContextCoordinator.end_context()
-
 
 @app.route("/echo")
 def echo():
@@ -128,6 +122,7 @@ def service_run(service_id: str, params: dict, saved: bool = False):
             result of the task.
     """
     try:
+        MCPSessionManager().init_session()
         params = {} if params is None else params
         request_task = RequestTask(ServiceInstance(service_id).run, saved,
                                    **params)
@@ -138,6 +133,8 @@ def service_run(service_id: str, params: dict, saved: bool = False):
         return make_standard_response(success=False,
                                       message="AU sync service timeout",
                                       status_code=504)
+    finally:
+        ContextCoordinator().end_context()
 
     return make_standard_response(success=True, result=result,
                                   request_id=request_task.request_id)
@@ -161,6 +158,7 @@ def service_run_stream(service_id: str, params: dict, saved: bool = False):
     params['streaming'] = True
     task = RequestTask(service_run_queue, saved, **params)
     context_prefix = get_context_prefix()
+    MCPSessionManager().init_session()
     response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
     response.headers['X-Request-ID'] = task.request_id
     return response
@@ -221,6 +219,7 @@ def service_run_result(request_id: str):
 @app.errorhandler(HTTPException)
 def handle_http_exception(e):
     """A global exception handler handle flask origin http exceptions."""
+    ContextCoordinator.end_context()
     response = e.get_response()
     return response
 
@@ -228,6 +227,7 @@ def handle_http_exception(e):
 @app.errorhandler(Exception)
 def handle_exception(e):
     """A global non http exception handler"""
+    ContextCoordinator.end_context()
     LOGGER.error(traceback.format_exc())
     if isinstance(e, ServiceNotFoundError):
         return make_standard_response(success=False,
@@ -250,6 +250,7 @@ def openai_protocol_chat(model: str, messages: list):
         "messages": messages,
         "stream": stream
     }
+    MCPSessionManager().init_session()
     if stream:
         task = RequestTask(service_run_queue, False, **params)
         context_prefix = get_context_prefix()
@@ -267,6 +268,8 @@ def openai_protocol_chat(model: str, messages: list):
         return make_standard_response(success=False,
                                       message="AU sync service timeout",
                                       status_code=504)
+    finally:
+        ContextCoordinator().end_context()
     response = make_response(result, 200)
     response.headers['X-Request-ID'] = request_task.request_id
     return response
