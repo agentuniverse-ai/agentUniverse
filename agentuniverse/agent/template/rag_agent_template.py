@@ -4,7 +4,7 @@
 # @Time    : 2024/10/24 21:19
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: rag_template.py
+# @FileName: rag_agent_template.py
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.template.agent_template import AgentTemplate

@@ -3,7 +3,7 @@
 # @Time    : 2025/2/26 09:47
 # @Author  : weizjajj 
 # @Email   : weizhongjie.wzj@antgroup.com
-# @FileName: openai_agent_template.py
+# @FileName: openai_protocol_template.py
 import datetime
 import json
 from queue import Queue

@@ -4,7 +4,7 @@
 # @Time    :
 # @Author  :
 # @Email   :
-# @FileName: google_search_tool.py
+# @FileName: mock_search_tool.py
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 

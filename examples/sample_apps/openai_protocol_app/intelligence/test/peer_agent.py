@@ -4,7 +4,7 @@
 # @Time    : 2024/5/8 11:41
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: peer_chat_bot.py
+# @FileName: peer_agent.py
 import queue
 
 from agentuniverse.agent.agent import Agent

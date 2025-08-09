@@ -4,7 +4,7 @@
 # @Time    : 2024/6/25 16:56
 # @Author  : weizjajj 
 # @Email   : weizhongjie.wzj@antgroup.com
-# @FileName: translation_planner.py
+# @FileName: translation_agent.py
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.template.rag_agent_template import RagAgentTemplate
 from agentuniverse.prompt.chat_prompt import ChatPrompt

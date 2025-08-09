@@ -4,7 +4,7 @@
 # @Time    : 2024/5/8 11:41
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: peer_chat_bot.py
+# @FileName: run_demo_agent_with_basic_tool.py
 from agentuniverse.base.agentuniverse import AgentUniverse
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager

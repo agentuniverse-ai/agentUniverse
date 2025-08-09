@@ -16,7 +16,7 @@ from agentuniverse.base.config.component_configer.component_configer import \
 # @Time    : 2024/3/13 13:54
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: tool_manager.py
+# @FileName: toolkit_manager.py
 
 
 @singleton

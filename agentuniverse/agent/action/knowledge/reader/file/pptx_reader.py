@@ -4,7 +4,7 @@
 # @Time    : 2024/3/18 17:34
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: pptx_parser.py
+# @FileName: pptx_reader.py
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 

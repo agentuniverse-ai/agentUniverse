@@ -4,7 +4,7 @@
 # @Time    : 2024/3/14 12:08
 # @Author  : jerry.zzw 
 # @Email   : jerry.zzw@antgroup.com
-# @FileName: component_manager.py
+# @FileName: application_component_manager.py
 from agentuniverse.agent.action.knowledge.knowledge_manager import KnowledgeManager
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
 from agentuniverse.agent.plan.planner.planner_manager import PlannerManager

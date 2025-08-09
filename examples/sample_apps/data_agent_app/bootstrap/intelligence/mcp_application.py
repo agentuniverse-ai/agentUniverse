@@ -4,7 +4,7 @@
 # @Time    : 2024/4/8 20:58
 # @Author  : jerry.zzw 
 # @Email   : jerry.zzw@antgroup.com
-# @FileName: server_application.py
+# @FileName: mcp_application.py
 from agentuniverse.agent_serve.web.mcp.mcp_server_manager import MCPServerManager
 from agentuniverse.base.agentuniverse import AgentUniverse
 

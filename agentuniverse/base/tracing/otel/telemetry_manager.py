@@ -4,7 +4,7 @@
 # @Time    : 2025/5/28 17:49
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: TelemetryManager.py
+# @FileName: telemetry_manager.py
 
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-

@@ -4,7 +4,7 @@
 # @Time    : 2025/1/16 16:23
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: agent_output_log_sink.py
+# @FileName: agent_invocation_log_sink.py
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.base.util.logging.log_sink.base_file_log_sink import BaseFileLogSink
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum

@@ -4,7 +4,7 @@
 # @Time    : 2024/11/12 11:59
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: search_context_tool.py
+# @FileName: product_info_tool.py
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from basic_sop_app.intelligence.utils.constant import product_b_info, product_c_info
 

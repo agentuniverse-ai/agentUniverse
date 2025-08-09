@@ -4,7 +4,7 @@
 # @Time    : 2024/3/14 11:54
 # @Author  : jerry.zzw 
 # @Email   : jerry.zzw@antgroup.com
-# @FileName: config_manager.py
+# @FileName: application_config_manager.py
 from typing import Optional
 from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.base.config.application_configer.app_configer import AppConfiger

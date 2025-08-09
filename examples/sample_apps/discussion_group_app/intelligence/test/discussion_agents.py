@@ -4,7 +4,7 @@
 # @Time    : 2024/6/7 11:22
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: discussion_chat_bots.py
+# @FileName: discussion_agents.py
 from agentuniverse.base.agentuniverse import AgentUniverse
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager

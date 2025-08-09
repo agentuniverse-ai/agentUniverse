@@ -4,7 +4,7 @@
 # @Time    : 2024/12/9 18:01
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: base_log_sink.py
+# @FileName: base_file_log_sink.py
 from loguru import logger
 
 from agentuniverse.base.config.component_configer.component_configer import \

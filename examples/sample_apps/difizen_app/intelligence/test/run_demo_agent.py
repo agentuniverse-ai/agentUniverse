@@ -4,7 +4,7 @@
 # @Time    :
 # @Author  :
 # @Email   :
-# @FileName: test_rag_agent.py
+# @FileName: run_demo_agent.py
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.base.agentuniverse import AgentUniverse

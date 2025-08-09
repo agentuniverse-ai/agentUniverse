@@ -4,7 +4,7 @@
 # @Time    :
 # @Author  :
 # @Email   :
-# @FileName: rag_template.py
+# @FileName: demo_agent.py
 
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory

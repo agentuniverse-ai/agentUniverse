@@ -4,7 +4,7 @@
 # @Time    : 2024/8/29 11:13
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: summary_agent.py
+# @FileName: simple_summary_agent.py
 
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.input_object import InputObject

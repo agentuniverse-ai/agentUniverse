@@ -4,7 +4,7 @@
 # @Time    : 2025/1/3 14:13
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: trace_manager.py
+# @FileName: au_trace_manager.py
 import warnings
 
 from agentuniverse.base.tracing import au_trace_manager as new_module

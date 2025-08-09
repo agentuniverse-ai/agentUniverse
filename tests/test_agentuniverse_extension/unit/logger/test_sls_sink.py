@@ -4,7 +4,7 @@
 # @Time    : 2024/3/13 15:50
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: test_logging_util.py
+# @FileName: test_sls_sink.py
 
 import os
 import shutil

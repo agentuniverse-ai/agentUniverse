@@ -4,7 +4,7 @@
 # @Time    : 2024/5/21 13:52
 # @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
-# @FileName: langchain_openai_style_instance.py
+# @FileName: openai_style_langchain_instance.py
 
 from typing import Any, List, Optional, AsyncIterator, Iterator, Mapping, Dict, Type, Union
 

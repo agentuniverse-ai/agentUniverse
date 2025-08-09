@@ -4,7 +4,7 @@
 # @Time    : 2024/3/18 14:32
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: doc_parser.py
+# @FileName: docx_reader.py
 from typing import Union
 from pathlib import Path
 from typing import List, Optional, Dict

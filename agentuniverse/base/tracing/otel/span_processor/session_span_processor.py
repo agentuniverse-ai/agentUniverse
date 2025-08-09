@@ -4,7 +4,7 @@
 # @Time    : 2025/5/29 11:31
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: session_id_processor.py
+# @FileName: session_span_processor.py
 
 from opentelemetry.sdk.trace import SpanProcessor
 

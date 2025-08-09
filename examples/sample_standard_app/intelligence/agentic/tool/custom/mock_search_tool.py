@@ -3,7 +3,7 @@
 # @Time    : 2024/3/31 11:00
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: google_search_tool.py
+# @FileName: mock_search_tool.py
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 
 

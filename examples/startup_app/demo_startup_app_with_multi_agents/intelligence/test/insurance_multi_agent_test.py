@@ -3,7 +3,7 @@
 # @Time    : 2024/11/28 17:17
 # @Author  : jijiawei
 # @Email   : jijiawei.jjw@antgroup.com
-# @FileName: pet_insurance_multi_agent_test.py
+# @FileName: insurance_multi_agent_test.py
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.base.agentuniverse import AgentUniverse
 from agentuniverse.agent.agent import Agent
