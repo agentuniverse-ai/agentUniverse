@@ -1,9 +1,17 @@
 name: 'qwen-max'
-description: 'qwen-max'
+description: 'Qwen Max via DashScope OpenAI Compatible API'
 model_name: 'qwen-max'
 temperature: 0.5
 max_tokens: 2000
 max_context_length: 32768
 streaming: True
-channel: qwen-max-official
-meta_class: 'agentuniverse.llm.default.qwen_openai_style_llm.QWenOpenAIStyleLLM'
+
+# ✅ 正确的 API 配置
+api_key: 'sk-48e3a6823e634731bd0f63d6a119d9bd'
+api_base: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+
+# ✅ 正确的元信息配置（metadata）
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.qwen_openai_style_llm'
+  class: 'QWenOpenAIStyleLLM'

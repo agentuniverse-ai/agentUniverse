@@ -26,3 +26,14 @@ class ServiceManager:
         if service_base is None:
             raise Exception(f"Service {service_code} not found.")
         return service_base
+if __name__ == "__main__":
+    sm = ServiceManager()
+    try:
+        svc = sm.get_instance_obj("test_app.service.test_service")
+        print("✅ get_instance_obj 返回值:", svc)
+
+        # 额外验证：调用 .run() 看是否返回预期值
+        print("✅ svc.run() 返回值:", svc.run())  # 应该输出 TEST_STR
+
+    except Exception as e:
+        print("❌ 错误:", e)

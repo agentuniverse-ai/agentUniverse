@@ -74,6 +74,7 @@ class RequestTask:
         self.__request_do__ = self.add_request_do()
         self.async_queue = asyncio.Queue(maxsize=2000)
         self.async_task = None
+        self.session_id = None
 
     def update_request_do(self, force: bool = False):
         current_time = time.time()
@@ -330,7 +331,7 @@ class RequestTask:
 
         request_do = RequestDO(
             request_id=self.request_id,
-            session_id="",
+            session_id=self.kwargs.get('session_id', ''),  # ✅ 修复：从 kwargs 获取
             query=query,
             state=TaskStateEnum.INIT.value,
             result=dict(),

@@ -1,15 +1,17 @@
 import time
 import traceback
 from concurrent.futures import TimeoutError
+import json
 
 from flask import Flask, Response, g, request, make_response, \
-    copy_current_request_context
+    copy_current_request_context, jsonify
 from loguru import logger
 from werkzeug.exceptions import HTTPException
 from werkzeug.local import LocalProxy
 
 from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
+# from tests.test_agentuniverse.mock.agent_serve.mock_service_manager import ServiceManager
 from .request_task import RequestTask
 from .thread_with_result import ThreadPoolExecutorWithReturnValue
 from .web_util import request_param, service_run_queue, make_standard_response, \
@@ -17,6 +19,8 @@ from .web_util import request_param, service_run_queue, make_standard_response, 
 from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
 from ...base.util.logging.logging_util import LOGGER
+from agentuniverse.agent_serve.service_manager import ServiceManager
+from examples.sample_standard_app.intelligence.db.database import get_db, close_db
 
 
 # Patch original flask request so it can be dumped by loguru.
@@ -135,27 +139,81 @@ def service_run(service_id: str, params: dict, saved: bool = False):
     return make_standard_response(success=True, result=result,
                                   request_id=request_task.request_id)
 
+@app.route("/agent/list", methods=['GET'])
+def list_agent():
+    try:
+        service_manager = ServiceManager()
+        services = service_manager.get_instance_obj_list()
+
+        agent_list = []
+        for service in services:
+            if not hasattr(service, 'agent') or service.agent is None:
+                continue
+            agent = service.agent
+            name = getattr(agent, 'name', None)
+            if not name:
+                name = agent.agent_model.info.get("name") if hasattr(agent, 'agent_model') else None
+            if name:
+                # 返回 { name, service_id } 结构
+                agent_list.append({
+                    "agent_name": name,
+                    "service_id": service.name  # 或其他唯一标识，如 component_id
+                })
+
+        # 去重：可能多个 service 使用同一个 agent，但 service_id 不同
+        # 是否去重看业务需求
+        return jsonify({
+            "success": True,
+            "data": agent_list
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "Failed to fetch agent list",
+            "error": str(e)
+        }), 500
+
+
+
+
 
 @app.route("/service_run_stream", methods=['POST'])
 @request_param
-def service_run_stream(service_id: str, params: dict, saved: bool = False):
-    """Synchronous invocation of an agent service, return in stream form.
-
-    Request Args:
-        service_id(`str`): The id of the agent service.
-        params(`dict`): Json style params passed to service.
-        saved(`bool`): Save the request and result into database.
-
-    Return:
-        A SSE(Server-Sent Event) stream.
-    """
+def service_run_stream(service_id: str = None,
+                       params: dict = None,
+                       saved: bool = True,
+                       ):
     params = {} if params is None else params
     params['service_id'] = service_id
     params['streaming'] = True
+    session_id = request.headers.get('X-Session-Id') or request.headers.get('X-Session-ID')
+    if session_id:
+        params['session_id'] = session_id.strip()
+    else:
+        # 可选：生成一个临时 session_id，或拒绝请求
+        # params['session_id'] = generate_temp_session_id()
+        pass  # 或抛出异常
+
     task = RequestTask(service_run_queue, saved, **params)
+    print("Session ID before creating task:", params.get('session_id'))
+
     context_prefix = get_context_prefix()
-    response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
+
+    try:
+        start_time = g.start_time
+    except:
+        start_time = None
+
+    response = Response(
+        timed_generator(task.stream_run(), start_time, context_prefix),
+        mimetype="text/event-stream"
+    )
     response.headers['X-Request-ID'] = task.request_id
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    print("All headers:", dict(request.headers))
+
     return response
 
 
