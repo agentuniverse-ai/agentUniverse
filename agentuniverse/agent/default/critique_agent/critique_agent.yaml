@@ -1,0 +1,14 @@
+info:
+  name: 'CritiqueAgent'
+  description: 'critique agent'
+
+profile:
+  prompt_version: 'default_critique_agent.cn'
+
+memory:
+  name: ''
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.critique_agent_template'
+  class: 'CritiqueAgentTemplate'
