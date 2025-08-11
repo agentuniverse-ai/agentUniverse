@@ -1,0 +1,8 @@
+id: workflow_475
+name: 故事大王_workflow
+description: ''
+graph:
+metadata:
+  class: Workflow
+  module: agentuniverse.workflow.workflow
+  type: WORKFLOW
