@@ -1,0 +1,13 @@
+info:
+  name: 'demo_expressing_agent'
+  description: 'demo expressing agent'
+profile:
+  prompt_version: demo_expressing_agent.cn
+  llm_model:
+    name: qwen_llm
+    temperature: 0.2
+    prompt_processor:
+      type: stuff
+memory:
+  name: ''
+meta_class: agentuniverse.agent.template.expressing_agent_template.ExpressingAgentTemplate

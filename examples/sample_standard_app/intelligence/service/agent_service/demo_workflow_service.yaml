@@ -1,0 +1,9 @@
+name: 'demo_workflow_service'
+description: 'demo workflow service of demo workflow agent'
+agent: 'demo_workflow_agent'
+metadata:
+  type: 'SERVICE'
+llm_model:
+    name: 'qwen-max'
+
+

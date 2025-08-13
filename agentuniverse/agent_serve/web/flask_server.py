@@ -20,7 +20,7 @@ from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
 from ...base.util.logging.logging_util import LOGGER
 from agentuniverse.agent_serve.service_manager import ServiceManager
-from examples.sample_standard_app.intelligence.db.database import get_db, close_db
+from examples.sample_standard_app.intelligence.db.database import init_app, get_db
 
 
 # Patch original flask request so it can be dumped by loguru.
@@ -140,10 +140,11 @@ def service_run(service_id: str, params: dict, saved: bool = False):
                                   request_id=request_task.request_id)
 
 @app.route("/agent/list", methods=['GET'])
-def list_agent():
+def agent_list():
     try:
         service_manager = ServiceManager()
         services = service_manager.get_instance_obj_list()
+        print(services)
 
         agent_list = []
         for service in services:
@@ -151,13 +152,17 @@ def list_agent():
                 continue
             agent = service.agent
             name = getattr(agent, 'name', None)
+            description = service.description
+
             if not name:
                 name = agent.agent_model.info.get("name") if hasattr(agent, 'agent_model') else None
             if name:
                 # 返回 { name, service_id } 结构
                 agent_list.append({
                     "agent_name": name,
-                    "service_id": service.name  # 或其他唯一标识，如 component_id
+                    "service_id": service.name,  # 或其他唯一标识，如 component_id
+                    "description": description,
+
                 })
 
         # 去重：可能多个 service 使用同一个 agent，但 service_id 不同
@@ -173,9 +178,6 @@ def list_agent():
             "message": "Failed to fetch agent list",
             "error": str(e)
         }), 500
-
-
-
 
 
 @app.route("/service_run_stream", methods=['POST'])
@@ -216,6 +218,124 @@ def service_run_stream(service_id: str = None,
 
     return response
 
+# app = Flask(__name__)
+# 初始化数据库（注册关闭、初始化等钩子）
+init_app(app)
+@app.route('/session/list', methods=['GET'])
+def sessions_list():
+    user_id = request.headers.get('X-User-Id') or request.args.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
+    try:
+        db = get_db()
+        # ✅ 改为使用 query 字段，并取第一个非空 query 作为 title 展示
+        query = '''
+        SELECT 
+            session_id AS id,
+            query AS title,
+            MIN(gmt_create) AS first_created
+        FROM request_task 
+        WHERE state = 'finished' 
+          AND query IS NOT NULL 
+          AND query != ''
+          AND user_id = ?
+        GROUP BY session_id
+        ORDER BY first_created DESC
+        LIMIT 50
+        '''
+        rows = db.execute(query, (user_id,)).fetchall()
+
+        sessions = [
+            {"id": row["id"], "title": row["title"]}
+            for row in rows
+        ]
+        return jsonify(sessions)
+
+    except Exception as e:
+        print(f"数据库查询错误: {e}")
+        return jsonify({"error": "服务器内部错误"}), 500
+
+@app.route('/session/update', methods=['PUT'])
+def update_session():
+    user_id = request.headers.get('X-User-Id') or request.args.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
+    # 从 JSON 中获取 session_id 和新的 query
+    data = request.get_json()
+    session_id = data.get('session_id')
+    new_query = data.get('query')
+
+    if not session_id:
+        return jsonify({"error": "Missing session_id in JSON body"}), 400
+    if not new_query:
+        return jsonify({"error": "Missing new query content"}), 400
+
+    try:
+        db = get_db()
+
+        # 检查是否存在该会话
+        cursor = db.execute(
+            "SELECT 1 FROM request_task WHERE session_id = ? AND user_id = ? LIMIT 1",
+            (session_id, user_id)
+        )
+        if not cursor.fetchone():
+            return jsonify({"error": "Session not found or no permission"}), 404
+
+        # 更新该 session 的所有记录的 query（或只更新第一条作为代表）
+        # 这里我们更新所有属于该 session 的记录
+        db.execute(
+            "UPDATE request_task SET query = ? WHERE session_id = ? AND user_id = ?",
+            (new_query, session_id, user_id)
+        )
+        db.commit()
+
+        return jsonify({
+            "message": "Session updated successfully",
+            "session_id": session_id,
+            "new_query": new_query
+        }), 200
+
+    except Exception as e:
+        print(f"更新会话错误: {e}")
+        return jsonify({"error": "服务器内部错误"}), 500
+
+@app.route('/session/delete', methods=['DELETE'])
+def delete_session():
+    # 从 header 或 query 获取 user_id
+    user_id = request.headers.get('X-User-Id') or request.args.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
+    # 从请求体中获取 session_id
+    data = request.get_json()
+    session_id = data.get('session_id') if data else None
+    if not session_id:
+        return jsonify({"error": "Missing session_id in JSON body"}), 400
+
+    try:
+        db = get_db()
+        # 先检查是否存在
+        cursor = db.execute(
+            "SELECT 1 FROM request_task WHERE session_id = ? AND user_id = ? LIMIT 1",
+            (session_id, user_id)
+        )
+        if not cursor.fetchone():
+            return jsonify({"error": "Session not found or no permission"}), 404
+
+        # 删除该 session 的所有记录
+        db.execute(
+            "DELETE FROM request_task WHERE session_id = ? AND user_id = ?",
+            (session_id, user_id)
+        )
+        db.commit()
+
+        return jsonify({"message": "Session deleted successfully", "session_id": session_id}), 200
+
+    except Exception as e:
+        print(f"删除会话错误: {e}")
+        return jsonify({"error": "服务器内部错误"}), 500
 
 @app.route("/service_run_async", methods=['POST'])
 @request_param

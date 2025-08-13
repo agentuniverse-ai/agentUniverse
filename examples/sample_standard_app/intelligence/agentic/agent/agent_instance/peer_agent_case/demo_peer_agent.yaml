@@ -1,0 +1,18 @@
+info:
+  name: 'demo_peer_agent'
+  description: 'demo peer agent'
+profile:
+  planning: 'demo_planning_agent'
+  executing: 'demo_executing_agent'
+  expressing: 'demo_expressing_agent'
+  reviewing: 'demo_reviewing_agent'
+  expert_framework:
+    context:
+      planning:
+      executing:
+      expressing:
+      reviewing:
+    selector:
+memory:
+  name: 'demo_memory'
+meta_class: 'agentuniverse.agent.template.peer_agent_template.PeerAgentTemplate'
