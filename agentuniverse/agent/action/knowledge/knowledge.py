@@ -43,7 +43,7 @@ class Knowledge(ComponentBase):
         description (str): The description of the knowledge.
 
         stores (List[str]): The stores for the knowledge, which are used to store knowledge
-            and provide retrieval capabilities, such as ChromaDB store or Redis Store.
+            and provide retrieval capabilities, such as ChromaDB store, Redis Store or Qdrant Store.
 
         query_paraphrasers (List[str]): Query paraphrasers used to paraphrase the original query string,
             such as extracting keywords and splitting into sub-queries.
