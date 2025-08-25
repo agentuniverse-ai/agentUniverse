@@ -24,6 +24,7 @@ from agentuniverse.base.config.configer import Configer
 from agentuniverse.base.config.custom_configer.default_llm_configer import DefaultLLMConfiger
 from agentuniverse.base.config.custom_configer.custom_key_configer import CustomKeyConfiger
 from agentuniverse.base.component.component_enum import ComponentEnum
+from agentuniverse.base.storage.config_storage import ConfigStorage
 from agentuniverse.base.util.monitor.monitor import Monitor
 from agentuniverse.base.util.system_util import get_project_root_path, is_api_key_missing, \
     is_system_builtin, find_default_llm_config
@@ -131,6 +132,8 @@ class AgentUniverse(object):
 
         # init monitor module
         Monitor(configer=configer)
+        # init config storage
+        ConfigStorage(configer=configer)
 
         # scan and register the components
         self.__scan_and_register(self.__config_container.app_configer)
@@ -253,7 +256,7 @@ class AgentUniverse(object):
             config_files = path.rglob(f'*.{config_type_enum.value}')
             for config_file in config_files:
                 config_file_str = str(config_file)
-                configer = Configer(path=config_file_str).load()
+                configer = ConfigStorage().sync_configer(config_file_str, component_enum)
                 component_configer = ComponentConfiger().load_by_configer(configer)
                 component_config_type = component_configer.get_component_config_type()
                 if component_config_type == component_enum.value:
