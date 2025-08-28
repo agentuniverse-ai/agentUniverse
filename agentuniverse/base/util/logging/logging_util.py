@@ -126,16 +126,15 @@ def _add_sls_log_handler():
 def _add_sls_log_async_handler():
     """Add a handler to record all """
     from agentuniverse_extension.logger.sls_sink import AsyncSlsSink, AsyncSlsSender
+    loop = asyncio.get_running_loop()
     sls_sender = AsyncSlsSender(LoggingConfig.sls_project,
                            LoggingConfig.sls_log_store,
                            LoggingConfig.sls_endpoint,
                            LoggingConfig.access_key_id,
                            LoggingConfig.access_key_secret,
                            LoggingConfig.sls_log_queue_max_size,
-                           LoggingConfig.sls_log_send_interval)
-    loop = asyncio.get_event_loop_policy().get_event_loop()
-    loop.create_task(sls_sender.start())
-
+                           LoggingConfig.sls_log_send_interval, loop=loop)
+    asyncio.create_task(sls_sender.start())
     def _sls_filter(record):
         return record["extra"].get('log_type') == LogTypeEnum.default or record["extra"].get('log_type') == LogTypeEnum.sls
     loguru.logger.add(
@@ -223,7 +222,7 @@ def add_sink(sink, log_level: Optional[LOG_LEVEL] = None) -> bool:
 
 def is_in_coroutine_context():
     try:
-        asyncio.current_task()
+        loop = asyncio.get_running_loop()
         return True
     except RuntimeError:
         return False
