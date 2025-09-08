@@ -35,7 +35,9 @@ profile:
   #
   # Note: The current configuration uses Way 1, as shown below
   llm_model:
-    name: 'qwen3-32b'
+    # name: 'qwen3-32b'
+    # name: 'deepseek-reasoner'
+    name: 'default_deepseek_llm'
 action:
   # Please select the tools, toolkits and knowledge base.
   tool:

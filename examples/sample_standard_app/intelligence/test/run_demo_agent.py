@@ -1,3 +1,13 @@
+# import sys
+# sys.path.append('D:/githubClone/agentUniverse')
+
+import sys
+import os
+
+# 将项目根目录添加到 sys.path 中
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+# os.environ["DEEPSEEK_PROXY"] = "http://127.0.0.1:9981"
+
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
@@ -9,8 +19,9 @@ from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.base.agentuniverse import AgentUniverse
 
-AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
+# AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
+AgentUniverse().start(config_path='D:/githubClone/agentUniverse/examples/sample_standard_app/config/config.toml', core_mode=True)
 
 def chat(question: str, session_id=None):
     """ Peer agents example.
