@@ -50,6 +50,7 @@ class WorkflowAgent(Agent):
 
     def execute(self, input_object: InputObject, agent_input: dict) -> dict:
         workflow: Workflow = WorkflowManager().get_instance_obj(self.workflow_id)
+
         # build and run workflow
         if not workflow or workflow.graph_config is None:
             raise Exception('Workflow graph is None, please add nodes and edges to the workflow graph.')

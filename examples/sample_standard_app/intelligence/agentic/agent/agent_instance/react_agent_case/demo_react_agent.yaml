@@ -34,14 +34,15 @@ profile:
 
     Question: {input}
     Thought: {agent_scratchpad}
+
   llm_model:
-    name: 'qwen_llm'
+    name: 'qwen-max'
     temperature: 0.1
     stop: Observation
 action:
   tool:
     - 'google_search_tool'
     - 'python_runner'
-  knowledge:
-    - 'law_knowledge'
+#  knowledge:
+#    - 'law_knowledge'
 meta_class: 'agentuniverse.agent.template.react_agent_template.ReActAgentTemplate'

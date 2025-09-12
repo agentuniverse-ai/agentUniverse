@@ -2,8 +2,7 @@ import time
 import traceback
 from concurrent.futures import TimeoutError
 import json
-import re
-from datetime import datetime
+
 from flask import Flask, Response, g, request, make_response, \
     copy_current_request_context, jsonify
 from loguru import logger
@@ -145,6 +144,7 @@ def agent_list():
     try:
         service_manager = ServiceManager()
         services = service_manager.get_instance_obj_list()
+        print(services)
 
         agent_list = []
         for service in services:
@@ -162,6 +162,7 @@ def agent_list():
                     "agent_name": name,
                     "service_id": service.name,  # 或其他唯一标识，如 component_id
                     "description": description,
+
                 })
 
         # 去重：可能多个 service 使用同一个 agent，但 service_id 不同
@@ -185,7 +186,6 @@ def service_run_stream(service_id: str = None,
                        params: dict = None,
                        saved: bool = True,
                        ):
-
     params = {} if params is None else params
     params['service_id'] = service_id
     params['streaming'] = True
@@ -198,7 +198,7 @@ def service_run_stream(service_id: str = None,
         pass  # 或抛出异常
 
     task = RequestTask(service_run_queue, saved, **params)
-    # print("Session ID before creating task:", params.get('session_id'))
+    print("Session ID before creating task:", params.get('session_id'))
 
     context_prefix = get_context_prefix()
 
@@ -214,33 +214,37 @@ def service_run_stream(service_id: str = None,
     response.headers['X-Request-ID'] = task.request_id
     response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
-    # print("All headers:", dict(request.headers))
+    print("All headers:", dict(request.headers))
 
     return response
 
+# app = Flask(__name__)
 # 初始化数据库（注册关闭、初始化等钩子）
 init_app(app)
-
 @app.route('/session/list', methods=['GET'])
-def sessions_list_all():
-    #获取最近会话列表
+def sessions_list():
+    user_id = request.headers.get('X-User-Id') or request.args.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
     try:
         db = get_db()
-
+        # ✅ 改为使用 query 字段，并取第一个非空 query 作为 title 展示
         query = '''
-                SELECT session_id      AS id, \
-                       query           AS title, \
-                       MIN(gmt_create) AS first_created
-                FROM request_task
-                WHERE state = 'finished'
-                  AND query IS NOT NULL
-                  AND query != ''
-                GROUP BY session_id
-                ORDER BY first_created DESC
-                    LIMIT 50 \
-                '''
-
-        rows = db.execute(query).fetchall()
+        SELECT 
+            session_id AS id,
+            query AS title,
+            MIN(gmt_create) AS first_created
+        FROM request_task 
+        WHERE state = 'finished' 
+          AND query IS NOT NULL 
+          AND query != ''
+          AND user_id = ?
+        GROUP BY session_id
+        ORDER BY first_created DESC
+        LIMIT 50
+        '''
+        rows = db.execute(query, (user_id,)).fetchall()
 
         sessions = [
             {"id": row["id"], "title": row["title"]}
@@ -252,10 +256,12 @@ def sessions_list_all():
         print(f"数据库查询错误: {e}")
         return jsonify({"error": "服务器内部错误"}), 500
 
-
 @app.route('/session/update', methods=['PUT'])
 def update_session():
-    #利用sessionId，更新最近会话的title
+    user_id = request.headers.get('X-User-Id') or request.args.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
     # 从 JSON 中获取 session_id 和新的 query
     data = request.get_json()
     session_id = data.get('session_id')
@@ -271,16 +277,17 @@ def update_session():
 
         # 检查是否存在该会话
         cursor = db.execute(
-            "SELECT 1 FROM request_task WHERE session_id = ? LIMIT 1",
-            (session_id,)  # 注意这里是 (session_id,)，因为是单元素的元组
+            "SELECT 1 FROM request_task WHERE session_id = ? AND user_id = ? LIMIT 1",
+            (session_id, user_id)
         )
         if not cursor.fetchone():
-            return jsonify({"error": "Session not found"}), 404  # 错误消息也移除“no permission”
+            return jsonify({"error": "Session not found or no permission"}), 404
 
-        # 更新该 session 的所有记录的 query
+        # 更新该 session 的所有记录的 query（或只更新第一条作为代表）
+        # 这里我们更新所有属于该 session 的记录
         db.execute(
-            "UPDATE request_task SET query = ? WHERE session_id = ?",
-            (new_query, session_id)
+            "UPDATE request_task SET query = ? WHERE session_id = ? AND user_id = ?",
+            (new_query, session_id, user_id)
         )
         db.commit()
 
@@ -294,9 +301,13 @@ def update_session():
         print(f"更新会话错误: {e}")
         return jsonify({"error": "服务器内部错误"}), 500
 
-
 @app.route('/session/delete', methods=['DELETE'])
 def delete_session():
+    # 从 header 或 query 获取 user_id
+    user_id = request.headers.get('X-User-Id') or request.args.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
     # 从请求体中获取 session_id
     data = request.get_json()
     session_id = data.get('session_id') if data else None
@@ -307,16 +318,16 @@ def delete_session():
         db = get_db()
         # 先检查是否存在
         cursor = db.execute(
-            "SELECT 1 FROM request_task WHERE session_id = ? LIMIT 1",
-            (session_id,)  # 注意这里是 (session_id,)
+            "SELECT 1 FROM request_task WHERE session_id = ? AND user_id = ? LIMIT 1",
+            (session_id, user_id)
         )
         if not cursor.fetchone():
-            return jsonify({"error": "Session not found"}), 404  # 错误消息也移除“no permission”
+            return jsonify({"error": "Session not found or no permission"}), 404
 
         # 删除该 session 的所有记录
         db.execute(
-            "DELETE FROM request_task WHERE session_id = ?",
-            (session_id,)  # 注意这里是 (session_id,)
+            "DELETE FROM request_task WHERE session_id = ? AND user_id = ?",
+            (session_id, user_id)
         )
         db.commit()
 
@@ -325,122 +336,6 @@ def delete_session():
     except Exception as e:
         print(f"删除会话错误: {e}")
         return jsonify({"error": "服务器内部错误"}), 500
-
-
-
-@app.route('/session/<session_id>/history', methods=['GET'])
-def get_session_history(session_id):
-    """
-    获取指定 session_id 的完整聊天历史
-    URL: GET /session/MRcNioQGmKH8GPw-vwm4O/history
-
-    返回结构化消息列表，兼容前端卡片式渲染。
-    """
-    try:
-        db = get_db()
-
-        # 查询该 session_id 下所有 state 为 'finished' 的记录，按时间升序排列
-        query = '''
-            SELECT query, result, gmt_create
-            FROM request_task
-            WHERE session_id = ?
-              AND state = 'finished'
-              AND result IS NOT NULL
-              AND result != ''
-            ORDER BY gmt_create ASC
-        '''
-
-        rows = db.execute(query, (session_id,)).fetchall()
-
-        if not rows:
-            return jsonify([]), 200  # 没有记录返回空数组，而不是错误
-
-        messages = []
-        message_id_counter = 1  # 用于生成 msg_id
-
-        for row in rows:
-            try:
-                # 解析外层 result
-                outer_result = json.loads(row["result"])
-                inner_result_str = outer_result.get("result")
-
-                if not inner_result_str:
-                    continue
-
-                # 兼容处理：inner_result_str 可能是字符串或已解析对象
-                if isinstance(inner_result_str, str):
-                    inner_result = json.loads(inner_result_str)
-                else:
-                    inner_result = inner_result_str
-
-                user_input = inner_result.get("input", "").strip()
-                ai_output = inner_result.get("output", {})
-
-                # ========== 用户消息 ==========
-                if user_input:
-                    user_msg_id = f"msg_{str(message_id_counter).zfill(3)}"
-                    message_id_counter += 1
-
-                    messages.append({
-                        "id": user_msg_id,
-                        "role": "user",
-                        "content": user_input,
-                        "status": "success",
-                        "gmt_create": _format_timestamp(row["gmt_create"])
-                    })
-
-                # ========== 助手消息 ==========
-                # 提取文本内容，优先使用 text 字段
-                ai_text = ""
-                if isinstance(ai_output, str):
-                    ai_text = ai_output.strip()
-                elif isinstance(ai_output, dict):
-                    ai_text = (ai_output.get("text") or ai_output.get("response") or "").strip()
-
-                if ai_text:
-                    assistant_msg_id = f"msg_{str(message_id_counter).zfill(3)}"
-                    message_id_counter += 1
-
-                    messages.append({
-                        "id": assistant_msg_id,
-                        "role": "assistant",
-                        "content": [
-                            {
-                                "card": "Markdown",
-                                "props": {
-                                    "children": ai_text,
-                                    "speed": 100  # 可配置：打字速度（字符/秒）
-                                }
-                            }
-                        ],
-                        "status": "success",
-                        "gmt_create": _format_timestamp(row["gmt_create"])
-                    })
-
-            except (json.JSONDecodeError, KeyError) as e:
-                print(f"解析 result 失败: {e}, row={row}")
-                continue  # 跳过解析失败的记录
-
-        return jsonify(messages), 200
-
-    except Exception as e:
-        print(f"服务器内部错误: {e}")
-        return jsonify({"error": "服务器内部错误"}), 500
-
-
-# 辅助函数：标准化时间格式
-def _format_timestamp(dt_str):
-    """
-    将数据库中的时间字符串转换为 ISO 8601 格式（带 T 和 Z）
-    输入示例: '2025-09-08 21:54:51.566212'
-    输出示例: '2025-09-08T21:54:51.566Z'
-    """
-    try:
-        dt = datetime.fromisoformat(dt_str.split('.')[0])  # 忽略微秒部分
-        return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-    except Exception:
-        return dt_str  # 若解析失败，原样返回
-
 
 @app.route("/service_run_async", methods=['POST'])
 @request_param

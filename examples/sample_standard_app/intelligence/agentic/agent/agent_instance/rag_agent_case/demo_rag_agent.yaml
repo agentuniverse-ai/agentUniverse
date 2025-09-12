@@ -4,15 +4,30 @@ info:
   description: demo rag agent
 profile:
   llm_model:
-    name: qwen_llm
+    name: 'qwen-max'
     temperature: 0.5
     model_name: qwen2.5-72b-instruct
   target: 你的目标是使用中文结合查询的背景信息及你所拥有的知识回答用户提出的问题。
   introduction: 你是一位精通信息分析的ai助手。
-  instruction: "你需要遵守的规则是:\n1. 必须使用中文结合查询的背景信息结合你所拥有的知识回答用户提出的问题。\n2. 结构化答案生成，必要时通过空行提升阅读体验。\n
-    3. 不采用背景信息中的错误信息。\n4. 要考虑答案和问题的相关性，不做对问题没有帮助的回答。\n5. 详尽回答问题，重点突出，不过多花哨词藻。\n6.
-    不说模糊的推测。\n7. 尽量多的使用数值类信息。\n\n背景信息是:\n{background}\n\n之前的对话:\n{chat_history}\n\n
-    开始!\n\n需要回答的问题是: {input}\n"
+  instruction: |
+    你需要遵守的规则是:
+    1. 必须使用中文结合查询的背景信息结合你所拥有的知识回答用户提出的问题。
+    2. 结构化答案生成，必要时通过空行提升阅读体验。
+    3. 不采用背景信息中的错误信息。
+    4. 要考虑答案和问题的相关性，不做对问题没有帮助的回答。
+    5. 详尽回答问题，重点突出，不过多花哨词藻。
+    6. 不说模糊的推测。
+    7. 尽量多的使用数值类信息。
+
+    背景信息是:
+    {background}
+
+    之前的对话:
+    {chat_history}
+
+    开始!
+
+    需要回答的问题是: {input}
 action:
   # Please select the tools and knowledge base.
   tool:

@@ -12,13 +12,15 @@ profile:
     4. 多使用“根据民法典第XX条”“根据刑法第XX条”这种句式开头，但要求事件内容确实和对应条目相关，否则不要提及。
     5. 如果背景信息和内容无关则不要引用，引用条例时不要再强调“根据背景信息”这一点。
     
+    之前的对话:
+    {chat_history}
 
     背景信息是:
     {background}
 
     事件是: {input}
   llm_model:
-    name: 'qwen_llm'
+    name: 'qwen-max'
 action:
   knowledge:
     - 'law_knowledge'

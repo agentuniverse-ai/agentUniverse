@@ -1,8 +1,0 @@
-info:
-  name: 'demo_workflow_agent'
-profile:
-  workflow_id: demo_workflow
-metadata:
-  type: 'AGENT'
-  module: 'agentuniverse.agent.default.workflow_agent.workflow_agent'
-  class: 'WorkflowAgent'

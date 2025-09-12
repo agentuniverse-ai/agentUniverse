@@ -8,7 +8,8 @@
 
 from agentuniverse.agent_serve.web.web_booster import start_web_server
 from agentuniverse.base.agentuniverse import AgentUniverse
-
+from flask_cors import CORS
+from agentuniverse.agent_serve.web.flask_server import app as flask_app
 
 class ServerApplication:
     """
@@ -18,6 +19,15 @@ class ServerApplication:
     @classmethod
     def start(cls):
         AgentUniverse().start()
+
+
+        CORS(
+            flask_app,
+            resources={r"/*": {"origins": ["http://localhost:5173",
+        "http://127.0.0.1:5173",
+        ]}},
+            supports_credentials=True
+        )
         start_web_server()
 
 
