@@ -1,14 +1,15 @@
 name: 'insurance_maya_llm'
 description: 'insurance llm'
-model_name: 'insurance_stream_llm'
+model_name: 'qwen-plus' 
 max_tokens: 3000
-streaming: True
+streaming: False
 request_timeout: 60
 ext_info:
   sceneName: 'xxxxxx' # The name of the corresponding model scene
   chainName: 'xxxxxx' # The model version
   serviceId: 'xxxxx' # The ID of the corresponding model service
-  endpoint: 'xxxx' # Corresponding to the endpoint of the model service
+  endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation' # Corresponding to the endpoint of the model service
+  api_key: '${DASHSCOPE_API_KEY}'
   params_filed: "data"
   query_field: "query"
 metadata:

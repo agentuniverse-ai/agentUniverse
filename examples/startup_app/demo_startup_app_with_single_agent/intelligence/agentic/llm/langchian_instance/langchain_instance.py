@@ -18,6 +18,7 @@ from langchain_core.outputs import GenerationChunk
 
 
 class LangChainInstance(LangChainLLM):
+    model_config = {"arbitrary_types_allowed": True}
     llm: LLM = None
     llm_type: str = "AgentUniverse"
     streaming: bool = False

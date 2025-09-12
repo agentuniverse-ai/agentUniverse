@@ -17,10 +17,18 @@ profile:
     开始！
     需要回答的问题是: {input}
   llm_model:
-    name: 'qwen_llm'
-    # model_name: 'qwen2.5-72b-instruct'
+    # name: 'qwen_llm'
+    # # model_name: 'qwen2.5-72b-instruct'
+    # model_name: 'qwen-plus' 
+    
+    # name: 'hf_llm'
+    # model_name: 'meta-llama/Meta-Llama-3.1-8B-Instruct' 
+    # temperature: 0.1
+
+    name: 'insurance_maya_llm'
     model_name: 'qwen-plus' 
     temperature: 0.1
+
 action:
   tool:
 metadata:

@@ -1,0 +1,14 @@
+name: 'hf_llm'
+description: 'HuggingFace inference llm'
+model_name: 'meta-llama/Meta-Llama-3.1-8B-Instruct'  # 供展示，可在 agent yaml 覆盖
+max_tokens: 512
+streaming: False
+request_timeout: 60
+ext_info:
+  repo_id: 'meta-llama/Meta-Llama-3.1-8B-Instruct'
+  api_key: '${HF_API_KEY}'          # 或直接写死，不推荐
+  use_inference_api: True               # 如果要本地 transformers，则改 False 并在代码里加载 pipeline
+metadata:
+  type: 'LLM'
+  module: 'demo_startup_app_with_single_agent.intelligence.agentic.llm.hf.hf_llm'      # 改成你保存 hf_llm.py 的模块路径
+  class: 'HuggingFaceLLM'

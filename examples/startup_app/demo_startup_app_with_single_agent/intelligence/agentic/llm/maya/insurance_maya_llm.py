@@ -6,7 +6,8 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: insurance_maya_llm.py
 
-import json
+import os,json
+import requests
 from typing import Any, Optional, List, Union, Iterator
 
 import tiktoken
@@ -133,64 +134,138 @@ class InsuranceMayaLLM(LLM):
                          "max_output_length": self.max_tokens},
         }
 
+    # def no_streaming_call(self,
+    #                       prompt: str,
+    #                       stop: Optional[List[str]] = None,
+    #                       model: Optional[str] = None,
+    #                       temperature: Optional[float] = None,
+    #                       stream: Optional[bool] = None,
+    #                       **kwargs) -> LLMOutput:
+    #     suffix = f"?model_name={self.model_name}"
+    #     # 进行模型http调用
+    #     # resp = requests.post(
+    #     #     url=self.endpoint + suffix,
+    #     #     headers={"Content-Type": "application/json"},
+    #     #     data=json.dumps(self.request_data(prompt, stop[0] if stop else ''), ensure_ascii=False).encode("utf-8"),
+    #     #     timeout=self.request_timeout,
+    #     # )
+    #     # resp = resp.json()
+    #     resp = {"success": True, "result": {
+    #         "output_string": "This is the llm mock response(no_streaming_call)."
+    #     }}
+    #     try:
+    #         if resp and resp["success"]:
+    #             return self.parse_output(resp)
+    #         else:
+    #             raise Exception(resp)
+    #     except Exception as e:
+    #         raise e
+
+    
     def no_streaming_call(self,
-                          prompt: str,
-                          stop: Optional[List[str]] = None,
-                          model: Optional[str] = None,
-                          temperature: Optional[float] = None,
-                          stream: Optional[bool] = None,
-                          **kwargs) -> LLMOutput:
-        suffix = f"?model_name={self.model_name}"
-        # 进行模型http调用
-        # resp = requests.post(
-        #     url=self.endpoint + suffix,
-        #     headers={"Content-Type": "application/json"},
-        #     data=json.dumps(self.request_data(prompt, stop[0] if stop else ''), ensure_ascii=False).encode("utf-8"),
-        #     timeout=self.request_timeout,
-        # )
-        # resp = resp.json()
-        resp = {"success": True, "result": {
-            "output_string": "This is the llm mock response."
-        }}
+                        prompt: str,
+                        stop: Optional[List[str]] = None,
+                        model: Optional[str] = None,
+                        temperature: Optional[float] = None,
+                        stream: Optional[bool] = None,
+                        **kwargs) -> LLMOutput:
+        # 读取 API Key（优先 ext_info，其次环境变量）
+        api_key = getattr(self, "api_key", None) or os.getenv("DASHSCOPE_API_KEY")
+        if not api_key:
+            raise ValueError("Missing DashScope API key. Set ext_info.api_key or env DASHSCOPE_API_KEY")
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        payload = {
+            "model": (model or self.model_name),     # ← 模型名放这里
+            "input": {"prompt": prompt},             # 或者用 messages：{"messages":[{"role":"user","content": prompt}]}
+            "parameters": {
+                "temperature": (temperature if temperature is not None else self.temperature),
+                "max_output_tokens": self.max_tokens,
+            }
+        }
+
+        resp = requests.post(
+            url=self.endpoint,                       # ← 不要再拼 suffix
+            headers=headers,
+            json=payload,                            # ← 用 json= 而不是 data=
+            timeout=self.request_timeout,
+        )
         try:
-            if resp and resp["success"]:
-                return self.parse_output(resp)
-            else:
-                raise Exception(resp)
+            resp.raise_for_status()
+        except requests.HTTPError as e:
+            # 打印后端返回，便于定位 401/403 等问题
+            raise RuntimeError(f"DashScope HTTP {resp.status_code}: {resp.text}") from e
+
+        data = resp.json()
+        # 典型返回：{"output":{"text":"..."}}
+        try:
+            text = data["output"]["text"]
+        except Exception:
+            raise RuntimeError(f"Unexpected DashScope response: {data}")
+
+        return LLMOutput(text=text, raw=data)
+
+    # def streaming_call(self,
+    #                    prompt: str,
+    #                    stop: Optional[List[str]] = None,
+    #                    model: Optional[str] = None,
+    #                    temperature: Optional[float] = None,
+    #                    stream: Optional[bool] = None,
+    #                    **kwargs):
+    #     suffix = f"?model_name={self.model_name}"
+    #     # 进行模型http调用
+    #     # with requests.post(
+    #     #         url=self.endpoint + suffix,
+    #     #         data=json.dumps(self.request_stream_data(prompt, stop[0] if stop else ''), ensure_ascii=False).encode(
+    #     #             "utf-8"),
+    #     #         timeout=self.request_timeout,
+    #     #         headers={"Content-Type": "application/json"},
+    #     #         stream=True
+    #     # ) as resp:
+
+    #     resp = [
+    #         json.dumps({"out_string": "This "}),
+    #         json.dumps({"out_string": "is "}),
+    #         json.dumps({"out_string": "the "}),
+    #         json.dumps({"out_string": "llm "}),
+    #         json.dumps({"out_string": "mock "}),
+    #         json.dumps({"out_string": "response"}),
+    #         json.dumps({"out_string": "."})
+    #     ]
+    #     for line in resp:
+    #         output = self.parse_stream_output(line)
+    #         if output:
+    #             yield output
+    def streaming_call(self,
+                    prompt: str,
+                    stop: Optional[List[str]] = None,
+                    model: Optional[str] = None,
+                    temperature: Optional[float] = None,
+                    stream: Optional[bool] = None,
+                    **kwargs):
+        suffix = f"?model_name={self.model_name}"
+        payload = self.request_stream_data(prompt, stop[0] if stop else '')
+        try:
+            with requests.post(
+                url=self.endpoint + suffix,
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                stream=True,
+                timeout=self.request_timeout,
+            ) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines(decode_unicode=True):
+                    if not line:
+                        continue
+                    output = self.parse_stream_output(line)
+                    if output:
+                        yield output
         except Exception as e:
             raise e
 
-    def streaming_call(self,
-                       prompt: str,
-                       stop: Optional[List[str]] = None,
-                       model: Optional[str] = None,
-                       temperature: Optional[float] = None,
-                       stream: Optional[bool] = None,
-                       **kwargs):
-        suffix = f"?model_name={self.model_name}"
-        # 进行模型http调用
-        # with requests.post(
-        #         url=self.endpoint + suffix,
-        #         data=json.dumps(self.request_stream_data(prompt, stop[0] if stop else ''), ensure_ascii=False).encode(
-        #             "utf-8"),
-        #         timeout=self.request_timeout,
-        #         headers={"Content-Type": "application/json"},
-        #         stream=True
-        # ) as resp:
-
-        resp = [
-            json.dumps({"out_string": "This "}),
-            json.dumps({"out_string": "is "}),
-            json.dumps({"out_string": "the "}),
-            json.dumps({"out_string": "llm "}),
-            json.dumps({"out_string": "mock "}),
-            json.dumps({"out_string": "response"}),
-            json.dumps({"out_string": "."})
-        ]
-        for line in resp:
-            output = self.parse_stream_output(line)
-            if output:
-                yield output
 
     def set_by_agent_model(self, **kwargs) -> 'InsuranceMayaLLM':
         copied_obj = super().set_by_agent_model(**kwargs)
