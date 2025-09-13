@@ -1,9 +1,7 @@
 import time
 import traceback
 from concurrent.futures import TimeoutError
-import json
-import re
-from datetime import datetime
+
 from flask import Flask, Response, g, request, make_response, \
     copy_current_request_context, jsonify
 from loguru import logger
@@ -12,7 +10,6 @@ from werkzeug.local import LocalProxy
 
 from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
-# from tests.test_agentuniverse.mock.agent_serve.mock_service_manager import ServiceManager
 from .request_task import RequestTask
 from .thread_with_result import ThreadPoolExecutorWithReturnValue
 from .web_util import request_param, service_run_queue, make_standard_response, \
@@ -20,9 +17,11 @@ from .web_util import request_param, service_run_queue, make_standard_response, 
 from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
 from ...base.util.logging.logging_util import LOGGER
+
 from agentuniverse.agent_serve.service_manager import ServiceManager
 from examples.sample_standard_app.intelligence.db.database import init_app, get_db
-
+import json
+from datetime import datetime
 
 # Patch original flask request so it can be dumped by loguru.
 class SerializableRequest:
@@ -145,7 +144,6 @@ def agent_list():
     try:
         service_manager = ServiceManager()
         services = service_manager.get_instance_obj_list()
-
         agent_list = []
         for service in services:
             if not hasattr(service, 'agent') or service.agent is None:
@@ -153,7 +151,6 @@ def agent_list():
             agent = service.agent
             name = getattr(agent, 'name', None)
             description = service.description
-
             if not name:
                 name = agent.agent_model.info.get("name") if hasattr(agent, 'agent_model') else None
             if name:
@@ -163,14 +160,11 @@ def agent_list():
                     "service_id": service.name,  # 或其他唯一标识，如 component_id
                     "description": description,
                 })
-
         # 去重：可能多个 service 使用同一个 agent，但 service_id 不同
-        # 是否去重看业务需求
         return jsonify({
             "success": True,
             "data": agent_list
         })
-
     except Exception as e:
         return jsonify({
             "success": False,
@@ -178,49 +172,35 @@ def agent_list():
             "error": str(e)
         }), 500
 
-
 @app.route("/service_run_stream", methods=['POST'])
 @request_param
 def service_run_stream(service_id: str = None,
                        params: dict = None,
                        saved: bool = True,
                        ):
+    """Synchronous invocation of an agent service, return in stream form.
 
+    Request Args:
+        service_id(`str`): The id of the agent service.
+        params(`dict`): Json style params passed to service.
+        saved(`bool`): Save the request and result into database.
+
+    Return:
+        A SSE(Server-Sent Event) stream.
+    """
     params = {} if params is None else params
     params['service_id'] = service_id
     params['streaming'] = True
-    session_id = request.headers.get('X-Session-Id') or request.headers.get('X-Session-ID')
-    if session_id:
-        params['session_id'] = session_id.strip()
-    else:
-        # 可选：生成一个临时 session_id，或拒绝请求
-        # params['session_id'] = generate_temp_session_id()
-        pass  # 或抛出异常
-
     task = RequestTask(service_run_queue, saved, **params)
-    # print("Session ID before creating task:", params.get('session_id'))
-
     context_prefix = get_context_prefix()
-
-    try:
-        start_time = g.start_time
-    except:
-        start_time = None
-
-    response = Response(
-        timed_generator(task.stream_run(), start_time, context_prefix),
-        mimetype="text/event-stream"
-    )
+    response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix),mimetype="text/event-stream")
     response.headers['X-Request-ID'] = task.request_id
-    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    # print("All headers:", dict(request.headers))
-
+    # response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
+    # response.headers['Access-Control-Allow-Credentials'] = 'true'
     return response
 
 # 初始化数据库（注册关闭、初始化等钩子）
 init_app(app)
-
 @app.route('/session/list', methods=['GET'])
 def sessions_list_all():
     #获取最近会话列表
@@ -265,10 +245,8 @@ def update_session():
         return jsonify({"error": "Missing session_id in JSON body"}), 400
     if not new_query:
         return jsonify({"error": "Missing new query content"}), 400
-
     try:
         db = get_db()
-
         # 检查是否存在该会话
         cursor = db.execute(
             "SELECT 1 FROM request_task WHERE session_id = ? LIMIT 1",
@@ -276,7 +254,6 @@ def update_session():
         )
         if not cursor.fetchone():
             return jsonify({"error": "Session not found"}), 404  # 错误消息也移除“no permission”
-
         # 更新该 session 的所有记录的 query
         db.execute(
             "UPDATE request_task SET query = ? WHERE session_id = ?",
@@ -327,13 +304,11 @@ def delete_session():
         return jsonify({"error": "服务器内部错误"}), 500
 
 
-
 @app.route('/session/<session_id>/history', methods=['GET'])
 def get_session_history(session_id):
     """
     获取指定 session_id 的完整聊天历史
     URL: GET /session/MRcNioQGmKH8GPw-vwm4O/history
-
     返回结构化消息列表，兼容前端卡片式渲染。
     """
     try:

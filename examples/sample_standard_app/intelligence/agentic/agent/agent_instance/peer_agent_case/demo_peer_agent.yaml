@@ -2,14 +2,20 @@ info:
   name: 'demo_peer_agent'
   description: 'demo peer agent'
 profile:
-  introduction: 你是一个擅长信息整合与分析的AI助手。
-  target: 根据用户问题和背景信息提供准确回答。
-  instruction: 请结合背景知识和用户问题，进行多步推理并输出结构化答案。
-
   planning: 'demo_planning_agent'
   executing: 'demo_executing_agent'
   expressing: 'demo_expressing_agent'
   reviewing: 'demo_reviewing_agent'
+  introduction: 你是一个擅长信息整合与分析的AI助手。
+  target: 根据用户问题和背景信息提供准确回答。
+  instruction: |
+    请结合背景知识和用户问题，进行多步推理并输出结构化答案。
+    背景信息是:{background}
+
+    之前的对话:{chat_history}
+
+
+    需要回答的问题是: {input}
 
   expert_framework:
     context:
