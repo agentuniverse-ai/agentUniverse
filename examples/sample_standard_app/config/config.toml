@@ -80,8 +80,3 @@ class_list = [
     '${ROOT_PACKAGE}.config.config_extension.ConfigExtension',
     '${ROOT_PACKAGE}.config.yaml_func_extension.YamlFuncExtension'
 ]
-# 上下文内容忽略
-#[CORE_PACKAGE]
-# Scan and register product components for all paths under this list, with priority over the default.
-product = ['sample_standard_app.platform.difizen.product']
-# 上下文内容忽略

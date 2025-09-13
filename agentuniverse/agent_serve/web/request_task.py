@@ -331,7 +331,7 @@ class RequestTask:
 
         request_do = RequestDO(
             request_id=self.request_id,
-            session_id=self.kwargs.get('session_id', ''),  # ✅ 修复：从 kwargs 获取
+            session_id=self.kwargs.get('session_id', ''),
             query=query,
             state=TaskStateEnum.INIT.value,
             result=dict(),
