@@ -1,0 +1,9 @@
+name: 'law_rag_service'
+description: 'law rag service of law rag agent'
+agent: 'law_rag_agent'
+metadata:
+  type: 'SERVICE'
+llm_model:
+    name: 'qwen-max'
+
+

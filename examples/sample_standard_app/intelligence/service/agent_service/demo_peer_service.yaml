@@ -1,0 +1,9 @@
+name: 'demo_peer_service'
+description: 'demo peer service of demo peer agent'
+agent: 'demo_peer_agent'
+metadata:
+  type: 'SERVICE'
+llm_model:
+    name: 'qwen-max'
+
+
