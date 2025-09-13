@@ -13,7 +13,7 @@ from .flask_server import app
 from .post_fork_queue import POST_FORK_QUEUE
 from ...base.annotation.singleton import singleton
 from ...base.context.framework_context_manager import FrameworkContextManager
-from ...base.util.tracing.au_trace_manager import AuTraceManager
+from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 
 DEFAULT_GUNICORN_CONFIG = {
     'bind': '127.0.0.1:8888',

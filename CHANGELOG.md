@@ -24,6 +24,27 @@ Note - Additional remarks regarding the version.
 ***************************************************
 
 # Version Update History
+## [0.0.18] - 2025-07-10
+### Added
+- Added observability capabilities for agent applications based on the OTel protocol
+Established observation standards for aU agent applications based on OTel (OpenTelemetry) protocol. Comprehensive metrics and traces (including token consumption, latency, success rate, etc.) are collected across key components such as agents, LLMs, and tools. The implementation supports integration with mainstream observability frameworks including SigNoz, Jaeger, and Prometheus, enabling full lifecycle observability for agents.
+
+- Added async Sink and Sender components for SLS Logger
+
+### Fixed
+- MCP service in Stdio mode now supports user-configurable environment parameter
+
+### Note
+- Third-party package dependency changes (Format: old version -> new version; single version means new)
+  - openai ("1.13.3" -> "1.55.3")
+  - opentelemetry-api ("^1.25.0")
+  - opentelemetry-sdk ("^1.25.0")
+  - opentelemetry-semantic-conventions (">=0.48b0")
+  - opentelemetry-exporter-otlp-proto-http ("^1.25.0")
+  - httpx ("0.27.2" -> ">=0.27.2")
+  - jsonlines ("^4.0.0")
+- Other code optimizations and documentation updates
+
 ## [0.0.17] - 2025-05-22
 ### Added
 - MCP Integration & Publishing Capabilities   

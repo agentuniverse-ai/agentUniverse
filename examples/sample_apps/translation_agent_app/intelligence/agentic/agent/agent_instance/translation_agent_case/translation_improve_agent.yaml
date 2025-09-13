@@ -1,0 +1,18 @@
+info:
+  name: 'translation_improve_agent'
+  description: '翻译反思Agent'
+profile:
+  prompt_version: 'translation_improve.en'
+  input_keys: ['source_lang','target_lang','source_text','init_agent_result','reflection_agent_result']
+  output_keys: ['output']
+  llm_model:
+    name: 'qwen_llm'
+    max_tokens: 1000
+action:
+  tool:
+memory:
+  name: ''
+metadata:
+  type: 'AGENT'
+  module: 'translation_agent_app.intelligence.agentic.agent.agent_instance.translation_agent_case.translation_agent'
+  class: 'TranslationAgent'

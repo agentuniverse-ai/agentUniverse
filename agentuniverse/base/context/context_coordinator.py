@@ -1,13 +1,14 @@
-# !/usr/bin/env python3
-# -*- coding:utf-8 -*-
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 import opentracing
+from opentelemetry import context as otel_context
+from opentelemetry.context import Context
+
 from agentuniverse.base.context.framework_context_manager import \
     FrameworkContextManager
 from agentuniverse.base.context.mcp_session_manager import MCPSessionManager
-from agentuniverse.base.util.tracing.au_trace_manager import AuTraceManager
+from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 
 
 # @Time    : 2025/4/15 15:35
@@ -22,6 +23,7 @@ class ContextPack:
     trace_context: Any
     mcp_session: dict
     opentracing_span: Any
+    otel_context: Optional[Context] = None
 
 
 class ContextCoordinator:
@@ -32,7 +34,8 @@ class ContextCoordinator:
             framework_context=FrameworkContextManager().get_all_contexts(),
             trace_context=AuTraceManager().trace_context,
             mcp_session=MCPSessionManager().save_mcp_session(),
-            opentracing_span=opentracing.tracer.active_span
+            opentracing_span=opentracing.tracer.active_span,
+            otel_context=otel_context.get_current()
         )
 
         return context_pack
@@ -47,6 +50,12 @@ class ContextCoordinator:
             opentracing.tracer.scope_manager.activate(
                 context_pack.opentracing_span, finish_on_close=False
             )
+
+        if context_pack.otel_context:
+            token = otel_context.attach(context_pack.otel_context)
+            return token
+
+        return None
 
     @classmethod
     def end_context(cls):

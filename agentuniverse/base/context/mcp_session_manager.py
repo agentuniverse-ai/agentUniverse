@@ -343,6 +343,7 @@ class MCPSessionManager:
         server_params = StdioServerParameters(
             command=command,
             args=args,
+            env=env,
             encoding=encoding,
             encoding_error_handler=encoding_error_handler,
         )
@@ -397,6 +398,7 @@ class MCPSessionManager:
         server_params = StdioServerParameters(
             command=command,
             args=args,
+            env=env,
             encoding=encoding,
             encoding_error_handler=encoding_error_handler,
         )

@@ -21,7 +21,7 @@ from agentuniverse.base.config.application_configer.application_config_manager i
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.llm.llm_channel.langchain_instance.default_channel_langchain_instance import \
     DefaultChannelLangchainInstance
-from agentuniverse.llm.llm_output import LLMOutput
+from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
 
 
 class LLMChannel(ComponentBase):
@@ -70,9 +70,9 @@ class LLMChannel(ComponentBase):
             self.model_support_max_tokens = component_configer.model_support_max_tokens
         if hasattr(component_configer, "model_is_openai_protocol_compatible"):
             self.model_is_openai_protocol_compatible = component_configer.model_is_openai_protocol_compatible
-        if component_configer.configer.value.get("ext_headers"):
+        if component_configer.configer.value.get("extra_headers"):
             self.ext_headers = component_configer.configer.value.get("extra_headers", {})
-        if component_configer.configer.value.get("ext_params"):
+        if component_configer.configer.value.get("extra_params"):
             self.ext_params = component_configer.configer.value.get("extra_params", {})
             self.ext_params["stream_options"] = {
                 "include_usage": True
@@ -109,6 +109,10 @@ class LLMChannel(ComponentBase):
                     if self.model_support_max_context_length:
                         value = min(self.model_support_max_context_length,
                                     value) if value else self.model_support_max_context_length
+                if key == 'ext_params' and value and isinstance(value, dict):
+                    self.ext_params.update(value)
+                if key == 'ext_headers' and value and isinstance(value, dict):
+                    self.ext_headers.update(value)
                 if not self.__dict__.get(key):
                     self.__dict__[key] = value
 
@@ -138,7 +142,7 @@ class LLMChannel(ComponentBase):
         extra_body = kwargs.pop("extra_body", {})
         ext_params = {**ext_params, **extra_body}
         if not streaming:
-            ext_params.pop("stream_options", "")
+            ext_params.pop("stream_options", None)
         self.client = self._new_client()
         self.client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.channel_api_base
         chat_completion = self.client.chat.completions.create(
@@ -174,7 +178,7 @@ class LLMChannel(ComponentBase):
         extra_body = kwargs.pop("extra_body", {})
         ext_params = {**ext_params, **extra_body}
         if not streaming:
-            ext_params.pop("stream_options")
+            ext_params.pop("stream_options", None)
         self.async_client = self._new_async_client()
         self.async_client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.channel_api_base
         chat_completion = await self.async_client.chat.completions.create(
@@ -263,16 +267,23 @@ class LLMChannel(ComponentBase):
         """Generate the result of the stream."""
         chat_completion = chunk
         if not isinstance(chunk, dict):
-            chunk = chunk.dict()
+            chunk = chunk.model_dump()
+
         if len(chunk["choices"]) == 0:
-            return LLMOutput(text="", raw=chat_completion.model_dump())
+            return LLMOutput(text="", raw=chunk,
+                             usage=TokenUsage.from_openai(chunk.get('usage', {})))
         choice = chunk["choices"][0]
         message = choice.get("delta")
         text = message.get("content")
         role = message.get("role")
         if text is None:
             text = ""
-        return LLMOutput(text=text, raw=chat_completion.model_dump(), message=Message(content=text, type=role))
+        return LLMOutput(
+            text=text,
+            raw=chat_completion.model_dump(),
+            message=Message(content=text, type=role),
+            usage=TokenUsage.from_openai(chunk.get('usage', {}))
+        )
 
     def get_instance_code(self) -> str:
         """Return the full name of the component."""

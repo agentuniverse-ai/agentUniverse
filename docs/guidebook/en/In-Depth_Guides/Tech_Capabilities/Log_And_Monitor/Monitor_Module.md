@@ -99,7 +99,7 @@ agentUniverse implements the `@trace_llm` decorator. When an agent calls the cor
 
 #### Demo Effect
 
-When calling the `demo_rag_agent` iin the sample project of agentUniverse, using the gpt-4omodel with a query to analyze the reasons behind Warren Buffett's reduction of his stake in BYD, the model invocation tracking function captures the following data:
+When calling the `demo_rag_agent` in the sample project of agentUniverse, using the gpt-4omodel with a query to analyze the reasons behind Warren Buffett's reduction of his stake in BYD, the model invocation tracking function captures the following data:
 
 ```json
 {

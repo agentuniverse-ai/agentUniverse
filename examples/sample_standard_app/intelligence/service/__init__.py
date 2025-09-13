@@ -5,6 +5,3 @@ from agentuniverse.agent_serve.service_manager import ServiceManager
 # @Time    :
 # @Author  :
 # @Email   :
-# @FileName: __init__.py.py
-
-ServiceManager()

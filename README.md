@@ -5,7 +5,7 @@ Language version: [English](./README.md) | [中文](./README_zh.md) | [日本語
 ![](https://img.shields.io/badge/framework-agentUniverse-pink)
 ![](https://img.shields.io/badge/python-3.10%2B-blue?logo=Python)
 [![](https://img.shields.io/badge/%20license-Apache--2.0-yellow)](LICENSE)
-[![Static Badge](https://img.shields.io/badge/pypi-v0.0.17-blue?logo=pypi)](https://pypi.org/project/agentUniverse/)
+[![Static Badge](https://img.shields.io/badge/pypi-v0.0.18-blue?logo=pypi)](https://pypi.org/project/agentUniverse/)
 
 ![](docs/guidebook/_picture/logo_bar.jpg)
 ****************************************
@@ -31,17 +31,17 @@ The LLM model integration can be accomplished with simple configuration, current
 
 |-|Vendors|                                                                                                         Models                                                                                                          |
 |:-----:|:--------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-|<img src="https://github.com/user-attachments/assets/b7b0f2ce-3250-4008-b6d7-4712a983deb9" height="25">|  Qwen  | <img src="https://img.shields.io/badge/%E2%9C%A8new-black" alt="new" width="30" height="13" style="vertical-align: text-bottom;"> **qwen3 Series**（qwen3-235b-a22b、qwen3-32b、qwen3-30b-a3b, etc.）、qwen2.5-72b-instruct、qwq-32b-preview、qwen-max、… |
-|<img src="https://github.com/user-attachments/assets/5a997feb-bef4-4e53-ac3e-d38221e5399c" height="25">|Deepseek|                                                                                 deepseek-r1、deepseek-v3、deepseek-r1-distill-qwen-32b、…                                                                                  |
-|<img src="https://github.com/user-attachments/assets/0b50e555-65e8-49b2-b725-f3f71ee7daed" height="25">| OpenAI |                                                                                      GPT-4o、GPT-4o mini、OpenAI o1、OpenAI o3-mini、…                                                                                      |
-|<img src="https://github.com/user-attachments/assets/60fe0a70-0b47-4ac7-9bc9-8e860732ace9" height="25">| Claude |                                                                                            Claude 3.5 Sonnet、Claude 3 Opus、…                                                                                            |
-|<img src="https://github.com/user-attachments/assets/334c7f09-7eae-4a65-a70f-2e6531964224" height="25">| Gemini |                                                                               Gemini 2.0 Flash、Gemini 2.0 Flash Thinking、Gemini 1.5 Pro、…                                                                               |
-|<img src="https://github.com/user-attachments/assets/8e41c73f-3103-4305-ad1f-56116ea55523" height="25">| Llama  |                                                                            llama3.3-70b-instruct、llama3.2-3b-instruct、llama3.2-1b-instruct、…                                                                            |
-|<img src="https://github.com/user-attachments/assets/19d264c6-e499-4913-9d6d-314d392f2246" height="25">|  KIMI  |                                                                                    moonshot-v1-128k、moonshot-v1-32k、moonshot-v1-8k、…                                                                                    |
-|<img src="https://github.com/user-attachments/assets/79572d9a-29d5-4c0e-a336-ce3f8018fb05" height="25">| WenXin |                                                                                          ERNIE 4.0、ERNIE 4.0 Turbo、ERNIE 3.5、…                                                                                          |
-|<img src="https://github.com/user-attachments/assets/abb5311e-4d70-4e9c-8fca-e5129ae912fc" height="25">|chatglm |                                                                                               chatglm3-6b、chatglm-6b-v2、…                                                                                               |
-|<img src="https://github.com/user-attachments/assets/fe265f24-4ea6-4ff2-9b50-58ab6706a5f5" height="25">|BaiChuan|                                                                                         baichuan2-turbo、baichuan2-13b-chat-v1、…                                                                                         |
-|<img src="https://github.com/user-attachments/assets/41ffe268-392f-4ab9-b42d-e30dbd70d66b" height="25">| Doubao |                                                                                    Doubao-pro-128k、Doubao-pro-32k、Doubao-lite-128k、…                                                                                    |
+|<img src="https://github.com/user-attachments/assets/b7b0f2ce-3250-4008-b6d7-4712a983deb9" height="25">|Qwen| qwen3 Series（qwen3-235b-a22b、qwen3-32b、qwen3-30b-a3b, etc.） 、qwen2.5-72b-instruct、qwq-32b-preview、qwen-max、… |
+|<img src="https://github.com/user-attachments/assets/5a997feb-bef4-4e53-ac3e-d38221e5399c" height="25">|Deepseek|                            deepseek-r1、deepseek-v3、deepseek-r1-distill-qwen-32b、…                            |
+|<img src="https://github.com/user-attachments/assets/0b50e555-65e8-49b2-b725-f3f71ee7daed" height="25">|OpenAI|                                GPT-4o、GPT-4o mini、OpenAI o1、OpenAI o3-mini、…                                 |
+|<img src="https://github.com/user-attachments/assets/60fe0a70-0b47-4ac7-9bc9-8e860732ace9" height="25">|Claude|                             claude 3.7 sonnet 、Claude 3.5 Sonnet、Claude 3 Opus、…                             |
+|<img src="https://github.com/user-attachments/assets/334c7f09-7eae-4a65-a70f-2e6531964224" height="25">|Gemini|                  Gemini 2.5 Pro、Gemini 2.0 Flash、Gemini 2.0 Flash Thinking、Gemini 1.5 Pro、…                  |
+|<img src="https://github.com/user-attachments/assets/8e41c73f-3103-4305-ad1f-56116ea55523" height="25">|Llama|                      llama3.3-70b-instruct、llama3.2-3b-instruct、llama3.2-1b-instruct、…                       |
+|<img src="https://github.com/user-attachments/assets/19d264c6-e499-4913-9d6d-314d392f2246" height="25">|KIMI|                              moonshot-v1-128k、moonshot-v1-32k、moonshot-v1-8k、…                               |
+|<img src="https://github.com/user-attachments/assets/79572d9a-29d5-4c0e-a336-ce3f8018fb05" height="25">|WenXin|                                     ERNIE 4.5 Turbo、ERNIE 4.5、ERNIE 4.0 Turbo、ERNIE 4.0、ERNIE 3.5、…                                     |
+|<img src="https://github.com/user-attachments/assets/abb5311e-4d70-4e9c-8fca-e5129ae912fc" height="25">|chatglm|                                         chatglm3-6b、chatglm-6b-v2、…                                          |
+|<img src="https://github.com/user-attachments/assets/fe265f24-4ea6-4ff2-9b50-58ab6706a5f5" height="25">|BaiChuan|                                   baichuan2-turbo、baichuan2-13b-chat-v1、…                                    |
+|<img src="https://github.com/user-attachments/assets/41ffe268-392f-4ab9-b42d-e30dbd70d66b" height="25">|Doubao|                              Doubao-pro-128k、Doubao-pro-32k、Doubao-lite-128k、…                               |
 
 For example, to use deepseek model, you can simply set DEEPSEEK_API_KEY value in the custom_key.toml file, and set the llm_model name in the agent configuration file to 'default_deepseek_llm' and you're all set. For more information about llm configuration, please refer to [switch-the-llm](https://github.com/agentuniverse-ai/agentUniverse/blob/master/docs/guidebook/en/Get_Start/2.Run_Your_First_Tutorial_Example.md#switch-the-llm).
 
@@ -88,6 +88,9 @@ You can learn how to create effective agent patterns into templates through the 
 
 #### Using and Publishing MCP Servers
 You can learn how to quickly use or publish MCP servers in agentUniverse framework by referring to [How to Use MCP Servers](docs/guidebook/en/How-to/Use%20and%20Publish%20MCP%20Server/How_to_Use_MCP_Servers.md) and [How to Publish MCP Servers](docs/guidebook/en/How-to/Use%20and%20Publish%20MCP%20Server/How_to_Publish_MCP_Servers.md).
+
+#### Agent Application Observability
+agentUniverse provides a standardized observability framework for agent applications. Based on the OpenTelemetry protocol, it enables comprehensive data collection and monitoring of critical components such as agents, LLMs, and tools, facilitating full lifecycle tracking of agents. You can learn how to utilize these observability capabilities in the [Agent Application Observability](docs/guidebook/en/In-Depth_Guides/Tech_Capabilities/Observability/Observability_with_OTEL.md) section.
 
 #### Common Tips and Advanced Techniques
 You can learn more advanced techniques in the agent application building process through other documents in the [Get_Start](./docs/guidebook/en/Get_Start), such as how to add a memory module into the intelligent agent process and how to effectively manage prompts within the project.
