@@ -1,0 +1,21 @@
+name: 'google_llm'
+description: 'Google Gemini llm'
+model_name: 'gemini-1.5-flash'   # 可改：gemini-1.5-pro
+max_tokens: 1024
+temperature: 0.1
+streaming: False
+request_timeout: 60
+ext_info:
+  api_key: '${GOOGLE_API_KEY}'   # 建议用环境变量；也可直接填明文
+  # 可选生成参数（需要的话解开）：
+  # top_p: 0.95
+  # top_k: 40
+  # candidate_count: 1
+  # safety_settings:
+  #   HARM_CATEGORY_HATE_SPEECH: BLOCK_NONE
+  #   HARM_CATEGORY_DANGEROUS_CONTENT: BLOCK_NONE
+
+metadata:
+  type: 'LLM'
+  module: 'demo_startup_app_with_single_agent.intelligence.agentic.llm.google.insurance_google_llm'
+  class:  'GoogleGeminiLLM'

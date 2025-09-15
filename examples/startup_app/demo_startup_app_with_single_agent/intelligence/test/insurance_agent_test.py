@@ -6,6 +6,13 @@
 # # @Email   : wangchongshi.wcs@antgroup.com
 # # @FileName: insurance_agent_test.py
 
+# --- fix: map "import genai" -> official google.generativeai ---
+import sys
+import google.generativeai as _gemini_sdk
+sys.modules['genai'] = _gemini_sdk
+# ---------------------------------------------------------------
+
+
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.base.agentuniverse import AgentUniverse
 from agentuniverse.agent.agent import Agent

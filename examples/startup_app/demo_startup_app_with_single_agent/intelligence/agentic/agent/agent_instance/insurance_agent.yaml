@@ -25,9 +25,14 @@ profile:
     # model_name: 'meta-llama/Meta-Llama-3.1-8B-Instruct' 
     # temperature: 0.1
 
-    name: 'insurance_maya_llm'
-    model_name: 'qwen-plus' 
+    # name: 'insurance_maya_llm'
+    # model_name: 'qwen-plus' 
+    # temperature: 0.1
+
+    name: 'google_llm'
+    model_name: 'gemini-1.5-flash'
     temperature: 0.1
+
 
 action:
   tool:
