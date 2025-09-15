@@ -316,14 +316,14 @@ def get_session_history(session_id):
 
         # 查询该 session_id 下所有 state 为 'finished' 的记录，按时间升序排列
         query = '''
-            SELECT query, result, gmt_create
-            FROM request_task
-            WHERE session_id = ?
-              AND state = 'finished'
-              AND result IS NOT NULL
-              AND result != ''
-            ORDER BY gmt_create ASC
-        '''
+                SELECT query, result, gmt_create
+                FROM request_task
+                WHERE session_id = ?
+                  AND state = 'finished'
+                  AND result IS NOT NULL
+                  AND result != ''
+                ORDER BY gmt_create ASC \
+                '''
 
         rows = db.execute(query, (session_id,)).fetchall()
 
@@ -335,6 +335,9 @@ def get_session_history(session_id):
 
         for row in rows:
             try:
+                # 直接使用 query 作为用户输入
+                user_input = row["query"].strip() if row["query"] else ""
+
                 # 解析外层 result
                 outer_result = json.loads(row["result"])
                 inner_result_str = outer_result.get("result")
@@ -348,8 +351,14 @@ def get_session_history(session_id):
                 else:
                     inner_result = inner_result_str
 
-                user_input = inner_result.get("input", "").strip()
-                ai_output = inner_result.get("output", {})
+                # 提取AI输出
+                ai_output = inner_result.get("output", "")
+
+                # 如果 ai_output 是字典，提取 text 字段
+                if isinstance(ai_output, dict):
+                    ai_text = (ai_output.get("text") or "").strip()
+                else:
+                    ai_text = str(ai_output).strip()
 
                 # ========== 用户消息 ==========
                 if user_input:
@@ -365,13 +374,6 @@ def get_session_history(session_id):
                     })
 
                 # ========== 助手消息 ==========
-                # 提取文本内容，优先使用 text 字段
-                ai_text = ""
-                if isinstance(ai_output, str):
-                    ai_text = ai_output.strip()
-                elif isinstance(ai_output, dict):
-                    ai_text = (ai_output.get("text") or ai_output.get("response") or "").strip()
-
                 if ai_text:
                     assistant_msg_id = f"msg_{str(message_id_counter).zfill(3)}"
                     message_id_counter += 1
@@ -392,7 +394,7 @@ def get_session_history(session_id):
                         "gmt_create": _format_timestamp(row["gmt_create"])
                     })
 
-            except (json.JSONDecodeError, KeyError) as e:
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
                 print(f"解析 result 失败: {e}, row={row}")
                 continue  # 跳过解析失败的记录
 
