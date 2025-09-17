@@ -133,7 +133,11 @@ def _add_sls_log_async_handler():
                            LoggingConfig.access_key_secret,
                            LoggingConfig.sls_log_queue_max_size,
                            LoggingConfig.sls_log_send_interval)
-    loop = asyncio.get_event_loop_policy().get_event_loop()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
     loop.create_task(sls_sender.start())
 
     def _sls_filter(record):
