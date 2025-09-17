@@ -11,6 +11,6 @@ from enum import Enum
 
 @enum.unique
 class ToolTypeEnum(Enum):
-    API = 'api'
-    MCP = 'mcp'
-    FUNC = 'func'
+    API = "api"
+    MCP = "mcp"
+    FUNC = "func"

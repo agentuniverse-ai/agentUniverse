@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/13 12:01
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: knowledge_configer.py
 from typing import Optional, Dict, List
@@ -40,14 +40,14 @@ class KnowledgeConfiger(ComponentConfiger):
     def ext_info(self) -> Optional[Dict]:
         return self.__ext_info
 
-    def load(self) -> 'KnowledgeConfiger':
+    def load(self) -> "KnowledgeConfiger":
         """Load the configuration by the Configer object.
         Returns:
             KnowledgeConfiger: the KnowledgeConfiger object
         """
         return self.load_by_configer(self.__configer)
 
-    def load_by_configer(self, configer: Configer) -> 'KnowledgeConfiger':
+    def load_by_configer(self, configer: Configer) -> "KnowledgeConfiger":
         """Load the configuration by the Configer object.
         Args:
             configer(Configer): the Configer object
@@ -57,9 +57,9 @@ class KnowledgeConfiger(ComponentConfiger):
         super().load_by_configer(configer)
 
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
-            self.__ext_info = configer.value.get('ext_info')
+            self.__name = configer.value.get("name")
+            self.__description = configer.value.get("description")
+            self.__ext_info = configer.value.get("ext_info")
         except Exception as e:
             raise Exception(f"Failed to parse the Knowledge configuration: {e}")
         return self

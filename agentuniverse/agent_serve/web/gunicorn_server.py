@@ -16,13 +16,13 @@ from ...base.context.framework_context_manager import FrameworkContextManager
 from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 
 DEFAULT_GUNICORN_CONFIG = {
-    'bind': '127.0.0.1:8888',
-    'workers': 5,
-    'backlog': 2048,
-    'worker_class': 'gthread',
-    'threads': 4,
-    'timeout': 60,
-    'keepalive': 10
+    "bind": "127.0.0.1:8888",
+    "workers": 5,
+    "backlog": 2048,
+    "worker_class": "gthread",
+    "threads": 4,
+    "timeout": 60,
+    "keepalive": 10,
 }
 
 
@@ -42,9 +42,12 @@ class ContextVarResetMiddleware:
         finally:
             FrameworkContextManager().clear_all_contexts()
             AuTraceManager().reset_trace()
+
+
 @singleton
 class GunicornApplication(BaseApplication):
     """Use gunicorn to wrap the flask web server."""
+
     def __init__(self, config_path: str = None):
         self.options = {}
         if config_path:
@@ -73,7 +76,7 @@ class GunicornApplication(BaseApplication):
                 self.cfg.set(key.lower(), value)
 
         # Set post fork.
-        self.cfg.set('post_fork', post_fork)
+        self.cfg.set("post_fork", post_fork)
 
     def update_config(self, options: dict):
         self.options = options
@@ -85,16 +88,13 @@ class GunicornApplication(BaseApplication):
     def __load_config_from_file(self, config_path: str):
         """Load gunicorn config file."""
         try:
-            with open(config_path, 'rb') as f:
+            with open(config_path, "rb") as f:
                 config = tomli.load(f)["GUNICORN_CONFIG"]
         except (FileNotFoundError, TypeError):
             print("can't find gunicorn config file, use default config")
             return
         except (tomli.TOMLDecodeError, KeyError):
-            print("gunicorn config file isn't a valid toml, "
-                  "use default config.")
+            print("gunicorn config file isn't a valid toml, use default config.")
             return
 
-        self.default_config = {
-            key: value for key, value in config.items()
-        }
+        self.default_config = {key: value for key, value in config.items()}

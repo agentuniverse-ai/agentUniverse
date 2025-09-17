@@ -15,8 +15,8 @@ from agentuniverse.base.annotation.retry import retry
 
 
 class SearchMode(Enum):
-    SEARCH = "search"   
-    DETAIL = "detail"  
+    SEARCH = "search"
+    DETAIL = "detail"
 
 
 @dataclass
@@ -30,7 +30,6 @@ class PaperSummary:
 
 
 class ArxivTool(Tool):
-    
     sch_engine: Optional[Any] = None
     MAX_QUERY_LENGTH: int = Field(default=300, description="查询字符串最大长度")
 
@@ -47,38 +46,38 @@ class ArxivTool(Tool):
             raise ValueError(f"Invalid mode: {mode}. Must be one of {[m.value for m in SearchMode]}")
 
         query = input
-        return (self.find_papers_by_str(query) if mode == SearchMode.SEARCH.value
-                else self.retrieve_full_paper_text(query))
-        
+        return (
+            self.find_papers_by_str(query) if mode == SearchMode.SEARCH.value else self.retrieve_full_paper_text(query)
+        )
+
     def _process_query(self, query: str) -> str:
         if len(query) <= self.MAX_QUERY_LENGTH:
             return query
-        
+
         words: List[str] = query.split()
         processed_words: List[str] = []
         current_length: int = 0
         for word in words:
-            word_length = len(word) + 1 
+            word_length = len(word) + 1
             if current_length + word_length <= self.MAX_QUERY_LENGTH:
                 processed_words.append(word)
                 current_length += word_length
             else:
                 break
-        return ' '.join(processed_words)
+        return " ".join(processed_words)
 
     @retry(3, 1.0)
     def find_papers_by_str(self, query) -> str:
         processed_query = self._process_query(query)
-        result_num:int = 10   
+        result_num: int = 10
         try:
             import arxiv
         except ImportError:
             raise ImportError("arxiv is required. Install with: pip install arxiv")
-    
+
         search = arxiv.Search(
-            query="abs:" + processed_query,
-            max_results=result_num,
-            sort_by=arxiv.SortCriterion.Relevance)
+            query="abs:" + processed_query, max_results=result_num, sort_by=arxiv.SortCriterion.Relevance
+        )
 
         papers: List[PaperSummary] = []
         for result in self.sch_engine.results(search):
@@ -87,8 +86,8 @@ class ArxivTool(Tool):
                 title=result.title,
                 authors=[str(author) for author in result.authors],
                 publish_date=str(result.published).split()[0],
-                summary=result.summary.replace('\n', ' '),
-                pdf_url=result.pdf_url
+                summary=result.summary.replace("\n", " "),
+                pdf_url=result.pdf_url,
             )
             papers.append(paper)
         return self._format_paper_results(papers)
@@ -101,15 +100,13 @@ class ArxivTool(Tool):
             raise ImportError("arxiv is required. Install with: pip install arxiv")
         search = arxiv.Search(id_list=[paper_id])
         paper = next(self.sch_engine.results(search))
-        paper.download_pdf(filename="downloaded-paper.pdf") 
-        
+        paper.download_pdf(filename="downloaded-paper.pdf")
+
         try:
             import pypdf
         except ImportError:
-            raise ImportError(
-                "pypdf is required to read PDF files: `pip install pypdf`"
-            )
-        reader = pypdf.PdfReader('downloaded-paper.pdf')
+            raise ImportError("pypdf is required to read PDF files: `pip install pypdf`")
+        reader = pypdf.PdfReader("downloaded-paper.pdf")
         text_content = [page.extract_text() for page in reader.pages]
         if os.path.exists("downloaded-paper.pdf"):
             os.remove("downloaded-paper.pdf")
@@ -128,7 +125,7 @@ class ArxivTool(Tool):
                 f"Paper ID: {paper.paper_id}",
                 f"PDF URL: {paper.pdf_url}",
                 f"Summary: {paper.summary}",
-                "-" * 80
+                "-" * 80,
             ]
             formatted_results.append("\n".join(paper_info))
         return "\n\n".join(formatted_results)

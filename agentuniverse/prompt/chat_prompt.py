@@ -33,7 +33,7 @@ class ChatPrompt(Prompt):
     def as_langchain(self) -> ChatPromptTemplate:
         return ChatPromptTemplate.from_messages(Message.as_langchain_list(self.messages))
 
-    def build_prompt(self, agent_prompt_model: AgentPromptModel, prompt_assemble_order: list[str]) -> 'ChatPrompt':
+    def build_prompt(self, agent_prompt_model: AgentPromptModel, prompt_assemble_order: list[str]) -> "ChatPrompt":
         """Build the prompt class.
 
         Args:
@@ -54,14 +54,14 @@ class ChatPrompt(Prompt):
             List[str]: The placeholders list.
         """
         result = []
-        placeholder_pattern = re.compile(r'\{(.*?)}')
+        placeholder_pattern = re.compile(r"\{(.*?)}")
         for message in self.messages:
             matches = placeholder_pattern.findall(message.content)
             result.extend(matches)
         return result
 
     def generate_image_prompt(self, image_urls: list[str]) -> None:
-        """ Generate the prompt with image urls.
+        """Generate the prompt with image urls.
 
         Args:
             image_urls (list[str]): The image urls.
@@ -87,11 +87,12 @@ class ChatPrompt(Prompt):
                             extension = parsed_url.path.lower().split(".")[-1]
                             mime_type = f"image/{extension}"
                             content = [
-                                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}}]
+                                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}}
+                            ]
                             self.messages.append(Message(type=ChatMessageEnum.HUMAN.value, content=content))
 
     def generate_audio_prompt(self, audio_url: str) -> None:
-        """ Generate the prompt with audio url.
+        """Generate the prompt with audio url.
 
         Args:
             audio_url (str): The audio url.

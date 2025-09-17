@@ -22,4 +22,5 @@ class GraphDocument(Document):
     Attributes:
         graph_data: A pandas dataframe contents all results of neo4j cypher
     """
+
     graph_data: pd.DataFrame = None

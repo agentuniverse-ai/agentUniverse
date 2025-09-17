@@ -13,6 +13,7 @@ import numpy as np
 import re
 import os
 
+
 def enhance_image(image):
     """
     Enhance the image: convert to grayscale, apply CLAHE for contrast enhancement,
@@ -25,7 +26,8 @@ def enhance_image(image):
     filtered = cv2.bilateralFilter(enhanced, 9, 75, 75)
     return filtered
 
-def detect_text_regions(image, east_model='frozen_east_text_detection.pb', min_confidence=0.5, width=320, height=320):
+
+def detect_text_regions(image, east_model="frozen_east_text_detection.pb", min_confidence=0.5, width=320, height=320):
     """
     Detect text regions in the image using the EAST text detection model.
     Returns a list of image regions (as numpy arrays) corresponding to text areas.
@@ -41,8 +43,7 @@ def detect_text_regions(image, east_model='frozen_east_text_detection.pb', min_c
     rH = origH / float(newH)
     resized = cv2.resize(image, (newW, newH))
 
-    blob = cv2.dnn.blobFromImage(resized, 1.0, (newW, newH),
-                                 (123.68, 116.78, 103.94), swapRB=True, crop=False)
+    blob = cv2.dnn.blobFromImage(resized, 1.0, (newW, newH), (123.68, 116.78, 103.94), swapRB=True, crop=False)
     net.setInput(blob)
     # Output layers of the EAST model
     layerNames = ["feature_fusion/Conv_7/Sigmoid", "feature_fusion/concat_3"]
@@ -98,7 +99,8 @@ def detect_text_regions(image, east_model='frozen_east_text_detection.pb', min_c
             regions.append(region)
     return regions
 
-def ocr_on_regions(regions, lang='chi_sim+eng'):
+
+def ocr_on_regions(regions, lang="chi_sim+eng"):
     """
     Perform OCR on each text region separately and concatenate the results.
     """
@@ -113,19 +115,22 @@ def ocr_on_regions(regions, lang='chi_sim+eng'):
         texts.append(text)
     return "\n".join(texts)
 
+
 def clean_extracted_text(text):
     """
     Clean the OCR output text by removing extra whitespace.
     """
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-def save_text_to_file(text, output_file='extracted_text.txt'):
-    with open(output_file, 'w', encoding='utf-8') as f:
+
+def save_text_to_file(text, output_file="extracted_text.txt"):
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write(text)
     print(f"Text content saved to {output_file}")
 
-def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng'):
+
+def extract_text_from_image(image_path, use_east=True, lang="chi_sim+eng"):
     """
     Extract text from an image:
       - First, enhance the image.
@@ -136,7 +141,7 @@ def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng'):
     image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     if image is None:
         raise ValueError("Cannot load image, please check the path")
-    
+
     # Convert image to 3-channel BGR if it's not already
     if len(image.shape) == 2:
         # If the image is grayscale, convert to BGR
@@ -144,10 +149,10 @@ def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng'):
     elif len(image.shape) == 3 and image.shape[2] == 4:
         # If the image has an alpha channel, convert BGRA to BGR
         image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-    
+
     # Enhance the image
     enhanced = enhance_image(image)
-    
+
     if use_east:
         try:
             # Use the original color image for EAST detection (usually yields better results)
@@ -164,14 +169,15 @@ def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng'):
         pil_img = Image.fromarray(enhanced)
         config = "--oem 3 --psm 6"
         raw_text = pytesseract.image_to_string(pil_img, lang=lang, config=config)
-    
+
     final_text = clean_extracted_text(raw_text)
     return final_text
 
+
 if __name__ == "__main__":
     # Specify the input image file. It can be a jpg, png, or any common format.
-    image_file = 'input.png'  # Change to the appropriate image file as needed
-    text_output = extract_text_from_image(image_file, use_east=True, lang='chi_sim+eng')
+    image_file = "input.png"  # Change to the appropriate image file as needed
+    text_output = extract_text_from_image(image_file, use_east=True, lang="chi_sim+eng")
     print("Extracted text:")
     print(text_output)
-    save_text_to_file(text_output, 'extracted_text.txt')
+    save_text_to_file(text_output, "extracted_text.txt")

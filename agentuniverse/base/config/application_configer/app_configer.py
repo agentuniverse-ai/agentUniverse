@@ -1,13 +1,12 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # @Time    : 2024/3/12 16:17
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: app_configer.py
 import importlib
 from typing import Optional, Dict, Any
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.config.configer import Configer
@@ -255,12 +254,12 @@ class AppConfiger(object):
     def load_llm_plugins(cls, plugin_modules):
         funcs = []
         for item in plugin_modules:
-            module_name, func_name = item.rsplit('.', 1)
+            module_name, func_name = item.rsplit(".", 1)
             module = importlib.import_module(module_name)
             funcs.append(getattr(module, func_name))
         return funcs
 
-    def load_by_configer(self, configer: Configer) -> 'AppConfiger':
+    def load_by_configer(self, configer: Configer) -> "AppConfiger":
         """Load the AppConfiger by the given Configer.
 
         Args:
@@ -269,32 +268,32 @@ class AppConfiger(object):
             AppConfiger: the AppConfiger object
         """
         self.__configer = configer
-        self.__base_info_appname = configer.value.get('BASE_INFO', {}).get('appname')
-        self.__root_package_name = configer.value.get('PACKAGE_PATH_INFO', {}).get('ROOT_PACKAGE')
-        self.__core_default_package_list = configer.value.get('CORE_PACKAGE', {}).get('default')
-        self.__core_agent_package_list = configer.value.get('CORE_PACKAGE', {}).get('agent')
-        self.__core_knowledge_package_list = configer.value.get('CORE_PACKAGE', {}).get('knowledge')
-        self.__core_llm_package_list = configer.value.get('CORE_PACKAGE', {}).get('llm')
-        self.__core_planner_package_list = configer.value.get('CORE_PACKAGE', {}).get('planner')
-        self.__core_tool_package_list = configer.value.get('CORE_PACKAGE', {}).get('tool')
-        self.__core_toolkit_package_list = configer.value.get('CORE_PACKAGE', {}).get('toolkit')
-        self.__core_memory_package_list = configer.value.get('CORE_PACKAGE', {}).get('memory')
-        self.__core_service_package_list = configer.value.get('CORE_PACKAGE', {}).get('service')
-        self.__core_sqldb_wrapper_package_list = configer.value.get('CORE_PACKAGE', {}).get('sqldb_wrapper')
-        self.__core_prompt_package_list = configer.value.get('CORE_PACKAGE', {}).get('prompt')
-        self.__core_product_package_list = configer.value.get('CORE_PACKAGE', {}).get('product')
-        self.__core_workflow_package_list = configer.value.get('CORE_PACKAGE', {}).get('workflow')
-        self.__core_embedding_package_list = configer.value.get('CORE_PACKAGE', {}).get('embedding')
-        self.__core_doc_processor_package_list = configer.value.get('CORE_PACKAGE', {}).get('doc_processor')
-        self.__core_reader_package_list = configer.value.get('CORE_PACKAGE', {}).get('reader')
-        self.__core_store_package_list = configer.value.get('CORE_PACKAGE', {}).get('store')
-        self.__core_rag_router_package_list = configer.value.get('CORE_PACKAGE', {}).get('rag_router')
-        self.__core_query_paraphraser_package_list = configer.value.get('CORE_PACKAGE', {}).get('query_paraphraser')
-        self.__core_memory_compressor_package_list = configer.value.get('CORE_PACKAGE', {}).get('memory_compressor')
-        self.__core_memory_storage_package_list = configer.value.get('CORE_PACKAGE', {}).get('memory_storage')
-        self.__core_work_pattern_package_list = configer.value.get('CORE_PACKAGE', {}).get('work_pattern')
-        self.__core_log_sink_package_list = configer.value.get('CORE_PACKAGE', {}).get('log_sink')
-        self.__core_llm_channel_package_list = configer.value.get('CORE_PACKAGE', {}).get('llm_channel')
-        self.__conversation_memory_configer = configer.value.get('CONVERSATION_MEMORY', {})
+        self.__base_info_appname = configer.value.get("BASE_INFO", {}).get("appname")
+        self.__root_package_name = configer.value.get("PACKAGE_PATH_INFO", {}).get("ROOT_PACKAGE")
+        self.__core_default_package_list = configer.value.get("CORE_PACKAGE", {}).get("default")
+        self.__core_agent_package_list = configer.value.get("CORE_PACKAGE", {}).get("agent")
+        self.__core_knowledge_package_list = configer.value.get("CORE_PACKAGE", {}).get("knowledge")
+        self.__core_llm_package_list = configer.value.get("CORE_PACKAGE", {}).get("llm")
+        self.__core_planner_package_list = configer.value.get("CORE_PACKAGE", {}).get("planner")
+        self.__core_tool_package_list = configer.value.get("CORE_PACKAGE", {}).get("tool")
+        self.__core_toolkit_package_list = configer.value.get("CORE_PACKAGE", {}).get("toolkit")
+        self.__core_memory_package_list = configer.value.get("CORE_PACKAGE", {}).get("memory")
+        self.__core_service_package_list = configer.value.get("CORE_PACKAGE", {}).get("service")
+        self.__core_sqldb_wrapper_package_list = configer.value.get("CORE_PACKAGE", {}).get("sqldb_wrapper")
+        self.__core_prompt_package_list = configer.value.get("CORE_PACKAGE", {}).get("prompt")
+        self.__core_product_package_list = configer.value.get("CORE_PACKAGE", {}).get("product")
+        self.__core_workflow_package_list = configer.value.get("CORE_PACKAGE", {}).get("workflow")
+        self.__core_embedding_package_list = configer.value.get("CORE_PACKAGE", {}).get("embedding")
+        self.__core_doc_processor_package_list = configer.value.get("CORE_PACKAGE", {}).get("doc_processor")
+        self.__core_reader_package_list = configer.value.get("CORE_PACKAGE", {}).get("reader")
+        self.__core_store_package_list = configer.value.get("CORE_PACKAGE", {}).get("store")
+        self.__core_rag_router_package_list = configer.value.get("CORE_PACKAGE", {}).get("rag_router")
+        self.__core_query_paraphraser_package_list = configer.value.get("CORE_PACKAGE", {}).get("query_paraphraser")
+        self.__core_memory_compressor_package_list = configer.value.get("CORE_PACKAGE", {}).get("memory_compressor")
+        self.__core_memory_storage_package_list = configer.value.get("CORE_PACKAGE", {}).get("memory_storage")
+        self.__core_work_pattern_package_list = configer.value.get("CORE_PACKAGE", {}).get("work_pattern")
+        self.__core_log_sink_package_list = configer.value.get("CORE_PACKAGE", {}).get("log_sink")
+        self.__core_llm_channel_package_list = configer.value.get("CORE_PACKAGE", {}).get("llm_channel")
+        self.__conversation_memory_configer = configer.value.get("CONVERSATION_MEMORY", {})
         self.__llm_plugins = self.load_llm_plugins(configer.value.get("PLUGINS", {}).get("llm_plugins", []))
         return self

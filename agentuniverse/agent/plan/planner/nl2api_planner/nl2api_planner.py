@@ -5,6 +5,7 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: nl2api_planner.py
 """Expressing planner module."""
+
 from langchain.tools import Tool as LangchainTool
 from langchain_core.output_parsers import StrOutputParser
 
@@ -48,14 +49,14 @@ class Nl2ApiPlanner(Planner):
         chain = prompt.as_langchain() | llm.as_langchain_runnable(agent_model.llm_params()) | StrOutputParser()
         res = self.invoke_chain(agent_model, chain, planner_input, None, input_object)
 
-        assemble_memory_output(memory=memory,
-                               agent_input=planner_input,
-                               content=f"Human: {planner_input.get(self.input_key)}, AI: {res}")
+        assemble_memory_output(
+            memory=memory, agent_input=planner_input, content=f"Human: {planner_input.get(self.input_key)}, AI: {res}"
+        )
         return {**planner_input, self.output_key: res}
 
     @staticmethod
     def acquire_tools(action) -> list[LangchainTool]:
-        tool_names: list = action.get('tool') or list()
+        tool_names: list = action.get("tool") or list()
         lc_tools: list[LangchainTool] = list()
         for tool_name in tool_names:
             tool: Tool = ToolManager().get_instance_obj(tool_name)
@@ -73,32 +74,37 @@ class Nl2ApiPlanner(Planner):
             ChatPrompt: The chat prompt instance.
         """
         tools = self.acquire_tools(action=agent_model.action)
-        lc_tools_str: str = ''
+        lc_tools_str: str = ""
         for lc_tool in tools:
-            lc_tools_str += "tool name:" + lc_tool.name + " " + "tool description:" + lc_tool.description + '\n'
+            lc_tools_str += "tool name:" + lc_tool.name + " " + "tool description:" + lc_tool.description + "\n"
         lc_tool_names = "|".join([lc_tool.name for lc_tool in tools])
-        planner_input['tool_names'] = lc_tool_names
-        planner_input['tools'] = lc_tools_str
-        planner_input['agent_scratchpad'] = ''
+        planner_input["tool_names"] = lc_tool_names
+        planner_input["tools"] = lc_tools_str
+        planner_input["agent_scratchpad"] = ""
         #
         profile: dict = agent_model.profile
         #
-        profile_prompt_model: AgentPromptModel = AgentPromptModel(introduction=profile.get('introduction'),
-                                                                  target=profile.get('target'),
-                                                                  instruction=profile.get('instruction'))
+        profile_prompt_model: AgentPromptModel = AgentPromptModel(
+            introduction=profile.get("introduction"),
+            target=profile.get("target"),
+            instruction=profile.get("instruction"),
+        )
 
         # get the prompt by the prompt version
-        prompt_version: str = profile.get('prompt_version')
+        prompt_version: str = profile.get("prompt_version")
         version_prompt: Prompt = PromptManager().get_instance_obj(prompt_version)
 
         if version_prompt is None and not profile_prompt_model:
-            raise Exception("Either the `prompt_version` or `introduction & target & instruction`"
-                            " in agent profile configuration should be provided.")
+            raise Exception(
+                "Either the `prompt_version` or `introduction & target & instruction`"
+                " in agent profile configuration should be provided."
+            )
         if version_prompt:
             version_prompt_model: AgentPromptModel = AgentPromptModel(
-                introduction=getattr(version_prompt, 'introduction', ''),
-                target=getattr(version_prompt, 'target', ''),
-                instruction=getattr(version_prompt, 'instruction', ''))
+                introduction=getattr(version_prompt, "introduction", ""),
+                target=getattr(version_prompt, "target", ""),
+                instruction=getattr(version_prompt, "instruction", ""),
+            )
             profile_prompt_model = profile_prompt_model + version_prompt_model
 
         prompt = Prompt().build_prompt(profile_prompt_model, self.prompt_assemble_order)

@@ -5,6 +5,7 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: reviewing_planner.py
 """Reviewing planner module."""
+
 from langchain_core.output_parsers import StrOutputParser
 
 from agentuniverse.agent.agent_model import AgentModel
@@ -44,9 +45,9 @@ class ReviewingPlanner(Planner):
 
         res = self.invoke_chain(agent_model, chain, planner_input, None, input_object)
 
-        assemble_memory_output(memory=memory,
-                               agent_input=planner_input,
-                               content=f"Human: {planner_input.get(self.input_key)}, AI: {res}")
+        assemble_memory_output(
+            memory=memory, agent_input=planner_input, content=f"Human: {planner_input.get(self.input_key)}, AI: {res}"
+        )
         return {**planner_input, self.output_key: res}
 
     def handle_prompt(self, agent_model: AgentModel, planner_input: dict) -> Prompt:
@@ -58,29 +59,32 @@ class ReviewingPlanner(Planner):
         Returns:
             Prompt: The prompt instance.
         """
-        expert_framework = planner_input.pop('expert_framework', '') or ''
+        expert_framework = planner_input.pop("expert_framework", "") or ""
 
         profile: dict = agent_model.profile
 
-        profile_instruction = profile.get('instruction')
+        profile_instruction = profile.get("instruction")
         profile_instruction = expert_framework + profile_instruction if profile_instruction else profile_instruction
 
-        profile_prompt_model: AgentPromptModel = AgentPromptModel(introduction=profile.get('introduction'),
-                                                                  target=profile.get('target'),
-                                                                  instruction=profile_instruction)
+        profile_prompt_model: AgentPromptModel = AgentPromptModel(
+            introduction=profile.get("introduction"), target=profile.get("target"), instruction=profile_instruction
+        )
 
         # get the prompt by the prompt version
-        prompt_version: str = profile.get('prompt_version')
+        prompt_version: str = profile.get("prompt_version")
         version_prompt: Prompt = PromptManager().get_instance_obj(prompt_version)
 
         if version_prompt is None and not profile_prompt_model:
-            raise Exception("Either the `prompt_version` or `introduction & target & instruction`"
-                            " in agent profile configuration should be provided.")
+            raise Exception(
+                "Either the `prompt_version` or `introduction & target & instruction`"
+                " in agent profile configuration should be provided."
+            )
         if version_prompt:
             version_prompt_model: AgentPromptModel = AgentPromptModel(
-                introduction=getattr(version_prompt, 'introduction', ''),
-                target=getattr(version_prompt, 'target', ''),
-                instruction=expert_framework + getattr(version_prompt, 'instruction', ''))
+                introduction=getattr(version_prompt, "introduction", ""),
+                target=getattr(version_prompt, "target", ""),
+                instruction=expert_framework + getattr(version_prompt, "instruction", ""),
+            )
             profile_prompt_model = profile_prompt_model + version_prompt_model
 
         return Prompt().build_prompt(profile_prompt_model, self.prompt_assemble_order)

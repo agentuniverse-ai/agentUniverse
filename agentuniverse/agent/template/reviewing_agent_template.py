@@ -17,26 +17,25 @@ from agentuniverse.base.util.logging.logging_util import LOGGER
 
 
 class ReviewingAgentTemplate(AgentTemplate):
-
     def input_keys(self) -> list[str]:
-        return ['input', 'expressing_result']
+        return ["input", "expressing_result"]
 
     def output_keys(self) -> list[str]:
-        return ['output', 'score', 'suggestion']
+        return ["output", "score", "suggestion"]
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
-        agent_input['input'] = input_object.get_data('input')
-        agent_input['expressing_result'] = input_object.get_data('expressing_result').get_data('output')
-        agent_input['expert_framework'] = input_object.get_data('expert_framework', {}).get('reviewing')
+        agent_input["input"] = input_object.get_data("input")
+        agent_input["expressing_result"] = input_object.get_data("expressing_result").get_data("output")
+        agent_input["expert_framework"] = input_object.get_data("expert_framework", {}).get("reviewing")
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
         final_result = dict()
 
-        output = agent_result.get('output')
+        output = agent_result.get("output")
         output = parse_json_markdown(output)
 
-        is_useful = output.get('is_useful')
+        is_useful = output.get("is_useful")
         if is_useful is None:
             is_useful = False
         is_useful = bool(is_useful)
@@ -45,9 +44,9 @@ class ReviewingAgentTemplate(AgentTemplate):
         else:
             score = 0
 
-        final_result['output'] = output
-        final_result['score'] = score
-        final_result['suggestion'] = output.get('suggestion')
+        final_result["output"] = output
+        final_result["score"] = score
+        final_result["suggestion"] = output.get("suggestion")
         # add reviewing agent log info.
         logger_info = f"\nReviewing agent execution result is :\n"
         reviewing_info_str = f"review suggestion: {final_result.get('suggestion')} \n"
@@ -60,13 +59,11 @@ class ReviewingAgentTemplate(AgentTemplate):
         if not output_stream:
             return
         # add reviewing agent final result into the stream output.
-        stream_output(output_stream,
-                      {"data": {
-                          'output': agent_output,
-                          "agent_info": self.agent_model.info
-                      }, "type": "reviewing"})
+        stream_output(
+            output_stream, {"data": {"output": agent_output, "agent_info": self.agent_model.info}, "type": "reviewing"}
+        )
 
-    def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'ReviewingAgentTemplate':
+    def initialize_by_component_configer(self, component_configer: AgentConfiger) -> "ReviewingAgentTemplate":
         """Initialize the Agent by the AgentConfiger object.
 
         Args:
@@ -75,12 +72,14 @@ class ReviewingAgentTemplate(AgentTemplate):
             ReviewingAgentTemplate: the ReviewingAgentTemplate object
         """
         super().initialize_by_component_configer(component_configer)
-        self.prompt_version = self.agent_model.profile.get('prompt_version', 'default_reviewing_agent.cn')
+        self.prompt_version = self.agent_model.profile.get("prompt_version", "default_reviewing_agent.cn")
         self.validate_required_params()
         return self
 
     def validate_required_params(self):
         if not self.llm_name:
-            raise ValueError(f'llm_name of the agent {self.agent_model.info.get("name")}'
-                             f' is not set, please go to the agent profile configuration'
-                             ' and set the `name` attribute in the `llm_model`.')
+            raise ValueError(
+                f"llm_name of the agent {self.agent_model.info.get('name')}"
+                f" is not set, please go to the agent profile configuration"
+                " and set the `name` attribute in the `llm_model`."
+            )

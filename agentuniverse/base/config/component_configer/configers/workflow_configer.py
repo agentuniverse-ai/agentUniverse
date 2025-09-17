@@ -40,14 +40,14 @@ class WorkflowConfiger(ComponentConfiger):
     def graph(self) -> Optional[dict]:
         return self.__graph
 
-    def load(self) -> 'WorkflowConfiger':
+    def load(self) -> "WorkflowConfiger":
         """Load the configuration by the Configer object.
         Returns:
             WorkflowConfiger: the WorkflowConfiger object
         """
         return self.load_by_configer(self.__configer)
 
-    def load_by_configer(self, configer: Configer) -> 'WorkflowConfiger':
+    def load_by_configer(self, configer: Configer) -> "WorkflowConfiger":
         """Load the configuration by the Configer object.
         Args:
             configer(Configer): the Configer object
@@ -57,10 +57,10 @@ class WorkflowConfiger(ComponentConfiger):
         super().load_by_configer(configer)
 
         try:
-            self.__id = configer.value.get('id')
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
-            self.__graph = configer.value.get('graph')
+            self.__id = configer.value.get("id")
+            self.__name = configer.value.get("name")
+            self.__description = configer.value.get("description")
+            self.__graph = configer.value.get("graph")
         except Exception as e:
             raise Exception(f"Failed to parse the Workflow configuration: {e}")
         return self

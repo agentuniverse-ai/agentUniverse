@@ -13,8 +13,7 @@ from agentuniverse.agent.action.knowledge.embedding.embedding_manager import Emb
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.store.chroma_store import ChromaStore
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
 class ChromaHierarchicalStore(ChromaStore):
@@ -27,6 +26,7 @@ class ChromaHierarchicalStore(ChromaStore):
         collection (Collection): A chroma collection object.
         persist_path (Optional[str]): Path to save the chroma database.
     """
+
     search_depth: int = None
     similarity_top_k_list: Optional[List[int]] = []
 
@@ -47,9 +47,11 @@ class ChromaHierarchicalStore(ChromaStore):
 
         embedding = query.embeddings
         if self.embedding_model is not None and len(embedding) == 0:
-            embedding = EmbeddingManager().get_instance_obj(
-                self.embedding_model
-            ).get_embeddings([query.query_str], text_type="query")[0]
+            embedding = (
+                EmbeddingManager()
+                .get_instance_obj(self.embedding_model)
+                .get_embeddings([query.query_str], text_type="query")[0]
+            )
 
         top_k_ids = []
         current_level_ids = None
@@ -58,46 +60,44 @@ class ChromaHierarchicalStore(ChromaStore):
         for depth in range(self.search_depth):
             if len(top_k_ids) > 0:
                 all_results = []
-                top_k = self.similarity_top_k_list[depth] if len(
-                                self.similarity_top_k_list) >= depth + 1 else self.similarity_top_k,
+                top_k = (
+                    self.similarity_top_k_list[depth]
+                    if len(self.similarity_top_k_list) >= depth + 1
+                    else self.similarity_top_k,
+                )
                 for parent_id in top_k_ids:
                     # Query for each parent_id
                     if len(embedding) > 0:
                         results = self.collection.query(
-                            n_results=top_k,
-                            query_embeddings=embedding,
-                            where={"hierarchical_parent": parent_id}
+                            n_results=top_k, query_embeddings=embedding, where={"hierarchical_parent": parent_id}
                         )
                     else:
                         results = self.collection.query(
-                            n_results=top_k,
-                            query_texts=[query.query_str],
-                            where={"hierarchical_parent": parent_id}
+                            n_results=top_k, query_texts=[query.query_str], where={"hierarchical_parent": parent_id}
                         )
                     all_results.extend(results)
-                sorted_results = sorted(all_results,
-                                        key=lambda x: x['distance'])
+                sorted_results = sorted(all_results, key=lambda x: x["distance"])
 
                 # Select the top k results
                 query_result = sorted_results[:top_k]
 
             else:
-                filter_condition = {
-                   "hierarchical_level": depth
-                }
+                filter_condition = {"hierarchical_level": depth}
                 if len(embedding) > 0:
                     query_result = self.collection.query(
-                        n_results=self.similarity_top_k_list[depth] if len(
-                            self.similarity_top_k_list) >= depth + 1 else self.similarity_top_k,
+                        n_results=self.similarity_top_k_list[depth]
+                        if len(self.similarity_top_k_list) >= depth + 1
+                        else self.similarity_top_k,
                         query_embeddings=embedding,
-                        where=filter_condition
+                        where=filter_condition,
                     )
                 else:
                     query_result = self.collection.query(
-                        n_results=self.similarity_top_k_list[depth] if len(
-                            self.similarity_top_k_list) >= depth + 1 else self.similarity_top_k,
+                        n_results=self.similarity_top_k_list[depth]
+                        if len(self.similarity_top_k_list) >= depth + 1
+                        else self.similarity_top_k,
                         query_texts=[query.query_str],
-                        where=filter_condition
+                        where=filter_condition,
                     )
 
             documents = self.to_documents(query_result)
@@ -105,8 +105,7 @@ class ChromaHierarchicalStore(ChromaStore):
 
         return self.to_documents(query_result)
 
-    def _initialize_by_component_configer(self,
-                                          chroma_store_configer: ComponentConfiger) -> 'DocProcessor':
+    def _initialize_by_component_configer(self, chroma_store_configer: ComponentConfiger) -> "DocProcessor":
         super()._initialize_by_component_configer(chroma_store_configer)
         if hasattr(chroma_store_configer, "search_depth"):
             self.search_depth = chroma_store_configer.search_depth

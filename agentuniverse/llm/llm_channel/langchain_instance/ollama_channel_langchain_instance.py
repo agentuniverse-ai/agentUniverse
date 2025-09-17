@@ -22,22 +22,20 @@ class OllamaChannelLangchainInstance(ChatOllama):
         self.model = llm_channel.channel_model_name
 
     def _create_chat_stream(
-            self,
-            messages: List[BaseMessage],
-            stop: Optional[List[str]] = None,
-            **kwargs: Any,
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> Iterator[str]:
-        data = self.llm_channel.call(
-            messages=self._convert_messages_to_ollama_messages(messages), stop=stop, **kwargs
-        )
+        data = self.llm_channel.call(messages=self._convert_messages_to_ollama_messages(messages), stop=stop, **kwargs)
         for llm_output in data:
             yield llm_output.raw
 
     async def _acreate_chat_stream(
-            self,
-            messages: List[BaseMessage],
-            stop: Optional[List[str]] = None,
-            **kwargs: Any,
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> AsyncIterator[str]:
         data = await self.llm_channel.acall(
             messages=self._convert_messages_to_ollama_messages(messages), stop=stop, **kwargs

@@ -38,7 +38,7 @@ def parse_dynamic_str(param: str):
     value directly, such as with secret keys.
     """
     try:
-        parts = param.rsplit('.', 1)
+        parts = param.rsplit(".", 1)
         if len(parts) == 2:
             module_path, func_name = parts
             module = importlib.import_module(module_path)
@@ -91,7 +91,7 @@ def get_module_path(yaml_path: str, root_name: str) -> str:
         raise FileNotFoundError(f"Corresponding Python file not found for YAML file: {yaml_path}")
 
     # Extract the directory parts after the root path
-    relevant_dirs = path_parts[root_index + 1:]
+    relevant_dirs = path_parts[root_index + 1 :]
 
     # Construct the module path
     module_parts = [root_name] + relevant_dirs + [file_name]
@@ -119,16 +119,16 @@ def process_yaml_func(func_expr: str, yaml_func_instance: Any) -> str:
     if not func_expr or yaml_func_instance is None:
         return func_expr
 
-    if func_expr.startswith('@FUNC(') and yaml_func_instance is None:
+    if func_expr.startswith("@FUNC(") and yaml_func_instance is None:
         raise ValueError(f"yaml_func_extension.py is required to resolve @FUNC expression {func_expr}.")
 
     # Process @FUNC expressions
-    if func_expr.startswith('@FUNC(') and func_expr.endswith(')'):
+    if func_expr.startswith("@FUNC(") and func_expr.endswith(")"):
         # Extract the method name and arguments
-        func_expr = func_expr[len('@FUNC('):-1]  # Remove '@FUNC(' and ')'
+        func_expr = func_expr[len("@FUNC(") : -1]  # Remove '@FUNC(' and ')'
         # Parse the function call expression using AST
         try:
-            parsed_expr = ast.parse(func_expr, mode='eval')
+            parsed_expr = ast.parse(func_expr, mode="eval")
         except SyntaxError as e:
             raise ValueError(f"Invalid function expression: {func_expr}. Error: {e}")
 
@@ -184,7 +184,7 @@ def process_dict_with_funcs(input_dict: dict, yaml_func_instance: Any) -> dict:
 
     processed_dict = {}
     for key, value in input_dict.items():
-        if isinstance(value, str) and value.startswith('@FUNC('):
+        if isinstance(value, str) and value.startswith("@FUNC("):
             # Process the @FUNC expression
             processed_dict[key] = process_yaml_func(value, yaml_func_instance)
         elif isinstance(value, dict):
@@ -217,7 +217,7 @@ def is_system_builtin(component_instance: ComponentBase) -> bool:
         # Define system paths for different component types
         system_paths: Dict[str, List[str]] = {
             ComponentEnum.LLM.value: ["agentuniverse", "llm", "default"],
-            ComponentEnum.TOOL.value: ["agentuniverse", "agent", "action", "tool"]
+            ComponentEnum.TOOL.value: ["agentuniverse", "agent", "action", "tool"],
         }
 
         # Get the system path components for this component type
@@ -272,7 +272,7 @@ def find_default_llm_config(package_list: list[str]):
         # Iterate through each package path in the provided list
         for package_path in package_list:
             # Check if the current path contains 'agentic.llm'
-            if 'agentic.llm' in package_path:
+            if "agentic.llm" in package_path:
                 # Try to import the module to get its actual path
                 try:
                     spec = importlib.util.find_spec(package_path)
@@ -280,7 +280,7 @@ def find_default_llm_config(package_list: list[str]):
                         # Get the directory containing the module
                         module_dir = os.path.dirname(spec.origin)
                         # Construct the full path to default_llm.toml
-                        default_llm_toml_path = os.path.join(module_dir, 'default_llm.toml')
+                        default_llm_toml_path = os.path.join(module_dir, "default_llm.toml")
 
                         if os.path.exists(default_llm_toml_path):
                             return os.path.abspath(default_llm_toml_path)

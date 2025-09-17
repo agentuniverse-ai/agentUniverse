@@ -5,12 +5,9 @@ import importlib
 from agentuniverse.agent.action.toolkit.toolkit import Toolkit
 from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.base.component.component_enum import ComponentEnum
-from agentuniverse.base.component.component_manager_base import \
-    ComponentManagerBase
-from agentuniverse.base.config.application_configer.application_config_manager import \
-    ApplicationConfigManager
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
+from agentuniverse.base.component.component_manager_base import ComponentManagerBase
+from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
 # @Time    : 2024/3/13 13:54
@@ -27,18 +24,19 @@ class ToolkitManager(ComponentManagerBase):
         """Initialize the ToolManager."""
         super().__init__(ComponentEnum.TOOLKIT)
 
-    def get_instance_obj(self, component_instance_name: str,
-                         appname: str = None, new_instance: bool = True) -> Toolkit:
+    def get_instance_obj(self, component_instance_name: str, appname: str = None, new_instance: bool = True) -> Toolkit:
         """Return the tool instance object."""
         if component_instance_name == "__default_instance__":
             return self.get_default_instance(new_instance)
         appname = appname or ApplicationConfigManager().app_configer.base_info_appname
-        instance_code = f'{appname}.{self._component_type.value.lower()}.{component_instance_name}'
+        instance_code = f"{appname}.{self._component_type.value.lower()}.{component_instance_name}"
         instance_obj = self._instance_obj_map.get(instance_code)
         # If the instance does not exist, try to create it using the configuration
         if instance_obj is None:
             # Retrieve the tool configuration map
-            toolkit_configer_map: dict[str, ComponentConfiger] = ApplicationConfigManager().app_configer.toolkit_configer_map
+            toolkit_configer_map: dict[str, ComponentConfiger] = (
+                ApplicationConfigManager().app_configer.toolkit_configer_map
+            )
             if toolkit_configer_map and component_instance_name in toolkit_configer_map.keys():
                 toolkit_configer = toolkit_configer_map.get(component_instance_name)
                 if toolkit_configer:

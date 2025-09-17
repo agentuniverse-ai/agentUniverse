@@ -44,18 +44,16 @@ class CommandResult:
     def message(self) -> str:
         # Truncate stdout and stderr if they are too long
         max_output_length = 2000
-        truncated_stdout = self._truncate_output(
-            self.stdout, max_output_length)
-        truncated_stderr = self._truncate_output(
-            self.stderr, max_output_length)
+        truncated_stdout = self._truncate_output(self.stdout, max_output_length)
+        truncated_stderr = self._truncate_output(self.stderr, max_output_length)
 
         result_dict = {
-            'thread_id': self.thread_id,
-            'status': self.status.value,
-            'stdout': truncated_stdout,
-            'stderr': truncated_stderr,
-            'exit_code': self.exit_code,
-            'duration': self.duration
+            "thread_id": self.thread_id,
+            "status": self.status.value,
+            "stdout": truncated_stdout,
+            "stderr": truncated_stderr,
+            "exit_code": self.exit_code,
+            "duration": self.duration,
         }
         return json.dumps(result_dict)
 
@@ -90,12 +88,7 @@ class RunCommandTool(Tool):
         def __run() -> None:
             try:
                 process = subprocess.Popen(
-                    command,
-                    cwd=cwd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    shell=True
+                    command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True
                 )
 
                 stdout, stderr = process.communicate()

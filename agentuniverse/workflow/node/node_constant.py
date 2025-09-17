@@ -22,4 +22,3 @@ NODE_CLS_MAPPING = {
     "llm": LLMNode,
     "ifelse": ConditionNode,
 }
-

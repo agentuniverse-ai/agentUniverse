@@ -34,7 +34,7 @@ class Node(BaseModel):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._data = self._data_cls(**kwargs.get('data', {}))
+        self._data = self._data_cls(**kwargs.get("data", {}))
 
     @abstractmethod
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
@@ -44,8 +44,7 @@ class Node(BaseModel):
         return self._run(workflow_output)
 
     @staticmethod
-    def _resolve_input_params(input_params: List[NodeInputParams],
-                              workflow_output: WorkflowOutput) -> Dict[str, Any]:
+    def _resolve_input_params(input_params: List[NodeInputParams], workflow_output: WorkflowOutput) -> Dict[str, Any]:
         """Resolve the input parameters of the node.
 
         Args:
@@ -55,12 +54,14 @@ class Node(BaseModel):
         node_input_params = {}
         for input_param in input_params:
             val = input_param.value
-            if val.type == 'reference':
+            if val.type == "reference":
                 reference_node_id = val.content[0]
                 reference_output_params: List[NodeOutputParams] = workflow_output.workflow_parameters.get(
-                    reference_node_id, [])
+                    reference_node_id, []
+                )
                 node_input_params[input_param.name] = next(
-                    (param.value for param in reference_output_params if param.name == val.content[1]), None)
+                    (param.value for param in reference_output_params if param.name == val.content[1]), None
+                )
             else:
                 node_input_params[input_param.name] = val.content
         return node_input_params

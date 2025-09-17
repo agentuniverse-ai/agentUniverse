@@ -41,12 +41,12 @@ class Memory(ComponentBase):
     name: Optional[str] = ""
     description: Optional[str] = None
     type: MemoryTypeEnum = None
-    memory_key: Optional[str] = 'chat_history'
+    memory_key: Optional[str] = "chat_history"
     max_tokens: int = 2000
     memory_compressor: Optional[str] = None
-    memory_storages: Optional[List[str]] = ['ram_memory_storage']
+    memory_storages: Optional[List[str]] = ["ram_memory_storage"]
     memory_retrieval_storage: Optional[str] = None
-    summarize_agent_id: Optional[str] = 'memory_summarize_agent'
+    summarize_agent_id: Optional[str] = "memory_summarize_agent"
 
     class Config:
         extra = Extra.allow
@@ -58,8 +58,7 @@ class Memory(ComponentBase):
         """Convert the agentUniverse(aU) memory class to the langchain memory class."""
         pass
 
-    def add(self, message_list: List[Message], session_id: str = None, agent_id: str = None,
-            **kwargs) -> None:
+    def add(self, message_list: List[Message], session_id: str = None, agent_id: str = None, **kwargs) -> None:
         """Add messages to the memory."""
         if not message_list:
             return
@@ -98,7 +97,7 @@ class Memory(ComponentBase):
             return []
         new_memories = memories[:]
 
-        agent_llm_name = self.agent_llm_name if hasattr(self, 'agent_llm_name') else None
+        agent_llm_name = self.agent_llm_name if hasattr(self, "agent_llm_name") else None
         tokens = get_memory_tokens(new_memories, agent_llm_name)
 
         if tokens <= self.max_tokens:
@@ -119,34 +118,35 @@ class Memory(ComponentBase):
         return new_memories
 
     def set_by_agent_model(self, **kwargs):
-        """ Assign values of parameters to the Memory model in the agent configuration."""
+        """Assign values of parameters to the Memory model in the agent configuration."""
         # note: default shallow copy
         copied_obj = self.model_copy()
-        if 'memory_key' in kwargs and kwargs['memory_key']:
-            copied_obj.memory_key = kwargs['memory_key']
-        if 'max_tokens' in kwargs and kwargs['max_tokens']:
-            copied_obj.max_tokens = kwargs['max_tokens']
-        if 'agent_llm_name' in kwargs and kwargs['agent_llm_name']:
-            copied_obj.agent_llm_name = kwargs['agent_llm_name']
+        if "memory_key" in kwargs and kwargs["memory_key"]:
+            copied_obj.memory_key = kwargs["memory_key"]
+        if "max_tokens" in kwargs and kwargs["max_tokens"]:
+            copied_obj.max_tokens = kwargs["max_tokens"]
+        if "agent_llm_name" in kwargs and kwargs["agent_llm_name"]:
+            copied_obj.agent_llm_name = kwargs["agent_llm_name"]
         return copied_obj
 
     def summarize_memory(self, **kwargs) -> str:
-        kwargs['prune'] = False
+        kwargs["prune"] = False
         messages = self.get(**kwargs)
-        summarize_messages = self.get(session_id=kwargs.get('session_id'), agent_id=kwargs.get('agent_id'),
-                                      type='summarize')
-        summarize_content = summarize_messages[-1].content if summarize_messages and len(summarize_messages) > 0 else ''
+        summarize_messages = self.get(
+            session_id=kwargs.get("session_id"), agent_id=kwargs.get("agent_id"), type="summarize"
+        )
+        summarize_content = summarize_messages[-1].content if summarize_messages and len(summarize_messages) > 0 else ""
         messages_str = get_memory_string(messages)
-        agent: 'Agent' = AgentManager().get_instance_obj(self.summarize_agent_id)
+        agent: "Agent" = AgentManager().get_instance_obj(self.summarize_agent_id)
         output_object: OutputObject = agent.run(input=messages_str, summarize_content=summarize_content)
-        return output_object.get_data('output')
+        return output_object.get_data("output")
 
     def get_instance_code(self) -> str:
         """Return the full name of the memory."""
         appname = ApplicationConfigManager().app_configer.base_info_appname
-        return f'{appname}.{self.component_type.value.lower()}.{self.name}'
+        return f"{appname}.{self.component_type.value.lower()}.{self.name}"
 
-    def initialize_by_component_configer(self, component_configer: MemoryConfiger) -> 'Memory':
+    def initialize_by_component_configer(self, component_configer: MemoryConfiger) -> "Memory":
         """Initialize the memory by the ComponentConfiger object.
         Args:
             component_configer(MemoryConfiger): the ComponentConfiger object

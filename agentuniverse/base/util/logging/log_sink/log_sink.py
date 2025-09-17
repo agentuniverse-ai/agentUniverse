@@ -12,14 +12,11 @@ from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 from agentuniverse.base.util.logging.logging_config import LoggingConfig
 from agentuniverse.base.component.component_base import ComponentEnum
 from agentuniverse.base.component.component_base import ComponentBase
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
-
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
 class LogSink(ComponentBase):
-    """The basic class for log sink.
-    """
+    """The basic class for log sink."""
 
     component_type: ComponentEnum = ComponentEnum.LOG_SINK
     name: Optional[str] = None
@@ -46,22 +43,17 @@ class LogSink(ComponentBase):
         raise NotImplementedError("Subclasses must implement process_record.")
 
     def filter(self, record):
-        if not record['extra'].get('log_type') == self.log_type:
+        if not record["extra"].get("log_type") == self.log_type:
             return False
         return True
 
     def register_sink(self):
         if self.sink_id == -1:
             self.sink_id = logger.add(
-                self,
-                level=self.level,
-                format=self.format,
-                filter=self.filter,
-                enqueue=self.enqueue
+                self, level=self.level, format=self.format, filter=self.filter, enqueue=self.enqueue
             )
 
-    def initialize_by_component_configer(self,
-                                          log_sink_configer: ComponentConfiger) -> 'LogSink':
+    def initialize_by_component_configer(self, log_sink_configer: ComponentConfiger) -> "LogSink":
         self.name = log_sink_configer.name
         self.description = log_sink_configer.description
         if hasattr(log_sink_configer, "level"):

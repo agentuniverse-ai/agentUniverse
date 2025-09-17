@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/9/6 16:00
-# @Author  : wangyapei 
+# @Author  : wangyapei
 # @FileName: zhipu_openai_style_llm.py
 
 from typing import Optional, Any, Union, Iterator, AsyncIterator
@@ -18,7 +18,7 @@ ZHIPU_MAXCONTETNLENGTH = {
     "GLM-4-Plus": 128000,
     "GLM-4-0520": 128000,
     "GLM-4-AirX": 8000,
-    "GLM-4-Air":  128000,
+    "GLM-4-Air": 128000,
     "GLM-4-Long": 1000000,
     "GLM-4-Flash": 128000,
     "GLM-4": 128000,
@@ -39,7 +39,7 @@ class DefaultZhiPuLLM(OpenAIStyleLLM):
 
     @trace_llm
     def call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        """ The call method of the LLM.
+        """The call method of the LLM.
 
         Users can customize how the model interacts by overriding call method of the LLM class.
 
@@ -51,7 +51,7 @@ class DefaultZhiPuLLM(OpenAIStyleLLM):
 
     @trace_llm
     async def acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
-        """ The async call method of the LLM.
+        """The async call method of the LLM.
 
         Users can customize how the model interacts by overriding acall method of the LLM class.
 
@@ -64,7 +64,6 @@ class DefaultZhiPuLLM(OpenAIStyleLLM):
     def max_context_length(self) -> int:
         """Max context length.
 
-          The total length of input tokens and generated tokens is limited by the openai model's context length.
-          """
+        The total length of input tokens and generated tokens is limited by the openai model's context length.
+        """
         return ZHIPU_MAXCONTETNLENGTH.get(self.model_name, 128000)
-

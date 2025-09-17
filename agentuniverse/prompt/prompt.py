@@ -5,6 +5,7 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: prompt.py
 """Prompt base module."""
+
 import re
 from typing import Optional
 
@@ -33,10 +34,9 @@ class Prompt(ComponentBase):
         Returns:
             PromptTemplate: The prompt template.
         """
-        return PromptTemplate(template=self.prompt_template,
-                              input_variables=self.input_variables)
+        return PromptTemplate(template=self.prompt_template, input_variables=self.input_variables)
 
-    def build_prompt(self, agent_prompt_model: AgentPromptModel, prompt_assemble_order: list[str]) -> 'Prompt':
+    def build_prompt(self, agent_prompt_model: AgentPromptModel, prompt_assemble_order: list[str]) -> "Prompt":
         """Build the prompt class.
 
         Args:
@@ -47,14 +47,14 @@ class Prompt(ComponentBase):
             Prompt: The prompt object.
         """
         self.prompt_template = generate_template(agent_prompt_model, prompt_assemble_order)
-        self.input_variables = re.findall(r'\{(.*?)}', self.prompt_template)
+        self.input_variables = re.findall(r"\{(.*?)}", self.prompt_template)
         return self
 
     def get_instance_code(self) -> str:
         """Return the prompt version of the current prompt."""
         return self.prompt_version
 
-    def initialize_by_component_configer(self, component_configer: PromptConfiger) -> 'Prompt':
+    def initialize_by_component_configer(self, component_configer: PromptConfiger) -> "Prompt":
         """Initialize the prompt by the PromptConfiger object.
 
         Args:
@@ -65,7 +65,7 @@ class Prompt(ComponentBase):
         prompt_values = []
         for k, v in component_configer.configer.value.items():
             # ignore metadata values
-            if k == 'metadata':
+            if k == "metadata":
                 continue
             self.__dict__[k] = v
             # splice the values in the prompt configer
@@ -74,7 +74,7 @@ class Prompt(ComponentBase):
         if component_configer.metadata_version:
             self.prompt_version = component_configer.metadata_version
 
-        self.prompt_template = '\n'.join(prompt_values)
+        self.prompt_template = "\n".join(prompt_values)
 
-        self.input_variables = re.findall(r'\{(.*?)}', self.prompt_template)
+        self.input_variables = re.findall(r"\{(.*?)}", self.prompt_template)
         return self

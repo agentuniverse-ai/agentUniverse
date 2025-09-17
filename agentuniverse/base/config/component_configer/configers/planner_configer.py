@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/13 12:01
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: planner_configer.py
 from typing import Optional
@@ -47,14 +47,14 @@ class PlannerConfiger(ComponentConfiger):
         """Return the description of the Planner."""
         return self.__description
 
-    def load(self) -> 'PlannerConfiger':
+    def load(self) -> "PlannerConfiger":
         """Load the configuration by the Configer object.
         Returns:
             PlannerConfiger: the PlannerConfiger object
         """
         return self.load_by_configer(self.__configer)
 
-    def load_by_configer(self, configer: Configer) -> 'PlannerConfiger':
+    def load_by_configer(self, configer: Configer) -> "PlannerConfiger":
         """Load the configuration by the Configer object.
         Args:
             configer(Configer): the Configer object
@@ -64,8 +64,8 @@ class PlannerConfiger(ComponentConfiger):
         super().load_by_configer(configer)
 
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
+            self.__name = configer.value.get("name")
+            self.__description = configer.value.get("description")
         except Exception as e:
             raise Exception(f"Failed to parse the Planner configuration: {e}")
         return self

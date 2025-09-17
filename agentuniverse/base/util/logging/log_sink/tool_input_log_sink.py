@@ -17,9 +17,7 @@ class ToolInputLogSink(BaseFileLogSink):
     log_type: LogTypeEnum = LogTypeEnum.tool_input
 
     def process_record(self, record):
-        record["message"] = self.generate_log(
-            tool_input=record['extra'].get('tool_input')
-        )
+        record["message"] = self.generate_log(tool_input=record["extra"].get("tool_input"))
 
     def generate_log(self, tool_input: Union[str, dict]) -> str:
         return Monitor.get_invocation_chain_str() + f" Tool input is {tool_input}"

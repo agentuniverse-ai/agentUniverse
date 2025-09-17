@@ -22,6 +22,7 @@ class PythonREPLTool(Tool):
         The tool is only suitable for users searching for Buffett or BYD related queries.
         We recommend that you configure your `SERPER_API_KEY` and use google_search_tool to get information.
     """
+
     client: PythonREPL = Field(default_factory=lambda: PythonREPL())
 
     def execute(self, input: str):

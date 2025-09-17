@@ -22,6 +22,7 @@ class ToolNodeData(NodeData):
 
 class ToolNode(Node):
     """The basic class of the tool node."""
+
     _data_cls = ToolNodeData
 
     def __init__(self, **kwargs):
@@ -33,9 +34,9 @@ class ToolNode(Node):
         tool_params: List[NodeInfoParams] = inputs.tool_param
         tool_id = None
         for tool_param in tool_params:
-            if tool_param.name == 'id':
+            if tool_param.name == "id":
                 if isinstance(tool_param.value, dict):
-                    tool_id = tool_param.value['content']
+                    tool_id = tool_param.value["content"]
                 else:
                     tool_id = tool_param.value
         tool: Tool = ToolManager().get_instance_obj(tool_id)

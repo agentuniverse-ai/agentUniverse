@@ -34,26 +34,26 @@ class LangchainOpenAI(ChatOpenAI):
             llm (LLM): the agentUniverse(aU) LLM instance.
         """
         init_params = dict()
-        init_params['model_name'] = llm.model_name if llm.model_name else 'gpt-3.5-turbo'
-        init_params['temperature'] = llm.temperature if llm.temperature else 0.7
-        init_params['request_timeout'] = llm.request_timeout
-        init_params['max_tokens'] = llm.max_tokens
-        init_params['max_retries'] = llm.max_retries if llm.max_retries else 2
-        init_params['streaming'] = llm.streaming if llm.streaming else False
-        init_params['openai_api_key'] = llm.openai_api_key if llm.openai_api_key else 'blank'
-        init_params['openai_organization'] = llm.openai_organization
-        init_params['openai_api_base'] = llm.openai_api_base
-        init_params['openai_proxy'] = llm.openai_proxy
+        init_params["model_name"] = llm.model_name if llm.model_name else "gpt-3.5-turbo"
+        init_params["temperature"] = llm.temperature if llm.temperature else 0.7
+        init_params["request_timeout"] = llm.request_timeout
+        init_params["max_tokens"] = llm.max_tokens
+        init_params["max_retries"] = llm.max_retries if llm.max_retries else 2
+        init_params["streaming"] = llm.streaming if llm.streaming else False
+        init_params["openai_api_key"] = llm.openai_api_key if llm.openai_api_key else "blank"
+        init_params["openai_organization"] = llm.openai_organization
+        init_params["openai_api_base"] = llm.openai_api_base
+        init_params["openai_proxy"] = llm.openai_proxy
         super().__init__(**init_params)
         self.llm = llm
 
     def _generate(
-            self,
-            messages: List[BaseMessage],
-            stop: Optional[List[str]] = None,
-            run_manager: Optional[CallbackManagerForLLMRun] = None,
-            stream: Optional[bool] = None,
-            **kwargs,
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        stream: Optional[bool] = None,
+        **kwargs,
     ) -> ChatResult:
         """Run the Langchain OpenAI LLM."""
         should_stream = stream if stream is not None else self.streaming
@@ -66,12 +66,12 @@ class LangchainOpenAI(ChatOpenAI):
         return generate_from_stream(stream_iter)
 
     async def _agenerate(
-            self,
-            messages: List[BaseMessage],
-            stop: Optional[List[str]] = None,
-            run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
-            stream: Optional[bool] = None,
-            **kwargs: Any,
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
+        stream: Optional[bool] = None,
+        **kwargs: Any,
     ) -> ChatResult:
         """Asynchronously run the Langchain OpenAI LLM."""
         should_stream = stream if stream is not None else self.streaming
@@ -93,13 +93,9 @@ class LangchainOpenAI(ChatOpenAI):
             if len(chunk["choices"]) == 0:
                 continue
             choice = chunk["choices"][0]
-            chunk = _convert_delta_to_message_chunk(
-                choice["delta"], default_chunk_class
-            )
+            chunk = _convert_delta_to_message_chunk(choice["delta"], default_chunk_class)
             finish_reason = choice.get("finish_reason")
-            generation_info = (
-                dict(finish_reason=finish_reason) if finish_reason is not None else None
-            )
+            generation_info = dict(finish_reason=finish_reason) if finish_reason is not None else None
             default_chunk_class = chunk.__class__
             chunk = ChatGenerationChunk(message=chunk, generation_info=generation_info)
             yield chunk
@@ -107,8 +103,9 @@ class LangchainOpenAI(ChatOpenAI):
                 run_manager.on_llm_new_token(chunk.text, chunk=chunk)
 
     @staticmethod
-    async def as_langchain_achunk(stream_iterator: AsyncIterator, run_manager=None) \
-            -> AsyncIterator[ChatGenerationChunk]:
+    async def as_langchain_achunk(
+        stream_iterator: AsyncIterator, run_manager=None
+    ) -> AsyncIterator[ChatGenerationChunk]:
         default_chunk_class = AIMessageChunk
         async for llm_result in stream_iterator:
             chunk = llm_result.raw
@@ -117,13 +114,9 @@ class LangchainOpenAI(ChatOpenAI):
             if len(chunk["choices"]) == 0:
                 continue
             choice = chunk["choices"][0]
-            chunk = _convert_delta_to_message_chunk(
-                choice["delta"], default_chunk_class
-            )
+            chunk = _convert_delta_to_message_chunk(choice["delta"], default_chunk_class)
             finish_reason = choice.get("finish_reason")
-            generation_info = (
-                dict(finish_reason=finish_reason) if finish_reason is not None else None
-            )
+            generation_info = dict(finish_reason=finish_reason) if finish_reason is not None else None
             default_chunk_class = chunk.__class__
             chunk = ChatGenerationChunk(message=chunk, generation_info=generation_info)
             yield chunk

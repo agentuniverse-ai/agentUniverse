@@ -17,7 +17,7 @@ from agentuniverse.llm.llm_manager import LLMManager
 
 
 def generate_messages(memories: list) -> List[Message]:
-    """ Generate a list of messages from the given memories
+    """Generate a list of messages from the given memories
 
     Args:
         memories(list): List of memory objects, which can be of type str, dict or Message.
@@ -38,10 +38,14 @@ def generate_messages(memories: list) -> List[Message]:
 
 
 def generate_memories(chat_messages: BaseChatMessageHistory) -> list:
-    return [
-        {"content": message.content, "type": 'ai' if message.type == 'AIMessageChunk' else message.type}
-        for message in chat_messages.messages
-    ] if chat_messages.messages else []
+    return (
+        [
+            {"content": message.content, "type": "ai" if message.type == "AIMessageChunk" else message.type}
+            for message in chat_messages.messages
+        ]
+        if chat_messages.messages
+        else []
+    )
 
 
 def get_memory_string(messages: List[Message], agent_id=None) -> str:
@@ -58,15 +62,15 @@ def get_memory_string(messages: List[Message], agent_id=None) -> str:
     string_messages = []
     for m in messages:
         if m.type == ChatMessageEnum.SYSTEM.value:
-            role = 'System'
+            role = "System"
         elif m.type == ChatMessageEnum.HUMAN.value:
-            role = 'Human'
+            role = "Human"
         elif m.type == ChatMessageEnum.AI.value:
             role = "AI"
         elif m.type == ChatMessageEnum.INPUT.value or m.type == ChatMessageEnum.OUTPUT.value:
             if current_trace_id == m.trace_id:
                 continue
-            role: str = m.metadata.get('prefix', "")
+            role: str = m.metadata.get("prefix", "")
             if agent_id:
                 role = role.replace(f"智能体 {agent_id}", " 你")
                 role = role.replace(f"Agent {agent_id}", " You")
@@ -76,7 +80,7 @@ def get_memory_string(messages: List[Message], agent_id=None) -> str:
         else:
             role = ""
         m_str = ""
-        if m.metadata and m.metadata.get('gmt_created'):
+        if m.metadata and m.metadata.get("gmt_created"):
             m_str += f"{m.metadata.get('gmt_created')} "
         if m.source:
             m_str += f" Message source: {m.source} "

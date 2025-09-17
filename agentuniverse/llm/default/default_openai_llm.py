@@ -42,13 +42,14 @@ class DefaultOpenAILLM(OpenAIStyleLLM):
     LLM parameters, such as name/description/model_name/max_tokens,
     are injected into this class by the default_openai_llm.yaml configuration.
     """
+
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("OPENAI_API_KEY"))
     organization: Optional[str] = Field(default_factory=lambda: get_from_env("OPENAI_ORGANIZATION"))
     api_base: Optional[str] = Field(default_factory=lambda: get_from_env("OPENAI_API_BASE"))
     proxy: Optional[str] = Field(default_factory=lambda: get_from_env("OPENAI_PROXY"))
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        """ The call method of the LLM.
+        """The call method of the LLM.
 
         Users can customize how the model interacts by overriding call method of the LLM class.
 
@@ -59,7 +60,7 @@ class DefaultOpenAILLM(OpenAIStyleLLM):
         return super()._call(messages, **kwargs)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
-        """ The async call method of the LLM.
+        """The async call method of the LLM.
 
         Users can customize how the model interacts by overriding acall method of the LLM class.
 
@@ -72,6 +73,6 @@ class DefaultOpenAILLM(OpenAIStyleLLM):
     def max_context_length(self) -> int:
         """Max context length.
 
-          The total length of input tokens and generated tokens is limited by the openai model's context length.
-          """
+        The total length of input tokens and generated tokens is limited by the openai model's context length.
+        """
         return OPENAI_MAX_CONTEXT_LENGTH.get(self.model_name, 4096)

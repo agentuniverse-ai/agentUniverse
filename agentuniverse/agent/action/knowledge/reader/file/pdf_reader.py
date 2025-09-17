@@ -24,9 +24,7 @@ class PdfReader(Reader):
         try:
             import pypdf
         except ImportError:
-            raise ImportError(
-                "pypdf is required to read PDF files: `pip install pypdf`"
-            )
+            raise ImportError("pypdf is required to read PDF files: `pip install pypdf`")
         if isinstance(file, str):
             file = Path(file)
         with open(file, "rb") as fp:

@@ -17,6 +17,7 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 class WorkflowAgent(Agent):
     """Workflow Agent class."""
+
     workflow_id: Optional[str] = None
 
     def input_keys(self) -> list[str]:
@@ -52,14 +53,15 @@ class WorkflowAgent(Agent):
         workflow: Workflow = WorkflowManager().get_instance_obj(self.workflow_id)
         # build and run workflow
         if not workflow or workflow.graph_config is None:
-            raise Exception('Workflow graph is None, please add nodes and edges to the workflow graph.')
+            raise Exception("Workflow graph is None, please add nodes and edges to the workflow graph.")
         workflow = workflow.build()
         workflow_output: WorkflowOutput = workflow.run(input_object.to_dict())
         print(workflow_output.workflow_node_results)
         return workflow_output.workflow_end_params
 
-    def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'WorkflowAgent':
+    def initialize_by_component_configer(self, component_configer: AgentConfiger) -> "WorkflowAgent":
         super().initialize_by_component_configer(component_configer)
-        self.workflow_id = (self.agent_model.profile.get('workflow_id')
-                            or self.agent_model.plan.get('planner', {}).get('workflow_id'))
+        self.workflow_id = self.agent_model.profile.get("workflow_id") or self.agent_model.plan.get("planner", {}).get(
+            "workflow_id"
+        )
         return self

@@ -72,14 +72,14 @@ class MemoryConfiger(ComponentConfiger):
         """Return the summarize agent of the Memory."""
         return self.__memory_summarize_agent
 
-    def load(self) -> 'MemoryConfiger':
+    def load(self) -> "MemoryConfiger":
         """Load the configuration by the Configer object.
         Returns:
             MemoryConfiger: the MemoryConfiger object
         """
         return self.load_by_configer(self.__configer)
 
-    def load_by_configer(self, configer: Configer) -> 'MemoryConfiger':
+    def load_by_configer(self, configer: Configer) -> "MemoryConfiger":
         """Load the configuration by the Configer object.
         Args:
             configer(Configer): the Configer object
@@ -89,15 +89,15 @@ class MemoryConfiger(ComponentConfiger):
         super().load_by_configer(configer)
 
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
-            self.__type = configer.value.get('type')
-            self.__memory_key = configer.value.get('memory_key')
-            self.__max_tokens = configer.value.get('max_tokens')
-            self.__memory_compressor = configer.value.get('memory_compressor')
-            self.__memory_storages = configer.value.get('memory_storages')
-            self.__memory_retrieval_storage = configer.value.get('memory_retrieval_storage')
-            self.__memory_summarize_agent = configer.value.get('memory_summarize_agent')
+            self.__name = configer.value.get("name")
+            self.__description = configer.value.get("description")
+            self.__type = configer.value.get("type")
+            self.__memory_key = configer.value.get("memory_key")
+            self.__max_tokens = configer.value.get("max_tokens")
+            self.__memory_compressor = configer.value.get("memory_compressor")
+            self.__memory_storages = configer.value.get("memory_storages")
+            self.__memory_retrieval_storage = configer.value.get("memory_retrieval_storage")
+            self.__memory_summarize_agent = configer.value.get("memory_summarize_agent")
         except Exception as e:
             raise Exception(f"Failed to parse the Memory configuration: {e}")
         return self

@@ -17,4 +17,3 @@ class LogSinkManager(ComponentManagerBase[LogSink]):
 
     def __init__(self):
         super().__init__(ComponentEnum.LOG_SINK)
-        

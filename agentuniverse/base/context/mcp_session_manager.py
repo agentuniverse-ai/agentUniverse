@@ -3,6 +3,7 @@
 import asyncio
 import os
 from contextlib import AsyncExitStack, ExitStack
+
 # @Time    : 2024/3/11 16:02
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
@@ -31,19 +32,20 @@ DEFAULT_SSE_READ_TIMEOUT = 60 * 5
 DEFAULT_STREAMABLE_HTTP_TIMEOUT = timedelta(seconds=30)
 DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT = timedelta(seconds=60 * 5)
 
+
 class SyncAsyncExitStack:
     """A bridge that lets sync code use async context managers and calls.
 
-        Internally, it spins up a portal (via AnyIO) and wraps async context
-        managers so they can be entered/exited under a regular `ExitStack`.
-        Useful in places where the call site is synchronous but the underlying
-        connections/clients are async.
+    Internally, it spins up a portal (via AnyIO) and wraps async context
+    managers so they can be entered/exited under a regular `ExitStack`.
+    Useful in places where the call site is synchronous but the underlying
+    connections/clients are async.
 
-        Attributes:
-            _portal_cm: The AnyIO blocking portal context manager.
-            _portal: The portal object to schedule async work from sync code.
-            _stack: A regular `ExitStack` hosting wrapped async context managers.
-        """
+    Attributes:
+        _portal_cm: The AnyIO blocking portal context manager.
+        _portal: The portal object to schedule async work from sync code.
+        _stack: A regular `ExitStack` hosting wrapped async context managers.
+    """
 
     def __init__(self) -> None:
         """Initialize an AnyIO portal and a local ExitStack."""
@@ -67,12 +69,12 @@ class SyncAsyncExitStack:
     def enter_async_context(self, async_cm):
         """Enter an async context manager from sync code.
 
-                Args:
-                    async_cm: An async context manager to wrap.
+        Args:
+            async_cm: An async context manager to wrap.
 
-                Returns:
-                    Any: The wrapped context manager resource handle.
-                """
+        Returns:
+            Any: The wrapped context manager resource handle.
+        """
         sync_cm = self._portal.wrap_async_context_manager(async_cm)
         return self._stack.enter_context(sync_cm)
 
@@ -102,17 +104,18 @@ def pick_exit_stack():
 class MCPTempClient:
     """A temporary MCP client that auto-connects and cleans up via `async with`.
 
-        Example:
-            >>> async with MCPTempClient({"transport": "stdio", "command": "uvx", "args": ["my-server"]}) as cli:
-            ...     session = cli.session
-            ...     # use session ...
-        """
+    Example:
+        >>> async with MCPTempClient({"transport": "stdio", "command": "uvx", "args": ["my-server"]}) as cli:
+        ...     session = cli.session
+        ...     # use session ...
+    """
+
     def __init__(self, connection_args: dict):
         """Create a temp client with connection parameters.
 
-               Args:
-                   connection_args: Passed to MCPSessionManager.connect_to_server(...).
-               """
+        Args:
+            connection_args: Passed to MCPSessionManager.connect_to_server(...).
+        """
         self.exit_stack = AsyncExitStack()
         self.connection_args = connection_args
         self.__session = None
@@ -125,17 +128,15 @@ class MCPTempClient:
     async def __aenter__(self) -> "MCPTempClient":
         """Connect to server and expose a session within an AsyncExitStack.
 
-                Returns:
-                    MCPTempClient: self with `session` field initialized.
+        Returns:
+            MCPTempClient: self with `session` field initialized.
 
-                Raises:
-                    Exception: Propagates connection/initialization errors.
-                """
+        Raises:
+            Exception: Propagates connection/initialization errors.
+        """
         try:
             session = await MCPSessionManager().connect_to_server(
-                server_name="tmp_client",
-                exit_stack=self.exit_stack,
-                **self.connection_args
+                server_name="tmp_client", exit_stack=self.exit_stack, **self.connection_args
             )
             self.__session = session
             return self
@@ -144,10 +145,10 @@ class MCPTempClient:
             raise
 
     async def __aexit__(
-            self,
-            exc_type: type[BaseException] | None,
-            exc_val: BaseException | None,
-            exc_tb: TracebackType | None,
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         await self.exit_stack.aclose()
 
@@ -183,7 +184,6 @@ class MCPSessionManager:
             self.__mcp_session_dict.set({})
         return self.__mcp_session_dict.get({})
 
-
     @property
     def exit_stack(self) -> AsyncExitStack:
         if not self.__exit_stack.get(None):
@@ -195,17 +195,13 @@ class MCPSessionManager:
         self.__exit_stack.set(None)
         self.__mcp_session_dict.set(None)
 
-
     def save_mcp_session(self) -> dict:
         """Serialize current MCP session handles for later recovery.
 
         Returns:
             dict: Contains both session dict and exit stack instances.
         """
-        return {
-            'mcp_session_dict': self.__mcp_session_dict.get(None),
-            'exit_stack': self.__exit_stack.get(None)
-        }
+        return {"mcp_session_dict": self.__mcp_session_dict.get(None), "exit_stack": self.__exit_stack.get(None)}
 
     def recover_mcp_session(self, mcp_session_dict, exit_stack) -> None:
         """Recover MCP sessions and exit stack into the current context.
@@ -288,7 +284,7 @@ class MCPSessionManager:
                 timeout=kwargs.get("timeout", DEFAULT_HTTP_TIMEOUT),
                 sse_read_timeout=kwargs.get("sse_read_timeout", DEFAULT_SSE_READ_TIMEOUT),
                 session_kwargs=kwargs.get("session_kwargs"),
-                exit_stack=exit_stack
+                exit_stack=exit_stack,
             )
         elif transport == "stdio":
             if "command" not in kwargs:
@@ -301,30 +297,25 @@ class MCPSessionManager:
                 args=kwargs["args"],
                 env=kwargs.get("env"),
                 encoding=kwargs.get("encoding", DEFAULT_ENCODING),
-                encoding_error_handler=kwargs.get(
-                    "encoding_error_handler", DEFAULT_ENCODING_ERROR_HANDLER
-                ),
+                encoding_error_handler=kwargs.get("encoding_error_handler", DEFAULT_ENCODING_ERROR_HANDLER),
                 session_kwargs=kwargs.get("session_kwargs"),
-                exit_stack=exit_stack
+                exit_stack=exit_stack,
             )
         elif transport == "streamable_http":
             if "url" not in kwargs:
-                raise ValueError(
-                    "'url' parameter is required for MCP streamble_http connection")
+                raise ValueError("'url' parameter is required for MCP streamble_http connection")
             session = await self.connect_to_server_via_streamable_http(
                 server_name,
                 url=kwargs["url"],
                 headers=kwargs.get("headers"),
                 timeout=kwargs.get("timeout", DEFAULT_STREAMABLE_HTTP_TIMEOUT),
-                sse_read_timeout=kwargs.get("sse_read_timeout",
-                                            DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT),
+                sse_read_timeout=kwargs.get("sse_read_timeout", DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT),
                 session_kwargs=kwargs.get("session_kwargs"),
-                exit_stack=exit_stack
+                exit_stack=exit_stack,
             )
         elif transport == "websocket":
             if "url" not in kwargs:
-                raise ValueError(
-                    "'url' parameter is required for MCP websocket connection")
+                raise ValueError("'url' parameter is required for MCP websocket connection")
             session = await self.connect_to_server_via_websocket(
                 server_name,
                 url=kwargs["url"],
@@ -333,7 +324,6 @@ class MCPSessionManager:
         else:
             raise ValueError(f"Unsupported transport: {transport}. Must be 'stdio' or 'sse'")
         return session
-
 
     def connect_to_server_sync(
         self,
@@ -378,28 +368,23 @@ class MCPSessionManager:
                 args=kwargs["args"],
                 env=kwargs.get("env"),
                 encoding=kwargs.get("encoding", DEFAULT_ENCODING),
-                encoding_error_handler=kwargs.get(
-                    "encoding_error_handler", DEFAULT_ENCODING_ERROR_HANDLER
-                ),
-                session_kwargs=kwargs.get("session_kwargs")
+                encoding_error_handler=kwargs.get("encoding_error_handler", DEFAULT_ENCODING_ERROR_HANDLER),
+                session_kwargs=kwargs.get("session_kwargs"),
             )
         elif transport == "streamable_http":
             if "url" not in kwargs:
-                raise ValueError(
-                    "'url' parameter is required for MCP streamble_http connection")
+                raise ValueError("'url' parameter is required for MCP streamble_http connection")
             session = self.connect_to_server_via_streamable_http_sync(
                 server_name,
                 url=kwargs["url"],
                 headers=kwargs.get("headers"),
                 timeout=kwargs.get("timeout", DEFAULT_STREAMABLE_HTTP_TIMEOUT),
-                sse_read_timeout=kwargs.get("sse_read_timeout",
-                                            DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT),
-                session_kwargs=kwargs.get("session_kwargs")
+                sse_read_timeout=kwargs.get("sse_read_timeout", DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT),
+                session_kwargs=kwargs.get("session_kwargs"),
             )
         elif transport == "websocket":
             if "url" not in kwargs:
-                raise ValueError(
-                    "'url' parameter is required for MCP websocket connection")
+                raise ValueError("'url' parameter is required for MCP websocket connection")
             session = self.connect_to_server_via_websocket_sync(
                 server_name,
                 url=kwargs["url"],
@@ -409,7 +394,6 @@ class MCPSessionManager:
             raise ValueError(f"Unsupported transport: {transport}. Must be 'stdio' or 'sse'")
         return session
 
-
     async def connect_to_server_via_stdio(
         self,
         server_name: str,
@@ -418,11 +402,9 @@ class MCPSessionManager:
         args: list[str],
         env: dict[str, str] | None = None,
         encoding: str = DEFAULT_ENCODING,
-        encoding_error_handler: Literal[
-            "strict", "ignore", "replace"
-        ] = DEFAULT_ENCODING_ERROR_HANDLER,
+        encoding_error_handler: Literal["strict", "ignore", "replace"] = DEFAULT_ENCODING_ERROR_HANDLER,
         session_kwargs: dict | None = None,
-        exit_stack: AsyncExitStack
+        exit_stack: AsyncExitStack,
     ) -> ClientSession:
         """Connect to a specific MCP server using stdio
 
@@ -474,10 +456,8 @@ class MCPSessionManager:
         args: list[str],
         env: dict[str, str] | None = None,
         encoding: str = DEFAULT_ENCODING,
-        encoding_error_handler: Literal[
-            "strict", "ignore", "replace"
-        ] = DEFAULT_ENCODING_ERROR_HANDLER,
-        session_kwargs: dict | None = None
+        encoding_error_handler: Literal["strict", "ignore", "replace"] = DEFAULT_ENCODING_ERROR_HANDLER,
+        session_kwargs: dict | None = None,
     ) -> ClientSession:
         """Connect to a specific MCP server using stdio
 
@@ -526,7 +506,7 @@ class MCPSessionManager:
         timeout: float = DEFAULT_HTTP_TIMEOUT,
         sse_read_timeout: float = DEFAULT_SSE_READ_TIMEOUT,
         session_kwargs: dict | None = None,
-        exit_stack: AsyncExitStack = None
+        exit_stack: AsyncExitStack = None,
     ) -> ClientSession:
         """Connect to a specific MCP server using SSE
 
@@ -577,9 +557,7 @@ class MCPSessionManager:
             session_kwargs: Additional keyword arguments to pass to the ClientSession
         """
         # Create and store the connection
-        sse_transport = self.exit_stack.enter_async_context(
-            sse_client(url, headers, timeout, sse_read_timeout)
-        )
+        sse_transport = self.exit_stack.enter_async_context(sse_client(url, headers, timeout, sse_read_timeout))
         read, write = sse_transport
         session_kwargs = session_kwargs or {}
         session = cast(
@@ -600,7 +578,7 @@ class MCPSessionManager:
         timeout: timedelta = DEFAULT_STREAMABLE_HTTP_TIMEOUT,
         sse_read_timeout: timedelta = DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT,
         session_kwargs: dict[str, Any] | None = None,
-        exit_stack: AsyncExitStack = None
+        exit_stack: AsyncExitStack = None,
     ) -> ClientSession:
         """Connect to a specific MCP server using Streamable HTTP
 
@@ -631,14 +609,14 @@ class MCPSessionManager:
         return session
 
     def connect_to_server_via_streamable_http_sync(
-            self,
-            server_name: str,
-            *,
-            url: str,
-            headers: dict[str, Any] | None = None,
-            timeout: timedelta = DEFAULT_STREAMABLE_HTTP_TIMEOUT,
-            sse_read_timeout: timedelta = DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT,
-            session_kwargs: dict[str, Any] | None = None
+        self,
+        server_name: str,
+        *,
+        url: str,
+        headers: dict[str, Any] | None = None,
+        timeout: timedelta = DEFAULT_STREAMABLE_HTTP_TIMEOUT,
+        sse_read_timeout: timedelta = DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT,
+        session_kwargs: dict[str, Any] | None = None,
     ) -> ClientSession:
         """Connect to a specific MCP server using Streamable HTTP
 
@@ -659,8 +637,7 @@ class MCPSessionManager:
         session_kwargs = session_kwargs or {}
         session = cast(
             ClientSession,
-            self.exit_stack.enter_async_context(
-                ClientSession(read, write, **session_kwargs)),
+            self.exit_stack.enter_async_context(ClientSession(read, write, **session_kwargs)),
         )
         self.run_async(session.initialize)
         self.mcp_session_dict[server_name] = session
@@ -672,7 +649,7 @@ class MCPSessionManager:
         *,
         url: str,
         session_kwargs: dict[str, Any] | None = None,
-        exit_stack: AsyncExitStack = None
+        exit_stack: AsyncExitStack = None,
     ) -> ClientSession:
         """Connect to a specific MCP server using Websockets
 
@@ -708,11 +685,7 @@ class MCPSessionManager:
         return session
 
     def connect_to_server_via_websocket_sync(
-        self,
-        server_name: str,
-        *,
-        url: str,
-        session_kwargs: dict[str, Any] | None = None
+        self, server_name: str, *, url: str, session_kwargs: dict[str, Any] | None = None
     ) -> ClientSession:
         """Connect to a specific MCP server using Websockets
 

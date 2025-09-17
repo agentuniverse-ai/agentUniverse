@@ -9,9 +9,7 @@ from typing import Optional
 
 from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 
-GEMINI_MAX_CONTEXT_LENGTH = {
-    "gemini-2.0-flash": 1048576
-}
+GEMINI_MAX_CONTEXT_LENGTH = {"gemini-2.0-flash": 1048576}
 
 
 class GeminiOfficialLLMChannel(LLMChannel):

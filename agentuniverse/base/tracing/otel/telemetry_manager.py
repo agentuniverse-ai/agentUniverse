@@ -23,9 +23,7 @@ __all__ = ["TelemetryManager"]
 DEFAULT_SPAN_PROCESSORS = [
     {"class": "agentuniverse.base.tracing.otel.span_processor.session_span_processor.SessionSpanProcessor"}
 ]
-DEFAULT_TRACE_PROPAGATORS = [
-    "agentuniverse.base.tracing.otel.propagator.au_session_propagator.AUSessionPropagator"
-]
+DEFAULT_TRACE_PROPAGATORS = ["agentuniverse.base.tracing.otel.propagator.au_session_propagator.AUSessionPropagator"]
 
 
 class TelemetryManager:
@@ -90,14 +88,8 @@ class TelemetryManager:
             meter_provider.shutdown()
 
     # -------- Trace helpers ---------------------------------------------
-    def _build_tracer_provider(
-        self, otel_conf: Dict[str, Any], resource: Resource
-    ) -> TracerProvider:
-        provider_cls = self._import_class(
-            otel_conf.get(
-                "provider_class", "opentelemetry.sdk.trace.TracerProvider"
-            )
-        )
+    def _build_tracer_provider(self, otel_conf: Dict[str, Any], resource: Resource) -> TracerProvider:
+        provider_cls = self._import_class(otel_conf.get("provider_class", "opentelemetry.sdk.trace.TracerProvider"))
         provider_kwargs: Dict[str, Any] = {"resource": resource}
 
         id_gen_path = otel_conf.get("id_generator_class")
@@ -108,9 +100,7 @@ class TelemetryManager:
 
         processors = otel_conf.get("processors", [])
         processors.extend(DEFAULT_SPAN_PROCESSORS)
-        self._attach_span_processors(
-            tracer_provider, processors
-        )
+        self._attach_span_processors(tracer_provider, processors)
         return tracer_provider
 
     def _attach_span_processors(
@@ -156,17 +146,13 @@ class TelemetryManager:
         propagate.set_global_textmap(composite)
 
     # -------- Metric helpers --------------------------------------------
-    def _setup_metrics(
-        self, otel_conf: Dict[str, Any], resource: Resource
-    ) -> Optional[MeterProvider]:
+    def _setup_metrics(self, otel_conf: Dict[str, Any], resource: Resource) -> Optional[MeterProvider]:
         readers_conf: List[Dict[str, Any]] = otel_conf.get("metric_readers", [])
         if not readers_conf:
             return None  # metrics disabled
 
         meter_provider_cls = self._import_class(
-            otel_conf.get(
-                "metric_provider_class", "opentelemetry.sdk.metrics.MeterProvider"
-            )
+            otel_conf.get("metric_provider_class", "opentelemetry.sdk.metrics.MeterProvider")
         )
 
         readers = []
@@ -183,9 +169,7 @@ class TelemetryManager:
                 reader = reader_cls(**reader_args)
             readers.append(reader)
 
-        meter_provider = meter_provider_cls(
-            resource=resource, metric_readers=readers
-        )
+        meter_provider = meter_provider_cls(resource=resource, metric_readers=readers)
         metrics.set_meter_provider(meter_provider)
         return meter_provider
 

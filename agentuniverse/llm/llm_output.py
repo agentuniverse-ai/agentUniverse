@@ -11,25 +11,9 @@ from pydantic import BaseModel, Field
 
 from agentuniverse.agent.memory.message import Message
 
-LLM_OUTPUT_TYPE = Literal[
-    "text",
-    "message",
-    "function_call",
-    "tool_call",
-    "stream",
-    "error"
-]
+LLM_OUTPUT_TYPE = Literal["text", "message", "function_call", "tool_call", "stream", "error"]
 
-FINISH_REASON_TYPE = Literal[
-    "stop",
-    "length",
-    "tool_calls",
-    "function_call",
-    "content_filter",
-    "error"
-]
-
-
+FINISH_REASON_TYPE = Literal["stop", "length", "tool_calls", "function_call", "content_filter", "error"]
 
 
 class FunctionCall(BaseModel):
@@ -72,13 +56,7 @@ class TokenUsage(BaseModel):
     @property
     def completion_tokens(self) -> int:
         """历史字段别名：所有输出 token 总和"""
-        return (
-            self.text_out
-            + self.image_out
-            + self.audio_out
-            + self.cached_out
-            + self.reasoning_out
-        )
+        return self.text_out + self.image_out + self.audio_out + self.cached_out + self.reasoning_out
 
     @property
     def cached_tokens(self) -> int:
@@ -136,18 +114,12 @@ class TokenUsage(BaseModel):
         # ---------- Realtime ----------
         if "input_tokens" in usage and "output_tokens" in usage:
             return cls(
-                text_in=usage.get("input_token_details", {}).get(
-                    "text_tokens", usage["input_tokens"]
-                ),
+                text_in=usage.get("input_token_details", {}).get("text_tokens", usage["input_tokens"]),
                 audio_in=usage.get("input_token_details", {}).get("audio_tokens", 0),
                 cached_in=usage.get("input_token_details", {}).get("cached_tokens", 0),
-                text_out=usage.get("output_token_details", {}).get(
-                    "text_tokens", usage["output_tokens"]
-                ),
+                text_out=usage.get("output_token_details", {}).get("text_tokens", usage["output_tokens"]),
                 audio_out=usage.get("output_token_details", {}).get("audio_tokens", 0),
-                cached_out=usage.get("output_token_details", {}).get(
-                    "cached_tokens", 0
-                ),
+                cached_out=usage.get("output_token_details", {}).get("cached_tokens", 0),
             )
 
         return cls()
@@ -209,7 +181,6 @@ class TokenUsage(BaseModel):
             data["completion_tokens_details"] = completion_details
 
         return data
-
 
 
 class LLMOutput(BaseModel):

@@ -26,12 +26,12 @@ class WorkflowPlanner(Planner):
         Returns:
             dict: The planner result.
         """
-        planner = agent_model.plan.get('planner', {})
-        workflow_id = planner.get('workflow_id')
+        planner = agent_model.plan.get("planner", {})
+        workflow_id = planner.get("workflow_id")
         workflow: Workflow = WorkflowManager().get_instance_obj(component_instance_name=workflow_id)
         # build and run workflow
         if workflow.graph_config is None:
-            raise Exception('Workflow graph is None, please add nodes and edges to the workflow graph.')
+            raise Exception("Workflow graph is None, please add nodes and edges to the workflow graph.")
         workflow = workflow.build()
         workflow_output: WorkflowOutput = workflow.run(input_object.to_dict())
         print(workflow_output.workflow_node_results)

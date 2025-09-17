@@ -36,8 +36,9 @@ class MemoryCompressor(ComponentBase):
     compressor_llm_name: Optional[str] = None
     component_type: ComponentEnum = ComponentEnum.MEMORY_COMPRESSOR
 
-    def compress_memory(self, new_memories: List[Message], max_tokens: int = 500, existing_memory: str = '',
-                        **kwargs) -> str:
+    def compress_memory(
+        self, new_memories: List[Message], max_tokens: int = 500, existing_memory: str = "", **kwargs
+    ) -> str:
         """Compress the memory.
 
         Args:
@@ -54,12 +55,13 @@ class MemoryCompressor(ComponentBase):
             new_memory_str = get_memory_string(new_memories)
             chain = prompt.as_langchain() | llm.as_langchain() | StrOutputParser()
             result = chain.invoke(
-                input={'new_lines': new_memory_str, 'summary': existing_memory, 'max_tokens': max_tokens})
+                input={"new_lines": new_memory_str, "summary": existing_memory, "max_tokens": max_tokens}
+            )
             return result
         else:
-            return ''
+            return ""
 
-    def _initialize_by_component_configer(self, memory_compressor_config: ComponentConfiger) -> 'MemoryCompressor':
+    def _initialize_by_component_configer(self, memory_compressor_config: ComponentConfiger) -> "MemoryCompressor":
         """Initialize the MemoryCompressor by the ComponentConfiger object.
 
         Args:
@@ -67,12 +69,12 @@ class MemoryCompressor(ComponentBase):
         Returns:
             MemoryCompressor: A MemoryCompressor instance.
         """
-        if getattr(memory_compressor_config, 'name', None):
+        if getattr(memory_compressor_config, "name", None):
             self.name = memory_compressor_config.name
-        if getattr(memory_compressor_config, 'description', None):
+        if getattr(memory_compressor_config, "description", None):
             self.description = memory_compressor_config.description
-        if getattr(memory_compressor_config, 'compressor_prompt_version', None):
+        if getattr(memory_compressor_config, "compressor_prompt_version", None):
             self.compressor_prompt_version = memory_compressor_config.compressor_prompt_version
-        if getattr(memory_compressor_config, 'compressor_llm_name', None):
+        if getattr(memory_compressor_config, "compressor_llm_name", None):
             self.compressor_llm_name = memory_compressor_config.compressor_llm_name
         return self

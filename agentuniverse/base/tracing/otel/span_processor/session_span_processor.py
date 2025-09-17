@@ -18,7 +18,7 @@ class SessionSpanProcessor(SpanProcessor):
         if session_id:
             span.set_attribute(SPAN_SESSION_ID_KEY, session_id)
         else:
-            span.set_attribute(SPAN_SESSION_ID_KEY, '-1')
+            span.set_attribute(SPAN_SESSION_ID_KEY, "-1")
 
     def on_end(self, span):
         pass

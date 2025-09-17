@@ -32,13 +32,13 @@ class ChromaConversationMemoryStorage(MemoryStorage):
         embedding_model (str): The name of the embedding model instance to use.
         _collection (Collection): The collection object.
     """
-    collection_name: Optional[str] = 'memory'
+
+    collection_name: Optional[str] = "memory"
     persist_path: Optional[str] = None
     embedding_model: Optional[str] = None
     _collection: SkipValidation[Collection] = None
 
-    def _initialize_by_component_configer(self,
-                                          memory_storage_config: ComponentConfiger) -> 'ChromaMemoryStorage':
+    def _initialize_by_component_configer(self, memory_storage_config: ComponentConfiger) -> "ChromaMemoryStorage":
         """Initialize the ChromaMemoryStorage by the ComponentConfiger object.
 
         Args:
@@ -47,28 +47,25 @@ class ChromaConversationMemoryStorage(MemoryStorage):
             ChromaMemoryStorage: A ChromaMemoryStorage instance.
         """
         super()._initialize_by_component_configer(memory_storage_config)
-        if getattr(memory_storage_config, 'collection_name', None):
+        if getattr(memory_storage_config, "collection_name", None):
             self.collection_name = memory_storage_config.collection_name
-        if getattr(memory_storage_config, 'persist_path', None):
+        if getattr(memory_storage_config, "persist_path", None):
             self.persist_path = memory_storage_config.persist_path
-        if getattr(memory_storage_config, 'embedding_model', None):
+        if getattr(memory_storage_config, "embedding_model", None):
             self.embedding_model = memory_storage_config.embedding_model
         return self
 
     def _init_collection(self) -> Any:
         """Initialize the ChromaDB collection."""
-        if self.persist_path.startswith('http') or self.persist_path.startswith('https'):
+        if self.persist_path.startswith("http") or self.persist_path.startswith("https"):
             parsed_url = urlparse(self.persist_path)
             settings = Settings(
                 chroma_api_impl="chromadb.api.fastapi.FastAPI",
                 chroma_server_host=parsed_url.hostname,
-                chroma_server_http_port=str(parsed_url.port)
+                chroma_server_http_port=str(parsed_url.port),
             )
         else:
-            settings = Settings(
-                is_persistent=True,
-                persist_directory=self.persist_path
-            )
+            settings = Settings(is_persistent=True, persist_directory=self.persist_path)
         client = chromadb.Client(settings)
         self._collection = client.get_or_create_collection(name=self.collection_name)
         return client
@@ -86,13 +83,14 @@ class ChromaConversationMemoryStorage(MemoryStorage):
         if session_id is None and agent_id is None:
             return
         if session_id is not None:
-            filters['session_id'] = session_id
+            filters["session_id"] = session_id
         if agent_id is not None:
-            filters['agent_id'] = agent_id
+            filters["agent_id"] = agent_id
         self._collection.delete(where=filters)
 
-    def add(self, message_list: List[ConversationMessage], session_id: str = None, trace_id: str = None,
-            **kwargs) -> None:
+    def add(
+        self, message_list: List[ConversationMessage], session_id: str = None, trace_id: str = None, **kwargs
+    ) -> None:
         """Add messages to the memory db.
 
         Args:
@@ -108,23 +106,23 @@ class ChromaConversationMemoryStorage(MemoryStorage):
         for message in message_list:
             embedding = []
             if self.embedding_model:
-                embedding = EmbeddingManager().get_instance_obj(
-                    self.embedding_model
-                ).get_embeddings([message.content])[0]
-            metadata = {'timestamp': datetime.now().isoformat()}
+                embedding = (
+                    EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([message.content])[0]
+                )
+            metadata = {"timestamp": datetime.now().isoformat()}
             if session_id:
-                metadata['session_id'] = session_id
-            metadata['trace_id'] = message.trace_id
-            metadata['source'] = message.source
-            metadata['source_type'] = message.source_type if message.source_type else ''
-            metadata['target'] = message.target
-            metadata['target_type'] = message.target_type if message.target_type else ''
-            metadata['type'] = message.type if message.type else ''
-            metadata['session_id'] = session_id if session_id else message.conversation_id
-            metadata['params'] = message.metadata.get('params')
-            metadata['prefix'] = message.metadata.get('prefix')
-            metadata['pair_id'] = message.metadata.get('pair_id')
-            metadata['additional_args'] = json.dumps(message.additional_args)
+                metadata["session_id"] = session_id
+            metadata["trace_id"] = message.trace_id
+            metadata["source"] = message.source
+            metadata["source_type"] = message.source_type if message.source_type else ""
+            metadata["target"] = message.target
+            metadata["target_type"] = message.target_type if message.target_type else ""
+            metadata["type"] = message.type if message.type else ""
+            metadata["session_id"] = session_id if session_id else message.conversation_id
+            metadata["params"] = message.metadata.get("params")
+            metadata["prefix"] = message.metadata.get("prefix")
+            metadata["pair_id"] = message.metadata.get("pair_id")
+            metadata["additional_args"] = json.dumps(message.additional_args)
             self._collection.add(
                 ids=[message.id if message.id else str(uuid.uuid4())],
                 documents=[message.content],
@@ -132,8 +130,9 @@ class ChromaConversationMemoryStorage(MemoryStorage):
                 embeddings=[embedding] if len(embedding) > 0 else None,
             )
 
-    def get(self, session_id: str = None, agent_id: str = None, top_k=50, input: str = '', **kwargs) -> \
-            List[ConversationMessage]:
+    def get(
+        self, session_id: str = None, agent_id: str = None, top_k=50, input: str = "", **kwargs
+    ) -> List[ConversationMessage]:
         """Get messages from the memory db.
 
         Args:
@@ -149,45 +148,36 @@ class ChromaConversationMemoryStorage(MemoryStorage):
             self._init_collection()
         filters = {"$and": []}
         if session_id:
-            filters["$and"].append({'session_id': session_id})
+            filters["$and"].append({"session_id": session_id})
 
-        if 'type' in kwargs:
-            if isinstance(kwargs['type'], list):
-                types = kwargs['type']
-            elif isinstance(kwargs['type'], str):
-                types = [kwargs['type']]
+        if "type" in kwargs:
+            if isinstance(kwargs["type"], list):
+                types = kwargs["type"]
+            elif isinstance(kwargs["type"], str):
+                types = [kwargs["type"]]
             else:
                 raise ValueError("type must be a list or str")
-            filters["$and"].append({'type': {
-                "$in": types
-            }})
+            filters["$and"].append({"type": {"$in": types}})
 
         if agent_id:
-            condition = {
-                "$and": [
-                    {'target': agent_id},
-                    {'target_type': ConversationMessageSourceType.AGENT.value}
-                ]
-            }
-            if kwargs['memory_types'] and len(kwargs["memory_types"]) > 0:
+            condition = {"$and": [{"target": agent_id}, {"target_type": ConversationMessageSourceType.AGENT.value}]}
+            if kwargs["memory_types"] and len(kwargs["memory_types"]) > 0:
                 condition = {
                     "$or": [
                         condition,
                         {
                             "$and": [
-                                {'source': agent_id},
-                                {'source_type': ConversationMessageSourceType.AGENT.value},
-                                {'target_type': {
-                                    "$in": kwargs["memory_types"]
-                                }}
+                                {"source": agent_id},
+                                {"source_type": ConversationMessageSourceType.AGENT.value},
+                                {"target_type": {"$in": kwargs["memory_types"]}},
                             ]
-                        }
+                        },
                     ]
                 }
             filters["$and"].append(condition)
 
-        if 'trace_id' in kwargs:
-            filters["$and"].append({'trace_id': kwargs['trace_id']})
+        if "trace_id" in kwargs:
+            filters["$and"].append({"trace_id": kwargs["trace_id"]})
 
         if len(filters["$and"]) < 2:
             filters = filters["$and"][0] if len(filters["$and"]) == 1 else {}
@@ -195,13 +185,9 @@ class ChromaConversationMemoryStorage(MemoryStorage):
         if input:
             embedding = []
             if self.embedding_model:
-                embedding = EmbeddingManager().get_instance_obj(
-                    self.embedding_model
-                ).get_embeddings([input])[0]
+                embedding = EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([input])[0]
             if len(embedding) > 0:
-                results = self._collection.query(
-                    query_embeddings=embedding, where=filters, n_results=top_k
-                )
+                results = self._collection.query(query_embeddings=embedding, where=filters, n_results=top_k)
             else:
                 results = self._collection.query(query_texts=[input], where=filters, n_results=top_k)
             messages = self.to_messages(result=results)
@@ -222,57 +208,57 @@ class ChromaConversationMemoryStorage(MemoryStorage):
             List[Message]: A list of aU messages.
         """
         message_list = []
-        if not result or not result['ids']:
+        if not result or not result["ids"]:
             return message_list
         try:
-            if self.is_nested_list(result['ids']):
-                metadatas = result.get('metadatas', [[]])
-                documents = result.get('documents', [[]])
-                ids = result.get('ids', [[]])
+            if self.is_nested_list(result["ids"]):
+                metadatas = result.get("metadatas", [[]])
+                documents = result.get("documents", [[]])
+                ids = result.get("ids", [[]])
                 message_list = [
                     ConversationMessage(
                         id=ids[0][i],
-                        conversation_id=metadatas[0][i].get('session_id', None) if metadatas[0] else None,
+                        conversation_id=metadatas[0][i].get("session_id", None) if metadatas[0] else None,
                         content=documents[0][i],
                         metadata=metadatas[0][i] if metadatas[0] else None,
-                        source=metadatas[0][i].get('source', None) if metadatas[0] else None,
-                        source_type=metadatas[0][i].get('source_type', ''),
-                        target=metadatas[0][i].get('target', None) if metadatas[0] else None,
-                        target_type=metadatas[0][i].get('target_type', '') if metadatas[0] else '',
-                        trace_id=metadatas[0][i].get('trace_id', '') if metadatas[0] else '',
-                        type=metadatas[0][i].get('type', '') if metadatas[0] else '',
-                        additional_args=json.loads(metadatas[0][i].get('additional_args', "{}"))
+                        source=metadatas[0][i].get("source", None) if metadatas[0] else None,
+                        source_type=metadatas[0][i].get("source_type", ""),
+                        target=metadatas[0][i].get("target", None) if metadatas[0] else None,
+                        target_type=metadatas[0][i].get("target_type", "") if metadatas[0] else "",
+                        trace_id=metadatas[0][i].get("trace_id", "") if metadatas[0] else "",
+                        type=metadatas[0][i].get("type", "") if metadatas[0] else "",
+                        additional_args=json.loads(metadatas[0][i].get("additional_args", "{}")),
                     )
-                    for i in range(len(result['ids'][0]))
+                    for i in range(len(result["ids"][0]))
                 ]
             else:
-                metadatas = result.get('metadatas', [])
-                documents = result.get('documents', [])
-                ids = result.get('ids', [])
+                metadatas = result.get("metadatas", [])
+                documents = result.get("documents", [])
+                ids = result.get("ids", [])
                 message_list = [
                     ConversationMessage(
                         id=ids[i],
-                        conversation_id=metadatas[i].get('session_id', None) if metadatas[i] else None,
-                        source_type=metadatas[i].get('source_type', ''),
-                        target_type=metadatas[i].get('target_type', '') if metadatas[i] else '',
-                        target=metadatas[i].get('target', None) if metadatas[i] else None,
-                        trace_id=metadatas[i].get('trace_id', '') if metadatas[i] else '',
-                        source=metadatas[i].get('source', None) if metadatas[i] else None,
+                        conversation_id=metadatas[i].get("session_id", None) if metadatas[i] else None,
+                        source_type=metadatas[i].get("source_type", ""),
+                        target_type=metadatas[i].get("target_type", "") if metadatas[i] else "",
+                        target=metadatas[i].get("target", None) if metadatas[i] else None,
+                        trace_id=metadatas[i].get("trace_id", "") if metadatas[i] else "",
+                        source=metadatas[i].get("source", None) if metadatas[i] else None,
                         content=documents[i],
                         metadata=metadatas[i] if metadatas[i] else None,
-                        type=metadatas[i].get('type', '') if metadatas[i] else '',
-                        additional_args=json.loads(metadatas[i].get('additional_args', "{}"))
+                        type=metadatas[i].get("type", "") if metadatas[i] else "",
+                        additional_args=json.loads(metadatas[i].get("additional_args", "{}")),
                     )
-                    for i in range(len(result['ids']))
+                    for i in range(len(result["ids"]))
                 ]
             if sort_by_time:
                 # order by timestamp asc
                 message_list = sorted(
                     message_list,
-                    key=lambda msg: msg.metadata.get('timestamp', ''),
+                    key=lambda msg: msg.metadata.get("timestamp", ""),
                 )
         except Exception as e:
-            print('ChromaMemory.to_messages failed, exception= ' + str(e))
+            print("ChromaMemory.to_messages failed, exception= " + str(e))
         return message_list
 
     @staticmethod
