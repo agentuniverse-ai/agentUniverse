@@ -20,7 +20,7 @@ class Store(ComponentBase):
 
     Store of the knowledge, store class is used to store knowledge
     and provide retrieval capabilities,
-    vector storage, such as ChromaDB store, or non-vector storage, such as Redis Store.
+    vector storage, such as ChromaDB store, Qdrant Store, or non-vector storage, such as Redis Store.
     """
     component_type: ComponentEnum = ComponentEnum.STORE
     name: Optional[str] = None

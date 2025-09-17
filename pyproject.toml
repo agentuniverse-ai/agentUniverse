@@ -21,14 +21,14 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.11,<3.12"
 requests = "^2.32.0"
 cffi = "^1.15.1"
 flask = "^2.3.2"
 werkzeug = "^3.0.3"
-langchain = "0.1.20"
-langchain-core = "0.1.52"
-langchain-community = "0.0.38"
+langchain = "^0.3.27"
+langchain-core = "^0.3.27"
+langchain-community = "^0.3.27"
 openai = '1.55.3'
 tiktoken = '<1.0.0'
 loguru = '0.7.2'
@@ -53,10 +53,10 @@ googleapis-common-protos = "^1.63.0"
 myst-parser = "^2.0.0"
 qianfan = "^0.3.12"
 dashscope = "^1.19.1"
-anthropic = "^0.26.0"
+anthropic = "^0.64.0"
 ollama = '^0.2.1'
-langchain-anthropic = '^0.1.13'
-numpy = '^1.26.0'
+langchain-anthropic = '^0.3.19'
+numpy = '^2.3.2'
 pandas = "^2.2.2"
 pyarrow = "^16.1.0"
 duckduckgo-search = "^6.3.5"
@@ -71,6 +71,7 @@ tomli = "^2.2"
 mcp = "~=1.9.0"
 opentracing = ">=2.4.0,<3.0.0"
 jsonlines = "^4.0.0"
+qdrant-client = "^1.15.1"
 
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
