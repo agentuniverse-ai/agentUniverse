@@ -19,7 +19,7 @@ BAICHUAN_Max_CONTEXT_LENGTH = {
     "Baichuan2-Turbo-192k": 192000,
     "Baichuan3-Turbo": 8000,
     "Baichuan3-Turbo-128k": 128000,
-    "Baichuan4": 8000
+    "Baichuan4": 8000,
 }
 
 
@@ -32,8 +32,9 @@ class BAICHUANOpenAIStyleLLM(OpenAIStyleLLM):
     """
 
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("BAICHUAN_API_KEY"))
-    api_base: Optional[str] = Field(default_factory=lambda: get_from_env(
-        "BAICHUAN_API_BASE") or "https://api.baichuan-ai.com/v1")
+    api_base: Optional[str] = Field(
+        default_factory=lambda: get_from_env("BAICHUAN_API_BASE") or "https://api.baichuan-ai.com/v1"
+    )
     proxy: Optional[str] = Field(default_factory=lambda: get_from_env("BAICHUAN_PROXY"))
     organization: Optional[str] = Field(default_factory=lambda: get_from_env("BAICHUAN_ORGANIZATION"))
 
@@ -43,7 +44,7 @@ class BAICHUANOpenAIStyleLLM(OpenAIStyleLLM):
         return BAICHUAN_Max_CONTEXT_LENGTH.get(self.model_name, 8000)
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        """ The call method of the LLM.
+        """The call method of the LLM.
 
         Users can customize how the model interacts by overriding call method of the LLM class.
 
@@ -54,7 +55,7 @@ class BAICHUANOpenAIStyleLLM(OpenAIStyleLLM):
         return super()._call(messages, **kwargs)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
-        """ The async call method of the LLM.
+        """The async call method of the LLM.
 
         Users can customize how the model interacts by overriding acall method of the LLM class.
 

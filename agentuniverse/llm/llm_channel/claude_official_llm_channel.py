@@ -15,7 +15,7 @@ CLAUDE_MAX_CONTEXT_LENGTH = {
     "claude-3-haiku-20240307": 200000,
     "claude-2.1": 200000,
     "claude-2.0": 100000,
-    "claude-instant-1.2": 100000
+    "claude-instant-1.2": 100000,
 }
 
 

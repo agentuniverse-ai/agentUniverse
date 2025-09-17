@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/13 12:01
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: llm_configer.py
 from typing import Optional
@@ -75,14 +75,14 @@ class LLMConfiger(ComponentConfiger):
     def tracing(self) -> Optional[bool]:
         return self.__tracing
 
-    def load(self) -> 'LLMConfiger':
+    def load(self) -> "LLMConfiger":
         """Load the configuration by the Configer object.
         Returns:
             LLMConfiger: the LLMConfiger object
         """
         return self.load_by_configer(self.__configer)
 
-    def load_by_configer(self, configer: Configer) -> 'LLMConfiger':
+    def load_by_configer(self, configer: Configer) -> "LLMConfiger":
         """Load the configuration by the Configer object.
         Args:
             configer(Configer): the Configer object
@@ -92,17 +92,17 @@ class LLMConfiger(ComponentConfiger):
         super().load_by_configer(configer)
 
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
-            self.__model_name = configer.value.get('model_name')
-            self.__temperature = configer.value.get('temperature')
-            self.__request_timeout = configer.value.get('request_timeout')
-            self.__max_tokens = configer.value.get('max_tokens')
-            self.__max_retries = configer.value.get('max_retries')
-            self.__streaming = configer.value.get('streaming')
-            self.__ext_info = configer.value.get('ext_info')
-            self.__max_context_length = configer.value.get('max_context_length')
-            self.__tracing = configer.value.get('tracing')
+            self.__name = configer.value.get("name")
+            self.__description = configer.value.get("description")
+            self.__model_name = configer.value.get("model_name")
+            self.__temperature = configer.value.get("temperature")
+            self.__request_timeout = configer.value.get("request_timeout")
+            self.__max_tokens = configer.value.get("max_tokens")
+            self.__max_retries = configer.value.get("max_retries")
+            self.__streaming = configer.value.get("streaming")
+            self.__ext_info = configer.value.get("ext_info")
+            self.__max_context_length = configer.value.get("max_context_length")
+            self.__tracing = configer.value.get("tracing")
         except Exception as e:
             raise Exception(f"Failed to parse the LLM configuration: {e}")
         return self

@@ -10,4 +10,3 @@ class SQLDBWrapperManager(ComponentManagerBase[SQLDBWrapper]):
 
     def __init__(self):
         super().__init__(ComponentEnum.SQLDB_WRAPPER)
-

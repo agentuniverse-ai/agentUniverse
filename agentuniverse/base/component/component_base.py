@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/14 15:35
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_base.py
 from typing import Optional
@@ -29,9 +29,9 @@ class ComponentBase(BaseModel):
     def get_instance_code(self) -> str:
         """Return the full name of the component."""
         appname = ApplicationConfigManager().app_configer.base_info_appname
-        return f'{appname}.{self.component_type.value.lower()}.{self.name}'
+        return f"{appname}.{self.component_type.value.lower()}.{self.name}"
 
-    def initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'ComponentBase':
+    def initialize_by_component_configer(self, component_configer: ComponentConfiger) -> "ComponentBase":
         """Initialize the component by the ComponentConfiger object.
 
         Args:
@@ -45,7 +45,7 @@ class ComponentBase(BaseModel):
 
         return self
 
-    def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'ComponentBase':
+    def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> "ComponentBase":
         pass
 
     def is_default_object(self):

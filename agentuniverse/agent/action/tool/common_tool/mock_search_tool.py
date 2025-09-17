@@ -10,8 +10,7 @@ from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 
 
 class MockSearchTool(Tool):
-    """The demo google search mock tool.
-    """
+    """The demo google search mock tool."""
 
     def execute(self, input: str):
         # get top10 results from mock search.

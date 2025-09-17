@@ -32,20 +32,17 @@ class KnowledgeNode(Node):
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
         inputs: KnowledgeNodeInputParams = self._data.inputs
 
-        param_map = {
-            'top_k': None,
-            'id': None
-        }
+        param_map = {"top_k": None, "id": None}
 
         for knowledge_param in inputs.knowledge_param:
             if knowledge_param.name in param_map:
                 if isinstance(knowledge_param.value, str):
                     param_map[knowledge_param.name] = knowledge_param.value
                 else:
-                    param_map[knowledge_param.name] = knowledge_param.value.get('content', None)
+                    param_map[knowledge_param.name] = knowledge_param.value.get("content", None)
 
-        knowledge_id_list = param_map.get('id')
-        query_top_k = param_map.get('top_k')
+        knowledge_id_list = param_map.get("id")
+        query_top_k = param_map.get("top_k")
 
         knowledge_list = []
         for knowledge_id in knowledge_id_list:
@@ -56,14 +53,14 @@ class KnowledgeNode(Node):
 
         knowledge_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
         if query_top_k:
-            knowledge_input_params['similarity_top_k'] = query_top_k
-        if 'query' in knowledge_input_params:
-            knowledge_input_params['query_str'] = knowledge_input_params.pop('query')
+            knowledge_input_params["similarity_top_k"] = query_top_k
+        if "query" in knowledge_input_params:
+            knowledge_input_params["query_str"] = knowledge_input_params.pop("query")
 
         knowledge_res = ""
         for knowledge in knowledge_list:
             document_texts = [document.text for document in knowledge.query_knowledge(**knowledge_input_params)]
-            knowledge_res += '\n'.join(document_texts)
+            knowledge_res += "\n".join(document_texts)
         output_params: List[NodeOutputParams] = self._data.outputs
         output_params[0].value = knowledge_res
 

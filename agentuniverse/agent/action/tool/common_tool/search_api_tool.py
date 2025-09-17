@@ -69,10 +69,10 @@ class SearchAPITool(Tool):
             return await self.search_api_wrapper.aresults(query=input, **search_params)
         return await self.search_api_wrapper.arun(query=input, **search_params)
 
-    def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'Tool':
+    def initialize_by_component_configer(self, component_configer: ToolConfiger) -> "Tool":
         """Initialize the tool by the component configer."""
         super().initialize_by_component_configer(component_configer)
-        self.engine = component_configer.configer.value.get('engine', 'google')
-        self.search_params = component_configer.configer.value.get('search_params', {})
-        self.search_type = component_configer.configer.value.get('search_type', 'common')
+        self.engine = component_configer.configer.value.get("engine", "google")
+        self.search_params = component_configer.configer.value.get("search_params", {})
+        self.search_type = component_configer.configer.value.get("search_type", "common")
         return self

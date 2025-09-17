@@ -56,9 +56,7 @@ class FrameworkContextManager:
                     self.context_dict[var_name] = ContextVar(var_name)
         return self.context_dict[var_name].set(var_value)
 
-    def get_context(self,
-                    var_name: str,
-                    default_value: Any = None):
+    def get_context(self, var_name: str, default_value: Any = None):
         """Get a context variable value.
 
         Args:
@@ -119,9 +117,7 @@ class FrameworkContextManager:
     def set_log_context(self, context_key: str, context_value: Any):
         log_context = self.get_context("LOG_CONTEXT")
         if not log_context:
-            log_context = {
-                context_key: context_value
-            }
+            log_context = {context_key: context_value}
             self.set_context("LOG_CONTEXT", log_context)
         else:
             log_context[context_key] = context_value

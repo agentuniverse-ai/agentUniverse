@@ -5,6 +5,7 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: planner.py
 """Base class for Planner."""
+
 from abc import abstractmethod
 import logging
 from queue import Queue
@@ -39,19 +40,19 @@ class Planner(ComponentBase):
 
     All planners should inherit from this class
     """
+
     name: Optional[str] = None
     description: Optional[str] = None
-    output_key: str = 'output'
-    input_key: str = 'input'
-    prompt_assemble_order: list = ['introduction', 'target', 'instruction']
+    output_key: str = "output"
+    input_key: str = "input"
+    prompt_assemble_order: list = ["introduction", "target", "instruction"]
 
     def __init__(self):
         """Initialize the ComponentBase."""
         super().__init__(component_type=ComponentEnum.PLANNER)
 
     @abstractmethod
-    def invoke(self, agent_model: AgentModel, planner_input: dict,
-               input_object: InputObject) -> dict:
+    def invoke(self, agent_model: AgentModel, planner_input: dict, input_object: InputObject) -> dict:
         """Invoke the planner.
 
         Args:
@@ -72,8 +73,8 @@ class Planner(ComponentBase):
         Returns:
              Memory: The memory.
         """
-        chat_history: list = planner_input.get('chat_history')
-        memory_name = agent_model.memory.get('name')
+        chat_history: list = planner_input.get("chat_history")
+        memory_name = agent_model.memory.get("name")
 
         # get memory instance
         memory: Memory = MemoryManager().get_instance_obj(component_instance_name=memory_name)
@@ -85,12 +86,12 @@ class Planner(ComponentBase):
         if temporary_messages:
             memory.add(temporary_messages, **planner_input)
 
-        llm_name = agent_model.profile.get('llm_model', {}).get('name')
+        llm_name = agent_model.profile.get("llm_model", {}).get("name")
         llm: LLM = LLMManager().get_instance_obj(llm_name)
 
         params: dict = dict()
-        params['llm'] = llm
-        params['agent_llm_name'] = llm_name
+        params["llm"] = llm
+        params["agent_llm_name"] = llm_name
         return memory.set_by_agent_model(**params)
 
     def run_all_actions(self, agent_model: AgentModel, planner_input: dict, input_object: InputObject):
@@ -102,9 +103,9 @@ class Planner(ComponentBase):
             input_object (InputObject): Agent input object.
         """
         action: dict = agent_model.action or dict()
-        tools: list = action.get('tool') or list()
-        knowledge: list = action.get('knowledge') or list()
-        agents: list = action.get('agent') or list()
+        tools: list = action.get("tool") or list()
+        knowledge: list = action.get("knowledge") or list()
+        agents: list = action.get("agent") or list()
 
         action_result: list = list()
 
@@ -120,8 +121,7 @@ class Planner(ComponentBase):
             if knowledge is None:
                 continue
             knowledge_res: List[Document] = knowledge.query_knowledge(
-                query_str=input_object.get_data(self.input_key),
-                **input_object.to_dict()
+                query_str=input_object.get_data(self.input_key), **input_object.to_dict()
             )
             action_result.append(knowledge.to_llm(knowledge_res))
 
@@ -131,11 +131,17 @@ class Planner(ComponentBase):
                 continue
             agent_input = {key: input_object.get_data(key) for key in agent.input_keys()}
             output_object = agent.run(**agent_input)
-            action_result.append("\n".join([output_object.get_data(key)
-                                            for key in agent.output_keys()
-                                            if output_object.get_data(key) is not None]))
+            action_result.append(
+                "\n".join(
+                    [
+                        output_object.get_data(key)
+                        for key in agent.output_keys()
+                        if output_object.get_data(key) is not None
+                    ]
+                )
+            )
 
-        planner_input['background'] = planner_input['background'] or '' + "\n".join(action_result)
+        planner_input["background"] = planner_input["background"] or "" + "\n".join(action_result)
 
     def handle_prompt(self, agent_model: AgentModel, planner_input: dict):
         """Prompt module processing.
@@ -156,11 +162,11 @@ class Planner(ComponentBase):
         Returns:
             LLM: The language model.
         """
-        llm_name = agent_model.profile.get('llm_model').get('name')
+        llm_name = agent_model.profile.get("llm_model").get("name")
         llm: LLM = LLMManager().get_instance_obj(component_instance_name=llm_name)
         return llm
 
-    def initialize_by_component_configer(self, component_configer: PlannerConfiger) -> 'Planner':
+    def initialize_by_component_configer(self, component_configer: PlannerConfiger) -> "Planner":
         """Initialize the planner by the PlannerConfiger object.
 
         Args:
@@ -182,26 +188,26 @@ class Planner(ComponentBase):
             input_object (InputObject): Agent input object.
             data (dict): The data to be streamed.
         """
-        output_stream: Queue = input_object.get_data('output_stream', None)
+        output_stream: Queue = input_object.get_data("output_stream", None)
         if output_stream is None:
             return
         output_stream.put_nowait(data)
 
-    def invoke_chain(self, agent_model: AgentModel, chain: RunnableSerializable[Any, str], planner_input: dict,
-                     chat_history,
-                     input_object: InputObject):
-
-        if not input_object.get_data('output_stream'):
+    def invoke_chain(
+        self,
+        agent_model: AgentModel,
+        chain: RunnableSerializable[Any, str],
+        planner_input: dict,
+        chat_history,
+        input_object: InputObject,
+    ):
+        if not input_object.get_data("output_stream"):
             res = chain.invoke(input=planner_input, config={"configurable": {"session_id": "unused"}})
             return res
         result = []
         for token in chain.stream(input=planner_input, config={"configurable": {"session_id": "unused"}}):
-            self.stream_output(input_object, {
-                'type': 'token',
-                'data': {
-                    'chunk': token,
-                    'agent_info': agent_model.info
-                }
-            })
+            self.stream_output(
+                input_object, {"type": "token", "data": {"chunk": token, "agent_info": agent_model.info}}
+            )
             result.append(token)
         return "".join(result)

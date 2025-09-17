@@ -19,10 +19,8 @@ from opentelemetry.baggage import set_baggage
 from opentelemetry.context.context import Context
 from opentelemetry.propagators import textmap
 
-from agentuniverse.base.tracing.au_trace_manager import set_session_id, \
-    get_session_id
-from agentuniverse.base.tracing.otel.consts import SESSION_ID_KEY, \
-    HTTP_HEADER_SESSION_ID_KEY, SPAN_SESSION_ID_KEY
+from agentuniverse.base.tracing.au_trace_manager import set_session_id, get_session_id
+from agentuniverse.base.tracing.otel.consts import SESSION_ID_KEY, HTTP_HEADER_SESSION_ID_KEY, SPAN_SESSION_ID_KEY
 
 
 class AUSessionPropagator(textmap.TextMapPropagator):
@@ -33,15 +31,10 @@ class AUSessionPropagator(textmap.TextMapPropagator):
         setter: textmap.Setter[textmap.CarrierT] = textmap.default_setter,
     ) -> None:
         session_id = get_session_id()
-        key_list = [
-            HTTP_HEADER_SESSION_ID_KEY,
-            SESSION_ID_KEY
-        ]
+        key_list = [HTTP_HEADER_SESSION_ID_KEY, SESSION_ID_KEY]
         for _key in key_list:
             if session_id:
-                setter.set(
-                    carrier, _key, session_id
-                )
+                setter.set(carrier, _key, session_id)
 
     def extract(
         self,
@@ -49,14 +42,10 @@ class AUSessionPropagator(textmap.TextMapPropagator):
         context: typing.Optional[Context] = None,
         getter: textmap.Getter[textmap.CarrierT] = textmap.default_getter,
     ) -> Context:
-
         if context is None:
             context = Context()
 
-        key_list = [
-            HTTP_HEADER_SESSION_ID_KEY,
-            SESSION_ID_KEY
-        ]
+        key_list = [HTTP_HEADER_SESSION_ID_KEY, SESSION_ID_KEY]
         for _key in key_list:
             _value = getter.get(carrier, _key)
             if _value:
@@ -72,7 +61,4 @@ class AUSessionPropagator(textmap.TextMapPropagator):
 
     @property
     def fields(self) -> typing.Set[str]:
-        return {
-            HTTP_HEADER_SESSION_ID_KEY,
-            SESSION_ID_KEY
-        }
+        return {HTTP_HEADER_SESSION_ID_KEY, SESSION_ID_KEY}

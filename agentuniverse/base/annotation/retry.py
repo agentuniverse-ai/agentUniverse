@@ -26,5 +26,7 @@ def retry(max_retries: int = 3, delay: float = 1.0) -> Callable:
                     if retries < max_retries:
                         time.sleep(delay)
             raise Exception(f"Failed after {max_retries} retries. Last error: {str(last_exception)}")
+
         return wrapper
+
     return decorator

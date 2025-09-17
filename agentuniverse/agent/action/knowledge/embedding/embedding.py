@@ -12,8 +12,7 @@ from langchain_core.embeddings import Embeddings as LCEmbeddings
 
 from agentuniverse.base.component.component_base import ComponentEnum
 from agentuniverse.base.component.component_base import ComponentBase
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
 class Embedding(ComponentBase):
@@ -34,17 +33,14 @@ class Embedding(ComponentBase):
         """Get embeddings."""
 
     @abstractmethod
-    async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[
-        List[float]]:
+    async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Asynchronously get embeddings."""
 
     def as_langchain(self) -> LCEmbeddings:
         """Convert the agentUniverse(aU) embedding class to the langchain embedding class."""
         pass
 
-    def _initialize_by_component_configer(self,
-                                          embedding_configer: ComponentConfiger) \
-            -> 'Embedding':
+    def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> "Embedding":
         """Initialize the embedding by the ComponentConfiger object.
 
         Args:

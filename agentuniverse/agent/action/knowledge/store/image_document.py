@@ -11,6 +11,7 @@ from PIL.Image import Image
 
 from .document import Document
 
+
 class ImageDocument(Document):
     """The basic class for an ImageDocument.
 

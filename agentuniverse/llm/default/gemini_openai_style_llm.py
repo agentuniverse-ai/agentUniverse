@@ -23,10 +23,10 @@ GEMINI_MAX_CONTEXT_LENGTH = {
 
 class GeminiOpenAIStyleLLM(OpenAIStyleLLM):
     """
-        Gemini OpenAI style LLM
-        Args:
-            api_key: API key for the model ,from Google AI Studio or Vertex AI
-            api_base: API base URL for the model (optional, depending on the service)
+    Gemini OpenAI style LLM
+    Args:
+        api_key: API key for the model ,from Google AI Studio or Vertex AI
+        api_base: API base URL for the model (optional, depending on the service)
     """
 
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("GOOGLE_API_KEY"))
@@ -35,7 +35,7 @@ class GeminiOpenAIStyleLLM(OpenAIStyleLLM):
     organization: Optional[str] = None  # Gemini does not require organization.
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        """ The call method of the LLM.
+        """The call method of the LLM.
 
         Users can customize how the model interacts by overriding call method of the LLM class.
 
@@ -46,7 +46,7 @@ class GeminiOpenAIStyleLLM(OpenAIStyleLLM):
         return super()._call(messages, **kwargs)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
-        """ The async call method of the LLM.
+        """The async call method of the LLM.
 
         Users can customize how the model interacts by overriding acall method of the LLM class.
 

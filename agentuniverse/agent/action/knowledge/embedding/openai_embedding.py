@@ -14,8 +14,7 @@ from pydantic import Field
 
 from agentuniverse.agent.action.knowledge.embedding.embedding import Embedding
 from agentuniverse.base.util.env_util import get_from_env
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
 class OpenAIEmbedding(Embedding):
@@ -42,14 +41,15 @@ class OpenAIEmbedding(Embedding):
 
          Raises:
              ValueError: If texts exceed the embedding model token limit or missing some required parameters.
-         """
+        """
         self.client = OpenAI(api_key=self.openai_api_key, **self.openai_client_args or {})
         if self.embedding_model_name is None:
             raise ValueError("Must provide `embedding_model_name`")
         try:
             if self.dimensions:
-                response = self.client.embeddings.create(input=texts, model=self.embedding_model_name,
-                                                         dimensions=self.dimensions)
+                response = self.client.embeddings.create(
+                    input=texts, model=self.embedding_model_name, dimensions=self.dimensions
+                )
             else:
                 response = self.client.embeddings.create(input=texts, model=self.embedding_model_name)
 
@@ -75,14 +75,15 @@ class OpenAIEmbedding(Embedding):
              List[List[float]]: Each text gets a float list, and the result is a list of the results for each text.
          Raises:
              ValueError: If texts exceed the embedding model token limit or missing some required parameters.
-         """
+        """
         self.async_client = AsyncOpenAI(api_key=self.openai_api_key, **self.openai_client_args or {})
         if self.embedding_model_name is None:
             raise ValueError("Must provide `embedding_model_name`")
         try:
             if self.dimensions:
-                response = await self.async_client.embeddings.create(input=texts, model=self.embedding_model_name,
-                                                                     dimensions=self.dimensions)
+                response = await self.async_client.embeddings.create(
+                    input=texts, model=self.embedding_model_name, dimensions=self.dimensions
+                )
             else:
                 response = await self.async_client.embeddings.create(input=texts, model=self.embedding_model_name)
             # Extract the embedding data from the response
@@ -95,12 +96,11 @@ class OpenAIEmbedding(Embedding):
 
     def as_langchain(self) -> OpenAIEmbeddings:
         """Convert the agentUniverse(aU) openai embedding class to the langchain openai embedding class."""
-        return OpenAIEmbeddings(openai_api_key=self.openai_api_key,
-                                client=self.client.embeddings, async_client=self.async_client.embeddings)
+        return OpenAIEmbeddings(
+            openai_api_key=self.openai_api_key, client=self.client.embeddings, async_client=self.async_client.embeddings
+        )
 
-    def _initialize_by_component_configer(self,
-                                          embedding_configer: ComponentConfiger) \
-            -> 'Embedding':
+    def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> "Embedding":
         """Initialize the embedding by the ComponentConfiger object.
 
         Args:

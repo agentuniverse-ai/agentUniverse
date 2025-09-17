@@ -14,7 +14,7 @@ BAICHUAN_MAX_CONTEXT_LENGTH = {
     "Baichuan2-Turbo-192k": 192000,
     "Baichuan3-Turbo": 8000,
     "Baichuan3-Turbo-128k": 128000,
-    "Baichuan4": 8000
+    "Baichuan4": 8000,
 }
 
 

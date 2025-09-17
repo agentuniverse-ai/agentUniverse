@@ -22,6 +22,7 @@ class Store(ComponentBase):
     and provide retrieval capabilities,
     vector storage, such as ChromaDB store, or non-vector storage, such as Redis Store.
     """
+
     component_type: ComponentEnum = ComponentEnum.STORE
     name: Optional[str] = None
     description: Optional[str] = None
@@ -30,6 +31,7 @@ class Store(ComponentBase):
 
     class Config:
         """Configuration for this pydantic object."""
+
         arbitrary_types_allowed = True
 
     def _new_client(self) -> Any:
@@ -40,9 +42,7 @@ class Store(ComponentBase):
         """Initialize the async client."""
         pass
 
-    def _initialize_by_component_configer(self,
-                                         store_configer: ComponentConfiger) \
-            -> 'Store':
+    def _initialize_by_component_configer(self, store_configer: ComponentConfiger) -> "Store":
         """Initialize the store by the ComponentConfiger object.
 
         Args:

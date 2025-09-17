@@ -19,21 +19,17 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 class AzureOpenAIEmbedding(Embedding):
     """The Azure OpenAI embedding class."""
 
-    azure_api_key: Optional[str] = Field(
-        default_factory=lambda: get_from_env("AZURE_OPENAI_API_KEY"))
-    
-    resource_name: Optional[str] = Field(
-        default_factory=lambda: get_from_env("AZURE_OPENAI_RESOURCE_NAME"))
+    azure_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("AZURE_OPENAI_API_KEY"))
 
-    azure_api_version: Optional[str] = Field(
-        default_factory=lambda: get_from_env("AZURE_API_VERSION"))
+    resource_name: Optional[str] = Field(default_factory=lambda: get_from_env("AZURE_OPENAI_RESOURCE_NAME"))
+
+    azure_api_version: Optional[str] = Field(default_factory=lambda: get_from_env("AZURE_API_VERSION"))
 
     embedding_model_name: Optional[str] = None
     embedding_dims: Optional[int] = None
 
     client: Any = None
     async_client: Any = None
-
 
     def get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """
@@ -46,24 +42,18 @@ class AzureOpenAIEmbedding(Embedding):
             Exception: If the API call fails or if required configuration is missing.
         """
         self._initialize_clients()
-        
+
         try:
             if self.embedding_dims is not None:
                 response = self.client.embeddings.create(
-                    input=texts,
-                    model=self.embedding_model_name,
-                    dimensions=self.embedding_dims
+                    input=texts, model=self.embedding_model_name, dimensions=self.embedding_dims
                 )
             else:
-                response = self.client.embeddings.create(
-                    input=texts,
-                    model=self.embedding_model_name
-                )
+                response = self.client.embeddings.create(input=texts, model=self.embedding_model_name)
             return [item.embedding for item in response.data]
 
         except Exception as e:
             raise Exception(f"Failed to get embeddings: {e}")
-
 
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """
@@ -80,20 +70,14 @@ class AzureOpenAIEmbedding(Embedding):
         try:
             if self.embedding_dims is not None:
                 response = await self.async_client.embeddings.create(
-                    input=texts,
-                    model=self.embedding_model_name,
-                    dimensions=self.embedding_dims
+                    input=texts, model=self.embedding_model_name, dimensions=self.embedding_dims
                 )
             else:
-                response = await self.async_client.embeddings.create(
-                    input=texts,
-                    model=self.embedding_model_name
-                )
+                response = await self.async_client.embeddings.create(input=texts, model=self.embedding_model_name)
             return [item.embedding for item in response.data]
 
         except Exception as e:
             raise Exception(f"Failed to get embeddings: {e}")
-
 
     def as_langchain(self) -> Any:
         """
@@ -102,15 +86,20 @@ class AzureOpenAIEmbedding(Embedding):
         self._initialize_clients()
 
         from langchain_community.embeddings.azure_openai import AzureOpenAIEmbeddings
-        return AzureOpenAIEmbeddings(openai_api_key=self.azure_api_key, client=self.client.embeddings, async_client=self.async_client.embeddings, azure_endpoint=f"https://{self.resource_name}.openai.azure.com/")
 
+        return AzureOpenAIEmbeddings(
+            openai_api_key=self.azure_api_key,
+            client=self.client.embeddings,
+            async_client=self.async_client.embeddings,
+            azure_endpoint=f"https://{self.resource_name}.openai.azure.com/",
+        )
 
-    def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> 'Embedding':
+    def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> "Embedding":
         """
         Initialize the embedding by the ComponentConfiger object.
         Args:
             embedding_configer(ComponentConfiger): A configer contains embedding configuration.
-        Returns:    
+        Returns:
             Embedding: A AzureOpenAIEmbedding instance.
         """
         super()._initialize_by_component_configer(embedding_configer)
@@ -119,7 +108,6 @@ class AzureOpenAIEmbedding(Embedding):
         if hasattr(embedding_configer, "resource_name"):
             self.resource_name = embedding_configer.resource_name
         return self
-
 
     def _initialize_clients(self) -> None:
         if not self.azure_api_key:
@@ -133,11 +121,11 @@ class AzureOpenAIEmbedding(Embedding):
             self.client = AzureOpenAI(
                 api_key=self.azure_api_key,
                 api_version=self.azure_api_version,
-                azure_endpoint=f"https://{self.resource_name}.openai.azure.com"
+                azure_endpoint=f"https://{self.resource_name}.openai.azure.com",
             )
         if self.async_client is None:
             self.async_client = AsyncAzureOpenAI(
                 api_key=self.azure_api_key,
                 api_version=self.azure_api_version,
-                azure_endpoint=f"https://{self.resource_name}.openai.azure.com"
+                azure_endpoint=f"https://{self.resource_name}.openai.azure.com",
             )

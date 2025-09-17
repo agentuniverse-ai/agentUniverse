@@ -15,11 +15,11 @@ class SimpleSummaryAgent(Agent):
 
     def input_keys(self) -> list[str]:
         """Return the input keys of the Agent."""
-        return ['input']
+        return ["input"]
 
     def output_keys(self) -> list[str]:
         """Return the output keys of the Agent."""
-        return ['output']
+        return ["output"]
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         """Agent parameter parsing.
@@ -30,8 +30,8 @@ class SimpleSummaryAgent(Agent):
         Returns:
             dict: agent input parsed from `input_object` by the user.
         """
-        agent_input['input'] = input_object.get_data('input')
-        self.agent_model.profile.setdefault('prompt_version', 'simple_summary_agent.cn')
+        agent_input["input"] = input_object.get_data("input")
+        self.agent_model.profile.setdefault("prompt_version", "simple_summary_agent.cn")
         return agent_input
 
     def parse_result(self, planner_result: dict) -> dict:

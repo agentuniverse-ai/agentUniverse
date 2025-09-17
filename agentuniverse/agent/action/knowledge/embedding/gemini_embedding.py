@@ -16,6 +16,7 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 # @mail : wozhapen@gmail.com
 # @FileName :gemini_embedding.py
 
+
 class GeminiEmbedding(Embedding):
     """Gemini Embedding class that inherits from the base Embedding class."""
 
@@ -29,12 +30,11 @@ class GeminiEmbedding(Embedding):
                 raise ValueError("GOOGLE_API_KEY is required but not set")
             try:
                 from google import genai
+
                 self.client = genai.Client(api_key=self.gemini_api_key)
             except ImportError as e:
-                raise ImportError(
-                    "genai is required. Install with: pip install google-genai"
-                ) from e
-            
+                raise ImportError("genai is required. Install with: pip install google-genai") from e
+
         model_name = self.embedding_model_name or "text-embedding-004"  # default model
 
         try:
@@ -80,21 +80,19 @@ class GeminiEmbedding(Embedding):
 
         return GeminiLangchainEmbedding(gemini_embedding=self)  # Pass the instance of GeminiEmbedding
 
-
-    def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> 'Embedding':
+    def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> "Embedding":
         super()._initialize_by_component_configer(embedding_configer)
         if hasattr(embedding_configer, "gemini_api_key"):
             self.gemini_api_key = embedding_configer.gemini_api_key
-        
+
         # Initialize client if API key is available
         if self.gemini_api_key:
             try:
                 from google import genai
+
                 self.client = genai.Client(api_key=self.gemini_api_key)
             except ImportError as e:
-                raise ImportError(
-                    "genai is required. Install with: pip install google-genai"
-                ) from e
+                raise ImportError("genai is required. Install with: pip install google-genai") from e
             except Exception as e:
                 raise ValueError(f"Failed to initialize Gemini client: {str(e)}")
         return self

@@ -11,9 +11,9 @@ from enum import Enum
 
 @enum.unique
 class PromptProcessEnum(Enum):
-    TRUNCATE = 'truncate'
-    STUFF = 'stuff'
-    MAP_REDUCE = 'map_reduce'
+    TRUNCATE = "truncate"
+    STUFF = "stuff"
+    MAP_REDUCE = "map_reduce"
 
     @classmethod
     def from_value(cls, value):

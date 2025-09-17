@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 import asyncio
 import inspect
+
 # @Time    : 2024/3/13 14:29
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
@@ -89,7 +90,7 @@ class Tool(ComponentBase):
         if self.input_keys:
             for key in self.input_keys:
                 if key not in kwargs.keys():
-                    raise Exception(f'{self.get_instance_code()} - The input must include key: {key}.')
+                    raise Exception(f"{self.get_instance_code()} - The input must include key: {key}.")
 
     @trace_tool
     def langchain_run(self, *args, callbacks=None, **kwargs):
@@ -103,8 +104,7 @@ class Tool(ComponentBase):
             return self.execute(tool_input)
         else:
             try:
-                parse_result = parse_and_check_json_markdown(args[0],
-                                                            self.input_keys)
+                parse_result = parse_and_check_json_markdown(args[0], self.input_keys)
             except Exception as e:
                 return str(e)
             return self.execute(**parse_result)
@@ -119,12 +119,10 @@ class Tool(ComponentBase):
 
     def parse_react_input(self, input_str: str):
         """
-            parse react string to you input
-            you can define your own logic here by override this function
+        parse react string to you input
+        you can define your own logic here by override this function
         """
-        return {
-            self.input_keys[0]: input_str
-        }
+        return {self.input_keys[0]: input_str}
 
     @abstractmethod
     def execute(self, **kwargs):
@@ -136,22 +134,19 @@ class Tool(ComponentBase):
 
     def as_langchain(self) -> LangchainTool:
         """Convert the agentUniverse(aU) tool class to the langchain tool class."""
-        return LangchainTool(name=self.name,
-                             func=self.langchain_run,
-                             description=self.description)
+        return LangchainTool(name=self.name, func=self.langchain_run, description=self.description)
 
     async def async_as_langchain(self) -> LangchainTool:
-        return LangchainTool(name=self.name,
-                             func=self.run,
-                             coroutine=self.async_langchain_run,
-                             description=self.description)
+        return LangchainTool(
+            name=self.name, func=self.run, coroutine=self.async_langchain_run, description=self.description
+        )
 
     def get_instance_code(self) -> str:
         """Return the full name of the tool."""
         appname = ApplicationConfigManager().app_configer.base_info_appname
-        return f'{appname}.{self.component_type.value.lower()}.{self.name}'
+        return f"{appname}.{self.component_type.value.lower()}.{self.name}"
 
-    def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'Tool':
+    def initialize_by_component_configer(self, component_configer: ToolConfiger) -> "Tool":
         """Initialize the LLM by the ComponentConfiger object.
         Args:
             component_configer(LLMConfiger): the ComponentConfiger object
@@ -161,15 +156,14 @@ class Tool(ComponentBase):
         try:
             # First handle the main configuration values
             for key, value in component_configer.configer.value.items():
-                if key != 'metadata' and key != 'meta_class':  # Skip metadata field
+                if key != "metadata" and key != "meta_class":  # Skip metadata field
                     setattr(self, key, value)
         except Exception as e:
             print(f"Error during configuration initialization: {str(e)}")
         self.name = component_configer.name
         self.description = component_configer.description
         if component_configer.tool_type:
-            self.tool_type = next((member for member in ToolTypeEnum if
-                                   member.value == component_configer.tool_type))
+            self.tool_type = next((member for member in ToolTypeEnum if member.value == component_configer.tool_type))
         self.input_keys = component_configer.input_keys
         if hasattr(component_configer, "tracing"):
             self.tracing = component_configer.tracing
@@ -184,10 +178,10 @@ class Tool(ComponentBase):
     def check_execute_signature_deprecated(self) -> bool:
         """Check if the tool use deprecated execute definition which use
         ToolInput as input args."""
-        if not hasattr(self, 'execute'):
+        if not hasattr(self, "execute"):
             return False
 
-        execute_method = getattr(self, 'execute')
+        execute_method = getattr(self, "execute")
         if not callable(execute_method):
             return False
 

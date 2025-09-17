@@ -44,18 +44,16 @@ class AuConversationSummaryBufferMemory(ConversationSummaryBufferMemory):
 
     @property
     def load_memory(self) -> List[BaseMessage]:
-        """ General method: load the memory context from the memory buffer."""
+        """General method: load the memory context from the memory buffer."""
         messages = self.chat_memory.messages
         if self.moving_summary_buffer != "":
-            moving_messages: List[BaseMessage] = [
-                self.summary_message_cls(content=self.moving_summary_buffer)
-            ]
+            moving_messages: List[BaseMessage] = [self.summary_message_cls(content=self.moving_summary_buffer)]
             messages = moving_messages + messages
         return messages
 
     @property
     def load_memory_str(self) -> str:
-        """ General method: load the memory context from the memory buffer as string format."""
+        """General method: load the memory context from the memory buffer as string format."""
         buffer = get_buffer_string(self.chat_memory.messages)
         if self.moving_summary_buffer is not None:
             buffer = self.moving_summary_buffer + buffer
@@ -95,29 +93,24 @@ class AuConversationSummaryBufferMemory(ConversationSummaryBufferMemory):
         """Save context from the conversation to buffer and prune memories"""
 
         def message_to_dict(message):
-            return {
-                "content": message.content,
-                "type": message.type
-            }
+            return {"content": message.content, "type": message.type}
 
         super().save_context(inputs, outputs)
         message_list = self.load_memory
         messages_dicts = [message_to_dict(message) for message in message_list]
         inputs[self.memory_key] = messages_dicts
 
-    def predict_new_summary(
-            self, messages: List[BaseMessage], existing_summary: str
-    ) -> str:
+    def predict_new_summary(self, messages: List[BaseMessage], existing_summary: str) -> str:
         """Predict new summary, summarize memories in multiple rounds of conversations."""
         new_lines = get_buffer_string(
             messages,
             human_prefix=self.human_prefix,
             ai_prefix=self.ai_prefix,
         )
-        prompt_version = self.prompt_version if self.prompt_version else 'chat_memory.summarizer_cn'
+        prompt_version = self.prompt_version if self.prompt_version else "chat_memory.summarizer_cn"
         prompt: Prompt = PromptManager().get_instance_obj(prompt_version)
         chain = prompt.as_langchain() | self.llm | StrOutputParser()
-        return chain.invoke(input={'summary': existing_summary, 'new_lines': new_lines, 'max_tokens': 500})
+        return chain.invoke(input={"summary": existing_summary, "new_lines": new_lines, "max_tokens": 500})
 
 
 class AuConversationTokenBufferMemory(ConversationTokenBufferMemory):
@@ -144,12 +137,12 @@ class AuConversationTokenBufferMemory(ConversationTokenBufferMemory):
 
     @property
     def load_memory(self) -> List[BaseMessage]:
-        """ General method: load the memory context from the memory buffer."""
+        """General method: load the memory context from the memory buffer."""
         return self.chat_memory.messages
 
     @property
     def load_memory_str(self) -> str:
-        """ General method: load the memory context from the memory buffer as string format."""
+        """General method: load the memory context from the memory buffer as string format."""
         return get_buffer_string(self.chat_memory.messages)
 
     def build_memory(self):
@@ -185,10 +178,7 @@ class AuConversationTokenBufferMemory(ConversationTokenBufferMemory):
         """Save context from the conversation to buffer and truncate part of memories."""
 
         def message_to_dict(message):
-            return {
-                "content": message.content,
-                "type": message.type
-            }
+            return {"content": message.content, "type": message.type}
 
         super().save_context(inputs, outputs)
         message_list = self.load_memory

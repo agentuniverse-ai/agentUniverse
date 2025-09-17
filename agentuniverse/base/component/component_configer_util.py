@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/13 14:00
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_configer_util.py
 import importlib
@@ -73,7 +73,7 @@ class ComponentConfigerUtil(object):
         ComponentEnum.WORK_PATTERN: WorkPatternConfiger,
         ComponentEnum.LOG_SINK: ComponentConfiger,
         ComponentEnum.DEFAULT: ComponentConfiger,
-        ComponentEnum.LLM_CHANNEL: ComponentConfiger
+        ComponentEnum.LLM_CHANNEL: ComponentConfiger,
     }
 
     __COMPONENT_MANAGER_CLZ_MAP = {
@@ -102,8 +102,9 @@ class ComponentConfigerUtil(object):
     }
 
     @classmethod
-    def get_component_config_clz_by_type(cls, component_type_enum: ComponentEnum) -> \
-            Type[ComponentConfiger | LLMConfiger]:
+    def get_component_config_clz_by_type(
+        cls, component_type_enum: ComponentEnum
+    ) -> Type[ComponentConfiger | LLMConfiger]:
         """Get the ComponentConfiger object by the component type.
         Args:
             component_type_enum(ConfigTypeEnum): the component type
@@ -125,13 +126,15 @@ class ComponentConfigerUtil(object):
         """
         if component_configer.meta_class:
             try:
-                metadata_module = '.'.join(component_configer.meta_class.split('.')[:-1])
-                metadata_class = component_configer.meta_class.split('.')[-1]
+                metadata_module = ".".join(component_configer.meta_class.split(".")[:-1])
+                metadata_class = component_configer.meta_class.split(".")[-1]
                 module = importlib.import_module(metadata_module)
                 clz = getattr(module, metadata_class)
                 return clz
             except Exception as ex:
-                LOGGER.error(f"Please check your config file, load configer module error! module name: {metadata_class},error info: {ex} ")
+                LOGGER.error(
+                    f"Please check your config file, load configer module error! module name: {metadata_class},error info: {ex} "
+                )
                 raise ex
         else:
             try:
@@ -139,7 +142,9 @@ class ComponentConfigerUtil(object):
                 clz = getattr(module, component_configer.metadata_class)
                 return clz
             except Exception as ex:
-                LOGGER.error(f"Please check your config file, load configer module error! module name: {component_configer.metadata_module},error info: {ex} ")
+                LOGGER.error(
+                    f"Please check your config file, load configer module error! module name: {component_configer.metadata_module},error info: {ex} "
+                )
                 raise ex
 
     @classmethod

@@ -23,6 +23,7 @@ class Query(BaseModel):
         embeddings (List[List[float]]): A list of embedded queries.
         ext_info (dict): extra information used in query.
     """
+
     class Config:
         arbitrary_types_allowed = True
 

@@ -5,6 +5,7 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: planner_manager.py
 """Planner Management Class."""
+
 from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.component.component_manager_base import ComponentManagerBase

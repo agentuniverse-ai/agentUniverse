@@ -18,10 +18,8 @@ SUPPORTED_DIMENSIONS = {512, 1024, 2048}
 class DoubaoEmbedding(Embedding):
     """The Doubao embedding class using Volcengine Ark Runtime."""
 
-    ark_api_key: Optional[str] = Field(
-        default_factory=lambda: get_from_env("ARK_API_KEY"))
-    endpoint_id: Optional[str] = Field(
-        default_factory=lambda: get_from_env("ARK_ENDPOINT_ID"))
+    ark_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("ARK_API_KEY"))
+    endpoint_id: Optional[str] = Field(default_factory=lambda: get_from_env("ARK_ENDPOINT_ID"))
     client: Optional[Any] = None
     embedding_dims: Optional[int] = None
 
@@ -44,9 +42,7 @@ class DoubaoEmbedding(Embedding):
             try:
                 from volcenginesdkarkruntime import Ark
             except ImportError:
-                raise ImportError(
-                    "Ark is required. Install with: pip install volcengine-python-sdk[ark]"
-                )
+                raise ImportError("Ark is required. Install with: pip install volcengine-python-sdk[ark]")
             self.client = Ark(api_key=self.ark_api_key)
         if not self.endpoint_id:
             raise ValueError("endpoint_id is required but not set")
@@ -58,25 +54,22 @@ class DoubaoEmbedding(Embedding):
                     f"Supported dimensions are: {', '.join(SUPPORTED_DIMENSIONS)}"
                 )
             import numpy as np
-            norm = float(np.linalg.norm(vec[:self.embedding_dims]))
-            return [v / norm for v in vec[:self.embedding_dims]]
+
+            norm = float(np.linalg.norm(vec[: self.embedding_dims]))
+            return [v / norm for v in vec[: self.embedding_dims]]
 
         try:
-            response = self.client.embeddings.create(model=self.endpoint_id,
-                                                     input=texts)
+            response = self.client.embeddings.create(model=self.endpoint_id, input=texts)
             if self.embedding_dims is None:
                 return [data.embedding for data in response.data]
             return [sliced_norm_l2(data.embedding) for data in response.data]
         except Exception as e:
-            raise Exception(
-                f"Failed to get embedding from Doubao API: {str(e)}")
+            raise Exception(f"Failed to get embedding from Doubao API: {str(e)}")
 
-    async def async_get_embeddings(self, texts: List[str],
-                                   **kwargs) -> List[List[float]]:
+    async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         return self.get_embeddings(texts)
 
-    def _initialize_by_component_configer(
-            self, embedding_configer: ComponentConfiger) -> 'Embedding':
+    def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> "Embedding":
         """Initialize the embedding by the ComponentConfiger object.
 
         Args:
@@ -95,8 +88,6 @@ class DoubaoEmbedding(Embedding):
             try:
                 from volcenginesdkarkruntime import Ark
             except ImportError:
-                raise ImportError(
-                    "Ark is required. Install with: pip install volcengine-python-sdk[ark]"
-                )
+                raise ImportError("Ark is required. Install with: pip install volcengine-python-sdk[ark]")
             self.client = Ark(api_key=self.ark_api_key)
         return self

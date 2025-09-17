@@ -23,13 +23,12 @@ class LLMManager(ComponentManagerBase):
         """Initialize the LLMManager."""
         super().__init__(ComponentEnum.LLM)
 
-    def get_instance_obj(self, component_instance_name: str,
-                         appname: str = None, new_instance: bool = True) -> LLM:
+    def get_instance_obj(self, component_instance_name: str, appname: str = None, new_instance: bool = True) -> LLM:
         """Return the tool instance object."""
         if component_instance_name == "__default_instance__":
             return self.get_default_instance(new_instance)
         appname = appname or ApplicationConfigManager().app_configer.base_info_appname
-        instance_code = f'{appname}.{self._component_type.value.lower()}.{component_instance_name}'
+        instance_code = f"{appname}.{self._component_type.value.lower()}.{component_instance_name}"
         instance_obj = self._instance_obj_map.get(instance_code)
         # If the instance does not exist, try to create it using the configuration
         if instance_obj is None:
@@ -40,8 +39,8 @@ class LLMManager(ComponentManagerBase):
                 if llm_configer:
                     # Dynamically import the module and retrieve the class specified in the configuration
                     if llm_configer.meta_class:
-                        metadata_module = '.'.join(llm_configer.meta_class.split('.')[:-1])
-                        metadata_class = llm_configer.meta_class.split('.')[-1]
+                        metadata_module = ".".join(llm_configer.meta_class.split(".")[:-1])
+                        metadata_class = llm_configer.meta_class.split(".")[-1]
                         module = importlib.import_module(metadata_module)
                         component_clz = getattr(module, metadata_class)
                     else:

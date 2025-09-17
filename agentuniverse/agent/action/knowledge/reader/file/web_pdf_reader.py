@@ -29,11 +29,9 @@ class WebPdfReader(Reader):
             try:
                 from pdfminer.high_level import extract_text_to_fp
             except ImportError:
-                raise ImportError(
-                    "pdfminer.six is required to read PDF files: `pip install pdfminer.six`"
-                )
+                raise ImportError("pdfminer.six is required to read PDF files: `pip install pdfminer.six`")
             # parse the pdf file and get the text content.
             with BytesIO() as output_string:
-                extract_text_to_fp(pdf_memory_file, output_string, output_type='text', codec='utf-8')
-                text = output_string.getvalue().decode('utf-8')
+                extract_text_to_fp(pdf_memory_file, output_string, output_type="text", codec="utf-8")
+                text = output_string.getvalue().decode("utf-8")
                 return [Document(text=text, metadata={"source": web_pdf_url})]

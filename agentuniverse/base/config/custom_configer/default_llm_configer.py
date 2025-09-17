@@ -20,6 +20,7 @@ class DefaultLLMConfiger(Configer):
     This class reads and parses a TOML configuration file to determine the default LLM instance
     that will be used in the agent when no specific model is manually designated.
     """
+
     default_llm: Optional[str] = None
 
     def __init__(self, config_path: str = None):
@@ -28,8 +29,10 @@ class DefaultLLMConfiger(Configer):
             try:
                 self.load()
             except FileNotFoundError as e:
-                print(f"Configuration file not found at path: {config_path}. "
-                      f"The default LLM configuration will not be loaded. "
-                      f"Error is {str(e)}")
+                print(
+                    f"Configuration file not found at path: {config_path}. "
+                    f"The default LLM configuration will not be loaded. "
+                    f"Error is {str(e)}"
+                )
         if self.value:
-            self.default_llm = self.value.get('DEFAULT', {}).get('default_llm', None)
+            self.default_llm = self.value.get("DEFAULT", {}).get("default_llm", None)

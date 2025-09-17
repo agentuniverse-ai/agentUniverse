@@ -12,6 +12,5 @@ from agentuniverse.base.component.component_manager_base import ComponentManager
 
 @singleton
 class LLMChannelManager(ComponentManagerBase):
-
     def __init__(self):
         super().__init__(ComponentEnum.LLM_CHANNEL)

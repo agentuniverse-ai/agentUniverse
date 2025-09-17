@@ -12,8 +12,8 @@ from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 
 
 class DashscopeLLMChannel(LLMChannel):
-    channel_api_base: Optional[str] = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    channel_api_base: Optional[str] = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
-    def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'DashscopeLLMChannel':
+    def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> "DashscopeLLMChannel":
         super()._initialize_by_component_configer(component_configer)
         return self

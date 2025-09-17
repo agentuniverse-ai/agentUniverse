@@ -32,15 +32,9 @@ def service_run(saved: bool, params: str, service_id: str):
         params = json.loads(params)
     else:
         params = {}
-    request_task = RequestTask(ServiceInstance(service_id).run, saved,
-                               **params)
+    request_task = RequestTask(ServiceInstance(service_id).run, saved, **params)
     result = request_task.run()
-    return {
-        "success": True,
-        "result": result,
-        "message": None,
-        "request_id": request_task.request_id
-    }
+    return {"success": True, "result": result, "message": None, "request_id": request_task.request_id}
 
 
 def service_run_async(saved: bool, params: str, service_id: str):
@@ -63,15 +57,10 @@ def service_run_async(saved: bool, params: str, service_id: str):
         params = json.loads(params)
     else:
         params = {}
-    params['service_id'] = service_id
+    params["service_id"] = service_id
     task = RequestTask(service_run_queue, saved, **params)
     task.async_run()
-    return {
-        "success": True,
-        "result": None,
-        "message": None,
-        "request_id": task.request_id
-    }
+    return {"success": True, "result": None, "message": None, "request_id": task.request_id}
 
 
 def service_run_result(request_id: str):
@@ -90,13 +79,5 @@ def service_run_result(request_id: str):
     """
     data = RequestTask.query_request_state(request_id)
     if data is None:
-        return {
-            "success": False,
-            "message": f"request {request_id} not found"
-        }
-    return {
-        "success": True,
-        "result": json.dumps(data, ensure_ascii=False),
-        "message": None,
-        "request_id": request_id
-    }
+        return {"success": False, "message": f"request {request_id} not found"}
+    return {"success": True, "result": json.dumps(data, ensure_ascii=False), "message": None, "request_id": request_id}

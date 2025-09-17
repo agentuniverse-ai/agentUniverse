@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/14 15:46
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_manager_base.py
 import copy
@@ -32,11 +32,15 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         """Register the component instance."""
         if component_instance_name in self._instance_obj_map.keys():
             if is_system_builtin(component_instance_obj):
-                LOGGER.info(f"Component name '{component_instance_name}' is already registered. "
-                            f"Skipping system built-in component in favor of user-configured component.")
+                LOGGER.info(
+                    f"Component name '{component_instance_name}' is already registered. "
+                    f"Skipping system built-in component in favor of user-configured component."
+                )
                 return
-            LOGGER.warn(f"{self._component_type.value} component object instance with name "
-                        f"'{component_instance_name}' already exists.")
+            LOGGER.warn(
+                f"{self._component_type.value} component object instance with name "
+                f"'{component_instance_name}' already exists."
+            )
             return
         self._instance_obj_map[component_instance_name] = component_instance_obj
         if component_instance_obj.default_symbol:
@@ -46,13 +50,14 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         """Unregister the component instance abstractmethod."""
         self._instance_obj_map.pop(component_instance_name)
 
-    def get_instance_obj(self, component_instance_name: str,
-                         appname: str = None, new_instance: bool = True) -> ComponentTypeVar:
+    def get_instance_obj(
+        self, component_instance_name: str, appname: str = None, new_instance: bool = True
+    ) -> ComponentTypeVar:
         """Return the component instance object."""
         if component_instance_name == "__default_instance__":
             return self.get_default_instance(new_instance)
         appname = appname or ApplicationConfigManager().app_configer.base_info_appname
-        instance_code = f'{appname}.{self._component_type.value.lower()}.{component_instance_name}'
+        instance_code = f"{appname}.{self._component_type.value.lower()}.{component_instance_name}"
         if new_instance:
             instance = self._instance_obj_map.get(instance_code)
             if instance:

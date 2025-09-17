@@ -13,20 +13,19 @@ from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
-SUPPORTED_FORMATS = {'jpg', 'jpeg', 'png', 'bmp', 'webp', 'tiff'}
+SUPPORTED_FORMATS = {"jpg", "jpeg", "png", "bmp", "webp", "tiff"}
 
 
 class ImageReader(Reader):
     """Image reader."""
 
-    languages: List[str] = ['en', 'ch_sim']
+    languages: List[str] = ["en", "ch_sim"]
     use_gpu: bool = False
     image_model: str = "microsoft/git-base-coco"
     _ocr_reader = None
     _description_pipeline = None
 
-    def _initialize_by_component_configer(
-            self, reader_configer: ComponentConfiger) -> 'ImageReader':
+    def _initialize_by_component_configer(self, reader_configer: ComponentConfiger) -> "ImageReader":
         """Initialize the reader by the ComponentConfiger object.
 
         Args:
@@ -49,8 +48,7 @@ class ImageReader(Reader):
             try:
                 import easyocr
             except ImportError:
-                raise ImportError(
-                    "easyocr is required. Install with: pip install easyocr")
+                raise ImportError("easyocr is required. Install with: pip install easyocr")
             self._ocr_reader = easyocr.Reader(self.languages, gpu=self.use_gpu)
         return self._ocr_reader
 
@@ -60,11 +58,8 @@ class ImageReader(Reader):
             try:
                 from transformers import pipeline
             except ImportError:
-                raise ImportError(
-                    "transformers is required. Install with: pip install transformers"
-                )
-            self._description_pipeline = pipeline("image-to-text",
-                                                  model=self.image_model)
+                raise ImportError("transformers is required. Install with: pip install transformers")
+            self._description_pipeline = pipeline("image-to-text", model=self.image_model)
         return self._description_pipeline
 
     def extract_text(self, image: Any) -> str:
@@ -76,12 +71,10 @@ class ImageReader(Reader):
     def generate_description(self, image: Any) -> str:
         """Generate description of the image content."""
         pipeline = self._get_description_pipeline()
-        description = pipeline(image)[0]['generated_text']
+        description = pipeline(image)[0]["generated_text"]
         return description
 
-    def _load_data(self,
-                   file: Union[str, Path],
-                   ext_info: Optional[Dict] = None) -> List[Document]:
+    def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
         """Load and process image file to extract text content.
 
         Args:
@@ -101,22 +94,18 @@ class ImageReader(Reader):
         try:
             from PIL import Image, ImageFile
         except ImportError as e:
-            raise ImportError(
-                "PIL is required. Install with: pip install Pillow") from e
+            raise ImportError("PIL is required. Install with: pip install Pillow") from e
 
         def parse_metadata(image: ImageFile) -> Dict[str, Any]:
             width, height = image.size
             channels = len(image.getbands())
             mode = image.mode
             metadata: Dict[str, Any] = {
-                'file_name': file.name,
-                'format': image_format,
-                'image_size': {
-                    'width': width,
-                    'height': height
-                },
-                'channel': channels,
-                'color_mode': mode
+                "file_name": file.name,
+                "format": image_format,
+                "image_size": {"width": width, "height": height},
+                "channel": channels,
+                "color_mode": mode,
             }
             if ext_info is not None:
                 metadata.update(ext_info)
@@ -128,24 +117,23 @@ class ImageReader(Reader):
             if not file.exists():
                 raise FileNotFoundError(f"Image file not found: {file}")
 
-            image_format = file.suffix.lower().lstrip('.')
+            image_format = file.suffix.lower().lstrip(".")
             if image_format not in SUPPORTED_FORMATS:
                 raise ValueError(
-                    f"Unsupported image format: {image_format}. "
-                    f"Supported formats are: {', '.join(SUPPORTED_FORMATS)}")
+                    f"Unsupported image format: {image_format}. Supported formats are: {', '.join(SUPPORTED_FORMATS)}"
+                )
 
             image: ImageFile = Image.open(file)
             ocr_text: str = self.extract_text(image)
             image_description: str = self.generate_description(image)
-            image_text = f"{ocr_text}\n{image_description}" if (
-                ocr_text.strip() and image_description.strip()
-            ) else f"{ocr_text}{image_description}"
+            image_text = (
+                f"{ocr_text}\n{image_description}"
+                if (ocr_text.strip() and image_description.strip())
+                else f"{ocr_text}{image_description}"
+            )
 
             metadata = parse_metadata(image)
-            metadata.update({
-                'has_text': bool(ocr_text.strip()),
-                'has_description': bool(image_description.strip())
-            })
+            metadata.update({"has_text": bool(ocr_text.strip()), "has_description": bool(image_description.strip())})
             return [Document(text=image_text, metadata=metadata)]
         except Exception as e:
             raise Exception(f"Error processing image {file}: {str(e)}")

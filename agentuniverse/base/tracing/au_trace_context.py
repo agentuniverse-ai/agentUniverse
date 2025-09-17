@@ -6,8 +6,7 @@ from typing import Optional
 
 from opentelemetry import trace, context
 from opentelemetry.sdk.trace.id_generator import RandomIdGenerator
-from opentelemetry.trace import format_trace_id, format_span_id, SpanContext, \
-    TraceFlags, NonRecordingSpan
+from opentelemetry.trace import format_trace_id, format_span_id, SpanContext, TraceFlags, NonRecordingSpan
 
 from agentuniverse.llm.llm_output import TokenUsage
 
@@ -40,8 +39,7 @@ class AuTraceContext:
         return cls()
 
     @classmethod
-    def from_trace_context(cls, trace_id: str, span_id: str,
-                           session_id: Optional[str] = None):
+    def from_trace_context(cls, trace_id: str, span_id: str, session_id: Optional[str] = None):
         instance = cls.__new__(cls)
         instance._session_id = session_id
         instance._trace_id = trace_id
@@ -66,10 +64,7 @@ class AuTraceContext:
             span_id_int = int(span_id, 16)
 
             span_context = SpanContext(
-                trace_id=trace_id_int,
-                span_id=span_id_int,
-                is_remote=True,
-                trace_flags=TraceFlags(0x01)
+                trace_id=trace_id_int, span_id=span_id_int, is_remote=True, trace_flags=TraceFlags(0x01)
             )
 
             span = NonRecordingSpan(span_context)
@@ -160,13 +155,8 @@ class AuTraceContext:
             return TokenUsage()
         return self._token_count_dict[span_id]
 
-
     def to_dict(self) -> dict:
-        return {
-            "session_id": self.session_id,
-            "trace_id": self.trace_id,
-            "span_id": self.span_id
-        }
+        return {"session_id": self.session_id, "trace_id": self.trace_id, "span_id": self.span_id}
 
     def __str__(self):
         return f"Context(session_id={self.session_id}, trace_id={self.trace_id}, span_id={self.span_id})"

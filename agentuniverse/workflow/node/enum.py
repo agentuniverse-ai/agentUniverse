@@ -11,13 +11,13 @@ from enum import Enum
 class NodeEnum(Enum):
     """The enumeration of the supported nodes."""
 
-    START = 'start'
-    END = 'end'
-    LLM = 'llm'
-    TOOL = 'tool'
-    KNOWLEDGE = 'knowledge'
-    AGENT = 'agent'
-    CONDITION = 'ifelse'
+    START = "start"
+    END = "end"
+    LLM = "llm"
+    TOOL = "tool"
+    KNOWLEDGE = "knowledge"
+    AGENT = "agent"
+    CONDITION = "ifelse"
 
     @staticmethod
     def to_value_list():
@@ -34,12 +34,12 @@ class NodeEnum(Enum):
 
 
 class NodeStatusEnum(Enum):
-    RUNNING = 'running'
-    SUCCEEDED = 'succeeded'
-    FAILED = 'failed'
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
 
 
 class ConditionComparisonEnum(Enum):
-    EQUAL = 'equal'
-    NOT_EQUAL = 'not_equal'
-    BLANK = 'blank'
+    EQUAL = "equal"
+    NOT_EQUAL = "not_equal"
+    BLANK = "blank"

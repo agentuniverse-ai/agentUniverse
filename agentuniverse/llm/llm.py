@@ -67,8 +67,7 @@ class LLM(ComponentBase):
 
     def init_channel(self):
         if self.channel and not self._channel_instance:
-            llm_channel: LLMChannel = LLMChannelManager().get_instance_obj(
-                component_instance_name=self.channel)
+            llm_channel: LLMChannel = LLMChannelManager().get_instance_obj(component_instance_name=self.channel)
             if not llm_channel:
                 return
 
@@ -108,9 +107,9 @@ class LLM(ComponentBase):
     def get_instance_code(self) -> str:
         """Return the full name of the llm."""
         appname = ApplicationConfigManager().app_configer.base_info_appname
-        return f'{appname}.{self.component_type.value.lower()}.{self.name}'
+        return f"{appname}.{self.component_type.value.lower()}.{self.name}"
 
-    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'LLM':
+    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> "LLM":
         """Initialize the LLM by the ComponentConfiger object.
 
         Args:
@@ -138,30 +137,30 @@ class LLM(ComponentBase):
         if component_configer.ext_info:
             self.ext_info = component_configer.ext_info
         self.tracing = component_configer.tracing
-        if 'max_context_length' in component_configer.configer.value:
-            self._max_context_length = component_configer.configer.value['max_context_length']
-        if 'channel' in component_configer.configer.value:
-            self.channel = component_configer.configer.value.get('channel')
+        if "max_context_length" in component_configer.configer.value:
+            self._max_context_length = component_configer.configer.value["max_context_length"]
+        if "channel" in component_configer.configer.value:
+            self.channel = component_configer.configer.value.get("channel")
         return self
 
     def set_by_agent_model(self, **kwargs):
-        """ Assign values of parameters to the LLM model in the agent configuration."""
+        """Assign values of parameters to the LLM model in the agent configuration."""
         # note: default shallow copy
         copied_obj = self.model_copy()
-        if 'model_name' in kwargs and kwargs['model_name']:
-            copied_obj.model_name = kwargs['model_name']
-        if 'temperature' in kwargs and kwargs['temperature']:
-            copied_obj.temperature = kwargs['temperature']
-        if 'request_timeout' in kwargs and kwargs['request_timeout']:
-            copied_obj.request_timeout = kwargs['request_timeout']
-        if 'max_tokens' in kwargs and kwargs['max_tokens']:
-            copied_obj.max_tokens = kwargs['max_tokens']
-        if 'max_retries' in kwargs and kwargs['max_retries']:
-            copied_obj.max_retries = kwargs['max_retries']
-        if 'streaming' in kwargs and kwargs['streaming']:
-            copied_obj.streaming = kwargs['streaming']
-        if 'max_context_length' in kwargs and kwargs['max_context_length']:
-            copied_obj._max_context_length = kwargs['max_context_length']
+        if "model_name" in kwargs and kwargs["model_name"]:
+            copied_obj.model_name = kwargs["model_name"]
+        if "temperature" in kwargs and kwargs["temperature"]:
+            copied_obj.temperature = kwargs["temperature"]
+        if "request_timeout" in kwargs and kwargs["request_timeout"]:
+            copied_obj.request_timeout = kwargs["request_timeout"]
+        if "max_tokens" in kwargs and kwargs["max_tokens"]:
+            copied_obj.max_tokens = kwargs["max_tokens"]
+        if "max_retries" in kwargs and kwargs["max_retries"]:
+            copied_obj.max_retries = kwargs["max_retries"]
+        if "streaming" in kwargs and kwargs["streaming"]:
+            copied_obj.streaming = kwargs["streaming"]
+        if "max_context_length" in kwargs and kwargs["max_context_length"]:
+            copied_obj._max_context_length = kwargs["max_context_length"]
         return copied_obj
 
     def max_context_length(self) -> int:
@@ -206,7 +205,7 @@ class LLM(ComponentBase):
                 return self._channel_instance._call(*args, **kwargs)
             return self._call(*args, **kwargs)
         except Exception as e:
-            LOGGER.error(f'Error in LLM call: {e}')
+            LOGGER.error(f"Error in LLM call: {e}")
             raise e
 
     @trace_llm
@@ -218,7 +217,7 @@ class LLM(ComponentBase):
                 return await self._channel_instance._acall(*args, **kwargs)
             return await self._acall(*args, **kwargs)
         except Exception as e:
-            LOGGER.error(f'Error in LLM acall: {e}')
+            LOGGER.error(f"Error in LLM acall: {e}")
             raise e
 
     def create_copy(self):

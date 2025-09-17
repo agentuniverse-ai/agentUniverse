@@ -8,14 +8,15 @@
 import os
 import httpx
 
-SSRF_PROXY_ALL_URL = os.getenv('SSRF_PROXY_ALL_URL', '')
-SSRF_PROXY_HTTP_URL = os.getenv('SSRF_PROXY_HTTP_URL', '')
-SSRF_PROXY_HTTPS_URL = os.getenv('SSRF_PROXY_HTTPS_URL', '')
+SSRF_PROXY_ALL_URL = os.getenv("SSRF_PROXY_ALL_URL", "")
+SSRF_PROXY_HTTP_URL = os.getenv("SSRF_PROXY_HTTP_URL", "")
+SSRF_PROXY_HTTPS_URL = os.getenv("SSRF_PROXY_HTTPS_URL", "")
 
-proxies = {
-    'http://': SSRF_PROXY_HTTP_URL,
-    'https://': SSRF_PROXY_HTTPS_URL
-} if SSRF_PROXY_HTTP_URL and SSRF_PROXY_HTTPS_URL else None
+proxies = (
+    {"http://": SSRF_PROXY_HTTP_URL, "https://": SSRF_PROXY_HTTPS_URL}
+    if SSRF_PROXY_HTTP_URL and SSRF_PROXY_HTTPS_URL
+    else None
+)
 
 
 def make_request(method, url, **kwargs):
@@ -28,24 +29,24 @@ def make_request(method, url, **kwargs):
 
 
 def get(url, **kwargs):
-    return make_request('GET', url, **kwargs)
+    return make_request("GET", url, **kwargs)
 
 
 def post(url, **kwargs):
-    return make_request('POST', url, **kwargs)
+    return make_request("POST", url, **kwargs)
 
 
 def put(url, **kwargs):
-    return make_request('PUT', url, **kwargs)
+    return make_request("PUT", url, **kwargs)
 
 
 def patch(url, **kwargs):
-    return make_request('PATCH', url, **kwargs)
+    return make_request("PATCH", url, **kwargs)
 
 
 def delete(url, **kwargs):
-    return make_request('DELETE', url, **kwargs)
+    return make_request("DELETE", url, **kwargs)
 
 
 def head(url, **kwargs):
-    return make_request('HEAD', url, **kwargs)
+    return make_request("HEAD", url, **kwargs)

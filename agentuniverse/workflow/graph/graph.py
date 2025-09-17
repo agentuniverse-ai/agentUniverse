@@ -19,16 +19,16 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 class Graph(nx.DiGraph):
     """The basic class of the graph."""
 
-    def build(self, workflow_id: str, config: dict) -> 'Graph':
+    def build(self, workflow_id: str, config: dict) -> "Graph":
         """Build the graph."""
-        nodes_config = config.get('nodes')
+        nodes_config = config.get("nodes")
         if not nodes_config:
-            raise ValueError('The nodes configuration is empty')
+            raise ValueError("The nodes configuration is empty")
         for node_config in nodes_config:
             self._add_graph_node(workflow_id, node_config)
-        edges_config = config.get('edges')
+        edges_config = config.get("edges")
         if not edges_config:
-            raise ValueError('The edges configuration is empty')
+            raise ValueError("The edges configuration is empty")
         for edge_config in edges_config:
             self._add_graph_edge(edge_config)
         if not nx.is_directed_acyclic_graph(self):
@@ -42,16 +42,15 @@ class Graph(nx.DiGraph):
             workflow_id: The workflow id.
             node_config: The node configuration.
         """
-        if node_config.get('type') not in NodeEnum.to_value_list():
-            raise ValueError('The node type is not supported')
-        node_id = node_config.get('id')
+        if node_config.get("type") not in NodeEnum.to_value_list():
+            raise ValueError("The node type is not supported")
+        node_id = node_config.get("id")
         if self.has_node(node_id):
             return
-        node_cls = NODE_CLS_MAPPING[node_config.get('type')]
-        node_type = node_config.pop('type')
-        node_instance = node_cls(type=NodeEnum.from_value(node_type), workflow_id=workflow_id,
-                                 **node_config)
-        node_config['type'] = node_type
+        node_cls = NODE_CLS_MAPPING[node_config.get("type")]
+        node_type = node_config.pop("type")
+        node_instance = node_cls(type=NodeEnum.from_value(node_type), workflow_id=workflow_id, **node_config)
+        node_config["type"] = node_type
         self.add_node(node_id, instance=node_instance, type=node_type)
 
     def _add_graph_edge(self, edge_config: dict) -> None:
@@ -60,8 +59,11 @@ class Graph(nx.DiGraph):
         Args:
             edge_config: The edge configuration.
         """
-        self.add_edge(edge_config.get('source_node_id'), edge_config.get('target_node_id'),
-                      source_handler=edge_config.get('source_handler'))
+        self.add_edge(
+            edge_config.get("source_node_id"),
+            edge_config.get("target_node_id"),
+            source_handler=edge_config.get("source_handler"),
+        )
 
     def run(self, workflow_output: WorkflowOutput) -> None:
         """Run the graph.
@@ -83,8 +85,9 @@ class Graph(nx.DiGraph):
                 break
             predecessor_node = next_node
 
-    def _get_next_node(self, workflow_output: WorkflowOutput, nodes: Any,
-                       predecessor_node: Optional[Node] = None) -> Optional[Node]:
+    def _get_next_node(
+        self, workflow_output: WorkflowOutput, nodes: Any, predecessor_node: Optional[Node] = None
+    ) -> Optional[Node]:
         """Get the next node in the graph.
 
         Args:
@@ -96,13 +99,10 @@ class Graph(nx.DiGraph):
         """
         if not predecessor_node:
             for node_id in nodes:
-                if self.nodes[node_id]['type'] == NodeEnum.START.value:
-                    return self.nodes[node_id]['instance']
+                if self.nodes[node_id]["type"] == NodeEnum.START.value:
+                    return self.nodes[node_id]["instance"]
         else:
-            predecessor_node_output: NodeOutput = workflow_output.workflow_node_results.get(
-                predecessor_node.id,
-                None
-            )
+            predecessor_node_output: NodeOutput = workflow_output.workflow_node_results.get(predecessor_node.id, None)
             source_handler = predecessor_node_output.edge_source_handler if predecessor_node_output else None
             successors = self.successors(predecessor_node.id)
             if not successors:
@@ -110,10 +110,10 @@ class Graph(nx.DiGraph):
             successors = list(successors)
             if source_handler:
                 for s in successors:
-                    if self.get_edge_data(predecessor_node.id, s).get('source_handler') == source_handler:
-                        return self.nodes[s]['instance']
+                    if self.get_edge_data(predecessor_node.id, s).get("source_handler") == source_handler:
+                        return self.nodes[s]["instance"]
             else:
-                return self.nodes[successors[0]]['instance']
+                return self.nodes[successors[0]]["instance"]
 
     @staticmethod
     def _has_node_been_executed(workflow_output: WorkflowOutput, node_id: str) -> bool:
@@ -128,8 +128,7 @@ class Graph(nx.DiGraph):
         return node_id in workflow_output.workflow_node_results
 
     @staticmethod
-    def _run_node(cur_node: Node = None,
-                  workflow_output: WorkflowOutput = None) -> None:
+    def _run_node(cur_node: Node = None, workflow_output: WorkflowOutput = None) -> None:
         """Run the node in the graph.
 
         Args:

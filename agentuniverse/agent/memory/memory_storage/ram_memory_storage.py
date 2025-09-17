@@ -20,7 +20,7 @@ class RamMemoryStorage(MemoryStorage):
 
     messages: Optional[Dict[str, Dict[str, List[Message]]]] = dict()
 
-    def add(self, message_list: List[Message], session_id: str = '', agent_id: str = '', **kwargs) -> None:
+    def add(self, message_list: List[Message], session_id: str = "", agent_id: str = "", **kwargs) -> None:
         """Add messages to the memory db.
 
         Args:
@@ -47,8 +47,7 @@ class RamMemoryStorage(MemoryStorage):
             else:
                 self.messages.get(session_id, {}).pop(agent_id, None)
 
-    def get(self, session_id: str = '', agent_id: str = '', top_k=10, **kwargs) -> \
-            List[Message]:
+    def get(self, session_id: str = "", agent_id: str = "", top_k=10, **kwargs) -> List[Message]:
         """Get messages from the memory db.
 
         Args:

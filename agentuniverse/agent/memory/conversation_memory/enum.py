@@ -12,14 +12,14 @@ from enum import Enum
 
 @enum.unique
 class ConversationMessageEnum(Enum):
-    INPUT = 'input'
-    OUTPUT = 'output'
+    INPUT = "input"
+    OUTPUT = "output"
 
 
 @enum.unique
 class ConversationMessageSourceType(Enum):
-    AGENT = 'agent'
-    TOOL = 'tool'
-    KNOWLEDGE = 'knowledge'
-    LLM = 'llm'
-    USER = 'user'
+    AGENT = "agent"
+    TOOL = "tool"
+    KNOWLEDGE = "knowledge"
+    LLM = "llm"
+    USER = "user"

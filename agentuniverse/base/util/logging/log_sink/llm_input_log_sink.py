@@ -17,9 +17,7 @@ class LLMInputLogSink(BaseFileLogSink):
     log_type: LogTypeEnum = LogTypeEnum.llm_input
 
     def process_record(self, record):
-        record["message"] = self.generate_log(
-            llm_input=record['extra'].get('llm_input')
-        )
+        record["message"] = self.generate_log(llm_input=record["extra"].get("llm_input"))
 
     def generate_log(self, llm_input: Union[str, dict]) -> str:
         return Monitor.get_invocation_chain_str() + f" LLM get an input."

@@ -26,10 +26,7 @@ class DocxReader(Reader):
         try:
             import docx2txt
         except ImportError:
-            raise ImportError(
-                "docx2txt is required to read Microsoft Word files: "
-                "`pip install docx2txt`"
-            )
+            raise ImportError("docx2txt is required to read Microsoft Word files: `pip install docx2txt`")
 
         if isinstance(file, str):
             file = Path(file)

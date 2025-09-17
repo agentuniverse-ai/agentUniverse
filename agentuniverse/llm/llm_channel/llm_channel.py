@@ -19,8 +19,9 @@ from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
-from agentuniverse.llm.llm_channel.langchain_instance.default_channel_langchain_instance import \
-    DefaultChannelLangchainInstance
+from agentuniverse.llm.llm_channel.langchain_instance.default_channel_langchain_instance import (
+    DefaultChannelLangchainInstance,
+)
 from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
 
 
@@ -45,8 +46,7 @@ class LLMChannel(ComponentBase):
     async_client: Any = None
     component_type: ComponentEnum = ComponentEnum.LLM_CHANNEL
 
-    def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'LLMChannel':
-
+    def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> "LLMChannel":
         super()._initialize_by_component_configer(component_configer)
         if hasattr(component_configer, "channel_name"):
             self.channel_name = component_configer.channel_name
@@ -74,15 +74,9 @@ class LLMChannel(ComponentBase):
             self.ext_headers = component_configer.configer.value.get("extra_headers", {})
         if component_configer.configer.value.get("extra_params"):
             self.ext_params = component_configer.configer.value.get("extra_params", {})
-            self.ext_params["stream_options"] = {
-                "include_usage": True
-            }
+            self.ext_params["stream_options"] = {"include_usage": True}
         else:
-            self.ext_params = {
-                "stream_options": {
-                    "include_usage": True
-                }
-            }
+            self.ext_params = {"stream_options": {"include_usage": True}}
         return self
 
     def create_copy(self):
@@ -99,19 +93,22 @@ class LLMChannel(ComponentBase):
             for key, value in config.items():
                 if not isinstance(key, str):
                     continue
-                if key == 'streaming':
+                if key == "streaming":
                     if self.model_support_stream is False:
                         value = False
-                if key == 'max_tokens':
+                if key == "max_tokens":
                     if self.model_support_max_tokens:
                         value = min(self.model_support_max_tokens, value) if value else self.model_support_max_tokens
-                if key == 'max_context_length':
+                if key == "max_context_length":
                     if self.model_support_max_context_length:
-                        value = min(self.model_support_max_context_length,
-                                    value) if value else self.model_support_max_context_length
-                if key == 'ext_params' and value and isinstance(value, dict):
+                        value = (
+                            min(self.model_support_max_context_length, value)
+                            if value
+                            else self.model_support_max_context_length
+                        )
+                if key == "ext_params" and value and isinstance(value, dict):
                     self.ext_params.update(value)
-                if key == 'ext_headers' and value and isinstance(value, dict):
+                if key == "ext_headers" and value and isinstance(value, dict):
                     self.ext_headers.update(value)
                 if not self.__dict__.get(key):
                     self.__dict__[key] = value
@@ -127,14 +124,15 @@ class LLMChannel(ComponentBase):
         return await self._acall(*args, **kwargs)
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.channel_model_config.get('streaming')
-        if 'stream' in kwargs:
-            streaming = kwargs.pop('stream')
+        streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.channel_model_config.get("streaming")
+        if "stream" in kwargs:
+            streaming = kwargs.pop("stream")
         if self.model_support_stream is False and streaming is True:
             streaming = False
         support_max_tokens = self.model_support_max_tokens
-        max_tokens = kwargs.pop('max_tokens', None) or self.channel_model_config.get('max_tokens',
-                                                                                     None) or support_max_tokens
+        max_tokens = (
+            kwargs.pop("max_tokens", None) or self.channel_model_config.get("max_tokens", None) or support_max_tokens
+        )
         if support_max_tokens:
             max_tokens = min(support_max_tokens, max_tokens)
 
@@ -144,12 +142,12 @@ class LLMChannel(ComponentBase):
         if not streaming:
             ext_params.pop("stream_options", None)
         self.client = self._new_client()
-        self.client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.channel_api_base
+        self.client.base_url = kwargs.pop("api_base") if kwargs.get("api_base") else self.channel_api_base
         chat_completion = self.client.chat.completions.create(
             messages=messages,
-            model=kwargs.pop('model', self.channel_model_name),
-            temperature=kwargs.pop('temperature', self.channel_model_config.get('temperature')),
-            stream=kwargs.pop('stream', streaming),
+            model=kwargs.pop("model", self.channel_model_name),
+            temperature=kwargs.pop("temperature", self.channel_model_config.get("temperature")),
+            stream=kwargs.pop("stream", streaming),
             max_tokens=max_tokens,
             extra_body=ext_params,
             extra_headers=kwargs.pop("extra_headers", self.ext_headers),
@@ -157,21 +155,26 @@ class LLMChannel(ComponentBase):
         )
         if not streaming:
             text = chat_completion.choices[0].message.content
-            return LLMOutput(text=text, raw=chat_completion.model_dump(),
-                             message=Message(content=chat_completion.choices[0].message.content,
-                                             type=chat_completion.choices[0].message.role))
+            return LLMOutput(
+                text=text,
+                raw=chat_completion.model_dump(),
+                message=Message(
+                    content=chat_completion.choices[0].message.content, type=chat_completion.choices[0].message.role
+                ),
+            )
         return self.generate_stream_result(chat_completion)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
-        streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.channel_model_config.get('streaming')
-        if 'stream' in kwargs:
-            streaming = kwargs.pop('stream')
+        streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.channel_model_config.get("streaming")
+        if "stream" in kwargs:
+            streaming = kwargs.pop("stream")
         if self.model_support_stream is False and streaming is True:
             streaming = False
 
         support_max_tokens = self.model_support_max_tokens
-        max_tokens = kwargs.pop('max_tokens', None) or self.channel_model_config.get('max_tokens',
-                                                                                     None) or support_max_tokens
+        max_tokens = (
+            kwargs.pop("max_tokens", None) or self.channel_model_config.get("max_tokens", None) or support_max_tokens
+        )
         if support_max_tokens:
             max_tokens = min(support_max_tokens, max_tokens)
         ext_params = self.ext_params.copy()
@@ -180,12 +183,12 @@ class LLMChannel(ComponentBase):
         if not streaming:
             ext_params.pop("stream_options", None)
         self.async_client = self._new_async_client()
-        self.async_client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.channel_api_base
+        self.async_client.base_url = kwargs.pop("api_base") if kwargs.get("api_base") else self.channel_api_base
         chat_completion = await self.async_client.chat.completions.create(
             messages=messages,
-            model=kwargs.pop('model', self.channel_model_name),
-            temperature=kwargs.pop('temperature', self.channel_model_config.get('temperature')),
-            stream=kwargs.pop('stream', streaming),
+            model=kwargs.pop("model", self.channel_model_name),
+            temperature=kwargs.pop("temperature", self.channel_model_config.get("temperature")),
+            stream=kwargs.pop("stream", streaming),
             max_tokens=max_tokens,
             extra_headers=kwargs.pop("extra_headers", self.ext_headers),
             extra_body=ext_params,
@@ -193,9 +196,13 @@ class LLMChannel(ComponentBase):
         )
         if not streaming:
             text = chat_completion.choices[0].message.content
-            return LLMOutput(text=text, raw=chat_completion.model_dump(),
-                             message=Message(content=chat_completion.choices[0].message.content,
-                                             type=chat_completion.choices[0].message.role))
+            return LLMOutput(
+                text=text,
+                raw=chat_completion.model_dump(),
+                message=Message(
+                    content=chat_completion.choices[0].message.content, type=chat_completion.choices[0].message.role
+                ),
+            )
         return self.agenerate_stream_result(chat_completion)
 
     def as_langchain(self) -> BaseLanguageModel:
@@ -218,7 +225,7 @@ class LLMChannel(ComponentBase):
         return len(encoding.encode(text))
 
     def max_context_length(self) -> int:
-        return self.channel_model_config.get('max_context_length')
+        return self.channel_model_config.get("max_context_length")
 
     def _new_client(self):
         """Initialize the openai client."""
@@ -228,10 +235,10 @@ class LLMChannel(ComponentBase):
             api_key=self.channel_api_key,
             organization=self.channel_organization,
             base_url=self.channel_api_base,
-            timeout=self.channel_model_config.get('request_timeout'),
-            max_retries=self.channel_model_config.get('max_retries'),
+            timeout=self.channel_model_config.get("request_timeout"),
+            max_retries=self.channel_model_config.get("max_retries"),
             http_client=httpx.Client(proxy=self.channel_proxy) if self.channel_proxy else None,
-            **(self.channel_model_config.get('client_args') or {}),
+            **(self.channel_model_config.get("client_args") or {}),
         )
 
     def _new_async_client(self):
@@ -242,10 +249,10 @@ class LLMChannel(ComponentBase):
             api_key=self.channel_api_key,
             organization=self.channel_organization,
             base_url=self.channel_api_base,
-            timeout=self.channel_model_config.get('request_timeout'),
-            max_retries=self.channel_model_config.get('max_retries'),
+            timeout=self.channel_model_config.get("request_timeout"),
+            max_retries=self.channel_model_config.get("max_retries"),
             http_client=httpx.AsyncClient(proxy=self.channel_proxy) if self.channel_proxy else None,
-            **(self.channel_model_config.get('client_args') or {}),
+            **(self.channel_model_config.get("client_args") or {}),
         )
 
     def generate_stream_result(self, stream: openai.Stream):
@@ -270,8 +277,7 @@ class LLMChannel(ComponentBase):
             chunk = chunk.model_dump()
 
         if len(chunk["choices"]) == 0:
-            return LLMOutput(text="", raw=chunk,
-                             usage=TokenUsage.from_openai(chunk.get('usage', {})))
+            return LLMOutput(text="", raw=chunk, usage=TokenUsage.from_openai(chunk.get("usage", {})))
         choice = chunk["choices"][0]
         message = choice.get("delta")
         text = message.get("content")
@@ -282,10 +288,10 @@ class LLMChannel(ComponentBase):
             text=text,
             raw=chat_completion.model_dump(),
             message=Message(content=text, type=role),
-            usage=TokenUsage.from_openai(chunk.get('usage', {}))
+            usage=TokenUsage.from_openai(chunk.get("usage", {})),
         )
 
     def get_instance_code(self) -> str:
         """Return the full name of the component."""
         appname = ApplicationConfigManager().app_configer.base_info_appname
-        return f'{appname}.{self.component_type.value.lower()}.{self.channel_name}'
+        return f"{appname}.{self.component_type.value.lower()}.{self.channel_name}"

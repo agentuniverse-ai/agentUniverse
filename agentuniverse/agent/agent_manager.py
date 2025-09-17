@@ -6,6 +6,7 @@
 # @FileName: agent_manager.py
 
 """Agents manager."""
+
 from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.component.component_manager_base import ComponentManagerBase

@@ -21,7 +21,7 @@ from agentuniverse.database.sqldb_wrapper_manager import SQLDBWrapperManager
 
 
 class BaseMemoryConverter(BaseModel):
-    """ The base class for memory converter used for converting between aU Message and SQLAlchemy model.
+    """The base class for memory converter used for converting between aU Message and SQLAlchemy model.
 
     Attributes:
         model_class: The SQLAlchemy model class.
@@ -61,18 +61,19 @@ def create_memory_model(table_name: str, DynamicBase: Any) -> Any:
 
     class MemoryModel(DynamicBase):
         """The default memory model for SqlAlchemyMemory."""
+
         __tablename__ = table_name
         id = Column(Integer, primary_key=True, autoincrement=True)
-        session_id = Column(String(100), default='')
-        agent_id = Column(String(100), default='')
-        source = Column(String(500), default='')
+        session_id = Column(String(100), default="")
+        agent_id = Column(String(100), default="")
+        source = Column(String(500), default="")
         message = Column(Text)
         gmt_created = Column(DateTime, default=func.now())
 
         __table_args__ = (
-            Index('idx_session_id_source', 'session_id', 'agent_id', 'source'),
-            Index('idx_agent_id_source', 'agent_id', 'source'),
-            Index('idx_gmt_created', 'gmt_created'),
+            Index("idx_session_id_source", "session_id", "agent_id", "source"),
+            Index("idx_agent_id_source", "agent_id", "source"),
+            Index("idx_gmt_created", "gmt_created"),
         )
 
     return MemoryModel
@@ -87,13 +88,15 @@ class DefaultMemoryConverter(BaseMemoryConverter):
 
     def from_sql_model(self, sql_message: Any) -> Message:
         """Convert a SQLAlchemy model to a Message instance."""
-        return Message.from_dict({'id': sql_message.id, **json.loads(sql_message.message)})
+        return Message.from_dict({"id": sql_message.id, **json.loads(sql_message.message)})
 
     def to_sql_model(self, message: Message, session_id: str = None, agent_id: str = None, source: str = None) -> Any:
         """Convert a Message instance to a SQLAlchemy model."""
         return self.model_class(
-            session_id=session_id, agent_id=agent_id, source=source,
-            message=json.dumps(message.to_dict(), ensure_ascii=False)
+            session_id=session_id,
+            agent_id=agent_id,
+            source=source,
+            message=json.dumps(message.to_dict(), ensure_ascii=False),
         )
 
     def get_sql_model_class(self) -> Any:
@@ -111,13 +114,12 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
         _sqldb_wrapper (SQLDBWrapper): The SQLDBWrapper instance to use for the memory.
     """
 
-    sqldb_table_name: Optional[str] = 'memory'
+    sqldb_table_name: Optional[str] = "memory"
     sqldb_wrapper_name: Optional[str] = None
     memory_converter: BaseMemoryConverter = None
     _sqldb_wrapper: SQLDBWrapper = None
 
-    def _initialize_by_component_configer(self,
-                                          memory_storage_config: ComponentConfiger) -> 'SqlAlchemyMemoryStorage':
+    def _initialize_by_component_configer(self, memory_storage_config: ComponentConfiger) -> "SqlAlchemyMemoryStorage":
         """Initialize the SqlAlchemyMemoryStorage by the ComponentConfiger object.
 
         Args:
@@ -126,12 +128,12 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             SqlAlchemyMemoryStorage: A SqlAlchemyMemoryStorage instance.
         """
         super()._initialize_by_component_configer(memory_storage_config)
-        if getattr(memory_storage_config, 'sqldb_table_name', None):
+        if getattr(memory_storage_config, "sqldb_table_name", None):
             self.sqldb_table_name = memory_storage_config.sqldb_table_name
-        if getattr(memory_storage_config, 'sqldb_wrapper_name', None):
+        if getattr(memory_storage_config, "sqldb_wrapper_name", None):
             self.sqldb_wrapper_name = memory_storage_config.sqldb_wrapper_name
         if self.sqldb_wrapper_name is None:
-            raise Exception('`sqldb_wrapper_name` is not set')
+            raise Exception("`sqldb_wrapper_name` is not set")
         # initialize the memory converter if not set
         if self.memory_converter is None:
             self.memory_converter = DefaultMemoryConverter(self.sqldb_table_name)
@@ -141,8 +143,9 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
         """Initialize the database."""
         self._sqldb_wrapper = SQLDBWrapperManager().get_instance_obj(self.sqldb_wrapper_name)
         if self._sqldb_wrapper is None:
-            raise Exception('The sqldb_wrapper for the `sqldb_wrapper_name` was not found,'
-                            ' please check the `sqldb_wrapper_name`.')
+            raise Exception(
+                "The sqldb_wrapper for the `sqldb_wrapper_name` was not found, please check the `sqldb_wrapper_name`."
+            )
         self._create_table_if_not_exists()
 
     def _create_table_if_not_exists(self) -> None:
@@ -167,9 +170,9 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             query = session.query(model_class)
             # construct query based on the provided session_id and agent_id
             if session_id is not None:
-                query = query.filter(getattr(model_class, 'session_id') == session_id)
+                query = query.filter(getattr(model_class, "session_id") == session_id)
             if agent_id is not None:
-                query = query.filter(getattr(model_class, 'agent_id') == agent_id)
+                query = query.filter(getattr(model_class, "agent_id") == agent_id)
 
             # execute delete and commit the session
             query.delete(synchronize_session=False)
@@ -190,13 +193,18 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
         with self._sqldb_wrapper.get_session()() as session:
             for message in message_list:
                 session.add(
-                    self.memory_converter.to_sql_model(message=message, session_id=session_id if session_id else None,
-                                                       agent_id=agent_id if agent_id else None,
-                                                       source=message.source if message.source else None))
+                    self.memory_converter.to_sql_model(
+                        message=message,
+                        session_id=session_id if session_id else None,
+                        agent_id=agent_id if agent_id else None,
+                        source=message.source if message.source else None,
+                    )
+                )
             session.commit()
 
-    def get(self, session_id: str = None, agent_id: str = None, top_k=10, source: str = None, **kwargs) -> List[
-        Message]:
+    def get(
+        self, session_id: str = None, agent_id: str = None, top_k=10, source: str = None, **kwargs
+    ) -> List[Message]:
         """Get messages from the memory db.
 
         Args:
@@ -217,24 +225,24 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
 
             # conditionally add session_id to the query
             if session_id:
-                session_id_col = getattr(model_class, 'session_id')
+                session_id_col = getattr(model_class, "session_id")
                 conditions.append(session_id_col == session_id)
 
             # conditionally add agent_id to the query
             if agent_id:
-                agent_id_col = getattr(model_class, 'agent_id')
+                agent_id_col = getattr(model_class, "agent_id")
                 conditions.append(agent_id_col == agent_id)
 
             # conditionally add source to the query
             if source:
-                source_col = getattr(model_class, 'source')
+                source_col = getattr(model_class, "source")
                 conditions.append(source_col == source)
-            if kwargs.get('type'):
-                if isinstance(kwargs['type'], list):
-                    types = kwargs['type']
-                if not isinstance(kwargs['type'], str):
-                    types = [kwargs['type']]
-                type_col = getattr(model_class, 'type')
+            if kwargs.get("type"):
+                if isinstance(kwargs["type"], list):
+                    types = kwargs["type"]
+                if not isinstance(kwargs["type"], str):
+                    types = [kwargs["type"]]
+                type_col = getattr(model_class, "type")
                 conditions.append(conditions.append(type_col.in_(types)))
 
             # build the query with dynamic conditions

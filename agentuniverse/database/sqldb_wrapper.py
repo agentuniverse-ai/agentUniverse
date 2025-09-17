@@ -12,16 +12,14 @@ from typing import Optional, Sequence, Any, Dict
 from langchain_community.utilities.sql_database import SQLDatabase
 from sqlalchemy.orm import sessionmaker
 
-from ..base.config.application_configer.application_config_manager import (
-    ApplicationConfigManager
-)
+from ..base.config.application_configer.application_config_manager import ApplicationConfigManager
 from ..base.config.component_configer.configers.sqldb_wrapper_config import SQLDBWrapperConfiger
 from ..base.component.component_base import ComponentBase
 from ..base.component.component_enum import ComponentEnum
 
 
 class SQLDBWrapper(ComponentBase):
-    """A sql DB wrapper based on sqlalchemy and langchain sql database, """
+    """A sql DB wrapper based on sqlalchemy and langchain sql database,"""
 
     # Basic attributes of the service class.
     component_type: ComponentEnum = ComponentEnum.SQLDB_WRAPPER
@@ -35,14 +33,12 @@ class SQLDBWrapper(ComponentBase):
         arbitrary_types_allowed = True
 
     def get_instance_code(self) -> str:
-        """Generate the full instance code from sql db wrapper name. """
+        """Generate the full instance code from sql db wrapper name."""
         app_cfg_manager: ApplicationConfigManager = ApplicationConfigManager()
         appname = app_cfg_manager.app_configer.base_info_appname
         return f"{appname}.{self.component_type.value.lower()}.{self.name}"
 
-    def initialize_by_component_configer(self,
-                                         db_wrapper_configer: SQLDBWrapperConfiger
-                                         ) -> 'SQLDBWrapper':
+    def initialize_by_component_configer(self, db_wrapper_configer: SQLDBWrapperConfiger) -> "SQLDBWrapper":
         """Initialize the SQLDBWrapper by the ComponentConfiger object.
 
         Args:
@@ -62,7 +58,6 @@ class SQLDBWrapper(ComponentBase):
         """
         return self.sql_database._execute(command=command)
 
-
     def run_with_str_return(self, command: str) -> str:
         """
         Execute given sql command and return a str result, intended to be used
@@ -81,23 +76,18 @@ class SQLDBWrapper(ComponentBase):
             self.db_wrapper_configer.engine_args.setdefault(
                 "json_serializer", lambda x: json.dumps(x, ensure_ascii=False)
             )
-            self.db_wrapper_configer.sql_database_args.setdefault(
-                "sample_rows_in_table_info", 3
-            )
-            self.db_wrapper_configer.sql_database_args.setdefault(
-                "max_string_length", -1
-            )
+            self.db_wrapper_configer.sql_database_args.setdefault("sample_rows_in_table_info", 3)
+            self.db_wrapper_configer.sql_database_args.setdefault("max_string_length", -1)
             self.__sql_database = SQLDatabase.from_uri(
                 engine_args=self.db_wrapper_configer.engine_args,
                 database_uri=self.db_wrapper_configer.db_uri,
-                **self.db_wrapper_configer.sql_database_args
+                **self.db_wrapper_configer.sql_database_args,
             )
         return self.__sql_database
 
-
     def get_session(self):
         """
-           Get a sqlalchemy session, used for operating with orm.
+        Get a sqlalchemy session, used for operating with orm.
         """
         if self.db_session:
             return self.db_session

@@ -22,21 +22,17 @@ class RagRouter(ComponentBase):
     name: Optional[str] = None
     description: Optional[str] = None
 
-    def rag_route(self, query: Query, store_list: List[str]) \
-            -> List[Tuple[Query, str]]:
+    def rag_route(self, query: Query, store_list: List[str]) -> List[Tuple[Query, str]]:
         """Accept query a list of store instance name, and return a list of
-         query-store pair."""
+        query-store pair."""
         return self._rag_route(query, store_list)
 
-    def _rag_route(self, query: Query, store_list: List[str]) \
-            -> List[Tuple[Query, str]]:
+    def _rag_route(self, query: Query, store_list: List[str]) -> List[Tuple[Query, str]]:
         """Accept query a list of store instance name, and return a list of
-         query-store pair."""
+        query-store pair."""
         pass
 
-    def _initialize_by_component_configer(self,
-                                         rag_router_config: ComponentConfiger) \
-            -> 'RagRouter':
+    def _initialize_by_component_configer(self, rag_router_config: ComponentConfiger) -> "RagRouter":
         """Initialize the rag router by the ComponentConfiger object.
 
         Args:

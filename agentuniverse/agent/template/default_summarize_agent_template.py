@@ -10,17 +10,16 @@ from agentuniverse.agent.template.rag_agent_template import RagAgentTemplate
 
 
 class SummarizeRagAgentTemplate(RagAgentTemplate):
-
     def input_keys(self) -> list[str]:
-        return ['input', 'summarize_content']
+        return ["input", "summarize_content"]
 
     def output_keys(self) -> list[str]:
-        return ['output']
+        return ["output"]
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
-        agent_input['input'] = input_object.get_data('input')
-        agent_input['summarize_content'] = input_object.get_data('summarize_content')
+        agent_input["input"] = input_object.get_data("input")
+        agent_input["summarize_content"] = input_object.get_data("summarize_content")
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
-        return {**agent_result, 'output': agent_result['output']}
+        return {**agent_result, "output": agent_result["output"]}
