@@ -47,6 +47,7 @@ from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.base.util.memory_util import generate_messages, get_memory_string
 from agentuniverse.base.util.system_util import process_dict_with_funcs, is_system_builtin
 from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
+from agentuniverse.base.monitoring import get_monitor, monitor_agent_execution, profile_operation
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.prompt.chat_prompt import ChatPrompt
@@ -107,26 +108,42 @@ class Agent(ComponentBase, ABC):
             AuTraceManager().trace_context.set_trace_id(trace_id)
 
     @trace_agent
+    @monitor_agent_execution("agent")
+    @profile_operation("agent_execution")
     def run(self, **kwargs) -> OutputObject:
         """Agent instance running entry.
 
         Returns:
             OutputObject: Agent execution result
         """
-        self.input_check(kwargs)
-        input_object = InputObject(kwargs)
+        agent_name = self.agent_model.info.get('name', 'unknown') if self.agent_model else 'unknown'
+        
+        try:
+            self.input_check(kwargs)
+            input_object = InputObject(kwargs)
 
-        self.update_trace_context(input_object)
+            self.update_trace_context(input_object)
 
-        agent_input = self.pre_parse_input(input_object)
+            agent_input = self.pre_parse_input(input_object)
 
-        planner_result = self.execute(input_object, agent_input)
+            planner_result = self.execute(input_object, agent_input)
 
-        agent_result = self.parse_result(planner_result)
+            agent_result = self.parse_result(planner_result)
 
-        self.output_check(agent_result)
-        output_object = OutputObject(agent_result)
-        return output_object
+            self.output_check(agent_result)
+            output_object = OutputObject(agent_result)
+            
+            # 记录成功执行
+            monitor = get_monitor()
+            monitor.record_agent_execution(agent_name, 0.0, True)  # 时间由装饰器记录
+            
+            return output_object
+            
+        except Exception as e:
+            # 记录失败执行
+            monitor = get_monitor()
+            monitor.record_agent_execution(agent_name, 0.0, False)
+            raise
 
     @trace_agent
     async def async_run(self, **kwargs) -> OutputObject:

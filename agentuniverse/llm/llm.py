@@ -19,6 +19,7 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.base.util.logging.logging_util import LOGGER
+from agentuniverse.base.cache import cached_method
 from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 from agentuniverse.llm.llm_channel.llm_channel_manager import LLMChannelManager
 from agentuniverse.llm.llm_output import LLMOutput
@@ -171,7 +172,7 @@ class LLM(ComponentBase):
         """
         return self._max_context_length
 
-    @abstractmethod
+    @cached_method(cache_name="token_count", ttl=86400)  # 缓存24小时
     def get_num_tokens(self, text: str) -> int:
         """Get the number of tokens present in the text.
 
@@ -180,7 +181,6 @@ class LLM(ComponentBase):
         Args:
             text: The string input to tokenize.
             model: The model you want to calculate
-
 
         Returns:
             The integer number of tokens in the text.
