@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 import asyncio
 import inspect
+import re
 # @Time    : 2024/3/13 14:29
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
@@ -10,7 +11,7 @@ from abc import abstractmethod
 import json
 from typing import List, Optional, get_type_hints, Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from langchain.tools import Tool as LangchainTool
 
 from agentuniverse.agent.action.tool.enum import ToolTypeEnum
@@ -20,6 +21,91 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.util.common_util import parse_and_check_json_markdown
+
+
+class InputValidator:
+    """输入验证器"""
+    
+    # 最大输入长度
+    MAX_INPUT_LENGTH = 10000
+    
+    # 危险的模式
+    DANGEROUS_PATTERNS = [
+        r'<script[^>]*>.*?</script>',  # XSS脚本
+        r'javascript:',                # JavaScript协议
+        r'data:text/html',             # 数据URI
+        r'vbscript:',                  # VBScript协议
+        r'onload\s*=',                 # 事件处理器
+        r'onerror\s*=',                # 事件处理器
+        r'eval\s*\(',                  # eval函数
+        r'exec\s*\(',                  # exec函数
+        r'import\s+os',                # 系统导入
+        r'__import__\s*\(',            # 动态导入
+        r'subprocess\.',               # 子进程调用
+        r'os\.system',                 # 系统调用
+    ]
+    
+    @classmethod
+    def validate_input(cls, key: str, value: Any) -> bool:
+        """验证输入参数"""
+        try:
+            # 检查字符串长度
+            if isinstance(value, str):
+                if len(value) > cls.MAX_INPUT_LENGTH:
+                    return False
+                
+                # 检查危险模式
+                for pattern in cls.DANGEROUS_PATTERNS:
+                    if re.search(pattern, value, re.IGNORECASE | re.DOTALL):
+                        return False
+                
+                # 检查SQL注入模式
+                sql_patterns = [
+                    r'union\s+select',
+                    r'drop\s+table',
+                    r'delete\s+from',
+                    r'insert\s+into',
+                    r'update\s+set',
+                    r'--',  # SQL注释
+                    r'/\*.*?\*/',  # SQL注释
+                ]
+                for pattern in sql_patterns:
+                    if re.search(pattern, value, re.IGNORECASE):
+                        return False
+            
+            # 检查列表长度
+            elif isinstance(value, list):
+                if len(value) > 1000:  # 限制列表大小
+                    return False
+                
+                # 递归验证列表中的元素
+                for item in value:
+                    if not cls.validate_input(f"{key}_item", item):
+                        return False
+            
+            # 检查字典大小
+            elif isinstance(value, dict):
+                if len(value) > 100:  # 限制字典大小
+                    return False
+                
+                # 递归验证字典中的值
+                for k, v in value.items():
+                    if not cls.validate_input(f"{key}_{k}", v):
+                        return False
+            
+            return True
+            
+        except Exception:
+            return False
+    
+    @classmethod
+    def sanitize_input(cls, value: Any) -> Any:
+        """清理输入数据"""
+        if isinstance(value, str):
+            # 移除控制字符
+            sanitized = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', value)
+            return sanitized.strip()
+        return value
 
 
 class ToolInput(BaseModel):
@@ -85,11 +171,19 @@ class Tool(ComponentBase):
         return await self.async_execute(**kwargs)
 
     def input_check(self, kwargs: dict) -> None:
-        """Check whether the input parameters of the tool contain input keys of the tool"""
+        """Enhanced input parameter validation"""
         if self.input_keys:
             for key in self.input_keys:
                 if key not in kwargs.keys():
-                    raise Exception(f'{self.get_instance_code()} - The input must include key: {key}.')
+                    raise ValueError(f'{self.get_instance_code()} - The input must include key: {key}.')
+                
+                # 验证输入参数
+                value = kwargs[key]
+                if not InputValidator.validate_input(key, value):
+                    raise ValueError(f'{self.get_instance_code()} - Invalid input for key: {key}')
+                
+                # 清理输入数据
+                kwargs[key] = InputValidator.sanitize_input(value)
 
     @trace_tool
     def langchain_run(self, *args, callbacks=None, **kwargs):
