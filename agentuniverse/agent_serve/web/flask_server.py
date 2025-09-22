@@ -11,6 +11,7 @@ from werkzeug.local import LocalProxy
 from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 from .request_task import RequestTask
+from .web_request_task import WebRequestTask
 from .thread_with_result import ThreadPoolExecutorWithReturnValue
 from .web_util import request_param, service_run_queue, make_standard_response, \
     FlaskServerManager
@@ -139,6 +140,28 @@ def service_run(service_id: str, params: dict, saved: bool = False):
     return make_standard_response(success=True, result=result,
                                   request_id=request_task.request_id)
 
+@app.route("/service_run_stream", methods=['POST'])
+@request_param
+def service_run_stream(service_id: str, params: dict, saved: bool = False):
+    """Synchronous invocation of an agent service, return in stream form.
+
+    Request Args:
+        service_id(`str`): The id of the agent service.
+        params(`dict`): Json style params passed to service.
+        saved(`bool`): Save the request and result into database.
+
+    Return:
+        A SSE(Server-Sent Event) stream.
+    """
+    params = {} if params is None else params
+    params['service_id'] = service_id
+    params['streaming'] = True
+    task = RequestTask(service_run_queue, saved, **params)
+    context_prefix = get_context_prefix()
+    response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
+    response.headers['X-Request-ID'] = task.request_id
+    return response
+
 @app.route("/agent/list", methods=['GET'])
 def agent_list():
     try:
@@ -172,9 +195,9 @@ def agent_list():
             "error": str(e)
         }), 500
 
-@app.route("/service_run_stream", methods=['POST'])
+@app.route("/web_service_run_stream", methods=['POST'])
 @request_param
-def service_run_stream(service_id: str = None,
+def web_service_run_stream(service_id: str = None,
                        params: dict = None,
                        saved: bool = True,
                        ):
@@ -191,12 +214,10 @@ def service_run_stream(service_id: str = None,
     params = {} if params is None else params
     params['service_id'] = service_id
     params['streaming'] = True
-    task = RequestTask(service_run_queue, saved, **params)
+    task = WebRequestTask(service_run_queue, saved, **params)
     context_prefix = get_context_prefix()
     response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix),mimetype="text/event-stream")
     response.headers['X-Request-ID'] = task.request_id
-    # response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
-    # response.headers['Access-Control-Allow-Credentials'] = 'true'
     return response
 
 # 初始化数据库（注册关闭、初始化等钩子）

@@ -3,7 +3,7 @@ import sqlite3
 import os
 from flask import g
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'agent_universe.db')
+DB_PATH = os.path.join(os.path.dirname(__file__), 'web_agent_universe.db')
 
 def get_db():
     if 'db' not in g:
