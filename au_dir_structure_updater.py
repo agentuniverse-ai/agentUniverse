@@ -4,7 +4,7 @@
 # @Time    : 2024/12/17 20:54
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: dir_structure_updater.py
+# @FileName: au_dir_structure_updater.py
 import os
 import shutil
 from pathlib import Path

@@ -5,3 +5,5 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: __init__.py
+
+from .xlsx_reader import XlsxReader

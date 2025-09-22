@@ -4,7 +4,7 @@
 # @Time    : 2024/6/25 16:56
 # @Author  : weizjajj 
 # @Email   : weizhongjie.wzj@antgroup.com
-# @FileName: translation_planner.py
+# @FileName: translation_by_token_agent.py
 from queue import Queue
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter

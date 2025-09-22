@@ -11,6 +11,7 @@ from typing import Dict, Type, List, Optional
 from agentuniverse.agent.action.knowledge.reader.file.docx_reader import DocxReader
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
+from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 
@@ -18,6 +19,7 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".pdf": PdfReader,
     ".docx": DocxReader,
     ".pptx": PptxReader,
+    ".xlsx": XlsxReader,
 }
 
 

@@ -4,7 +4,7 @@
 # @Time    : 2024/10/24 21:19
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: rag_template.py
+# @FileName: demo_openai_protocol_agent.py
 
 
 from agentuniverse.agent.input_object import InputObject

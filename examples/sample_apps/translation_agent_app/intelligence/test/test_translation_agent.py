@@ -4,7 +4,7 @@
 # @Time    : 2024/4/1 14:32
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: test_rag_agent.py
+# @FileName: test_translation_agent.py
 import unittest
 
 from agentuniverse.agent.agent import Agent

@@ -1,0 +1,6 @@
+name: 'jina_reranker'
+description: 'reranker use jina api'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.jina_reranker'
+  class: 'JinaReranker'

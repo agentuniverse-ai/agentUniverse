@@ -4,7 +4,7 @@
 # @Time    : 2024/7/26 10:10
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: llm.py
+# @FileName: llm_constant.py
 # llm model name list
 LLM_MODEL_NAME = {
     'demo_llm': ['gpt-4o', 'gpt-4o-mini', 'o1', 'o3-mini', 'qwen-max', 'qwen-long', 'qwen-plus',

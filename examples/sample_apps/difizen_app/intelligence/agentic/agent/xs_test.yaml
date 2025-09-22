@@ -1,0 +1,10 @@
+info:
+  name: xs_test
+  description: xs test
+profile:
+  workflow_id: workflow_726
+action: {}
+metadata:
+  class: WorkflowAgent
+  module: agentuniverse.agent.default.workflow_agent.workflow_agent
+  type: AGENT

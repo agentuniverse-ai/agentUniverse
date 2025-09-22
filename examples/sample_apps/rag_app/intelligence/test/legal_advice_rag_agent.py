@@ -4,7 +4,7 @@
 # @Time    : 2024/5/8 11:44
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: law_chat_bot.py
+# @FileName: legal_advice_rag_agent.py
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager

@@ -3,7 +3,7 @@
 # @Time    : 2024/3/18 10:50
 # @Author  : heji
 # @Email   : lc299034@antgroup.com
-# @FileName: expressing_planner.py
+# @FileName: nl2api_planner.py
 """Expressing planner module."""
 from langchain.tools import Tool as LangchainTool
 from langchain_core.output_parsers import StrOutputParser
