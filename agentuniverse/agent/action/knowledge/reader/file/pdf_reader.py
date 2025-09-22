@@ -4,7 +4,7 @@
 # @Time    : 2024/3/18 14:21
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: pdf_parser.py
+# @FileName: pdf_reader.py
 from pathlib import Path
 from typing import List, Optional, Dict, Union
 

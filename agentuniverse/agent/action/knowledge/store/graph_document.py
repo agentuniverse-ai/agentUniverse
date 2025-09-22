@@ -4,7 +4,7 @@
 # @Time    : 2024/7/22 18:16
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: image_document.py
+# @FileName: graph_document.py
 from .document import Document
 
 try:

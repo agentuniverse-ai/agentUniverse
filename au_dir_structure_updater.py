@@ -4,7 +4,7 @@
 # @Time    : 2024/12/17 20:54
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: dir_structure_updater.py
+# @FileName: au_dir_structure_updater.py
 import os
 import shutil
 from pathlib import Path
@@ -193,7 +193,7 @@ def migrate_files(source_root, target_root):
             'target': 'bootstrap/platform'
         },
         {
-            'source': 'app/boostrap/product_application.py',
+            'source': 'app/bootstrap/product_application.py',
             'target': 'bootstrap/platform'
         },
         {
@@ -201,7 +201,7 @@ def migrate_files(source_root, target_root):
             'target': 'boostrap/intelligence'
         },
         {
-            'source': 'app/boostrap/server_application.py',
+            'source': 'app/bootstrap/server_application.py',
             'target': 'boostrap/intelligence'
         },
     ]

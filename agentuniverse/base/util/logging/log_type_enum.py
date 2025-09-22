@@ -4,7 +4,7 @@
 # @Time    : 2024/12/5 16:22
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: log_type_const.py
+# @FileName: log_type_enum.py
 from enum import Enum
 
 

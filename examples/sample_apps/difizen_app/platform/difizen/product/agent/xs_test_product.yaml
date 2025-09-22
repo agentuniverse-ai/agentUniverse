@@ -1,0 +1,9 @@
+id: xs_test
+nickname: xs_test
+avatar: ''
+opening_speech: ''
+type: AGENT
+metadata:
+  class: AgentProduct
+  module: agentuniverse_product.base.agent_product
+  type: PRODUCT

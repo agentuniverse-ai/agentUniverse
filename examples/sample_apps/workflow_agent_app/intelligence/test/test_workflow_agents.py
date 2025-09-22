@@ -4,7 +4,7 @@
 # @Time    : 2024/6/7 10:49
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: test_discussion_agents.py
+# @FileName: test_workflow_agents.py
 import unittest
 
 from agentuniverse.agent.agent import Agent

@@ -171,11 +171,11 @@ metadata:
 ```
 This component requires configuring DASHSCOPE_API_KEY in the environment variables.
 
-### [HierarchicalRegexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/hierarchical_regex_text_spliter.py)
+### [HierarchicalRegexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/hierarchical_regex_text_splitter.py)
 
 This component splits the original text into multiple hierarchical levels using specified regex rules, forming a tree-like document structure. Users need to create a custom definition file, with an example as follows:
 ```yaml
-name: 'hierarchical_regex_text_spliter'
+name: 'hierarchical_regex_text_splitter'
 description: 'extract keywords from query'
 merge_first: True
 hierarchical_index:
@@ -189,7 +189,7 @@ llm:
   model_name: qwen-plus
 metadata:
   type: 'DOC_PROCESSOR'
-  module: 'agentuniverse.agent.action.knowledge.doc_processor.hierarchical_regex_text_spliter'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.hierarchical_regex_text_splitter'
   class: 'HierarchicalRegexTextSplitter'
 ```
 - merge_first: If set to True, it merges the input List[Document] into a single document before splitting.

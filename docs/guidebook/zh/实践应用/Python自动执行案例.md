@@ -2,7 +2,7 @@
 ## 案例说明
 本案例基于ReactAgentTemplate，搭建了一个简单可以自动生成python代码并执行的案例。
 
-该案例基于千问大模型和`goolge_search`功能，使用前需要您在环境变量中配置`DASHSCOPE_API_KEY`、`SERPER_API_KEY`。
+该案例基于千问大模型和`google_search`功能，使用前需要您在环境变量中配置`DASHSCOPE_API_KEY`、`SERPER_API_KEY`。
 
 ## 快速开始
 ### 配置API密钥

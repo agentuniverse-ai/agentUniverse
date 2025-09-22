@@ -4,7 +4,7 @@
 # @Time    : 2025/1/17 14:50
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: llm_first_token_log_sink.py
+# @FileName: agent_first_token_log_sink.py
 
 from typing import Union
 

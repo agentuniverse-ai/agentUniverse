@@ -13,6 +13,7 @@ from loguru import logger
 
 from pydantic import BaseModel
 
+from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.base.annotation.singleton import singleton
@@ -20,7 +21,7 @@ from agentuniverse.base.config.configer import Configer
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
-from agentuniverse.base.util.tracing.au_trace_manager import AuTraceManager
+from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 
 LLM_INVOCATION_SUBDIR = "llm_invocation"
 AGENT_INVOCATION_SUBDIR = "agent_invocation"
@@ -40,52 +41,27 @@ class Monitor(BaseModel):
             self.activate = config.get('activate', False)
             self.log_activate = config.get('log_activate', True)
 
-    def trace_llm_input(self, source: str, llm_input: Union[str, dict]) -> None:
+    @staticmethod
+    def trace_llm_input(source: str, llm_input: Union[str, dict]) -> None:
         """Trace the llm input."""
-        if self.log_activate:
-            logger.bind(
-                log_type=LogTypeEnum.llm_input,
-                llm_input=llm_input,
-                context_prefix=get_context_prefix()
-            ).info("Trace llm input.")
+        logger.bind(
+            log_type=LogTypeEnum.llm_input,
+            llm_input=llm_input,
+            context_prefix=get_context_prefix()
+        ).info("Trace llm input.")
 
-    def trace_llm_invocation(self, source: str, llm_input: Union[str, dict], llm_output: Union[str, dict],
+    @staticmethod
+    def trace_llm_invocation(source: str, llm_input: Union[str, dict], llm_output: Union[str, dict],
                              cost_time: float = None) -> None:
-        """Trace the llm invocation and save it to the monitor jsonl file."""
-        if self.activate:
-            try:
-                import jsonlines
-            except ImportError:
-                raise ImportError(
-                    "jsonlines is required to trace llm invocation: `pip install jsonlines`"
-                )
-            # get the current time
-            date = datetime.datetime.now()
-            llm_invocation = {
-                "source": source,
-                "date": date.strftime("%Y-%m-%d %H:%M:%S"),
-                "llm_input": llm_input,
-                "llm_output": llm_output,
-            }
-            # files are stored in hours
-            filename = f"llm_{date.strftime('%Y-%m-%d-%H')}.jsonl"
-            # file path to save
-            path_save = os.path.join(str(self._get_or_create_subdir(LLM_INVOCATION_SUBDIR)), filename)
+        logger.bind(
+            log_type=LogTypeEnum.llm_invocation,
+            used_token=Monitor.get_token_usage(),
+            cost_time=cost_time,
+            llm_output=llm_output,
+            context_prefix=get_context_prefix()
+        ).info("Trace llm invocation.")
 
-            # write to jsonl
-            with jsonlines.open(path_save, 'a') as writer:
-                writer.write(llm_invocation)
-
-        if self.log_activate:
-            logger.bind(
-                log_type=LogTypeEnum.llm_invocation,
-                used_token=Monitor.get_token_usage(),
-                cost_time=cost_time,
-                llm_output=llm_output,
-                context_prefix=get_context_prefix()
-            ).info("Trace llm input.")
-
-    def trace_llm_token_usage(self, llm_obj: object, llm_input: dict, output_str: str) -> None:
+    def trace_llm_token_usage(self, llm_obj: object, llm_input: dict, output: LLMOutput) -> None:
         """ Trace the token usage of the given LLM object.
         Args:
             llm_obj(object): LLM object.
@@ -93,11 +69,13 @@ class Monitor(BaseModel):
             output_str(str): LLM output.
         """
         trace_id = AuTraceManager().get_trace_id()
+
         # trace token usage for a complete request chain based on trace id
         if trace_id:
+            token_usage: dict = self.get_llm_token_usage(llm_obj, llm_input,
+                                                         output)
             old_token_usage: dict = FrameworkContextManager().get_context(trace_id + '_token_usage')
             if old_token_usage is not None:
-                token_usage: dict = self.get_llm_token_usage(llm_obj, llm_input, output_str)
                 if token_usage:
                     Monitor.add_token_usage(token_usage)
 
@@ -277,17 +255,20 @@ class Monitor(BaseModel):
         return invocation_chain_str
 
     @staticmethod
-    def get_llm_token_usage(llm_obj: object, llm_input: dict, output_str: str) -> dict:
+    def get_llm_token_usage(llm_obj: object, llm_input: dict, output: LLMOutput) -> dict:
         """ Calculate the token usage of the given LLM object.
         Args:
             llm_obj(object): LLM object.
             llm_input(dict): Dictionary of LLM input.
-            output_str(str): LLM output.
+            output(LLMOutput): LLM output.
 
         Returns:
             dict: Dictionary of token usage including the completion_tokens, prompt_tokens, and total_tokens.
         """
         try:
+            if output.usage and output.usage.completion_tokens > 0 and output.usage.prompt_tokens > 0:
+                return output.usage.to_dict()
+
             if llm_obj is None or llm_input is None:
                 return {}
             messages = llm_input.get('kwargs', {}).pop('messages', None)
@@ -309,18 +290,15 @@ class Monitor(BaseModel):
                             if content is not None:
                                 input_str += str(m.content) + '\n'
 
-            if input_str == '' or output_str == '':
+            if input_str == '' or output.text == '':
                 return {}
 
-            usage = {}
             # the number of input and output tokens is calculated by the llm `get_num_tokens` method.
             if hasattr(llm_obj, 'get_num_tokens'):
-                completion_tokens = llm_obj.get_num_tokens(output_str)
-                prompt_tokens = llm_obj.get_num_tokens(input_str)
-                total_tokens = completion_tokens + prompt_tokens
-                usage = {'completion_tokens': completion_tokens, 'prompt_tokens': prompt_tokens,
-                         'total_tokens': total_tokens}
-            return usage
+                output.usage = TokenUsage()
+                output.usage.text_out = llm_obj.get_num_tokens(output.text)
+                output.usage.text_in = llm_obj.get_num_tokens(input_str)
+            return output.usage.to_dict()
         except Exception as e:
             return {}
 

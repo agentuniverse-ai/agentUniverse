@@ -42,5 +42,5 @@ example_key = 'AnExampleKey'
 ##search api
 #SEARCHAPI_API_KEY='xxxxxx'
 #
-##bing seacrh
+##bing search
 #BING_SUBSCRIPTION_KEY='xxxxxx'

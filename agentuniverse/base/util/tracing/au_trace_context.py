@@ -6,66 +6,22 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: au_trace_context.py
 
-import threading
-import uuid
-from typing import Optional
+import warnings
+
+from agentuniverse.base.tracing import au_trace_context as new_module
 
 
-class AuTraceContext:
-    def __init__(self, session_id: Optional[str] = None,
-                 trace_id: Optional[str] = None,
-                 span_id: Optional[str] = None):
-        self._session_id = session_id
-        self._trace_id = trace_id or self._generate_id()
-        self._span_id = span_id or '0'
-        self._span_id_counter = 0
-        self._lock = threading.Lock()
-
-    @classmethod
-    def new_context(cls):
-        return cls()
-
-    @staticmethod
-    def _generate_id() -> str:
-        return uuid.uuid4().hex
-
-    @property
-    def session_id(self) -> str:
-        return self._session_id
-
-    @property
-    def trace_id(self) -> str:
-        return self._trace_id
-
-    @property
-    def span_id(self) -> str:
-        return self._span_id
-
-    def set_session_id(self, session_id: str):
-        self._session_id = session_id
-
-    def set_trace_id(self, trace_id: str):
-        self._trace_id = trace_id
-
-    def set_span_id(self, span_id: str):
-        self._span_id = span_id
-
-    def gen_child_span_id(self) -> str:
-        with self._lock:
-            child_span_id = self.span_id + '.' + str(self._span_id_counter)
-            self._span_id_counter += 1
-            return child_span_id
+def __getattr__(name):
+    if hasattr(new_module, name):
+        warnings.warn(
+            f"Importing {name} from 'agentuniverse.base.util.tracing.au_trace_context' "
+            "is deprecated and will be removed in future. "
+            f"Please use 'from agentuniverse.base.tracing.au_trace_context import {name}' instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return getattr(new_module, name)
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
-    def to_dict(self) -> dict:
-        return {
-            "session_id": self.session_id,
-            "trace_id": self.trace_id,
-            "span_id": self.span_id
-        }
-
-    def __str__(self):
-        return f"Context(session_id={self.session_id}, trace_id={self.trace_id}, span_id={self.span_id})"
-
-    def __repr__(self):
-        return self.__str__()
+__all__ = getattr(new_module, '__all__', [])

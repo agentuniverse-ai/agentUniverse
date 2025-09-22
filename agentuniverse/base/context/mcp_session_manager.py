@@ -32,23 +32,56 @@ DEFAULT_STREAMABLE_HTTP_TIMEOUT = timedelta(seconds=30)
 DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT = timedelta(seconds=60 * 5)
 
 class SyncAsyncExitStack:
+    """A bridge that lets sync code use async context managers and calls.
+
+        Internally, it spins up a portal (via AnyIO) and wraps async context
+        managers so they can be entered/exited under a regular `ExitStack`.
+        Useful in places where the call site is synchronous but the underlying
+        connections/clients are async.
+
+        Attributes:
+            _portal_cm: The AnyIO blocking portal context manager.
+            _portal: The portal object to schedule async work from sync code.
+            _stack: A regular `ExitStack` hosting wrapped async context managers.
+        """
+
     def __init__(self) -> None:
+        """Initialize an AnyIO portal and a local ExitStack."""
         self._portal_cm = start_blocking_portal()
         self._portal = self._portal_cm.__enter__()
         self._stack: ExitStack = ExitStack()
 
     def run_async(self, func, *args, **kwargs):
-        """use portal to run async code"""
+        """Invoke an async function from sync context via the portal.
+
+        Args:
+            func: An async callable (e.g., `session.initialize`).
+            *args: Positional args forwarded to the callable.
+            **kwargs: Keyword args forwarded to the callable.
+
+        Returns:
+            Any: The result of the awaited function.
+        """
         return self._portal.call(func, *args, **kwargs)
 
     def enter_async_context(self, async_cm):
+        """Enter an async context manager from sync code.
+
+                Args:
+                    async_cm: An async context manager to wrap.
+
+                Returns:
+                    Any: The wrapped context manager resource handle.
+                """
         sync_cm = self._portal.wrap_async_context_manager(async_cm)
         return self._stack.enter_context(sync_cm)
 
     def callback(self, func: Callable, *args, **kwargs):
+        """Register a callback on the underlying ExitStack via the portal."""
         return self._portal.call(self._stack.callback, func, *args, **kwargs)
 
     def close(self):
+        """Close the ExitStack and tear down the AnyIO blocking portal."""
         try:
             self._stack.close()
         finally:
@@ -67,16 +100,37 @@ def pick_exit_stack():
 
 
 class MCPTempClient:
+    """A temporary MCP client that auto-connects and cleans up via `async with`.
+
+        Example:
+            >>> async with MCPTempClient({"transport": "stdio", "command": "uvx", "args": ["my-server"]}) as cli:
+            ...     session = cli.session
+            ...     # use session ...
+        """
     def __init__(self, connection_args: dict):
+        """Create a temp client with connection parameters.
+
+               Args:
+                   connection_args: Passed to MCPSessionManager.connect_to_server(...).
+               """
         self.exit_stack = AsyncExitStack()
         self.connection_args = connection_args
         self.__session = None
 
     @property
     def session(self) -> ClientSession:
+        """The established `ClientSession` after entering the context."""
         return self.__session
 
     async def __aenter__(self) -> "MCPTempClient":
+        """Connect to server and expose a session within an AsyncExitStack.
+
+                Returns:
+                    MCPTempClient: self with `session` field initialized.
+
+                Raises:
+                    Exception: Propagates connection/initialization errors.
+                """
         try:
             session = await MCPSessionManager().connect_to_server(
                 server_name="tmp_client",
@@ -100,7 +154,18 @@ class MCPTempClient:
 
 @singleton
 class MCPSessionManager:
-    """A manager class to manage different mcp server session."""
+    """A manager class to manage different mcp server session.
+
+    Features:
+        - Support for stdio / SSE / websocket / streamable_http transports.
+        - Sync and async helper methods for connecting.
+        - Session caching keyed by `server_name`.
+        - Exit stack management (async or sync-bridged).
+
+    ContextVars:
+        __mcp_session_dict: Stores {server_name: ClientSession}.
+        __exit_stack: Stores AsyncExitStack or SyncAsyncExitStack.
+    """
 
     def __init__(self):
         """Init an empty context variable dict and a thread lock used when
@@ -131,13 +196,24 @@ class MCPSessionManager:
         self.__mcp_session_dict.set(None)
 
 
-    def save_mcp_session(self):
+    def save_mcp_session(self) -> dict:
+        """Serialize current MCP session handles for later recovery.
+
+        Returns:
+            dict: Contains both session dict and exit stack instances.
+        """
         return {
             'mcp_session_dict': self.__mcp_session_dict.get(None),
             'exit_stack': self.__exit_stack.get(None)
         }
 
-    def recover_mcp_session(self, mcp_session_dict, exit_stack):
+    def recover_mcp_session(self, mcp_session_dict, exit_stack) -> None:
+        """Recover MCP sessions and exit stack into the current context.
+
+        Args:
+            mcp_session_dict: Previously saved session mapping.
+            exit_stack: Previously saved exit stack instance.
+        """
         self.__mcp_session_dict.set(mcp_session_dict)
         self.__exit_stack.set(exit_stack)
 
@@ -147,13 +223,19 @@ class MCPSessionManager:
         transport: Literal["stdio", "sse", "websocket", "streamable_http"] = "stdio",
         **kwargs,
     ) -> ClientSession:
+        """Get (or create) a session synchronously for the given server.
+
+        Args:
+            server_name: Unique key for caching the connection.
+            transport: Transport type.
+            **kwargs: Passed to the underlying connect method.
+
+        Returns:
+            ClientSession: The connected session.
+        """
         if self.mcp_session_dict.get(server_name):
             return self.mcp_session_dict.get(server_name)
-        return self.connect_to_server_sync(
-            server_name=server_name,
-            transport=transport,
-            **kwargs
-        )
+        return self.connect_to_server_sync(server_name=server_name, transport=transport, **kwargs)
 
     async def get_mcp_server_session(
         self,
@@ -161,13 +243,19 @@ class MCPSessionManager:
         transport: Literal["stdio", "sse", "websocket", "streamable_http"] = "stdio",
         **kwargs,
     ) -> ClientSession:
+        """Get (or create) a session asynchronously for the given server.
+
+        Args:
+            server_name: Unique key for caching the connection.
+            transport: Transport type.
+            **kwargs: Passed to the underlying async connect method.
+
+        Returns:
+            ClientSession: The connected session.
+        """
         if self.mcp_session_dict.get(server_name):
             return self.mcp_session_dict.get(server_name)
-        return await self.connect_to_server(
-            server_name=server_name,
-            transport=transport,
-            **kwargs
-        )
+        return await self.connect_to_server(server_name=server_name, transport=transport, **kwargs)
 
     async def connect_to_server(
         self,
@@ -176,12 +264,19 @@ class MCPSessionManager:
         exit_stack: AsyncExitStack = None,
         **kwargs,
     ) -> ClientSession:
-        """Connect to an MCP server using either stdio or SSE.
+        """Connect to an MCP server (async) using the specified transport.
+
         Args:
-            server_name: Name to identify this server connection
-            transport: Type of transport to use ("stdio" or "sse"), defaults to "stdio"
-            exit_stack: Use a temp exit_stack to get an temp session
-            **kwargs: Additional arguments to pass to the specific connection method
+            server_name: Name to identify and cache this server connection.
+            transport: One of "stdio", "sse", "websocket", "streamable_http".
+            exit_stack: Optional temporary stack; if not provided, use manager's stack.
+            **kwargs: Transport-specific parameters (see methods below).
+
+        Returns:
+            ClientSession: The connected/initialized session.
+
+        Raises:
+            ValueError: If required kwargs are missing or transport is unsupported.
         """
         if transport == "sse":
             if "url" not in kwargs:
@@ -246,12 +341,20 @@ class MCPSessionManager:
         transport: Literal["stdio", "sse", "websocket", "streamable_http"] = "stdio",
         **kwargs,
     ) -> ClientSession:
-        """Connect to an MCP server using either stdio or SSE.
+        """Connect to an MCP server using stdio (async).
+
         Args:
-            server_name: Name to identify this server connection
-            transport: Type of transport to use ("stdio" or "sse"), defaults to "stdio"
-            exit_stack: Use a temp exit_stack to get an temp session
-            **kwargs: Additional arguments to pass to the specific connection method
+            server_name: Name to identify this server connection.
+            command: Command to execute (e.g., a launcher).
+            args: Command arguments.
+            env: Environment variables for the command (PATH is ensured).
+            encoding: Character encoding for stdio.
+            encoding_error_handler: How to handle encoding errors.
+            session_kwargs: Extra kwargs for `ClientSession`.
+            exit_stack: Optional temp stack to bind lifetime.
+
+        Returns:
+            ClientSession: Initialized and ready to use.
         """
         if transport == "sse":
             if "url" not in kwargs:
@@ -343,6 +446,7 @@ class MCPSessionManager:
         server_params = StdioServerParameters(
             command=command,
             args=args,
+            env=env,
             encoding=encoding,
             encoding_error_handler=encoding_error_handler,
         )
@@ -397,6 +501,7 @@ class MCPSessionManager:
         server_params = StdioServerParameters(
             command=command,
             args=args,
+            env=env,
             encoding=encoding,
             encoding_error_handler=encoding_error_handler,
         )

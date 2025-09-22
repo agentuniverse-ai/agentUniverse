@@ -25,7 +25,7 @@ from .dal.entity.request_do import RequestDO
 from .thread_with_result import ThreadWithReturnValue
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from ...agent.output_object import OutputObject
-from agentuniverse.base.util.tracing.au_trace_manager import AuTraceManager
+from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 

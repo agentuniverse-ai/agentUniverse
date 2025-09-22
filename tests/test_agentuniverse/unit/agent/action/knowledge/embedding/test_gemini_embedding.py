@@ -3,7 +3,7 @@
 # @Time    : 2025/2/13 20:00
 # @Author  : wozhapen
 # @Email   : wozhapen@gmail.com
-# @FileName: test_embedding.py
+# @FileName: test_gemini_embedding.py
 import asyncio
 import unittest
 import os

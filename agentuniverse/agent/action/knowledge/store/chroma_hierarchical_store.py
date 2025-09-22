@@ -4,7 +4,7 @@
 # @Time    : 2024/8/30 15:13
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: chroma_hierarchichal_store.py
+# @FileName: chroma_hierarchical_store.py
 
 from typing import List, Any, Optional
 from chromadb.api.models.Collection import Collection

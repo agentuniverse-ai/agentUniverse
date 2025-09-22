@@ -24,6 +24,27 @@ Note - 对于版本的额外说明。
 ***************************************************
 
 # 版本更新记录
+## [0.0.18] - 2025-07-10
+### Added
+- 新增基于OTel协议的智能体应用可观测能力
+制定aU智能体应用的观测标准，基于OTel(OpenTelemetry)协议，对智能体、模型、工具等关键组件的token消耗、耗时、成功率等核心指标以及调用链（trace）进行全面采集与观测，并适配 SigNoz、Jaeger、Prometheus 等主流观测框架，从而实现对智能体全生命周期的可观测性支持。
+
+- 新增异步SLS日志Sink、Sender组件
+
+### Fixed
+- MCP服务调用Stdio模式下env参数支持用户配置透传
+
+### Note
+- 第三方包依赖变更（格式：原版本->新版本，只包含一个版本号为新引入）
+  - openai ("1.13.3" -> "1.55.3")
+  - opentelemetry-api ("^1.25.0")
+  - opentelemetry-sdk ("^1.25.0")
+  - opentelemetry-semantic-conventions (">=0.48b0")
+  - opentelemetry-exporter-otlp-proto-http ("^1.25.0")
+  - httpx ("0.27.2" -> ">=0.27.2")
+  - jsonlines ("^4.0.0")
+- 其他代码优化与文档更新
+
 ## [0.0.17] - 2025-05-22
 ### Added
 - 新增MCP接入与发布能力

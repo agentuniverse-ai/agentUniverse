@@ -27,9 +27,12 @@ class TokenTextSplitter(DocProcessor):
     @property
     def splitter(self) -> Splitter:
         if not self.__splitter:
-            self.__splitter = Splitter(separator=self.separator,
-                                       chunk_size=self.chunk_size,
-                                       chunk_overlap=self.chunk_overlap)
+            self.__splitter = Splitter(
+            encoding_name=self.encoding_name,
+            model_name=self.model_name,
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap
+        )
         return self.__splitter
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> \

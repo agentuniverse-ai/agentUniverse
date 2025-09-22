@@ -4,7 +4,7 @@
 # @Time    : 2024/3/12 14:29
 # @Author  : jerry.zzw 
 # @Email   : jerry.zzw@antgroup.com
-# @FileName: config_manager.py
+# @FileName: configer.py
 import os
 import re
 from typing import Optional, Callable

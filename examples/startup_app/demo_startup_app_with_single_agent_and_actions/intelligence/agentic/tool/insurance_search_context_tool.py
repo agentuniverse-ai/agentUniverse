@@ -4,7 +4,7 @@
 # @Time    : 2024/11/12 11:59
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: search_context_tool.py
+# @FileName: insurance_search_context_tool.py
 import json
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput

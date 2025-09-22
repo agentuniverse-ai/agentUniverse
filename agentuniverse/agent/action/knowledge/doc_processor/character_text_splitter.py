@@ -4,7 +4,7 @@
 # @Time    : 2024/8/5 14:37
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: text_splitter.py
+# @FileName: character_text_splitter.py
 from typing import List, Optional
 from langchain.text_splitter import CharacterTextSplitter as Splitter
 

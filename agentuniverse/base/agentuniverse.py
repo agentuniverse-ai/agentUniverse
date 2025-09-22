@@ -33,7 +33,7 @@ from agentuniverse.agent_serve.web.rpc.grpc.grpc_server_booster import set_grpc_
 from agentuniverse.agent_serve.web.web_booster import ACTIVATE_OPTIONS
 from agentuniverse.agent_serve.web.post_fork_queue import POST_FORK_QUEUE
 from agentuniverse.agent_serve.web.web_util import FlaskServerManager
-
+from agentuniverse.base.tracing.otel.telemetry_manager import TelemetryManager
 
 @singleton
 class AgentUniverse(object):
@@ -92,6 +92,9 @@ class AgentUniverse(object):
             configer.value.get('SUB_CONFIG_PATH', {}).get('log_config_path'),
             config_path)
         init_loggers(log_config_path)
+
+        # Init OTEL configs
+        TelemetryManager().init_from_config(configer.value.get('OTEL', {}))
 
         # init web request task database
         RequestLibrary(configer=configer)

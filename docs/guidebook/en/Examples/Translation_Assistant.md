@@ -14,17 +14,17 @@ During the translation process, the priority is to ascertain whether the model's
 
 Implementing this translation in agentUniverse involves the following steps:
 1. Define prompts related to translation, with three for short text and three for long text. Relevant files include:
-   - [Short Text Init Prompt](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/prompt/translation/translation_init_en.yaml)
-   - [Short Text Reflection Prompt](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/prompt/translation/translation_reflection_en.yaml)
-   - [Short Text Improve Prompt](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/prompt/translation/translation_improve_en.yaml)
-   - [Long Text Init Prompt](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/prompt/translation/multi_translation_init_en.yaml)
-   - [Long Text Reflection Prompt](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/prompt/translation/multi_translation_improve_en.yaml)
-   - [Long Text Improve Prompt](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/prompt/translation/multi_translation_improve_en.yaml)  
+   - [Short Text Init Prompt](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/prompt/translation/translation_init_en.yaml)
+   - [Short Text Reflection Prompt](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/prompt/translation/translation_reflection_en.yaml)
+   - [Short Text Improve Prompt](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/prompt/translation/translation_improve_en.yaml)
+   - [Long Text Init Prompt](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/prompt/translation/multi_translation_init_en.yaml)
+   - [Long Text Reflection Prompt](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/prompt/translation/multi_translation_improve_en.yaml)
+   - [Long Text Improve Prompt](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/prompt/translation/multi_translation_improve_en.yaml)  
 2. Define three agents  
-   - [Short Text Translation Work Agent](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_work_agent.yaml)
-   - [Short Text Translation Reflection Agent](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_reflection_agent.yaml)  
-   - [Short Text Translation Improvement Agent](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_improve_agent.yaml)  
-   These agents switch their prompts based on whether the task involves translating long or short texts. The specific logic for this switching mechanism is detailed in the [agent file](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_agent.py).
+   - [Short Text Translation Work Agent](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_work_agent.yaml)
+   - [Short Text Translation Reflection Agent](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_reflection_agent.yaml)  
+   - [Short Text Translation Improvement Agent](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_improve_agent.yaml)  
+   These agents switch their prompts based on whether the task involves translating long or short texts. The specific logic for this switching mechanism is detailed in the [agent file](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_agent.py).
 
 3. Define the collaborative work process of the three agents
 The collaborative process is illustrated in the earlier-mentioned flowchart of multi-agent collaboration. 
@@ -32,17 +32,17 @@ The collaborative process is illustrated in the earlier-mentioned flowchart of m
 ![](../../_picture/translation_execute_flow.png)    
 
 
-For a deeper dive into the processes, refer to the [detailed code file](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_by_token_agent.py).  
-The [configuration file](../../../../examples/sample_apps/traslation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_agent.yaml) for the collaborative agents.
+For a deeper dive into the processes, refer to the [detailed code file](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_by_token_agent.py).  
+The [configuration file](../../../../examples/sample_apps/translation_agent_app/intelligence/agentic/agent/agent_instance/translation_agent_case/translation_agent.yaml) for the collaborative agents.
 
 ### Demonstration Code  
-[Code Link](../../../../examples/sample_apps/traslation_agent_app/intelligence/test/test_translation_agent.py)
+[Code Link](../../../../examples/sample_apps/translation_agent_app/intelligence/test/test_translation_agent.py)
 
-[Long Text](../../../../examples/sample_apps/traslation_agent_app/intelligence/test/translation_data/long_text.txt)  
-[Short Text](../../../../examples/sample_apps/traslation_agent_app/intelligence/test/translation_data/short_text.txt)  
+[Long Text](../../../../examples/sample_apps/translation_agent_app/intelligence/test/translation_data/long_text.txt)  
+[Short Text](../../../../examples/sample_apps/translation_agent_app/intelligence/test/translation_data/short_text.txt)  
 
-[Translation Of Long Text](../../../../examples/sample_apps/traslation_agent_app/intelligence/test/translation_data/short_text_result.txt)  
-[Translation Of Short Text](../../../../examples/sample_apps/traslation_agent_app/intelligence/test/translation_data/long_text_result.txt)  
+[Translation Of Long Text](../../../../examples/sample_apps/translation_agent_app/intelligence/test/translation_data/short_text_result.txt)  
+[Translation Of Short Text](../../../../examples/sample_apps/translation_agent_app/intelligence/test/translation_data/long_text_result.txt)  
 
 ### Demonstration Results
 We can see that using agentUniverse maintains consistency with the results of the original translation_agent project, which hasa been successfully replicated.
