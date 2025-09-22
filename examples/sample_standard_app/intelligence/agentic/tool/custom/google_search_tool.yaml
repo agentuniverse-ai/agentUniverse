@@ -1,0 +1,63 @@
+name: 'google_search_tool'
+description: |
+  增强的Google搜索工具，支持多种搜索类型和参数配置。
+  
+  工具输入参数说明：
+    - input (必填): 搜索查询词，描述你希望查询的具体信息
+    - search_type (可选): 搜索类型，可选值: "search"(普通搜索), "images"(图片搜索), "news"(新闻搜索), "places"(地点搜索)，默认为"search"
+    - k (可选): 返回结果数量，默认为10
+    - gl (可选): 地理位置代码，如"us"(美国), "cn"(中国)，默认为"us"
+    - hl (可选): 语言代码，如"en"(英语), "zh"(中文)，默认为"en"
+  
+  特性:
+    - 支持普通搜索、图片搜索、新闻搜索、地点搜索
+    - 可配置返回结果数量和地理位置
+    - 支持多语言搜索
+    - 提供格式化的搜索结果
+  
+  示例工具输入：
+    示例1: 普通搜索
+      ```json
+      {
+        "input": "人工智能最新发展"
+      }
+      ```
+    示例2: 图片搜索
+      ```json
+      {
+        "input": "美丽的风景",
+        "search_type": "images",
+        "k": 5
+      }
+      ```
+    示例3: 新闻搜索
+      ```json
+      {
+        "input": "科技新闻",
+        "search_type": "news",
+        "gl": "cn",
+        "hl": "zh"
+      }
+      ```
+    示例4: 地点搜索
+      ```json
+      {
+        "input": "北京餐厅",
+        "search_type": "places",
+        "gl": "cn"
+      }
+      ```
+  
+  注意:
+    - 需要在环境变量中配置SERPER_API_KEY
+    - 每月有2500次免费查询额度
+    - 如未配置API密钥，将返回模拟结果
+tool_type: 'func'
+input_keys: ['input']
+serper_api_key: '${SERPER_API_KEY}'
+default_k: 10
+default_gl: 'us'
+default_hl: 'en'
+# The placeholder "${ROOT_PACKAGE}" is mapped to the value of "ROOT_PACKAGE" defined in the config.toml file.
+# It allows you to conveniently manage multiple different agent applications by configuring the root package value.
+meta_class: '${ROOT_PACKAGE}.intelligence.agentic.tool.custom.google_search_tool.GoogleSearchTool'
