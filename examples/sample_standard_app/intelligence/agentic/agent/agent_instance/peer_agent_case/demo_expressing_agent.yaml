@@ -34,5 +34,5 @@ profile:
     prompt_processor:
       type: stuff
 memory:
-  name: ''
+  name: 'demo_memory'
 meta_class: agentuniverse.agent.template.expressing_agent_template.ExpressingAgentTemplate

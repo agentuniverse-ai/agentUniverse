@@ -45,4 +45,6 @@ action:
     - 'python_runner'
 #  knowledge:
 #    - 'law_knowledge'
+memory:
+  name: 'demo_memory'
 meta_class: 'agentuniverse.agent.template.react_agent_template.ReActAgentTemplate'

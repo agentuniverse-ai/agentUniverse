@@ -36,7 +36,7 @@ profile:
     name: 'qwen-max'
     temperature: 0.4
 memory:
-  name: ''
+  name: 'demo_memory'
 action:
   knowledge:
     - ''

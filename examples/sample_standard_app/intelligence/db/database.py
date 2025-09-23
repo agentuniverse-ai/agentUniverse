@@ -3,7 +3,7 @@ import sqlite3
 import os
 from flask import g
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'web_agent_universe.db')
+DB_PATH = os.path.join(os.path.dirname(__file__), 'agent_universe_web.db')
 
 def get_db():
     if 'db' not in g:
@@ -25,10 +25,11 @@ def init_db():
             request_id TEXT NOT NULL,
             query TEXT,
             session_id TEXT NOT NULL,
-            user_id TEXT NOT NULL,
             state TEXT DEFAULT 'finished',
             result TEXT,
-            gmt_creat TEXT DEFAULT (datetime('now', 'localtime')),
+            steps TEXT,                  -- ✅ 新增字段
+            additional_args TEXT,        -- ✅ 新增字段
+            gmt_create TEXT DEFAULT (datetime('now', 'localtime')),
             gmt_modified TEXT DEFAULT (datetime('now', 'localtime'))
         )
         ''')

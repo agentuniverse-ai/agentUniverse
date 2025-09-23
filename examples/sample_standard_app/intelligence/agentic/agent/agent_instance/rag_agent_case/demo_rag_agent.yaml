@@ -40,4 +40,5 @@ action:
   knowledge: []
   # advantage feature，please refer to doc
 memory:
+  name: 'demo_memory'
 meta_class: 'agentuniverse.agent.template.rag_agent_template.RagAgentTemplate'

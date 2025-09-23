@@ -24,4 +24,6 @@ profile:
 action:
   knowledge:
     - 'law_knowledge'
+memory:
+  name: 'demo_memory'
 meta_class: 'agentuniverse.agent.template.rag_agent_template.RagAgentTemplate'

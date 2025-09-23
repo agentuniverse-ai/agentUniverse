@@ -83,13 +83,13 @@ class WebRequestTask:
         self.state = TaskStateEnum.INIT.value
         self.saved = saved
         self.last_update_time = time.time()
-
         # 使用新的数据访问层和数据对象
         self.web_request_library = WebRequestLibrary(Configer())
         self.__request_do__ = self.add_request_do()
 
         self.async_queue = asyncio.Queue(maxsize=2000)
         self.async_task = None
+        self.session_id = None
 
     def update_request_do(self, force: bool = False):
         current_time = time.time()
@@ -345,7 +345,7 @@ class WebRequestTask:
 
         request_do = WebRequestDO(
             request_id=self.request_id,
-            session_id="",
+            session_id=self.kwargs.get('session_id', ''),
             query=query,
             state=TaskStateEnum.INIT.value,
             result=dict(),

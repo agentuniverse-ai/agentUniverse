@@ -195,28 +195,19 @@ def agent_list():
             "error": str(e)
         }), 500
 
-@app.route("/web_service_run_stream", methods=['POST'])
+@app.route("/web_stream", methods=['POST'])  # 修改接口名称
 @request_param
-def web_service_run_stream(service_id: str = None,
-                       params: dict = None,
-                       saved: bool = True,
-                       ):
-    """Synchronous invocation of an agent service, return in stream form.
-
-    Request Args:
-        service_id(`str`): The id of the agent service.
-        params(`dict`): Json style params passed to service.
-        saved(`bool`): Save the request and result into database.
-
-    Return:
-        A SSE(Server-Sent Event) stream.
-    """
+def web_stream(service_id: str, params: dict, saved: bool = True):
+    """Web流式运行接口，使用新的数据库表"""
     params = {} if params is None else params
     params['service_id'] = service_id
     params['streaming'] = True
+
+    # 使用新的 WebRequestTask
     task = WebRequestTask(service_run_queue, saved, **params)
+
     context_prefix = get_context_prefix()
-    response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix),mimetype="text/event-stream")
+    response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
     response.headers['X-Request-ID'] = task.request_id
     return response
 

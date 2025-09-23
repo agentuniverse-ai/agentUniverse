@@ -29,7 +29,6 @@ profile:
         "framework": list[string]
     }}
     ```
-
     开始!
     必须使用中文回答用户提出的问题。
 
@@ -39,5 +38,5 @@ profile:
     name: 'qwen-max'
     temperature: 0.5
 memory:
-  name: ''
+  name: 'demo_memory'
 meta_class: 'agentuniverse.agent.template.planning_agent_template.PlanningAgentTemplate'
