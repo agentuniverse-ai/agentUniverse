@@ -2,15 +2,17 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/14 15:46
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_manager_base.py
 import copy
 from typing import TypeVar, Generic
 
-from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
+from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
+from agentuniverse.base.config.configer import Configer
+from agentuniverse.base.storage.storage_context import StorageContext
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.base.util.system_util import is_system_builtin
 
@@ -53,11 +55,40 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
             return self.get_default_instance(new_instance)
         appname = appname or ApplicationConfigManager().app_configer.base_info_appname
         instance_code = f'{appname}.{self._component_type.value.lower()}.{component_instance_name}'
-        if new_instance:
-            instance = self._instance_obj_map.get(instance_code)
-            if instance:
-                return instance.create_copy()
-        return self._instance_obj_map.get(instance_code)
+        instance = self._instance_obj_map.get(instance_code)
+        if not instance:
+            instance = self._load_instance(instance_code)
+        if instance:
+            return instance.create_copy() if new_instance else instance
+
+    def _load_instance(self, instance_code: str) -> ComponentTypeVar:
+        from agentuniverse.base.storage.config_storage import ConfigStorage, ConfigNotFoundError, InstanceLoadError
+        LOGGER.info(f"Loading {self._component_type.value} component instance '{instance_code}' from storage.")
+        try:
+            ctx = StorageContext(
+                instance_code=instance_code,
+                configer=Configer(path="TMP"),
+                configer_type=self._component_type
+            )
+            configer = ConfigStorage().load_from_storage(ctx)
+        except Exception as e:
+            raise InstanceLoadError(
+                f"Unexpected error while loading config for {instance_code}: {e}"
+            ) from e
+        from agentuniverse.base.component.component_configer_util import ComponentConfigerUtil
+        if configer.value:
+            configer_clz = ComponentConfigerUtil.get_component_config_clz_by_type(self._component_type)
+            configer_instance = configer_clz().load_by_configer(configer)
+            component_clz = ComponentConfigerUtil.get_component_object_clz_by_component_configer(configer_instance)
+            new_instance_obj = component_clz().initialize_by_component_configer(configer_instance)
+
+            if not new_instance_obj:
+                raise InstanceLoadError(f"Failed to initialize instance for {instance_code}")
+
+            new_instance_obj.component_config_path = configer.path
+            self._instance_obj_map[instance_code] = new_instance_obj
+
+            return new_instance_obj
 
     def get_default_instance(self, new_instance: bool = False) -> ComponentTypeVar:
         """Return the default instance of component."""

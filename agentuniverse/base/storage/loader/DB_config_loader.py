@@ -23,20 +23,20 @@ class DBConfigLoader(BaseConfigLoader):
         self._init_schema()
 
     def load(self, ctx: StorageContext):
-        key = self._get_key(ctx.trimmed_path)
+        key = self._get_key(ctx.instance_code, ctx.configer_type.value)
         return self.version_manager.load_config(**key)
 
     def save(self, ctx: StorageContext):
-        key = self._get_key(ctx.trimmed_path)
-        config_type = ctx.configer.value.get("metadata", {}).get("type", "default")
-        self.version_manager.save_config(**key, content=ctx.configer.value, config_type=config_type)
+        key = self._get_key(ctx.instance_code, ctx.configer_type.value)
+        # config_type = ctx.configer.value.get("metadata", {}).get("type", "default")
+        self.version_manager.save_config(**key, content=ctx.configer.value)
 
     def delete(self, ctx: StorageContext):
-        key = self._get_key(ctx.trimmed_path)
+        key = self._get_key(ctx.instance_code, ctx.configer_type.value)
         self.version_manager.delete_config(**key)
 
-    def _get_key(self, name):
-        return {"tenant_id": 1, "name": name, "namespace": self.namespace}
+    def _get_key(self, name, config_type):
+        return {"name": name, "namespace": self.namespace, "config_type": config_type}
 
     def _init_schema(self) -> None:
         """

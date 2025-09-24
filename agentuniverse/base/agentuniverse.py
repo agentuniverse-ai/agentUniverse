@@ -25,6 +25,7 @@ from agentuniverse.base.config.custom_configer.default_llm_configer import Defau
 from agentuniverse.base.config.custom_configer.custom_key_configer import CustomKeyConfiger
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.storage.config_storage import ConfigStorage
+from agentuniverse.base.storage.storage_context import StorageContext
 from agentuniverse.base.util.monitor.monitor import Monitor
 from agentuniverse.base.util.system_util import get_project_root_path, is_api_key_missing, \
     is_system_builtin, find_default_llm_config
@@ -35,6 +36,7 @@ from agentuniverse.agent_serve.web.web_booster import ACTIVATE_OPTIONS
 from agentuniverse.agent_serve.web.post_fork_queue import POST_FORK_QUEUE
 from agentuniverse.agent_serve.web.web_util import FlaskServerManager
 from agentuniverse.base.tracing.otel.telemetry_manager import TelemetryManager
+
 
 @singleton
 class AgentUniverse(object):
@@ -155,9 +157,10 @@ class AgentUniverse(object):
         core_planner_package_list = ((app_configer.core_planner_package_list or app_configer.core_default_package_list)
                                      + self.__system_default_planner_package)
         core_tool_package_list = ((app_configer.core_tool_package_list or app_configer.core_default_package_list)
-                                    + self.__system_default_tool_package)
-        core_toolkit_package_list = ((app_configer.core_toolkit_package_list or app_configer.core_tool_package_list or app_configer.core_default_package_list)
                                   + self.__system_default_tool_package)
+        core_toolkit_package_list = ((
+                                             app_configer.core_toolkit_package_list or app_configer.core_tool_package_list or app_configer.core_default_package_list)
+                                     + self.__system_default_tool_package)
         core_service_package_list = app_configer.core_service_package_list or app_configer.core_default_package_list
         core_sqldb_wrapper_package_list = app_configer.core_sqldb_wrapper_package_list or app_configer.core_default_package_list
         core_memory_package_list = ((app_configer.core_memory_package_list or app_configer.core_default_package_list)
@@ -165,28 +168,35 @@ class AgentUniverse(object):
         core_prompt_package_list = ((app_configer.core_prompt_package_list or app_configer.core_default_package_list)
                                     + self.__system_default_prompt_package)
         core_workflow_package_list = app_configer.core_workflow_package_list or app_configer.core_default_package_list
-        core_embedding_package_list = ((app_configer.core_embedding_package_list or app_configer.core_default_package_list)
-                                       + self.__system_default_embedding_package)
-        core_doc_processor_package_list = ((app_configer.core_doc_processor_package_list or app_configer.core_default_package_list)
-                                           + self.__system_default_doc_processor_package)
+        core_embedding_package_list = (
+                (app_configer.core_embedding_package_list or app_configer.core_default_package_list)
+                + self.__system_default_embedding_package)
+        core_doc_processor_package_list = (
+                (app_configer.core_doc_processor_package_list or app_configer.core_default_package_list)
+                + self.__system_default_doc_processor_package)
         core_reader_package_list = ((app_configer.core_reader_package_list or app_configer.core_default_package_list)
                                     + self.__system_default_reader_package)
         core_store_package_list = app_configer.core_store_package_list or app_configer.core_default_package_list
-        core_rag_router_package_list = ((app_configer.core_rag_router_package_list or app_configer.core_default_package_list)
-                                        + self.__system_default_rag_router_package)
-        core_query_paraphraser_package_list = ((app_configer.core_query_paraphraser_package_list or app_configer.core_default_package_list)
-                                               + self.__system_default_query_paraphraser_package)
-        core_memory_compressor_package_list = ((app_configer.core_memory_compressor_package_list or app_configer.core_default_package_list)
-                                               + self.__system_default_memory_compressor_package)
-        core_memory_storage_package_list = ((app_configer.core_memory_storage_package_list or app_configer.core_default_package_list)
-                                            + self.__system_default_memory_storage_package)
-        core_work_pattern_package_list = ((app_configer.core_work_pattern_package_list or app_configer.core_default_package_list)
-                                            + self.__system_default_work_pattern_package)
-        core_log_sink_package_list = ((app_configer.core_log_sink_package_list or app_configer.core_default_package_list)
-                                          + self.__system_default_log_sink_package)
+        core_rag_router_package_list = (
+                (app_configer.core_rag_router_package_list or app_configer.core_default_package_list)
+                + self.__system_default_rag_router_package)
+        core_query_paraphraser_package_list = (
+                (app_configer.core_query_paraphraser_package_list or app_configer.core_default_package_list)
+                + self.__system_default_query_paraphraser_package)
+        core_memory_compressor_package_list = (
+                (app_configer.core_memory_compressor_package_list or app_configer.core_default_package_list)
+                + self.__system_default_memory_compressor_package)
+        core_memory_storage_package_list = (
+                (app_configer.core_memory_storage_package_list or app_configer.core_default_package_list)
+                + self.__system_default_memory_storage_package)
+        core_work_pattern_package_list = (
+                (app_configer.core_work_pattern_package_list or app_configer.core_default_package_list)
+                + self.__system_default_work_pattern_package)
+        core_log_sink_package_list = (
+                (app_configer.core_log_sink_package_list or app_configer.core_default_package_list)
+                + self.__system_default_log_sink_package)
 
         core_llm_channel_package_list = app_configer.core_llm_channel_package_list or app_configer.core_default_package_list
-
 
         component_package_map = {
             ComponentEnum.AGENT: core_agent_package_list,
@@ -212,7 +222,6 @@ class AgentUniverse(object):
             ComponentEnum.LOG_SINK: core_log_sink_package_list,
             ComponentEnum.LLM_CHANNEL: core_llm_channel_package_list
         }
-
         component_configer_list_map = {}
         for component_enum, package_list in component_package_map.items():
             if not package_list:
@@ -256,7 +265,7 @@ class AgentUniverse(object):
             config_files = path.rglob(f'*.{config_type_enum.value}')
             for config_file in config_files:
                 config_file_str = str(config_file)
-                configer = ConfigStorage().sync_configer(config_file_str, component_enum)
+                configer = Configer(path=config_file_str).load()
                 component_configer = ComponentConfiger().load_by_configer(configer)
                 component_config_type = component_configer.get_component_config_type()
                 if component_config_type == component_enum.value:
@@ -328,6 +337,13 @@ class AgentUniverse(object):
                 continue
             component_instance.component_config_path = component_configer.configer.path
             component_manager_clz().register(component_instance.get_instance_code(), component_instance)
+
+            ctx = StorageContext(
+                instance_code=component_instance.get_instance_code(),
+                configer=configer_instance.configer,
+                configer_type=component_enum
+            )
+            ConfigStorage().persist_to_storage(ctx)
 
     def __package_name_to_path(self, package_name: str) -> str:
         """Convert the package name to the package path.

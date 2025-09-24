@@ -45,6 +45,6 @@ db_uri = 'sqlite:///config_store.db'
 persist = true
 
 [EXTENSION_MODULES]
-class_list = [
-    '${ROOT_PACKAGE}.custom_loader.CustomConfigLoader',
-]
+#class_list = [
+#    '${ROOT_PACKAGE}.custom_loader.CustomConfigLoader',
+#]

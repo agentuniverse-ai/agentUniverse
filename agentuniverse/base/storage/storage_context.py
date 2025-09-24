@@ -10,7 +10,8 @@ class StorageContext:
     """
     Context for configuration storage operations.
     """
-    raw_path: str
+    instance_code: str
+    raw_path: Optional[str] = None
     trimmed_path: Optional[str] = None
     configer_type: Optional[ComponentEnum] = None
     configer: Optional[Configer] = None
