@@ -41,6 +41,25 @@ def get_context_prefix() -> str:
         return "[default]"
 
 
+def _get_invocation_chain_prefix() -> str:
+    """Build a short invocation-chain prefix for error logs.
+
+    Format: "source: X, type: Y -> ... | " when chain exists; otherwise empty.
+    """
+    trace_id = AuTraceManager().get_trace_id()
+    if not trace_id:
+        return ""
+    invocation_chain = FrameworkContextManager().get_context(
+        trace_id + '_invocation_chain', []
+    )
+    if not invocation_chain:
+        return ""
+    chain_str = ' -> '.join(
+        [f"source: {d.get('source', '')}, type: {d.get('type', '')}" for d in invocation_chain]
+    )
+    return f"{chain_str} | "
+
+
 def _get_source_filter(source: str) -> callable:
     """Create a function to filter out specific messages that need to be
     recorded in target loguru sink.
@@ -183,6 +202,8 @@ class GeneralLogger(Logger):
         await self._logger.complete()
 
     def error(self, msg, *args, **kwargs):
+        # Prepend invocation chain for better troubleshooting context
+        msg = _get_invocation_chain_prefix() + str(msg)
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
@@ -194,6 +215,8 @@ class GeneralLogger(Logger):
         await self._logger.complete()
 
     def critical(self, msg, *args, **kwargs):
+        # Prepend invocation chain for better troubleshooting context
+        msg = _get_invocation_chain_prefix() + str(msg)
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
