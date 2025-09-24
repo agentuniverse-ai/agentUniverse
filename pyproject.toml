@@ -19,6 +19,7 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
+
 [tool.poetry.dependencies]
 python = "^3.10"
 requests = "^2.32.0"
@@ -70,7 +71,13 @@ tomli = "^2.2"
 mcp = "~=1.9.0"
 opentracing = ">=2.4.0,<3.0.0"
 jsonlines = "^4.0.0"
-ruamel.yaml = { version = "^0.18.0", optional = true}
+ruamel-yaml = "^0.18.15"
+
+
+[tool.poetry.extras]
+log_ext = ["aliyun-log-python-sdk"]
+store_ext = ["pymilvus"]
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
 pytest-cov = "^4.0.0"
@@ -154,9 +161,3 @@ skip_empty = true
 [tool.coverage.run]
 branch = true
 source = ["agentuniverse"]
-[tool.poetry.extras]
-log_ext = ["aliyun-log-python-sdk"]
-store_ext = ["pymilvus"]
-dir_updater = ["ruamel.yaml"]
-
-
