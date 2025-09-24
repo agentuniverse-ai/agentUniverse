@@ -71,6 +71,8 @@ tomli = "^2.2"
 mcp = "~=1.9.0"
 opentracing = ">=2.4.0,<3.0.0"
 jsonlines = "^4.0.0"
+ruamel-yaml = "^0.18.15"
+
 
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
@@ -159,5 +161,3 @@ skip_empty = true
 [tool.coverage.run]
 branch = true
 source = ["agentuniverse"]
-
-
