@@ -121,7 +121,7 @@ class RequestTask:
             if self.saved:
                 self.update_request_do(force=True)
         except Exception as e:
-            LOGGER.error("request task execute Fail: " + str(e) + traceback.format_exc())
+            LOGGER.error("Request task execute failed: " + str(e) + traceback.format_exc())
             if self.saved:
                 self.__request_do__.result['result'] = {"error_msg": str(e)}
                 self.next_state(TaskStateEnum.FAIL)
@@ -162,7 +162,7 @@ class RequestTask:
             if self.saved:
                 self.update_request_do(force=True)
         except Exception as e:
-            LOGGER.error("request task execute Fail: " + str(e) + traceback.format_exc())
+            LOGGER.error("Request task execute failed: " + str(e) + traceback.format_exc())
             if self.saved:
                 self.__request_do__.result['result'] = {"error_msg": str(e)}
                 self.next_state(TaskStateEnum.FAIL)

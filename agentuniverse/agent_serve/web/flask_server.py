@@ -174,7 +174,7 @@ def service_run_async(service_id: str, params: dict, saved: bool = True):
         Returns a dict containing two keys: success and result.
         success: This key holds a boolean value indicating the task was
             successfully or not.
-        request_id: Stand for a single request taski, can be used in
+        request_id: Stand for a single request task id, can be used in
             service_run_result api to get the result of async task.
     """
     params = {} if params is None else params

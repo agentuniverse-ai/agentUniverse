@@ -64,7 +64,7 @@ class AgentUniverseService(agentuniverse_service_pb2_grpc.AgentUniverseService):
             Returns agentuniverse_service_pb2.AgentServiceResponse:
             success: This key holds a boolean value indicating the task was
                 successfully or not.
-            request_id: Stand for a single request taski, can be used in
+            request_id: Stand for a single request task id, can be used in
                 service_run_result api to get the result of async task.
         """
         service_result = service_run_async(
