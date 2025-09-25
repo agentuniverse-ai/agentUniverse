@@ -159,7 +159,7 @@ class SqliteMemoryStorage(MemoryStorage):
     session: Optional[Any] = None
 
     model_config = {
-        "arbitrary_types_allowed": True,  # 允许任意类型
+        "arbitrary_types_allowed": True,  # Allow any type.
     }
 
     def _new_client(self):
