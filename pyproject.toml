@@ -71,6 +71,8 @@ tomli = "^2.2"
 mcp = "~=1.9.0"
 opentracing = ">=2.4.0,<3.0.0"
 jsonlines = "^4.0.0"
+EbookLib = "^0.18"
+beautifulsoup4 = "^4.12.0"
 
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
