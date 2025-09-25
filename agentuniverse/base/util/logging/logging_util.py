@@ -8,6 +8,7 @@
 
 import os
 import sys
+import re
 from typing import Optional
 from pathlib import Path
 from typing_extensions import deprecated
@@ -28,7 +29,66 @@ LOG_SUB_DIR = 'logs'
 LOGGER = GeneralLogger(STANDARD_LOG_SUFFIX, "", "", "", "", add_handler=False)
 
 
+class SensitiveInfoFilter:
+    """敏感信息过滤器"""
+    
+    # 敏感信息模式
+    SENSITIVE_PATTERNS = [
+        # API密钥
+        (r'api[_-]?key["\']?\s*[:=]\s*["\']?([^"\',\s]+)', r'api_key="***REDACTED***"'),
+        (r'apikey["\']?\s*[:=]\s*["\']?([^"\',\s]+)', r'apikey="***REDACTED***"'),
+        
+        # 密码
+        (r'password["\']?\s*[:=]\s*["\']?([^"\',\s]+)', r'password="***REDACTED***"'),
+        (r'pwd["\']?\s*[:=]\s*["\']?([^"\',\s]+)', r'pwd="***REDACTED***"'),
+        
+        # 密钥
+        (r'secret["\']?\s*[:=]\s*["\']?([^"\',\s]+)', r'secret="***REDACTED***"'),
+        (r'key["\']?\s*[:=]\s*["\']?([^"\',\s]+)', r'key="***REDACTED***"'),
+        
+        # Token
+        (r'token["\']?\s*[:=]\s*["\']?([^"\',\s]+)', r'token="***REDACTED***"'),
+        (r'access[_-]?token["\']?\s*[:=]\s*["\']?([^"\',\s]+)', r'access_token="***REDACTED***"'),
+        
+        # 数据库连接信息
+        (r'(mongodb|mysql|postgresql|redis)://[^:]+:([^@]+)@', r'\1://***:***@'),
+        
+        # 邮箱
+        (r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '***@***.***'),
+        
+        # 手机号
+        (r'1[3-9]\d{9}', '***'),
+        
+        # 身份证号
+        (r'\d{17}[\dXx]', '***'),
+        
+        # 银行卡号
+        (r'\d{16,19}', '***'),
+    ]
+    
+    @classmethod
+    def filter_sensitive_info(cls, message: str) -> str:
+        """过滤日志中的敏感信息"""
+        if not message:
+            return message
+        
+        filtered_message = message
+        for pattern, replacement in cls.SENSITIVE_PATTERNS:
+            filtered_message = re.sub(pattern, replacement, filtered_message, flags=re.IGNORECASE)
+        
+        return filtered_message
+
+
+def _sanitize_log_record(record):
+    """清理日志记录中的敏感信息"""
+    if "message" in record:
+        record["message"] = SensitiveInfoFilter.filter_sensitive_info(record["message"])
+    return record
+
+
 def _standard_filter(record):
+    # 先清理敏感信息
+    record = _sanitize_log_record(record)
     return record["extra"].get('log_type') == LogTypeEnum.default
 
 
