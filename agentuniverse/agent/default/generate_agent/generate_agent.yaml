@@ -1,0 +1,13 @@
+info:
+  name: 'GenerateAgent'
+  description: 'generate agent'
+
+profile:
+  prompt_version: 'default_generate_agent.cn'
+
+memory:
+  name: ''
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.generate_agent_template'
+  class: 'GenerateAgentTemplate'
