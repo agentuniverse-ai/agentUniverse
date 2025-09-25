@@ -1,0 +1,35 @@
+# Document Classifier App Configuration
+
+[APP]
+name = "document_classifier_app"
+version = "1.0.0"
+description = "文档分类器应用示例"
+
+[CORE_PACKAGE]
+doc_processor = ['agentuniverse.agent.action.knowledge.doc_processor']
+
+[LLM]
+default_llm = "openai"
+llm_list = ["openai", "claude", "qwen"]
+
+[LLM.openai]
+api_key = "your_openai_api_key_here"
+model_name = "gpt-4"
+temperature = 0.1
+max_tokens = 2000
+
+[LLM.claude]
+api_key = "your_claude_api_key_here"
+model_name = "claude-3-sonnet-20240229"
+temperature = 0.1
+max_tokens = 2000
+
+[LLM.qwen]
+api_key = "your_qwen_api_key_here"
+model_name = "qwen-max"
+temperature = 0.1
+max_tokens = 2000
+
+[LOG]
+level = "INFO"
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
