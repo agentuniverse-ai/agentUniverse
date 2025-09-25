@@ -54,6 +54,7 @@ class WebRequestLibrary:
             request_id = Column(String(50), nullable=False)
             query = Column(Text)
             session_id = Column(String(50))
+            title = Column(Text)
             state = Column(String(20))
             result = Column(JSON)
             steps = Column(JSON)

@@ -23,6 +23,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS request_task (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             request_id TEXT NOT NULL,
+            title TEXT,
             query TEXT,
             session_id TEXT NOT NULL,
             state TEXT DEFAULT 'finished',

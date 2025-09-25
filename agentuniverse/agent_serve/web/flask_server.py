@@ -215,27 +215,34 @@ def web_stream(service_id: str, params: dict, saved: bool = True):
 init_app(app)
 @app.route('/session/list', methods=['GET'])
 def sessions_list_all():
-    #获取最近会话列表
     try:
         db = get_db()
 
         query = '''
-                SELECT session_id      AS id, \
-                       query           AS title, \
-                       MIN(gmt_create) AS first_created
+            SELECT 
+                rt.session_id AS id,
+                rt.title AS title
+            FROM request_task rt
+            INNER JOIN (
+                SELECT 
+                    session_id, 
+                    MIN(gmt_create) AS first_created
                 FROM request_task
                 WHERE state = 'finished'
                   AND query IS NOT NULL
                   AND query != ''
                 GROUP BY session_id
-                ORDER BY first_created DESC
-                    LIMIT 50 \
-                '''
+            ) first_msgs
+            ON rt.session_id = first_msgs.session_id
+               AND rt.gmt_create = first_msgs.first_created
+            ORDER BY rt.gmt_create DESC
+            LIMIT 50
+        '''
 
         rows = db.execute(query).fetchall()
 
         sessions = [
-            {"id": row["id"], "title": row["title"]}
+            {"id": row["id"], "title": row["title"] or "新对话"}
             for row in rows
         ]
         return jsonify(sessions)
@@ -251,11 +258,11 @@ def update_session():
     # 从 JSON 中获取 session_id 和新的 query
     data = request.get_json()
     session_id = data.get('session_id')
-    new_query = data.get('query')
+    new_title = data.get('title')
 
     if not session_id:
         return jsonify({"error": "Missing session_id in JSON body"}), 400
-    if not new_query:
+    if not new_title:
         return jsonify({"error": "Missing new query content"}), 400
     try:
         db = get_db()
@@ -268,15 +275,15 @@ def update_session():
             return jsonify({"error": "Session not found"}), 404  # 错误消息也移除“no permission”
         # 更新该 session 的所有记录的 query
         db.execute(
-            "UPDATE request_task SET query = ? WHERE session_id = ?",
-            (new_query, session_id)
+            "UPDATE request_task SET title = ? WHERE session_id = ?",
+            (new_title, session_id)
         )
         db.commit()
 
         return jsonify({
             "message": "Session updated successfully",
             "session_id": session_id,
-            "new_query": new_query
+            "new_query": new_title
         }), 200
 
     except Exception as e:
