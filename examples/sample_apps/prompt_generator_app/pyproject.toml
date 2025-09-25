@@ -1,0 +1,49 @@
+[tool.poetry]
+name = "prompt_generator_app"
+version = "0.0.1"
+description = "This is a sample project for agentUniverse prompt generation and optimization."
+authors = ["AntGroup <AntGroup>"]
+repository = "https://github.com/agentuniverse-ai/agentUniverse/tree/master/examples/sample_apps/prompt_generator_app"
+readme = "README.md"
+packages = [
+    { include = "prompt_generator_app" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+agentUniverse = "^0.0.15"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.2.0"
+pytest-cov = "^4.0.0"
+deptry = "^0.6.4"
+pre-commit = "^2.20.0"
+
+[[tool.poetry.source]]
+name = "china"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+priority = "primary"
+
+[[tool.poetry.source]]
+name = "pipy"
+url = "https://pypi.org/simple/"
+priority = "supplemental"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["intelligence/test"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.black]
+line-length = 120
+target-version = ['py310']
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+disallow_untyped_defs = true
