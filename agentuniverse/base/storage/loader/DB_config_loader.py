@@ -24,12 +24,17 @@ class DBConfigLoader(BaseConfigLoader):
 
     def load(self, ctx: StorageContext):
         key = self._get_key(ctx.instance_code, ctx.configer_type.value)
-        return self.version_manager.load_config(**key)
+        value = self.version_manager.load_config(**key)
+        if value:
+            configer = Configer(path=value["config_path"])
+            configer.value = value["content"]
+            ctx.configer = configer
 
     def save(self, ctx: StorageContext):
+        if ctx.trimmed_path is None:
+            return
         key = self._get_key(ctx.instance_code, ctx.configer_type.value)
-        # config_type = ctx.configer.value.get("metadata", {}).get("type", "default")
-        self.version_manager.save_config(**key, content=ctx.configer.value)
+        self.version_manager.save_config(**key, content=ctx.configer.value, config_path=ctx.trimmed_path)
 
     def delete(self, ctx: StorageContext):
         key = self._get_key(ctx.instance_code, ctx.configer_type.value)

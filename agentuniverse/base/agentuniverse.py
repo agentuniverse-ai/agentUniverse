@@ -341,7 +341,8 @@ class AgentUniverse(object):
             ctx = StorageContext(
                 instance_code=component_instance.get_instance_code(),
                 configer=configer_instance.configer,
-                configer_type=component_enum
+                configer_type=component_enum,
+                root_package_name=ConfigStorage().root_package_name
             )
             ConfigStorage().persist_to_storage(ctx)
 

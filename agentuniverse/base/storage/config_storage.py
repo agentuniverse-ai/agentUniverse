@@ -47,40 +47,11 @@ class ConfigStorage:
     # Public API
     # ----------------------------------------------------------------------
 
-    # def sync_configer(self, config_file_str: str, config_type: ComponentEnum) -> Configer:
-    #     """
-    #     Get a Configer instance, syncing with storage if necessary.
-    #
-    #     - If local config is empty → load from storage.
-    #     - Otherwise → persist local config into storage.
-    #
-    #     Args:
-    #         config_type: Type of the configer.
-    #         config_file_str: Path string of the config file.
-    #
-    #     Returns:
-    #         Configer: The synced Configer instance.
-    #     """
-    #     configer = Configer(path=config_file_str).load()
-    #     ctx = self._build_context(configer, config_type)
-    #     if not configer.value:
-    #         self.load_from_storage(ctx)
-    #     elif self.persist:
-    #         self.persist_to_storage(ctx)
-    #     return ctx.configer
-
     def load_from_storage(self, ctx: StorageContext) -> Configer:
         """
         Load configuration into a Configer instance from storage.
         """
-        # path = self._check_and_trim_path(configer.path)
-        # if not ctx.trimmed_path:
-        # raise ConfigStorageError(f"Invalid configer path: {ctx.trimmed_path}")
-
-        value = self.loader.load(ctx)
-        # if not value:
-        # raise ConfigNotFoundError(f"Config not found in storage for path={ctx.trimmed_path}")
-        ctx.configer.value = value
+        self.loader.load(ctx)
         return ctx.configer
 
     def persist_to_storage(self, ctx: StorageContext) -> None:
@@ -103,13 +74,6 @@ class ConfigStorage:
     # Internal Helpers
     # ----------------------------------------------------------------------
 
-    def _check_and_trim_path(self, path: str) -> Optional[str]:
-        """
-        Ensure path contains root_package_name, and return trimmed path.
-        """
-        idx = path.find(self.root_package_name)
-        return None if idx == -1 else path[idx:]
-
     def _try_load_custom_loader(self, configer: Configer) -> Optional[BaseConfigLoader]:
         """
         Try to load user-defined ConfigLoader from EXTENSION_MODULES.class_list.
@@ -128,23 +92,6 @@ class ConfigStorage:
                 return cls(configer)
         return None
 
-    # def build_context(self, instance_code: str, configer: Configer, config_type: ComponentEnum) -> StorageContext:
-    #     trimmed = self._check_and_trim_path(configer.path)
-    #     return StorageContext(
-    #         raw_path=configer.path,
-    #         instance_code=instance_code,
-    #         trimmed_path=trimmed,
-    #         configer_type=config_type,
-    #         configer=configer,
-    #         metadata={}
-    #     )
-
-    # def build_context(self, instance_code: str, config_type: ComponentEnum) -> StorageContext:
-    #     return StorageContext(
-    #         instance_code=instance_code,
-    #         configer_type=config_type,
-    #         metadata={}
-    #     )
 
 
 class ConfigStorageError(Exception):
