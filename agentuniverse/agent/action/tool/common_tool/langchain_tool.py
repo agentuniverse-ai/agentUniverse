@@ -24,7 +24,7 @@ class LangChainTool(Tool):
     async def async_execute(self, input: str, callbacks):
         return await self.tool.arun(input, callbacks=callbacks)
 
-    def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'Tool':
+    def initialize_by_component_configer(self, component_configer: ToolConfiger) -> "Tool":
         super().initialize_by_component_configer(component_configer)
         self.tool = self.init_langchain_tool(component_configer)
         if not component_configer.description and self.tool is not None:
@@ -32,7 +32,7 @@ class LangChainTool(Tool):
         return self
 
     def init_langchain_tool(self, component_configer):
-        langchain_info = component_configer.configer.value.get('langchain')
+        langchain_info = component_configer.configer.value.get("langchain")
         module = langchain_info.get("module")
         class_name = langchain_info.get("class_name")
         module = importlib.import_module(module)

@@ -5,6 +5,7 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: agent_model.py
 """Agent model class."""
+
 from typing import Optional
 from pydantic import BaseModel
 
@@ -25,11 +26,11 @@ class AgentModel(BaseModel):
             dict: The parameters for the LLM.
         """
         params = {}
-        for key, value in self.profile.get('llm_model').items():
-            if key == 'name' or key == 'prompt_processor':
+        for key, value in self.profile.get("llm_model").items():
+            if key == "name" or key == "prompt_processor":
                 continue
-            if key == 'model_name':
-                params['model'] = value
+            if key == "model_name":
+                params["model"] = value
             else:
                 params[key] = value
         return params

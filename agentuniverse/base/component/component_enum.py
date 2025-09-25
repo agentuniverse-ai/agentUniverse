@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/12 17:47
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_enum.py
 from enum import Enum
@@ -10,6 +10,7 @@ from enum import Enum
 
 class ComponentEnum(Enum):
     """The enumeration of the supported components."""
+
     AGENT = "AGENT"
     KNOWLEDGE = "KNOWLEDGE"
     LLM = "LLM"

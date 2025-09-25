@@ -14,6 +14,7 @@ INSTRUMENTOR_VERSION = "0.1.0"
 # Metric names
 class MetricNames:
     """Metric name constants."""
+
     LLM_CALLS_TOTAL = "llm_calls_total"
     LLM_ERRORS_TOTAL = "llm_errors_total"
     LLM_CALL_DURATION = "llm_call_duration"
@@ -28,6 +29,7 @@ class MetricNames:
 # Span attribute names
 class SpanAttributes:
     """Span attribute name constants."""
+
     # Basic span attributes
     SPAN_KIND = "au.span.kind"
     AU_LLM_NAME = "au.llm.name"
@@ -59,6 +61,7 @@ class SpanAttributes:
 # Metric label names
 class MetricLabels:
     """Metric label name constants."""
+
     STATUS = "au_llm_status"
     STREAMING = "au_llm_streaming"
     LLM_NAME = "au_llm_name"

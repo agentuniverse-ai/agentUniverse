@@ -14,28 +14,26 @@ from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
 
-KIMI_Max_CONTEXT_LENGTH = {
-    "moonshot-v1-8k": 8000,
-    "moonshot-v1-32k": 32000,
-    "moonshot-v1-128k": 128000
-}
+KIMI_Max_CONTEXT_LENGTH = {"moonshot-v1-8k": 8000, "moonshot-v1-32k": 32000, "moonshot-v1-128k": 128000}
 
 
 class KIMIOpenAIStyleLLM(OpenAIStyleLLM):
     """
-        KIMI's OpenAI Style LLM
-        Attributes:
-            api_key (Optional[str]): The API key to use for authentication. Defaults to None.
-            api_base (Optional[str]): The base URL to use for the API. Defaults to None.
+    KIMI's OpenAI Style LLM
+    Attributes:
+        api_key (Optional[str]): The API key to use for authentication. Defaults to None.
+        api_base (Optional[str]): The base URL to use for the API. Defaults to None.
     """
+
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("KIMI_API_KEY"))
-    api_base: Optional[str] = Field(default_factory=lambda: get_from_env(
-        "KIMI_API_BASE") or "https://api.moonshot.cn/v1")
+    api_base: Optional[str] = Field(
+        default_factory=lambda: get_from_env("KIMI_API_BASE") or "https://api.moonshot.cn/v1"
+    )
     proxy: Optional[str] = Field(default_factory=lambda: get_from_env("KIMI_PROXY"))
     organization: Optional[str] = Field(default_factory=lambda: get_from_env("KIMI_ORGANIZATION"))
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        """ The call method of the LLM.
+        """The call method of the LLM.
 
         Users can customize how the model interacts by overriding call method of the LLM class.
 
@@ -46,7 +44,7 @@ class KIMIOpenAIStyleLLM(OpenAIStyleLLM):
         return super()._call(messages, **kwargs)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
-        """ The async call method of the LLM.
+        """The async call method of the LLM.
 
         Users can customize how the model interacts by overriding acall method of the LLM class.
 
@@ -65,6 +63,6 @@ class KIMIOpenAIStyleLLM(OpenAIStyleLLM):
         # 通过http获取token数量
         messages = [{"role": "user", "content": text}]
         body = {"model": self.model_name, "messages": messages}
-        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.api_key}'}
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
         res = requests.post(f"{self.api_base}/tokenizers/estimate-token-count", headers=headers, json=body)
-        return res.json().get('data').get('total_tokens')
+        return res.json().get("data").get("total_tokens")

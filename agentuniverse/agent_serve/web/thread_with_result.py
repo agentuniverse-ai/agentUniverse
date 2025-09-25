@@ -18,8 +18,7 @@ from agentuniverse.base.context.context_coordinator import ContextCoordinator
 class ThreadWithReturnValue(Thread):
     """A thread can save the target func exec result."""
 
-    def __init__(self, group=None, target=None, name=None,
-                 args=(), kwargs=None):
+    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None):
         super().__init__(group, target, name, args, kwargs)
 
         if kwargs is None:
@@ -106,5 +105,4 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
                 if otel_token:
                     otel_context.detach(otel_token)
 
-        return super().map(context_aware_func, *iterables,
-                           timeout=timeout, chunksize=chunksize)
+        return super().map(context_aware_func, *iterables, timeout=timeout, chunksize=chunksize)

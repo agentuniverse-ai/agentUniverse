@@ -44,16 +44,12 @@ class SQLDBWrapperConfiger(ComponentConfiger):
 
     def __set_default_meta_info(self):
         """Set default instantiated class of service."""
-        if (not hasattr(self, '_ComponentConfiger__metadata_module')
-                or self._ComponentConfiger__metadata_module is None):
-            self._ComponentConfiger__metadata_module = (
-                "agentuniverse.database.sqldb_wrapper"
-            )
-        if (not hasattr(self, '_ComponentConfiger__metadata_class')
-                or self._ComponentConfiger__metadata_class is None):
-            self._ComponentConfiger__metadata_class = 'SQLDBWrapper'
+        if not hasattr(self, "_ComponentConfiger__metadata_module") or self._ComponentConfiger__metadata_module is None:
+            self._ComponentConfiger__metadata_module = "agentuniverse.database.sqldb_wrapper"
+        if not hasattr(self, "_ComponentConfiger__metadata_class") or self._ComponentConfiger__metadata_class is None:
+            self._ComponentConfiger__metadata_class = "SQLDBWrapper"
 
-    def load(self) -> 'SQLDBWrapperConfiger':
+    def load(self) -> "SQLDBWrapperConfiger":
         """Setting property using own configer member property.
 
         Returns:
@@ -61,7 +57,7 @@ class SQLDBWrapperConfiger(ComponentConfiger):
         """
         return self.load_by_configer(self.configer)
 
-    def load_by_configer(self, configer: Configer) -> 'SQLDBWrapperConfiger':
+    def load_by_configer(self, configer: Configer) -> "SQLDBWrapperConfiger":
         """Initialize self using given configer, get SQLDBWrapperConfiger property
         from it.
         Args:
@@ -72,11 +68,11 @@ class SQLDBWrapperConfiger(ComponentConfiger):
         super().load_by_configer(configer)
         self.__set_default_meta_info()
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
-            self.db_uri = parse_dynamic_str(configer.value.get('db_uri'))
-            self.engine_args = dict(configer.value.get('engine_args', {}))
-            self.sql_database_args = dict(configer.value.get('sql_database_args', {}))
+            self.__name = configer.value.get("name")
+            self.__description = configer.value.get("description")
+            self.db_uri = parse_dynamic_str(configer.value.get("db_uri"))
+            self.engine_args = dict(configer.value.get("engine_args", {}))
+            self.sql_database_args = dict(configer.value.get("sql_database_args", {}))
 
         except Exception as e:
             raise Exception(f"Failed to parse the db wrapper configuration: {e}")

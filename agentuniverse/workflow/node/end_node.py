@@ -21,6 +21,7 @@ class EndNodeData(NodeData):
 
 class EndNode(Node):
     """The basic class of the end node."""
+
     _data_cls = EndNodeData
 
     def __init__(self, **kwargs):
@@ -31,12 +32,12 @@ class EndNode(Node):
         inputs: EndNodeInputParams = self._data.inputs
         prompt: NodeInfoParams = inputs.prompt
         if isinstance(prompt.value, dict):
-            prompt_val = prompt.value.get('content', '')
+            prompt_val = prompt.value.get("content", "")
         else:
             prompt_val = prompt.value
 
         # Extract variables from the prompt template
-        template_variables = re.findall(r'\{\{(.*?)\}\}', prompt_val)
+        template_variables = re.findall(r"\{\{(.*?)\}\}", prompt_val)
         # Resolve the input parameters
         end_node_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
 
@@ -45,8 +46,9 @@ class EndNode(Node):
             for var in template_variables:
                 if var not in end_node_input_params:
                     raise KeyError(f"The variable '{var}' is not found in the input params.")
-                prompt_val = prompt_val.replace(f'{{{{{var}}}}}',
-                                                str(end_node_input_params[var]) if end_node_input_params[var] else '')
+                prompt_val = prompt_val.replace(
+                    f"{{{{{var}}}}}", str(end_node_input_params[var]) if end_node_input_params[var] else ""
+                )
         except KeyError as e:
             raise ValueError(f"Error processing template variables: {e}")
 

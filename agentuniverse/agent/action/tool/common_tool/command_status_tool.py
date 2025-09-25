@@ -19,8 +19,5 @@ class CommandStatusTool(Tool):
         result = get_command_result(thread_id)
 
         if result is None:
-            return json.dumps({
-                "error": f"No command found with thread_id: {thread_id}",
-                "status": "not_found"
-            })
+            return json.dumps({"error": f"No command found with thread_id: {thread_id}", "status": "not_found"})
         return result.message

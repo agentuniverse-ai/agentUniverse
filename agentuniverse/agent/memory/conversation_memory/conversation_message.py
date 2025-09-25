@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/12/5 17:43
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: conversation_message.py
 
@@ -36,6 +36,7 @@ class ConversationMessage(Message):
         content (Optional[str]): Message content.
         metadata (Optional[dict]): The metadata of the message.
     """
+
     id: Optional[str | int] = uuid.uuid4().hex
     trace_id: Optional[str] = None
     conversation_id: Optional[str] = None
@@ -49,22 +50,34 @@ class ConversationMessage(Message):
     additional_args: Optional[dict] = Field(default_factory=dict)
 
     @staticmethod
-    def as_langchain_list(message_list: List['ConversationMessage']):
-        """Convert agentUniverse(aU) message list to langchain message list """
+    def as_langchain_list(message_list: List["ConversationMessage"]):
+        """Convert agentUniverse(aU) message list to langchain message list"""
         messages = []
         for message in message_list:
-            if message.type == ChatMessageEnum.SYSTEM.value or message.type == ChatMessageEnum.HUMAN.value or message.type == ChatMessageEnum.AI.value:
+            if (
+                message.type == ChatMessageEnum.SYSTEM.value
+                or message.type == ChatMessageEnum.HUMAN.value
+                or message.type == ChatMessageEnum.AI.value
+            ):
                 messages.append(message)
                 continue
             # only got agent message
             if message.target_type != ConversationMessageSourceType.AGENT.value:
                 continue
-            if message.source_type not in [ConversationMessageSourceType.AGENT.value,
-                                           ConversationMessageSourceType.USER.value]:
+            if message.source_type not in [
+                ConversationMessageSourceType.AGENT.value,
+                ConversationMessageSourceType.USER.value,
+            ]:
                 continue
-            if message.source_type == ConversationMessageSourceType.AGENT.value and message.type == ConversationMessageEnum.OUTPUT.value:
+            if (
+                message.source_type == ConversationMessageSourceType.AGENT.value
+                and message.type == ConversationMessageEnum.OUTPUT.value
+            ):
                 messages.append(message)
-            elif message.target_type == ConversationMessageSourceType.AGENT.value and message.type == ConversationMessageEnum.INPUT.value:
+            elif (
+                message.target_type == ConversationMessageSourceType.AGENT.value
+                and message.type == ConversationMessageEnum.INPUT.value
+            ):
                 messages.append(message)
         return [message.as_langchain() for message in messages]
 
@@ -92,23 +105,23 @@ class ConversationMessage(Message):
     def from_message(cls, message: Message, session_id: str):
         if not message.metadata:
             message.metadata = {}
-        message.metadata['prefix'] = '之前对话的摘要：' if message.type == 'summarize' else ''
-        message.metadata['params'] = "{}"
-        trace_id = message.metadata.get('trace_id')
+        message.metadata["prefix"] = "之前对话的摘要：" if message.type == "summarize" else ""
+        message.metadata["params"] = "{}"
+        trace_id = message.metadata.get("trace_id")
         if not trace_id:
-            trace_id = FrameworkContextManager().get_context('trace_id')
-            message.metadata['trace_id'] = trace_id
+            trace_id = FrameworkContextManager().get_context("trace_id")
+            message.metadata["trace_id"] = trace_id
         return cls(
             id=uuid.uuid4().hex,
             content=message.content,
             metadata=message.metadata,
             type=message.type,
             source=message.source,
-            source_type='agent',
+            source_type="agent",
             target=message.source,
-            target_type='agent',
+            target_type="agent",
             trace_id=trace_id,
-            conversation_id=message.metadata.get('session_id') if not session_id else session_id,
+            conversation_id=message.metadata.get("session_id") if not session_id else session_id,
         )
 
     @classmethod

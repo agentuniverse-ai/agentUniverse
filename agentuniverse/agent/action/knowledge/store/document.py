@@ -20,6 +20,7 @@ class Document(BaseModel):
         metadata (Dict[str, Any]): Metadata associated with the document.
         embedding (List[float]): Embedding data associated with the document
     """
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -29,11 +30,11 @@ class Document(BaseModel):
     embedding: List[float] = Field(default_factory=list)
     keywords: Set[str] = Field(default_factory=set)
 
-    @model_validator(mode='before')
+    @model_validator(mode="before")
     def create_id(cls, values):
-        text: str = values.get('text', '')
-        if not values.get('id'):
-            values['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, text))
+        text: str = values.get("text", "")
+        if not values.get("id"):
+            values["id"] = str(uuid.uuid5(uuid.NAMESPACE_URL, text))
         return values
 
     def as_langchain(self) -> LCDocument:
@@ -43,7 +44,7 @@ class Document(BaseModel):
 
     @staticmethod
     def as_langchain_list(document_list) -> List[LCDocument]:
-        """Convert agentUniverse(aU) document list to langchain document list """
+        """Convert agentUniverse(aU) document list to langchain document list"""
         langchain_document_list = []
         if document_list is None:
             return langchain_document_list
@@ -53,7 +54,7 @@ class Document(BaseModel):
 
     @staticmethod
     def from_langchain_list(lc_document_list: List[LCDocument]):
-        """Convert langchain document list to agentUniverse(aU) document list """
+        """Convert langchain document list to agentUniverse(aU) document list"""
         document_list = []
         if lc_document_list is None:
             return document_list

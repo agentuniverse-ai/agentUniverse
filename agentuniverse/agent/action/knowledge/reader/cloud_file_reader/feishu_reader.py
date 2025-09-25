@@ -10,8 +10,9 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import time
-from typing import Dict,List
+from typing import Dict, List
 from agentuniverse.agent.action.knowledge.store.document import Document
+
 
 class PublicFeishuReader:
     """Feishu public document reader using Selenium
@@ -50,7 +51,7 @@ class PublicFeishuReader:
             # Wait for dynamic content loading
             time.sleep(5)
             page_source = self.driver.page_source
-            soup = BeautifulSoup(page_source, 'html.parser')
+            soup = BeautifulSoup(page_source, "html.parser")
             return self._parse_content(soup)
         except Exception as e:
             print(f"Error fetching document: {e}")
@@ -69,41 +70,47 @@ class PublicFeishuReader:
             ValueError: If document structure is invalid
         """
         # Find the body tag
-        body = soup.find('body')
+        body = soup.find("body")
         if not body:
             return "Body tag not found"
 
         content = []
 
         # Extract document title
-        title_tag = soup.find('h1')
+        title_tag = soup.find("h1")
         if title_tag:
             title_text = title_tag.get_text(strip=True)
             if title_text:
                 content.append(f"Title: {title_text}")
 
         # Define irrelevant class names for filtering
-        irrelevant_classes = ['footer', 'nav', 'navigation', 'header', 'comment', 'help', 'login']
+        irrelevant_classes = ["footer", "nav", "navigation", "header", "comment", "help", "login"]
 
         # Try to locate main content container
-        content_div = soup.find('div', class_='doc-content')  # Update class name as needed
+        content_div = soup.find("div", class_="doc-content")  # Update class name as needed
         if content_div:
             # Extract text from content container
-            for tag in content_div.find_all(['p', 'div', 'span'], recursive=True):
-                if tag.get('class') and any(cls.lower() in irrelevant_classes for cls in tag.get('class')):
+            for tag in content_div.find_all(["p", "div", "span"], recursive=True):
+                if tag.get("class") and any(cls.lower() in irrelevant_classes for cls in tag.get("class")):
                     continue
                 text = tag.get_text(strip=True)
-                if text and text.strip() and not any(
-                        keyword in text.lower() for keyword in ['login', 'sign up', 'comment', 'help']):
+                if (
+                    text
+                    and text.strip()
+                    and not any(keyword in text.lower() for keyword in ["login", "sign up", "comment", "help"])
+                ):
                     content.append(text)
         else:
             # Fallback extraction from body
-            for div in body.find_all('div', recursive=True):
-                if div.get('class') and any(cls.lower() in irrelevant_classes for cls in div.get('class')):
+            for div in body.find_all("div", recursive=True):
+                if div.get("class") and any(cls.lower() in irrelevant_classes for cls in div.get("class")):
                     continue
                 text = div.get_text(strip=True)
-                if text and text.strip() and not any(
-                        keyword in text.lower() for keyword in ['login', 'sign up', 'comment', 'help']):
+                if (
+                    text
+                    and text.strip()
+                    and not any(keyword in text.lower() for keyword in ["login", "sign up", "comment", "help"])
+                ):
                     content.append(text)
 
         # Deduplicate while preserving order
@@ -132,8 +139,9 @@ class PublicFeishuReader:
 
     def __del__(self):
         """Cleanup resources by closing browser instance"""
-        if hasattr(self, 'driver'):
+        if hasattr(self, "driver"):
             self.driver.quit()
+
 
 """
 if __name__ == "__main__":

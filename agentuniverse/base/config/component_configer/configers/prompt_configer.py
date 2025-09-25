@@ -25,14 +25,14 @@ class PromptConfiger(ComponentConfiger):
         """Return prompt version of the Prompt."""
         return self.__metadata_version
 
-    def load(self) -> 'PromptConfiger':
+    def load(self) -> "PromptConfiger":
         """Load the configuration by the Configer object.
         Returns:
             PromptConfiger: the PromptConfiger object
         """
         return self.load_by_configer(self.__configer)
 
-    def load_by_configer(self, configer: Configer) -> 'PromptConfiger':
+    def load_by_configer(self, configer: Configer) -> "PromptConfiger":
         """Load the configuration by the Configer object.
         Args:
             configer(Configer): the Configer object
@@ -41,17 +41,17 @@ class PromptConfiger(ComponentConfiger):
         """
         super().load_by_configer(configer)
         try:
-            if configer.value.get('metadata'):
-                self.__metadata_version = configer.value.get('metadata').get('version')
+            if configer.value.get("metadata"):
+                self.__metadata_version = configer.value.get("metadata").get("version")
             else:
                 path = Path(configer.path)
                 self.__metadata_version = f"{path.parent.name}.{path.stem}"
             # set the prompt default module and class
             if self.meta_class is None:
                 if self.metadata_module is None:
-                    self.metadata_module = 'agentuniverse.prompt.prompt'
+                    self.metadata_module = "agentuniverse.prompt.prompt"
                 if self.metadata_class is None:
-                    self.metadata_class = 'Prompt'
+                    self.metadata_class = "Prompt"
         except Exception as e:
             raise Exception(f"Failed to parse the Prompt configuration: {e}")
         return self

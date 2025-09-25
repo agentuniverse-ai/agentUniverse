@@ -26,6 +26,7 @@ class Workflow(ComponentBase):
 
     class Config:
         """Configuration for this pydantic object."""
+
         arbitrary_types_allowed = True
 
     def __init__(self, **kwargs):
@@ -34,22 +35,22 @@ class Workflow(ComponentBase):
     def get_instance_code(self) -> str:
         """Return the full instance code of the workflow."""
         appname = ApplicationConfigManager().app_configer.base_info_appname
-        return f'{appname}.{self.component_type.value.lower()}.{self.id}'
+        return f"{appname}.{self.component_type.value.lower()}.{self.id}"
 
-    def build(self) -> 'Workflow':
+    def build(self) -> "Workflow":
         if self.graph_config is None:
-            raise ValueError('The graph config is None.')
+            raise ValueError("The graph config is None.")
         self.graph = Graph().build(self.id, self.graph_config)
         return self
 
     def run(self, input_params: dict) -> WorkflowOutput:
         if self.graph is None:
-            raise ValueError('The graph of the workflow is None.')
+            raise ValueError("The graph of the workflow is None.")
         workflow_output = WorkflowOutput(workflow_id=self.id, workflow_start_params=input_params)
         self.graph.run(workflow_output)
         return workflow_output
 
-    def initialize_by_component_configer(self, component_configer: WorkflowConfiger) -> 'Workflow':
+    def initialize_by_component_configer(self, component_configer: WorkflowConfiger) -> "Workflow":
         """Initialize the Workflow by the ComponentConfiger object.
 
         Args:

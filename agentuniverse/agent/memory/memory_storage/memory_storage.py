@@ -25,7 +25,7 @@ class MemoryStorage(ComponentBase):
     description: Optional[str] = None
     component_type: ComponentEnum = ComponentEnum.MEMORY_STORAGE
 
-    def _initialize_by_component_configer(self, memory_storage_config: ComponentConfiger) -> 'MemoryStorage':
+    def _initialize_by_component_configer(self, memory_storage_config: ComponentConfiger) -> "MemoryStorage":
         """Initialize the MemoryStorage by the ComponentConfiger object.
 
         Args:
@@ -33,9 +33,9 @@ class MemoryStorage(ComponentBase):
         Returns:
             MemoryStorage: A MemoryStorage instance.
         """
-        if getattr(memory_storage_config, 'name', None):
+        if getattr(memory_storage_config, "name", None):
             self.name = memory_storage_config.name
-        if getattr(memory_storage_config, 'description', None):
+        if getattr(memory_storage_config, "description", None):
             self.description = memory_storage_config.description
         return self
 

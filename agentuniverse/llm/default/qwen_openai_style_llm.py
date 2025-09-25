@@ -22,26 +22,28 @@ QWen_Max_CONTEXT_LENGTH = {
     "qwen-max-0428": 8000,
     "qwen-max-0403": 8000,
     "qwen-max-0107": 8000,
-    "qwen-long": 10000000
+    "qwen-long": 10000000,
 }
 
 
 class QWenOpenAIStyleLLM(OpenAIStyleLLM):
     """
-        QWen OpenAI style LLM
-        Args:
-            api_key: API key for the model ,from dashscope : DASHSCOPE_API_KEY
-            api_base: API base URL for the model, from dashscope : DASHSCOPE_API_BASE
+    QWen OpenAI style LLM
+    Args:
+        api_key: API key for the model ,from dashscope : DASHSCOPE_API_KEY
+        api_base: API base URL for the model, from dashscope : DASHSCOPE_API_BASE
     """
 
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("DASHSCOPE_API_KEY"))
-    api_base: Optional[str] = Field(default_factory=lambda: get_from_env(
-        "DASHSCOPE_API_BASE") or "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    api_base: Optional[str] = Field(
+        default_factory=lambda: get_from_env("DASHSCOPE_API_BASE")
+        or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    )
     proxy: Optional[str] = Field(default_factory=lambda: get_from_env("DASHSCOPE_PROXY"))
     organization: Optional[str] = Field(default_factory=lambda: get_from_env("DASHSCOPE_ORGANIZATION"))
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        """ The call method of the LLM.
+        """The call method of the LLM.
 
         Users can customize how the model interacts by overriding call method of the LLM class.
 
@@ -52,7 +54,7 @@ class QWenOpenAIStyleLLM(OpenAIStyleLLM):
         return super()._call(messages, **kwargs)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
-        """ The async call method of the LLM.
+        """The async call method of the LLM.
 
         Users can customize how the model interacts by overriding acall method of the LLM class.
 

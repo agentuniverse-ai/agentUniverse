@@ -16,8 +16,10 @@ from agentuniverse.llm.ollama_langchain_instance import OllamaLangchainInstance
 
 class OllamaLLM(LLM):
     base_url: Optional[str] = Field(
-        default_factory=lambda: get_from_env("OLLAMA_BASE_URL") if get_from_env(
-            "OLLAMA_BASE_URL") else "http://localhost:11434")
+        default_factory=lambda: get_from_env("OLLAMA_BASE_URL")
+        if get_from_env("OLLAMA_BASE_URL")
+        else "http://localhost:11434"
+    )
     """Base url the model is hosted under."""
 
     streaming: bool = True
@@ -26,6 +28,7 @@ class OllamaLLM(LLM):
         if self.client:
             return self.client
         from ollama import Client
+
         return Client(
             host=self.base_url,
         )
@@ -34,18 +37,21 @@ class OllamaLLM(LLM):
         if self.async_client:
             return self.async_client
         from ollama import AsyncClient
+
         return AsyncClient(
             host=self.base_url,
         )
 
     def _options(self):
-        return Options(**{
-            "num_ctx": self.max_context_length(),
-            "num_predict": self.max_tokens,
-            "temperature": self.temperature,
-            "timeout": self.request_timeout,
-            **(self.ext_info if self.ext_info else {}),
-        })
+        return Options(
+            **{
+                "num_ctx": self.max_context_length(),
+                "num_predict": self.max_tokens,
+                "temperature": self.temperature,
+                "timeout": self.request_timeout,
+                **(self.ext_info if self.ext_info else {}),
+            }
+        )
 
     def _call(self, messages, stop=None, **kwargs) -> Union[LLMOutput, Iterator[LLMOutput]]:
         should_stream = kwargs.pop("stream", self.streaming)
@@ -56,7 +62,7 @@ class OllamaLLM(LLM):
         if should_stream:
             return self.generate_result(res)
         else:
-            return LLMOutput(text=res.get("message").get('content'), raw=json.dumps(res))
+            return LLMOutput(text=res.get("message").get("content"), raw=json.dumps(res))
 
     async def _acall(self, messages, stop=None, **kwargs) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         client = self._new_async_client()
@@ -65,33 +71,31 @@ class OllamaLLM(LLM):
         options.setdefault("stop", stop)
         res = await client.chat(model=self.model_name, messages=messages, options=options, stream=should_stream)
         if not should_stream:
-            return LLMOutput(text=res.get("message").get('content'), raw=json.dumps(res))
+            return LLMOutput(text=res.get("message").get("content"), raw=json.dumps(res))
         if should_stream:
             return self.agenerate_result(res)
 
     def generate_result(self, data):
         for line in data:
-            yield LLMOutput(text=line.get("message").get('content'), raw=json.dumps(line))
+            yield LLMOutput(text=line.get("message").get("content"), raw=json.dumps(line))
 
     async def agenerate_result(self, data):
         async for line in data:
-            yield LLMOutput(text=line.get("message").get('content'), raw=json.dumps(line))
+            yield LLMOutput(text=line.get("message").get("content"), raw=json.dumps(line))
 
     def as_langchain(self) -> BaseLanguageModel:
         self.init_channel()
         if self._channel_instance:
             return self._channel_instance.as_langchain()
-        return OllamaLangchainInstance(
-            self
-        )
+        return OllamaLangchainInstance(self)
 
-    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'LLM':
+    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> "LLM":
         super().initialize_by_component_configer(component_configer)
-        if 'base_url' in component_configer.configer.value:
-            base_url = component_configer.configer.value['base_url']
+        if "base_url" in component_configer.configer.value:
+            base_url = component_configer.configer.value["base_url"]
             self.base_url = process_yaml_func(base_url, component_configer.yaml_func_instance)
-        if 'max_context_length' in component_configer.configer.value:
-            self._max_context_length = component_configer.configer.value['max_context_length']
+        if "max_context_length" in component_configer.configer.value:
+            self._max_context_length = component_configer.configer.value["max_context_length"]
         return self
 
     def get_num_tokens(self, text: str) -> int:

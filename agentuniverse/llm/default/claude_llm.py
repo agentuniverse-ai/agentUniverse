@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/5/21 17:49
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: claude_llm.py
 from typing import Optional, Any, Union, Iterator, AsyncIterator
@@ -25,7 +25,7 @@ ClaudeMAXCONTETNLENGTH = {
     "claude-3-haiku-20240307": 200000,
     "claude-2.1": 200000,
     "claude-2.0": 100000,
-    "claude-instant-1.2": 100000
+    "claude-instant-1.2": 100000,
 }
 
 
@@ -39,9 +39,10 @@ class ClaudeLLM(LLM):
         proxy (Optional[str]): The proxy to use for the Anthropic API. Defaults to None.
         connection_pool_limits (Optional[int]): The maximum number of connections to keep in a pool. Defaults to None.
     """
-    api_key: Optional[str] = Field(default_factory=lambda: get_from_env('ANTHROPIC_API_KEY'))
-    api_url: Optional[str] = Field(default_factory=lambda: get_from_env('ANTHROPIC_API_URL'))
-    proxy: Optional[str] = Field(default_factory=lambda: get_from_env('ANTHROPIC_PROXY'))
+
+    api_key: Optional[str] = Field(default_factory=lambda: get_from_env("ANTHROPIC_API_KEY"))
+    api_url: Optional[str] = Field(default_factory=lambda: get_from_env("ANTHROPIC_API_URL"))
+    proxy: Optional[str] = Field(default_factory=lambda: get_from_env("ANTHROPIC_PROXY"))
     connection_pool_limits: Optional[int] = None
 
     def _new_client(self):
@@ -51,7 +52,7 @@ class ClaudeLLM(LLM):
             timeout=self.request_timeout if self.request_timeout else 60,
             max_retries=self.max_retries if self.max_retries else 2,
             http_client=httpx.Client(proxy=self.proxy) if self.proxy else None,
-            connection_pool_limits=self.connection_pool_limits
+            connection_pool_limits=self.connection_pool_limits,
         )
         return client
 
@@ -62,7 +63,7 @@ class ClaudeLLM(LLM):
             timeout=self.request_timeout if self.request_timeout else 60,
             max_retries=self.max_retries if self.max_retries else 2,
             http_client=httpx.AsyncClient(proxy=self.proxy) if self.proxy else None,
-            connection_pool_limits=self.connection_pool_limits
+            connection_pool_limits=self.connection_pool_limits,
         )
         return client
 
@@ -77,10 +78,10 @@ class ClaudeLLM(LLM):
         self.client = self._new_client()
         chat_completion = self.client.messages.create(
             messages=messages,
-            model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
+            model=kwargs.pop("model", self.model_name),
+            temperature=kwargs.pop("temperature", self.temperature),
+            stream=kwargs.pop("stream", streaming),
+            max_tokens=kwargs.pop("max_tokens", self.max_tokens),
             **kwargs,
         )
         if not streaming:
@@ -93,10 +94,10 @@ class ClaudeLLM(LLM):
         self.client = self._new_async_client()
         chat_completion = await self.client.messages.create(
             messages=messages,
-            model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
+            model=kwargs.pop("model", self.model_name),
+            temperature=kwargs.pop("temperature", self.temperature),
+            stream=kwargs.pop("stream", streaming),
+            max_tokens=kwargs.pop("max_tokens", self.max_tokens),
             **kwargs,
         )
         if not streaming:
@@ -113,7 +114,7 @@ class ClaudeLLM(LLM):
 
     def generate_stream_result(self, chat_completion: Iterator):
         for chunk in chat_completion:
-            if chunk.type != 'content_block_delta':
+            if chunk.type != "content_block_delta":
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
         self.close()
@@ -121,7 +122,7 @@ class ClaudeLLM(LLM):
     async def agenerate_stream_result(self, chat_completion: AsyncIterator):
         async for chunk in chat_completion:
             print(chunk)
-            if chunk.type != 'content_block_delta':
+            if chunk.type != "content_block_delta":
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
         await self.aclose()
@@ -146,24 +147,24 @@ class ClaudeLLM(LLM):
 
     def close(self):
         """Close the client."""
-        if hasattr(self, 'client') and self.client:
+        if hasattr(self, "client") and self.client:
             self.client.close()
 
     async def aclose(self):
         """Async close the client."""
-        if hasattr(self, 'async_client') and self.async_client:
+        if hasattr(self, "async_client") and self.async_client:
             await self.async_client.aclose()
 
-    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'ClaudeLLM':
+    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> "ClaudeLLM":
         super().initialize_by_component_configer(component_configer)
-        if 'api_key' in component_configer.configer.value:
-            api_key = component_configer.configer.value.get('api_key')
+        if "api_key" in component_configer.configer.value:
+            api_key = component_configer.configer.value.get("api_key")
             self.api_key = process_yaml_func(api_key, component_configer.yaml_func_instance)
-        if 'api_url' in component_configer.configer.value:
-            api_url = component_configer.configer.value.get('api_url')
+        if "api_url" in component_configer.configer.value:
+            api_url = component_configer.configer.value.get("api_url")
             self.api_url = process_yaml_func(api_url, component_configer.yaml_func_instance)
-        if 'proxy' in component_configer.configer.value:
-            self.proxy = component_configer.configer.value.get('proxy')
-        if 'connection_pool_limits' in component_configer.configer.value:
-            self.connection_pool_limits = component_configer.configer.value.get('connection_pool_limits')
+        if "proxy" in component_configer.configer.value:
+            self.proxy = component_configer.configer.value.get("proxy")
+        if "connection_pool_limits" in component_configer.configer.value:
+            self.connection_pool_limits = component_configer.configer.value.get("connection_pool_limits")
         return self

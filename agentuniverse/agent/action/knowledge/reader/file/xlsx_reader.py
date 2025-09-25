@@ -13,7 +13,7 @@ from agentuniverse.agent.action.knowledge.store.document import Document
 
 class XlsxReader(Reader):
     """Excel (.xlsx) file reader.
-    
+
     Used to read and parse Excel format files, supports multiple sheets and various data types.
     """
 
@@ -33,10 +33,7 @@ class XlsxReader(Reader):
         try:
             import openpyxl
         except ImportError:
-            raise ImportError(
-                "openpyxl is required to read Excel files: "
-                "`pip install openpyxl`"
-            )
+            raise ImportError("openpyxl is required to read Excel files: `pip install openpyxl`")
 
         if isinstance(file, str):
             file = Path(file)
@@ -48,12 +45,12 @@ class XlsxReader(Reader):
         # Process each worksheet
         for sheet_name in workbook.sheetnames:
             worksheet = workbook[sheet_name]
-            
+
             # Extract data from the worksheet
             sheet_data = []
             max_row = worksheet.max_row
             max_col = worksheet.max_column
-            
+
             # Read all data from the worksheet
             for row in range(1, max_row + 1):
                 row_data = []
@@ -67,7 +64,7 @@ class XlsxReader(Reader):
                             row_data.append(str(cell.value))
                     else:
                         row_data.append("")
-                
+
                 # Only add non-empty rows
                 if any(cell.strip() for cell in row_data):
                     sheet_data.append(" | ".join(row_data))
@@ -75,15 +72,10 @@ class XlsxReader(Reader):
             # Create document for this sheet
             if sheet_data:
                 sheet_content = "\n".join(sheet_data)
-                metadata = {
-                    "file_name": file.name,
-                    "sheet_name": sheet_name,
-                    "max_row": max_row,
-                    "max_col": max_col
-                }
+                metadata = {"file_name": file.name, "sheet_name": sheet_name, "max_row": max_row, "max_col": max_col}
                 if ext_info is not None:
                     metadata.update(ext_info)
-                
+
                 document_list.append(Document(text=sheet_content, metadata=metadata))
 
         return document_list

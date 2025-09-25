@@ -4,6 +4,7 @@ from .service_manager import ServiceManager
 
 class ServiceNotFoundError(Exception):
     """An exception when service code is not in service manager."""
+
     def __init__(self, service_code: str):
         super().__init__(f"Service {service_code} not found.")
         self.service_code = service_code
@@ -23,9 +24,7 @@ class ServiceInstance(object):
         """
         self.__service_code = service_code
         service_manager: ServiceManager = ServiceManager()
-        self.__service: Service = service_manager.get_instance_obj(
-            service_code
-        )
+        self.__service: Service = service_manager.get_instance_obj(service_code)
         if self.__service is None:
             raise ServiceNotFoundError(service_code)
 

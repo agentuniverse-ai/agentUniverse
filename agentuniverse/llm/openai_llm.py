@@ -53,7 +53,7 @@ class OpenAILLM(LLM):
         This automatically infers the `openai_api_base` from the environment variable `OPENAI_API_BASE` if not provided.
 
         openai_client_args (Optional[dict], optional): Additional arguments to pass to the OpenAI client.
-   """
+    """
 
     openai_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("OPENAI_API_KEY"))
     openai_organization: Optional[str] = Field(default_factory=lambda: get_from_env("OPENAI_ORGANIZATION"))
@@ -96,10 +96,10 @@ class OpenAILLM(LLM):
         self.client = self._new_client()
         chat_completion = self.client.chat.completions.create(
             messages=messages,
-            model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
+            model=kwargs.pop("model", self.model_name),
+            temperature=kwargs.pop("temperature", self.temperature),
+            stream=kwargs.pop("stream", streaming),
+            max_tokens=kwargs.pop("max_tokens", self.max_tokens),
             **kwargs,
         )
         if not streaming:
@@ -118,10 +118,10 @@ class OpenAILLM(LLM):
         self.async_client = self._new_async_client()
         chat_completion = await self.async_client.chat.completions.create(
             messages=messages,
-            model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
+            model=kwargs.pop("model", self.model_name),
+            temperature=kwargs.pop("temperature", self.temperature),
+            stream=kwargs.pop("stream", streaming),
+            max_tokens=kwargs.pop("max_tokens", self.max_tokens),
             **kwargs,
         )
         if not streaming:
@@ -134,23 +134,23 @@ class OpenAILLM(LLM):
         return LangchainOpenAI(self)
 
     def set_by_agent_model(self, **kwargs):
-        """ Assign values of parameters to the OpenAILLM model in the agent configuration."""
+        """Assign values of parameters to the OpenAILLM model in the agent configuration."""
         copied_obj = super().set_by_agent_model(**kwargs)
-        if 'openai_api_key' in kwargs and kwargs['openai_api_key']:
-            copied_obj.openai_api_key = kwargs['openai_api_key']
-        if 'openai_api_base' in kwargs and kwargs['openai_api_base']:
-            copied_obj.openai_api_base = kwargs['openai_api_base']
-        if 'openai_proxy' in kwargs and kwargs['openai_proxy']:
-            copied_obj.openai_proxy = kwargs['openai_proxy']
-        if 'openai_client_args' in kwargs and kwargs['openai_client_args']:
-            copied_obj.openai_client_args = kwargs['openai_client_args']
+        if "openai_api_key" in kwargs and kwargs["openai_api_key"]:
+            copied_obj.openai_api_key = kwargs["openai_api_key"]
+        if "openai_api_base" in kwargs and kwargs["openai_api_base"]:
+            copied_obj.openai_api_base = kwargs["openai_api_base"]
+        if "openai_proxy" in kwargs and kwargs["openai_proxy"]:
+            copied_obj.openai_proxy = kwargs["openai_proxy"]
+        if "openai_client_args" in kwargs and kwargs["openai_client_args"]:
+            copied_obj.openai_client_args = kwargs["openai_client_args"]
         return copied_obj
 
     def max_context_length(self) -> int:
         """Max context length.
 
-          The total length of input tokens and generated tokens is limited by the openai model's context length.
-          """
+        The total length of input tokens and generated tokens is limited by the openai model's context length.
+        """
         return OPENAI_MAX_CONTEXT_LENGTH.get(self.model_name, 4096)
 
     def get_num_tokens(self, text: str) -> int:

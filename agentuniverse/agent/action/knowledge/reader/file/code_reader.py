@@ -14,38 +14,35 @@ from agentuniverse.agent.action.knowledge.store.document import Document
 
 
 CODE_FILE_EXTENSIONS = {
-    '.py': 'python',
-    '.js': 'javascript',
-    '.ts': 'typescript',
-    '.java': 'java',
-    '.cpp': 'cpp',
-    '.c': 'c',
-    '.h': 'c',
-    '.hpp': 'cpp',
-    '.cs': 'csharp',
-    '.go': 'go',
-    '.rb': 'ruby',
-    '.php': 'php',
-    '.swift': 'swift',
-    '.kt': 'kotlin',
-    '.rs': 'rust',
-    '.sh': 'shell',
-    '.html': 'html',
-    '.css': 'css',
-    '.sql': 'sql',
-    '.json': 'json',
-    '.xml': 'xml',
-    '.yaml': 'yaml',
-    '.yml': 'yaml',
-    '.md': 'markdown',
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".java": "java",
+    ".cpp": "cpp",
+    ".c": "c",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".cs": "csharp",
+    ".go": "go",
+    ".rb": "ruby",
+    ".php": "php",
+    ".swift": "swift",
+    ".kt": "kotlin",
+    ".rs": "rust",
+    ".sh": "shell",
+    ".html": "html",
+    ".css": "css",
+    ".sql": "sql",
+    ".json": "json",
+    ".xml": "xml",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".md": "markdown",
 }
 
 
 class CodeReader(Reader):
-
-    def _load_data(self,
-                   file: Union[str, Path],
-                   ext_info: Optional[Dict] = None) -> List[Document]:
+    def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
         if isinstance(file, str):
             file = Path(file)
         if isinstance(file, Path):
@@ -54,7 +51,7 @@ class CodeReader(Reader):
         file_content = file.read_text(encoding="utf-8")
         file_name = file.name
         file_suffix = file.suffix.lower()
-        language = CODE_FILE_EXTENSIONS.get(file_suffix, 'unknown')
+        language = CODE_FILE_EXTENSIONS.get(file_suffix, "unknown")
         metadata = {
             "file_name": file_name,
             "file_path": str(file),

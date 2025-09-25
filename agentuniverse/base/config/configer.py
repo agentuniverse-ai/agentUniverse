@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/12 14:29
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: configer.py
 import os
@@ -19,8 +19,7 @@ from agentuniverse.base.config.config_type_enum import ConfigTypeEnum
 class PlaceholderResolver:
     def __init__(self):
         self._resolvers = []
-        self.register_resolver(r'\${(.+?)}',
-                               lambda match: os.getenv(match.group(1), ''))
+        self.register_resolver(r"\${(.+?)}", lambda match: os.getenv(match.group(1), ""))
 
     def register_resolver(self, pattern, func):
         """Register a new resolver with a regex pattern and its corresponding function."""
@@ -33,7 +32,7 @@ class PlaceholderResolver:
             root_package_name: The value to replace ${ROOT_PACKAGE}.
         """
         if root_package_name:
-            self._resolvers.insert(0, (re.compile(r'\${ROOT_PACKAGE}'), lambda _: root_package_name))
+            self._resolvers.insert(0, (re.compile(r"\${ROOT_PACKAGE}"), lambda _: root_package_name))
 
     def resolve(self, value):
         """Resolve placeholders in a given value based on registered resolvers."""
@@ -55,8 +54,7 @@ class Configer(object):
     # List of supported file formats
     __SUPPORTED_FILE_FORMATS = [ConfigTypeEnum.TOML.value, ConfigTypeEnum.YAML.value]
 
-    def __init__(self,
-                 path: str = None):
+    def __init__(self, path: str = None):
         """Initialize the ConfigManager
         Args:
             path(str): the path of the configuration file
@@ -96,7 +94,7 @@ class Configer(object):
         """
         self.__value = value
 
-    def load_by_path(self, path: str) -> 'Configer':
+    def load_by_path(self, path: str) -> "Configer":
         """Load the configuration file by the given path
         Args:
             path(str): the path of the configuration file
@@ -104,7 +102,7 @@ class Configer(object):
             Configer: the Configer object
         """
         # Check the file format.
-        file_format = path.split('.')[-1]
+        file_format = path.split(".")[-1]
         if file_format not in self.__SUPPORTED_FILE_FORMATS:
             raise ValueError(f"Unsupported file format: {file_format}")
 
@@ -114,7 +112,7 @@ class Configer(object):
         self.__value = config_data
         return self
 
-    def load(self) -> 'Configer':
+    def load(self) -> "Configer":
         """Load the configuration file
 
         Returns:
@@ -161,13 +159,10 @@ class Configer(object):
             Optional[Callable]: the load method
         """
         # Define the regular expression and the corresponding method map.
-        toml_re = re.compile(r'.*\.toml')
-        yaml_re = re.compile(r'.*\.yaml')
+        toml_re = re.compile(r".*\.toml")
+        yaml_re = re.compile(r".*\.yaml")
 
-        re_method_map = {
-            toml_re: self.__load_toml_file,
-            yaml_re: self.__load_yaml_file
-        }
+        re_method_map = {toml_re: self.__load_toml_file, yaml_re: self.__load_yaml_file}
         for re_compile, method in re_method_map.items():
             if re_compile.search(path):
                 return method
@@ -181,10 +176,10 @@ class Configer(object):
         Returns:
             dict: the value of the toml file
         """
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             config_data = tomli.load(f)
         if config_data:
-            root_package_name = config_data.get('PACKAGE_PATH_INFO', {}).get('ROOT_PACKAGE')
+            root_package_name = config_data.get("PACKAGE_PATH_INFO", {}).get("ROOT_PACKAGE")
             PlaceholderResolver().set_root_package_name(root_package_name)
         config_data = PlaceholderResolver().resolve(config_data)
         return config_data
@@ -198,7 +193,7 @@ class Configer(object):
         Returns:
             dict: the value of the yaml file
         """
-        with open(path, 'r', encoding='utf-8') as stream:
+        with open(path, "r", encoding="utf-8") as stream:
             config_data = yaml.safe_load(stream)
         config_data = PlaceholderResolver().resolve(config_data)
         return config_data

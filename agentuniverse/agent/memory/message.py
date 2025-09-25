@@ -25,6 +25,7 @@ class Message(BaseModel):
         source (Optional[str]): The source of the message.
         metadata (Optional[dict]): The metadata of the message.
     """
+
     id: Optional[str] = None
     type: Optional[str] = None
     content: Optional[Union[str, List[Union[str, Dict]]]] = None
@@ -46,8 +47,8 @@ class Message(BaseModel):
             return BaseStringMessagePromptTemplate.from_template(self.content)
 
     @staticmethod
-    def as_langchain_list(message_list: List['Message']):
-        """Convert agentUniverse(aU) message list to langchain message list """
+    def as_langchain_list(message_list: List["Message"]):
+        """Convert agentUniverse(aU) message list to langchain message list"""
         langchain_message_list = []
         if message_list is None:
             return langchain_message_list
@@ -60,7 +61,7 @@ class Message(BaseModel):
         return {"type": self.type, "content": self.content, "metadata": self.metadata, "source": self.source}
 
     @staticmethod
-    def from_dict(message_dict: dict) -> 'Message':
+    def from_dict(message_dict: dict) -> "Message":
         """Convert the dict to agentUniverse(aU) message class.
 
         Args:
@@ -71,11 +72,11 @@ class Message(BaseModel):
         message = Message()
         if not message_dict:
             return message
-        attributes = ['id', 'content', 'type', 'source', 'metadata', 'role']
+        attributes = ["id", "content", "type", "source", "metadata", "role"]
         for attr in attributes:
             if attr in message_dict:
-                if attr == 'role':
-                    setattr(message, 'type', message_dict[attr])
+                if attr == "role":
+                    setattr(message, "type", message_dict[attr])
                 else:
                     setattr(message, attr, message_dict[attr])
         return message

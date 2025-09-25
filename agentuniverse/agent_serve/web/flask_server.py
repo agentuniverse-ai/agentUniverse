@@ -2,8 +2,7 @@ import time
 import traceback
 from concurrent.futures import TimeoutError
 
-from flask import Flask, Response, g, request, make_response, \
-    copy_current_request_context
+from flask import Flask, Response, g, request, make_response, copy_current_request_context
 from loguru import logger
 from werkzeug.exceptions import HTTPException
 from werkzeug.local import LocalProxy
@@ -12,8 +11,7 @@ from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 from .request_task import RequestTask
 from .thread_with_result import ThreadPoolExecutorWithReturnValue
-from .web_util import request_param, service_run_queue, make_standard_response, \
-    FlaskServerManager
+from .web_util import request_param, service_run_queue, make_standard_response, FlaskServerManager
 from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
 from ...base.util.logging.logging_util import LOGGER
@@ -54,22 +52,20 @@ def timed_generator(generator, start_time, context_prefix):
             log_type=LogTypeEnum.flask_response,
             flask_response="Stream finished",
             elapsed_time=elapsed_time,
-            context_prefix=context_prefix
+            context_prefix=context_prefix,
         ).info("Stream finished.")
 
 
 app = Flask(__name__)
-app.config['JSON_AS_ASCII'] = False
+app.config["JSON_AS_ASCII"] = False
 app.json.ensure_ascii = False
 
 
 @app.before_request
 def before():
-    logger.bind(
-        log_type=LogTypeEnum.flask_request,
-        flask_request=request,
-        context_prefix=get_context_prefix()
-    ).info("Before request.")
+    logger.bind(log_type=LogTypeEnum.flask_request, flask_request=request, context_prefix=get_context_prefix()).info(
+        "Before request."
+    )
     g.start_time = time.time()
 
 
@@ -80,9 +76,10 @@ def after_request(response):
             log_type=LogTypeEnum.flask_response,
             flask_response=response,
             elapsed_time=time.time() - g.start_time,
-            context_prefix=get_context_prefix()
+            context_prefix=get_context_prefix(),
         ).info("After request.")
     return response
+
 
 @app.teardown_request
 def teardown_resource(exception):
@@ -94,16 +91,15 @@ def teardown_resource(exception):
 
 @app.route("/echo")
 def echo():
-    return 'Welcome to agentUniverse!!!'
+    return "Welcome to agentUniverse!!!"
 
 
 @app.route("/liveness")
 def liveness():
-    return make_standard_response(success=True,
-                                  result="liveness health check pass!")
+    return make_standard_response(success=True, result="liveness health check pass!")
 
 
-@app.route("/service_run", methods=['POST'])
+@app.route("/service_run", methods=["POST"])
 @request_param
 def service_run(service_id: str, params: dict, saved: bool = False):
     """Synchronous invocation of an agent service.
@@ -122,21 +118,17 @@ def service_run(service_id: str, params: dict, saved: bool = False):
     """
     try:
         params = {} if params is None else params
-        request_task = RequestTask(ServiceInstance(service_id).run, saved,
-                                   **params)
+        request_task = RequestTask(ServiceInstance(service_id).run, saved, **params)
         with ThreadPoolExecutorWithReturnValue() as executor:
             future = executor.submit(copy_current_request_context(request_task.run))
             result = future.result(timeout=FlaskServerManager().sync_service_timeout)
     except TimeoutError:
-        return make_standard_response(success=False,
-                                      message="AU sync service timeout",
-                                      status_code=504)
+        return make_standard_response(success=False, message="AU sync service timeout", status_code=504)
 
-    return make_standard_response(success=True, result=result,
-                                  request_id=request_task.request_id)
+    return make_standard_response(success=True, result=result, request_id=request_task.request_id)
 
 
-@app.route("/service_run_stream", methods=['POST'])
+@app.route("/service_run_stream", methods=["POST"])
 @request_param
 def service_run_stream(service_id: str, params: dict, saved: bool = False):
     """Synchronous invocation of an agent service, return in stream form.
@@ -150,16 +142,16 @@ def service_run_stream(service_id: str, params: dict, saved: bool = False):
         A SSE(Server-Sent Event) stream.
     """
     params = {} if params is None else params
-    params['service_id'] = service_id
-    params['streaming'] = True
+    params["service_id"] = service_id
+    params["streaming"] = True
     task = RequestTask(service_run_queue, saved, **params)
     context_prefix = get_context_prefix()
     response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
-    response.headers['X-Request-ID'] = task.request_id
+    response.headers["X-Request-ID"] = task.request_id
     return response
 
 
-@app.route("/service_run_async", methods=['POST'])
+@app.route("/service_run_async", methods=["POST"])
 @request_param
 def service_run_async(service_id: str, params: dict, saved: bool = True):
     """Async invocation of an agent service, return the request id used to
@@ -178,14 +170,13 @@ def service_run_async(service_id: str, params: dict, saved: bool = True):
             service_run_result api to get the result of async task.
     """
     params = {} if params is None else params
-    params['service_id'] = service_id
+    params["service_id"] = service_id
     task = RequestTask(service_run_queue, saved, **params)
     task.async_run()
-    return make_standard_response(success=True,
-                                  request_id=task.request_id)
+    return make_standard_response(success=True, request_id=task.request_id)
 
 
-@app.route("/service_run_result", methods=['GET'])
+@app.route("/service_run_result", methods=["GET"])
 @request_param
 def service_run_result(request_id: str):
     """Get the async service result.
@@ -203,12 +194,8 @@ def service_run_result(request_id: str):
     """
     data = RequestTask.query_request_state(request_id)
     if data is None:
-        return make_standard_response(
-            success=False,
-            message=f"request {request_id} not found"
-        )
-    return make_standard_response(success=True, result=data,
-                                  request_id=request_id)
+        return make_standard_response(success=False, message=f"request {request_id} not found")
+    return make_standard_response(success=True, result=data, request_id=request_id)
 
 
 @app.errorhandler(HTTPException)
@@ -223,43 +210,34 @@ def handle_exception(e):
     """A global non http exception handler"""
     LOGGER.error(traceback.format_exc())
     if isinstance(e, ServiceNotFoundError):
-        return make_standard_response(success=False,
-                                      message=str(e),
-                                      status_code=404)
-    return make_standard_response(success=False,
-                                  message="Internal Server Error",
-                                  status_code=500)
+        return make_standard_response(success=False, message=str(e), status_code=404)
+    return make_standard_response(success=False, message="Internal Server Error", status_code=500)
 
 
-@app.route("/chat/completions", methods=['POST'])
+@app.route("/chat/completions", methods=["POST"])
 @request_param
 def openai_protocol_chat(model: str, messages: list):
     """
     OpenAI chat completion API.
     """
     stream = request.json.get("stream", False)
-    params = {
-        "service_id": model,
-        "messages": messages,
-        "stream": stream
-    }
+    params = {"service_id": model, "messages": messages, "stream": stream}
     if stream:
         task = RequestTask(service_run_queue, False, **params)
         context_prefix = get_context_prefix()
-        response = Response(timed_generator(task.user_stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
-        response.headers['X-Request-ID'] = task.request_id
+        response = Response(
+            timed_generator(task.user_stream_run(), g.start_time, context_prefix), mimetype="text/event-stream"
+        )
+        response.headers["X-Request-ID"] = task.request_id
         return response
     try:
         params = {} if params is None else params
-        request_task = RequestTask(ServiceInstance(params.get('service_id')).run, False,
-                                   **params)
+        request_task = RequestTask(ServiceInstance(params.get("service_id")).run, False, **params)
         with ThreadPoolExecutorWithReturnValue() as executor:
             future = executor.submit(request_task.run)
             result = future.result(timeout=FlaskServerManager().sync_service_timeout)
     except TimeoutError:
-        return make_standard_response(success=False,
-                                      message="AU sync service timeout",
-                                      status_code=504)
+        return make_standard_response(success=False, message="AU sync service timeout", status_code=504)
     response = make_response(result, 200)
-    response.headers['X-Request-ID'] = request_task.request_id
+    response.headers["X-Request-ID"] = request_task.request_id
     return response

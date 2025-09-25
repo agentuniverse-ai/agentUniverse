@@ -134,9 +134,7 @@ def parse_partial_json(s: str, *, strict: bool = False) -> Any:
     return json.loads(s, strict=strict)
 
 
-def parse_json_markdown(
-        json_string: str, *, parser: Callable[[str], Any] = parse_partial_json
-) -> dict:
+def parse_json_markdown(json_string: str, *, parser: Callable[[str], Any] = parse_partial_json) -> dict:
     """
     Parse a JSON string from a Markdown string.
 
@@ -162,9 +160,7 @@ def parse_json_markdown(
     return _parse_json(json_str, parser=parser)
 
 
-def _parse_json(
-        json_str: str, *, parser: Callable[[str], Any] = parse_partial_json
-) -> dict:
+def _parse_json(json_str: str, *, parser: Callable[[str], Any] = parse_partial_json) -> dict:
     # Strip whitespace and newlines from the start and end
     json_str = json_str.strip().strip("`")
 
@@ -193,9 +189,5 @@ def parse_and_check_json_markdown(text: str, expected_keys: List[str]) -> dict:
         raise Exception(f"Got invalid JSON object. Error: {e}")
     for key in expected_keys:
         if key not in json_obj:
-            raise Exception(
-                f"Got invalid return object. Expected key `{key}` "
-                f"to be present, but got {json_obj}"
-            )
+            raise Exception(f"Got invalid return object. Expected key `{key}` to be present, but got {json_obj}")
     return json_obj
-

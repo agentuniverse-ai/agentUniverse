@@ -55,7 +55,6 @@ class OpenAIStyleLLM(LLM):
             timeout=self.request_timeout,
             max_retries=self.max_retries,
             http_client=httpx.Client(proxy=self.proxy) if self.proxy else None,
-
             **(self.client_args or {}),
         )
 
@@ -84,7 +83,6 @@ class OpenAIStyleLLM(LLM):
             timeout=self.request_timeout,
             max_retries=self.max_retries,
             http_client=httpx.Client(proxy=self.proxy) if self.proxy else None,
-
             **(self.client_args or {}),
         )
 
@@ -110,24 +108,22 @@ class OpenAIStyleLLM(LLM):
             **kwargs: Arbitrary keyword arguments.
         """
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
-        if 'stream' in kwargs:
-            streaming = kwargs.pop('stream')
+        if "stream" in kwargs:
+            streaming = kwargs.pop("stream")
         ext_params = self.ext_params.copy()
         extra_body = kwargs.pop("extra_body", {})
         ext_params = {**ext_params, **extra_body}
         if streaming and "stream_options" not in ext_params:
-            ext_params["stream_options"] = {
-                "include_usage": True
-            }
+            ext_params["stream_options"] = {"include_usage": True}
         self.client = self._new_client()
-        self.client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.api_base
+        self.client.base_url = kwargs.pop("api_base") if kwargs.get("api_base") else self.api_base
         client = self.client
         chat_completion = client.chat.completions.create(
             messages=messages,
-            model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
+            model=kwargs.pop("model", self.model_name),
+            temperature=kwargs.pop("temperature", self.temperature),
+            stream=kwargs.pop("stream", streaming),
+            max_tokens=kwargs.pop("max_tokens", self.max_tokens),
             extra_headers=kwargs.pop("extra_headers", self.ext_headers),
             extra_body=ext_params,
             **kwargs,
@@ -145,24 +141,22 @@ class OpenAIStyleLLM(LLM):
             **kwargs: Arbitrary keyword arguments.
         """
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
-        if 'stream' in kwargs:
-            streaming = kwargs.pop('stream')
+        if "stream" in kwargs:
+            streaming = kwargs.pop("stream")
         self.async_client: AsyncOpenAI = self._new_async_client()
-        self.async_client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.api_base
+        self.async_client.base_url = kwargs.pop("api_base") if kwargs.get("api_base") else self.api_base
         async_client = self.async_client
         ext_params = self.ext_params.copy()
         extra_body = kwargs.pop("extra_body", {})
         ext_params = {**ext_params, **extra_body}
         if streaming and "stream_options" not in ext_params:
-            ext_params["stream_options"] = {
-                "include_usage": True
-            }
+            ext_params["stream_options"] = {"include_usage": True}
         chat_completion = await async_client.chat.completions.create(
             messages=messages,
-            model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
+            model=kwargs.pop("model", self.model_name),
+            temperature=kwargs.pop("temperature", self.temperature),
+            stream=kwargs.pop("stream", streaming),
+            max_tokens=kwargs.pop("max_tokens", self.max_tokens),
             extra_headers=kwargs.pop("extra_headers", self.ext_headers),
             extra_body=ext_params,
             **kwargs,
@@ -180,16 +174,16 @@ class OpenAIStyleLLM(LLM):
         return LangchainOpenAIStyleInstance(self)
 
     def set_by_agent_model(self, **kwargs) -> None:
-        """ Assign values of parameters to the OpenAILLM model in the agent configuration."""
+        """Assign values of parameters to the OpenAILLM model in the agent configuration."""
         copied_obj = super().set_by_agent_model(**kwargs)
-        if 'api_key' in kwargs and kwargs['api_key']:
-            copied_obj.api_key = kwargs['api_key']
-        if 'api_base' in kwargs and kwargs['api_base']:
-            copied_obj.api_base = kwargs['api_base']
-        if 'proxy' in kwargs and kwargs['proxy']:
-            copied_obj.proxy = kwargs['proxy']
-        if 'client_args' in kwargs and kwargs['client_args']:
-            copied_obj.client_args = kwargs['client_args']
+        if "api_key" in kwargs and kwargs["api_key"]:
+            copied_obj.api_key = kwargs["api_key"]
+        if "api_base" in kwargs and kwargs["api_base"]:
+            copied_obj.api_base = kwargs["api_base"]
+        if "proxy" in kwargs and kwargs["proxy"]:
+            copied_obj.proxy = kwargs["proxy"]
+        if "client_args" in kwargs and kwargs["client_args"]:
+            copied_obj.client_args = kwargs["client_args"]
         return copied_obj
 
     @staticmethod
@@ -221,22 +215,22 @@ class OpenAIStyleLLM(LLM):
             if llm_output:
                 yield llm_output
 
-    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'LLM':
-        if 'api_base' in component_configer.configer.value:
-            api_base = component_configer.configer.value.get('api_base')
+    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> "LLM":
+        if "api_base" in component_configer.configer.value:
+            api_base = component_configer.configer.value.get("api_base")
             self.api_base = process_yaml_func(api_base, component_configer.yaml_func_instance)
-        elif 'api_base_env' in component_configer.configer.value:
-            self.api_base = get_from_env(component_configer.configer.value.get('api_base_env'))
-        if 'api_key' in component_configer.configer.value:
-            api_key = component_configer.configer.value.get('api_key')
+        elif "api_base_env" in component_configer.configer.value:
+            self.api_base = get_from_env(component_configer.configer.value.get("api_base_env"))
+        if "api_key" in component_configer.configer.value:
+            api_key = component_configer.configer.value.get("api_key")
             self.api_key = process_yaml_func(api_key, component_configer.yaml_func_instance)
-        elif 'api_key_env' in component_configer.configer.value:
-            self.api_key = get_from_env(component_configer.configer.value.get('api_key_env'))
-        if 'organization' in component_configer.configer.value:
-            organization = component_configer.configer.value.get('organization')
+        elif "api_key_env" in component_configer.configer.value:
+            self.api_key = get_from_env(component_configer.configer.value.get("api_key_env"))
+        if "organization" in component_configer.configer.value:
+            organization = component_configer.configer.value.get("organization")
             self.organization = process_yaml_func(organization, component_configer.yaml_func_instance)
-        if 'proxy' in component_configer.configer.value:
-            proxy = component_configer.configer.value.get('proxy')
+        if "proxy" in component_configer.configer.value:
+            proxy = component_configer.configer.value.get("proxy")
             self.proxy = process_yaml_func(proxy, component_configer.yaml_func_instance)
         if component_configer.configer.value.get("extra_headers"):
             self.ext_headers = component_configer.configer.value.get("extra_headers")

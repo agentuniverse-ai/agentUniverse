@@ -18,8 +18,7 @@ from agentuniverse.agent.action.knowledge.embedding.embedding_manager import Emb
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.store.store import Store
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
 class ChromaStore(Store):
@@ -33,7 +32,7 @@ class ChromaStore(Store):
         persist_path (Optional[str]): Path to save the chroma database.
     """
 
-    collection_name: Optional[str] = 'chroma_db'
+    collection_name: Optional[str] = "chroma_db"
     collection: SkipValidation[Collection] = None
     persist_path: Optional[str] = None
     embedding_model: Optional[str] = None
@@ -41,27 +40,21 @@ class ChromaStore(Store):
 
     def _new_client(self) -> Any:
         """Initialize the chroma client."""
-        if self.persist_path.startswith('http') or \
-                self.persist_path.startswith('https'):
+        if self.persist_path.startswith("http") or self.persist_path.startswith("https"):
             # Remote database URL
             parsed_url = urlparse(self.persist_path)
             settings = Settings(
                 chroma_api_impl="chromadb.api.fastapi.FastAPI",
                 chroma_server_host=parsed_url.hostname,
-                chroma_server_http_port=str(parsed_url.port)
+                chroma_server_http_port=str(parsed_url.port),
             )
         else:
-            settings = Settings(
-                is_persistent=True,
-                persist_directory=self.persist_path
-            )
+            settings = Settings(is_persistent=True, persist_directory=self.persist_path)
 
         client = chromadb.Client(settings)
         if self.collection is None:
             # default to create a new collection or get an existed collection.
-            self.collection = client.get_or_create_collection(
-                name=self.collection_name
-            )
+            self.collection = client.get_or_create_collection(name=self.collection_name)
         return client
 
     def query(self, query: Query, **kwargs) -> List[Document]:
@@ -81,18 +74,20 @@ class ChromaStore(Store):
 
         embedding = query.embeddings
         if self.embedding_model is not None and len(embedding) == 0:
-            embedding = EmbeddingManager().get_instance_obj(
-                self.embedding_model
-            ).get_embeddings([query.query_str], text_type="query")[0]
+            embedding = (
+                EmbeddingManager()
+                .get_instance_obj(self.embedding_model)
+                .get_embeddings([query.query_str], text_type="query")[0]
+            )
         if len(embedding) > 0:
             query_result = self.collection.query(
                 n_results=query.similarity_top_k if query.similarity_top_k else self.similarity_top_k,
-                query_embeddings=embedding
+                query_embeddings=embedding,
             )
         else:
             query_result = self.collection.query(
                 n_results=query.similarity_top_k if query.similarity_top_k else self.similarity_top_k,
-                query_texts=[query.query_str]
+                query_texts=[query.query_str],
             )
         # convert to the agentUniverse(aU) document format
         return self.to_documents(query_result)
@@ -112,14 +107,12 @@ class ChromaStore(Store):
         for document in documents:
             embedding = document.embedding
             if self.embedding_model is not None and len(embedding) == 0:
-                embedding = EmbeddingManager().get_instance_obj(
-                    self.embedding_model
-                ).get_embeddings([document.text])[0]
+                embedding = EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([document.text])[0]
             self.collection.add(
                 documents=[document.text],
                 metadatas=[document.metadata],
                 embeddings=[embedding] if len(embedding) > 0 else None,
-                ids=[document.id]
+                ids=[document.id],
             )
 
     def upsert_document(self, documents: List[Document], **kwargs):
@@ -127,14 +120,12 @@ class ChromaStore(Store):
         for document in documents:
             embedding = document.embedding
             if self.embedding_model is not None and len(embedding) == 0:
-                embedding = EmbeddingManager().get_instance_obj(
-                    self.embedding_model
-                ).get_embeddings([document.text])[0]
+                embedding = EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([document.text])[0]
             self.collection.upsert(
                 documents=[document.text],
                 metadatas=[document.metadata],
                 embeddings=[embedding] if embedding is not None else None,
-                ids=[document.id]
+                ids=[document.id],
             )
 
     def update_document(self, documents: List[Document], **kwargs):
@@ -142,14 +133,12 @@ class ChromaStore(Store):
         for document in documents:
             embedding = document.embedding
             if self.embedding_model is not None and len(embedding) == 0:
-                embedding = EmbeddingManager().get_instance_obj(
-                    self.embedding_model
-                ).get_embeddings([document.text])[0]
+                embedding = EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([document.text])[0]
             self.collection.update(
                 documents=[document.text],
                 metadatas=[document.metadata],
                 embeddings=[embedding] if embedding is not None else None,
-                ids=[document.id]
+                ids=[document.id],
             )
 
     @staticmethod
@@ -159,20 +148,18 @@ class ChromaStore(Store):
         if query_result is None:
             return []
         documents = []
-        for i in range(len(query_result['ids'][0])):
-            documents.append(Document(id=query_result['ids'][0][i],
-                                      text=query_result['documents'][0][i],
-                                      embedding=query_result['embeddings'][0][
-                                          i]
-                                      if query_result[
-                                             'embeddings'] is not None else [],
-                                      metadata=query_result['metadatas'][0][i]
-                                      if query_result[
-                                             'metadatas'] is not None else None))
+        for i in range(len(query_result["ids"][0])):
+            documents.append(
+                Document(
+                    id=query_result["ids"][0][i],
+                    text=query_result["documents"][0][i],
+                    embedding=query_result["embeddings"][0][i] if query_result["embeddings"] is not None else [],
+                    metadata=query_result["metadatas"][0][i] if query_result["metadatas"] is not None else None,
+                )
+            )
         return documents
 
-    def _initialize_by_component_configer(self,
-                                          chroma_store_configer: ComponentConfiger) -> 'DocProcessor':
+    def _initialize_by_component_configer(self, chroma_store_configer: ComponentConfiger) -> "DocProcessor":
         super()._initialize_by_component_configer(chroma_store_configer)
         if hasattr(chroma_store_configer, "collection_name"):
             self.collection_name = chroma_store_configer.collection_name

@@ -17,12 +17,14 @@ from agentuniverse.base.util.env_util import get_from_env
 
 api_base = "https://api.jina.ai/v1/rerank"
 
+
 class JinaReranker(DocProcessor):
     """Document reranker using Jina AI's Rerank API.
 
     This processor reranks documents based on their relevance to a query
     using Jina AI's reranking models.
     """
+
     api_key: Optional[str] = None
     model_name: str = "jina-reranker-v2-base-multilingual"
     top_n: int = 10
@@ -44,7 +46,8 @@ class JinaReranker(DocProcessor):
             raise Exception("Jina AI reranker needs an origin string query.")
         if not self.api_key:
             raise Exception(
-                "Jina AI API key is not set. Please configure it in the component or environment variables.")
+                "Jina AI API key is not set. Please configure it in the component or environment variables."
+            )
         if not origin_docs:
             return []
 
@@ -84,7 +87,7 @@ class JinaReranker(DocProcessor):
 
         return rerank_docs
 
-    def _initialize_by_component_configer(self, doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
+    def _initialize_by_component_configer(self, doc_processor_configer: ComponentConfiger) -> "DocProcessor":
         """Initialize reranker parameters from component configuration.
 
         Args:

@@ -48,7 +48,7 @@ class WorkPattern(ComponentBase):
         """
         pass
 
-    def initialize_by_component_configer(self, work_pattern_configer: WorkPatternConfiger) -> 'WorkPattern':
+    def initialize_by_component_configer(self, work_pattern_configer: WorkPatternConfiger) -> "WorkPattern":
         """Initialize the work pattern by the WorkPatternConfiger object.
 
         Args:

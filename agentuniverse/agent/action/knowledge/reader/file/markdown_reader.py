@@ -13,8 +13,6 @@ from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 
-
-
 class MarkdownReader(Reader):
     """Docx reader."""
 
@@ -27,8 +25,7 @@ class MarkdownReader(Reader):
             `pip install unstructured` and `pip install markdown`
         """
         try:
-            from langchain_community.document_loaders import \
-                UnstructuredMarkdownLoader
+            from langchain_community.document_loaders import UnstructuredMarkdownLoader
         except ImportError:
             raise ImportError(
                 "markdown and unstructured is required to read markdown files: "

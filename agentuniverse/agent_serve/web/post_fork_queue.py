@@ -20,5 +20,3 @@ def add_post_fork(func: Callable, *args: Any, **kwargs: Any) -> None:
     """
 
     POST_FORK_QUEUE.append((func, args, kwargs))
-
-

@@ -26,10 +26,7 @@ class QueryParaphraser(ComponentBase):
     def query_paraphrase(self, origin_query: Query) -> Query:
         """Paraphrase the origin query string to different style."""
 
-
-    def _initialize_by_component_configer(self,
-                                         query_paraphraser_config: ComponentConfiger) \
-            -> 'QueryParaphraser':
+    def _initialize_by_component_configer(self, query_paraphraser_config: ComponentConfiger) -> "QueryParaphraser":
         """Initialize the QueryParaphraser by the ComponentConfiger object.
 
         Args:

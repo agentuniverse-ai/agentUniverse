@@ -46,15 +46,12 @@ class ServiceConfiger(ComponentConfiger):
 
     def __set_default_meta_info(self):
         """Set default instantiated class of service."""
-        if (not hasattr(self, '_ComponentConfiger__metadata_module')
-                or self._ComponentConfiger__metadata_module is None):
-            self._ComponentConfiger__metadata_module = ("agentuniverse."
-                                                        "agent_serve.service")
-        if (not hasattr(self, '_ComponentConfiger__metadata_class')
-                or self._ComponentConfiger__metadata_class is None):
-            self._ComponentConfiger__metadata_class = 'Service'
+        if not hasattr(self, "_ComponentConfiger__metadata_module") or self._ComponentConfiger__metadata_module is None:
+            self._ComponentConfiger__metadata_module = "agentuniverse.agent_serve.service"
+        if not hasattr(self, "_ComponentConfiger__metadata_class") or self._ComponentConfiger__metadata_class is None:
+            self._ComponentConfiger__metadata_class = "Service"
 
-    def load(self) -> 'ServiceConfiger':
+    def load(self) -> "ServiceConfiger":
         """Setting property using own configer member property.
 
         Returns:
@@ -62,7 +59,7 @@ class ServiceConfiger(ComponentConfiger):
         """
         return self.load_by_configer(self.configer)
 
-    def load_by_configer(self, configer: Configer) -> 'ServiceConfiger':
+    def load_by_configer(self, configer: Configer) -> "ServiceConfiger":
         """Initialize self using given configer, get ServiceConfiger property
         from it.
         Args:
@@ -71,11 +68,11 @@ class ServiceConfiger(ComponentConfiger):
             ServiceConfiger: A ServiceConfiger instance.
         """
         super().load_by_configer(configer)
-        agent_code = configer.value.get('agent')
+        agent_code = configer.value.get("agent")
         self.__set_default_meta_info()
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
+            self.__name = configer.value.get("name")
+            self.__description = configer.value.get("description")
             agent_manager: AgentManager = AgentManager()
             self.__agent = agent_manager.get_instance_obj(agent_code)
             if not self.__agent:

@@ -16,6 +16,7 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 
 class Reader(ComponentBase):
     """The basic class for the knowledge reader."""
+
     component_type: ComponentEnum = ComponentEnum.READER
     name: Optional[str] = None
     description: Optional[str] = None
@@ -28,9 +29,7 @@ class Reader(ComponentBase):
     def _load_data(self, *args: Any, **kwargs: Any) -> List[Document]:
         """Load data from the input params."""
 
-    def _initialize_by_component_configer(self,
-                                         reader_configer: ComponentConfiger) \
-            -> 'Reader':
+    def _initialize_by_component_configer(self, reader_configer: ComponentConfiger) -> "Reader":
         """Initialize the reader by the ComponentConfiger object.
 
         Args:

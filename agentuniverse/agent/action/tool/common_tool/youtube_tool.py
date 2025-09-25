@@ -18,13 +18,14 @@ import re
 service_name = "youtube"
 api_version = "v3"
 
+
 class Mode(Enum):
-    VIDEO_SEARCH = "search" 
+    VIDEO_SEARCH = "search"
     TRENDING_VIDEOS = "trending"
-    CHANNEL_INFO = "channel_info" 
+    CHANNEL_INFO = "channel_info"
+
 
 class YouTubeTool(Tool):
-
     service: Optional[Any] = None
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("YOUTUBE_API_KEY"))
     max_results: int = Field(10, description="Maximum video results to return")
@@ -38,7 +39,7 @@ class YouTubeTool(Tool):
 
     def parse_duration(self, duration_str):
         """Converts ISO 8601 duration format to seconds"""
-        match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
+        match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_str)
         if not match:
             return 0
         hours = int(match.group(1)) if match.group(1) else 0
@@ -48,34 +49,32 @@ class YouTubeTool(Tool):
 
     @retry(3, 1.0)
     def _search_videos(self, query: str) -> List[Dict]:
-        try:         
-            search_response = self.service.search().list(
-                q=query,
-                part='id',
-                type='video',
-                maxResults=self.max_results
-            ).execute()
+        try:
+            search_response = (
+                self.service.search().list(q=query, part="id", type="video", maxResults=self.max_results).execute()
+            )
 
-            video_ids = [item['id']['videoId'] for item in search_response.get('items', [])]
+            video_ids = [item["id"]["videoId"] for item in search_response.get("items", [])]
             if not video_ids:
                 return []
 
-            video_response = self.service.videos().list(
-                id=','.join(video_ids),
-                part='snippet,statistics,contentDetails'
-            ).execute()
+            video_response = (
+                self.service.videos().list(id=",".join(video_ids), part="snippet,statistics,contentDetails").execute()
+            )
 
             results = []
-            for item in video_response.get('items', []):
-                results.append({
-                    'id': item['id'],
-                    'title': item['snippet']['title'],
-                    'view_count': int(item['statistics'].get('viewCount', 0)),
-                    'like_count': int(item['statistics'].get('likeCount', 0)),
-                    'comment_count': int(item['statistics'].get('commentCount', 0)),
-                    'duration_seconds': self.parse_duration(item['contentDetails']['duration']),
-                    'url': f"https://www.youtube.com/watch?v={item['id']}"
-                })
+            for item in video_response.get("items", []):
+                results.append(
+                    {
+                        "id": item["id"],
+                        "title": item["snippet"]["title"],
+                        "view_count": int(item["statistics"].get("viewCount", 0)),
+                        "like_count": int(item["statistics"].get("likeCount", 0)),
+                        "comment_count": int(item["statistics"].get("commentCount", 0)),
+                        "duration_seconds": self.parse_duration(item["contentDetails"]["duration"]),
+                        "url": f"https://www.youtube.com/watch?v={item['id']}",
+                    }
+                )
             return results
 
         except HttpError as e:
@@ -87,45 +86,48 @@ class YouTubeTool(Tool):
     @retry(3, 1.0)
     def _get_channel_info(self, channel_id: str) -> Dict:
         try:
-            response = self.service.channels().list(
-                id=channel_id,
-                part='snippet,statistics,contentDetails'
-            ).execute()
+            response = self.service.channels().list(id=channel_id, part="snippet,statistics,contentDetails").execute()
 
-            if not response.get('items'):
+            if not response.get("items"):
                 return {"error": "Channel not found"}
 
-            channel_info = response['items'][0]
-            playlist_id = channel_info['contentDetails']['relatedPlaylists']['uploads']
+            channel_info = response["items"][0]
+            playlist_id = channel_info["contentDetails"]["relatedPlaylists"]["uploads"]
 
             video_list = []
             next_page_token = None
             for _ in range(self.max_results):
-                playlist_items = self.service.playlistItems().list(
-                    playlistId=playlist_id,
-                    part='snippet,contentDetails',
-                    maxResults=self.max_results,
-                    pageToken=next_page_token
-                ).execute()
+                playlist_items = (
+                    self.service.playlistItems()
+                    .list(
+                        playlistId=playlist_id,
+                        part="snippet,contentDetails",
+                        maxResults=self.max_results,
+                        pageToken=next_page_token,
+                    )
+                    .execute()
+                )
 
-                for item in playlist_items.get('items', []):
-                    video_list.append({
-                        'id': item['contentDetails']['videoId'],
-                        'title': item['snippet']['title'],
-                        'published_at': item['snippet']['publishedAt']
-                    })
+                for item in playlist_items.get("items", []):
+                    video_list.append(
+                        {
+                            "id": item["contentDetails"]["videoId"],
+                            "title": item["snippet"]["title"],
+                            "published_at": item["snippet"]["publishedAt"],
+                        }
+                    )
 
-                next_page_token = playlist_items.get('nextPageToken')
+                next_page_token = playlist_items.get("nextPageToken")
                 if not next_page_token:
                     break
 
             return {
-                'name': channel_info['snippet']['title'],
-                'description': channel_info['snippet'].get('description', ''),
-                'subscriber_count': int(channel_info['statistics'].get('subscriberCount', 0)),
-                'total_view_count': int(channel_info['statistics'].get('viewCount', 0)),
-                'total_video_count': int(channel_info['statistics'].get('videoCount', 0)),
-                'latest_video_list': video_list
+                "name": channel_info["snippet"]["title"],
+                "description": channel_info["snippet"].get("description", ""),
+                "subscriber_count": int(channel_info["statistics"].get("subscriberCount", 0)),
+                "total_view_count": int(channel_info["statistics"].get("viewCount", 0)),
+                "total_video_count": int(channel_info["statistics"].get("videoCount", 0)),
+                "latest_video_list": video_list,
             }
 
         except HttpError as e:
@@ -138,29 +140,31 @@ class YouTubeTool(Tool):
     def _get_trending_videos(self, region_code: Optional[str] = None) -> List[Dict]:
         try:
             request_param = {
-                'part': 'snippet,statistics,contentDetails',
-                'chart': 'mostPopular',
-                'maxResults': self.max_results
+                "part": "snippet,statistics,contentDetails",
+                "chart": "mostPopular",
+                "maxResults": self.max_results,
             }
             if region_code:
-                request_param['regionCode'] = region_code
+                request_param["regionCode"] = region_code
 
             response = self.service.videos().list(**request_param).execute()
 
             results = []
-            for item in response.get('items', []):
-                view_count = int(item['statistics'].get('viewCount', 0))
-                results.append({
-                    'id': item['id'],
-                    'title': item['snippet']['title'],
-                    'channel_title': item['snippet']['channelTitle'],
-                    'published_at': item['snippet']['publishedAt'],
-                    'view_count': view_count,
-                    'like_count': int(item['statistics'].get('likeCount', 0)),
-                    'comment_count': int(item['statistics'].get('commentCount', 0)),
-                    'duration_seconds': self.parse_duration(item['contentDetails']['duration']),
-                    'url': f"https://www.youtube.com/watch?v={item['id']}"
-                })
+            for item in response.get("items", []):
+                view_count = int(item["statistics"].get("viewCount", 0))
+                results.append(
+                    {
+                        "id": item["id"],
+                        "title": item["snippet"]["title"],
+                        "channel_title": item["snippet"]["channelTitle"],
+                        "published_at": item["snippet"]["publishedAt"],
+                        "view_count": view_count,
+                        "like_count": int(item["statistics"].get("likeCount", 0)),
+                        "comment_count": int(item["statistics"].get("commentCount", 0)),
+                        "duration_seconds": self.parse_duration(item["contentDetails"]["duration"]),
+                        "url": f"https://www.youtube.com/watch?v={item['id']}",
+                    }
+                )
             return results
 
         except HttpError as e:
@@ -169,10 +173,7 @@ class YouTubeTool(Tool):
                 error_msg += " (API quota may be exhausted)"
             return [{"error": error_msg}]
 
-    def execute(self,
-            mode: str,
-            input: Optional[str] = None
-        ) -> List[Dict] | Dict:
+    def execute(self, mode: str, input: Optional[str] = None) -> List[Dict] | Dict:
         if self.service is None:
             self._initialize_service()
 

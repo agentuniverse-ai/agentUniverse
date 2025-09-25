@@ -14,6 +14,6 @@ from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 class QianfanLLMChannel(LLMChannel):
     channel_api_base: Optional[str] = "https://qianfan.baidubce.com/v2/"
 
-    def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'QianfanLLMChannel':
+    def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> "QianfanLLMChannel":
         super()._initialize_by_component_configer(component_configer)
         return self

@@ -23,7 +23,7 @@ class RequestDO(BaseModel):
     result: dict = Field(description="Exec result.")
     steps: list = Field(description="Exec steps.")
     additional_args: dict = Field(description="Additional info.")
-    gmt_create: Optional[datetime.datetime] = Field(
-        description="Create time", default_factory=datetime.datetime.now)
+    gmt_create: Optional[datetime.datetime] = Field(description="Create time", default_factory=datetime.datetime.now)
     gmt_modified: Optional[datetime.datetime] = Field(
-        description="Modified time", default_factory=datetime.datetime.now)
+        description="Modified time", default_factory=datetime.datetime.now
+    )

@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/13 12:01
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: tool_configer.py
 from typing import Optional, List
@@ -39,14 +39,14 @@ class ToolConfiger(ComponentConfiger):
     def input_keys(self) -> Optional[List]:
         return self.__input_keys
 
-    def load(self) -> 'ToolConfiger':
+    def load(self) -> "ToolConfiger":
         """Load the configuration by the Configer object.
         Returns:
             ToolConfiger: the ToolConfiger object
         """
         return self.load_by_configer(self.__configer)
 
-    def load_by_configer(self, configer: Configer) -> 'ToolConfiger':
+    def load_by_configer(self, configer: Configer) -> "ToolConfiger":
         """Load the configuration by the Configer object.
         Args:
             configer(Configer): the Configer object
@@ -56,10 +56,10 @@ class ToolConfiger(ComponentConfiger):
         super().load_by_configer(configer)
 
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
-            self.__tool_type = configer.value.get('tool_type')
-            self.__input_keys = configer.value.get('input_keys')
+            self.__name = configer.value.get("name")
+            self.__description = configer.value.get("description")
+            self.__tool_type = configer.value.get("tool_type")
+            self.__input_keys = configer.value.get("input_keys")
         except Exception as e:
             raise Exception(f"Failed to parse the Tool configuration: {e}")
         return self

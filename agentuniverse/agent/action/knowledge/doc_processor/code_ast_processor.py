@@ -9,7 +9,11 @@ import json
 from typing import List, Dict, Any, Optional, cast
 
 from agentuniverse.agent.action.knowledge.doc_processor.types.ast_types import AstNode, AstNodePoint, CodeBoundary
-from agentuniverse.agent.action.knowledge.doc_processor.types.code_types import CodeFeatures, CodeRepresentation, ChunkRepresentation
+from agentuniverse.agent.action.knowledge.doc_processor.types.code_types import (
+    CodeFeatures,
+    CodeRepresentation,
+    ChunkRepresentation,
+)
 from agentuniverse.agent.action.knowledge.doc_processor.types.metrics_types import CodeMetrics
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -19,7 +23,6 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 
 
 class CodeAstProcessor(DocProcessor):
-
     max_depth: int = 8
     language_dir: str = None
     chunk_size: int = 1000
@@ -32,25 +35,25 @@ class CodeAstProcessor(DocProcessor):
         result_docs = []
         for doc in origin_docs:
             code = doc.text
-            language = doc.metadata.get('language', 'unknown') if doc.metadata else 'unknown'
+            language = doc.metadata.get("language", "unknown") if doc.metadata else "unknown"
             metadata = doc.metadata.copy() if doc.metadata else {}
-            metadata['document_type'] = 'code_ast'
+            metadata["document_type"] = "code_ast"
             result_docs.extend(self._process_with_tree_sitter(code, language, metadata))
         return result_docs
 
-    def _process_with_tree_sitter(self, code: str, language: str,
-                                  metadata: Dict[str, Any]) -> List[Document]:
+    def _process_with_tree_sitter(self, code: str, language: str, metadata: Dict[str, Any]) -> List[Document]:
         def _ensure_language() -> None:
             if language not in self._languages:
                 try:
                     from tree_sitter import Language
                     from importlib import import_module
-                    module_name = f'tree_sitter_{language}'
+
+                    module_name = f"tree_sitter_{language}"
                     lang_module = import_module(module_name)
                     self._languages[language] = Language(lang_module.language())
                 except ImportError:
-                    raise ImportError(
-                        f"Could not import {module_name}. Install with: pip install {module_name}")
+                    raise ImportError(f"Could not import {module_name}. Install with: pip install {module_name}")
+
         _ensure_language()
 
         result_docs: List[Document] = []
@@ -62,17 +65,13 @@ class CodeAstProcessor(DocProcessor):
             "ast": ast_json,
             "features": features,
             "language": language,
-            "code_length": len(code)
+            "code_length": len(code),
         }
-        metadata['processing_method'] = 'tree_sitter'
-        ast_doc: Document = Document(
-            text=json.dumps(repr),
-            metadata=metadata
-        )
+        metadata["processing_method"] = "tree_sitter"
+        ast_doc: Document = Document(text=json.dumps(repr), metadata=metadata)
         result_docs.append(ast_doc)
         if len(code) > self.chunk_size:
-            chunk_docs = self._generate_code_chunks(
-                code, tree.root_node, language, metadata)
+            chunk_docs = self._generate_code_chunks(code, tree.root_node, language, metadata)
             result_docs.extend(chunk_docs)
         return result_docs
 
@@ -93,7 +92,7 @@ class CodeAstProcessor(DocProcessor):
             "start_point": start_point,
             "end_point": end_point,
             "start_byte": start_byte,
-            "end_byte": end_byte
+            "end_byte": end_byte,
         }
 
         if len(text) < self.max_node_len or node.child_count == 0:
@@ -110,14 +109,13 @@ class CodeAstProcessor(DocProcessor):
         return result
 
     def _extract_features(self, node: Any, code: str, language: str) -> CodeFeatures:
-
         features: CodeFeatures = {
             "node_counts": self._count_node_types(node),
             "code_metrics": self._calculate_code_metrics(code, language),
             "identifier_count": 0,
             "function_count": 0,
             "class_count": 0,
-            "statement_count": 0
+            "statement_count": 0,
         }
 
         cursor = node.walk()
@@ -159,34 +157,34 @@ class CodeAstProcessor(DocProcessor):
         return counts
 
     def _calculate_code_metrics(self, code: str, language: str) -> CodeMetrics:
-
         lines = code.splitlines()
-        code_lines = [line.strip() for line in lines if line.strip(
-        ) and not line.strip().startswith(('#', '//', '/*', '*', '*/'))]
+        code_lines = [
+            line.strip() for line in lines if line.strip() and not line.strip().startswith(("#", "//", "/*", "*", "*/"))
+        ]
 
         metrics: CodeMetrics = {
             "line_count": len(lines),
             "code_line_count": len(code_lines),
             "avg_line_length": sum(len(line) for line in code_lines) / max(len(code_lines), 1),
             "max_line_length": max([len(line) for line in code_lines]) if code_lines else 0,
-            "character_count": len(code)
+            "character_count": len(code),
         }
         return metrics
 
-    def _generate_code_chunks(
-            self,
-            code: str,
-            root_node,
-            language: str,
-            metadata: Dict[str, Any]) -> List[Document]:
+    def _generate_code_chunks(self, code: str, root_node, language: str, metadata: Dict[str, Any]) -> List[Document]:
         chunks = []
         lines = code.splitlines()
         boundaries = []
 
         def _collect_declarations(node, path=""):
-
-            if node.type in ("function_definition", "method_definition", "class_definition",
-                             "function_declaration", "method_declaration", "class_declaration"):
+            if node.type in (
+                "function_definition",
+                "method_definition",
+                "class_definition",
+                "function_declaration",
+                "method_declaration",
+                "class_declaration",
+            ):
                 start_line = node.start_point[0]
                 end_line = node.end_point[0]
 
@@ -196,7 +194,7 @@ class CodeAstProcessor(DocProcessor):
 
                     for child in node.children:
                         if child.type == "identifier":
-                            name = code[child.start_byte:child.end_byte]
+                            name = code[child.start_byte : child.end_byte]
                             break
 
                     boundary: CodeBoundary = {
@@ -204,7 +202,7 @@ class CodeAstProcessor(DocProcessor):
                         "end": end_line,
                         "type": node_type,
                         "name": name,
-                        "node": node
+                        "node": node,
                     }
                     boundaries.append(boundary)
 
@@ -232,7 +230,7 @@ class CodeAstProcessor(DocProcessor):
                 if end_line - start_line < 3:
                     continue
 
-                chunk_code = "\n".join(lines[start_line:end_line + 1])
+                chunk_code = "\n".join(lines[start_line : end_line + 1])
 
                 chunk_metadata = metadata.copy()
                 chunk_metadata["chunk_type"] = boundary["type"]
@@ -250,16 +248,12 @@ class CodeAstProcessor(DocProcessor):
                         "code": chunk_code,
                         "language": language,
                         "name": boundary["name"],
-                        "type": boundary["type"]
+                        "type": boundary["type"],
                     }
 
-                    chunk_doc = Document(
-                        text=json.dumps(representation),
-                        metadata=chunk_metadata
-                    )
+                    chunk_doc = Document(text=json.dumps(representation), metadata=chunk_metadata)
                     chunks.append(chunk_doc)
                 except BaseException:
-
                     chunk_metadata["ast_available"] = False
                     chunks.append(Document(text=chunk_code, metadata=chunk_metadata))
 
@@ -281,23 +275,23 @@ class CodeAstProcessor(DocProcessor):
 
         return chunks
 
-    def _initialize_by_component_configer(
-            self, doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
+    def _initialize_by_component_configer(self, doc_processor_configer: ComponentConfiger) -> "DocProcessor":
         super()._initialize_by_component_configer(doc_processor_configer)
         try:
             from tree_sitter import Parser
+
             self._parser = Parser()
             self._languages = {}
         except ImportError:
-            raise ImportError(
-                "tree-sitter not available. Install with: pip install tree-sitter")
+            raise ImportError("tree-sitter not available. Install with: pip install tree-sitter")
 
         if hasattr(doc_processor_configer, "max_depth"):
             self.max_depth = doc_processor_configer.max_depth
 
         if not hasattr(doc_processor_configer, "language_dir"):
             raise ValueError(
-                "language_dir is required - tree-sitter needs compiled language libraries (.so files) to parse code, download from https://tree-sitter.github.io/tree-sitter/#available-parsers")
+                "language_dir is required - tree-sitter needs compiled language libraries (.so files) to parse code, download from https://tree-sitter.github.io/tree-sitter/#available-parsers"
+            )
         self.language_dir = doc_processor_configer.language_dir
 
         if hasattr(doc_processor_configer, "chunk_size"):

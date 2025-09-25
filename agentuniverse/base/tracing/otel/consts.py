@@ -7,7 +7,6 @@
 # @FileName: consts.py
 
 
-
 TRACE_ID_KEY = "auTraceId"
 HTTP_HEADER_TRACE_ID_KEY = "AU-TraceId"
 

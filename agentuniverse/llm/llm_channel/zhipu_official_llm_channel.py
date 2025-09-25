@@ -26,6 +26,6 @@ class ZhiPuOfficialLLMChannel(LLMChannel):
     def max_context_length(self) -> int:
         """Max context length.
 
-          The total length of input tokens and generated tokens is limited by the openai model's context length.
-          """
+        The total length of input tokens and generated tokens is limited by the openai model's context length.
+        """
         return ZHIPU_MAX_CONTEXT_LENGTH.get(self.channel_model_name, 128000)

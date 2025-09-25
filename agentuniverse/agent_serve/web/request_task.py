@@ -35,6 +35,7 @@ EOF_SIGNAL = '{"type": "EOF"}'
 @enum.unique
 class TaskStateEnum(Enum):
     """All possible state of a web request task."""
+
     INIT = "init"
     RUNNING = "running"
     FINISHED = "finished"
@@ -83,7 +84,6 @@ class RequestTask:
             self.last_update_time = current_time
             RequestLibrary().update_request(self.__request_do__)
 
-
     def receive_steps(self):
         """Yield the stream data by getting data from the queue."""
         self.next_state(TaskStateEnum.RUNNING)
@@ -99,31 +99,26 @@ class RequestTask:
                 first_chunk = False
                 cost_time = time.time() - start_time
                 logger.bind(
-                    log_type=LogTypeEnum.agent_first_token,
-                    cost_time=cost_time,
-                    context_prefix=get_context_prefix()
+                    log_type=LogTypeEnum.agent_first_token, cost_time=cost_time, context_prefix=get_context_prefix()
                 ).info("Agent first token generated.")
-            yield "data:" + json.dumps({"process": output},
-                                       ensure_ascii=False) + "\n\n"
+            yield "data:" + json.dumps({"process": output}, ensure_ascii=False) + "\n\n"
         try:
             if self.canceled():
-                self.__request_do__.result['result'] = {
-                    "result": "The task's tracking status has been canceled."}
+                self.__request_do__.result["result"] = {"result": "The task's tracking status has been canceled."}
             else:
                 result = self.thread.result()
                 if isinstance(result, OutputObject):
                     result = result.to_dict()
 
-                yield "data:" + json.dumps({"result": result},
-                                           ensure_ascii=False) + "\n\n "
-                self.__request_do__.result['result'] = result
+                yield "data:" + json.dumps({"result": result}, ensure_ascii=False) + "\n\n "
+                self.__request_do__.result["result"] = result
                 self.next_state(TaskStateEnum.FINISHED)
             if self.saved:
                 self.update_request_do(force=True)
         except Exception as e:
             LOGGER.error("request task execute Fail: " + str(e) + traceback.format_exc())
             if self.saved:
-                self.__request_do__.result['result'] = {"error_msg": str(e)}
+                self.__request_do__.result["result"] = {"error_msg": str(e)}
                 self.next_state(TaskStateEnum.FAIL)
                 self.update_request_do(force=True)
             yield "data:" + json.dumps({"error": {"error_msg": str(e)}}) + "\n\n "
@@ -143,28 +138,25 @@ class RequestTask:
                 first_chunk = False
                 cost_time = time.time() - start_time
                 logger.bind(
-                    log_type=LogTypeEnum.agent_first_token,
-                    cost_time=cost_time,
-                    context_prefix=get_context_prefix()
+                    log_type=LogTypeEnum.agent_first_token, cost_time=cost_time, context_prefix=get_context_prefix()
                 ).info("Agent first token generated.")
             if isinstance(output, str):
                 yield "data:" + output + "\n\n"
         try:
             if self.canceled():
-                self.__request_do__.result['result'] = {
-                    "result": "The task's tracking status has been canceled."}
+                self.__request_do__.result["result"] = {"result": "The task's tracking status has been canceled."}
             else:
                 result = self.thread.result()
                 if isinstance(result, OutputObject):
                     result = result.to_dict()
-                self.__request_do__.result['result'] = result
+                self.__request_do__.result["result"] = result
                 self.next_state(TaskStateEnum.FINISHED)
             if self.saved:
                 self.update_request_do(force=True)
         except Exception as e:
             LOGGER.error("request task execute Fail: " + str(e) + traceback.format_exc())
             if self.saved:
-                self.__request_do__.result['result'] = {"error_msg": str(e)}
+                self.__request_do__.result["result"] = {"error_msg": str(e)}
                 self.next_state(TaskStateEnum.FAIL)
                 self.update_request_do(force=True)
             yield "data:" + json.dumps({"error": {"error_msg": str(e)}}) + "\n\n "
@@ -188,29 +180,24 @@ class RequestTask:
                 first_chunk = False
                 cost_time = time.time() - start_time
                 logger.bind(
-                    log_type=LogTypeEnum.agent_first_token,
-                    cost_time=cost_time,
-                    context_prefix=get_context_prefix()
+                    log_type=LogTypeEnum.agent_first_token, cost_time=cost_time, context_prefix=get_context_prefix()
                 ).info("LLM first token generated.")
-            yield "data:" + json.dumps({"process": output},
-                                       ensure_ascii=False) + "\n\n"
+            yield "data:" + json.dumps({"process": output}, ensure_ascii=False) + "\n\n"
         try:
             if self.canceled():
-                self.__request_do__.result['result'] = {
-                    "result": "The task's tracking status has been canceled."}
+                self.__request_do__.result["result"] = {"result": "The task's tracking status has been canceled."}
             else:
                 result = await self.async_task
                 if isinstance(result, OutputObject):
                     result = result.to_dict()
-                yield "data:" + json.dumps({"result": result},
-                                           ensure_ascii=False) + "\n\n"
+                yield "data:" + json.dumps({"result": result}, ensure_ascii=False) + "\n\n"
                 self.__request_do__.result["result"] = result
             if self.saved:
                 self.update_request_do(force=True)
         except Exception as e:
             LOGGER.error("request task update request state Fail: " + str(e))
             if self.saved:
-                self.__request_do__.result['result'] = {"error_msg": str(e)}
+                self.__request_do__.result["result"] = {"error_msg": str(e)}
                 self.next_state(TaskStateEnum.FAIL)
                 self.update_request_do(force=True)
             yield "data:" + json.dumps({"error": {"error_msg": str(e)}}) + "\n\n"
@@ -230,47 +217,43 @@ class RequestTask:
                 if self.saved:
                     self.update_request_do()
             if self.canceled():
-                self.__request_do__.result['result'] = {
-                    "result": "The task's tracking status has been canceled."}
+                self.__request_do__.result["result"] = {"result": "The task's tracking status has been canceled."}
             else:
-                self.__request_do__.result['result'] = self.thread.result()
+                self.__request_do__.result["result"] = self.thread.result()
                 self.next_state(TaskStateEnum.FINISHED)
             if self.saved:
                 self.update_request_do(force=True)
         except Exception as e:
             LOGGER.error("request task update request state Fail: " + str(e))
-            self.__request_do__.result['result'] = {"error_msg": str(e)}
+            self.__request_do__.result["result"] = {"error_msg": str(e)}
             self.next_state(TaskStateEnum.FAIL)
             if self.saved:
                 self.update_request_do(force=True)
 
     def async_run(self):
         """Run the service in async mode."""
-        self.kwargs['output_stream'] = self.queue
-        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func),
-                                            kwargs=self.kwargs)
+        self.kwargs["output_stream"] = self.queue
+        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func), kwargs=self.kwargs)
         self.thread.start()
         Thread(target=self.append_steps).start()
         Thread(target=self.check_state).start()
 
     def stream_run(self):
         """Run the service in a separate thread and yield result stream."""
-        self.kwargs['output_stream'] = self.queue
+        self.kwargs["output_stream"] = self.queue
 
-        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func),
-                                            kwargs=self.kwargs)
+        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func), kwargs=self.kwargs)
         self.thread.start()
         return self.receive_steps()
 
     def user_stream_run(self):
-        self.kwargs['output_stream'] = self.queue
-        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func),
-                                            kwargs=self.kwargs)
+        self.kwargs["output_stream"] = self.queue
+        self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func), kwargs=self.kwargs)
         self.thread.start()
         return self.user_receive_steps()
 
     async def async_stream_run(self) -> AsyncIterator[str]:
-        self.kwargs['output_stream'] = self.async_queue
+        self.kwargs["output_stream"] = self.async_queue
         loop = asyncio.get_event_loop()
         self.async_task = loop.create_task(self.func(**self.kwargs))
         async for item in self.async_receive_steps():
@@ -286,7 +269,7 @@ class RequestTask:
             return result
         except Exception as e:
             self.next_state(TaskStateEnum.FAIL)
-            self.__request_do__.additional_args['error_msg'] = str(e)
+            self.__request_do__.additional_args["error_msg"] = str(e)
             raise e
         finally:
             if self.saved:
@@ -294,8 +277,7 @@ class RequestTask:
 
     def next_state(self, next_state: TaskStateEnum):
         """Update request task state if the transition is valid."""
-        if ((TaskStateEnum[self.__request_do__.state.upper()], next_state)
-                in VALID_TRANSITIONS):
+        if (TaskStateEnum[self.__request_do__.state.upper()], next_state) in VALID_TRANSITIONS:
             self.__request_do__.state = next_state.value
         else:
             raise Exception("Invalid state transition")
@@ -305,8 +287,7 @@ class RequestTask:
         is alive, update the request modified time in database."""
         while True:
             if self.thread is not None and self.thread.is_alive():
-                LOGGER.debug(
-                    "request:" + str(self.request_id) + "task thread alive")
+                LOGGER.debug("request:" + str(self.request_id) + "task thread alive")
                 if self.saved:
                     RequestLibrary().update_gmt_modified(self.request_id)
                 time.sleep(60)
@@ -315,18 +296,18 @@ class RequestTask:
                 # Waiting one minute to avoid skipping the state change step.
                 time.sleep(60)
                 if self.__request_do__.state == TaskStateEnum.RUNNING.value:
-                    LOGGER.debug("request:" + str(self.request_id) +
-                                 " task thread stop but state not end")
+                    LOGGER.debug("request:" + str(self.request_id) + " task thread stop but state not end")
                     self.__request_do__.state = TaskStateEnum.FAIL.value
                     if self.saved:
                         self.update_request_do(force=True)
             break
 
     def add_request_do(self):
-        query_keys = ['question', 'query_content', 'query', 'request', 'input']
-        query = next((self.kwargs[key] for key in query_keys if
-                      self.kwargs.get(key) is not None),
-                     "No relevant query was retrieved.")
+        query_keys = ["question", "query_content", "query", "request", "input"]
+        query = next(
+            (self.kwargs[key] for key in query_keys if self.kwargs.get(key) is not None),
+            "No relevant query was retrieved.",
+        )
 
         request_do = RequestDO(
             request_id=self.request_id,
@@ -351,9 +332,11 @@ class RequestTask:
     def is_validate(request_do: RequestDO):
         """If there is no update within ten minutes and the status is neither
         completed nor failed, the task is considered to have failed."""
-        if (request_do.gmt_modified < datetime.now() - timedelta(minutes=10)
-                and request_do.state != TaskStateEnum.FINISHED.value
-                and request_do.state != TaskStateEnum.FAIL.value):
+        if (
+            request_do.gmt_modified < datetime.now() - timedelta(minutes=10)
+            and request_do.state != TaskStateEnum.FINISHED.value
+            and request_do.state != TaskStateEnum.FAIL.value
+        ):
             LOGGER.error("request task is validate fail" + str(request_do))
             request_do.state = TaskStateEnum.FAIL.value
             RequestLibrary().update_request(request_do)
@@ -384,13 +367,8 @@ class RequestTask:
         Args:
             request_id(str): Unique request id.
         """
-        request_do = RequestLibrary().query_request_by_request_id(
-            request_id)
+        request_do = RequestLibrary().query_request_by_request_id(request_id)
         if request_do is None:
             return None
         RequestTask.is_validate(request_do)
-        return {
-            "state": request_do.state,
-            "result": request_do.result,
-            "steps": request_do.steps
-        }
+        return {"state": request_do.state, "result": request_do.result, "steps": request_do.steps}

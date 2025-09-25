@@ -21,7 +21,7 @@ class AstNode(TypedDict):
     start_byte: int
     end_byte: int
     text: Optional[str]
-    children: Optional[List['AstNode']]
+    children: Optional[List["AstNode"]]
 
 
 class CodeBoundary(TypedDict):

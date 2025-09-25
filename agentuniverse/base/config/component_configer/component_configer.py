@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/12 23:16
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_configer.py
 import importlib
@@ -74,14 +74,14 @@ class ComponentConfiger(object):
     def meta_class(self) -> str:
         return self.__meta_class
 
-    def load(self) -> 'ComponentConfiger':
+    def load(self) -> "ComponentConfiger":
         """Load the configuration by the Configer object.
         Returns:
             ComponentConfiger: the ComponentConfiger object
         """
         return self.load_by_configer(self.configer)
 
-    def load_by_configer(self, configer: Configer) -> 'ComponentConfiger':
+    def load_by_configer(self, configer: Configer) -> "ComponentConfiger":
         """Load the configuration by the Configer object.
         Args:
             configer(Configer): the Configer object
@@ -93,13 +93,13 @@ class ComponentConfiger(object):
         try:
             for k, v in configer.value.items():
                 self.__dict__[k] = v
-            if configer.value.get('metadata'):
-                self.__metadata_type = configer.value.get('metadata').get('type')
-                self.__metadata_module = configer.value.get('metadata').get('module')
-                self.__metadata_class = configer.value.get('metadata').get('class')
-            elif configer.path and 'prompt' in configer.path:
+            if configer.value.get("metadata"):
+                self.__metadata_type = configer.value.get("metadata").get("type")
+                self.__metadata_module = configer.value.get("metadata").get("module")
+                self.__metadata_class = configer.value.get("metadata").get("class")
+            elif configer.path and "prompt" in configer.path:
                 self.__metadata_type = ComponentEnum.PROMPT.value
-            self.__meta_class = configer.value.get('meta_class')
+            self.__meta_class = configer.value.get("meta_class")
         except Exception as e:
             raise Exception(f"Failed to parse the component configuration: {e}")
 
@@ -112,8 +112,8 @@ class ComponentConfiger(object):
             Optional[str]: the type of the component
         """
         if self.__meta_class:
-            metadata_module = '.'.join(self.__meta_class.split('.')[:-1])
-            metadata_class = self.__meta_class.split('.')[-1]
+            metadata_module = ".".join(self.__meta_class.split(".")[:-1])
+            metadata_class = self.__meta_class.split(".")[-1]
             module = importlib.import_module(metadata_module)
             clz = getattr(module, metadata_class)
             return clz().component_type.value

@@ -8,6 +8,7 @@
 
 import json
 from typing import List, Any, Optional
+
 try:
     from neo4j import GraphDatabase, AsyncGraphDatabase
     import pandas as pd
@@ -22,12 +23,10 @@ from agentuniverse.agent.action.knowledge.store.graph_document import GraphDocum
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.store.store import Store
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
 class Neo4jStore(Store):
-
     uri: Optional[str] = None
     user: Optional[str] = None
     password: Optional[str] = None
@@ -39,17 +38,15 @@ class Neo4jStore(Store):
         if self.database:
             self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password), database=self.database)
         else:
-            self.driver = GraphDatabase.driver(self.uri,
-                                               auth=(self.user, self.password))
+            self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
 
     def _new_async_client(self) -> Any:
         if self.database:
-            self.async_driver = AsyncGraphDatabase.driver(self.uri,
-                                               auth=(self.user, self.password),
-                                               database=self.database)
+            self.async_driver = AsyncGraphDatabase.driver(
+                self.uri, auth=(self.user, self.password), database=self.database
+            )
         else:
-            self.async_driver = AsyncGraphDatabase.driver(self.uri,
-                                               auth=(self.user, self.password))
+            self.async_driver = AsyncGraphDatabase.driver(self.uri, auth=(self.user, self.password))
 
     def execute_cypher(self, query_str, param=None, return_data=True):
         df_result = self._execute_cypher(self.driver.session(), query_str, param, return_data)
@@ -72,7 +69,6 @@ class Neo4jStore(Store):
         session.close()
         return df_result
 
-
     def query(self, query: Query, **kwargs) -> List[Document]:
         query_type = query.ext_info.get("query_type", "")
 
@@ -85,10 +81,7 @@ class Neo4jStore(Store):
         elif query_type == "llm_generate_cypher":
             schema_info = self._get_graph_schema_info()
 
-            llm_cypher = self._llm_generate_cypher(
-                query.query_str,
-                schema_info
-            )
+            llm_cypher = self._llm_generate_cypher(query.query_str, schema_info)
             query_params = query.ext_info.get("query_params", {})
             records = self.execute_cypher(llm_cypher, query_params)
             return self._records_to_documents(query.query_str, records)
@@ -102,15 +95,10 @@ class Neo4jStore(Store):
             records = self.execute_cypher(cypher_query, query_params)
             return self._records_to_documents(node_ids, records)
         else:
-            raise NotImplementedError('This query type is not allowed in neo4j store.')
+            raise NotImplementedError("This query type is not allowed in neo4j store.")
 
     def _records_to_documents(self, text, records: pd.DataFrame) -> List[Document]:
-        documents = [
-            GraphDocument(
-                text=text,
-                graph_data=records
-            )
-        ]
+        documents = [GraphDocument(text=text, graph_data=records)]
 
         return documents
 
@@ -126,15 +114,12 @@ class Neo4jStore(Store):
         finally:
             session.close()
 
-    def _llm_generate_cypher(self, natural_language_query: str,
-                                      schema_info: dict) -> str:
+    def _llm_generate_cypher(self, natural_language_query: str, schema_info: dict) -> str:
         return "MATCH (n) RETURN n LIMIT 10"
-
 
     def _build_node_ids_query(self, node_ids: List[int]) -> str:
         ids_str = ", ".join(str(i) for i in node_ids)
         return f"MATCH (n) WHERE id(n) IN [{ids_str}] RETURN n"
-
 
     def insert_document(self, documents: List[Document], **kwargs: Any):
         session = self.driver.session()
@@ -149,9 +134,7 @@ class Neo4jStore(Store):
         finally:
             session.close()
 
-
     def upsert_document(self, documents: List[Document], **kwargs):
-
         self.insert_document(documents, **kwargs)
 
     def update_document(self, documents: List[Document], **kwargs):
@@ -167,8 +150,7 @@ class Neo4jStore(Store):
         finally:
             session.close()
 
-    def _initialize_by_component_configer(self,
-                                          neo4j_store_configer: ComponentConfiger) -> 'Neo4jStore':
+    def _initialize_by_component_configer(self, neo4j_store_configer: ComponentConfiger) -> "Neo4jStore":
         super()._initialize_by_component_configer(neo4j_store_configer)
         if hasattr(neo4j_store_configer, "uri"):
             self.uri = neo4j_store_configer.uri

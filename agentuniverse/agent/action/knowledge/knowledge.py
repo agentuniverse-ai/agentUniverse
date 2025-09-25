@@ -1,6 +1,7 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 import asyncio
+
 # @Time    : 2024/3/22 15:44
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
@@ -85,14 +86,8 @@ class Knowledge(ComponentBase):
 
     def __init__(self, **kwargs):
         super().__init__(component_type=ComponentEnum.KNOWLEDGE, **kwargs)
-        self.insert_executor = ThreadPoolExecutorWithReturnValue(
-            max_workers=5,
-            thread_name_prefix="Knowledge store"
-        )
-        self.query_executor = ThreadPoolExecutorWithReturnValue(
-            max_workers=10,
-            thread_name_prefix="Knowledge query"
-        )
+        self.insert_executor = ThreadPoolExecutorWithReturnValue(max_workers=5, thread_name_prefix="Knowledge store")
+        self.query_executor = ThreadPoolExecutorWithReturnValue(max_workers=10, thread_name_prefix="Knowledge query")
 
     def _load_data(self, *args: Any, **kwargs: Any) -> List[Document]:
         # check if source is a local file or remote url
@@ -101,12 +96,12 @@ class Knowledge(ComponentBase):
         else:
             raise Exception("No file to load.")
         url_pattern = re.compile(
-            r'^(https?:\/\/)?'
-            r'((([a-zA-Z0-9]{1,256}\.[a-zA-Z0-9]{1,6})|'
-            r'(\d{1,3}\.){3}\d{1,3})'
-            r'(:\d{1,5})?)'
-            r'(\/[a-zA-Z0-9@:%._\+~#=]*)*\/?'
-            r'(\?[a-zA-Z0-9@:%._\+~#&//=]*)?$'
+            r"^(https?:\/\/)?"
+            r"((([a-zA-Z0-9]{1,256}\.[a-zA-Z0-9]{1,6})|"
+            r"(\d{1,3}\.){3}\d{1,3})"
+            r"(:\d{1,5})?)"
+            r"(\/[a-zA-Z0-9@:%._\+~#=]*)*\/?"
+            r"(\?[a-zA-Z0-9@:%._\+~#&//=]*)?$"
         )
 
         if url_pattern.match(source_path):
@@ -141,8 +136,7 @@ class Knowledge(ComponentBase):
 
     def _paraphrase_query(self, origin_query: Query) -> Query:
         for _paraphraser_code in self.query_paraphrasers:
-            query_paraphraser: QueryParaphraser = QueryParaphraserManager().get_instance_obj(
-                _paraphraser_code)
+            query_paraphraser: QueryParaphraser = QueryParaphraserManager().get_instance_obj(_paraphraser_code)
             origin_query = query_paraphraser.query_paraphrase(origin_query)
         return origin_query
 
@@ -160,9 +154,8 @@ class Knowledge(ComponentBase):
             stores = self.stores
         for _store_code in stores:
             futures.append(
-                self.insert_executor.submit(
-                    StoreManager().get_instance_obj(_store_code).insert_document,
-                    document_list))
+                self.insert_executor.submit(StoreManager().get_instance_obj(_store_code).insert_document, document_list)
+            )
         wait(futures, return_when=ALL_COMPLETED)
         for future in futures:
             try:
@@ -186,9 +179,8 @@ class Knowledge(ComponentBase):
             stores = self.stores
         for _store_code in stores:
             futures.append(
-                self.insert_executor.submit(
-                    StoreManager().get_instance_obj(_store_code).update_document,
-                    document_list))
+                self.insert_executor.submit(StoreManager().get_instance_obj(_store_code).update_document, document_list)
+            )
         wait(futures, return_when=ALL_COMPLETED)
         for future in futures:
             try:
@@ -214,9 +206,8 @@ class Knowledge(ComponentBase):
         futures = []
         for query_task in query_tasks:
             futures.append(
-                self.query_executor.submit(
-                    StoreManager().get_instance_obj(query_task[1]).query,
-                    query_task[0]))
+                self.query_executor.submit(StoreManager().get_instance_obj(query_task[1]).query, query_task[0])
+            )
         wait(futures, return_when=ALL_COMPLETED)
         retrieved_docs = {}
         for future in futures:
@@ -237,9 +228,7 @@ class Knowledge(ComponentBase):
         retrieved_texts = [doc.text for doc in retrieved_docs]
         return "\n=========================================\n".join(retrieved_texts)
 
-    def _initialize_by_component_configer(self,
-                                          knowledge_configer: ComponentConfiger) \
-            -> 'Knowledge':
+    def _initialize_by_component_configer(self, knowledge_configer: ComponentConfiger) -> "Knowledge":
         """Initialize the reader by the ComponentConfiger object.
 
         Args:
@@ -305,7 +294,7 @@ class Knowledge(ComponentBase):
         """
         return LangchainTool(
             name=self.name,
-            description=self.description or '' + args_description,
+            description=self.description or "" + args_description,
             func=self.langchain_query,
         )
 
@@ -326,7 +315,7 @@ class Knowledge(ComponentBase):
         """
         return LangchainTool(
             name=self.name,
-            description=self.description or '' + args_description,
+            description=self.description or "" + args_description,
             func=self.async_langchain_query,
         )
 

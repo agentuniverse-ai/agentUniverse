@@ -15,15 +15,13 @@ from agentuniverse.agent.action.knowledge.store.document import Document
 
 class CSVReader(Reader):
     """CSV file reader.
-    
+
     Used to read and parse CSV format files, supports local file paths or file objects as input.
     """
 
-    def _load_data(self, 
-                  file: Union[str, Path], 
-                  delimiter: str = ",",
-                  quotechar: str = '"',
-                  ext_info: Optional[Dict] = None) -> List[Document]:
+    def _load_data(
+        self, file: Union[str, Path], delimiter: str = ",", quotechar: str = '"', ext_info: Optional[Dict] = None
+    ) -> List[Document]:
         """Parse CSV file.
 
         Args:
@@ -42,7 +40,7 @@ class CSVReader(Reader):
         try:
             if isinstance(file, str):
                 file = Path(file)
-            
+
             if isinstance(file, Path):
                 if not file.exists():
                     raise FileNotFoundError(f"File not found: {file}")
@@ -62,12 +60,12 @@ class CSVReader(Reader):
                             row.pop()
                         # Only add non-empty values to result
                         csv_content.append(", ".join(filter(None, row)))
-            
+
             # Combine all valid rows into final text
             final_content = "\n".join(csv_content)
 
             # Get metadata
-            metadata = {"file_name": getattr(file, 'name', 'unknown')}
+            metadata = {"file_name": getattr(file, "name", "unknown")}
             if ext_info:
                 metadata.update(ext_info)
             # print(f"csv_content: {final_content} \n metadata: {metadata}")

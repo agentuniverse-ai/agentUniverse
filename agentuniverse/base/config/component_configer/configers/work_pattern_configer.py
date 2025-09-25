@@ -30,14 +30,14 @@ class WorkPatternConfiger(ComponentConfiger):
         """Return the description of the WorkPattern."""
         return self.__description
 
-    def load(self) -> 'WorkPatternConfiger':
+    def load(self) -> "WorkPatternConfiger":
         """Load the configuration by the Configer object.
         Returns:
             WorkPatternConfiger: the WorkPatternConfiger object
         """
         return self.load_by_configer(self.__configer)
 
-    def load_by_configer(self, configer: Configer) -> 'WorkPatternConfiger':
+    def load_by_configer(self, configer: Configer) -> "WorkPatternConfiger":
         """Load the configuration by the Configer object.
         Args:
             configer(Configer): the Configer object
@@ -46,8 +46,8 @@ class WorkPatternConfiger(ComponentConfiger):
         """
         super().load_by_configer(configer)
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
+            self.__name = configer.value.get("name")
+            self.__description = configer.value.get("description")
         except Exception as e:
             raise Exception(f"Failed to parse the work pattern configuration: {e}")
         return self

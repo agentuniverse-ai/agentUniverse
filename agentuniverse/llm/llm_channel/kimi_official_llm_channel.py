@@ -9,11 +9,7 @@ from typing import Optional
 
 from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 
-KIMI_MAX_CONTEXT_LENGTH = {
-    "moonshot-v1-8k": 8000,
-    "moonshot-v1-32k": 32000,
-    "moonshot-v1-128k": 128000
-}
+KIMI_MAX_CONTEXT_LENGTH = {"moonshot-v1-8k": 8000, "moonshot-v1-32k": 32000, "moonshot-v1-128k": 128000}
 
 
 class KimiOfficialLLMChannel(LLMChannel):
