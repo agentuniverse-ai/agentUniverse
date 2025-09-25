@@ -111,6 +111,8 @@ show_error_codes = "True"
 target-version = "py37"
 line-length = 120
 fix = true
+
+[tool.ruff.lint]
 select = [
     # flake8-2020
     "YTT",
@@ -150,7 +152,7 @@ ignore = [
     "E731",
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
 
 [tool.coverage.report]
