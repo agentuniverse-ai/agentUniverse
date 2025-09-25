@@ -1,0 +1,105 @@
+[tool.poetry]
+name = "sample_standard_app"
+version = "0.0.1"
+description = "This is a sample project for agentuniverse."
+authors = ["AntGroup <AntGroup>"]
+repository = "https://github.com/alipay/agentUniverse/tree/master/sample_standard_app"
+readme = "README.md"
+packages = [
+    { include = "sample_standard_app" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+agentUniverse = "^0.0.9"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.2.0"
+pytest-cov = "^4.0.0"
+deptry = "^0.6.4"
+pre-commit = "^2.20.0"
+
+
+[[tool.poetry.source]]
+name = "china"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+priority = "primary"
+
+[[tool.poetry.source]]
+name = "pipy"
+url = "https://pypi.org/simple/"
+priority = "supplemental"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+target-version = ['py310']
+preview = true
+
+[tool.mypy]
+files = ["agentuniverse"]
+disallow_untyped_defs = "True"
+disallow_any_unimported = "True"
+no_implicit_optional = "True"
+check_untyped_defs = "True"
+warn_return_any = "True"
+warn_unused_ignores = "True"
+show_error_codes = "True"
+
+[tool.ruff]
+target-version = "py37"
+line-length = 120
+fix = true
+select = [
+    # flake8-2020
+    "YTT",
+    # flake8-bandit
+    "S",
+    # flake8-bugbear
+    "B",
+    # flake8-builtins
+    "A",
+    # flake8-comprehensions
+    "C4",
+    # flake8-debugger
+    "T10",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # mccabe
+    "C90",
+    # pycodestyle
+    "E", "W",
+    # pyflakes
+    "F",
+    # pygrep-hooks
+    "PGH",
+    # pyupgrade
+    "UP",
+    # ruff
+    "RUF",
+    # tryceratops
+    "TRY",
+]
+ignore = [
+    # LineTooLong
+    "E501",
+    # DoNotAssignLambda
+    "E731",
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.coverage.report]
+skip_empty = true
+
+[tool.coverage.run]
+branch = true
+source = ["sample_standard_app"]
+
+

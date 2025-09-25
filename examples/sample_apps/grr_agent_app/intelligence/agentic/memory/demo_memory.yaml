@@ -1,0 +1,12 @@
+name: 'demo_memory'
+description: 'demo memory with chroma storage'
+type: 'long_term'
+memory_key: 'chat_history'
+max_tokens: 3000
+memory_compressor: default_memory_compressor
+memory_storages:
+  - chroma_memory_storage
+metadata:
+  type: 'MEMORY'
+  module: 'agentuniverse.agent.memory.memory'
+  class: 'Memory'

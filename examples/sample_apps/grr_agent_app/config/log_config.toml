@@ -1,0 +1,32 @@
+[LOG_CONFIG]
+[LOG_CONFIG.BASIC_CONFIG]
+# Loguru log level.
+log_level = "INFO"
+# Output path of the log file. If value is empty, agentuniverse will create a subdir under your workdir to save logs.
+log_path = "./.test_log_dir"
+# Specifies the log rotation policy, controlling when a new log file is created. It can be a time period
+# (e.g., "1 week"), a file size (e.g., "100 MB"), or a function returning True when rotation should occur.
+log_rotation = "100 MB"
+# Specifies the duration to keep old log files. It can be a time span (e.g., "30 days") or a function to filter the
+# files to be retained. Files outside this policy are purged.
+log_retention = "7 days"
+
+[LOG_CONFIG.EXTEND_MODULE]
+# Whether you use Aliyun Simple Log Service (SLS), if the value is "True", you should fill in the ALIYUN_SLS_CONFIG below.
+sls_log = "False"
+
+[LOG_CONFIG.ALIYUN_SLS_CONFIG]
+# Aliyun sls endpoint.
+sls_endpoint = "mock_endpoint"
+# Your sls log project name.
+sls_project = "mock_project"
+# Your sls log store name.
+sls_log_store = "mock_log_store"
+# Aliyun sls access_key_id.
+access_key_id = "mock_key_id"
+# Aliyun sls access_key_secret.
+access_key_secret = "mock_key_secret"
+# Log queue max size, agentuniverse uses a queue to save the logs to be sent, they will be sent periodically.
+sls_log_queue_max_size = 1000
+# Interval of sending logs to aliyun sls.
+sls_log_send_interval = 3.0
