@@ -1,0 +1,69 @@
+name: 'google_scholar_search_tool'
+description: |
+  Google学术搜索工具，专门用于搜索学术论文和研究资料。
+  
+  工具输入参数说明：
+    - input (必填): 搜索查询词，描述你希望查询的学术内容
+    - year (可选): 年份筛选，格式如"2020..2024"表示2020年到2024年
+    - author (可选): 作者筛选，指定特定作者
+    - journal (可选): 期刊筛选，指定特定期刊
+    - k (可选): 返回结果数量，默认为10
+  
+  特性:
+    - 专门针对学术内容搜索
+    - 支持按年份、作者、期刊等筛选
+    - 提供论文引用信息
+    - 支持多种学术搜索参数
+    - 自动构建学术搜索查询
+  
+  示例工具输入：
+    示例1: 基础学术搜索
+      ```json
+      {
+        "input": "机器学习算法"
+      }
+      ```
+    示例2: 按年份筛选
+      ```json
+      {
+        "input": "深度学习",
+        "year": "2020..2024"
+      }
+      ```
+    示例3: 按作者筛选
+      ```json
+      {
+        "input": "神经网络",
+        "author": "Geoffrey Hinton"
+      }
+      ```
+    示例4: 按期刊筛选
+      ```json
+      {
+        "input": "计算机视觉",
+        "journal": "Nature",
+        "year": "2023..2024"
+      }
+      ```
+    示例5: 综合搜索
+      ```json
+      {
+        "input": "自然语言处理",
+        "author": "Yoshua Bengio",
+        "year": "2020..2024",
+        "k": 5
+      }
+      ```
+  
+  注意:
+    - 需要在环境变量中配置SERPER_API_KEY
+    - 每月有2500次免费查询额度
+    - 如未配置API密钥，将返回模拟结果
+    - 搜索结果来自Google学术数据库
+tool_type: 'func'
+input_keys: ['input']
+serper_api_key: '${SERPER_API_KEY}'
+default_k: 10
+# The placeholder "${ROOT_PACKAGE}" is mapped to the value of "ROOT_PACKAGE" defined in the config.toml file.
+# It allows you to conveniently manage multiple different agent applications by configuring the root package value.
+meta_class: '${ROOT_PACKAGE}.intelligence.agentic.tool.custom.google_search_tool.GoogleScholarSearchTool'
