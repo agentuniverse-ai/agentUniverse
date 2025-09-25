@@ -94,7 +94,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 120
-target-version = ['py37']
+target-version = ['py310']
 preview = true
 
 [tool.mypy]
@@ -108,7 +108,7 @@ warn_unused_ignores = "True"
 show_error_codes = "True"
 
 [tool.ruff]
-target-version = "py37"
+target-version = "py310"
 line-length = 120
 fix = true
 select = [
