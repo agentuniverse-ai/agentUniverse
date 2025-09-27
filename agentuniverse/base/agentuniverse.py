@@ -168,35 +168,28 @@ class AgentUniverse(object):
         core_prompt_package_list = ((app_configer.core_prompt_package_list or app_configer.core_default_package_list)
                                     + self.__system_default_prompt_package)
         core_workflow_package_list = app_configer.core_workflow_package_list or app_configer.core_default_package_list
-        core_embedding_package_list = (
-                (app_configer.core_embedding_package_list or app_configer.core_default_package_list)
-                + self.__system_default_embedding_package)
-        core_doc_processor_package_list = (
-                (app_configer.core_doc_processor_package_list or app_configer.core_default_package_list)
-                + self.__system_default_doc_processor_package)
+        core_embedding_package_list = ((app_configer.core_embedding_package_list or app_configer.core_default_package_list)
+                                       + self.__system_default_embedding_package)
+        core_doc_processor_package_list = ((app_configer.core_doc_processor_package_list or app_configer.core_default_package_list)
+                                           + self.__system_default_doc_processor_package)
         core_reader_package_list = ((app_configer.core_reader_package_list or app_configer.core_default_package_list)
                                     + self.__system_default_reader_package)
         core_store_package_list = app_configer.core_store_package_list or app_configer.core_default_package_list
-        core_rag_router_package_list = (
-                (app_configer.core_rag_router_package_list or app_configer.core_default_package_list)
-                + self.__system_default_rag_router_package)
-        core_query_paraphraser_package_list = (
-                (app_configer.core_query_paraphraser_package_list or app_configer.core_default_package_list)
-                + self.__system_default_query_paraphraser_package)
-        core_memory_compressor_package_list = (
-                (app_configer.core_memory_compressor_package_list or app_configer.core_default_package_list)
-                + self.__system_default_memory_compressor_package)
-        core_memory_storage_package_list = (
-                (app_configer.core_memory_storage_package_list or app_configer.core_default_package_list)
-                + self.__system_default_memory_storage_package)
-        core_work_pattern_package_list = (
-                (app_configer.core_work_pattern_package_list or app_configer.core_default_package_list)
-                + self.__system_default_work_pattern_package)
-        core_log_sink_package_list = (
-                (app_configer.core_log_sink_package_list or app_configer.core_default_package_list)
-                + self.__system_default_log_sink_package)
+        core_rag_router_package_list = ((app_configer.core_rag_router_package_list or app_configer.core_default_package_list)
+                                        + self.__system_default_rag_router_package)
+        core_query_paraphraser_package_list = ((app_configer.core_query_paraphraser_package_list or app_configer.core_default_package_list)
+                                               + self.__system_default_query_paraphraser_package)
+        core_memory_compressor_package_list = ((app_configer.core_memory_compressor_package_list or app_configer.core_default_package_list)
+                                               + self.__system_default_memory_compressor_package)
+        core_memory_storage_package_list = ((app_configer.core_memory_storage_package_list or app_configer.core_default_package_list)
+                                            + self.__system_default_memory_storage_package)
+        core_work_pattern_package_list = ((app_configer.core_work_pattern_package_list or app_configer.core_default_package_list)
+                                            + self.__system_default_work_pattern_package)
+        core_log_sink_package_list = ((app_configer.core_log_sink_package_list or app_configer.core_default_package_list)
+                                          + self.__system_default_log_sink_package)
 
         core_llm_channel_package_list = app_configer.core_llm_channel_package_list or app_configer.core_default_package_list
+
 
         component_package_map = {
             ComponentEnum.AGENT: core_agent_package_list,
@@ -222,6 +215,7 @@ class AgentUniverse(object):
             ComponentEnum.LOG_SINK: core_log_sink_package_list,
             ComponentEnum.LLM_CHANNEL: core_llm_channel_package_list
         }
+
         component_configer_list_map = {}
         for component_enum, package_list in component_package_map.items():
             if not package_list:

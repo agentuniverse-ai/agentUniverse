@@ -1,4 +1,3 @@
-# -*- coding:utf-8 -*-
 import importlib
 from typing import Optional, Dict, Type
 from agentuniverse.base.annotation.singleton import singleton
@@ -35,7 +34,7 @@ class ConfigStorage:
 
         self.loader: Optional[BaseConfigLoader] = self._try_load_custom_loader(configer)
         if not self.loader:
-            # 如果没有用户自定义，检查 CONFIG_STORAGE.type
+            # check CONFIG_STORAGE.type
             loader_type = config_storage_cfg.get("type", "DB")
             loader_cls = BUILTIN_LOADERS.get(loader_type)
             if not loader_cls:
@@ -51,17 +50,16 @@ class ConfigStorage:
         """
         Load configuration into a Configer instance from storage.
         """
-        self.loader.load(ctx)
+        if self.persist:
+            self.loader.load(ctx)
         return ctx.configer
 
     def persist_to_storage(self, ctx: StorageContext) -> None:
         """
         Persist a Configer instance into storage if persistence is enabled.
         """
-        if not self.persist:
-            return
-
-        self.loader.save(ctx)
+        if self.persist:
+            self.loader.save(ctx)
 
     def delete_from_storage(self, ctx: StorageContext) -> None:
 
@@ -91,7 +89,6 @@ class ConfigStorage:
             if issubclass(cls, BaseConfigLoader):
                 return cls(configer)
         return None
-
 
 
 class ConfigStorageError(Exception):

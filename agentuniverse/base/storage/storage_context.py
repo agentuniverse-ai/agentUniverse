@@ -30,6 +30,6 @@ class StorageContext:
         self.raw_path = configer.path if configer else None
         self.trimmed_path = _check_and_trim_path(self.raw_path, root_package_name) if self.raw_path else None
         self.configer_type = configer_type
-        self.configer = configer
+        self.configer = configer if configer else Configer(path=instance_code)
         self.metadata = metadata or {}
 

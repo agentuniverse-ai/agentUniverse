@@ -1,8 +1,3 @@
-# -*- coding:utf-8 -*-
-"""
-ORM模型定义
-"""
-
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, func
 from sqlalchemy.ext.declarative import declarative_base

@@ -67,7 +67,6 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         try:
             ctx = StorageContext(
                 instance_code=instance_code,
-                configer=Configer(path="TMP"),
                 configer_type=self._component_type
             )
             configer = ConfigStorage().load_from_storage(ctx)
