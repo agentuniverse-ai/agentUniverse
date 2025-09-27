@@ -11,7 +11,6 @@ from typing import TypeVar, Generic
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
-from agentuniverse.base.config.configer import Configer
 from agentuniverse.base.storage.storage_context import StorageContext
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.base.util.system_util import is_system_builtin
@@ -55,14 +54,12 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
             return self.get_default_instance(new_instance)
         appname = appname or ApplicationConfigManager().app_configer.base_info_appname
         instance_code = f'{appname}.{self._component_type.value.lower()}.{component_instance_name}'
-        instance = self._instance_obj_map.get(instance_code)
-        if not instance:
-            instance = self._load_instance(instance_code)
+        instance = self._instance_obj_map.get(instance_code) or self._load_instance(instance_code)
         if instance:
             return instance.create_copy() if new_instance else instance
 
     def _load_instance(self, instance_code: str) -> ComponentTypeVar:
-        from agentuniverse.base.storage.config_storage import ConfigStorage, ConfigNotFoundError, InstanceLoadError
+        from agentuniverse.base.storage.config_storage import ConfigStorage, InstanceLoadError
         LOGGER.info(f"Loading {self._component_type.value} component instance '{instance_code}' from storage.")
         try:
             ctx = StorageContext(
