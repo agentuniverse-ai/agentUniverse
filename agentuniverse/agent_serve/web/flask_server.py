@@ -140,6 +140,7 @@ def service_run(service_id: str, params: dict, saved: bool = False):
     return make_standard_response(success=True, result=result,
                                   request_id=request_task.request_id)
 
+
 @app.route("/service_run_stream", methods=['POST'])
 @request_param
 def service_run_stream(service_id: str, params: dict, saved: bool = False):
