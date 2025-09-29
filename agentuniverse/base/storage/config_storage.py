@@ -58,7 +58,7 @@ class ConfigStorage:
         """
         Persist a Configer instance into storage if persistence is enabled.
         """
-        if self.persist:
+        if self.persist and ctx.trimmed_path:
             self.loader.save(ctx)
 
     def delete_from_storage(self, ctx: StorageContext) -> None:
@@ -76,12 +76,12 @@ class ConfigStorage:
         """
         Try to load user-defined ConfigLoader from EXTENSION_MODULES.class_list.
         """
-        ext_classes = configer.value.get("EXTENSION_MODULES", {}).get("class_list", [])
-        if not isinstance(ext_classes, list):
+        custom_loaders = configer.get("CONFIG_STORAGE", {}).get("custom_loaders", [])
+        if not isinstance(custom_loaders, list):
             return None
 
-        for ext_class in ext_classes:
-            module_path, _, class_name = ext_class.rpartition('.')
+        for custom_loader in custom_loaders:
+            module_path, _, class_name = custom_loader.rpartition('.')
             module = importlib.import_module(module_path)
             cls = getattr(module, class_name)
             if not cls:

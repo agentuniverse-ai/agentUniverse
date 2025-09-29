@@ -166,18 +166,18 @@ class ConfigVersionManager:
                 session.flush()  # Ensure config.id is available
 
                 # Save version record
-                config_version = ConfigVersion(
-                    config_id=config.id,
-                    namespace=namespace,
-                    name=name,
-                    config_type=config_type,
-                    config_path=config_path,
-                    version=1,
-                    content=content,
-                    md5=new_md5,
-                    operation_type="create",
-                )
-                session.add(config_version)
+                # config_version = ConfigVersion(
+                #     config_id=config.id,
+                #     namespace=namespace,
+                #     name=name,
+                #     config_type=config_type,
+                #     config_path=config_path,
+                #     version=1,
+                #     content=content,
+                #     md5=new_md5,
+                #     operation_type="create",
+                # )
+                # session.add(config_version)
 
             session.commit()
         finally:

@@ -18,13 +18,20 @@ class StorageContext:
     Context for configuration storage operations.
     """
 
+    instance_code: str
+    raw_path: Optional[str]
+    trimmed_path: Optional[str]
+    configer_type: Optional[ComponentEnum]
+    configer: Configer
+    metadata: Dict[str, Any]
+
     def __init__(
-        self,
-        instance_code: str,
-        root_package_name: Optional[str] = None,
-        configer_type: Optional[ComponentEnum] = None,
-        configer: Optional[Configer] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+            self,
+            instance_code: str,
+            root_package_name: Optional[str] = None,
+            configer_type: Optional[ComponentEnum] = None,
+            configer: Optional[Configer] = None,
+            metadata: Optional[Dict[str, Any]] = None,
     ):
         self.instance_code = instance_code
         self.raw_path = configer.path if configer else None
@@ -32,4 +39,3 @@ class StorageContext:
         self.configer_type = configer_type
         self.configer = configer if configer else Configer(path=instance_code)
         self.metadata = metadata or {}
-

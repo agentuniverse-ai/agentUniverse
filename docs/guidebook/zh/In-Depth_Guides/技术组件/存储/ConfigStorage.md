@@ -72,13 +72,12 @@ class CustomConfigLoader(BaseConfigLoader):
 1. 在配置文件中注册：
 
 ```yaml
-EXTENSION_MODULES:
-  class_list:
-    - "your_package.custom_loader.CustomConfigLoader"
+custom_loaders=[
+    '${ROOT_PACKAGE}.custom_loader.CustomConfigLoader',
+]
 ```
 
 这样，ConfigStorage 会自动识别并使用你的自定义实现。
-
 
 
 ## **注意事项**

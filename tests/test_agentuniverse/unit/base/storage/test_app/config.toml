@@ -43,7 +43,9 @@ dir = './monitor'
 [CONFIG_STORAGE]
 db_uri = 'sqlite:///config_store.db'
 persist = true
-
+custom_loaders=[
+    '${ROOT_PACKAGE}.custom_loader.CustomConfigLoader',
+]
 [EXTENSION_MODULES]
 #class_list = [
 #    '${ROOT_PACKAGE}.custom_loader.CustomConfigLoader',
