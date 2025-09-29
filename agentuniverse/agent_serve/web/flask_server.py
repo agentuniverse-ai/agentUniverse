@@ -423,7 +423,7 @@ def get_session_history(session_id):
                 print(f"解析 result 失败: {e}, row={row}")
                 continue  # 跳过解析失败的记录
 
-        return jsonify(messages), 200
+        return jsonify({"messages": messages,"service_id": service_id}), 200
 
     except Exception as e:
         print(f"服务器内部错误: {e}")
