@@ -54,6 +54,7 @@ class WebRequestLibrary:
             request_id = Column(String(50), nullable=False)
             query = Column(Text)
             session_id = Column(String(50))
+            service_id = Column(String(50))
             title = Column(Text)
             state = Column(String(20))
             result = Column(JSON)
@@ -160,6 +161,8 @@ class WebRequestLibrary:
         request_obj = WebRequestDO(
             request_id='',
             session_id="",
+            service_id="",
+            title="",
             query='',
             state='',
             result=dict(),

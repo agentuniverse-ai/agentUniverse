@@ -26,6 +26,7 @@ def init_db():
             title TEXT,
             query TEXT,
             session_id TEXT NOT NULL,
+            service_id TEXT,
             state TEXT DEFAULT 'finished',
             result TEXT,
             steps TEXT,                  -- ✅ 新增字段

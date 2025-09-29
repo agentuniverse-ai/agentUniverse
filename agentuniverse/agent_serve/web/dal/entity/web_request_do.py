@@ -17,6 +17,7 @@ class WebRequestDO(BaseModel):
     session_id: str = Field(description="Session id of the request.")
     query: str = Field(description="The query contents.")
     title: str = Field(description="The title of the request.")
+    service_id: str = Field(description="Service id of the request.")
     state: str = Field(description="State of the request.")
     result: dict = Field(description="Exec result.")
     steps: list = Field(description="Exec steps.")

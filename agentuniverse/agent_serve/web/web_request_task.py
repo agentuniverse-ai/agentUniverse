@@ -78,6 +78,7 @@ class WebRequestTask:
         if not request_id:
             request_id = uuid.uuid4().hex
         self.request_id = request_id
+        self.service_id = None
         self.queue = queue.Queue(maxsize=1000)
         self.thread: Optional[ThreadWithReturnValue] = None
         self.state = TaskStateEnum.INIT.value
@@ -349,6 +350,7 @@ class WebRequestTask:
             session_id=self.kwargs.get('session_id', ''),
             query=query,
             title = query,
+            service_id=self.kwargs.get('service_id'),
             state=TaskStateEnum.INIT.value,
             result=dict(),
             steps=[],

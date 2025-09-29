@@ -221,7 +221,8 @@ def sessions_list_all():
         query = '''
             SELECT 
                 rt.session_id AS id,
-                rt.title AS title
+                rt.title AS title,
+                rt.service_id AS service_id
             FROM request_task rt
             INNER JOIN (
                 SELECT 
@@ -242,7 +243,9 @@ def sessions_list_all():
         rows = db.execute(query).fetchall()
 
         sessions = [
-            {"id": row["id"], "title": row["title"] or "新对话"}
+            {"id": row["id"],
+             "title": row["title"] or "新对话",
+             "service_id": row["service_id"]}
             for row in rows
         ]
         return jsonify(sessions)
@@ -335,7 +338,7 @@ def get_session_history(session_id):
 
         # 查询该 session_id 下所有 state 为 'finished' 的记录，按时间升序排列
         query = '''
-                SELECT query, result, gmt_create
+                SELECT query, result, gmt_create, service_id
                 FROM request_task
                 WHERE session_id = ?
                   AND state = 'finished'
@@ -356,6 +359,7 @@ def get_session_history(session_id):
             try:
                 # 直接使用 query 作为用户输入
                 user_input = row["query"].strip() if row["query"] else ""
+                service_id = row["service_id"]  # 新增：获取 service_id
 
                 # 解析外层 result
                 outer_result = json.loads(row["result"])
@@ -388,6 +392,7 @@ def get_session_history(session_id):
                         "id": user_msg_id,
                         "role": "user",
                         "content": user_input,
+                        "service_id": service_id,  # ✅ 添加 service_id
                         "status": "success",
                         "gmt_create": _format_timestamp(row["gmt_create"])
                     })
@@ -409,6 +414,7 @@ def get_session_history(session_id):
                                 }
                             }
                         ],
+                        "service_id": service_id,  # ✅ 添加 service_id
                         "status": "success",
                         "gmt_create": _format_timestamp(row["gmt_create"])
                     })
