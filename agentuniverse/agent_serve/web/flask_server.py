@@ -339,7 +339,7 @@ def get_session_history(session_id):
 
         # 查询该 session_id 下所有 state 为 'finished' 的记录，按时间升序排列
         query = '''
-                SELECT query, result, gmt_create, service_id
+                SELECT query, result, gmt_create,service_id
                 FROM request_task
                 WHERE session_id = ?
                   AND state = 'finished'
@@ -393,7 +393,6 @@ def get_session_history(session_id):
                         "id": user_msg_id,
                         "role": "user",
                         "content": user_input,
-                        "service_id": service_id,  # ✅ 添加 service_id
                         "status": "success",
                         "gmt_create": _format_timestamp(row["gmt_create"])
                     })
@@ -415,7 +414,6 @@ def get_session_history(session_id):
                                 }
                             }
                         ],
-                        "service_id": service_id,  # ✅ 添加 service_id
                         "status": "success",
                         "gmt_create": _format_timestamp(row["gmt_create"])
                     })
@@ -424,7 +422,7 @@ def get_session_history(session_id):
                 print(f"解析 result 失败: {e}, row={row}")
                 continue  # 跳过解析失败的记录
 
-        return jsonify({"messages": messages,"service_id": service_id}), 200
+        return jsonify(messages), 200
 
     except Exception as e:
         print(f"服务器内部错误: {e}")
