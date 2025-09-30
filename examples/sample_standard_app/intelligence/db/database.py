@@ -2,7 +2,6 @@
 import sqlite3
 import os
 from flask import g
-#testtest
 DB_PATH = os.path.join(os.path.dirname(__file__), 'agent_universe_web.db')
 
 def get_db():
