@@ -376,6 +376,10 @@ class Agent(ComponentBase, ABC):
     def tool_names(self) -> list:
         return self._get_tool_names()
 
+    @tool_names.setter
+    def tool_names(self, value):
+        self._tool_names = value
+
     def _get_tool_names(self) -> list:
         tool_name_list = self.agent_model.action.get('tool', [])
         if tool_name_list is None:
