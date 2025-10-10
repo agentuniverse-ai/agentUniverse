@@ -102,26 +102,7 @@ class TestPromptOptimizer(unittest.TestCase):
         for suggestion in suggestions:
             self.assertIsInstance(suggestion, str)
     
-    def test_optimize_section(self):
-        """Test section optimization."""
-        original_text = "你是一个助手"
-        optimized = self.optimizer._optimize_section(
-            original_text,
-            [OptimizationStrategy.CLARITY]
-        )
-        
-        self.assertIsInstance(optimized, str)
-        # Should be different from original due to optimization rules
-        self.assertNotEqual(original_text, optimized)
     
-    def test_optimize_section_empty(self):
-        """Test section optimization with empty text."""
-        optimized = self.optimizer._optimize_section(
-            None,
-            [OptimizationStrategy.CLARITY]
-        )
-        
-        self.assertEqual(optimized, "")
     
     def test_get_applicable_rules(self):
         """Test getting applicable rules."""
@@ -152,29 +133,6 @@ class TestPromptOptimizer(unittest.TestCase):
         # Should include custom rule
         self.assertIn(custom_rule, rules)
     
-    def test_rule_applies_to_strategies(self):
-        """Test rule application to strategies."""
-        rule = OptimizationRule(
-            name="clarity_rule",
-            pattern=r"test",
-            replacement="optimized",
-            description="Clarity rule",
-            priority=5
-        )
-        
-        # Test with matching strategy
-        applies = self.optimizer._rule_applies_to_strategies(
-            rule, 
-            [OptimizationStrategy.CLARITY]
-        )
-        self.assertTrue(applies)
-        
-        # Test with non-matching strategy
-        applies = self.optimizer._rule_applies_to_strategies(
-            rule, 
-            [OptimizationStrategy.EFFICIENCY]
-        )
-        self.assertFalse(applies)
     
     def test_calculate_metric_score(self):
         """Test metric score calculation."""

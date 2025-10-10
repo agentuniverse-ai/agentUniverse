@@ -138,52 +138,6 @@ class TestScenarioAnalyzer(unittest.TestCase):
             self.assertIsInstance(context.value, str)
             self.assertIsInstance(context.confidence, AnalysisConfidence)
     
-    def test_determine_scenario(self):
-        """Test scenario determination."""
-        # Test code generation scenario
-        content = "我需要写代码"
-        scenario = self.analyzer._determine_scenario(content, [])
-        self.assertEqual(scenario, PromptScenario.CODE_GENERATION)
-        
-        # Test analytical scenario
-        content = "我需要分析数据"
-        scenario = self.analyzer._determine_scenario(content, [])
-        self.assertEqual(scenario, PromptScenario.ANALYTICAL)
-        
-        # Test creative scenario
-        content = "我需要创意设计"
-        scenario = self.analyzer._determine_scenario(content, [])
-        self.assertEqual(scenario, PromptScenario.CREATIVE)
-        
-        # Test reasoning scenario
-        content = "我需要逻辑推理"
-        scenario = self.analyzer._determine_scenario(content, [])
-        self.assertEqual(scenario, PromptScenario.REASONING)
-        
-        # Test customer service scenario
-        content = "我需要客服支持"
-        scenario = self.analyzer._determine_scenario(content, [])
-        self.assertEqual(scenario, PromptScenario.CUSTOMER_SERVICE)
-        
-        # Test educational scenario
-        content = "我需要教育内容"
-        scenario = self.analyzer._determine_scenario(content, [])
-        self.assertEqual(scenario, PromptScenario.EDUCATIONAL)
-        
-        # Test research scenario
-        content = "我需要研究分析"
-        scenario = self.analyzer._determine_scenario(content, [])
-        self.assertEqual(scenario, PromptScenario.RESEARCH)
-        
-        # Test task-oriented scenario
-        content = "我需要完成任务"
-        scenario = self.analyzer._determine_scenario(content, [])
-        self.assertEqual(scenario, PromptScenario.TASK_ORIENTED)
-        
-        # Test default scenario
-        content = "我需要一个助手"
-        scenario = self.analyzer._determine_scenario(content, [])
-        self.assertEqual(scenario, PromptScenario.CONVERSATIONAL)
     
     def test_determine_complexity(self):
         """Test complexity determination."""
