@@ -1,0 +1,7 @@
+name: 'score_threshold_filter'
+description: 'Filter documents by relevance score threshold'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.score_filter_processor'
+  class: 'ScoreThresholdFilter'
+
