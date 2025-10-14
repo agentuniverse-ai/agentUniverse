@@ -1,0 +1,10 @@
+name: 'nlu_rag_router'
+description: 'base rag router map query to all store'
+store_amount: 2
+llm:
+  name: qwen_llm
+  model_name: qwen-max
+metadata:
+  type: 'RAG_ROUTER'
+  module: 'agentuniverse.agent.action.knowledge.rag_router.nlu_rag_router'
+  class: 'NluRagRouter'
