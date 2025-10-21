@@ -3,7 +3,7 @@ import traceback
 from concurrent.futures import TimeoutError
 
 from flask import Flask, Response, g, request, make_response, \
-    copy_current_request_context
+    copy_current_request_context, jsonify
 from loguru import logger
 from werkzeug.exceptions import HTTPException
 from werkzeug.local import LocalProxy
@@ -11,6 +11,7 @@ from werkzeug.local import LocalProxy
 from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 from .request_task import RequestTask
+from .web_request_task import WebRequestTask
 from .thread_with_result import ThreadPoolExecutorWithReturnValue
 from .web_util import request_param, service_run_queue, make_standard_response, \
     FlaskServerManager
@@ -18,6 +19,10 @@ from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
 from ...base.util.logging.logging_util import LOGGER
 
+from agentuniverse.agent_serve.service_manager import ServiceManager
+from examples.sample_standard_app.intelligence.db.database import init_app, get_db
+import json
+from datetime import datetime
 
 # Patch original flask request so it can be dumped by loguru.
 class SerializableRequest:
@@ -157,6 +162,285 @@ def service_run_stream(service_id: str, params: dict, saved: bool = False):
     response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
     response.headers['X-Request-ID'] = task.request_id
     return response
+
+@app.route("/agent/list", methods=['GET'])
+def agent_list():
+    try:
+        service_manager = ServiceManager()
+        services = service_manager.get_instance_obj_list()
+        agent_list = []
+        for service in services:
+            if not hasattr(service, 'agent') or service.agent is None:
+                continue
+            agent = service.agent
+            name = getattr(agent, 'name', None)
+            description = service.description
+            if not name:
+                name = agent.agent_model.info.get("name") if hasattr(agent, 'agent_model') else None
+            if name:
+                # 返回 { name, service_id } 结构
+                agent_list.append({
+                    "agent_name": name,
+                    "service_id": service.name,  # 或其他唯一标识，如 component_id
+                    "description": description,
+                })
+        # 去重：可能多个 service 使用同一个 agent，但 service_id 不同
+        return jsonify({
+            "success": True,
+            "data": agent_list
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "Failed to fetch agent list",
+            "error": str(e)
+        }), 500
+
+@app.route("/web_stream", methods=['POST'])  # 修改接口名称
+@request_param
+def web_stream(service_id: str, params: dict, saved: bool = True):
+    """Web流式运行接口，使用新的数据库表"""
+    params = {} if params is None else params
+    params['service_id'] = service_id
+    params['streaming'] = True
+
+    # 使用新的 WebRequestTask
+    task = WebRequestTask(service_run_queue, saved, **params)
+
+    context_prefix = get_context_prefix()
+    response = Response(timed_generator(task.stream_run(), g.start_time, context_prefix), mimetype="text/event-stream")
+    response.headers['X-Request-ID'] = task.request_id
+    return response
+
+# 初始化数据库（注册关闭、初始化等钩子）
+init_app(app)
+@app.route('/session/list', methods=['GET'])
+def sessions_list_all():
+    try:
+        db = get_db()
+
+        query = '''
+            SELECT 
+                rt.session_id AS id,
+                rt.title AS title,
+                rt.service_id AS service_id
+            FROM request_task rt
+            INNER JOIN (
+                SELECT 
+                    session_id, 
+                    MIN(gmt_create) AS first_created
+                FROM request_task
+                WHERE state = 'finished'
+                  AND query IS NOT NULL
+                  AND query != ''
+                GROUP BY session_id
+            ) first_msgs
+            ON rt.session_id = first_msgs.session_id
+               AND rt.gmt_create = first_msgs.first_created
+            ORDER BY rt.gmt_create DESC
+            LIMIT 50
+        '''
+
+        rows = db.execute(query).fetchall()
+
+        sessions = [
+            {"id": row["id"],
+             "title": row["title"] or "新对话",
+             "service_id": row["service_id"]}
+            for row in rows
+        ]
+        return jsonify(sessions)
+
+    except Exception as e:
+        print(f"数据库查询错误: {e}")
+        return jsonify({"error": "服务器内部错误"}), 500
+
+
+@app.route('/session/update', methods=['PUT'])
+def update_session():
+    #利用sessionId，更新最近会话的title
+    # 从 JSON 中获取 session_id 和新的 query
+    data = request.get_json()
+    session_id = data.get('session_id')
+    new_title = data.get('title')
+
+    if not session_id:
+        return jsonify({"error": "Missing session_id in JSON body"}), 400
+    if not new_title:
+        return jsonify({"error": "Missing new query content"}), 400
+    try:
+        db = get_db()
+        # 检查是否存在该会话
+        cursor = db.execute(
+            "SELECT 1 FROM request_task WHERE session_id = ? LIMIT 1",
+            (session_id,)  # 注意这里是 (session_id,)，因为是单元素的元组
+        )
+        if not cursor.fetchone():
+            return jsonify({"error": "Session not found"}), 404  # 错误消息也移除“no permission”
+        # 更新该 session 的所有记录的 query
+        db.execute(
+            "UPDATE request_task SET title = ? WHERE session_id = ?",
+            (new_title, session_id)
+        )
+        db.commit()
+
+        return jsonify({
+            "message": "Session updated successfully",
+            "session_id": session_id,
+            "new_query": new_title
+        }), 200
+
+    except Exception as e:
+        print(f"更新会话错误: {e}")
+        return jsonify({"error": "服务器内部错误"}), 500
+
+
+@app.route('/session/delete', methods=['DELETE'])
+def delete_session():
+    # 从请求体中获取 session_id
+    data = request.get_json()
+    session_id = data.get('session_id') if data else None
+    if not session_id:
+        return jsonify({"error": "Missing session_id in JSON body"}), 400
+
+    try:
+        db = get_db()
+        # 先检查是否存在
+        cursor = db.execute(
+            "SELECT 1 FROM request_task WHERE session_id = ? LIMIT 1",
+            (session_id,)  # 注意这里是 (session_id,)
+        )
+        if not cursor.fetchone():
+            return jsonify({"error": "Session not found"}), 404  # 错误消息也移除“no permission”
+
+        # 删除该 session 的所有记录
+        db.execute(
+            "DELETE FROM request_task WHERE session_id = ?",
+            (session_id,)  # 注意这里是 (session_id,)
+        )
+        db.commit()
+
+        return jsonify({"message": "Session deleted successfully", "session_id": session_id}), 200
+
+    except Exception as e:
+        print(f"删除会话错误: {e}")
+        return jsonify({"error": "服务器内部错误"}), 500
+
+
+@app.route('/session/<session_id>/history', methods=['GET'])
+def get_session_history(session_id):
+    """
+    获取指定 session_id 的完整聊天历史
+    URL: GET /session/MRcNioQGmKH8GPw-vwm4O/history
+    返回结构化消息列表，兼容前端卡片式渲染。
+    """
+    try:
+        db = get_db()
+
+        # 查询该 session_id 下所有 state 为 'finished' 的记录，按时间升序排列
+        query = '''
+                SELECT query, result, gmt_create,service_id
+                FROM request_task
+                WHERE session_id = ?
+                  AND state = 'finished'
+                  AND result IS NOT NULL
+                  AND result != ''
+                ORDER BY gmt_create ASC \
+                '''
+
+        rows = db.execute(query, (session_id,)).fetchall()
+
+        if not rows:
+            return jsonify([]), 200  # 没有记录返回空数组，而不是错误
+
+        messages = []
+        message_id_counter = 1  # 用于生成 msg_id
+
+        for row in rows:
+            try:
+                # 直接使用 query 作为用户输入
+                user_input = row["query"].strip() if row["query"] else ""
+                service_id = row["service_id"]  # 新增：获取 service_id
+
+                # 解析外层 result
+                outer_result = json.loads(row["result"])
+                inner_result_str = outer_result.get("result")
+
+                if not inner_result_str:
+                    continue
+
+                # 兼容处理：inner_result_str 可能是字符串或已解析对象
+                if isinstance(inner_result_str, str):
+                    inner_result = json.loads(inner_result_str)
+                else:
+                    inner_result = inner_result_str
+
+                # 提取AI输出
+                ai_output = inner_result.get("output", "")
+
+                # 如果 ai_output 是字典，提取 text 字段
+                if isinstance(ai_output, dict):
+                    ai_text = (ai_output.get("text") or "").strip()
+                else:
+                    ai_text = str(ai_output).strip()
+
+                # ========== 用户消息 ==========
+                if user_input:
+                    user_msg_id = f"msg_{str(message_id_counter).zfill(3)}"
+                    message_id_counter += 1
+
+                    messages.append({
+                        "id": user_msg_id,
+                        "role": "user",
+                        "content": user_input,
+                        "status": "success",
+                        "gmt_create": _format_timestamp(row["gmt_create"])
+                    })
+
+                # ========== 助手消息 ==========
+                if ai_text:
+                    assistant_msg_id = f"msg_{str(message_id_counter).zfill(3)}"
+                    message_id_counter += 1
+
+                    messages.append({
+                        "id": assistant_msg_id,
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "card": "Markdown",
+                                "props": {
+                                    "children": ai_text,
+                                    "speed": 100  # 可配置：打字速度（字符/秒）
+                                }
+                            }
+                        ],
+                        "status": "success",
+                        "gmt_create": _format_timestamp(row["gmt_create"])
+                    })
+
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                print(f"解析 result 失败: {e}, row={row}")
+                continue  # 跳过解析失败的记录
+
+        return jsonify(messages), 200
+
+    except Exception as e:
+        print(f"服务器内部错误: {e}")
+        return jsonify({"error": "服务器内部错误"}), 500
+
+
+# 辅助函数：标准化时间格式
+def _format_timestamp(dt_str):
+    """
+    将数据库中的时间字符串转换为 ISO 8601 格式（带 T 和 Z）
+    输入示例: '2025-09-08 21:54:51.566212'
+    输出示例: '2025-09-08T21:54:51.566Z'
+    """
+    try:
+        dt = datetime.fromisoformat(dt_str.split('.')[0])  # 忽略微秒部分
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    except Exception:
+        return dt_str  # 若解析失败，原样返回
 
 
 @app.route("/service_run_async", methods=['POST'])

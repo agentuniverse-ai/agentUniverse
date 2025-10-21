@@ -1,0 +1,12 @@
+info:
+  name: 'demo_reviewing_agent'
+  description: 'demo reviewing agent'
+profile:
+
+
+  llm_model:
+    name: 'qwen-max'
+    temperature: 0.1
+memory:
+  name: 'demo_memory'
+meta_class: 'agentuniverse.agent.template.reviewing_agent_template.ReviewingAgentTemplate'

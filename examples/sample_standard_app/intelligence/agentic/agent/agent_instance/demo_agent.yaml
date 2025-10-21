@@ -35,7 +35,7 @@ profile:
   #
   # Note: The current configuration uses Way 1, as shown below
   llm_model:
-    name: 'qwen3-32b'
+    name: 'qwen-max'
 action:
   # Please select the tools, toolkits and knowledge base.
   tool:
@@ -53,3 +53,4 @@ action:
 memory:
   name: 'demo_memory'
 meta_class: sample_standard_app.intelligence.agentic.agent.agent_instance.demo_agent.DemoAgent
+
