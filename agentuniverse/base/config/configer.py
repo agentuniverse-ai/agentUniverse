@@ -103,6 +103,9 @@ class Configer(object):
         Returns:
             Configer: the Configer object
         """
+        if not os.path.exists(path):
+            self.__value = {}
+            return self
         # Check the file format.
         file_format = path.split('.')[-1]
         if file_format not in self.__SUPPORTED_FILE_FORMATS:

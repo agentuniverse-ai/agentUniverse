@@ -1,0 +1,52 @@
+[BASE_INFO]
+# The app name will be applied to all processes including agent service integration.
+appname = 'test_app'
+
+# The placeholder "${ROOT_PACKAGE}" is mapped to the value of "ROOT_PACKAGE" defined in this file.
+# It allows you to conveniently manage multiple different agent applications by configuring the root package value.
+[PACKAGE_PATH_INFO]
+ROOT_PACKAGE = 'test_app'
+
+[CORE_PACKAGE]
+# Perform a full component scan and registration for all the paths under this list.
+default = ['${ROOT_PACKAGE}.intelligence.agentic']
+# Scan and register agent components for all paths under this list, with priority over the default.
+agent = ['${ROOT_PACKAGE}.intelligence.agentic.agent']
+
+
+[SUB_CONFIG_PATH]
+# Log config file path, an absolute path or a relative path based on the dir where the current config file is located.
+log_config_path = './log_config.toml'
+# Custom key file path, use to save your own secret key like open ai or sth else. REMEMBER TO ADD IT TO .gitignore.
+custom_key_path = './custom_key.toml'
+
+[DB]
+# A sqlalchemy db uri used for storing various info, for example, service request, generated during application running.
+# If it's empty, agentUniverse will create a local sqlite db as default choice.
+system_db_uri = ''
+
+[GUNICORN]
+# Use gunicorn as http server when activate is 'true', or only use flask.
+activate = 'false'
+# Gunicorn config file path, an absolute path or a relative path based on the dir where the current config file is located.
+gunicorn_config_path = './gunicorn_config.toml'
+
+[GRPC]
+activate = 'false'
+max_workers = 10
+server_port = 50051
+
+[MONITOR]
+activate = false
+dir = './monitor'
+
+[CONFIG_STORAGE]
+db_uri = 'sqlite:///config_store.db'
+persist = true
+custom_loaders=[
+    '${ROOT_PACKAGE}.custom_loader.CustomConfigLoader',
+]
+[EXTENSION_MODULES]
+#class_list = [
+#    '${ROOT_PACKAGE}.custom_loader.CustomConfigLoader',
+#]

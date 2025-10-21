@@ -24,6 +24,8 @@ from agentuniverse.base.config.configer import Configer
 from agentuniverse.base.config.custom_configer.default_llm_configer import DefaultLLMConfiger
 from agentuniverse.base.config.custom_configer.custom_key_configer import CustomKeyConfiger
 from agentuniverse.base.component.component_enum import ComponentEnum
+from agentuniverse.base.storage.config_storage import ConfigStorage
+from agentuniverse.base.storage.storage_context import StorageContext
 from agentuniverse.base.util.monitor.monitor import Monitor
 from agentuniverse.base.util.system_util import get_project_root_path, is_api_key_missing, \
     is_system_builtin, find_default_llm_config
@@ -34,6 +36,7 @@ from agentuniverse.agent_serve.web.web_booster import ACTIVATE_OPTIONS
 from agentuniverse.agent_serve.web.post_fork_queue import POST_FORK_QUEUE
 from agentuniverse.agent_serve.web.web_util import FlaskServerManager
 from agentuniverse.base.tracing.otel.telemetry_manager import TelemetryManager
+
 
 @singleton
 class AgentUniverse(object):
@@ -131,6 +134,8 @@ class AgentUniverse(object):
 
         # init monitor module
         Monitor(configer=configer)
+        # init config storage
+        ConfigStorage(configer=configer)
 
         # scan and register the components
         self.__scan_and_register(self.__config_container.app_configer)
@@ -152,9 +157,10 @@ class AgentUniverse(object):
         core_planner_package_list = ((app_configer.core_planner_package_list or app_configer.core_default_package_list)
                                      + self.__system_default_planner_package)
         core_tool_package_list = ((app_configer.core_tool_package_list or app_configer.core_default_package_list)
-                                    + self.__system_default_tool_package)
-        core_toolkit_package_list = ((app_configer.core_toolkit_package_list or app_configer.core_tool_package_list or app_configer.core_default_package_list)
                                   + self.__system_default_tool_package)
+        core_toolkit_package_list = ((
+                                             app_configer.core_toolkit_package_list or app_configer.core_tool_package_list or app_configer.core_default_package_list)
+                                     + self.__system_default_tool_package)
         core_service_package_list = app_configer.core_service_package_list or app_configer.core_default_package_list
         core_sqldb_wrapper_package_list = app_configer.core_sqldb_wrapper_package_list or app_configer.core_default_package_list
         core_memory_package_list = ((app_configer.core_memory_package_list or app_configer.core_default_package_list)
@@ -325,6 +331,14 @@ class AgentUniverse(object):
                 continue
             component_instance.component_config_path = component_configer.configer.path
             component_manager_clz().register(component_instance.get_instance_code(), component_instance)
+
+            ctx = StorageContext(
+                instance_code=component_instance.get_instance_code(),
+                configer=configer_instance.configer,
+                configer_type=component_enum,
+                root_package_name=ConfigStorage().root_package_name
+            )
+            ConfigStorage().persist_to_storage(ctx)
 
     def __package_name_to_path(self, package_name: str) -> str:
         """Convert the package name to the package path.
