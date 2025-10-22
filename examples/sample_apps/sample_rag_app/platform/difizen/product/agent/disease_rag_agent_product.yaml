@@ -1,0 +1,12 @@
+id: disease_rag_agent
+nickname: 医疗顾问智能体
+opening_speech: |
+  您好，欢迎使用医疗顾问智能体，我将根据您提供的身体状况描述信息，推测您可能患有的疾病类型，并给出相应的治疗方案。你可以这样问我：
+  问题 1: 我最近总是头疼，还伴有头晕和恶心的症状，这可能是什么病，该怎么治疗呢？
+  问题 2: 我胸口时不时会疼一下，有时候疼得还挺厉害，这大概是什么情况，要如何应对呀？
+type: AGENT
+avatar: ../../../resources/law_agent_logo.png
+metadata:
+  class: AgentProduct
+  module: agentuniverse_product.base.agent_product
+  type: PRODUCT

@@ -1,0 +1,11 @@
+name: 'disease_therapy_one_sqlite_store'
+description: '保存了常见疾病及其自然治疗方法的所有内容，以文本形式存储'
+db_path: '../../intelligence/db/disease_therapy_one_sqlite.db'
+k1: 1.5
+b: 0.75
+keyword_extractor: 'jieba_keyword_extractor'
+similarity_top_k: 10
+metadata:
+  type: 'STORE'
+  module: 'agentuniverse.agent.action.knowledge.store.sqlite_store'
+  class: 'SQLiteStore'

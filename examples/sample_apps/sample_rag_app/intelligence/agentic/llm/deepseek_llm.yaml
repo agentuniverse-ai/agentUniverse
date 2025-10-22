@@ -1,0 +1,8 @@
+name: 'deepseek_llm'
+description: 'default default_deepseek_llm llm with spi'
+model_name: 'deepseek-chat'
+max_tokens: 2000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.deep_seek_openai_style_llm'
+  class: 'DefaultDeepSeekLLM'

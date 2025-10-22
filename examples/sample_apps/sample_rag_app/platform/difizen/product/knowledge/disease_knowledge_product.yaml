@@ -1,0 +1,7 @@
+id: disease_knowledge
+nickname: 疾病类型/疾病治疗方法知识库，可以查询疾病类型/疾病治疗方法相关内容
+type: KNOWLEDGE
+metadata:
+  type: 'PRODUCT'
+  module: 'agentuniverse_product.base.product'
+  class: 'Product'
