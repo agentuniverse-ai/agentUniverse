@@ -1,12 +1,12 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
+
 # @Time    :
 # @Author  :
 # @Email   :
 # @FileName: google_search_tool.py
 
 import json
-import requests
 from typing import Optional, Dict, Any, List
 from urllib.parse import quote_plus
 
@@ -36,13 +36,13 @@ class GoogleSearchTool(Tool):
     default_gl: str = Field(default="us", description="地理位置代码")
     default_hl: str = Field(default="en", description="语言代码")
 
-    def execute(self, query: str, search_type: str = "search", k: int = None, 
+    def execute(self, input: str, search_type: str = "search", k: int = None, 
                 gl: str = None, hl: str = None, **kwargs) -> str:
         """
         执行Google搜索
         
         Args:
-            query: 搜索查询词
+            input: 搜索查询词
             search_type: 搜索类型 ("search", "images", "news", "places")
             k: 返回结果数量
             gl: 地理位置代码
@@ -53,7 +53,7 @@ class GoogleSearchTool(Tool):
             格式化的搜索结果字符串
         """
         if not self.serper_api_key:
-            return self._get_mock_result(query)
+            return self._get_mock_result(input)
             
         k = k or self.default_k
         gl = gl or self.default_gl
@@ -67,16 +67,16 @@ class GoogleSearchTool(Tool):
                 hl=hl, 
                 type=search_type
             )
-            result = search.run(query=query)
-            return self._format_search_result(result, query, search_type)
+            result = search.run(query=input)
+            return self._format_search_result(result, input, search_type)
         except Exception as e:
             return f"搜索出错: {str(e)}"
 
-    async def async_execute(self, query: str, search_type: str = "search", k: int = None,
+    async def async_execute(self, input: str, search_type: str = "search", k: int = None,
                            gl: str = None, hl: str = None, **kwargs) -> str:
         """异步执行Google搜索"""
         if not self.serper_api_key:
-            return self._get_mock_result(query)
+            return self._get_mock_result(input)
             
         k = k or self.default_k
         gl = gl or self.default_gl
@@ -90,8 +90,8 @@ class GoogleSearchTool(Tool):
                 hl=hl, 
                 type=search_type
             )
-            result = await search.arun(query=query)
-            return self._format_search_result(result, query, search_type)
+            result = await search.arun(query=input)
+            return self._format_search_result(result, input, search_type)
         except Exception as e:
             return f"搜索出错: {str(e)}"
 
@@ -150,20 +150,18 @@ class GoogleScholarSearchTool(Tool):
 
     注意:
         需要在 https://serper.dev 注册免费账户获取API密钥。
-    Note:
-        You need to sign up for a free account at https://serper.dev and get the serper api key (2500 free queries).
     """
 
     serper_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("SERPER_API_KEY"))
     default_k: int = Field(default=10, description="默认返回结果数量")
 
-    def execute(self, query: str, year: str = None, author: str = None, 
+    def execute(self, input: str, year: str = None, author: str = None, 
                 journal: str = None, k: int = None, **kwargs) -> str:
         """
         执行Google学术搜索
         
         Args:
-            query: 搜索查询词
+            input: 搜索查询词
             year: 年份筛选 (如: "2020..2024")
             author: 作者筛选
             journal: 期刊筛选
@@ -174,12 +172,12 @@ class GoogleScholarSearchTool(Tool):
             格式化的学术搜索结果字符串
         """
         if not self.serper_api_key:
-            return self._get_mock_scholar_result(query)
+            return self._get_mock_scholar_result(input)
             
         k = k or self.default_k
         
         # 构建学术搜索查询
-        scholar_query = self._build_scholar_query(query, year, author, journal)
+        scholar_query = self._build_scholar_query(input, year, author, journal)
         
         try:
             search = GoogleSerperAPIWrapper(
@@ -190,18 +188,18 @@ class GoogleScholarSearchTool(Tool):
                 type="search"
             )
             result = search.run(query=scholar_query)
-            return self._format_scholar_result(result, query, scholar_query)
+            return self._format_scholar_result(result, input, scholar_query)
         except Exception as e:
             return f"学术搜索出错: {str(e)}"
 
-    async def async_execute(self, query: str, year: str = None, author: str = None,
+    async def async_execute(self, input: str, year: str = None, author: str = None,
                            journal: str = None, k: int = None, **kwargs) -> str:
         """异步执行Google学术搜索"""
         if not self.serper_api_key:
-            return self._get_mock_scholar_result(query)
+            return self._get_mock_scholar_result(input)
             
         k = k or self.default_k
-        scholar_query = self._build_scholar_query(query, year, author, journal)
+        scholar_query = self._build_scholar_query(input, year, author, journal)
         
         try:
             search = GoogleSerperAPIWrapper(
@@ -212,7 +210,7 @@ class GoogleScholarSearchTool(Tool):
                 type="search"
             )
             result = await search.arun(query=scholar_query)
-            return self._format_scholar_result(result, query, scholar_query)
+            return self._format_scholar_result(result, input, scholar_query)
         except Exception as e:
             return f"学术搜索出错: {str(e)}"
 
