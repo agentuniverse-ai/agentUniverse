@@ -1,0 +1,14 @@
+info:
+  name: 'demo_prompt_toolkit_agent'
+  description: '智能prompt生成与优化助手'
+profile:
+  prompt_version: demo_prompt_toolkit
+  llm_model:
+    name: 'qwen3-32b'
+action:
+  - name: 'prompt_generation_action'
+    description: '根据用户场景生成prompt'
+  - name: 'prompt_optimization_action'
+    description: '优化现有prompt'
+  - name: 'scenario_analysis_action'
+    description: '分析用户场景和需求'
