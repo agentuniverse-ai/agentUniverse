@@ -1,30 +1,30 @@
 name: github_tool
-description: GitHub仓库、用户、问题和代码搜索工具
+description: GitHub repository, user, issue and code search tool
 class_path: agentuniverse.agent.action.tool.common_tool.github_tool.GitHubTool
 args_model:
   mode:
     type: string
-    description: 搜索模式，可选值：repository(搜索仓库), user(搜索用户), issue(搜索问题), code(搜索代码), repo_info(获取仓库信息)
+    description: Search mode, options: repository(search repositories), user(search users), issue(search issues), code(search code), repo_info(get repository info)
     required: true
   query:
     type: string
-    description: 搜索查询字符串，用于repository、user、issue、code模式
+    description: Search query string, used for repository, user, issue, code modes
     required: false
   owner:
     type: string
-    description: 仓库所有者，用于repo_info模式
+    description: Repository owner, used for repo_info mode
     required: false
   repo:
     type: string
-    description: 仓库名称，用于repo_info模式
+    description: Repository name, used for repo_info mode
     required: false
   sort:
     type: string
-    description: 排序方式，repository模式可选：stars, forks, help-wanted-issues, updated；user模式可选：followers, repositories, joined；issue模式可选：created, updated, comments；code模式可选：indexed
+    description: Sort method, repository mode options: stars, forks, help-wanted-issues, updated; user mode options: followers, repositories, joined; issue mode options: created, updated, comments; code mode options: indexed
     required: false
   order:
     type: string
-    description: 排序顺序，可选值：desc(降序), asc(升序)
+    description: Sort order, options: desc(descending), asc(ascending)
     required: false
     default: desc
 args_model_schema:
@@ -33,22 +33,22 @@ args_model_schema:
     mode:
       type: string
       enum: ["repository", "user", "issue", "code", "repo_info"]
-      description: 搜索模式
+      description: Search mode
     query:
       type: string
-      description: 搜索查询字符串
+      description: Search query string
     owner:
       type: string
-      description: 仓库所有者
+      description: Repository owner
     repo:
       type: string
-      description: 仓库名称
+      description: Repository name
     sort:
       type: string
-      description: 排序方式
+      description: Sort method
     order:
       type: string
       enum: ["desc", "asc"]
       default: "desc"
-      description: 排序顺序
+      description: Sort order
   required: ["mode"]

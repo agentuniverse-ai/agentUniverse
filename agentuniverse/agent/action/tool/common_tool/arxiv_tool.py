@@ -30,11 +30,25 @@ class PaperSummary:
 
 
 class ArxivTool(Tool):
+    """ArXiv paper search and extraction tool.
+    
+    This tool provides functionality to search for academic papers on ArXiv and extract full text content.
+    Supports two modes: search (find papers by query) and detail (extract full paper text by ID).
+    """
     
     sch_engine: Optional[Any] = None
-    MAX_QUERY_LENGTH: int = Field(default=300, description="查询字符串最大长度")
+    MAX_QUERY_LENGTH: int = Field(default=300, description="Maximum query string length")
 
     def execute(self, input: str, mode: str):
+        """Execute ArXiv search or extraction.
+        
+        Args:
+            input (str): Search query or paper ID depending on mode
+            mode (str): Operation mode - 'search' or 'detail'
+            
+        Returns:
+            str: Search results or extracted paper text
+        """
         try:
             import arxiv
         except ImportError:
@@ -51,6 +65,7 @@ class ArxivTool(Tool):
                 else self.retrieve_full_paper_text(query))
         
     def _process_query(self, query: str) -> str:
+        """Process and truncate query to fit within MAX_QUERY_LENGTH."""
         if len(query) <= self.MAX_QUERY_LENGTH:
             return query
         
@@ -68,6 +83,7 @@ class ArxivTool(Tool):
 
     @retry(3, 1.0)
     def find_papers_by_str(self, query) -> str:
+        """Search for papers on ArXiv by query string."""
         processed_query = self._process_query(query)
         result_num:int = 10   
         try:
@@ -95,6 +111,7 @@ class ArxivTool(Tool):
 
     @retry(3, 1.0)
     def retrieve_full_paper_text(self, paper_id: str) -> str:
+        """Retrieve and extract full text content from a paper by its ID."""
         try:
             import arxiv
         except ImportError:
@@ -116,6 +133,7 @@ class ArxivTool(Tool):
         return "\n\n".join(text_content)
 
     def _format_paper_results(self, papers: List[PaperSummary]) -> str:
+        """Format paper search results into a readable string."""
         if not papers:
             return "No papers found."
 

@@ -19,6 +19,7 @@ from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 
 
 class CommandStatus(Enum):
+    """Enumeration for command execution status."""
     RUNNING = "running"
     COMPLETED = "completed"
     ERROR = "error"
@@ -26,6 +27,17 @@ class CommandStatus(Enum):
 
 @dataclass
 class CommandResult:
+    """Data class representing the result of a command execution.
+    
+    Attributes:
+        thread_id: Unique identifier for the command thread
+        stdout: Standard output from the command
+        stderr: Standard error from the command
+        start_time: Timestamp when command started
+        status: Current status of the command
+        exit_code: Exit code of the command (if completed)
+        end_time: Timestamp when command ended (if completed)
+    """
     thread_id: int
     stdout: str
     stderr: str
@@ -36,12 +48,22 @@ class CommandResult:
 
     @property
     def duration(self) -> float:
+        """Calculate the duration of command execution.
+        
+        Returns:
+            float: Duration in seconds
+        """
         if self.end_time is None:
             return time.time() - self.start_time
         return self.end_time - self.start_time
 
     @property
     def message(self) -> str:
+        """Generate a formatted message with command execution details.
+        
+        Returns:
+            str: JSON string containing command status, output, and metadata
+        """
         # Truncate stdout and stderr if they are too long
         max_output_length = 2000
         truncated_stdout = self._truncate_output(
@@ -60,7 +82,15 @@ class CommandResult:
         return json.dumps(result_dict)
 
     def _truncate_output(self, output: str, max_length: int) -> str:
-        """Truncate output to keep beginning and end, removing middle when too long"""
+        """Truncate output to keep beginning and end, removing middle when too long.
+        
+        Args:
+            output: Output string to truncate
+            max_length: Maximum allowed length
+            
+        Returns:
+            str: Truncated output with ellipsis in the middle if needed
+        """
         if not output or len(output) <= max_length:
             return output
         half_length = max_length // 2
@@ -71,14 +101,36 @@ _command_results: Dict[int, CommandResult] = {}
 
 
 class RunCommandTool(Tool):
-    """
-    Tool for executing shell commands either synchronously or asynchronously.
+    """Tool for executing shell commands either synchronously or asynchronously.
+
+    This tool provides functionality to execute shell commands and track their execution status.
+    Commands can be run in blocking or non-blocking mode, with results stored for later retrieval.
     """
 
     def execute(self, command: str, cwd: str, blocking: bool = True) -> str:
+        """Execute a shell command with specified working directory.
+        
+        Args:
+            command: Shell command to execute
+            cwd: Current working directory for the command
+            blocking: Whether to wait for command completion
+            
+        Returns:
+            str: Command execution result message
+        """
         return self._run_command(command, cwd, blocking)
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:
+        """Internal method to execute shell command with result tracking.
+        
+        Args:
+            command: Shell command to execute
+            cwd: Current working directory for the command
+            blocking: Whether to wait for command completion
+            
+        Returns:
+            str: Command execution result message
+        """
         result = CommandResult(
             thread_id=threading.get_ident(),
             status=CommandStatus.RUNNING,
@@ -88,6 +140,7 @@ class RunCommandTool(Tool):
         )
 
         def __run() -> None:
+            """Execute command in thread and update result status."""
             try:
                 process = subprocess.Popen(
                     command,
@@ -126,4 +179,12 @@ class RunCommandTool(Tool):
 
 
 def get_command_result(thread_id: int) -> Optional[CommandResult]:
+    """Get command execution result by thread ID.
+    
+    Args:
+        thread_id: Thread ID to look up
+        
+    Returns:
+        Optional[CommandResult]: Command result if found, None otherwise
+    """
     return _command_results.get(thread_id)

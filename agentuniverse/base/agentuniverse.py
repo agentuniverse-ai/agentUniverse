@@ -153,8 +153,9 @@ class AgentUniverse(object):
                                      + self.__system_default_planner_package)
         core_tool_package_list = ((app_configer.core_tool_package_list or app_configer.core_default_package_list)
                                     + self.__system_default_tool_package)
+        # toolkit 默认包应追加 toolkit 包而非 tool 包
         core_toolkit_package_list = ((app_configer.core_toolkit_package_list or app_configer.core_tool_package_list or app_configer.core_default_package_list)
-                                  + self.__system_default_tool_package)
+                                  + self.__system_default_toolkit_package)
         core_service_package_list = app_configer.core_service_package_list or app_configer.core_default_package_list
         core_sqldb_wrapper_package_list = app_configer.core_sqldb_wrapper_package_list or app_configer.core_default_package_list
         core_memory_package_list = ((app_configer.core_memory_package_list or app_configer.core_default_package_list)
@@ -366,11 +367,13 @@ class AgentUniverse(object):
         return str(combined_path)
 
     def __dynamic_import_and_init(self, class_path: str, configer: Configer = None):
-        """Resolve a sub config file path according to main config file.
+        """Dynamically import a class by path and initialize it.
 
-            Args:
-                class_path(str): Full class path like package_name.class_name.
-                Auto read from config file.
+        Args:
+            class_path (str): Full class path like "package.module.ClassName".
+            configer (Configer | None): Optional config object passed to the constructor.
+        Returns:
+            Any: The instantiated object.
         """
 
         module_path, _, class_name = class_path.rpartition('.')

@@ -17,6 +17,19 @@ from langchain_core.utils.json import parse_json_markdown
 
 
 class RequestTool(Tool):
+    """HTTP request tool for making various HTTP requests.
+
+    This tool provides functionality to make HTTP requests (GET, POST, PUT, DELETE)
+    with configurable headers and response handling. It supports both JSON parsing
+    and raw response handling.
+    
+    Attributes:
+        method: HTTP method to use (default: GET)
+        headers: HTTP headers to include in requests
+        response_content_type: Expected response content type
+        requests_wrapper: LangChain requests wrapper instance
+        json_parser: Whether to parse JSON input parameters
+    """
     method: Optional[str] = 'GET'
     headers: Optional[dict] = {}
     response_content_type: Optional[str] = 'text'
@@ -25,10 +38,25 @@ class RequestTool(Tool):
 
     @staticmethod
     def _clean_url(url: str) -> str:
-        """Strips quotes from the url."""
+        """Clean URL by removing surrounding quotes.
+        
+        Args:
+            url: URL string that may have surrounding quotes
+            
+        Returns:
+            str: Cleaned URL string
+        """
         return url.strip("\"'")
 
     def execute(self, input: str):
+        """Execute HTTP request based on configured method and parameters.
+        
+        Args:
+            input (str): Input string containing URL and optional parameters
+            
+        Returns:
+            str: HTTP response content or error message
+        """
         input_params: str = input
         if self.json_parser:
             try:
@@ -41,6 +69,19 @@ class RequestTool(Tool):
             return self.execute_by_method(input_params)
 
     async def async_execute_by_method(self, url: str, data: dict = None, **kwargs):
+        """Execute HTTP request asynchronously based on configured method.
+        
+        Args:
+            url: Target URL for the request
+            data: Request data for POST/PUT requests
+            **kwargs: Additional parameters
+            
+        Returns:
+            str: HTTP response content
+            
+        Raises:
+            ValueError: If unsupported HTTP method is specified
+        """
         url = self._clean_url(url)
         if self.method == 'GET':
             return await self.requests_wrapper.aget(url)
@@ -54,6 +95,19 @@ class RequestTool(Tool):
             raise ValueError(f"Unsupported method: {self.method}")
 
     def execute_by_method(self, url: str, data: dict = None, **kwargs):
+        """Execute HTTP request synchronously based on configured method.
+        
+        Args:
+            url: Target URL for the request
+            data: Request data for POST/PUT requests
+            **kwargs: Additional parameters
+            
+        Returns:
+            str: HTTP response content
+            
+        Raises:
+            ValueError: If unsupported HTTP method is specified
+        """
         url = self._clean_url(url)
         if self.method == 'GET':
             return self.requests_wrapper.get(url)
@@ -67,9 +121,13 @@ class RequestTool(Tool):
             raise ValueError(f"Unsupported method: {self.method}")
 
     def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'Tool':
-        """
-        :param component_configer:
-        :return:
+        """Initialize the tool using component configer.
+        
+        Args:
+            component_configer: Tool configuration object
+            
+        Returns:
+            Tool: Initialized tool instance
         """
         self.headers = component_configer.configer.value.get('headers')
         self.method = component_configer.configer.value.get('method')

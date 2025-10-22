@@ -92,7 +92,8 @@ class ConversationMessage(Message):
     def from_message(cls, message: Message, session_id: str):
         if not message.metadata:
             message.metadata = {}
-        message.metadata['prefix'] = '之前对话的摘要：' if message.type == 'summarize' else ''
+        # Use English prefix for summary to keep one language style across the system
+        message.metadata['prefix'] = 'Summary of previous conversation: ' if message.type == 'summarize' else ''
         message.metadata['params'] = "{}"
         trace_id = message.metadata.get('trace_id')
         if not trace_id:
