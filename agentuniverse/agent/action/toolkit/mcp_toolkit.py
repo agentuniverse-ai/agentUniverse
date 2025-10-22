@@ -100,7 +100,12 @@ class MCPToolkit(Toolkit):
                 origin_tool_name=tool.name,
                 args_model_schema=tool.inputSchema,
                 input_keys=tool.inputSchema['required'],
-                **self.get_mcp_server_connect_args()
+                transport=self.transport,
+                url=self.url,
+                command=self.command,
+                args=self.args,
+                env=self.env,
+                connection_kwargs=self.connection_kwargs
             )
             ToolManager().register(tool_instance.get_instance_code(), tool_instance)
 
