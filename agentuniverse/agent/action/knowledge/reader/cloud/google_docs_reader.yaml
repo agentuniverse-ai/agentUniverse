@@ -1,0 +1,6 @@
+name: 'default_google_docs_reader'
+description: 'default Google Docs reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.cloud.google_docs_reader'
+  class: 'GoogleDocsReader'

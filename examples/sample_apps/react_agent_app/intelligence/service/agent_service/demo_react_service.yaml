@@ -1,0 +1,5 @@
+name: 'demo_react_service'
+description: 'demo react service of demo agent'
+agent: 'demo_react_agent'
+metadata:
+  type: 'SERVICE'

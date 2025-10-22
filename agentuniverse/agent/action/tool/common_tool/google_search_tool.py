@@ -150,6 +150,8 @@ class GoogleScholarSearchTool(Tool):
 
     注意:
         需要在 https://serper.dev 注册免费账户获取API密钥。
+    Note:
+        You need to sign up for a free account at https://serper.dev and get the serper api key (2500 free queries).
     """
 
     serper_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("SERPER_API_KEY"))

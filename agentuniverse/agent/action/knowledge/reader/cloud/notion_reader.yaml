@@ -1,0 +1,6 @@
+name: 'default_notion_reader'
+description: 'default Notion reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.cloud.notion_reader'
+  class: 'NotionReader'

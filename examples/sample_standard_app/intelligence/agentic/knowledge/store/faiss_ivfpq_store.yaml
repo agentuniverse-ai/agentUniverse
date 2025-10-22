@@ -1,0 +1,17 @@
+name: 'faiss_ivfpq_store'
+description: 'FAISS store with IndexIVFPQ for memory-efficient similarity search with product quantization'
+index_path: '../../db/faiss_ivfpq.index'
+metadata_path: '../../db/faiss_ivfpq_metadata.pkl'
+embedding_model: 'dashscope_embedding'
+similarity_top_k: 25
+index_config:
+  index_type: 'IndexIVFPQ'
+  dimension: 768
+  nlist: 100        # Number of clusters
+  nprobe: 10        # Number of clusters to search
+  m: 8              # Number of subquantizers
+  nbits: 8          # Bits per subquantizer
+metadata:
+  type: 'STORE'
+  module: 'agentuniverse.agent.action.knowledge.store.faiss_store'
+  class: 'FAISSStore'

@@ -51,14 +51,14 @@ def prune_none(obj):
 
 
 class TokenUsage(BaseModel):
-    # ======== 基础字段 ========
-    # 输入
+    # ======== Basic fields. ========
+    # Input
     text_in: int = 0
     image_in: int = 0
     audio_in: int = 0
     cached_in: int = 0
 
-    # 输出
+    # Output
     text_out: int = 0
     image_out: int = 0
     audio_out: int = 0
@@ -71,7 +71,7 @@ class TokenUsage(BaseModel):
 
     @property
     def completion_tokens(self) -> int:
-        """历史字段别名：所有输出 token 总和"""
+        """Historical field alias: Total of all output tokens."""
         return (
             self.text_out
             + self.image_out
@@ -92,7 +92,7 @@ class TokenUsage(BaseModel):
     def total_tokens(self) -> int:
         return self.prompt_tokens + self.completion_tokens
 
-    # ======== 解析入口 ========
+    # ======== Entry point for parsing ========
     @classmethod
     def from_openai(cls, usage: Dict[str, Any]) -> "TokenUsage":
         if not usage:

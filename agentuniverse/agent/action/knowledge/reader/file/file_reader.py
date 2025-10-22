@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Type, List, Optional
 
 from agentuniverse.agent.action.knowledge.reader.file.docx_reader import DocxReader
+from agentuniverse.agent.action.knowledge.reader.file.epub_reader import EpubReader
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
@@ -20,6 +21,7 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".docx": DocxReader,
     ".pptx": PptxReader,
     ".xlsx": XlsxReader,
+    ".epub": EpubReader,
 }
 
 

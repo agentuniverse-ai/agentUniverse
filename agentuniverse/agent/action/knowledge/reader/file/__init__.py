@@ -6,4 +6,5 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: __init__.py
 
+from .epub_reader import EpubReader
 from .xlsx_reader import XlsxReader

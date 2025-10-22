@@ -62,7 +62,7 @@ class KIMIOpenAIStyleLLM(OpenAIStyleLLM):
         return KIMI_Max_CONTEXT_LENGTH.get(self.model_name, 8000)
 
     def get_num_tokens(self, text: str) -> int:
-        # 通过http获取token数量
+        # Get the token count via HTTP
         messages = [{"role": "user", "content": text}]
         body = {"model": self.model_name, "messages": messages}
         headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.api_key}'}

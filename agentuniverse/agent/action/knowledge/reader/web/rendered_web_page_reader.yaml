@@ -1,0 +1,6 @@
+name: 'default_rendered_web_page_reader'
+description: 'default rendered web page reader (playwright)'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.web.rendered_web_page_reader'
+  class: 'RenderedWebPageReader'

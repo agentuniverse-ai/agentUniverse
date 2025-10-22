@@ -61,7 +61,7 @@ class GoogleSearchTool(Tool):
     Implement the execute method of demo google search tool, using the `GoogleSerperAPIWrapper` to implement a simple Google search.
 
     Note:
-        You need to sign up for a free account at https://serper.dev and get the serpher api key (2500 free queries).
+        You need to sign up for a free account at https://serper.dev and get the serper api key (2500 free queries).
     """
 
     def execute(self, tool_input: ToolInput):
