@@ -23,8 +23,9 @@ def summarize_by_stuff(texts: List[str], llm: LLM, summary_prompt):
     """
     stuff summarization -- general method
     """
-    stuff_chain = load_summarize_chain(llm.as_langchain(), chain_type='stuff', verbose=True,
-                                       prompt=summary_prompt.as_langchain())
+    stuff_chain = load_summarize_chain(
+        llm.as_langchain(), chain_type="stuff", verbose=True, prompt=summary_prompt.as_langchain()
+    )
     return stuff_chain.run([Document(page_content=text) for text in texts])
 
 
@@ -32,9 +33,13 @@ def summarize_by_map_reduce(texts: List[str], llm: LLM, summary_prompt, combine_
     """
     map reduce summarization -- general method
     """
-    map_reduce_chain = load_summarize_chain(llm.as_langchain(), chain_type='map_reduce', verbose=True,
-                                            map_prompt=summary_prompt.as_langchain(),
-                                            combine_prompt=combine_prompt.as_langchain())
+    map_reduce_chain = load_summarize_chain(
+        llm.as_langchain(),
+        chain_type="map_reduce",
+        verbose=True,
+        map_prompt=summary_prompt.as_langchain(),
+        combine_prompt=combine_prompt.as_langchain(),
+    )
     return map_reduce_chain.run([Document(page_content=text) for text in texts])
 
 
@@ -52,7 +57,7 @@ def split_text_on_tokens(text: str, text_token: int, chunk_size=800, chunk_overl
         if current_position + chunk_char_size >= len(text):
             chunk = text[current_position:]
         else:
-            chunk = text[current_position:current_position + chunk_char_size]
+            chunk = text[current_position : current_position + chunk_char_size]
 
         result.append(chunk)
         current_position += chunk_char_size - chunk_char_overlap
@@ -72,8 +77,10 @@ def split_texts(texts: list[str], llm: LLM, chunk_size=800, chunk_overlap=100, r
         for text in texts:
             text_token = llm.get_num_tokens(text)
             split_texts_res.extend(
-                split_text_on_tokens(text=text, text_token=text_token, chunk_size=chunk_size,
-                                     chunk_overlap=chunk_overlap))
+                split_text_on_tokens(
+                    text=text, text_token=text_token, chunk_size=chunk_size, chunk_overlap=chunk_overlap
+                )
+            )
         return split_texts_res
     except Exception as e:
         if retry:
@@ -119,19 +126,19 @@ def generate_chat_template(agent_prompt_model: AgentPromptModel, prompt_assemble
     for attr in prompt_assemble_order:
         value = getattr(agent_prompt_model, attr, None)
         if value is not None:
-            message_list.append(
-                Message(type=agent_prompt_model.get_message_type(attr), content=value))
+            message_list.append(Message(type=agent_prompt_model.get_message_type(attr), content=value))
     if message_list:
         # Integrate the system messages and put them in the first of the message list.
-        system_messages = '\n'.join(msg.content for msg in message_list if msg.type == ChatMessageEnum.SYSTEM.value)
+        system_messages = "\n".join(msg.content for msg in message_list if msg.type == ChatMessageEnum.SYSTEM.value)
         if system_messages:
             message_list = list(filter(lambda msg: msg.type != ChatMessageEnum.SYSTEM.value, message_list))
             message_list.insert(0, Message(type=ChatMessageEnum.SYSTEM.value, content=system_messages))
     return message_list
 
 
-def process_llm_token(agent_llm: LLM, lc_prompt_template, profile: dict, planner_input: dict,
-                      var_to_process: str = 'background'):
+def process_llm_token(
+    agent_llm: LLM, lc_prompt_template, profile: dict, planner_input: dict, var_to_process: str = "background"
+):
     """Process the prompt template based on the prompt processor.
 
     Args:
@@ -141,16 +148,16 @@ def process_llm_token(agent_llm: LLM, lc_prompt_template, profile: dict, planner
         planner_input (dict): The planner input.
         var_to_process (str): The variable needs to be processed in the prompt, the default is 'background'
     """
-    llm_model: dict = profile.get('llm_model')
+    llm_model: dict = profile.get("llm_model")
 
     # get the prompt processor configuration
-    prompt_processor: dict = llm_model.get('prompt_processor') or dict()
-    prompt_processor_type: str = prompt_processor.get('type') or PromptProcessEnum.TRUNCATE.value
-    prompt_processor_llm: str = prompt_processor.get('llm')
+    prompt_processor: dict = llm_model.get("prompt_processor") or dict()
+    prompt_processor_type: str = prompt_processor.get("type") or PromptProcessEnum.TRUNCATE.value
+    prompt_processor_llm: str = prompt_processor.get("llm")
 
     # get the summary and combine prompt versions
-    summary_prompt_version: str = prompt_processor.get('summary_prompt_version') or 'prompt_processor.summary_cn'
-    combine_prompt_version: str = prompt_processor.get('combine_prompt_version') or 'prompt_processor.combine_cn'
+    summary_prompt_version: str = prompt_processor.get("summary_prompt_version") or "prompt_processor.summary_cn"
+    combine_prompt_version: str = prompt_processor.get("combine_prompt_version") or "prompt_processor.combine_cn"
 
     prompt_input_dict = {key: planner_input[key] for key in lc_prompt_template.input_variables if key in planner_input}
 
@@ -164,10 +171,12 @@ def process_llm_token(agent_llm: LLM, lc_prompt_template, profile: dict, planner
     # get the number of tokens in the prompt
     prompt_tokens: int = agent_llm.get_num_tokens(prompt)
 
-    input_tokens = agent_llm.max_context_length() - llm_model.get('max_tokens', agent_llm.max_tokens)
+    input_tokens = agent_llm.max_context_length() - llm_model.get("max_tokens", agent_llm.max_tokens)
     if input_tokens <= 0:
-        raise Exception("The current output max tokens limit is greater than the context length of the LLM model, "
-                        "please adjust it by editing the `max_tokens` parameter in the llm yaml.")
+        raise Exception(
+            "The current output max tokens limit is greater than the context length of the LLM model, "
+            "please adjust it by editing the `max_tokens` parameter in the llm yaml."
+        )
 
     if prompt_tokens <= input_tokens:
         return
@@ -181,13 +190,13 @@ def process_llm_token(agent_llm: LLM, lc_prompt_template, profile: dict, planner
         if process_prompt_type_enum == PromptProcessEnum.TRUNCATE:
             planner_input[var_to_process] = truncate_content(content, input_tokens, agent_llm)
         elif process_prompt_type_enum == PromptProcessEnum.STUFF:
-            planner_input[var_to_process] = summarize_by_stuff(texts=[content], llm=prompt_llm,
-                                                               summary_prompt=PromptManager().get_instance_obj(
-                                                                   summary_prompt_version))
+            planner_input[var_to_process] = summarize_by_stuff(
+                texts=[content], llm=prompt_llm, summary_prompt=PromptManager().get_instance_obj(summary_prompt_version)
+            )
         elif process_prompt_type_enum == PromptProcessEnum.MAP_REDUCE:
-            planner_input[var_to_process] = summarize_by_map_reduce(texts=split_texts([content], agent_llm),
-                                                                    llm=prompt_llm,
-                                                                    summary_prompt=PromptManager().get_instance_obj(
-                                                                        summary_prompt_version),
-                                                                    combine_prompt=PromptManager().get_instance_obj(
-                                                                        combine_prompt_version))
+            planner_input[var_to_process] = summarize_by_map_reduce(
+                texts=split_texts([content], agent_llm),
+                llm=prompt_llm,
+                summary_prompt=PromptManager().get_instance_obj(summary_prompt_version),
+                combine_prompt=PromptManager().get_instance_obj(combine_prompt_version),
+            )

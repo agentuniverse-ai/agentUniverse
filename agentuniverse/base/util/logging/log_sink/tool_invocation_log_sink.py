@@ -17,8 +17,7 @@ class ToolInvocationLogSink(BaseFileLogSink):
 
     def process_record(self, record):
         record["message"] = self.generate_log(
-            cost_time=record['extra'].get('cost_time'),
-            tool_output=record['extra'].get('tool_output')
+            cost_time=record["extra"].get("cost_time"), tool_output=record["extra"].get("tool_output")
         )
 
     def generate_log(self, cost_time: float, tool_output) -> str:

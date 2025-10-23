@@ -17,10 +17,10 @@ def __getattr__(name):
             "is deprecated and will be removed in future. "
             f"Please use 'from agentuniverse.base.tracing.au_trace_manager import {name}' instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         return getattr(new_module, name)
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
-__all__ = getattr(new_module, '__all__', [])
+__all__ = getattr(new_module, "__all__", [])

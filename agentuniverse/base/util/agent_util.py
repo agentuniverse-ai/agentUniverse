@@ -29,14 +29,14 @@ def assemble_memory_input(memory: Memory, agent_input: dict, query_params: dict 
         else:
             memory_messages = memory.get(**query_params)
         # convert the memory messages to a string and add it to the agent input object.
-        memory_str = get_memory_string(memory_messages, agent_input.get('agent_id'))
+        memory_str = get_memory_string(memory_messages, agent_input.get("agent_id"))
         agent_input[memory.memory_key] = memory_str
     return memory_messages
 
 
-def assemble_memory_output(memory: Memory, agent_input: dict,
-                           content: str, source: str = None, memory_messages=None) -> \
-        list[Message]:
+def assemble_memory_output(
+    memory: Memory, agent_input: dict, content: str, source: str = None, memory_messages=None
+) -> list[Message]:
     """Assemble the historical memory information and current memory information
      into the agent's final output memory information.
 
@@ -73,8 +73,8 @@ def process_agent_llm_config(agent_id: str, agent_profile: dict, default_llm_con
     if not agent_profile:
         agent_profile = {}
 
-    llm_model = agent_profile.setdefault('llm_model', {})
-    llm_name = llm_model.get('name')
+    llm_model = agent_profile.setdefault("llm_model", {})
+    llm_name = llm_model.get("name")
 
     # If LLM model name is specified, return the agent profile unchanged
     if llm_name:
@@ -82,7 +82,7 @@ def process_agent_llm_config(agent_id: str, agent_profile: dict, default_llm_con
 
     # Update the LLM model name with the default LLM from the config manager, if available
     if default_llm_configer.default_llm:
-        llm_model['name'] = default_llm_configer.default_llm
+        llm_model["name"] = default_llm_configer.default_llm
 
     # Return the updated agent profile
     return agent_profile

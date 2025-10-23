@@ -15,15 +15,7 @@ from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 
-LOG_LEVEL = Literal[
-    "TRACE",
-    "DEBUG",
-    "INFO",
-    "SUCCESS",
-    "WARNING",
-    "ERROR",
-    "CRITICAL"
-]
+LOG_LEVEL = Literal["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
 
 
 def get_context_prefix() -> str:
@@ -35,7 +27,7 @@ def get_context_prefix() -> str:
         trace_dict.update(log_context)
     if trace_dict:
         json_str = json.dumps(trace_dict)
-        format_context_prefix = '[' + json_str[1:-1] + ']'
+        format_context_prefix = "[" + json_str[1:-1] + "]"
         return format_context_prefix
     else:
         return "[default]"
@@ -56,8 +48,7 @@ def _get_source_filter(source: str) -> callable:
     """
 
     def source_filter(record) -> bool:
-        return record["extra"].get("log_type") == LogTypeEnum.default and \
-            record["extra"].get("source") == source
+        return record["extra"].get("log_type") == LogTypeEnum.default and record["extra"].get("source") == source
 
     return source_filter
 
@@ -111,14 +102,16 @@ class GeneralLogger(Logger):
     """General logger class, create a logger with config from config file for
     separate module."""
 
-    def __init__(self,
-                 module_name: str,
-                 log_path: str,
-                 log_format: str,
-                 log_rotation: str,
-                 log_retention: str,
-                 log_level: LOG_LEVEL = "INFO",
-                 add_handler: bool = True):
+    def __init__(
+        self,
+        module_name: str,
+        log_path: str,
+        log_format: str,
+        log_rotation: str,
+        log_retention: str,
+        log_level: LOG_LEVEL = "INFO",
+        add_handler: bool = True,
+    ):
         """Create a new logger instance used by a specific module.
 
         Args:
@@ -157,14 +150,11 @@ class GeneralLogger(Logger):
             if hasattr(self, key):
                 setattr(self, key, value)
             else:
-                raise AttributeError(f"{self.__class__.__name__} "
-                                     f"has no attribute '{key}'")
+                raise AttributeError(f"{self.__class__.__name__} has no attribute '{key}'")
 
     def warn(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
-            log_type=LogTypeEnum.default,
-            source=self.module_name,
-            context_prefix=get_context_prefix()
+            log_type=LogTypeEnum.default, source=self.module_name, context_prefix=get_context_prefix()
         ).warning(msg, *args, **kwargs)
 
     async def awarn(self, msg, *args, **kwargs):
@@ -173,9 +163,7 @@ class GeneralLogger(Logger):
 
     def info(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
-            log_type=LogTypeEnum.default,
-            source=self.module_name,
-            context_prefix=get_context_prefix()
+            log_type=LogTypeEnum.default, source=self.module_name, context_prefix=get_context_prefix()
         ).info(msg, *args, **kwargs)
 
     async def ainfo(self, msg, *args, **kwargs):
@@ -184,9 +172,7 @@ class GeneralLogger(Logger):
 
     def error(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
-            log_type=LogTypeEnum.default,
-            source=self.module_name,
-            context_prefix=get_context_prefix()
+            log_type=LogTypeEnum.default, source=self.module_name, context_prefix=get_context_prefix()
         ).error(msg, *args, **kwargs)
 
     async def aerror(self, msg, *args, **kwargs):
@@ -195,9 +181,7 @@ class GeneralLogger(Logger):
 
     def critical(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
-            log_type=LogTypeEnum.default,
-            source=self.module_name,
-            context_prefix=get_context_prefix()
+            log_type=LogTypeEnum.default, source=self.module_name, context_prefix=get_context_prefix()
         ).critical(msg, *args, **kwargs)
 
     async def acritical(self, msg, *args, **kwargs):
@@ -206,9 +190,7 @@ class GeneralLogger(Logger):
 
     def trace(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
-            log_type=LogTypeEnum.default,
-            source=self.module_name,
-            context_prefix=get_context_prefix()
+            log_type=LogTypeEnum.default, source=self.module_name, context_prefix=get_context_prefix()
         ).trace(msg, *args, **kwargs)
 
     async def atrace(self, msg, *args, **kwargs):
@@ -217,9 +199,7 @@ class GeneralLogger(Logger):
 
     def debug(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
-            log_type=LogTypeEnum.default,
-            source=self.module_name,
-            context_prefix=get_context_prefix()
+            log_type=LogTypeEnum.default, source=self.module_name, context_prefix=get_context_prefix()
         ).debug(msg, *args, **kwargs)
 
     async def adebug(self, msg, *args, **kwargs):
@@ -240,8 +220,8 @@ class GeneralLogger(Logger):
             format=self.log_format,
             rotation=self.log_rotation,
             retention=self.log_retention,
-            compression='zip',
+            compression="zip",
             encoding="utf-8",
             enqueue=True,
-            filter=_get_source_filter(self.module_name)
+            filter=_get_source_filter(self.module_name),
         )

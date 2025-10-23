@@ -17,12 +17,12 @@ class LLMInvocationLogSink(BaseFileLogSink):
 
     def process_record(self, record):
         record["message"] = self.generate_log(
-            used_token=record['extra'].get('used_token'),
-            cost_time=record['extra'].get('cost_time'),
-            llm_output=record['extra'].get('llm_output'),
+            used_token=record["extra"].get("used_token"),
+            cost_time=record["extra"].get("cost_time"),
+            llm_output=record["extra"].get("llm_output"),
         )
 
-    def generate_log(self, used_token: int, cost_time: float, llm_output:  Union[str, dict]) -> str:
+    def generate_log(self, used_token: int, cost_time: float, llm_output: Union[str, dict]) -> str:
         log_str = f" LLM cost {cost_time:.2f} seconds"
         if used_token:
             log_str += f", token usage: {used_token}"

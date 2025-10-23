@@ -21,15 +21,15 @@ from ..system_util import get_project_root_path
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 
 _module_logger_dict = {}
-STANDARD_LOG_SUFFIX = 'all'
-ERROR_LOG_SUFFIX = 'error'
+STANDARD_LOG_SUFFIX = "all"
+ERROR_LOG_SUFFIX = "error"
 LOG_FILE_PREFIX = "au"
-LOG_SUB_DIR = 'logs'
+LOG_SUB_DIR = "logs"
 LOGGER = GeneralLogger(STANDARD_LOG_SUFFIX, "", "", "", "", add_handler=False)
 
 
 def _standard_filter(record):
-    return record["extra"].get('log_type') == LogTypeEnum.default
+    return record["extra"].get("log_type") == LogTypeEnum.default
 
 
 def _get_log_file_path(log_suffix: str) -> str:
@@ -49,7 +49,7 @@ def _get_log_file_path(log_suffix: str) -> str:
     else:
         project_path = get_project_root_path()
         project_log_dir = project_path / LOG_SUB_DIR
-    project_log_filename = f'{LOG_FILE_PREFIX}_{log_suffix}.log'
+    project_log_filename = f"{LOG_FILE_PREFIX}_{log_suffix}.log"
     project_log_path = project_log_dir / project_log_filename
     return str(project_log_path)
 
@@ -61,7 +61,8 @@ def _add_standard_logger():
         log_path=_get_log_file_path(STANDARD_LOG_SUFFIX),
         log_format=LoggingConfig.log_format,
         log_rotation=LoggingConfig.log_rotation,
-        log_retention=LoggingConfig.log_retention)
+        log_retention=LoggingConfig.log_retention,
+    )
     loguru.logger.add(
         sink=_get_log_file_path(STANDARD_LOG_SUFFIX),
         level=LoggingConfig.log_level,
@@ -71,7 +72,7 @@ def _add_standard_logger():
         retention=LoggingConfig.log_retention,
         compression=LoggingConfig.log_compression if LoggingConfig.log_compression else None,
         encoding="utf-8",
-        enqueue=True
+        enqueue=True,
     )
 
 
@@ -82,7 +83,7 @@ def _add_std_out_handler():
         level=LoggingConfig.log_level,
         format=LoggingConfig.log_format,
         filter=_standard_filter,
-        enqueue=True
+        enqueue=True,
     )
 
 
@@ -94,45 +95,54 @@ def _add_error_log_handler():
         format=LoggingConfig.log_format,
         rotation=LoggingConfig.log_rotation,
         retention=LoggingConfig.log_retention,
-        compression='zip',
+        compression="zip",
         encoding="utf-8",
         enqueue=True,
     )
 
 
 def _add_sls_log_handler():
-    """Add a handler to record all """
+    """Add a handler to record all"""
     from agentuniverse_extension.logger.sls_sink import SlsSink, SlsSender
-    sls_sender = SlsSender(LoggingConfig.sls_project,
-                           LoggingConfig.sls_log_store,
-                           LoggingConfig.sls_endpoint,
-                           LoggingConfig.access_key_id,
-                           LoggingConfig.access_key_secret,
-                           LoggingConfig.sls_log_queue_max_size,
-                           LoggingConfig.sls_log_send_interval)
+
+    sls_sender = SlsSender(
+        LoggingConfig.sls_project,
+        LoggingConfig.sls_log_store,
+        LoggingConfig.sls_endpoint,
+        LoggingConfig.access_key_id,
+        LoggingConfig.access_key_secret,
+        LoggingConfig.sls_log_queue_max_size,
+        LoggingConfig.sls_log_send_interval,
+    )
     sls_sender.start_batch_send_thread()
 
     def _sls_filter(record):
-        return record["extra"].get('log_type') == LogTypeEnum.default or record["extra"].get('log_type') == LogTypeEnum.sls
+        return (
+            record["extra"].get("log_type") == LogTypeEnum.default or record["extra"].get("log_type") == LogTypeEnum.sls
+        )
+
     loguru.logger.add(
         sink=SlsSink(sls_sender),
         format=LoggingConfig.log_format,
         filter=_sls_filter,
         level=LoggingConfig.log_level,
-        enqueue=True
+        enqueue=True,
     )
 
 
 def _add_sls_log_async_handler():
-    """Add a handler to record all """
+    """Add a handler to record all"""
     from agentuniverse_extension.logger.sls_sink import AsyncSlsSink, AsyncSlsSender
-    sls_sender = AsyncSlsSender(LoggingConfig.sls_project,
-                           LoggingConfig.sls_log_store,
-                           LoggingConfig.sls_endpoint,
-                           LoggingConfig.access_key_id,
-                           LoggingConfig.access_key_secret,
-                           LoggingConfig.sls_log_queue_max_size,
-                           LoggingConfig.sls_log_send_interval)
+
+    sls_sender = AsyncSlsSender(
+        LoggingConfig.sls_project,
+        LoggingConfig.sls_log_store,
+        LoggingConfig.sls_endpoint,
+        LoggingConfig.access_key_id,
+        LoggingConfig.access_key_secret,
+        LoggingConfig.sls_log_queue_max_size,
+        LoggingConfig.sls_log_send_interval,
+    )
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -141,18 +151,20 @@ def _add_sls_log_async_handler():
     loop.create_task(sls_sender.start())
 
     def _sls_filter(record):
-        return record["extra"].get('log_type') == LogTypeEnum.default or record["extra"].get('log_type') == LogTypeEnum.sls
+        return (
+            record["extra"].get("log_type") == LogTypeEnum.default or record["extra"].get("log_type") == LogTypeEnum.sls
+        )
+
     loguru.logger.add(
         sink=AsyncSlsSink(sls_sender),
         format=LoggingConfig.log_format,
         filter=_sls_filter,
         level=LoggingConfig.log_level,
-        enqueue=False
+        enqueue=False,
     )
 
 
-def get_module_logger(module_name: str,
-                      log_level: Optional[LOG_LEVEL] = None) -> GeneralLogger:
+def get_module_logger(module_name: str, log_level: Optional[LOG_LEVEL] = None) -> GeneralLogger:
     """Get a module dedicated logger.
 
     Args:
@@ -169,17 +181,19 @@ def get_module_logger(module_name: str,
         return _module_logger_dict.get(module_name)
     if not log_level:
         log_level = LoggingConfig.log_level
-    new_logger = GeneralLogger(module_name,
-                               _get_log_file_path(module_name),
-                               LoggingConfig.log_format,
-                               LoggingConfig.log_rotation,
-                               LoggingConfig.log_retention,
-                               log_level)
+    new_logger = GeneralLogger(
+        module_name,
+        _get_log_file_path(module_name),
+        LoggingConfig.log_format,
+        LoggingConfig.log_rotation,
+        LoggingConfig.log_retention,
+        log_level,
+    )
     _module_logger_dict[module_name] = new_logger
     return new_logger
 
 
-@deprecated('Deleted in future, use LogSink to register a new sink instead.')
+@deprecated("Deleted in future, use LogSink to register a new sink instead.")
 def add_sink(sink, log_level: Optional[LOG_LEVEL] = None) -> bool:
     """Validate the given sink and add it to the loguru logger if valid.
 
@@ -199,7 +213,7 @@ def add_sink(sink, log_level: Optional[LOG_LEVEL] = None) -> bool:
         # If the sink is a string, assume it's a file path
         valid_sink = True
 
-    elif hasattr(sink, 'write') and callable(getattr(sink, 'write')):
+    elif hasattr(sink, "write") and callable(getattr(sink, "write")):
         # An object with a write method (like file objects or class instances)
         valid_sink = True
 
@@ -210,18 +224,13 @@ def add_sink(sink, log_level: Optional[LOG_LEVEL] = None) -> bool:
     if valid_sink:
         try:
             loguru.logger.add(
-                sink=sink,
-                format=LoggingConfig.log_format,
-                level=log_level or LoggingConfig.log_level,
-                enqueue=True
+                sink=sink, format=LoggingConfig.log_format, level=log_level or LoggingConfig.log_level, enqueue=True
             )
             return True
         except Exception as e:
             print(f"Failed to add log sink due to error: {e}")
 
-    print(
-        f"The provided sink type {type(sink)} is not supported "
-        f"or caused an error.")
+    print(f"The provided sink type {type(sink)} is not supported or caused an error.")
     return False
 
 

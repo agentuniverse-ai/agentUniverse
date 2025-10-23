@@ -16,8 +16,7 @@ class AgentInvocationLogSink(BaseFileLogSink):
 
     def process_record(self, record):
         record["message"] = self.generate_log(
-            cost_time=record['extra'].get('cost_time'),
-            agent_output=record['extra'].get('agent_output')
+            cost_time=record["extra"].get("cost_time"), agent_output=record["extra"].get("agent_output")
         )
 
     def generate_log(self, cost_time: float, agent_output: OutputObject) -> str:
