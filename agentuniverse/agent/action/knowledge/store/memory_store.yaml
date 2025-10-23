@@ -1,0 +1,5 @@
+name: 'memory_store'
+description: 'A simple in-memory store for testing and development'
+module: 'agentuniverse.agent.action.knowledge.store.memory_store'
+class: 'MemoryStore'
+similarity_top_k: 10

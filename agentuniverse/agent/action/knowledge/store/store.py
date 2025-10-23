@@ -7,12 +7,12 @@
 # @FileName: store.py
 from typing import Any, List, Optional
 
-from agentuniverse.base.component.component_base import ComponentEnum
-from agentuniverse.base.component.component_base import ComponentBase
-from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
-from agentuniverse.agent.action.knowledge.store.document import Document
-from agentuniverse.agent.action.knowledge.store.query import Query
-from agentuniverse.agent_serve.web.post_fork_queue import add_post_fork
+from agentUniverse.base.component.component_base import ComponentEnum
+from agentUniverse.base.component.component_base import ComponentBase
+from agentUniverse.base.config.component_configer.component_configer import ComponentConfiger
+from agentUniverse.agent.action.knowledge.store.document import Document
+from agentUniverse.agent.action.knowledge.store.query import Query
+from agentUniverse.agent_serve.web.post_fork_queue import add_post_fork
 
 
 class Store(ComponentBase):
