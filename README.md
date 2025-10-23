@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/agentuniverse-ai-agentuniverse-badge.png)](https://mseep.ai/app/agentuniverse-ai-agentuniverse)
+
 # agentUniverse
 ****************************************
 Language version: [English](./README.md) | [中文](./README_zh.md) | [日本語](./README_jp.md)
