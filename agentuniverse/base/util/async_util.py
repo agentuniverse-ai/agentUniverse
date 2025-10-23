@@ -12,7 +12,7 @@ import threading
 from queue import Queue
 from typing import Coroutine, TypeVar, Any, Optional
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def _async_runner_thread_target(coro: Coroutine[Any, Any, T], result_queue: Queue):
@@ -63,11 +63,7 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
 
     # Using a queue for thread-safe communication of the result/exception
     result_queue: Queue = Queue(maxsize=1)
-    worker_thread = threading.Thread(
-        target=_async_runner_thread_target,
-        args=(coro, result_queue),
-        daemon=True
-    )
+    worker_thread = threading.Thread(target=_async_runner_thread_target, args=(coro, result_queue), daemon=True)
     worker_thread.start()
 
     try:
