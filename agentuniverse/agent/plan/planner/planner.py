@@ -34,10 +34,39 @@ logging.getLogger().setLevel(logging.ERROR)
 
 
 class Planner(ComponentBase):
-    """
-    Base class for all planners.
-
-    All planners should inherit from this class
+    """Base class for all planners in the agentUniverse framework.
+    
+    Planner is an abstract base class that defines the interface for planning
+    components in the agentUniverse framework. Planners are responsible for
+    generating execution plans for agents based on input requirements and
+    available resources.
+    
+    This class provides a standardized way to implement planning logic,
+    including memory handling, tool execution, and knowledge retrieval.
+    
+    Attributes:
+        name (Optional[str]): Optional name identifier for the planner.
+        description (Optional[str]): Optional description of the planner's 
+            functionality.
+        output_key (str): Key used for output in the result dictionary.
+            Defaults to 'output'.
+        input_key (str): Key used for input in the planner input dictionary.
+            Defaults to 'input'.
+        prompt_assemble_order (list): Order for assembling prompt components.
+            Defaults to ['introduction', 'target', 'instruction'].
+    
+    Example:
+        >>> class MyPlanner(Planner):
+        ...     def invoke(self, agent_model, planner_input, input_object):
+        ...         # Custom planning logic
+        ...         return {'output': 'plan_result'}
+        >>> 
+        >>> planner = MyPlanner()
+        >>> result = planner.invoke(agent_model, planner_input, input_object)
+    
+    Note:
+        Subclasses must implement the `invoke` method to provide specific
+        planning logic.
     """
     name: Optional[str] = None
     description: Optional[str] = None
