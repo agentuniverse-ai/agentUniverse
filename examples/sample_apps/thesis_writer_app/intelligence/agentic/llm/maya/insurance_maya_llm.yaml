@@ -1,0 +1,17 @@
+name: 'insurance_maya_llm'
+description: 'insurance llm'
+model_name: 'insurance_stream_llm'
+max_tokens: 3000
+streaming: True
+request_timeout: 60
+ext_info:
+  sceneName: 'xxxxxx' # The name of the corresponding model scene
+  chainName: 'xxxxxx' # The model version
+  serviceId: 'xxxxx' # The ID of the corresponding model service
+  endpoint: 'xxxx' # Corresponding to the endpoint of the model service
+  params_filed: "data"
+  query_field: "query"
+metadata:
+  type: 'LLM'
+  module: 'demo_startup_app_with_single_agent.intelligence.agentic.llm.maya.insurance_maya_llm'
+  class: 'InsuranceMayaLLM'

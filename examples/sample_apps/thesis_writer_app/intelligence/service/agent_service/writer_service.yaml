@@ -1,0 +1,5 @@
+name: 'writer_agent_service'
+description: 'demo react service of demo agent'
+agent: 'writer_agent'
+metadata:
+  type: 'SERVICE'
