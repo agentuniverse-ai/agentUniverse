@@ -1,0 +1,9 @@
+name: 'deepseek-llm'
+description: 'deepseek-chat'
+model_name: 'deepseek-chat'
+max_tokens: 2000
+api_key: '${DEEPSEEK_API_KEY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.deep_seek_openai_style_llm'
+  class: 'DefaultDeepSeekLLM'
