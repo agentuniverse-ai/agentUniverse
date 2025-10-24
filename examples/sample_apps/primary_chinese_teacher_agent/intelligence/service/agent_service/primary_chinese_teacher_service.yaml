@@ -1,0 +1,5 @@
+name: 'primary_chinese_teacher_agent_service'
+description: ''
+agent: 'primary_chinese_teacher_agent'
+metadata:
+  type: 'SERVICE'
