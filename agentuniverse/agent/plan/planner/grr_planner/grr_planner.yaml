@@ -1,0 +1,6 @@
+name: 'grr_planner'
+description: 'grr planner'
+metadata:
+  type: 'PLANNER'
+  module: 'agentuniverse.agent.plan.planner.grr_planner.grr_planner'
+  class: 'GrrPlanner'

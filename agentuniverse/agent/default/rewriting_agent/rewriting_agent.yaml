@@ -1,0 +1,14 @@
+info:
+  name: 'RewritingAgent'
+  description: 'rewriting agent'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+    temperature: 0.1
+memory:
+  name: ''
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.rewriting_agent_template'
+  class: 'RewritingAgentTemplate'
