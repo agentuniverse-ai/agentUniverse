@@ -27,7 +27,7 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.util.monitor.monitor import Monitor
 from agentuniverse.base.util.system_util import get_project_root_path, is_api_key_missing, \
     is_system_builtin, find_default_llm_config
-from agentuniverse.base.util.logging.logging_util import init_loggers
+from agentuniverse.base.util.logging.logging_util import init_loggers, LOGGER
 from agentuniverse.agent_serve.web.request_task import RequestLibrary
 from agentuniverse.agent_serve.web.rpc.grpc.grpc_server_booster import set_grpc_config
 from agentuniverse.agent_serve.web.web_booster import ACTIVATE_OPTIONS
@@ -254,7 +254,14 @@ class AgentUniverse(object):
             for config_file in config_files:
                 config_file_str = str(config_file)
                 configer = Configer(path=config_file_str).load()
-                component_configer = ComponentConfiger().load_by_configer(configer)
+                component_configer = ComponentConfiger()
+                try:
+                    component_configer = ComponentConfiger().load_by_configer(configer)
+                except Exception as ex:
+                    if configer.value is None:
+                        LOGGER.warn(f"Config file is blank, path={configer.path}")
+                    else:
+                        raise ex
                 component_config_type = component_configer.get_component_config_type()
                 if component_config_type == component_enum.value:
                     component_configer_list.append(component_configer)
