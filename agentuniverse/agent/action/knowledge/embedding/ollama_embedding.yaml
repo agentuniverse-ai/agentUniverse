@@ -1,0 +1,8 @@
+name: 'ollama_embedding'
+description: 'embedding use ollama api with support for mxbai-embed-large, nomic-embed-text, all-minilm models'
+embedding_model_name: 'mxbai-embed-large'
+
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.ollama_embedding'
+  class: 'OllamaEmbedding'

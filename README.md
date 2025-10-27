@@ -107,7 +107,7 @@ pip install magent-ui ruamel.yaml
 
 **One-click Run**
 
-Run [product_application.py](examples/sample_apps/workflow_agent_app/bootstrap/platform/product_application.py) in ample_apps/workflow_agent_app/bootstrap/platform for quick startup.
+Run [product_application.py](examples/sample_apps/workflow_agent_app/bootstrap/platform/product_application.py) in sample_apps/workflow_agent_app/bootstrap/platform for quick startup.
 
 For more details, refer to [Quick Start for Product Platform](docs/guidebook/en/How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Quick_Start.md) and the [Advanced Guide](docs/guidebook/en/How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Advancement_Guide.md).
 

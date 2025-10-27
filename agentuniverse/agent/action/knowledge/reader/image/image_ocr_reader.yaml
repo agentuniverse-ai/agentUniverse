@@ -1,0 +1,6 @@
+name: 'default_image_ocr_reader'
+description: 'default image OCR reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.image.image_ocr_reader'
+  class: 'ImageOCRReader'

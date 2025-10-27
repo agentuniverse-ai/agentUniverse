@@ -15,8 +15,8 @@ from ruamel.yaml import YAML
 def create_directory_structure(base_path):
     """Create new directory structure"""
     directories = [
-        'boostrap/intelligence',
-        'boostrap/platform',
+        'bootstrap/intelligence',
+        'bootstrap/platform',
         'intelligence/agentic/agent/agent_instance',
         'intelligence/agentic/agent/agent_template',
         'intelligence/agentic/knowledge/store',
@@ -198,11 +198,11 @@ def migrate_files(source_root, target_root):
         },
         {
             'source': 'app/bootstrap/server_application.py',
-            'target': 'boostrap/intelligence'
+            'target': 'bootstrap/intelligence'
         },
         {
             'source': 'app/bootstrap/server_application.py',
-            'target': 'boostrap/intelligence'
+            'target': 'bootstrap/intelligence'
         },
     ]
 
