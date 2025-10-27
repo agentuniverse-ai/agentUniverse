@@ -14,7 +14,7 @@ POST_FORK_QUEUE: List[FunctionWithArgs] = []
 
 def add_post_fork(func: Callable, *args: Any, **kwargs: Any) -> None:
     """
-    Add funcs and parameters into a waiting list, all of them will be executed
+    Add func and parameters into a waiting list, all of them will be executed
     after gunicorn worker child processes have been forked, or before flask
     main app start if you work without gunicorn.
     """
