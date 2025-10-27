@@ -1,0 +1,9 @@
+name: 'nlu_rag_router'
+description: 'base rag router map query to all store'
+store_amount: 2
+llm:
+  name: demo_llm
+metadata:
+  type: 'RAG_ROUTER'
+  module: 'agentuniverse.agent.action.knowledge.rag_router.nlu_rag_router'
+  class: 'NluRagRouter'

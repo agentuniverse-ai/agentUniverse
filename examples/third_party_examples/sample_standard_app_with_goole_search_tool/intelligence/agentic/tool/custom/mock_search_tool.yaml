@@ -1,0 +1,29 @@
+name: 'mock_search_tool'
+description: |
+  使用该工具可以执行搜索操作。工具的输入是你想搜索的内容。
+  
+  工具输入参数说明：
+    - input (必填): 搜索内容，描述你希望查询的具体信息。
+  
+  注意：
+    - 该工具仅用于展示，返回数据为mock数据。
+  
+  示例工具输入：
+    示例1: 如果你想搜索上海今天的天气，工具的输入应该是：
+      ```json
+      {
+        "input": "上海今天的天气"
+      }
+      ```
+    示例2: 如果你想搜索某个主题的简要信息（例如 "人工智能的发展历史"），工具的输入可以是：
+      ```json
+      {
+        "input": "人工智能的发展历史"
+      }
+      ```
+tool_type: 'api'
+input_keys: ['input']
+as_mcp_tool: true
+# The placeholder "${ROOT_PACKAGE}" is mapped to the value of "ROOT_PACKAGE" defined in the config.toml file.
+# It allows you to conveniently manage multiple different agent applications by configuring the root package value.
+meta_class: '${ROOT_PACKAGE}.intelligence.agentic.tool.custom.mock_search_tool.MockSearchTool'

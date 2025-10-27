@@ -1,0 +1,74 @@
+name: 'requests_post'
+description: |
+  This tool allows you to send an HTTP POST request to a website or API endpoint. It is useful when you need to submit data, such as form inputs, JSON payloads, or other key-value pairs, to a server.
+
+  Tool Input Parameters:
+    - input (required): A JSON string containing two keys:
+      - "url" (required): The URL of the website or API endpoint you want to send the POST request to. For example, "https://api.example.com/submit".
+      - "data" (required): A dictionary of key-value pairs that you want to include in the body of the POST request. For example, `{"key1": "value1", "key2": "value2"}`.
+    - headers (optional): Additional HTTP headers to include in the request. If not provided, default headers will be used.
+    - json_parser (optional): A boolean flag indicating whether the response should be parsed as JSON. Default is `true`.
+
+  Example Tool Inputs:
+    Example 1: To send a simple POST request with form data, the tool input should be:
+      ```json
+      {
+        "input": {
+          "url": "https://api.example.com/form",
+          "data": {
+            "name": "John Doe",
+            "email": "john.doe@example.com"
+          }
+        }
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "response": {
+          "status": "success",
+          "message": "Form submitted successfully"
+        }
+      }
+      ```
+
+    Example 2: To send a POST request with JSON data, the tool input should be:
+      ```json
+      {
+        "input": {
+          "url": "https://api.example.com/data",
+          "data": {
+            "action": "create",
+            "item": {
+              "id": 123,
+              "name": "Sample Item"
+            }
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer YOUR_ACCESS_TOKEN"
+        }
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "response": {
+          "id": 123,
+          "name": "Sample Item",
+          "status": "created"
+        }
+      }
+      ```
+headers:
+  content-type: 'application/json'
+method: 'POST'
+json_parser: true
+response_content_type: json
+tool_type: 'api'
+input_keys: ['input']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.request_tool'
+  class: 'RequestTool'

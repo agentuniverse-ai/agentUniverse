@@ -1,0 +1,12 @@
+name: jina_ai_tool
+description: | 
+  该工具可以用来进行网页读取或搜索，工具的输入是你想读取的网页地址或搜索的内容。
+  工具输入示例：
+    示例1: 你想要读取https://github.com/agentuniverse-ai/agentUniverse这个网页时，工具的输入应该是：https://github.com/agentuniverse-ai/agentUniverse
+    示例2: 你想要搜索上海的天气时，工具的输入应该是：上海今天的天气
+tool_type: api
+input_keys: [input]
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.jina_ai_tool
+  class: JinaAITool
