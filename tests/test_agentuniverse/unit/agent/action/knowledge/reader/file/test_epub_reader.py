@@ -245,7 +245,7 @@ class TestEpubReader(unittest.TestCase):
             # May have empty or minimal content documents
             if documents:
                 self.assertIsInstance(documents[0].text, str)
-        except Exception as e:
+        except (OSError, ebooklib.EpubException) as e:
             # If EPUB creation fails due to library limitations, skip this test
             self.skipTest(f"EPUB creation failed: {e}")
 
