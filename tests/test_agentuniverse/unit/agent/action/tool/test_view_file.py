@@ -46,15 +46,15 @@ class ViewFileToolTest(unittest.TestCase):
     def test_view_specific_lines(self):
         tool_input = ToolInput({
             'file_path': self.temp_file_path,
-            'start_line': 1,
-            'end_line': 3
+            'start_line': 2,
+            'end_line': 4
         })
 
         result_json = self.tool.execute(tool_input)
         result = json.loads(result_json)
 
         self.assertEqual(result['status'], 'success')
-        self.assertEqual(result['content'], "Line 2\nLine 3\n")
+        self.assertEqual(result['content'], "Line 2\nLine 3\nLine 4\n")
         self.assertEqual(result['start_line'], 1)
         self.assertEqual(result['end_line'], 2)
 
