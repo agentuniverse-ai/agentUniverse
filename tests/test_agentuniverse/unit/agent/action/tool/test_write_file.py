@@ -21,12 +21,8 @@ class WriteFileToolTest(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         
     def tearDown(self):
-        for root, dirs, files in os.walk(self.temp_dir, topdown=False):
-            for name in files:
-                os.unlink(os.path.join(root, name))
-            for name in dirs:
-                os.rmdir(os.path.join(root, name))
-        os.rmdir(self.temp_dir)
+        import shutil  
+        shutil.rmtree(self.temp_dir)
     
     def test_write_new_file(self):
         file_path = os.path.join(self.temp_dir, 'test_new.txt')
