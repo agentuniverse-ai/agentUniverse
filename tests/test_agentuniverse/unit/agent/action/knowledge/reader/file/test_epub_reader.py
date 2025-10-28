@@ -124,7 +124,7 @@ class TestEpubReader(unittest.TestCase):
         """Test handling of non-existent file"""
         non_existent_file = os.path.join(self.temp_dir, "non_existent.epub")
         
-        with self.assertRaises(Exception):
+        with self.assertRaises((FileNotFoundError, IOError)):
             self.reader._load_data(non_existent_file)
 
     def test_load_data_invalid_file(self):
