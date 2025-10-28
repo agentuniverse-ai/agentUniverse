@@ -40,6 +40,7 @@ class EmbeddingTest(unittest.TestCase):
     def test_as_langchain(self) -> None:
         langchain_embedding = self.embedding.as_langchain()
         res = langchain_embedding.embed_documents(texts=["hello world"])
+        print(res)
         self.assertIsInstance(res, list)  
         self.assertEqual(len(res), 1)  
         self.assertIsInstance(res[0], list)  
