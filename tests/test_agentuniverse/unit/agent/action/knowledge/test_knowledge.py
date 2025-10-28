@@ -46,7 +46,9 @@ class KnowledgeTest(unittest.TestCase):
         store = self.knowledge.store
         query = Query(query_str='Which one is a cell phone?', similarity_top_k=1)
         res = store.query(query)
-        print(res)
+        self.assertIsNotNone(res)  
+        self.assertGreater(len(res), 0)  
+        self.assertIn('iPhone', res[0].text)
 
 
 if __name__ == '__main__':
