@@ -73,13 +73,25 @@ class TestXlsxReader:
         mock_sheet1 = MagicMock()
         mock_sheet1.max_row = 2
         mock_sheet1.max_column = 2
-        mock_sheet1.cell.return_value = MagicMock(value='Data1')
+        def mock_cell1(*args, **kwargs):
+            row = kwargs.get('row', args[0] if len(args) > 0 else 1)
+            col = kwargs.get('column', args[1] if len(args) > 1 else 1)
+            return MagicMock(value=f'Sheet1 Cell {row},{col}')
+
+        mock_sheet1.cell.side_effect = mock_cell1
+
         
         # Mock second sheet
         mock_sheet2 = MagicMock()
         mock_sheet2.max_row = 2
         mock_sheet2.max_column = 2
-        mock_sheet2.cell.return_value = MagicMock(value='Data2')
+        def mock_cell2(*args, **kwargs):
+            row = kwargs.get('row', args[0] if len(args) > 0 else 1)
+            col = kwargs.get('column', args[1] if len(args) > 1 else 1)
+            return MagicMock(value=f'Sheet2 Cell {row},{col}')
+
+        mock_sheet2.cell.side_effect = mock_cell2
+
         
         def mock_getitem(sheet_name):
             if sheet_name == 'Sheet1':
