@@ -25,7 +25,8 @@ class ArxivToolTest(unittest.TestCase):
             'mode': SearchMode.SEARCH.value
         })
         result = self.tool.execute(tool_input)
-        self.assertTrue(result!= "")
+        self.assertIsNotNone(result)
+        self.assertGreater(len(result.strip()), 0)
 
     def test_get_paper_detail(self) -> None:
         tool_input = ToolInput({
