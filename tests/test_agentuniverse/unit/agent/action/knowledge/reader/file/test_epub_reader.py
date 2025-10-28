@@ -13,7 +13,6 @@ import unittest
 import tempfile
 import os
 from pathlib import Path
-
 from agentuniverse.agent.action.knowledge.reader.file.epub_reader import EpubReader
 
 
@@ -131,12 +130,16 @@ class TestEpubReader(unittest.TestCase):
     def test_load_data_invalid_file(self):
         """Test handling of invalid EPUB file"""
         # Create a non-EPUB file with .epub extension
+        try:
+            import ebooklib
+        except ImportError:
+            self.skipTest("EbookLib not available for testing")
         invalid_epub_path = os.path.join(self.temp_dir, "invalid.epub")
         with open(invalid_epub_path, 'w') as f:
             f.write("This is not a valid EPUB file")
         
         try:
-            with self.assertRaises(Exception):
+            with self.assertRaises((ebooklib.epub.EpubException, ValueError, IOError)):  
                 self.reader._load_data(invalid_epub_path)
         finally:
             os.remove(invalid_epub_path)
