@@ -24,6 +24,7 @@ from agentuniverse.base.config.configer import Configer
 from agentuniverse.base.config.custom_configer.default_llm_configer import DefaultLLMConfiger
 from agentuniverse.base.config.custom_configer.custom_key_configer import CustomKeyConfiger
 from agentuniverse.base.component.component_enum import ComponentEnum
+from agentuniverse.base.util import character_util
 from agentuniverse.base.util.monitor.monitor import Monitor
 from agentuniverse.base.util.system_util import get_project_root_path, is_api_key_missing, \
     is_system_builtin, find_default_llm_config
@@ -64,6 +65,7 @@ class AgentUniverse(object):
         """Start the agentUniverse framework.
 
         """
+        character_util.show_au_start_banner()
         # get default config path
         project_root_path = get_project_root_path()
         sys.path.append(str(project_root_path.parent))
