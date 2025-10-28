@@ -117,9 +117,9 @@ class TestEpubReader(unittest.TestCase):
         documents = self.reader._load_data(self.test_epub_path, ext_info=custom_metadata)
         
         # Check that custom metadata is included
-        doc = documents[0]
-        self.assertEqual(doc.metadata['custom_field'], 'custom_value')
-        self.assertEqual(doc.metadata['processing_date'], '2024-12-19')
+        for doc in documents: 
+            self.assertEqual(doc.metadata['custom_field'], 'custom_value')
+            self.assertEqual(doc.metadata['processing_date'], '2024-12-19')
 
     def test_load_data_file_not_found(self):
         """Test handling of non-existent file"""
