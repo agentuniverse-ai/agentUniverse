@@ -22,9 +22,11 @@ class TestEpubReader(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
-        self.reader = EpubReader()
-        self.temp_dir = tempfile.mkdtemp()
-        self.test_epub_path = os.path.join(self.temp_dir, "test_book.epub")
+        self.reader = EpubReader()  
+        self.temp_dir = None  
+        self.test_epub_path = None  
+        self.temp_dir = tempfile.mkdtemp()  
+        self.test_epub_path = os.path.join(self.temp_dir, "test_book.epub")"
 
     def tearDown(self):
         """Clean up test fixtures"""
