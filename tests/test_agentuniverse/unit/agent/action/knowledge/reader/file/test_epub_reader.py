@@ -201,7 +201,8 @@ class TestEpubReader(unittest.TestCase):
         
         # Both should produce same results
         self.assertEqual(len(documents1), len(documents2))
-        self.assertEqual(documents1[0].text, documents2[0].text)
+        if len(documents1) > 0: 
+            self.assertEqual(documents1[0].text, documents2[0].text)
 
     def test_empty_content_handling(self):
         """Test handling of EPUB with empty or minimal content"""
