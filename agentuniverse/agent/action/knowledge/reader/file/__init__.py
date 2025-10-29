@@ -8,3 +8,4 @@
 
 from .epub_reader import EpubReader
 from .xlsx_reader import XlsxReader
+from .rar_reader import RarReader
