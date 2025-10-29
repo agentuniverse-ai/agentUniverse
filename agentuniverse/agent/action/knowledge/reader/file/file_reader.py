@@ -12,6 +12,7 @@ from agentuniverse.agent.action.knowledge.reader.file.docx_reader import DocxRea
 from agentuniverse.agent.action.knowledge.reader.file.epub_reader import EpubReader
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
+from agentuniverse.agent.action.knowledge.reader.file.rar_reader import RarReader
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -22,6 +23,7 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".pptx": PptxReader,
     ".xlsx": XlsxReader,
     ".epub": EpubReader,
+    ".rar": RarReader,
 }
 
 
