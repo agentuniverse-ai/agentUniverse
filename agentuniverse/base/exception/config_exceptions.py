@@ -1,11 +1,3 @@
-# !/usr/bin/env python3
-# -*- coding:utf-8 -*-
-
-# @Time    : 2025/1/27 10:00
-# @Author  : Auto
-# @Email   : auto@example.com
-# @FileName: config_exceptions.py
-
 """
 配置相关异常类
 

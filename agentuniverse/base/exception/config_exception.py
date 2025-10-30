@@ -1,11 +1,3 @@
-# !/usr/bin/env python3
-# -*- coding:utf-8 -*-
-
-# @Time    : 2025/1/15 10:00
-# @Author  : Auto
-# @Email   : auto@example.com
-# @FileName: config_exception.py
-
 from enum import Enum
 from typing import Optional, Dict, Any, List
 from .agentuniverse_exception import AgentUniverseException, ErrorSeverity

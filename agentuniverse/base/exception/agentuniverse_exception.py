@@ -1,11 +1,3 @@
-# !/usr/bin/env python3
-# -*- coding:utf-8 -*-
-
-# @Time    : 2025/1/27 10:00
-# @Author  : Auto
-# @Email   : auto@example.com
-# @FileName: agentuniverse_exception.py
-
 """
 AgentUniverse 基础异常类
 
