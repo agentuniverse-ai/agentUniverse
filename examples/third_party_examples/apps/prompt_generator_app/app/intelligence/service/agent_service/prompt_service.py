@@ -7,7 +7,7 @@
 # @FileName: prompt_service.py
 """Prompt Generation Service.
 
-Provides core prompt generation service functionality for prompt_generator_app.
+Provides core prompt generation service functionality for app.
 This service layer encapsulates the core logic for prompt generation, optimization,
 and configuration management.
 """
@@ -22,7 +22,7 @@ project_root = Path(__file__).parent.parent.parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from agentuniverse.prompt.prompt_generator_helper import (
+from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_helper import (
     PromptTemplateHelper,
     generate_prompt_config,
     optimize_existing_prompt

@@ -17,7 +17,7 @@ import os
 import tempfile
 import unittest
 
-from agentuniverse.prompt.prompt_generator_helper import (
+from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_helper import (
     PromptTemplateHelper,
     generate_prompt_config,
     optimize_existing_prompt

@@ -7,7 +7,7 @@
 # @FileName: prompt_util.py
 """Prompt Utility Functions.
 
-Provides practical utility functions for prompt processing in prompt_generator_app.
+Provides practical utility functions for prompt processing in app.
 This utility module focuses on prompt content analysis, validation, and transformation.
 """
 import re

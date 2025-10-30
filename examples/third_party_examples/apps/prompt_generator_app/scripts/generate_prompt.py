@@ -14,7 +14,6 @@ provides flexible configuration options.
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -23,7 +22,7 @@ current_dir = Path(__file__).parent
 project_root = current_dir.parent
 sys.path.insert(0, str(project_root))
 
-from agentuniverse.prompt.prompt_generator_helper import (
+from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_helper import (
     PromptTemplateHelper,
     generate_prompt_config
 )

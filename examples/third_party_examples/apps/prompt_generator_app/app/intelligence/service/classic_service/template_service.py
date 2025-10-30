@@ -7,20 +7,19 @@
 # @FileName: template_service.py
 """Prompt Template Service.
 
-Provides template management and generation functionality for prompt_generator_app.
+Provides template management and generation functionality for app.
 This service layer focuses on template storage, retrieval, and management.
 """
-import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 
 # Add project root directory to Python path
 project_root = Path(__file__).parent.parent.parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from agentuniverse.prompt.prompt_generator_helper import PromptTemplateHelper
+from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_helper import PromptTemplateHelper
 
 
 class PromptTemplateService:

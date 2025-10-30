@@ -7,7 +7,6 @@
 # @FileName: prompt_optimizer_demo.py
 
 import sys
-import os
 from pathlib import Path
 
 # Add project root to Python path
@@ -15,7 +14,7 @@ project_root = Path(__file__).parent.parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from agentuniverse.prompt.prompt_generator_helper import optimize_existing_prompt
+from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_helper import optimize_existing_prompt
 
 
 def demo_basic_prompt_optimization():

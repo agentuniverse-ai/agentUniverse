@@ -7,7 +7,7 @@
 # @FileName: yaml_util.py
 """YAML Utility Functions.
 
-Provides YAML file reading, writing, and validation functionality for prompt_generator_app.
+Provides YAML file reading, writing, and validation functionality for app.
 This utility module focuses on YAML data processing and validation.
 """
 import os

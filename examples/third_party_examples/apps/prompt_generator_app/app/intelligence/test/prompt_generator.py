@@ -10,7 +10,6 @@
 This demo script shows how to use the prompt generator to create different types of agent prompts.
 Suitable for learning and understanding how to use the prompt generator.
 """
-import os
 import sys
 from pathlib import Path
 
@@ -19,7 +18,7 @@ project_root = Path(__file__).parent.parent.parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from agentuniverse.prompt.prompt_generator_helper import (
+from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_helper import (
     PromptTemplateHelper,
     generate_prompt_config
 )
