@@ -5,12 +5,19 @@
 # @Author  : jerry.zzw 
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_configer.py
+
+# @Time    : 2025/1/27 10:30
+# @Author  : Auto
+# @Email   : auto@example.com
+# @Note    : 优化错误信息处理，添加详细的错误描述和解决建议
+
 import importlib
 from typing import Optional
 
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.configer import Configer
 from agentuniverse.base.config.custom_configer.default_llm_configer import DefaultLLMConfiger
+from agentuniverse.base.exception import ConfigValidationError
 
 
 class ComponentConfiger(object):
@@ -101,7 +108,21 @@ class ComponentConfiger(object):
                 self.__metadata_type = ComponentEnum.PROMPT.value
             self.__meta_class = configer.value.get('meta_class')
         except Exception as e:
-            raise Exception(f"Failed to parse the component configuration: {e}")
+            validation_errors = [
+                f"配置解析失败: {str(e)}",
+                "检查配置文件格式是否正确",
+                "验证必需的配置字段是否存在"
+            ]
+            
+            raise ConfigValidationError(
+                file_path=configer.path or "unknown",
+                validation_errors=validation_errors,
+                details={
+                    "config_keys": list(configer.value.keys()) if configer.value else [],
+                    "metadata": configer.value.get('metadata') if configer.value else None
+                },
+                original_exception=e
+            )
 
         return self
 
