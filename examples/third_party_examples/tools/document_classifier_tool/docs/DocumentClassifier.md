@@ -22,7 +22,7 @@ DocumentClassifier是agentUniverse框架中的文档分类组件，提供智能�
 
 ```python
 from agentuniverse.agent.action.knowledge.store.document import Document
-from agentuniverse.agent.action.knowledge.doc_processor.document_classifier import DocumentClassifier
+from examples.third_party_examples.tools.document_classifier_tool.document_classifier import DocumentClassifier
 
 # 创建分类器
 classifier = DocumentClassifier()
@@ -41,7 +41,8 @@ classified_doc = classifier._classify_document(doc)
 ### 中文分类器
 
 ```python
-from agentuniverse.agent.action.knowledge.doc_processor.chinese_document_classifier import ChineseDocumentClassifier
+from examples.third_party_examples.tools.document_classifier_tool.chinese_document_classifier import
+    ChineseDocumentClassifier
 
 # 创建中文分类器
 classifier = ChineseDocumentClassifier()

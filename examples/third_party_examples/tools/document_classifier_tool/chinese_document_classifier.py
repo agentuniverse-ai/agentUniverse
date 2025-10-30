@@ -8,14 +8,11 @@
 
 import jieba
 import re
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 from collections import Counter
 
-from agentuniverse.agent.action.knowledge.store.query import Query
-from agentuniverse.agent.action.knowledge.store.document import Document
-from agentuniverse.agent.action.knowledge.doc_processor.document_classifier import (
-    DocumentClassifier, 
-    ClassificationStrategy
+from examples.third_party_examples.tools.document_classifier_tool.document_classifier import (
+    DocumentClassifier
 )
 
 

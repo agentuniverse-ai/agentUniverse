@@ -21,14 +21,14 @@ import sys
 import os
 
 # 添加项目根目录到Python路径
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../..'))
 
 from agentuniverse.agent.action.knowledge.store.document import Document
-from agentuniverse.agent.action.knowledge.doc_processor.document_classifier import (
+from examples.third_party_examples.tools.document_classifier_tool.document_classifier import (
     DocumentClassifier, 
     ClassificationStrategy
 )
-from agentuniverse.agent.action.knowledge.doc_processor.chinese_document_classifier import ChineseDocumentClassifier
+from examples.third_party_examples.tools.document_classifier_tool.chinese_document_classifier import ChineseDocumentClassifier
 
 
 class TestDocumentClassifier(unittest.TestCase):

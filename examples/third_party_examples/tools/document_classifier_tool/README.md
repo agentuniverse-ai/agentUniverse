@@ -43,7 +43,7 @@ python test_classifier.py
 
 ```python
 from agentuniverse.agent.action.knowledge.store.document import Document
-from agentuniverse.agent.action.knowledge.doc_processor.document_classifier import DocumentClassifier
+from examples.third_party_examples.tools.document_classifier_tool.document_classifier import DocumentClassifier
 
 # 创建分类器
 classifier = DocumentClassifier()
@@ -67,7 +67,8 @@ print(f"置信度: {classified_doc.metadata['classification_confidence']}")
 ### 中文分类器使用
 
 ```python
-from agentuniverse.agent.action.knowledge.doc_processor.chinese_document_classifier import ChineseDocumentClassifier
+from examples.third_party_examples.tools.document_classifier_tool.chinese_document_classifier import
+    ChineseDocumentClassifier
 
 # 创建中文分类器
 classifier = ChineseDocumentClassifier()
