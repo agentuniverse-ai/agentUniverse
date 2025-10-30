@@ -92,8 +92,8 @@
 
 **5. Best Practices**
 * 5.1 Operations and Deployment
-  * 5.1.1 [Docker Containerization Solution](In-Depth_Guides/Tech_Capabilities/Deployment/Docker_Container_Deployment.md)
-  * 5.1.2 [K8S Solution](In-Depth_Guides/Tech_Capabilities/Deployment/K8S_Deployment.md)
+  * 5.1.1 [Docker Containerization Solution](In-Depth_Guides/Deployment/Docker_Container_Deployment.md)
+  * 5.1.2 [K8S Solution](In-Depth_Guides/Deployment/K8S_Deployment.md)
 
 **6. Use Cases**
 * 6.1 RAG-Type Agent Examples

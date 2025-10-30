@@ -1,0 +1,16 @@
+#name: 'faiss_hnsw_store'
+#description: 'FAISS store with IndexHNSWFlat for high-performance similarity search'
+#index_path: '../../db/faiss_hnsw.index'
+#metadata_path: '../../db/faiss_hnsw_metadata.pkl'
+#embedding_model: 'dashscope_embedding'
+#similarity_top_k: 15
+#index_config:
+#  index_type: 'IndexHNSWFlat'
+#  dimension: 768
+#  M: 16               # Number of bi-directional links for every new element
+#  efConstruction: 200 # Size of the dynamic candidate list
+#  efSearch: 50        # Size of the dynamic candidate list during search
+#metadata:
+#  type: 'STORE'
+#  module: 'agentuniverse.agent.action.knowledge.store.faiss_store'
+#  class: 'FAISSStore'

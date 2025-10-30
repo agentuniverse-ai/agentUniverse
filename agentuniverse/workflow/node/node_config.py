@@ -4,7 +4,7 @@
 # @Time    : 2024/8/21 11:34
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: workflow_config.py
+# @FileName: node_config.py
 from typing import Optional, List, Any, Union
 
 from pydantic import BaseModel

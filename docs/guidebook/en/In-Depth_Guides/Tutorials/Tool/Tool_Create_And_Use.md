@@ -61,7 +61,7 @@ class GoogleSearchTool(Tool):
     Implement the execute method of demo google search tool, using the `GoogleSerperAPIWrapper` to implement a simple Google search.
 
     Note:
-        You need to sign up for a free account at https://serper.dev and get the serpher api key (2500 free queries).
+        You need to sign up for a free account at https://serper.dev and get the serper api key (2500 free queries).
     """
 
     def execute(self, tool_input: ToolInput):
@@ -88,7 +88,9 @@ tool = ['sample_standard_app.intelligence.agentic.tool']
 ## Configure for use in an Agent
 You can set up any tool you have created in the tool of your agent according to the contents of [Agent Creation and Usage section](../Agent/Agent_Create_And_Use.md).
 
-Refer to the example: `demo_rag_agent`, with the specific file path being `sample_standard_app/intelligence/agentic/agent/agent_instance/rag_agent_case/demo_rag_agent.yaml`.
+For examples of tool definitions, please refer to [python_runner](../../../../../../examples/sample_apps/toolkit_demo_app/intelligence/agentic/tool/python_runner.yaml)
+
+For examples of tool calls, please refer to [demo_agent_with_basic_tool.yaml](../../../../../../examples/sample_apps/toolkit_demo_app/intelligence/agentic/agent/agent_instance/demo_agent_with_basic_tool.yaml)
 
 ## Using the Tool Manager
 You can obtain the instance of the tool with the corresponding name through the `.get_instance_obj(xx_tool_name)` method in the Tool manager, and call it using the `run` method.

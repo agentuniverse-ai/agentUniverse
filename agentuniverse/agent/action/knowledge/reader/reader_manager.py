@@ -20,7 +20,15 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "pdf": "default_pdf_reader",
         "pptx": "default_pptx_reader",
         "docx": "default_docx_reader",
-        "txt": "default_txt_reader"
+        "txt": "default_txt_reader",
+        # extended defaults for web & images
+        "url": "default_web_page_reader",
+        "png": "default_image_ocr_reader",
+        "jpg": "default_image_ocr_reader",
+        "jpeg": "default_image_ocr_reader",
+        "bmp": "default_image_ocr_reader",
+        "tiff": "default_image_ocr_reader",
+        "webp": "default_image_ocr_reader",
     }
 
     def __init__(self):

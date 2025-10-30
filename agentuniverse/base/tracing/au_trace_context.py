@@ -150,7 +150,7 @@ class AuTraceContext:
             return
 
         span = trace.get_current_span()
-        parent_ctx = span.parent  # 只有 SpanContext，可能为 None
+        parent_ctx = span.parent  # Only SpanContext, which may be None.
         if parent_ctx is not None and parent_ctx.span_id and parent_ctx.span_id in self._token_count_dict:
             self._token_count_dict[parent_ctx.span_id] += token_usage
 

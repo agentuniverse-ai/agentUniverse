@@ -4,7 +4,7 @@ import json
 # @Time    : 2024/10/10 19:10
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: chroma_memory_storage.py
+# @FileName: chroma_conversation_memory_storage.py
 
 import uuid
 from datetime import datetime

@@ -4,7 +4,7 @@
 # @Time    : 2024/10/17 20:36
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: planning_agent_template.py
+# @FileName: openai_protocol_planning_agent.py
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.openai_protocol_template import OpenAIProtocolTemplate

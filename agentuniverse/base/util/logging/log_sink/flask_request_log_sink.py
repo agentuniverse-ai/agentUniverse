@@ -4,7 +4,7 @@
 # @Time    : 2024/12/9 18:01
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: base_log_sink.py
+# @FileName: flask_request_log_sink.py
 
 from agentuniverse.base.util.logging.log_sink.base_file_log_sink import BaseFileLogSink
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum

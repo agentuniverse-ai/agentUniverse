@@ -5,7 +5,7 @@
 # @Time    :
 # @Author  :
 # @Email   :
-# @FileName: custom_flask_request_sink.py
+# @FileName: custom_flask_response_sink.py
 
 from agentuniverse.base.util.logging.log_sink.flask_response_log_sink import FlaskResponseLogSink
 

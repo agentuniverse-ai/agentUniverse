@@ -184,6 +184,7 @@ class Monitor(BaseModel):
         if trace_id is not None:
             invocation_chain = FrameworkContextManager().get_context(trace_id + '_invocation_chain')
             if invocation_chain is not None:
+                invocation_chain = invocation_chain.copy()
                 invocation_chain.append(source)
                 FrameworkContextManager().set_context(trace_id + '_invocation_chain', invocation_chain)
             invocation_chain_bak = FrameworkContextManager().get_context(trace_id + '_invocation_chain_bak')

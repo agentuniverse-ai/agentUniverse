@@ -17,12 +17,20 @@ class GoogleSearchTool(Tool):
     Implement the execute method of demo google search tool, using the `GoogleSerperAPIWrapper` to implement a simple Google search.
 
     Note:
-        You need to sign up for a free account at https://serper.dev and get the serpher api key (2500 free queries).
+        You need to sign up for a free account at https://serper.dev and get the serper api key (2500 free queries).
     """
 
     serper_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("SERPER_API_KEY"))
 
     def execute(self, input: str):
-        # get top10 results from Google search.
+        """Execute Google search and return top 10 results.
+        
+        Args:
+            input (str): The search query string
+            
+        Returns:
+            str: Search results from Google in text format
+        """
+        # Configure Google search with top 10 results, US region, English language
         search = GoogleSerperAPIWrapper(serper_api_key=self.serper_api_key, k=10, gl="us", hl="en", type="search")
         return search.run(query=input)

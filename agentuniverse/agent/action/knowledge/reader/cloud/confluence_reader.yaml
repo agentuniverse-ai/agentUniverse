@@ -1,0 +1,6 @@
+name: 'default_confluence_reader'
+description: 'default Confluence reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.cloud.confluence_reader'
+  class: 'ConfluenceReader'

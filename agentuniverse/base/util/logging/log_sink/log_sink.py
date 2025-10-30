@@ -4,7 +4,7 @@
 # @Time    : 2024/12/9 18:01
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: base_log_sink.py
+# @FileName: log_sink.py
 from typing import Optional
 from loguru import logger
 

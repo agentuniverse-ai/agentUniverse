@@ -4,7 +4,7 @@
 # @Time    :
 # @Author  :
 # @Email   :
-# @FileName: google_search_tool.py
+# @FileName: demo_search_tool.py
 from typing import Optional
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
@@ -19,7 +19,7 @@ class DemoSearchTool(Tool):
     Implement the execute method of demo google search tool, using the `GoogleSerperAPIWrapper` to implement a simple Google search.
 
     Note:
-        You need to sign up for a free account at https://serper.dev and get the serpher api key (2500 free queries).
+        You need to sign up for a free account at https://serper.dev and get the serper api key (2500 free queries).
     """
 
     serper_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("SERPER_API_KEY"))

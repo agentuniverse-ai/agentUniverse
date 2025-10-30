@@ -4,7 +4,7 @@
 # @Time    : 2024/8/28 16:54
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
-# @FileName: hierarchical_text_splitter.py
+# @FileName: hierarchical_regex_text_splitter.py
 import re
 import uuid
 from typing import List, Optional

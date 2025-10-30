@@ -1,0 +1,6 @@
+name: 'default_scanned_pdf_ocr_reader'
+description: 'default scanned PDF OCR reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.image.scanned_pdf_ocr_reader'
+  class: 'ScannedPdfOCRReader'

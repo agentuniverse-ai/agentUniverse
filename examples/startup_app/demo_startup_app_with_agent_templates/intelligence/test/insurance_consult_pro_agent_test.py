@@ -3,7 +3,7 @@
 # @Time    : 2024/12/12 23:03
 # @Author  : jijiawei
 # @Email   : jijiawei.jjw@antgroup.com
-# @FileName: insurance_consult_agent_test.py
+# @FileName: insurance_consult_pro_agent_test.py
 from agentuniverse.base.agentuniverse import AgentUniverse
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager

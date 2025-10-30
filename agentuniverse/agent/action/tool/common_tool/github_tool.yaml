@@ -1,0 +1,54 @@
+name: github_tool
+description: GitHub仓库、用户、问题和代码搜索工具
+class_path: agentuniverse.agent.action.tool.common_tool.github_tool.GitHubTool
+args_model:
+  mode:
+    type: string
+    description: 搜索模式，可选值：repository(搜索仓库), user(搜索用户), issue(搜索问题), code(搜索代码), repo_info(获取仓库信息)
+    required: true
+  query:
+    type: string
+    description: 搜索查询字符串，用于repository、user、issue、code模式
+    required: false
+  owner:
+    type: string
+    description: 仓库所有者，用于repo_info模式
+    required: false
+  repo:
+    type: string
+    description: 仓库名称，用于repo_info模式
+    required: false
+  sort:
+    type: string
+    description: 排序方式，repository模式可选：stars, forks, help-wanted-issues, updated；user模式可选：followers, repositories, joined；issue模式可选：created, updated, comments；code模式可选：indexed
+    required: false
+  order:
+    type: string
+    description: 排序顺序，可选值：desc(降序), asc(升序)
+    required: false
+    default: desc
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["repository", "user", "issue", "code", "repo_info"]
+      description: 搜索模式
+    query:
+      type: string
+      description: 搜索查询字符串
+    owner:
+      type: string
+      description: 仓库所有者
+    repo:
+      type: string
+      description: 仓库名称
+    sort:
+      type: string
+      description: 排序方式
+    order:
+      type: string
+      enum: ["desc", "asc"]
+      default: "desc"
+      description: 排序顺序
+  required: ["mode"]

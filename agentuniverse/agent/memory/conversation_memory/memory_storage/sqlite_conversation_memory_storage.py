@@ -4,7 +4,7 @@
 # @Time    : 2024/10/10 19:45
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
-# @FileName: sql_alchemy_memory_storage.py
+# @FileName: sqlite_conversation_memory_storage.py
 import datetime
 import json
 import uuid
@@ -159,7 +159,7 @@ class SqliteMemoryStorage(MemoryStorage):
     session: Optional[Any] = None
 
     model_config = {
-        "arbitrary_types_allowed": True,  # 允许任意类型
+        "arbitrary_types_allowed": True,  # Allow any type.
     }
 
     def _new_client(self):
