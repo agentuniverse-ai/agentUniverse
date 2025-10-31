@@ -10,8 +10,11 @@ from typing import Dict, Type, List, Optional
 
 from agentuniverse.agent.action.knowledge.reader.file.docx_reader import DocxReader
 from agentuniverse.agent.action.knowledge.reader.file.epub_reader import EpubReader
+from agentuniverse.agent.action.knowledge.reader.file.markdown_reader import MarkdownReader
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
+from agentuniverse.agent.action.knowledge.reader.file.txt_reader import TxtReader
+from agentuniverse.agent.action.knowledge.reader.file.csv_reader import CSVReader
 from agentuniverse.agent.action.knowledge.reader.file.rar_reader import RarReader
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
 from agentuniverse.agent.action.knowledge.reader.file.zip_reader import ZipReader
@@ -24,6 +27,10 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".pptx": PptxReader,
     ".xlsx": XlsxReader,
     ".epub": EpubReader,
+    ".txt": TxtReader,
+    ".md": MarkdownReader,
+    ".markdown": MarkdownReader,
+    ".csv": CSVReader,
     ".rar": RarReader,
     ".zip": ZipReader,
 }
