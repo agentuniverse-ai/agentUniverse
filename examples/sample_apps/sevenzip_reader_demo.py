@@ -151,8 +151,7 @@ def create_sample_7z_archive():
             """)
 
     # 定义7Z文件路径
-    out_dir="/developer/xuyizhou/agentUniverse-master/examples/sample_apps"
-    sevenzip_path = os.path.join(out_dir, "sample_archive.7z")
+    sevenzip_path = os.path.join(temp_dir, "sample_archive.7z")
 
     try:
         import py7zr
