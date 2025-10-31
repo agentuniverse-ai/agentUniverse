@@ -1,0 +1,9 @@
+name: 'qwen-max'
+description: 'qwen-max'
+model_name: 'qwen-max'
+temperature: 0.5
+max_tokens: 2000
+max_context_length: 32768
+streaming: True
+channel: qwen-max-official
+meta_class: 'agentuniverse.llm.default.qwen_openai_style_llm.QWenOpenAIStyleLLM'

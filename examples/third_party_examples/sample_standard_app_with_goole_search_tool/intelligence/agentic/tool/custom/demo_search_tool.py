@@ -1,10 +1,10 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
+
 # @Time    :
 # @Author  :
 # @Email   :
-# @FileName: google_search_tool.py
-
+# @FileName: demo_search_tool.py
 from typing import Optional
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
@@ -13,7 +13,7 @@ from langchain_community.utilities.google_serper import GoogleSerperAPIWrapper
 from pydantic import Field
 
 
-class GoogleSearchTool(Tool):
+class DemoSearchTool(Tool):
     """The demo google search tool.
 
     Implement the execute method of demo google search tool, using the `GoogleSerperAPIWrapper` to implement a simple Google search.
@@ -26,10 +26,6 @@ class GoogleSearchTool(Tool):
 
     def execute(self, input: str):
         # get top10 results from Google search.
-        search = GoogleSerperAPIWrapper(serper_api_key=self.serper_api_key, k=10, gl="us", hl="en", type="search")
-        return search.run(query=input)
-
-    async def async_execute(self, input: str):
-        # get top10 results from Google search.
-        search = GoogleSerperAPIWrapper(serper_api_key=self.serper_api_key, k=10, gl="us", hl="en", type="search")
-        return await search.arun(query=input)
+        search_api = GoogleSerperAPIWrapper(serper_api_key=self.serper_api_key, k=10, gl="us", hl="en", type="search")
+        res = search_api.run(query=input)
+        return res

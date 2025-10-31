@@ -1,0 +1,4 @@
+name: "custom_flask_request_sink"
+description: "custom_flask_request_sink"
+file_prefix: 'flask_request'
+meta_class: '${ROOT_PACKAGE}.intelligence.utils.log_sink.custom_flask_request_sink.CustomFlaskRequestSink'

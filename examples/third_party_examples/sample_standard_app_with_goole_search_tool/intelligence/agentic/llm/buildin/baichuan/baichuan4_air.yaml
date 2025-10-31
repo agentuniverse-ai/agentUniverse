@@ -1,0 +1,37 @@
+name: 'Baichuan4-Air'
+description: 'Baichuan Baichuan4-Air model'
+model_name: 'Baichuan4-Air'
+max_tokens: 3000
+#
+# There are three ways to configure the api_key:
+#
+# 1. Direct String Value:
+#    Directly input the API key as a string.
+#    Example: api_key: 'sk-xxxxxxxxxxxxxxxx'
+#
+# 2. Environment Variable Placeholder:
+#    Use ${VARIABLE_NAME} syntax to load from environment variables. When agentUniverse starts,
+#    it will automatically read the value from environment variables during YAML configuration parsing.
+#    Example: api_key: '${BAICHUAN_API_KEY}'
+#
+# 3. Custom Function Loading:
+#    Use @FUNC annotation to dynamically load the API key at runtime through a custom function.
+#    Example: api_key: '@FUNC(load_api_key(model_name="baichuan"))'
+#    The function should be defined in the YamlFuncExtension class within yaml_func_extension.py
+#    When agentUniverse loads this configuration, it will:
+#     - Parse the @FUNC annotation
+#     - Execute the load_api_key function with the given argument
+#     - Replace the annotation with the function's return value
+#
+# The same configuration methods apply to other parameters below (api_base, organization, proxy)
+#
+# Note: Current configuration uses the second method (Environment Variable Placeholder)
+#
+api_key: '${BAICHUAN_API_KEY}'
+api_base: '${BAICHUAN_API_BASE}'
+organization: '${BAICHUAN_ORGANIZATION}'
+proxy: '${BAICHUAN_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.baichuan_openai_style_llm'
+  class: 'BAICHUANOpenAIStyleLLM'

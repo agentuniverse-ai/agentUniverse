@@ -1,0 +1,13 @@
+name: 'faiss_flat_store'
+description: 'FAISS store with IndexFlatL2 for exact similarity search'
+index_path: '../../db/faiss_flat.index'
+metadata_path: '../../db/faiss_flat_metadata.pkl'
+embedding_model: 'dashscope_embedding'
+similarity_top_k: 10
+index_config:
+  index_type: 'IndexFlatL2'
+  dimension: 768
+metadata:
+  type: 'STORE'
+  module: 'agentuniverse.agent.action.knowledge.store.faiss_store'
+  class: 'FAISSStore'

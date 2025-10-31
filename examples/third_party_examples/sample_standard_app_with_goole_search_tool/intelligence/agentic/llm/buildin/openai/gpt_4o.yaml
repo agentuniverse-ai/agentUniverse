@@ -1,0 +1,9 @@
+name: 'gpt-4o'
+description: 'gpt-4o'
+model_name: 'gpt-4o'
+temperature: 0.5
+max_tokens: 2000
+streaming: True
+max_context_length: 128000
+channel: gpt-4o-official
+meta_class: 'agentuniverse.llm.default.default_openai_llm.DefaultOpenAILLM'

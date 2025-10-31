@@ -1,0 +1,20 @@
+name: 'arxiv_tool'
+description: |
+  该工具用于在arxiv上搜索和查看学术论文。工具支持两种操作模式：
+  1. 搜索相关论文：通过关键词或描述搜索相关论文
+  2. 查看论文详情：通过论文ID获取论文的完整信息
+
+  工具输入示例：
+    模式1 - 搜索论文：
+      input: "large language model applications"
+      mode: "search"
+    
+    模式2 - 查看论文详情：
+      input: "2402.17550"  # arxiv论文ID
+      mode: "detail"
+tool_type: 'api'
+input_keys: ['input', 'mode']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.arxiv_tool'
+  class: 'ArxivTool'

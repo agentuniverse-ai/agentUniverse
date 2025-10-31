@@ -1,0 +1,5 @@
+name: 'sqlite_conversation_memory_storage'
+description: 'demo sqlite memory storage'
+sqldb_path: 'sqlite:///../../intelligence/db/sqlite_memory.db'
+sql_table_name: 'conversation_memory'
+meta_class: 'agentuniverse.agent.memory.conversation_memory.memory_storage.sqlite_conversation_memory_storage.SqliteMemoryStorage'
