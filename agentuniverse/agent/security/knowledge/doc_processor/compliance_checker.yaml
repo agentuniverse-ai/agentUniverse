@@ -1,0 +1,6 @@
+name: 'compliance_checker'
+description: ''
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'rag_app.intelligence.agentic.knowledge.doc_processor.compliance_checker'
+  class: 'ComplianceDocProcessor'

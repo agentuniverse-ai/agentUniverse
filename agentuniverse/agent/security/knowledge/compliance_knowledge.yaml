@@ -1,0 +1,22 @@
+name: "compliance_knowledge"
+description: "xx场景合规知识库"
+type: "building"
+stores:
+  - "political_risk_chroma_store"
+insert_processors:
+  - "recursive_character_text_splitter"
+readers:
+  pdf: "default_pdf_reader"
+
+metadata:
+  type: 'KNOWLEDGE'
+  module: 'rag_app.intelligence.agentic.knowledge.compliance_knowledge'
+  class: 'ComplianceKnowledge'
+  risk_levels:  # 自定义元数据
+    - "高危"
+    - "中危"
+    - "低危"
+  event_types:
+    - "政治事件"
+    - "社会事件"
+    - "经济事件"
