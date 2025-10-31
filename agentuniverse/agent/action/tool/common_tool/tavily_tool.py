@@ -22,55 +22,55 @@ except ImportError:
 
 
 class TavilyTool(Tool):
-    """Tavily搜索工具，用于通过Tavily API进行网络搜索和网页内容提取。
-    
-    该工具可以执行两种操作：
-    1. 搜索：返回结构化的搜索结果
-    2. 网页提取：从指定URL提取网页内容
-    
-    Args:
-        api_key (Optional[str]): Tavily API密钥，如果不提供则从环境变量获取
-        search_depth (Literal["basic", "advanced"]): 搜索深度，可选"basic"或"advanced"
-        max_results (int): 返回的最大结果数
-        include_answer (bool): 是否包含AI生成的摘要答案
-        mode (Literal["search", "extract"]): 操作模式，可选"search"或"extract"
-    """
-    description: str = "使用Tavily API进行网络搜索和网页内容提取，获取实时在线信息"
+    """Tavily search and extraction tool using the Tavily API.
 
-    # 基本配置参数
-    api_key: Optional[str] = Field(default_factory=lambda: get_from_env("TAVILY_API_KEY"), description="Tavily API密钥")
-    search_depth: Literal["basic", "advanced"] = Field(default="basic", description="搜索深度")
-    include_answer: bool = Field(default=False, description="是否包含AI生成的摘要答案")
-    mode: Literal["search", "extract"] = Field(default="search", description="操作模式：search或extract")
+    This tool supports two modes:
+    1. Search: returns structured search results
+    2. Extract: extracts web page content from one or more URLs
+
+    Args:
+        api_key (Optional[str]): Tavily API key. If not provided, it will be read from the environment variable.
+        search_depth (Literal["basic", "advanced"]): Search depth, either "basic" or "advanced".
+        max_results (int): Maximum number of results to return.
+        include_answer (bool): Whether to include the AI-generated summary answer.
+        mode (Literal["search", "extract"]): Operation mode, either "search" or "extract".
+    """
+    description: str = "Use Tavily API for web search and content extraction to get real-time information"
+
+    # Basic configuration parameters
+    api_key: Optional[str] = Field(default_factory=lambda: get_from_env("TAVILY_API_KEY"), description="Tavily API key")
+    search_depth: Literal["basic", "advanced"] = Field(default="basic", description="Search depth")
+    include_answer: bool = Field(default=False, description="Include AI-generated summary answer")
+    mode: Literal["search", "extract"] = Field(default="search", description="Operation mode: search or extract")
     
-    # 搜索模式可选参数
-    topic: Optional[Literal["general", "news"]] = Field(default=None, description="搜索主题：general或news")
-    days: Optional[int] = Field(default=None, description="当topic为news时，指定搜索的天数")
-    time_range: Optional[Literal["day", "week", "month", "year"]] = Field(default=None, description="搜索时间范围")
-    max_results: int = Field(default=5, description="返回的最大结果数")
-    include_domains: Optional[List[str]] = Field(default=None, description="包含的域名列表")
-    exclude_domains: Optional[List[str]] = Field(default=None, description="排除的域名列表")
-    include_raw_content: bool = Field(default=False, description="是否包含原始内容")
-    include_images: bool = Field(default=False, description="是否包含图片")
-    include_image_descriptions: bool = Field(default=False, description="是否包含图片描述")
+    # Optional parameters for search mode
+    topic: Optional[Literal["general", "news"]] = Field(default=None, description="Search topic: general or news")
+    days: Optional[int] = Field(default=None, description="When topic=news, specify the number of days to search")
+    time_range: Optional[Literal["day", "week", "month", "year"]] = Field(default=None, description="Search time range")
+    max_results: int = Field(default=5, description="Maximum number of results")
+    include_domains: Optional[List[str]] = Field(default=None, description="Domains to include")
+    exclude_domains: Optional[List[str]] = Field(default=None, description="Domains to exclude")
+    include_raw_content: bool = Field(default=False, description="Include raw content")
+    include_images: bool = Field(default=False, description="Include images")
+    include_image_descriptions: bool = Field(default=False, description="Include image descriptions")
     
-    # 提取模式可选参数
-    extract_depth: Literal["basic", "advanced"] = Field(default="advanced", description="提取深度")
+    # Optional parameters for extraction mode
+    extract_depth: Literal["basic", "advanced"] = Field(default="advanced", description="Extraction depth")
 
     def execute(self, input: str | list = None, **kwargs):
-        """执行Tavily工具。
+        """Execute the Tavily tool.
         
         Args:
-            tool_input (ToolInput): 包含查询/URL和可选配置参数的输入对象
+            tool_input (ToolInput): Input containing query/URLs and optional configuration parameters
         
         Returns:
-            Dict: 包含搜索结果或提取内容的字典
+            Dict: Search results or extracted content
         """
-        # 检查API密钥
+        # Check API key
         if not self.api_key:
-            return {"error": "未提供Tavily API密钥，请设置TAVILY_API_KEY环境变量或在调用时提供api_key参数"}
+            return {"error": "Tavily API key not provided, please set TAVILY_API_KEY environment variable or provide api_key parameter"}
             
-        # 更新可选配置（如果提供）
+        # Update optional configuration if provided
         possible_params = [
             "api_key", "search_depth", "include_answer", "mode",
             "topic", "days", "time_range", "max_results", "include_domains", "exclude_domains",
@@ -82,46 +82,45 @@ class TavilyTool(Tool):
                 setattr(self, param, kwargs.get(param))
 
         try:
-            # 初始化Tavily客户端
+            # Initialize Tavily client
             client = TavilyClient(api_key=self.api_key)
             
-            # 根据操作模式执行不同的操作
+            # Execute according to operation mode
             if self.mode == "extract":
-                # 提取模式
+                # Extraction mode
                 urls = input
                 if not urls:
-                    return {"error": "未提供要提取内容的URL"}
+                    return {"error": "No URLs provided for content extraction"}
                 
-                # 如果提供的是单个URL字符串，转换为列表
+                # Normalize single URL to list
                 if isinstance(urls, str):
                     urls = [urls]
                 
-                # 提取参数
+                # Build extraction params
                 extract_params = {
                     "urls": urls,
                     "include_images": self.include_images,
                     "extract_depth": self.extract_depth
                 }
                 
-                # 执行提取
+                # Execute extraction
                 result = client.extract(**extract_params)
-                # LOGGER.info(f"Tavily提取结果: {result}")
                 
-                # 直接返回API响应
+                # Return API response
                 return result
             else:
-                # 搜索模式
+                # Search mode
                 query = input
                 if not query:
-                    return {"error": "未提供搜索查询"}
+                    return {"error": "No search query provided"}
                 
-                # 搜索参数
+                # Build search params
                 search_params = {
                     "query": query,
                     "search_depth": self.search_depth
                 }
                 
-                # 添加其他可选参数（如果有设置）
+                # Add optional params if present
                 for param_name, param_attr in {
                     "topic": self.topic,
                     "days": self.days,
@@ -137,13 +136,12 @@ class TavilyTool(Tool):
                     if param_attr is not None:
                         search_params[param_name] = param_attr
                 
-                # 执行标准搜索
+                # Execute search
                 result = client.search(**search_params)
-                # LOGGER.info(f"Tavily搜索结果: {result}")
                 
-                # 直接返回API响应
+                # Return API response
                 return result
                 
         except Exception as e:
-            LOGGER.error(f"Tavily操作出错: {e}")
-            return {"error": f"操作过程中出错: {str(e)}"}
+            LOGGER.error(f"Error while running Tavily tool: {e}")
+            return {"error": f"Exception during Tavily operation: {str(e)}"}

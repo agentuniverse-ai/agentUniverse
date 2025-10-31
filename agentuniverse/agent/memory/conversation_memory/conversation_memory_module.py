@@ -138,7 +138,7 @@ class ConversationMemoryModule:
                 self.thread_pool.submit(func)
             except Exception as e:
                 LOGGER.error(f"Failed to process trace info: {e}")
-                # 打印详细堆栈信息
+                # Print full traceback for debugging
                 traceback.print_exc()
             finally:
                 self.queue.task_done()

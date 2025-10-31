@@ -14,18 +14,29 @@ from pydantic import Field
 
 
 class PythonREPLTool(Tool):
-    """The mock search tool.
+    """Python REPL (Read-Eval-Print Loop) tool for executing Python code.
 
-    In this tool, we mocked the search engine's answers to search for information about BYD and Warren Buffett.
-
+    This tool allows execution of Python code snippets and returns the output.
+    It can handle both raw Python code and code wrapped in markdown code blocks.
+    
     Note:
-        The tool is only suitable for users searching for Buffett or BYD related queries.
-        We recommend that you configure your `SERPER_API_KEY` and use google_search_tool to get information.
+        The tool is designed for executing Python code snippets safely.
+        Make sure to use print() statements to see output from your code.
+        
+    Attributes:
+        client: PythonREPL instance for code execution
     """
     client: PythonREPL = Field(default_factory=lambda: PythonREPL())
 
     def execute(self, input: str):
-        """Demonstrates the execute method of the Tool class."""
+        """Execute Python code and return the output.
+        
+        Args:
+            input (str): Python code to execute (can be raw code or markdown wrapped)
+            
+        Returns:
+            str: Output from the Python code execution or error message
+        """
         pattern = re.compile(r"```python(.*?)``", re.DOTALL)
         matches = pattern.findall(input)
         if len(matches) == 0:
@@ -35,6 +46,6 @@ class PythonREPLTool(Tool):
             return self.client.run(input)
         res = self.client.run(matches[0])
         if res == "" or res is None:
-            return "ERROR: 你的python代码中没有使用print输出任何内容，请参考工具示例"
+            return "ERROR: Your Python code did not print any output. Please refer to the tool example."
         else:
             return res
