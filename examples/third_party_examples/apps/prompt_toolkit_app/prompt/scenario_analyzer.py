@@ -12,7 +12,7 @@ import json
 from typing import Dict, List, Optional, Tuple, Any, Set
 from dataclasses import dataclass
 from enum import Enum
-from agentuniverse.prompt.prompt_generator import ScenarioContext, PromptScenario, PromptComplexity
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import ScenarioContext, PromptScenario, PromptComplexity
 
 
 class ContextType(Enum):

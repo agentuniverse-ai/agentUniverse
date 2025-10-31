@@ -42,7 +42,8 @@
 ### 基本使用
 
 ```python
-from agentuniverse.prompt.prompt_toolkit import PromptToolkit, PromptGenerationRequest
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkit,
+    PromptGenerationRequest
 
 # 初始化工具包
 toolkit = PromptToolkit()
@@ -109,7 +110,7 @@ print(f"置信度: {result.confidence_score}")
 ### PromptToolkitConfig
 
 ```python
-from agentuniverse.prompt.prompt_toolkit import PromptToolkitConfig
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkitConfig
 from agentuniverse.prompt.prompt_generator import PromptScenario, PromptComplexity
 from agentuniverse.prompt.prompt_optimizer import OptimizationStrategy
 

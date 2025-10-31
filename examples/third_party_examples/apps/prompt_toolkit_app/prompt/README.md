@@ -57,7 +57,7 @@ PromptToolkit
 ### 基本使用
 
 ```python
-from agentuniverse.prompt.prompt_toolkit import PromptToolkit, PromptGenerationRequest
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkit, PromptGenerationRequest
 
 # 初始化工具包
 toolkit = PromptToolkit()
@@ -80,7 +80,7 @@ print(f"生成的prompt: {result.generated_prompt}")
 
 ```python
 from agentuniverse.prompt.prompt_model import AgentPromptModel
-from agentuniverse.prompt.prompt_optimizer import OptimizationStrategy
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import OptimizationStrategy
 
 # 创建要优化的prompt
 prompt = AgentPromptModel(
@@ -100,7 +100,7 @@ print(f"优化结果: {result.optimized_prompt}")
 ### 场景分析
 
 ```python
-from agentuniverse.prompt.scenario_analyzer import ScenarioAnalyzer
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.scenario_analyzer import ScenarioAnalyzer
 
 analyzer = ScenarioAnalyzer()
 result = analyzer.analyze_scenario("我需要一个数据分析助手")
@@ -147,9 +147,9 @@ print(f"推荐场景: {result.recommended_scenario}")
 ### PromptToolkitConfig
 
 ```python
-from agentuniverse.prompt.prompt_toolkit import PromptToolkitConfig
-from agentuniverse.prompt.prompt_generator import PromptScenario, PromptComplexity
-from agentuniverse.prompt.prompt_optimizer import OptimizationStrategy
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkitConfig
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import PromptScenario, PromptComplexity
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import OptimizationStrategy
 
 config = PromptToolkitConfig(
     enable_auto_optimization=True,  # 启用自动优化

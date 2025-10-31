@@ -8,8 +8,8 @@
 """Scenario analysis action for the prompt toolkit demo."""
 
 from typing import Dict, Any, Optional
-from agentuniverse.prompt.prompt_toolkit import PromptToolkit
-from agentuniverse.prompt.scenario_analyzer import ScenarioAnalyzer
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkit
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.scenario_analyzer import ScenarioAnalyzer
 from agentuniverse.agent.action.tool.tool import Tool
 
 

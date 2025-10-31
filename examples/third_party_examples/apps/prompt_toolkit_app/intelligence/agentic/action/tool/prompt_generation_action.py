@@ -8,12 +8,11 @@
 """Prompt generation action for the prompt toolkit demo."""
 
 from typing import Dict, Any, Optional
-from agentuniverse.prompt.prompt_toolkit import (
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import (
     PromptToolkit,
     PromptToolkitConfig,
     PromptGenerationRequest
 )
-from agentuniverse.prompt.prompt_generator import PromptScenario, PromptComplexity
 from agentuniverse.agent.action.tool.tool import Tool
 
 

@@ -8,16 +8,9 @@
 """Unit tests for prompt optimizer module."""
 
 import unittest
-from unittest.mock import Mock, patch
-from agentuniverse.prompt.prompt_optimizer import (
-    PromptOptimizer,
-    OptimizationStrategy,
-    OptimizationRule,
-    PromptQualityMetric,
-    QualityScore,
-    OptimizationResult
-)
 from agentuniverse.prompt.prompt_model import AgentPromptModel
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import PromptOptimizer, \
+    OptimizationResult, OptimizationStrategy, OptimizationRule, QualityScore, PromptQualityMetric
 
 
 class TestPromptOptimizer(unittest.TestCase):

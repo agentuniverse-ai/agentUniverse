@@ -8,16 +8,11 @@
 """Unit tests for scenario analyzer module."""
 
 import unittest
-from unittest.mock import Mock, patch
-from agentuniverse.prompt.scenario_analyzer import (
-    ScenarioAnalyzer,
-    ContextType,
-    AnalysisConfidence,
-    ExtractedContext,
-    ScenarioAnalysisResult
-)
-from agentuniverse.prompt.prompt_generator import PromptScenario, PromptComplexity
-from agentuniverse.prompt.prompt_model import AgentPromptModel
+
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import PromptScenario, \
+    PromptComplexity
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.scenario_analyzer import ScenarioAnalyzer, \
+    ScenarioAnalysisResult, ExtractedContext, ContextType, AnalysisConfidence
 
 
 class TestScenarioAnalyzer(unittest.TestCase):

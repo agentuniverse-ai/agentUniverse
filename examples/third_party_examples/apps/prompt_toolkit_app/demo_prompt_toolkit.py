@@ -8,13 +8,13 @@
 """Demo script for the prompt toolkit functionality."""
 
 import asyncio
-from agentuniverse.prompt.prompt_toolkit import (
+
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import PromptComplexity
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import OptimizationStrategy
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import (
     PromptToolkit,
-    PromptToolkitConfig,
     PromptGenerationRequest
 )
-from agentuniverse.prompt.prompt_generator import PromptScenario, PromptComplexity
-from agentuniverse.prompt.prompt_optimizer import OptimizationStrategy
 
 
 async def demo_prompt_generation():

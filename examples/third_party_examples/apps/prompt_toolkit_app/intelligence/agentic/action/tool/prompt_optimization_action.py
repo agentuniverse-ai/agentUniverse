@@ -7,9 +7,9 @@
 # @FileName: prompt_optimization_action.py
 """Prompt optimization action for the prompt toolkit demo."""
 
-from typing import Dict, Any, Optional, List
-from agentuniverse.prompt.prompt_toolkit import PromptToolkit
-from agentuniverse.prompt.prompt_optimizer import OptimizationStrategy
+from typing import Dict, Any
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkit
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import OptimizationStrategy
 from agentuniverse.prompt.prompt_model import AgentPromptModel
 from agentuniverse.agent.action.tool.tool import Tool
 

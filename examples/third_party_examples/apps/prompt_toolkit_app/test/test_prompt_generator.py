@@ -8,15 +8,9 @@
 """Unit tests for prompt generator module."""
 
 import unittest
-from unittest.mock import Mock, patch
-from agentuniverse.prompt.prompt_generator import (
-    PromptGenerator,
-    PromptScenario,
-    PromptComplexity,
-    ScenarioContext,
-    PromptOptimizationResult
-)
 from agentuniverse.prompt.prompt_model import AgentPromptModel
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import ScenarioContext, \
+    PromptGenerator, PromptScenario, PromptComplexity
 
 
 class TestPromptGenerator(unittest.TestCase):

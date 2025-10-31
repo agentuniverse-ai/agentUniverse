@@ -8,15 +8,17 @@
 """Unit tests for prompt toolkit module."""
 
 import unittest
-from unittest.mock import Mock, patch
-from agentuniverse.prompt.prompt_toolkit import (
+from unittest.mock import Mock
+
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import PromptScenario, \
+    PromptComplexity
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import OptimizationStrategy
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import (
     PromptToolkit,
     PromptToolkitConfig,
     PromptGenerationRequest,
     PromptToolkitResult
 )
-from agentuniverse.prompt.prompt_generator import PromptScenario, PromptComplexity
-from agentuniverse.prompt.prompt_optimizer import OptimizationStrategy
 from agentuniverse.prompt.prompt_model import AgentPromptModel
 
 

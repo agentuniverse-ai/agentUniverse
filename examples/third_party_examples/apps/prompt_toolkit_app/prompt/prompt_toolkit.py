@@ -9,22 +9,13 @@
 
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
-from agentuniverse.prompt.prompt_generator import (
-    PromptGenerator, 
-    PromptScenario, 
-    PromptComplexity, 
-    ScenarioContext
-)
-from agentuniverse.prompt.prompt_optimizer import (
-    PromptOptimizer, 
-    OptimizationStrategy, 
-    OptimizationResult
-)
-from agentuniverse.prompt.scenario_analyzer import (
-    ScenarioAnalyzer, 
-    ScenarioAnalysisResult
-)
 from agentuniverse.prompt.prompt_model import AgentPromptModel
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import PromptScenario, \
+    PromptComplexity, PromptGenerator
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import OptimizationStrategy, \
+    OptimizationResult, PromptOptimizer
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.scenario_analyzer import ScenarioAnalysisResult, \
+    ScenarioAnalyzer
 
 
 @dataclass
