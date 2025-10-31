@@ -64,81 +64,41 @@ class AgentUniverse(object):
     def start(self, config_path: str = None, core_mode: bool = False):
         """Start the agentUniverse framework.
 
+        This method uses a phased startup approach for better organization,
+        error handling, and extensibility.
+
+        Args:
+            config_path: Path to the configuration file
+            core_mode: Whether to run in core mode
+
+        Raises:
+            Exception: If any startup phase fails
         """
-        character_util.show_au_start_banner()
-        # get default config path
-        project_root_path = get_project_root_path()
-        sys.path.append(str(project_root_path.parent))
-        self._add_to_sys_path(project_root_path, ['intelligence', 'app'])
+        from agentuniverse.base.startup.startup_context import StartupContext
+        from agentuniverse.base.startup.startup_orchestrator import StartupOrchestrator
+        from agentuniverse.base.startup.phases.config_phase import ConfigPhase
+        from agentuniverse.base.startup.phases.logging_phase import LoggingPhase
+        from agentuniverse.base.startup.phases.telemetry_phase import TelemetryPhase
+        from agentuniverse.base.startup.phases.web_phase import WebPhase
+        from agentuniverse.base.startup.phases.component_phase import ComponentPhase
 
-        if not config_path:
-            config_path = project_root_path / 'config' / 'config.toml'
-            config_path = str(config_path)
+        # Create startup context
+        context = StartupContext(config_path=config_path, core_mode=core_mode)
 
-        # load the configuration file
-        configer = Configer(path=config_path).load()
+        # Create orchestrator and register phases
+        orchestrator = StartupOrchestrator()
+        orchestrator.add_phase(ConfigPhase())
+        orchestrator.add_phase(LoggingPhase())
+        orchestrator.add_phase(TelemetryPhase())
+        orchestrator.add_phase(WebPhase())
+        orchestrator.add_phase(ComponentPhase(self))
 
-        # try to load custom key first
-        custom_key_configer_path = self.__parse_sub_config_path(
-            configer.value.get('SUB_CONFIG_PATH', {}).get('custom_key_path'),
-            config_path)
-        CustomKeyConfiger(custom_key_configer_path)
+        # Execute all phases
+        orchestrator.execute(context)
 
-        # then reload config
-        configer = Configer(path=config_path).load()
-        app_configer = AppConfiger().load_by_configer(configer)
-        self.__config_container.app_configer = app_configer
+        # Store context data in instance for backward compatibility
+        self.__config_container = context.config_container
 
-        # init loguru loggers
-        log_config_path = self.__parse_sub_config_path(
-            configer.value.get('SUB_CONFIG_PATH', {}).get('log_config_path'),
-            config_path)
-        init_loggers(log_config_path)
-
-        # Init OTEL configs
-        TelemetryManager().init_from_config(configer.value.get('OTEL', {}))
-
-        # init web request task database
-        RequestLibrary(configer=configer)
-
-        # Edit grpc config.
-        grpc_activate = configer.value.get('GRPC', {}).get('activate')
-        if grpc_activate and grpc_activate.lower() == 'true':
-            ACTIVATE_OPTIONS["grpc"] = True
-            set_grpc_config(configer)
-
-        # Init gunicorn web server with config file.
-        sync_service_timeout = configer.value.get('HTTP_SERVER', {}).get('sync_service_timeout')
-        if sync_service_timeout:
-            FlaskServerManager().sync_service_timeout = sync_service_timeout
-        gunicorn_activate = configer.value.get('GUNICORN', {}).get('activate')
-        if gunicorn_activate and gunicorn_activate.lower() == 'true':
-            ACTIVATE_OPTIONS["gunicorn"] = True
-            gunicorn_config_path = self.__parse_sub_config_path(
-                configer.value.get('GUNICORN', {})
-                .get('gunicorn_config_path'), config_path
-            )
-            from ..agent_serve.web.gunicorn_server import \
-                GunicornApplication
-            GunicornApplication(config_path=gunicorn_config_path)
-
-        # init all extension module
-        ext_classes = configer.value.get('EXTENSION_MODULES', {}).get('class_list')
-        if isinstance(ext_classes, list):
-            for ext_class in ext_classes:
-                if "YamlFuncExtension" in ext_class:
-                    self.__config_container.app_configer.yaml_func_instance = self.__dynamic_import_and_init(ext_class)
-                else:
-                    self.__dynamic_import_and_init(ext_class, configer)
-
-        # init monitor module
-        Monitor(configer=configer)
-
-        # scan and register the components
-        self.__scan_and_register(self.__config_container.app_configer)
-        if core_mode:
-            for _func, args, kwargs in POST_FORK_QUEUE:
-                _func(*args, **kwargs)
 
     def __scan_and_register(self, app_configer: AppConfiger):
         """Scan the component directory and register the components.

@@ -9,8 +9,10 @@ import os
 import cv2
 import numpy as np
 import unittest
-from readimage_tool import (enhance_image, detect_text_regions, ocr_on_regions,
-                            clean_extracted_text, save_text_to_file, extract_text_from_image)
+from agentuniverse.agent.action.tool.common_tool.readimage_tool import (
+    enhance_image, detect_text_regions, ocr_on_regions,
+    clean_extracted_text, save_text_to_file, extract_text_from_image
+)
 
 class TestReadImageTool(unittest.TestCase):
     def setUp(self):
