@@ -23,7 +23,7 @@ Materials on Symptoms and Treatment Plans of Common Diseases:
 - Drug Recommendations for Common Diseases.docx
 
 disease_knowledge is defined as follows:
-```python
+```yaml
 name: "disease_knowledge"
 description: "常见疾病症状与治疗方法相关的知识库"
 stores:
@@ -44,7 +44,7 @@ readers:
     docx: "default_docx_reader"
 metadata:
   type: 'KNOWLEDGE'
-  module: 'sample_rag_app.intelligence.agentic.knowledge.disease_knowledge'
+  module: 'medical_consultation_assistant_app.intelligence.agentic.knowledge.disease_knowledge'
   class: 'DiseaseKnowledge'
 ```
 
@@ -85,32 +85,32 @@ if name == '__main__':
 ### Result Demonstration
 question: "Xiao Ming has recently had symptoms of fever, accompanied by chills. He experiences lethargy, difficulty concentrating, frequent dizziness, and overall obvious weakness. Please infer the type of disease Xiao Ming has, and recommend treatment methods and medications for him."
 
-![Result_Demonstration](../../_picture/result_show.png)
+![Result_Demonstration](./_picture/result_show.png)
 
 ## More Details
 ### Reader Component
-- [default_docx_reader](../../../../agentuniverse/agent/action/knowledge/reader/file/docx_reader.yaml)
+- [default_docx_reader](../../../../../agentuniverse/agent/action/knowledge/reader/file/docx_reader.yaml)
 
 ### DocProcessor Component
-- [custom_query_keyword_extractor](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/doc_processor/query_keyword_extractor.yaml)
-- [recursive_character_text_splitter](../../../../agentuniverse/agent/action/knowledge/doc_processor/recursive_character_text_splitter.yaml)
+- [custom_query_keyword_extractor](../../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/doc_processor/query_keyword_extractor.yaml)
+- [recursive_character_text_splitter](../../../../../agentuniverse/agent/action/knowledge/doc_processor/recursive_character_text_splitter.yaml)
 
 ### QueryParaphraser Component
-- [custom_query_keyword_extractor](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/query_paraphraser/custom_query_keyword_extractor.yaml)
+- [custom_query_keyword_extractor](../../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/query_paraphraser/custom_query_keyword_extractor.yaml)
 
 ### RagRouter Component
-- [nlu_rag_router](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/rag_router/nlu_rag_router.yaml)
+- [nlu_rag_router](../../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/rag_router/nlu_rag_router.yaml)
 
 ### Store Component
-- [disease_symptoms_chroma_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_symptoms_chroma_store.yaml)
-- [disease_therapy_one_chroma_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_therapy_one_chroma_store.yaml)
-- [disease_therapy_two_chroma_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_therapy_two_chroma_store.yaml)
-- [disease_symptoms_sqlite_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_symptoms_sqlite_store.yaml)
-- [disease_therapy_one_sqlite_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_therapy_one_sqlite_store.yaml)
-- [disease_therapy_two_sqlite_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_therapy_two_sqlite_store.yaml)
+- [disease_symptoms_chroma_store](../intelligence/agentic/knowledge/store/disease_symptoms_chroma_store.yaml)
+- [disease_therapy_one_chroma_store](../intelligence/agentic/knowledge/store/disease_therapy_one_chroma_store.yaml)
+- [disease_therapy_two_chroma_store](../intelligence/agentic/knowledge/store/disease_therapy_two_chroma_store.yaml)
+- [disease_symptoms_sqlite_store](../intelligence/agentic/knowledge/store/disease_symptoms_sqlite_store.yaml)
+- [disease_therapy_one_sqlite_store](../intelligence/agentic/knowledge/store/disease_therapy_one_sqlite_store.yaml)
+- [disease_therapy_two_sqlite_store](../intelligence/agentic/knowledge/store/disease_therapy_two_sqlite_store.yaml)
 
 For your convenience, we have stored the database files containing relevant information as shown in the figure below.
-![Db_Structure](../../_picture/db_structure.png)
+![Db_Structure](./_picture/db_structure.png)
 
 If you want to build the knowledge base from scratch, you can run the __init__.py file in the test folder. The code is as follows:
-![Init_Code](../../_picture/init_code.png)
+![Init_Code](./_picture/init_code.png)

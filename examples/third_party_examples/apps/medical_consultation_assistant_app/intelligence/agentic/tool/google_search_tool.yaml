@@ -8,5 +8,5 @@ tool_type: 'api'
 input_keys: ['input']
 metadata:
   type: 'TOOL'
-  module: 'sample_rag_app.intelligence.agentic.tool.google_search_tool'
+  module: 'medical_consultation_assistant_app.intelligence.agentic.tool.google_search_tool'
   class: 'GoogleSearchTool'

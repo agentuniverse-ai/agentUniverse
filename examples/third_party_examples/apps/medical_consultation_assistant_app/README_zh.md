@@ -44,7 +44,7 @@ readers:
     docx: "default_docx_reader"
 metadata:
   type: 'KNOWLEDGE'
-  module: 'sample_rag_app.intelligence.agentic.knowledge.disease_knowledge'
+  module: 'medical_consultation_assistant_app.intelligence.agentic.knowledge.disease_knowledge'
   class: 'DiseaseKnowledge'
 ```
 
