@@ -73,6 +73,7 @@ opentracing = ">=2.4.0,<3.0.0"
 jsonlines = "^4.0.0"
 EbookLib = "^0.18"
 beautifulsoup4 = "^4.12.0"
+qdrant-client = "^1.15.1"
 
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
@@ -163,5 +164,3 @@ skip_empty = true
 [tool.coverage.run]
 branch = true
 source = ["agentuniverse"]
-
-

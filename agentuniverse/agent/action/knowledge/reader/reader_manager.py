@@ -24,6 +24,8 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "md": "default_markdown_reader",
         "markdown": "default_markdown_reader",
         "csv": "default_csv_reader",
+        "rar": "default_rar_reader",
+        "zip": "default_zip_reader",
         # extended defaults for web & images
         "url": "default_web_page_reader",
         "png": "default_image_ocr_reader",

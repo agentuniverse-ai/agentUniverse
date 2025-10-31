@@ -15,7 +15,9 @@ from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReade
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
 from agentuniverse.agent.action.knowledge.reader.file.txt_reader import TxtReader
 from agentuniverse.agent.action.knowledge.reader.file.csv_reader import CSVReader
+from agentuniverse.agent.action.knowledge.reader.file.rar_reader import RarReader
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
+from agentuniverse.agent.action.knowledge.reader.file.zip_reader import ZipReader
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 
@@ -29,6 +31,8 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".md": MarkdownReader,
     ".markdown": MarkdownReader,
     ".csv": CSVReader,
+    ".rar": RarReader,
+    ".zip": ZipReader,
 }
 
 

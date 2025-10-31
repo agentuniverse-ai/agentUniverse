@@ -24,5 +24,5 @@ class ServiceManager:
     def get_instance_obj(self, service_code: str):
         service_base = self.__service_map.get(service_code)
         if service_base is None:
-            raise Exception(f"Service {service_code} not found.")
+            raise ValueError(f"Service {service_code} not found.")
         return service_base

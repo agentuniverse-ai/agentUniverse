@@ -1,0 +1,9 @@
+name: 'qwen3-235b-a22b'
+description: 'qwen3-235b-a22b'
+model_name: 'qwen3-235b-a22b'
+temperature: 0.5
+max_tokens: 8192
+max_context_length: 131072
+streaming: True
+channel: qwen3-235b-a22b-official
+meta_class: 'agentuniverse.llm.default.qwen_openai_style_llm.QWenOpenAIStyleLLM'

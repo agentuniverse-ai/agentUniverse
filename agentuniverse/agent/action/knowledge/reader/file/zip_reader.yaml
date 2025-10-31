@@ -1,0 +1,6 @@
+name: 'default_zip_reader'
+description: 'ZIP archive reader for knowledge base'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.zip_reader'
+  class: 'ZipReader'

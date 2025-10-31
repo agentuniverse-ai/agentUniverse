@@ -1,0 +1,9 @@
+name: 'claude-3-5-sonnet'
+description: 'claude-3-5-sonnet'
+model_name: 'claude-3-5-sonnet-latest'
+max_tokens: 2000
+temperature: 0.5
+max_context_length: 200000
+streaming: True
+channel: claude-3-5-sonnet-official
+meta_class: 'agentuniverse.llm.default.claude_llm.ClaudeLLM'

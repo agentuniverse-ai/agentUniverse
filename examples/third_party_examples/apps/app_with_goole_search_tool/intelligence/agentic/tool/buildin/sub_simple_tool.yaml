@@ -1,0 +1,41 @@
+name: 'sub'
+description: |
+  This tool is used to subtract two floating-point numbers. The input parameters consist of two numbers separated by a comma, and the tool returns the result of the subtraction.
+
+  Tool Input Parameters:
+    - input (required): A string containing two floating-point numbers separated by a comma. For example, "2.0, 1.0".
+      - The first number is the minuend.
+      - The second number is the subtrahend.
+
+  Example Tool Inputs:
+    Example 1: To subtract 1.0 from 2.0, the tool input should be:
+      ```json
+      {
+        "input": "2.0, 1.0"
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "result": 1.0
+      }
+      ```
+
+    Example 2: To subtract 4.5 from 10.2, the tool input should be:
+      ```json
+      {
+        "input": "10.2, 4.5"
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "result": 5.7
+      }
+      ```
+tool_type: 'api'
+input_keys: ['input']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.simple_math_tool'
+  class: 'SubtractTool'

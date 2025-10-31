@@ -1,0 +1,9 @@
+name: 'moonshot-v1-128k'
+description: 'moonshot-v1-128k'
+model_name: 'moonshot-v1-128k'
+max_tokens: 2000
+temperature: 0.5
+streaming: True
+max_context_length: 128000
+channel: moonshot-v1-128k-official
+meta_class: 'agentuniverse.llm.default.kimi_openai_style_llm.KIMIOpenAIStyleLLM'

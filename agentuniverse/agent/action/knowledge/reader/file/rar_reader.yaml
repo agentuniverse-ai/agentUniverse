@@ -1,0 +1,6 @@
+name: 'default_rar_reader'
+description: 'default rar reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.rar_reader'
+  class: 'RarReader'
