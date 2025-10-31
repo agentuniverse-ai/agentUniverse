@@ -19,7 +19,7 @@ RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*; \
 ENV TZ=Asia/Shanghai
 ENV PROJECT_NAME=${PROJECT_NAME}
 
-COPY ./shell /usr/local/etc/workspace/shell/
+COPY shell /usr/local/etc/workspace/shell/
 # Copy project files excluding the image_build directory
 COPY ./project_files/ /usr/local/etc/workspace/${PROJECT_NAME}
 RUN rm -rf /usr/local/etc/workspace/${PROJECT_NAME}/image_build
