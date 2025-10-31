@@ -6,7 +6,6 @@ from typing import List, Union, Optional, Dict, Type
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
-import pdb
 
 class SevenZipReader(Reader):
     """
@@ -124,9 +123,6 @@ class SevenZipReader(Reader):
 
                 # 遍历每个条目
                 for entry_name in entries:
-                    #print(entry_name)
-                    #if(entry_name=="config/app_config.yaml"):
-                        #pdb.set_trace()
                     # 检查是否达到最大文件数限制
                     if file_count >= max_files:
                         break
@@ -201,7 +197,6 @@ class SevenZipReader(Reader):
                                 archive_root=archive_root,
                                 parent_path=full_path,
                             )
-                            #print(extracted_path)
                             documents.extend(nested_docs)
                         else:
                             # 处理普通文件
@@ -212,7 +207,6 @@ class SevenZipReader(Reader):
                                 archive_depth=current_depth,
                                 base_metadata=base_metadata,
                             )
-                            #print(extracted_path)
                             if doc:
                                 documents.extend(doc)
 
@@ -256,13 +250,11 @@ class SevenZipReader(Reader):
                 "archive_path": archive_path,
                 "archive_depth": archive_depth,
             }
-            #pdb.set_trace()
             # 合并基础元数据
             metadata.update(base_metadata)
 
             # 使用对应的读取器加载文件数据
             documents = reader.load_data(file_path, ext_info=metadata)
-            #print(len(documents))
             return documents
 
         except Exception as e:
