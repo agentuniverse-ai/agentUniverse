@@ -1,0 +1,8 @@
+name: 'moonshot-v1-auto'
+description: 'moonshot-v1-auto'
+model_name: 'moonshot-v1-auto'
+max_tokens: 2000
+temperature: 0.5
+streaming: True
+channel: moonshot-v1-auto-official
+meta_class: 'agentuniverse.llm.default.kimi_openai_style_llm.KIMIOpenAIStyleLLM'

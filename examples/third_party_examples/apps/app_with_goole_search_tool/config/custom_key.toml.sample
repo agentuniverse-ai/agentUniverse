@@ -1,0 +1,76 @@
+# Example file of custom_key.toml. Rename to custom_key.toml while using.
+[KEY_LIST]
+# Perform a full component scan and registration for all the paths under this list.
+# the key configuration should be listed in following form:
+# the_key_name = 'the_key_value'
+
+#  ========================================================================
+#  The following section is used for key configuration of models.
+#  ========================================================================
+#kimi default name: default_kimi_llm
+KIMI_API_KEY=''
+KIMI_API_BASE='https://api.moonshot.cn/v1'
+KIMI_PROXY = ''
+KIMI_ORGANIZATION = ''
+
+#Qwen default name: default_qwen_llm
+DASHSCOPE_API_KEY=''
+DASHSCOPE_API_BASE='https://dashscope.aliyuncs.com/compatible-mode/v1'
+DASHSCOPE_PROXY = ''
+DASHSCOPE_ORGANIZATION = ''
+
+#Opean default name: default_openai_llm
+OPENAI_API_KEY=''
+OPENAI_API_BASE ='https://api.openai.com/v1'
+OPENAI_ORGANIZATION = ''
+OPENAI_PROXY = ''
+
+#DEEPSEEK default name: default_deepseek_llm
+DEEPSEEK_API_KEY=''
+DEEPSEEK_API_BASE='https://api.deepseek.com/v1'
+DEEPSEEK_ORGANIZATION = ''
+DEEPSEEK_PROXY = ''
+
+#WenXin default name: default_wenxin_llm
+QIANFAN_AK=''
+QIANFAN_SK=''
+QIANFAN_API_KEY=''
+
+#Ollama default name: default_ollama_llm
+OLLAMA_BASE_URL='http://localhost:11434/v1'
+
+#claude default name: default_claude_llm
+ANTHROPIC_API_KEY=''
+ANTHROPIC_API_URL='https://api.anthropic.com/v1'
+ANTHROPIC_PROXY=''
+
+#baichuan default name: default_baichuan_llm
+BAICHUAN_API_KEY=''
+BAICHUAN_API_BASE='https://api.baichuan-ai.com/v1'
+BAICHUAN_PROXY=''
+BAICHUAN_ORGANIZATION=''
+
+#ZHIPU default name: default_zhipu_llm
+ZHIPU_API_KEY=''
+ZHIPU_API_BASE='https://open.bigmodel.cn/api/paas/v4/'
+ZHIPU_PROXY=''
+ZHIPU_ORGANIZATION=''
+
+#gemini default name: default_gemini_llm
+GOOGLE_API_KEY=''
+GOOGLE_API_BASE='https://generativelanguage.googleapis.com/v1beta/openai/'
+GOOGLE_PROXY=''
+
+#  ========================================================================
+#  The following section is used for key configuration of search tools.
+#  ========================================================================
+#Google search
+SERPER_API_KEY=''
+
+#bing search
+BING_SUBSCRIPTION_KEY=''
+
+#search.io api
+# You could sign up for a free account at https://www.searchapi.io/
+# And get the SEARCHAPI_API_KEY api key (100 free queries).
+SEARCHAPI_API_KEY=''

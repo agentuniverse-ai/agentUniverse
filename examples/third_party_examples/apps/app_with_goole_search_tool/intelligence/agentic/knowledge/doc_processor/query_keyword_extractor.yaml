@@ -1,0 +1,7 @@
+name: 'query_keyword_extractor'
+description: 'extract keywords from query'
+top_k: 6
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.jieba_keyword_extractor'
+  class: 'JiebaKeywordExtractor'

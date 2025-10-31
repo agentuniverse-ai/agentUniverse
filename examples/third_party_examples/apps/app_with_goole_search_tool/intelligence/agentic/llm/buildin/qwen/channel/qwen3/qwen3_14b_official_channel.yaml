@@ -1,0 +1,8 @@
+channel_name: 'qwen3-14b-official'
+channel_api_key: '${DASHSCOPE_API_KEY}'
+channel_api_base: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+channel_model_name: 'qwen3-14b'
+model_support_stream: True
+model_support_max_context_length: 131072
+model_is_openai_protocol_compatible: True
+meta_class: 'agentuniverse.llm.llm_channel.dashscope_llm_channel.DashscopeLLMChannel'

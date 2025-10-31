@@ -22,6 +22,7 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "docx": "default_docx_reader",
         "txt": "default_txt_reader",
         "rar": "default_rar_reader",
+        "zip": "default_zip_reader",
         # extended defaults for web & images
         "url": "default_web_page_reader",
         "png": "default_image_ocr_reader",

@@ -1,0 +1,9 @@
+name: 'qwen3-0.6b'
+description: 'qwen3-0.6b'
+model_name: 'qwen3-0.6b'
+temperature: 0.5
+max_tokens: 8192
+max_context_length: 32768
+streaming: True
+channel: qwen3-0.6b-official
+meta_class: 'agentuniverse.llm.default.qwen_openai_style_llm.QWenOpenAIStyleLLM'

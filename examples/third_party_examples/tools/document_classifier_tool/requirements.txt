@@ -1,0 +1,4 @@
+agentuniverse>=0.0.18
+jieba>=0.42.1
+pydantic>=2.0.0
+langchain>=0.1.0

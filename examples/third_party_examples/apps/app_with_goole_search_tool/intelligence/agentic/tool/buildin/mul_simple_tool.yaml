@@ -1,0 +1,40 @@
+name: 'mul'
+description: |
+  This tool is used to multiply two floating-point numbers. The input parameters consist of two numbers separated by a comma, and the tool returns the product of the two numbers.
+
+  Tool Input Parameters:
+    - input (required): A string containing two floating-point numbers separated by a comma. For example, "2.0, 1.0".
+      - The first number is the first factor.
+      - The second number is the second factor.
+
+  Example Tool Inputs:
+    Example 1: To multiply 2.0 and 1.0, the tool input should be:
+      ```json
+      {
+        "input": "2.0, 1.0"
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "result": 2.0
+      }
+      ```
+
+    Example 2: To multiply 3.5 and 4.2, the tool input should be:
+      ```json
+      {
+        "input": "3.5, 4.2"
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "result": 14.7
+      }
+      ```
+input_keys: ['input']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.simple_math_tool'
+  class: 'MultiplyTool'

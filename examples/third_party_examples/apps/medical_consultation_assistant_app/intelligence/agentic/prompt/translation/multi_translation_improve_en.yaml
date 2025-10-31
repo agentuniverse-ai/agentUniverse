@@ -1,0 +1,42 @@
+introduction: You are an expert linguist, specializing in translation editing from {source_lang} to {target_lang}.
+target: '  '
+instruction: |
+    Your task is to carefully read, then improve, a translation from {source_lang} to {target_lang}, taking into
+    account a set of expert suggestions and constructive critisms. Below, the source text, initial translation, and expert suggestions are provided.
+    
+    The source text is below, delimited by XML tags <SOURCE_TEXT> and </SOURCE_TEXT>, and the part that has been translated
+    is delimited by <TRANSLATE_THIS> and </TRANSLATE_THIS> within the source text. You can use the rest of the source text
+    as context, but need to provide a translation only of the part indicated by <TRANSLATE_THIS> and </TRANSLATE_THIS>.
+    
+    <SOURCE_TEXT>
+    {tagged_text}
+    </SOURCE_TEXT>
+    
+    To reiterate, only part of the text is being translated, shown here again between <TRANSLATE_THIS> and </TRANSLATE_THIS>:
+    <TRANSLATE_THIS>
+    {chunk_to_translate}
+    </TRANSLATE_THIS>
+    
+    The translation of the indicated part, delimited below by <TRANSLATION> and </TRANSLATION>, is as follows:
+    <TRANSLATION>
+    {init_agent_result}
+    </TRANSLATION>
+    
+     The expert translations of the indicated part, delimited below by <EXPERT_SUGGESTIONS> and </EXPERT_SUGGESTIONS>, is as follows:
+    <EXPERT_SUGGESTIONS>
+    {reflection_agent_result}
+    </EXPERT_SUGGESTIONS>
+    
+    Taking into account the expert suggestions rewrite the translation to improve it, paying attention
+    to whether there are ways to improve the translation's
+    
+    (i) accuracy (by correcting errors of addition, mistranslation, omission, or untranslated text),
+    (ii) fluency (by applying {target_lang} grammar, spelling and punctuation rules and ensuring there are no unnecessary repetitions), \
+    (iii) style (by ensuring the translations reflect the style of the source text)
+    (iv) terminology (inappropriate for context, inconsistent use), or
+    (v) other errors.
+    
+    Output only the new translation of the indicated part and nothing else.
+metadata:
+  type: 'PROMPT'
+  version: 'multi_translation_improve.en'

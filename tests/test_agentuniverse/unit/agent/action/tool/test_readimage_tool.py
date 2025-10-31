@@ -36,11 +36,15 @@ class TestReadImageTool(unittest.TestCase):
         test_text = "Sample text for testing."
         test_filename = "test_extracted_text.txt"
         save_text_to_file(test_text, test_filename)
-        self.assertTrue(os.path.exists(test_filename))
-        with open(test_filename, 'r', encoding='utf-8') as f:
-            content = f.read()
-        self.assertEqual(content, test_text)
-        os.remove(test_filename)
+        try:
+            self.assertTrue(os.path.exists(test_filename))
+            with open(test_filename, 'r', encoding='utf-8') as f:
+                content = f.read()
+            self.assertEqual(content, test_text)
+        finally:
+            if os.path.exists(test_filename): 
+                os.remove(test_filename)
+
 
     def test_extract_text_from_image_without_east(self):
         # Save the test OCR image as a temporary file

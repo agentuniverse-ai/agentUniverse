@@ -1,0 +1,8 @@
+channel_name: 'o3-mini-official'
+channel_api_key: '${OPENAI_API_KEY}'
+channel_api_base: 'https://api.openai.com/v1/'
+channel_model_name: o3-mini
+model_support_stream: True
+model_support_max_context_length: 200000
+model_is_openai_protocol_compatible: True
+meta_class: agentuniverse.llm.llm_channel.openai_official_llm_channel.OpenAIOfficialLLMChannel

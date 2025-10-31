@@ -1,0 +1,12 @@
+name: 'python_runner'
+description: '使用该工具可以执行python代码，可以在pycharm中直接运行的代码.你的输入必须是json格式。如果你想要查看工具的执行结果, 必须在python代码中使用print(...)打印你想查看的内容。
+
+    Args:
+        input: 完整代码
+  '
+tool_type: 'api'
+input_keys: ['input']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.python_repl'
+  class: 'PythonREPLTool'

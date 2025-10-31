@@ -1,0 +1,9 @@
+name: 'disease_therapy_one_chroma_store'
+description: '保存了常见疾病及其自然治疗方法的所有内容，以文本向量形式存储'
+persist_path: '../../intelligence/db/disease_therapy_one.db'
+embedding_model: 'dashscope_embedding'
+similarity_top_k: 100
+metadata:
+  type: 'STORE'
+  module: 'agentuniverse.agent.action.knowledge.store.chroma_store'
+  class: 'ChromaStore'

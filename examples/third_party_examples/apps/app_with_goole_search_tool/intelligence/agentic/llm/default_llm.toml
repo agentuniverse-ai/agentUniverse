@@ -1,0 +1,12 @@
+# This configuration file defines the default llm instance
+# to be used in the agent system.
+#
+# The 'default_llm' key under the [DEFAULT] section specifies the name of
+# the default LLM instance. This value is utilized when the agent applies an
+# LLM but no specific model is manually designated. In such cases, the system
+# will fall back to the model instance specified here.
+#
+# For example, if 'default_llm' is set to 'qwen2.5-72b-instruct', the agent will use the
+# 'qwen2.5-72b-instruct' model instance as the default unless explicitly overridden by user configuration.
+[DEFAULT]
+default_llm = 'qwen2.5-72b-instruct'
