@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from agentuniverse.prompt.prompt_auto_designer import (
+from examples.third_party_examples.tools.prompt_auto_designer_tool.prompt_auto_designer import (
     PromptAutoDesigner,
     PromptAutoDesignerError,
     PromptGenerationRequest,

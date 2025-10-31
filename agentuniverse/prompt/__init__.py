@@ -5,6 +5,3 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: __init__.py
 
-from agentuniverse.prompt.prompt_auto_designer import PromptAutoDesigner
-
-__all__ = ["PromptAutoDesigner"]
