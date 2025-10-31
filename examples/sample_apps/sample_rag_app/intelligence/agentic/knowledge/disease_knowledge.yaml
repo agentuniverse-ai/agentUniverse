@@ -1,0 +1,22 @@
+name: "disease_knowledge"
+description: "常见疾病症状与治疗方法相关的知识库"
+stores:
+    - "disease_symptoms_chroma_store"
+    - "disease_therapy_one_chroma_store"
+    - "disease_therapy_two_chroma_store"
+    - "disease_symptoms_sqlite_store"
+    - "disease_therapy_one_sqlite_store"
+    - "disease_therapy_two_sqlite_store"
+query_paraphrasers:
+    - "custom_query_keyword_extractor"
+insert_processors:
+    - "recursive_character_text_splitter"
+rag_router: "nlu_rag_router"
+post_processors:
+    - "dashscope_reranker"
+readers:
+    docx: "default_docx_reader"
+metadata:
+  type: 'KNOWLEDGE'
+  module: 'sample_rag_app.intelligence.agentic.knowledge.disease_knowledge'
+  class: 'DiseaseKnowledge'

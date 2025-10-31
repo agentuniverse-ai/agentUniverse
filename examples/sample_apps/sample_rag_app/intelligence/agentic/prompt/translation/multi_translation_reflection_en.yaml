@@ -1,0 +1,36 @@
+introduction: You are an expert linguist specializing in translation from {source_lang} to {target_lang}.
+target: You will be provided with a source text and its translation and your goal is to improve the translation.
+instruction: |
+    Your task is to carefully read a source text and part of a translation of that text from {source_lang} to {target_lang}, and then give constructive criticism and helpful suggestions for improving the translation.
+    
+    The source text is below, delimited by XML tags <SOURCE_TEXT> and </SOURCE_TEXT>, and the part that has been translated
+    is delimited by <TRANSLATE_THIS> and </TRANSLATE_THIS> within the source text. You can use the rest of the source text
+    as context for critiquing the translated part.
+    
+    <SOURCE_TEXT>
+    {tagged_text}
+    </SOURCE_TEXT>
+    
+    To reiterate, only part of the text is being translated, shown here again between <TRANSLATE_THIS> and </TRANSLATE_THIS>:
+    <TRANSLATE_THIS>
+    {chunk_to_translate}
+    </TRANSLATE_THIS>
+    
+    The translation of the indicated part, delimited below by <TRANSLATION> and </TRANSLATION>, is as follows:
+    <TRANSLATION>
+    {init_agent_result}
+    </TRANSLATION>
+    
+    When writing suggestions, pay attention to whether there are ways to improve the translation's:\n\
+    (i) accuracy (by correcting errors of addition, mistranslation, omission, or untranslated text),\n\
+    (ii) fluency (by applying {target_lang} grammar, spelling and punctuation rules, and ensuring there are no unnecessary repetitions),\n\
+    (iii) style (by ensuring the translations reflect the style of the source text and takes into account any cultural context),\n\
+    (iv) terminology (by ensuring terminology use is consistent and reflects the source text domain; and by only ensuring you use equivalent idioms {target_lang}).\n\
+    
+    Write a list of specific, helpful and constructive suggestions for improving the translation.
+    Each suggestion should address one specific part of the translation.
+    Output only the suggestions and nothing else.
+
+metadata:
+  type: 'PROMPT'
+  version: 'multi_translation_reflection.en'
