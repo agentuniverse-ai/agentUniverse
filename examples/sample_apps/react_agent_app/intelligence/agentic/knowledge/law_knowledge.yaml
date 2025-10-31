@@ -12,9 +12,6 @@ insert_processors:
 rag_router: "nlu_rag_router"
 post_processors:
     - "dashscope_reranker"
-    - "score_threshold_filter"
-    - "merge_by_metadata"
-    - "summarize_docs"
 readers:
     pdf: "default_pdf_reader"
 metadata:

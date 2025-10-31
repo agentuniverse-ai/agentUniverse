@@ -14,20 +14,6 @@ action:
     - 'python_runner'
   knowledge:
     - 'law_knowledge'
-config:
-  doc_processors:
-    score_threshold_filter:
-      min_score: 0.2
-      keep_no_score: true
-      top_k: 20
-    merge_by_metadata:
-      group_keys: ['file_name']
-      separator: "\n\n"
-      prefer_higher_score: true
-    summarize_docs:
-      llm: '__default_instance__'
-      mode: 'stuff'
-      return_only_summary: false
 memory:
   name: 'demo_memory'
 metadata:
