@@ -5,6 +5,7 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: test_framework_context.py
 
+import asyncio
 import queue
 import time
 import threading
@@ -28,7 +29,7 @@ def add(q: queue.Queue):
 
 
 async def async_add(q: queue.Queue):
-    add(q)
+    await asyncio.get_event_loop().run_in_executor(None, add, q)
 
 
 @pytest.mark.asyncio
