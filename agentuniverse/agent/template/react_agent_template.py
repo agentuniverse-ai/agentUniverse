@@ -67,10 +67,13 @@ class ReActAgentTemplate(AgentTemplate):
         agent = self.create_react_agent(llm.as_langchain(), lc_tools, prompt.as_langchain(),
                                         stop_sequence=self.stop_sequence,
                                         bind_params=self.agent_model.llm_params())
+        # Set stream_runnable based on LLM's streaming capability to avoid errors with non-streaming LLMs
+        stream_runnable = getattr(llm, 'streaming', False) if llm else False
         agent_executor = AgentExecutor(agent=agent, tools=lc_tools,
                                        verbose=True,
                                        handle_parsing_errors=True,
-                                       max_iterations=self.max_iterations)
+                                       max_iterations=self.max_iterations,
+                                       stream_runnable=stream_runnable)
         res = agent_executor.invoke(input=agent_input, memory=memory.as_langchain() if memory else None,
                                     chat_history=agent_input.get(memory.memory_key) if memory else '',
                                     config=self._get_run_config(input_object))
@@ -87,10 +90,13 @@ class ReActAgentTemplate(AgentTemplate):
         agent = self.create_react_agent(llm.as_langchain(), lc_tools, prompt.as_langchain(),
                                         stop_sequence=self.stop_sequence,
                                         bind_params=self.agent_model.llm_params())
+        # Set stream_runnable based on LLM's streaming capability to avoid errors with non-streaming LLMs
+        stream_runnable = getattr(llm, 'streaming', False) if llm else False
         agent_executor = AgentExecutor(agent=agent, tools=lc_tools,
                                        verbose=True,
                                        handle_parsing_errors=True,
-                                       max_iterations=self.max_iterations)
+                                       max_iterations=self.max_iterations,
+                                       stream_runnable=stream_runnable)
         res = await agent_executor.ainvoke(input=agent_input, memory=memory.as_langchain() if memory else None,
                                            chat_history=agent_input.get(memory.memory_key) if memory else '',
                                            config=self._get_run_config(input_object))

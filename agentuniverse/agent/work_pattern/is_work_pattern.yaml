@@ -1,0 +1,7 @@
+name: 'is_work_pattern'
+description: 'IS (Implementation-Supervision) work pattern for task execution with supervision feedback'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.is_work_pattern'
+  class: 'ISWorkPattern'
+
