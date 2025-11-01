@@ -1,0 +1,15 @@
+info:
+  name: 'demo_generating_agent'
+  description: 'Generating agent for GRR pattern - generates initial content'
+
+profile:
+  llm_model:
+    name: 'qwen_llm'
+    temperature: 0.7
+  prompt_version: 'demo_generating_agent.cn'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.generating_agent_template'
+  class: 'GeneratingAgentTemplate'
+

@@ -478,7 +478,8 @@ class Agent(ComponentBase, ABC):
         session_id = agent_input.get('session_id')
         agent_id = self.agent_model.info.get('name')
         if not session_id:
-            session_id = FrameworkContextManager().get_context('session_id')
+            # Use empty string as default to match pre_parse_input behavior
+            session_id = FrameworkContextManager().get_context('session_id') or ''
         if "agent_id" in memory_info:
             agent_id = memory_info.get('agent_id')
         params = {

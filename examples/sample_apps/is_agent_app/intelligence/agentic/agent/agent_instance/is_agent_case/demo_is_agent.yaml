@@ -1,0 +1,28 @@
+info:
+  name: 'demo_is_agent'
+  description: 'Demo IS agent using Implementation-Supervision work pattern for monitored task execution'
+
+profile:
+  llm_model:
+    name: 'qwen_llm'  # Replace with your LLM configuration
+    temperature: 0.7
+  # Configure the two sub-agents
+  implementation: 'demo_implementation_agent'
+  supervision: 'demo_supervision_agent'
+  # Maximum number of refinement iterations
+  retry_count: 2
+  # Alignment score threshold (0-100)
+  eval_threshold: 60
+  # Optional: expert framework for domain-specific guidance
+  # expert_framework:
+  #   context:
+  #     implementation: "Expert guidance for task implementation..."
+  #     supervision: "Expert criteria for supervision..."
+
+memory:
+  name: 'demo_memory'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.is_agent_template'
+  class: 'ISAgentTemplate'

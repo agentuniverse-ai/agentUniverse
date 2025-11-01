@@ -190,10 +190,13 @@ class Planner(ComponentBase):
     def invoke_chain(self, agent_model: AgentModel, chain: RunnableSerializable[Any, str], planner_input: dict,
                      chat_history,
                      input_object: InputObject):
-
-        if not input_object.get_data('output_stream'):
+        supports_streaming = self._judge_chain_stream(chain)
+        has_output_stream = input_object.get_data('output_stream') is not None
+        
+        if not supports_streaming or not has_output_stream:
             res = chain.invoke(input=planner_input, config={"configurable": {"session_id": "unused"}})
             return res
+
         result = []
         for token in chain.stream(input=planner_input, config={"configurable": {"session_id": "unused"}}):
             self.stream_output(input_object, {
@@ -205,3 +208,12 @@ class Planner(ComponentBase):
             })
             result.append(token)
         return "".join(result)
+
+    def _judge_chain_stream(self, chain: RunnableSerializable[Any, str]) -> bool:
+        streaming = False
+        for _step in chain.steps:
+            if hasattr(_step, "llm"):
+                return _step.kwargs.get('streaming', _step.llm.streaming)
+            if hasattr(_step, "llm_channel"):
+                return _step.kwargs.get('streaming', _step.llm_channel.streaming)
+        return streaming

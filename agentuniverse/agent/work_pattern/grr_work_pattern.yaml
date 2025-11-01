@@ -1,0 +1,7 @@
+name: 'grr_work_pattern'
+description: 'GRR (Generate-Review-Rewrite) work pattern for iterative content generation and improvement'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.grr_work_pattern'
+  class: 'GRRWorkPattern'
+
