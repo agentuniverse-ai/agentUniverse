@@ -138,6 +138,12 @@ class GRRWorkPattern(WorkPattern):
             generating_result = input_object.get_data('generating_result')
             rewriting_result = OutputObject(generating_result.to_dict() if generating_result else {})
         else:
+            generating_result = input_object.get_data('generating_result')
+            if generating_result:
+                input_object.add_data('generated_content', generating_result.get_data('generated_content'))
+            reviewing_result = input_object.get_data('reviewing_result')
+            if reviewing_result:
+                input_object.add_data('review_feedback', reviewing_result.get_data('suggestion'))
             rewriting_result = self.rewriting.run(**input_object.to_dict())
             grr_round_results['rewriting_result'] = rewriting_result.to_dict()
         input_object.add_data('rewriting_result', rewriting_result)
@@ -148,6 +154,12 @@ class GRRWorkPattern(WorkPattern):
             generating_result = input_object.get_data('generating_result')
             rewriting_result = OutputObject(generating_result.to_dict() if generating_result else {})
         else:
+            generating_result = input_object.get_data('generating_result')
+            if generating_result:
+                input_object.add_data('generated_content', generating_result.get_data('generated_content'))
+            reviewing_result = input_object.get_data('reviewing_result')
+            if reviewing_result:
+                input_object.add_data('review_feedback', reviewing_result.get_data('suggestion'))
             rewriting_result = await self.rewriting.async_run(**input_object.to_dict())
             grr_round_results['rewriting_result'] = rewriting_result.to_dict()
         input_object.add_data('rewriting_result', rewriting_result)

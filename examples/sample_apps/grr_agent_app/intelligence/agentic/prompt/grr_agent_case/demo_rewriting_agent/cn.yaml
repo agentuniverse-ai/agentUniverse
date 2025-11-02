@@ -3,7 +3,7 @@ target: |
   根据评审反馈，重写和优化内容。
 instruction: |
   原始内容:
-  {original_content}
+  {generated_content}
   
   评审反馈:
   {review_feedback}
