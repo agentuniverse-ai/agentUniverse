@@ -34,6 +34,16 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "bmp": "default_image_ocr_reader",
         "tiff": "default_image_ocr_reader",
         "webp": "default_image_ocr_reader",
+        # extended defaults for database
+        "sqlite": "default_sqlalchemy_reader",
+        "mysql": "default_sqlalchemy_reader",
+        "mssql": "default_sqlalchemy_reader",
+        "oracle": "default_sqlalchemy_reader",
+        "postgresql": "default_sqlalchemy_reader",
+        # extended database for plugin: clickhouse-sqlalchemy
+        "clickhouse": "default_sqlalchemy_reader",
+        # extended database for plugin: oceanbase-sqlalchemy
+        "oceanbase": "default_sqlalchemy_reader",
     }
 
     def __init__(self):

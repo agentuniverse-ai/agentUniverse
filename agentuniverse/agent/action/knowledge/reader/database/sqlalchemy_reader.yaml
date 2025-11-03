@@ -1,0 +1,6 @@
+name: 'default_sql_reader'
+description: 'default sql reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.database.sqlalchemy_reader'
+  class: 'SQLAlchemyReader'
