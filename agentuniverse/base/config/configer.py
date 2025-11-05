@@ -5,12 +5,6 @@
 # @Author  : jerry.zzw 
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: configer.py
-
-# @Time    : 2025/1/27 10:30
-# @Author  : Auto
-# @Email   : auto@example.com
-# @Note    : 优化错误信息处理，添加详细的错误描述和解决建议
-
 import os
 import re
 from typing import Optional, Callable
@@ -19,12 +13,6 @@ import yaml
 
 from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.base.config.config_type_enum import ConfigTypeEnum
-from agentuniverse.base.exception import (
-    ConfigFileNotFoundError,
-    ConfigParseError,
-    UnsupportedConfigFormatError,
-    ConfigValidationError
-)
 
 
 @singleton
@@ -115,45 +103,16 @@ class Configer(object):
         Returns:
             Configer: the Configer object
         """
-        # Check if file exists
-        if not os.path.exists(path):
-            raise ConfigFileNotFoundError(
-                file_path=path,
-                details={"absolute_path": os.path.abspath(path)},
-                original_exception=None
-            )
-        
         # Check the file format.
         file_format = path.split('.')[-1]
         if file_format not in self.__SUPPORTED_FILE_FORMATS:
-            raise UnsupportedConfigFormatError(
-                file_path=path,
-                file_format=file_format,
-                details={"supported_formats": self.__SUPPORTED_FILE_FORMATS},
-                original_exception=None
-            )
+            raise ValueError(f"Unsupported file format: {file_format}")
 
         # Choose the load method according to the file format.
         load_method = self.__choice_load_method(path)
-        if load_method is None:
-            raise ConfigParseError(
-                file_path=path,
-                parse_error=f"无法确定文件格式 {file_format} 的加载方法",
-                details={"file_format": file_format},
-                original_exception=None
-            )
-        
-        try:
-            config_data = load_method(path)
-            self.__value = config_data
-            return self
-        except Exception as e:
-            raise ConfigParseError(
-                file_path=path,
-                parse_error=str(e),
-                details={"file_format": file_format},
-                original_exception=e
-            )
+        config_data = load_method(path)
+        self.__value = config_data
+        return self
 
     def load(self) -> 'Configer':
         """Load the configuration file
@@ -222,34 +181,13 @@ class Configer(object):
         Returns:
             dict: the value of the toml file
         """
-        try:
-            with open(path, 'rb') as f:
-                config_data = tomli.load(f)
-            if config_data:
-                root_package_name = config_data.get('PACKAGE_PATH_INFO', {}).get('ROOT_PACKAGE')
-                PlaceholderResolver().set_root_package_name(root_package_name)
-            config_data = PlaceholderResolver().resolve(config_data)
-            return config_data
-        except FileNotFoundError as e:
-            raise ConfigFileNotFoundError(
-                file_path=path,
-                details={"file_type": "TOML"},
-                original_exception=e
-            )
-        except tomli.TOMLDecodeError as e:
-            raise ConfigParseError(
-                file_path=path,
-                parse_error=f"TOML格式错误: {str(e)}",
-                details={"file_type": "TOML", "error_line": getattr(e, 'lineno', None)},
-                original_exception=e
-            )
-        except Exception as e:
-            raise ConfigParseError(
-                file_path=path,
-                parse_error=f"TOML文件加载失败: {str(e)}",
-                details={"file_type": "TOML"},
-                original_exception=e
-            )
+        with open(path, 'rb') as f:
+            config_data = tomli.load(f)
+        if config_data:
+            root_package_name = config_data.get('PACKAGE_PATH_INFO', {}).get('ROOT_PACKAGE')
+            PlaceholderResolver().set_root_package_name(root_package_name)
+        config_data = PlaceholderResolver().resolve(config_data)
+        return config_data
 
     @staticmethod
     def __load_yaml_file(path: str) -> dict:
@@ -260,35 +198,7 @@ class Configer(object):
         Returns:
             dict: the value of the yaml file
         """
-        try:
-            with open(path, 'r', encoding='utf-8') as stream:
-                config_data = yaml.safe_load(stream)
-            config_data = PlaceholderResolver().resolve(config_data)
-            return config_data
-        except FileNotFoundError as e:
-            raise ConfigFileNotFoundError(
-                file_path=path,
-                details={"file_type": "YAML"},
-                original_exception=e
-            )
-        except yaml.YAMLError as e:
-            raise ConfigParseError(
-                file_path=path,
-                parse_error=f"YAML格式错误: {str(e)}",
-                details={"file_type": "YAML", "error_line": getattr(e, 'lineno', None)},
-                original_exception=e
-            )
-        except UnicodeDecodeError as e:
-            raise ConfigParseError(
-                file_path=path,
-                parse_error=f"文件编码错误: {str(e)}",
-                details={"file_type": "YAML", "encoding": "UTF-8"},
-                original_exception=e
-            )
-        except Exception as e:
-            raise ConfigParseError(
-                file_path=path,
-                parse_error=f"YAML文件加载失败: {str(e)}",
-                details={"file_type": "YAML"},
-                original_exception=e
-            )
+        with open(path, 'r', encoding='utf-8') as stream:
+            config_data = yaml.safe_load(stream)
+        config_data = PlaceholderResolver().resolve(config_data)
+        return config_data

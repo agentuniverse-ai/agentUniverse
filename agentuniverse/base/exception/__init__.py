@@ -1,3 +1,11 @@
+# !/usr/bin/env python3
+# -*- coding:utf-8 -*-
+
+# @Time    : 2025/1/27 10:00
+# @Author  : Auto
+# @Email   : auto@example.com
+# @FileName: __init__.py
+
 """
 AgentUniverse 统一异常处理模块
 

@@ -5,12 +5,6 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: llm.py
-
-# @Time    : 2025/1/27 10:30
-# @Author  : Auto
-# @Email   : auto@example.com
-# @Note    : 优化错误信息处理，添加详细的错误描述和解决建议
-
 from abc import abstractmethod
 from copy import deepcopy
 from typing import Optional, Any, AsyncIterator, Iterator, Union
@@ -24,7 +18,6 @@ from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
-from agentuniverse.base.exception import LLMExecutionError, LLMConnectionError, LLMAuthenticationError
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 from agentuniverse.llm.llm_channel.llm_channel_manager import LLMChannelManager
@@ -213,40 +206,8 @@ class LLM(ComponentBase):
                 return self._channel_instance._call(*args, **kwargs)
             return self._call(*args, **kwargs)
         except Exception as e:
-            # 根据异常类型提供更详细的错误信息
-            error_details = {
-                "model_name": self.model_name,
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "streaming": self.streaming,
-                "channel": self.channel
-            }
-            
-            # 检查是否是连接错误
-            if "connection" in str(e).lower() or "timeout" in str(e).lower():
-                raise LLMConnectionError(
-                    model_name=self.model_name or "unknown",
-                    connection_error=str(e),
-                    details=error_details,
-                    original_exception=e
-                )
-            
-            # 检查是否是认证错误
-            if "auth" in str(e).lower() or "key" in str(e).lower() or "401" in str(e) or "403" in str(e):
-                raise LLMAuthenticationError(
-                    model_name=self.model_name or "unknown",
-                    auth_error=str(e),
-                    details=error_details,
-                    original_exception=e
-                )
-            
-            # 其他执行错误
-            raise LLMExecutionError(
-                model_name=self.model_name or "unknown",
-                execution_error=str(e),
-                details=error_details,
-                original_exception=e
-            )
+            LOGGER.error(f'Error in LLM call: {e}')
+            raise e
 
     @trace_llm
     async def acall(self, *args: Any, **kwargs: Any):
@@ -257,40 +218,8 @@ class LLM(ComponentBase):
                 return await self._channel_instance._acall(*args, **kwargs)
             return await self._acall(*args, **kwargs)
         except Exception as e:
-            # 根据异常类型提供更详细的错误信息
-            error_details = {
-                "model_name": self.model_name,
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "streaming": self.streaming,
-                "channel": self.channel
-            }
-            
-            # 检查是否是连接错误
-            if "connection" in str(e).lower() or "timeout" in str(e).lower():
-                raise LLMConnectionError(
-                    model_name=self.model_name or "unknown",
-                    connection_error=str(e),
-                    details=error_details,
-                    original_exception=e
-                )
-            
-            # 检查是否是认证错误
-            if "auth" in str(e).lower() or "key" in str(e).lower() or "401" in str(e) or "403" in str(e):
-                raise LLMAuthenticationError(
-                    model_name=self.model_name or "unknown",
-                    auth_error=str(e),
-                    details=error_details,
-                    original_exception=e
-                )
-            
-            # 其他执行错误
-            raise LLMExecutionError(
-                model_name=self.model_name or "unknown",
-                execution_error=str(e),
-                details=error_details,
-                original_exception=e
-            )
+            LOGGER.error(f'Error in LLM acall: {e}')
+            raise e
 
     def create_copy(self):
         copied = self.model_copy()

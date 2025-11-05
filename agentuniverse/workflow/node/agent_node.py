@@ -5,19 +5,12 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: agent_node.py
-
-# @Time    : 2025/1/27 10:30
-# @Author  : Auto
-# @Email   : auto@example.com
-# @Note    : 优化错误信息处理，添加详细的错误描述和解决建议
-
 import re
 from typing import List, Dict
 
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.output_object import OutputObject
-from agentuniverse.base.exception import ServiceNotFoundError, ServiceExecutionError
 from agentuniverse.workflow.node.enum import NodeEnum, NodeStatusEnum
 from agentuniverse.workflow.node.node import Node, NodeData
 from agentuniverse.workflow.node.node_config import AgentNodeInputParams, NodeInfoParams, NodeOutputParams
@@ -56,41 +49,15 @@ class AgentNode(Node):
 
         agent: Agent = AgentManager().get_instance_obj(agent_id)
         if agent is None:
-            # 获取可用Agent列表
-            available_agents = list(AgentManager().get_instance_dict().keys()) if hasattr(AgentManager(), 'get_instance_dict') else []
-            
-            raise ServiceNotFoundError(
-                service_code=agent_id or "unknown",
-                available_services=available_agents,
-                details={
-                    "workflow_id": self.workflow_id,
-                    "node_id": self.id,
-                    "node_name": self.name,
-                    "service_type": "Agent"
-                },
-                original_exception=None
-            )
+            raise ValueError("No agent with id {} was found.".format(agent_id))
 
-        try:
-            agent_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
-            agent_output: OutputObject = agent.run(**agent_input_params)
-            agent_output_dict = agent_output.to_dict()
-            output_params: List[NodeOutputParams] = self._data.outputs
+        agent_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
 
-            for output_param in output_params:
-                output_param.value = agent_output_dict.get(output_param.name, None)
-            workflow_output.workflow_parameters[self.id] = output_params
-            return NodeOutput(node_id=self.id, status=NodeStatusEnum.SUCCEEDED, result=output_params)
-            
-        except Exception as e:
-            raise ServiceExecutionError(
-                service_code=agent_id,
-                execution_error=f"Agent执行失败: {str(e)}",
-                details={
-                    "workflow_id": self.workflow_id,
-                    "node_id": self.id,
-                    "node_name": self.name,
-                    "agent_input_params": agent_input_params if 'agent_input_params' in locals() else None
-                },
-                original_exception=e
-            )
+        agent_output: OutputObject = agent.run(**agent_input_params)
+        agent_output_dict = agent_output.to_dict()
+        output_params: List[NodeOutputParams] = self._data.outputs
+
+        for output_param in output_params:
+            output_param.value = agent_output_dict.get(output_param.name, None)
+        workflow_output.workflow_parameters[self.id] = output_params
+        return NodeOutput(node_id=self.id, status=NodeStatusEnum.SUCCEEDED, result=output_params)

@@ -5,12 +5,6 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: api_tool.py
-
-# @Time    : 2025/1/27 10:30
-# @Author  : Auto
-# @Email   : auto@example.com
-# @Note    : 优化错误信息处理，添加详细的错误描述和解决建议
-
 import json
 from typing import Any, Optional
 from urllib.parse import urlencode
@@ -19,7 +13,6 @@ import httpx
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.agent.action.tool.utils import ssrf_proxy
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
-from agentuniverse.base.exception import ToolExecutionError, ToolParameterError
 
 
 class APITool(Tool):
@@ -200,19 +193,7 @@ class APITool(Tool):
         if parameter['name'] in parameters:
             return parameters[parameter['name']]
         elif parameter.get('required', False):
-            raise ToolParameterError(
-                tool_id="API_TOOL",
-                parameter_errors=[
-                    f"缺少必需的参数: {parameter['name']}",
-                    f"参数 '{parameter['name']}' 是必需的，但未提供"
-                ],
-                details={
-                    "missing_parameter": parameter['name'],
-                    "parameter_schema": parameter,
-                    "provided_parameters": list(parameters.keys())
-                },
-                original_exception=None
-            )
+            raise Exception(f"Missing required parameter {parameter['name']}")
         else:
             return (parameter.get('schema', {}) or {}).get('default', None)
 
@@ -221,45 +202,17 @@ class APITool(Tool):
         """Validate and parse the response from the tool response."""
         if isinstance(response, httpx.Response):
             if response.status_code >= 400:
-                error_suggestions = []
-                if response.status_code == 401:
-                    error_suggestions = ["检查API密钥是否正确", "验证认证信息是否有效"]
-                elif response.status_code == 403:
-                    error_suggestions = ["检查API权限是否足够", "验证访问权限"]
-                elif response.status_code == 404:
-                    error_suggestions = ["检查API端点是否正确", "验证资源是否存在"]
-                elif response.status_code == 429:
-                    error_suggestions = ["API调用频率过高，请稍后重试", "检查API配额限制"]
-                elif response.status_code >= 500:
-                    error_suggestions = ["服务器内部错误，请稍后重试", "联系API提供商"]
-                
-                raise ToolExecutionError(
-                    tool_id="API_TOOL",
-                    execution_error=f"HTTP请求失败，状态码: {response.status_code}",
-                    details={
-                        "status_code": response.status_code,
-                        "response_text": response.text,
-                        "url": str(response.url),
-                        "method": response.request.method if response.request else "unknown"
-                    },
-                    original_exception=None
-                )
-            
+                raise Exception(
+                    f"Request failed with status code {response.status_code} and {response.text}")
             if not response.content:
                 return 'Empty response from the tool, please check your parameters and try again.'
-            
             try:
-                response_data = response.json()
+                response = response.json()
                 try:
-                    return json.dumps(response_data, ensure_ascii=False)
+                    return json.dumps(response, ensure_ascii=False)
                 except Exception as e:
-                    return json.dumps(response_data)
+                    return json.dumps(response)
             except Exception as e:
                 return response.text
         else:
-            raise ToolExecutionError(
-                tool_id="API_TOOL",
-                execution_error=f"无效的响应类型: {type(response)}",
-                details={"response_type": str(type(response))},
-                original_exception=None
-            )
+            raise ValueError(f'Invalid response type {type(response)}')

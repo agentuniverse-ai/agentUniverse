@@ -1,14 +1,12 @@
-# !/usr/bin/env python3
-# -*- coding:utf-8 -*-
-
-# @Time    : 2025/1/27 10:30
-# @Author  : Auto
-# @Email   : auto@example.com
-# @Note    : 优化错误信息处理，添加详细的错误描述和解决建议
-
 from .service import Service
 from .service_manager import ServiceManager
-from agentuniverse.base.exception import ServiceNotFoundError
+
+
+class ServiceNotFoundError(Exception):
+    """An exception when service code is not in service manager."""
+    def __init__(self, service_code: str):
+        super().__init__(f"Service {service_code} not found.")
+        self.service_code = service_code
 
 
 class ServiceInstance(object):
@@ -29,18 +27,7 @@ class ServiceInstance(object):
             service_code
         )
         if self.__service is None:
-            # 获取可用服务列表
-            available_services = list(service_manager.get_instance_dict().keys()) if hasattr(service_manager, 'get_instance_dict') else []
-            
-            raise ServiceNotFoundError(
-                service_code=service_code,
-                available_services=available_services,
-                details={
-                    "service_manager_type": type(service_manager).__name__,
-                    "total_services": len(available_services)
-                },
-                original_exception=None
-            )
+            raise ServiceNotFoundError(service_code)
 
     def run(self, **kwargs) -> str:
         """Call the service run."""

@@ -63,6 +63,14 @@ class AgentUniverse(object):
     def start(self, config_path: str = None, core_mode: bool = False):
         """Start the agentUniverse framework.
 
+        Initializes the framework by loading configuration, setting up logging,
+        initializing components, and registering all agents, LLMs, tools, etc.
+
+        Args:
+            config_path (str, optional): Path to configuration file. If None,
+                defaults to 'config/config.toml' in project root.
+            core_mode (bool): If True, execute post-fork queue functions.
+                Defaults to False.
         """
         # get default config path
         project_root_path = get_project_root_path()
@@ -268,11 +276,15 @@ class AgentUniverse(object):
         return component_configer_list
 
     def __register(self, component_enum: ComponentEnum, component_configer_list: list[ComponentConfiger]):
-        """Register the components.
+        """Register components in the component manager.
+
+        Registers components based on their type, handling special cases for
+        agents, LLMs, tools, and toolkits. Only registers components that are
+        referenced by agents to optimize memory usage.
 
         Args:
-            component_enum(ComponentEnum): the component enumeration
-            component_configer_list(list): the component configer list
+            component_enum(ComponentEnum): The component enumeration.
+            component_configer_list(list): The component configer list.
         """
         component_manager_clz = ComponentConfigerUtil.get_component_manager_clz_by_type(component_enum)
         default_llm_configer: DefaultLLMConfiger = self.__config_container.app_configer.default_llm_configer
@@ -373,11 +385,12 @@ class AgentUniverse(object):
         return str(combined_path)
 
     def __dynamic_import_and_init(self, class_path: str, configer: Configer = None):
-        """Resolve a sub config file path according to main config file.
+        """Dynamically import and initialize a class from its full path.
 
-            Args:
-                class_path(str): Full class path like package_name.class_name.
-                Auto read from config file.
+        Args:
+            class_path(str): Full class path like package_name.class_name.
+            configer(Configer, optional): Configer instance to pass to class
+                constructor if provided.
         """
 
         module_path, _, class_name = class_path.rpartition('.')

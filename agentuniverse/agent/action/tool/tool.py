@@ -1,18 +1,11 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-
+import asyncio
+import inspect
 # @Time    : 2024/3/13 14:29
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: tool.py
-
-# @Time    : 2025/1/27 10:30
-# @Author  : Auto
-# @Email   : auto@example.com
-# @Note    : 优化错误信息处理，添加详细的错误描述和解决建议
-
-import asyncio
-import inspect
 from abc import abstractmethod
 import json
 from typing import List, Optional, get_type_hints, Any
@@ -26,7 +19,6 @@ from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
-from agentuniverse.base.exception import ToolParameterError
 from agentuniverse.base.util.common_util import parse_and_check_json_markdown
 
 
@@ -95,26 +87,9 @@ class Tool(ComponentBase):
     def input_check(self, kwargs: dict) -> None:
         """Check whether the input parameters of the tool contain input keys of the tool"""
         if self.input_keys:
-            missing_keys = []
             for key in self.input_keys:
                 if key not in kwargs.keys():
-                    missing_keys.append(key)
-            
-            if missing_keys:
-                raise ToolParameterError(
-                    tool_id=self.get_instance_code(),
-                    parameter_errors=[
-                        f"缺少必需的参数: {', '.join(missing_keys)}",
-                        f"工具 '{self.name}' 需要以下参数: {', '.join(self.input_keys)}"
-                    ],
-                    details={
-                        "missing_keys": missing_keys,
-                        "required_keys": self.input_keys,
-                        "provided_keys": list(kwargs.keys()),
-                        "tool_name": self.name
-                    },
-                    original_exception=None
-                )
+                    raise Exception(f'{self.get_instance_code()} - The input must include key: {key}.')
 
     @trace_tool
     def langchain_run(self, *args, callbacks=None, **kwargs):

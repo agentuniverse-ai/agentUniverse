@@ -1,8 +1,3 @@
-# @Time    : 2025/1/27 10:30
-# @Author  : Auto
-# @Email   : auto@example.com
-# @Note    : 优化错误信息处理，添加详细的错误描述和解决建议
-
 import time
 import traceback
 from concurrent.futures import TimeoutError
@@ -15,7 +10,6 @@ from werkzeug.local import LocalProxy
 
 from agentuniverse.base.util.logging.general_logger import get_context_prefix
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
-from agentuniverse.base.exception import AgentUniverseException
 from .request_task import RequestTask
 from .thread_with_result import ThreadPoolExecutorWithReturnValue
 from .web_util import request_param, service_run_queue, make_standard_response, \
@@ -226,62 +220,15 @@ def handle_http_exception(e):
 
 @app.errorhandler(Exception)
 def handle_exception(e):
-    """A global non http exception handler with enhanced error information"""
+    """A global non http exception handler"""
     LOGGER.error(traceback.format_exc())
-    
-    # 处理AgentUniverse自定义异常
-    if isinstance(e, AgentUniverseException):
-        return make_standard_response(
-            success=False,
-            message=e.get_user_friendly_message("zh"),
-            status_code=500,
-            error_code=e.error_code.value,
-            error_details=e.to_dict()
-        )
-    
-    # 处理服务未找到异常
     if isinstance(e, ServiceNotFoundError):
-        return make_standard_response(
-            success=False,
-            message=e.get_user_friendly_message("zh"),
-            status_code=404,
-            error_code=e.error_code.value,
-            error_details=e.to_dict()
-        )
-    
-    # 处理超时异常
-    if isinstance(e, TimeoutError):
-        return make_standard_response(
-            success=False,
-            message="请求处理超时，请稍后重试",
-            status_code=408,
-            error_code="AU_SYSTEM_TIMEOUT",
-            error_details={
-                "error_type": "TimeoutError",
-                "suggestions": [
-                    "检查网络连接是否稳定",
-                    "尝试减少请求的复杂度",
-                    "联系系统管理员"
-                ]
-            }
-        )
-    
-    # 处理其他异常
-    return make_standard_response(
-        success=False,
-        message="服务器内部错误，请联系系统管理员",
-        status_code=500,
-        error_code="AU_SYSTEM_INTERNAL_ERROR",
-        error_details={
-            "error_type": type(e).__name__,
-            "error_message": str(e),
-            "suggestions": [
-                "检查请求参数是否正确",
-                "查看服务器日志获取详细信息",
-                "联系系统管理员"
-            ]
-        }
-    )
+        return make_standard_response(success=False,
+                                      message=str(e),
+                                      status_code=404)
+    return make_standard_response(success=False,
+                                  message="Internal Server Error",
+                                  status_code=500)
 
 
 @app.route("/chat/completions", methods=['POST'])
