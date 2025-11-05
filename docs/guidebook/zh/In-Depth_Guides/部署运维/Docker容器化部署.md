@@ -3,7 +3,7 @@
 agentUniverse提供标准的工作环境镜像用于容器化部署agentUniverse工程。本文档将介绍如何基于工作环境镜像部署您自己的工程项目。镜像tag列表可以在[这里获取](https://cr.console.aliyun.com/repository/cn-hangzhou/agent_universe/agent_universe/images)。如果您希望打包一个基于自己工程的镜像，请参考[工程镜像打包](./工程镜像打包.md)。
 
 ## 准备工作
-1.  按照agentUniverse的标准结构目录搭建自己的项目，具体结构参考[应用工程结构及说明](../../../开始使用/1.标准应用工程结构说明.md)。为方便说明，在本文档中假设项目名称和工程目录为`sample_standard_app`。
+1.  按照agentUniverse的标准结构目录搭建自己的项目，具体结构参考[应用工程结构及说明](../../../zh/开始使用/1.标准应用工程结构说明.md)。为方便说明，在本文档中假设项目名称和工程目录为`sample_standard_app`。
 2.  获取所需版本的镜像:
 ```shell
 docker pull registry.cn-hangzhou.aliyuncs.com/agent_universe/agent_universe:0.0.14b1_centos8
