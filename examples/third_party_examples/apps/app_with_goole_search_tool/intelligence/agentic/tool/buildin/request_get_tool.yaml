@@ -1,0 +1,50 @@
+name: 'requests_get'
+description: |
+  This tool acts as a portal to the internet and allows you to retrieve content from a specific website using an HTTP GET request. It is useful when you need to fetch data, such as HTML pages, API responses, or other web resources.
+
+  Tool Input Parameters:
+    - input (required): The URL of the website or API endpoint you want to access. For example, "https://www.google.com".
+    - headers (optional): Additional HTTP headers to include in the request. If not provided, default headers will be used.
+    - json_parser (optional): A boolean flag indicating whether the response should be parsed as JSON. Default is `false`.
+
+  Example Tool Inputs:
+    Example 1: To fetch the content of Google's homepage, the tool input should be:
+      ```json
+      {
+        "input": "https://www.google.com"
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "response": "<HTML content of Google's homepage>"
+      }
+      ```
+
+    Example 2: To fetch JSON data from a public API, the tool input should be:
+      ```json
+      {
+        "input": "https://api.example.com/data",
+        "json_parser": true
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "response": {
+          "key1": "value1",
+          "key2": "value2"
+        }
+      }
+      ```
+headers:
+  content-type: 'application/json'
+method: 'GET'
+json_parser: false
+response_content_type: json
+tool_type: 'api'
+input_keys: ['input']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.request_tool'
+  class: 'RequestTool'

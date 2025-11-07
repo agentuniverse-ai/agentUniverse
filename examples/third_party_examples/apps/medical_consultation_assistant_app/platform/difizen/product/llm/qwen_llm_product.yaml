@@ -1,0 +1,7 @@
+id: qwen_llm
+nickname: 千问系列大模型
+type: LLM
+metadata:
+  type: 'PRODUCT'
+  module: 'agentuniverse_product.base.product'
+  class: 'Product'

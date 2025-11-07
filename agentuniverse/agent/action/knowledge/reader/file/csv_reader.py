@@ -6,71 +6,80 @@
 # @FileName: csv_reader.py
 
 import csv
+import io
 from pathlib import Path
-from typing import List, Union, Optional, Dict
+from typing import List, Union, Optional, Dict, TextIO
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
+from agentuniverse.agent.action.knowledge.reader.utils import detect_file_encoding
 
 
 class CSVReader(Reader):
     """CSV file reader.
-    
+
     Used to read and parse CSV format files, supports local file paths or file objects as input.
     """
 
-    def _load_data(self, 
-                  file: Union[str, Path], 
+    def _load_data(self,
+                  file: Union[str, Path, TextIO],
                   delimiter: str = ",",
                   quotechar: str = '"',
                   ext_info: Optional[Dict] = None) -> List[Document]:
-        """Parse CSV file.
-
-        Args:
-            file: CSV file path or file object
-            delimiter: CSV delimiter, default is comma
-            quotechar: Quote character, default is double quote
-            ext_info: Additional metadata information
-
-        Returns:
-            List[Document]: List of documents containing CSV content
-
-        Raises:
-            FileNotFoundError: Raised when file does not exist
-            ValueError: Raised when file reading fails
-        """
+        """Parse CSV file."""
         try:
+            text_stream: TextIO
+            should_close = False
+
             if isinstance(file, str):
                 file = Path(file)
-            
+
             if isinstance(file, Path):
                 if not file.exists():
                     raise FileNotFoundError(f"File not found: {file}")
-                file_content = file.open(newline="", mode="r", encoding="utf-8")
+                encoding = detect_file_encoding(file)
+                text_stream = file.open(newline="", mode="r", encoding=encoding)
+                should_close = True
+            elif hasattr(file, "read"):
+                try:
+                    file.seek(0)
+                except (AttributeError, OSError):
+                    pass
+                raw_content = file.read()
+                if isinstance(raw_content, bytes):
+                    encoding = detect_file_encoding(raw_content)
+                    text_stream = io.StringIO(raw_content.decode(encoding))
+                elif isinstance(raw_content, str):
+                    text_stream = io.StringIO(raw_content)
+                else:
+                    raise ValueError("Unsupported file object type")
+                should_close = True
             else:
-                file.seek(0)
-                file_content = file
+                raise TypeError("file must be a path string, Path, or file-like object")
 
-            csv_content = []
-            with file_content as csvfile:
-                csv_reader = csv.reader(csvfile, delimiter=delimiter, quotechar=quotechar)
+            csv_content: List[str] = []
+            try:
+                csv_reader = csv.reader(text_stream, delimiter=delimiter, quotechar=quotechar)
                 for row in csv_reader:
-                    # Filter out completely empty rows
                     if any(cell.strip() for cell in row):
-                        # Remove empty values at the end of row
                         while row and not row[-1].strip():
                             row.pop()
-                        # Only add non-empty values to result
                         csv_content.append(", ".join(filter(None, row)))
-            
-            # Combine all valid rows into final text
+            finally:
+                if should_close:
+                    text_stream.close()
+
             final_content = "\n".join(csv_content)
 
-            # Get metadata
-            metadata = {"file_name": getattr(file, 'name', 'unknown')}
+            if isinstance(file, Path):
+                file_name = file.name
+            else:
+                name_attr = getattr(file, 'name', None)
+                file_name = Path(name_attr).name if isinstance(name_attr, str) else 'unknown'
+            metadata = {"file_name": file_name}
             if ext_info:
                 metadata.update(ext_info)
-            # print(f"csv_content: {final_content} \n metadata: {metadata}")
+
             return [Document(text=final_content, metadata=metadata)]
         except Exception as e:
             raise ValueError(f"Failed to read CSV file: {str(e)}") from e

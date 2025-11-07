@@ -1,0 +1,15 @@
+#name: 'faiss_ivf_store'
+#description: 'FAISS store with IndexIVFFlat for fast approximate similarity search'
+#index_path: '../../db/faiss_ivf.index'
+#metadata_path: '../../db/faiss_ivf_metadata.pkl'
+#embedding_model: 'dashscope_embedding'
+#similarity_top_k: 20
+#index_config:
+#  index_type: 'IndexIVFFlat'
+#  dimension: 768
+#  nlist: 100        # Number of clusters
+#  nprobe: 10        # Number of clusters to search
+#metadata:
+#  type: 'STORE'
+#  module: 'agentuniverse.agent.action.knowledge.store.faiss_store'
+#  class: 'FAISSStore'

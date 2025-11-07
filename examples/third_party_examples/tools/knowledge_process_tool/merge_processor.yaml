@@ -1,0 +1,7 @@
+name: 'merge_by_metadata'
+description: 'Merge retrieved documents by metadata keys'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.merge_processor'
+  class: 'MergeByMetadata'
+

@@ -1,0 +1,8 @@
+name: 'deepseek-chat'
+description: 'deepseek-chat'
+model_name: 'deepseek-chat'
+temperature: 0.5
+max_tokens: 2000
+streaming: True
+channel: deepseek-v3-official
+meta_class: 'agentuniverse.llm.default.deep_seek_openai_style_llm.DefaultDeepSeekLLM'

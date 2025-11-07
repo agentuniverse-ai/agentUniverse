@@ -1,0 +1,39 @@
+name: 'add'
+description: |
+  This tool is used to add two floating-point numbers. The input parameters consist of two numbers separated by a comma ',' and the tool returns the sum of the two numbers.
+
+  Tool Input Parameters:
+    - input (required): A string containing two floating-point numbers separated by a comma. For example, "1.5, 2.3".
+
+  Example Tool Inputs:
+    Example 1: To add 1.5 and 2.3, the tool input should be:
+      ```json
+      {
+        "input": "1.5, 2.3"
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "result": 3.8
+      }
+      ```
+
+    Example 2: To add -5.0 and 10.2, the tool input should be:
+      ```json
+      {
+        "input": "-5.0, 10.2"
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "result": 5.2
+      }
+      ```
+tool_type: 'api'
+input_keys: ['input']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.simple_math_tool'
+  class: 'AddTool'

@@ -1,0 +1,41 @@
+name: 'div'
+description: |
+  This tool is used to divide two floating-point numbers. The input parameters consist of two numbers separated by a comma, and the tool returns the result of the division.
+
+  Tool Input Parameters:
+    - input (required): A string containing two floating-point numbers separated by a comma. For example, "6.0, 3.0".
+      - The first number is the dividend.
+      - The second number is the divisor.
+
+  Example Tool Inputs:
+    Example 1: To divide 6.0 by 3.0, the tool input should be:
+      ```json
+      {
+        "input": "6.0, 3.0"
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "result": 2.0
+      }
+      ```
+
+    Example 2: To divide 10.5 by 2.5, the tool input should be:
+      ```json
+      {
+        "input": "10.5, 2.5"
+      }
+      ```
+      The result will be:
+      ```json
+      {
+        "result": 4.2
+      }
+      ```
+tool_type: 'api'
+input_keys: ['input']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.simple_math_tool'
+  class: 'DivideTool'

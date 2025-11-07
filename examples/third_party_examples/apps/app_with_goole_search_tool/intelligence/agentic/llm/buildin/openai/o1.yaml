@@ -1,0 +1,9 @@
+name: 'o1'
+description: 'o1'
+model_name: 'o1'
+temperature: 0.5
+max_tokens: 2000
+streaming: True
+max_context_length: 200000
+channel: o1-official
+meta_class: 'agentuniverse.llm.default.default_openai_llm.DefaultOpenAILLM'

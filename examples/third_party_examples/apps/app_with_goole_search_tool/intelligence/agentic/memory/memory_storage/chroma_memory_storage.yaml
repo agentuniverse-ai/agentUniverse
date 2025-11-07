@@ -1,0 +1,6 @@
+name: 'chroma_memory_storage'
+description: 'demo chroma memory storage'
+collection_name: 'memory'
+persist_path: '../../db/memory.db'
+embedding_model: 'dashscope_embedding'
+meta_class: 'agentuniverse.agent.memory.memory_storage.chroma_memory_storage.ChromaMemoryStorage'

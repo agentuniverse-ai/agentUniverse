@@ -1,0 +1,7 @@
+name: 'summarize_docs'
+description: 'Summarize or combine retrieved documents'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.summarize_processor'
+  class: 'SummarizeDocs'
+

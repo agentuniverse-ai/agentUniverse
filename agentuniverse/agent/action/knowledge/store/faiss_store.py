@@ -11,16 +11,6 @@ import pickle
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-try:
-    import faiss
-    import numpy as np
-except ImportError as e:
-    FAISS_NOT_INSTALLED_MSG = (
-        "FAISS is not installed. Please install it with 'pip install faiss-cpu' "
-        "for CPU version or 'pip install faiss-gpu' for GPU version."
-    )
-    raise ImportError(FAISS_NOT_INSTALLED_MSG) from e
-
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
@@ -82,10 +72,19 @@ class FAISSStore(Store):
 
     def _new_client(self) -> Any:
         """Initialize the FAISS index and load existing data if available."""
+        try:
+            import faiss
+            import numpy as np
+        except ImportError as e:
+            FAISS_NOT_INSTALLED_MSG = (
+                "FAISS is not installed. Please install it with 'pip install faiss-cpu' "
+                "for CPU version or 'pip install faiss-gpu' for GPU version."
+            )
+            raise ImportError(FAISS_NOT_INSTALLED_MSG) from e
         self._load_index_and_metadata()
         return self.faiss_index
 
-    def _create_faiss_index(self, dimension: int) -> faiss.Index:
+    def _create_faiss_index(self, dimension: int):
         """Create a FAISS index based on the configuration.
 
         Args:

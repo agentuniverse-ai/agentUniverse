@@ -1,0 +1,8 @@
+name: 'wikipedia_query'
+description: ''
+tool_type: 'api'
+input_keys: ['input']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.wikipedia_query'
+  class: 'WikipediaTool'
