@@ -1,0 +1,652 @@
+# Excel Tool - 使用指南
+
+## 概述
+
+Excel Tool 是为 agentUniverse 开发的企业级 Excel 文件处理工具，提供安全可靠的读取、写入、追加和信息查询功能。
+
+### 特性亮点
+
+✅ **安全第一**
+- 路径验证防止路径穿越攻击
+- 系统目录保护
+- 文件大小限制（读取: 50MB, 写入: 10MB）
+- 格式验证
+
+✅ **功能完整**
+- 读取 Excel 文件（.xlsx, .xls）
+- 写入新文件或覆盖现有文件
+- 追加数据到现有文件
+- 获取文件元数据和结构信息
+
+✅ **生产就绪**
+- 完整的错误处理
+- 重试机制（@retry(3, 1.0)）
+- 异步支持（async_execute）
+- 结构化 JSON 响应
+
+✅ **开发友好**
+- 详细的文档和示例
+- 清晰的错误消息
+- 类型提示
+- 测试覆盖
+
+---
+
+## 安装
+
+### 依赖项
+
+```bash
+pip install openpyxl
+```
+
+### 文件位置
+
+**Python 实现**:
+```
+agentuniverse/agent/action/tool/common_tool/excel_tool.py
+```
+
+**YAML 配置**:
+```
+examples/sample_standard_app/intelligence/agentic/tool/buildin/excel_tool.yaml
+```
+
+---
+
+## 快速开始
+
+### 在 Agent 中使用
+
+**Agent 配置示例**:
+```yaml
+# your_agent.yaml
+info:
+  name: 'data_analyst_agent'
+  description: 'Agent that can analyze Excel data'
+  tools:
+    - 'excel_tool'
+    - 'other_tools'
+
+# ... rest of agent config
+```
+
+### 直接调用
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+# 获取工具实例
+excel_tool = ToolManager().get_instance_obj('excel_tool')
+
+# 读取文件
+result = excel_tool.run(
+    file_path="data.xlsx",
+    mode="read",
+    sheet_name="Sheet1"
+)
+
+print(result)
+```
+
+---
+
+## 操作模式详解
+
+### 1. READ - 读取 Excel 文件
+
+**功能**: 读取指定 sheet 的数据，支持行数限制
+
+**参数**:
+- `file_path` (必需): Excel 文件路径
+- `mode`: "read"
+- `sheet_name` (可选): Sheet 名称，默认为第一个 sheet
+- `max_rows` (可选): 最大读取行数
+
+**示例 1: 读取整个文件**
+```python
+result = excel_tool.run(
+    file_path="sales_data.xlsx",
+    mode="read"
+)
+```
+
+**示例 2: 读取指定 sheet**
+```python
+result = excel_tool.run(
+    file_path="report.xlsx",
+    mode="read",
+    sheet_name="Q1_Sales"
+)
+```
+
+**示例 3: 限制读取行数**
+```python
+result = excel_tool.run(
+    file_path="large_data.xlsx",
+    mode="read",
+    sheet_name="Data",
+    max_rows=100  # 只读取前100行
+)
+```
+
+**返回示例**:
+```json
+{
+  "status": "success",
+  "file_path": "sales_data.xlsx",
+  "sheet_name": "Sheet1",
+  "rows_read": 100,
+  "columns": 5,
+  "data": [
+    ["Name", "Age", "City", "Score", "Grade"],
+    ["Alice", 25, "NYC", 95, "A"],
+    ["Bob", 30, "LA", 88, "B"]
+  ],
+  "total_rows": 100,
+  "total_columns": 5
+}
+```
+
+---
+
+### 2. WRITE - 写入 Excel 文件
+
+**功能**: 创建新文件或覆盖现有文件，自动格式化标题行
+
+**参数**:
+- `file_path` (必需): Excel 文件路径
+- `mode`: "write"
+- `data` (必需): 二维数组 `[[row1], [row2], ...]`
+- `sheet_name` (可选): Sheet 名称，默认 "Sheet1"
+- `overwrite` (可选): 是否覆盖现有文件，默认 `False`
+
+**示例 1: 创建新文件**
+```python
+data = [
+    ["Product", "Sales", "Revenue"],
+    ["Product A", 100, 5000],
+    ["Product B", 200, 12000],
+    ["Product C", 150, 9000]
+]
+
+result = excel_tool.run(
+    file_path="report.xlsx",
+    mode="write",
+    data=data,
+    sheet_name="Monthly_Report"
+)
+```
+
+**示例 2: 覆盖现有文件**
+```python
+result = excel_tool.run(
+    file_path="existing.xlsx",
+    mode="write",
+    data=new_data,
+    overwrite=True  # 强制覆盖
+)
+```
+
+**返回示例**:
+```json
+{
+  "status": "success",
+  "file_path": "report.xlsx",
+  "sheet_name": "Monthly_Report",
+  "rows_written": 4,
+  "columns": 3,
+  "file_size": 5432,
+  "overwrite": false
+}
+```
+
+---
+
+### 3. APPEND - 追加数据
+
+**功能**: 在现有文件末尾追加行，保持原有格式
+
+**参数**:
+- `file_path` (必需): Excel 文件路径（必须已存在）
+- `mode`: "append"
+- `data` (必需): 要追加的二维数组
+- `sheet_name` (可选): Sheet 名称，默认活动 sheet
+
+**示例 1: 追加日志数据**
+```python
+new_logs = [
+    ["2025-11-10 14:30", "User Login", "Success"],
+    ["2025-11-10 14:31", "Data Export", "Success"],
+    ["2025-11-10 14:32", "Report Generated", "Success"]
+]
+
+result = excel_tool.run(
+    file_path="activity_log.xlsx",
+    mode="append",
+    data=new_logs
+)
+```
+
+**示例 2: 追加到指定 sheet**
+```python
+result = excel_tool.run(
+    file_path="multi_sheet.xlsx",
+    mode="append",
+    data=new_data,
+    sheet_name="Transactions"
+)
+```
+
+**返回示例**:
+```json
+{
+  "status": "success",
+  "file_path": "activity_log.xlsx",
+  "sheet_name": "Sheet1",
+  "rows_appended": 3,
+  "start_row": 101,
+  "end_row": 103,
+  "file_size": 15678
+}
+```
+
+---
+
+### 4. INFO - 获取文件信息
+
+**功能**: 返回文件元数据和结构信息
+
+**参数**:
+- `file_path` (必需): Excel 文件路径
+- `mode`: "info"
+
+**示例**:
+```python
+result = excel_tool.run(
+    file_path="analysis.xlsx",
+    mode="info"
+)
+```
+
+**返回示例**:
+```json
+{
+  "status": "success",
+  "file_path": "analysis.xlsx",
+  "file_size": 234567,
+  "file_size_mb": 0.22,
+  "total_sheets": 3,
+  "sheets": [
+    {"name": "Summary", "rows": 50, "columns": 8},
+    {"name": "Details", "rows": 500, "columns": 15},
+    {"name": "Charts", "rows": 10, "columns": 3}
+  ],
+  "sheet_names": ["Summary", "Details", "Charts"]
+}
+```
+
+---
+
+## 异步使用
+
+Excel Tool 支持异步操作，适合 I/O 密集型场景：
+
+```python
+import asyncio
+
+async def process_excel():
+    excel_tool = ToolManager().get_instance_obj('excel_tool')
+
+    # 异步读取
+    result = await excel_tool.async_run(
+        file_path="large_file.xlsx",
+        mode="read",
+        max_rows=1000
+    )
+
+    print(result)
+
+# 运行异步函数
+asyncio.run(process_excel())
+```
+
+---
+
+## 错误处理
+
+所有错误都返回结构化的 JSON 响应：
+
+### 错误示例 1: 路径安全验证失败
+```json
+{
+  "status": "error",
+  "error": "Access denied: Cannot access system directory /etc",
+  "file_path": "/etc/passwd.xlsx"
+}
+```
+
+### 错误示例 2: 文件大小超限
+```json
+{
+  "status": "error",
+  "error": "File size 60.5MB exceeds limit of 50MB",
+  "file_path": "huge_file.xlsx"
+}
+```
+
+### 错误示例 3: Sheet 不存在
+```json
+{
+  "status": "error",
+  "error": "Sheet 'InvalidSheet' not found. Available: ['Sheet1', 'Data']",
+  "file_path": "data.xlsx"
+}
+```
+
+### 错误示例 4: 缺少必需参数
+```json
+{
+  "status": "error",
+  "error": "Parameter 'data' is required for write mode",
+  "file_path": "output.xlsx"
+}
+```
+
+---
+
+## 安全最佳实践
+
+### ✅ 推荐做法
+
+1. **使用相对路径或工作目录内的路径**
+```python
+# ✅ 好的做法
+file_path = "./data/reports/sales.xlsx"
+file_path = "output/analysis.xlsx"
+```
+
+2. **验证文件大小**
+```python
+# ✅ 先获取文件信息
+info = excel_tool.run(file_path="large.xlsx", mode="info")
+info_dict = json.loads(info)
+
+if info_dict["file_size_mb"] < 50:
+    # 继续处理
+    data = excel_tool.run(file_path="large.xlsx", mode="read")
+```
+
+3. **处理错误响应**
+```python
+# ✅ 始终检查状态
+import json
+
+result = excel_tool.run(file_path="data.xlsx", mode="read")
+result_dict = json.loads(result)
+
+if result_dict["status"] == "success":
+    data = result_dict["data"]
+    # 处理数据
+else:
+    error = result_dict["error"]
+    # 处理错误
+```
+
+### ❌ 避免的做法
+
+1. **不要使用绝对路径到系统目录**
+```python
+# ❌ 坏的做法 - 会被阻止
+file_path = "/etc/config.xlsx"
+file_path = "C:\\Windows\\data.xlsx"
+```
+
+2. **不要使用路径穿越**
+```python
+# ❌ 坏的做法 - 会被阻止
+file_path = "../../../etc/passwd.xlsx"
+```
+
+3. **不要忽略错误**
+```python
+# ❌ 坏的做法
+result = excel_tool.run(file_path="data.xlsx", mode="read")
+data = json.loads(result)["data"]  # 可能崩溃！
+```
+
+---
+
+## 实际应用场景
+
+### 场景 1: 数据分析 Agent
+
+```python
+# Agent 读取销售数据并分析
+sales_data = excel_tool.run(
+    file_path="sales_2024.xlsx",
+    mode="read",
+    sheet_name="Q4"
+)
+
+# Agent 处理数据...
+analysis_results = analyze_sales(sales_data)
+
+# Agent 写入分析结果
+excel_tool.run(
+    file_path="analysis_results.xlsx",
+    mode="write",
+    data=analysis_results,
+    sheet_name="Analysis"
+)
+```
+
+### 场景 2: 日志记录系统
+
+```python
+# Agent 持续追加日志
+def log_event(event_data):
+    excel_tool.run(
+        file_path="system_log.xlsx",
+        mode="append",
+        data=[event_data]
+    )
+
+# 使用示例
+log_event(["2025-11-10 15:00", "Task Completed", "Success"])
+log_event(["2025-11-10 15:01", "API Call", "200 OK"])
+```
+
+### 场景 3: 报表生成流程
+
+```python
+# 1. 获取文件信息
+info = json.loads(excel_tool.run(
+    file_path="raw_data.xlsx",
+    mode="info"
+))
+
+print(f"Processing {info['total_sheets']} sheets...")
+
+# 2. 读取每个 sheet
+for sheet_name in info['sheet_names']:
+    data = json.loads(excel_tool.run(
+        file_path="raw_data.xlsx",
+        mode="read",
+        sheet_name=sheet_name
+    ))
+
+    # 处理数据...
+    processed = process_data(data['data'])
+
+    # 3. 写入处理后的结果
+    excel_tool.run(
+        file_path=f"processed_{sheet_name}.xlsx",
+        mode="write",
+        data=processed
+    )
+```
+
+---
+
+## 配置选项
+
+可以通过子类化自定义配置：
+
+```python
+from agentuniverse.agent.action.tool.common_tool.excel_tool import ExcelTool
+
+class CustomExcelTool(ExcelTool):
+    # 自定义文件大小限制
+    max_read_size = 100 * 1024 * 1024  # 100MB
+    max_write_size = 20 * 1024 * 1024   # 20MB
+
+    # 添加更多允许的扩展名
+    allowed_extensions = ['.xlsx', '.xls', '.xlsm', '.xlsb']
+```
+
+---
+
+## 性能优化
+
+### 大文件处理
+
+```python
+# 分批读取大文件
+batch_size = 1000
+offset = 0
+
+while True:
+    result = json.loads(excel_tool.run(
+        file_path="huge_data.xlsx",
+        mode="read",
+        max_rows=batch_size
+    ))
+
+    if result["status"] != "success":
+        break
+
+    # 处理这一批数据
+    process_batch(result["data"])
+
+    if result["rows_read"] < batch_size:
+        break  # 已读取完毕
+
+    offset += batch_size
+```
+
+### 并发处理
+
+```python
+import asyncio
+
+async def process_multiple_files(file_paths):
+    excel_tool = ToolManager().get_instance_obj('excel_tool')
+
+    tasks = [
+        excel_tool.async_run(file_path=path, mode="read")
+        for path in file_paths
+    ]
+
+    results = await asyncio.gather(*tasks)
+    return results
+
+# 并发读取10个文件
+files = [f"data_{i}.xlsx" for i in range(10)]
+results = asyncio.run(process_multiple_files(files))
+```
+
+---
+
+## 故障排查
+
+### 问题 1: ModuleNotFoundError: No module named 'openpyxl'
+
+**解决方案**:
+```bash
+pip install openpyxl
+```
+
+### 问题 2: 写入失败 "File already exists"
+
+**解决方案**:
+```python
+# 使用 overwrite=True
+result = excel_tool.run(
+    file_path="existing.xlsx",
+    mode="write",
+    data=data,
+    overwrite=True  # 添加此参数
+)
+```
+
+### 问题 3: "Access denied: Cannot access system directory"
+
+**解决方案**: 使用相对路径或工作目录内的路径
+```python
+# ❌ 错误
+file_path = "/etc/data.xlsx"
+
+# ✅ 正确
+file_path = "./data/data.xlsx"
+```
+
+---
+
+## 与其他工具比较
+
+| 特性 | Excel Tool | Write File Tool | pandas |
+|------|-----------|----------------|--------|
+| 安全验证 | ✅ 完整 | ⚠️ 基础 | ❌ 无 |
+| Excel 专用 | ✅ 是 | ❌ 否 | ✅ 是 |
+| 多 Sheet 支持 | ✅ 是 | ❌ 否 | ✅ 是 |
+| 文件大小限制 | ✅ 是 | ⚠️ 简单 | ❌ 无 |
+| 格式化支持 | ✅ 基础 | ❌ 无 | ✅ 高级 |
+| 依赖数量 | 1个 | 0个 | 10+ |
+| 学习曲线 | 低 | 低 | 中 |
+
+**建议**:
+- **Excel Tool**: 生产环境 Excel 操作，需要安全保障
+- **Write File Tool**: 简单文本文件
+- **pandas**: 复杂数据分析和转换
+
+---
+
+## 更新日志
+
+### v1.0.0 (2025-11-10)
+- ✅ 初始版本发布
+- ✅ 支持 read, write, append, info 四种模式
+- ✅ 完整的安全验证
+- ✅ 异步支持
+- ✅ 重试机制
+- ✅ 详细文档
+
+---
+
+## 贡献指南
+
+Excel Tool 遵循 agentUniverse 工具开发最佳实践：
+
+**参考的优秀实践**:
+- ✅ YouTube Tool - 错误处理和 API 集成
+- ✅ ArXiv Tool - 模式化设计和数据结构
+- ✅ Write File Tool - 文件操作和 JSON 响应
+
+**改进点**:
+- ✅ 添加了路径安全验证
+- ✅ 实现了异步支持
+- ✅ 完善了文档
+
+---
+
+## 支持与反馈
+
+如有问题或建议，请在 GitHub 提交 Issue：
+https://github.com/agentuniverse-ai/agentUniverse/issues/252
+
+---
+
+## 许可证
+
+与 agentUniverse 项目保持一致。

@@ -1,0 +1,158 @@
+name: 'excel_tool'
+description: |
+  功能强大且安全的 Excel 文件处理工具，支持读取、写入、追加和信息查询操作。
+
+  支持的文件格式：.xlsx, .xls
+
+  安全特性：
+  - 路径安全验证（防止路径穿越攻击）
+  - 文件大小限制（读取: 50MB, 写入: 10MB）
+  - 系统目录保护
+  - 格式验证
+
+  操作模式：
+
+  1. read - 读取 Excel 文件
+     读取指定 sheet 的数据，支持行数限制
+
+     输入参数：
+       - file_path (必需): Excel 文件路径
+       - mode: "read"
+       - sheet_name (可选): Sheet 名称，默认为第一个 sheet
+       - max_rows (可选): 最大读取行数，默认读取全部
+
+     输出示例：
+       {
+         "status": "success",
+         "file_path": "data.xlsx",
+         "sheet_name": "Sheet1",
+         "rows_read": 100,
+         "columns": 5,
+         "data": [
+           ["Name", "Age", "City", "Score", "Grade"],
+           ["Alice", 25, "NYC", 95, "A"],
+           ...
+         ],
+         "total_rows": 100,
+         "total_columns": 5
+       }
+
+  2. write - 写入 Excel 文件
+     创建新文件或覆盖现有文件，自动格式化标题行
+
+     输入参数：
+       - file_path (必需): Excel 文件路径
+       - mode: "write"
+       - data (必需): 二维数组，例如 [["A", "B"], ["C", "D"]]
+       - sheet_name (可选): Sheet 名称，默认为 "Sheet1"
+       - overwrite (可选): 是否覆盖现有文件，默认 false
+
+     输出示例：
+       {
+         "status": "success",
+         "file_path": "output.xlsx",
+         "sheet_name": "Sheet1",
+         "rows_written": 50,
+         "columns": 3,
+         "file_size": 12345,
+         "overwrite": false
+       }
+
+  3. append - 追加数据
+     在现有文件末尾追加行，保持原有格式
+
+     输入参数：
+       - file_path (必需): Excel 文件路径（必须已存在）
+       - mode: "append"
+       - data (必需): 要追加的二维数组
+       - sheet_name (可选): Sheet 名称，默认为活动 sheet
+
+     输出示例：
+       {
+         "status": "success",
+         "file_path": "data.xlsx",
+         "sheet_name": "Sheet1",
+         "rows_appended": 10,
+         "start_row": 101,
+         "end_row": 110,
+         "file_size": 23456
+       }
+
+  4. info - 获取文件信息
+     返回文件元数据和结构信息
+
+     输入参数：
+       - file_path (必需): Excel 文件路径
+       - mode: "info"
+
+     输出示例：
+       {
+         "status": "success",
+         "file_path": "data.xlsx",
+         "file_size": 23456,
+         "file_size_mb": 0.02,
+         "total_sheets": 3,
+         "sheets": [
+           {"name": "Sheet1", "rows": 100, "columns": 5},
+           {"name": "Summary", "rows": 20, "columns": 3},
+           {"name": "Details", "rows": 500, "columns": 10}
+         ],
+         "sheet_names": ["Sheet1", "Summary", "Details"]
+       }
+
+  错误处理：
+  所有操作失败时返回带有 "status": "error" 和详细错误信息的 JSON
+
+  示例错误响应：
+    {
+      "status": "error",
+      "error": "File size 60.5MB exceeds limit of 50MB",
+      "file_path": "large_file.xlsx"
+    }
+
+  工具输入示例：
+
+    示例 1 - 读取 Excel 文件：
+      {
+        "file_path": "sales_data.xlsx",
+        "mode": "read",
+        "sheet_name": "Q1_Sales",
+        "max_rows": 100
+      }
+
+    示例 2 - 写入新文件：
+      {
+        "file_path": "report.xlsx",
+        "mode": "write",
+        "data": [
+          ["Product", "Sales", "Revenue"],
+          ["Product A", 100, 5000],
+          ["Product B", 200, 12000]
+        ],
+        "sheet_name": "Monthly_Report",
+        "overwrite": true
+      }
+
+    示例 3 - 追加数据：
+      {
+        "file_path": "log.xlsx",
+        "mode": "append",
+        "data": [
+          ["2025-11-10", "Event 1", "Success"],
+          ["2025-11-10", "Event 2", "Failed"]
+        ]
+      }
+
+    示例 4 - 获取文件信息：
+      {
+        "file_path": "analysis.xlsx",
+        "mode": "info"
+      }
+
+tool_type: 'api'
+input_keys: ['file_path', 'mode']
+
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.excel_tool'
+  class: 'ExcelTool'
