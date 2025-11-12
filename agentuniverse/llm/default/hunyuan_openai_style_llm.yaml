@@ -1,0 +1,8 @@
+name: 'default_hunyuan_llm'
+description: 'default tencent hunyuan llm with spi'
+model_name: 'hunyuan-turbos-latest'
+max_tokens: 1000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.hunyuan_openai_style_llm'
+  class: 'HunyuanOpenAIStyleLLM'
