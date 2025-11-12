@@ -1,0 +1,15 @@
+info:
+  name: 'demo_rewriting_agent'
+  description: 'Rewriting agent for GRR pattern - rewrites content based on review feedback'
+
+profile:
+  llm_model:
+    name: 'qwen_llm'
+    temperature: 0.7
+  prompt_version: 'demo_rewriting_agent.cn'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.rewriting_agent_template'
+  class: 'RewritingAgentTemplate'
+

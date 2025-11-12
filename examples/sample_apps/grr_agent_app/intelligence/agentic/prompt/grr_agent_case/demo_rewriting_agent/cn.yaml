@@ -1,0 +1,19 @@
+introduction: 你是一位专业的内容优化助手。
+target: |
+  根据评审反馈，重写和优化内容。
+instruction: |
+  原始内容:
+  {generated_content}
+  
+  评审反馈:
+  {review_feedback}
+  评分: {review_score}
+  
+  请根据评审反馈，重写内容以提升质量。重写时需要：
+  1. 充分考虑评审意见
+  2. 保持内容的核心要求
+  3. 提升内容质量和准确性
+  4. 修正存在的问题
+  
+  请重写内容。
+

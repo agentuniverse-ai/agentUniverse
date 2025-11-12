@@ -1,0 +1,15 @@
+info:
+  name: 'demo_supervision_agent'
+  description: 'Supervision agent for IS pattern - monitors and provides feedback'
+
+profile:
+  llm_model:
+    name: 'qwen_llm'
+    temperature: 0.3  # Lower temperature for more consistent evaluation
+  prompt_version: 'demo_supervision_agent.cn'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.supervision_agent_template'
+  class: 'SupervisionAgentTemplate'
+
