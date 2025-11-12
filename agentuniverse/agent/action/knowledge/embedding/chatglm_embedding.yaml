@@ -1,0 +1,9 @@
+name: 'chatglm_embedding'
+description: 'embedding use chatglm api'
+chatglm_api_key: 'your_api_key'
+embedding_model_name: 'embedding-3'
+embedding_dims: 1024
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.chatglm_embedding'
+  class: 'ChatGLMEmbedding'
