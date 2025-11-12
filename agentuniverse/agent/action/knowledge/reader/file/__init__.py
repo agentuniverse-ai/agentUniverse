@@ -10,3 +10,4 @@ from .epub_reader import EpubReader
 from .xlsx_reader import XlsxReader
 from .rar_reader import RarReader
 from .zip_reader import ZipReader
+from .sevenzip_reader import SevenZipReader

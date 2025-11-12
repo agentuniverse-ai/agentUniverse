@@ -1,0 +1,6 @@
+name: 'default_sevenzip_reader'
+description: 'default sevenzip reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.sevenzip_reader'
+  class: 'SevenZipReader'
