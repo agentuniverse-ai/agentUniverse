@@ -10,7 +10,12 @@ from pydantic import BaseModel
 
 
 class AgentModel(BaseModel):
-    """The parent class of all agent models, containing only attributes."""
+    """Agent model containing configuration and metadata.
+
+    Stores agent configuration including info, profile, plan, memory,
+    action, and work_pattern settings. Provides utility methods for
+    extracting LLM parameters.
+    """
 
     info: Optional[dict] = dict()
     profile: Optional[dict] = dict()
@@ -20,9 +25,11 @@ class AgentModel(BaseModel):
     work_pattern: Optional[dict] = dict()
 
     def llm_params(self) -> dict:
-        """
+        """Extract LLM parameters from agent profile configuration.
+
         Returns:
-            dict: The parameters for the LLM.
+            dict: Dictionary of LLM parameters excluding 'name' and 'prompt_processor'.
+                  Maps 'model_name' to 'model' key.
         """
         params = {}
         for key, value in self.profile.get('llm_model').items():
