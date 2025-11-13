@@ -1,0 +1,12 @@
+name: 'huggingface_llm'
+description: 'default huggingface hub llm with api'
+model_name: 'Qwen/Qwen3-8B'
+api_key: '${HUGGINGFACE_HUB_API_KEY}'
+proxy: '${HUGGINGFACE_HUB_PROXY}'
+api_base: 'https://router.huggingface.co/v1'
+max_tokens: 2048
+max_context_length: 2048
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.huggingface_hub_openai_style_llm'
+  class: 'HuggingFaceHubLLM'
