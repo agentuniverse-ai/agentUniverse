@@ -81,7 +81,7 @@ kubectl apply -f agentuniverse.yaml
 ```
 kubectl get all -n agent-namespace
 ```
-![资源部署情况](../../../../_picture/k8s_resource.png)
+![资源部署情况](../../../../guidebook/_picture/k8s_resource.png)
 ## 4. 从集群内部访问agentUniverse 服务
 
 要从集群内部访问 agentUniverse 服务，请使用以下命令行示例：
@@ -98,11 +98,11 @@ kubectl exec -it [Pod名称] -n agent-namespace -- curl http://agentuniverse-ser
 kubectl exec -it agentuniverse-deployment-55cfd778d-g7d9d -n agent-namespace -- curl http://agentuniverse-service:9999/echo
 ```
 
-![连通性测试](../../../../_picture/k8s_hello.png)
+![连通性测试](../../../../guidebook/_picture/k8s_hello.png)
 #### 4.1.2 问答测试
 
 ```
 kubectl exec -it agentuniverse-deployment-55cfd778d-g7d9d -n agent-namespace -- curl -X POST -H "Content-Type: application/json" -d '{"service_id":"demo_service","params":{"input":"(18+3-5)/2*4=?"}}' http://agentuniverse-service:9999/service_run
 ```
 
-![问答测试](../../../../_picture/k8s_question.png)
+![问答测试](../../../../guidebook/_picture/k8s_question.png)
