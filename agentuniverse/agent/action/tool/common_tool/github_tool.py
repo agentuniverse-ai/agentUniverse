@@ -17,35 +17,35 @@ from agentuniverse.base.util.env_util import get_from_env
 
 
 class GitHubSearchMode(Enum):
-    """GitHub搜索模式枚举"""
-    REPOSITORY = "repository"  # 搜索仓库
-    USER = "user"  # 搜索用户
-    ISSUE = "issue"  # 搜索问题
-    CODE = "code"  # 搜索代码
+    """GitHub search mode enumeration"""
+    REPOSITORY = "repository"  # Search repositories
+    USER = "user"  # Search users
+    ISSUE = "issue"  # Search issues
+    CODE = "code"  # Search code
 
 
 class GitHubTool(Tool):
-    """GitHub工具类
+    """GitHub tool class
     
-    提供GitHub仓库、用户、问题和代码的搜索功能
-    支持通过GitHub API获取仓库信息、用户信息、问题列表和代码片段
+    Provides GitHub repository, user, issue and code search functionality
+    Supports retrieving repository info, user info, issue lists and code snippets via GitHub API
     
     Attributes:
-        api_key: GitHub API密钥，从环境变量GITHUB_API_KEY获取
-        base_url: GitHub API基础URL
-        timeout: 请求超时时间（秒）
-        max_results: 最大返回结果数量
+        api_key: GitHub API key, retrieved from GITHUB_API_KEY environment variable
+        base_url: GitHub API base URL
+        timeout: Request timeout in seconds
+        max_results: Maximum number of results to return
     """
 
     name: str = "github_tool"
-    description: str = "GitHub仓库、用户、问题和代码搜索工具"
+    description: str = "GitHub repository, user, issue and code search tool"
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("GITHUB_API_KEY"))
     base_url: str = "https://api.github.com"
-    timeout: int = Field(30, description="请求超时时间（秒）")
-    max_results: int = Field(10, description="最大返回结果数量")
+    timeout: int = Field(30, description="Request timeout in seconds")
+    max_results: int = Field(10, description="Maximum number of results to return")
 
     def _get_headers(self) -> Dict[str, str]:
-        """获取请求头"""
+        """Get request headers"""
         headers = {
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "AgentUniverse-GitHub-Tool/1.0"
@@ -55,7 +55,7 @@ class GitHubTool(Tool):
         return headers
 
     def _make_request(self, url: str, params: Optional[Dict] = None) -> Dict[str, Any]:
-        """发送HTTP请求"""
+        """Send HTTP request"""
         try:
             response = requests.get(
                 url, 
@@ -79,15 +79,15 @@ class GitHubTool(Tool):
 
     @retry(3, 1.0)
     def search_repositories(self, query: str, sort: str = "stars", order: str = "desc") -> List[Dict[str, Any]]:
-        """搜索GitHub仓库
+        """Search GitHub repositories
         
         Args:
-            query: 搜索查询字符串
-            sort: 排序方式 (stars, forks, help-wanted-issues, updated)
-            order: 排序顺序 (desc, asc)
+            query: Search query string
+            sort: Sort method (stars, forks, help-wanted-issues, updated)
+            order: Sort order (desc, asc)
             
         Returns:
-            仓库信息列表
+            List of repository information
         """
         url = f"{self.base_url}/search/repositories"
         params = {
@@ -126,15 +126,15 @@ class GitHubTool(Tool):
 
     @retry(3, 1.0)
     def search_users(self, query: str, sort: str = "followers", order: str = "desc") -> List[Dict[str, Any]]:
-        """搜索GitHub用户
+        """Search GitHub users
         
         Args:
-            query: 搜索查询字符串
-            sort: 排序方式 (followers, repositories, joined)
-            order: 排序顺序 (desc, asc)
+            query: Search query string
+            sort: Sort method (followers, repositories, joined)
+            order: Sort order (desc, asc)
             
         Returns:
-            用户信息列表
+            List of user information
         """
         url = f"{self.base_url}/search/users"
         params = {
@@ -164,15 +164,15 @@ class GitHubTool(Tool):
 
     @retry(3, 1.0)
     def search_issues(self, query: str, sort: str = "created", order: str = "desc") -> List[Dict[str, Any]]:
-        """搜索GitHub问题
+        """Search GitHub issues
         
         Args:
-            query: 搜索查询字符串
-            sort: 排序方式 (created, updated, comments)
-            order: 排序顺序 (desc, asc)
+            query: Search query string
+            sort: Sort method (created, updated, comments)
+            order: Sort order (desc, asc)
             
         Returns:
-            问题信息列表
+            List of issue information
         """
         url = f"{self.base_url}/search/issues"
         params = {
@@ -212,15 +212,15 @@ class GitHubTool(Tool):
 
     @retry(3, 1.0)
     def search_code(self, query: str, sort: str = "indexed", order: str = "desc") -> List[Dict[str, Any]]:
-        """搜索GitHub代码
+        """Search GitHub code
         
         Args:
-            query: 搜索查询字符串
-            sort: 排序方式 (indexed)
-            order: 排序顺序 (desc, asc)
+            query: Search query string
+            sort: Sort method (indexed)
+            order: Sort order (desc, asc)
             
         Returns:
-            代码片段列表
+            List of code snippets
         """
         url = f"{self.base_url}/search/code"
         params = {
@@ -252,14 +252,14 @@ class GitHubTool(Tool):
         return code_results
 
     def get_repository_info(self, owner: str, repo: str) -> Dict[str, Any]:
-        """获取特定仓库的详细信息
+        """Get detailed information of a specific repository
         
         Args:
-            owner: 仓库所有者
-            repo: 仓库名称
+            owner: Repository owner
+            repo: Repository name
             
         Returns:
-            仓库详细信息
+            Detailed repository information
         """
         url = f"{self.base_url}/repos/{owner}/{repo}"
         result = self._make_request(url)
@@ -297,18 +297,18 @@ class GitHubTool(Tool):
                 repo: str = None,
                 sort: str = None,
                 order: str = "desc") -> List[Dict[str, Any]] | Dict[str, Any]:
-        """执行GitHub搜索
+        """Execute GitHub search
         
         Args:
-            mode: 搜索模式 (repository, user, issue, code, repo_info)
-            query: 搜索查询字符串
-            owner: 仓库所有者（用于repo_info模式）
-            repo: 仓库名称（用于repo_info模式）
-            sort: 排序方式
-            order: 排序顺序
+            mode: Search mode (repository, user, issue, code, repo_info)
+            query: Search query string
+            owner: Repository owner (for repo_info mode)
+            repo: Repository name (for repo_info mode)
+            sort: Sort method
+            order: Sort order
             
         Returns:
-            搜索结果或错误信息
+            Search results or error information
         """
         if mode == GitHubSearchMode.REPOSITORY.value:
             if not query:

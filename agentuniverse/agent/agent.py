@@ -399,8 +399,8 @@ class Agent(ComponentBase, ABC):
             try:
                 tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
                 tool_results.append(str(tool.run(**tool_input)))
-            except:
-                LOGGER.warn(f'Tool {tool_name} call failed, maybe invalid or lack arguments')
+            except Exception:
+                LOGGER.warning(f'Tool {tool_name} call failed, maybe invalid or lack arguments')
         return "\n\n".join(tool_results)
 
     async def async_invoke_tools(self, input_object: InputObject, **kwargs) -> str:
@@ -495,7 +495,7 @@ class Agent(ComponentBase, ABC):
             params["type"] = ['input', 'output']
         return params
 
-    def get_run_config(self, **kwargs) -> dict:
+    def get_run_config(self, **kwargs) -> RunnableConfig:
         llm_name = kwargs.get('llm_name') or self.agent_model.profile.get('llm_model', {}).get('name')
         callbacks = [InvokeCallbackHandler(
             source=self.agent_model.info.get('name'),
