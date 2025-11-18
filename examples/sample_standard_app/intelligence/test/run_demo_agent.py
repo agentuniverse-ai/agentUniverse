@@ -5,12 +5,13 @@
 # @Author  :
 # @Email   :
 # @FileName: run_demo_agent.py
+
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.base.agentuniverse import AgentUniverse
 
 AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
-
+#examples/sample_standard_app/config/config.toml
 
 def chat(question: str, session_id=None):
     """ Peer agents example.
@@ -26,4 +27,5 @@ def chat(question: str, session_id=None):
 
 if __name__ == '__main__':
     chat(question="分析下巴菲特减持比亚迪的原因", session_id="test-01")
+    print('testtest')
     chat(question="我刚才问了什么问题", session_id="test-01")

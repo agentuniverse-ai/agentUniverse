@@ -1,0 +1,9 @@
+name: 'qwen_llm'
+description: 'demo qwen llm with spi'
+model_name: 'qwen2-72b-instruct'
+max_tokens: 2500
+api_key: '${DASHSCOPE_API_KEY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.qwen_openai_style_llm'
+  class: 'QWenOpenAIStyleLLM'
