@@ -1,0 +1,15 @@
+info:
+  name: 'demo_implementation_agent'
+  description: 'Implementation agent for IS pattern - executes the main task'
+
+profile:
+  llm_model:
+    name: 'qwen_llm'
+    temperature: 0.7
+  prompt_version: 'demo_implementation_agent.cn'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.implementation_agent_template'
+  class: 'ImplementationAgentTemplate'
+

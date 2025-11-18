@@ -1,0 +1,15 @@
+info:
+  name: 'demo_reviewing_agent'
+  description: 'Reviewing agent for GRR pattern - reviews generated content and provides feedback'
+
+profile:
+  llm_model:
+    name: 'qwen_llm'
+    temperature: 0.3  # Lower temperature for more consistent evaluation
+  prompt_version: 'demo_reviewing_agent.cn'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.reviewing_agent_template'
+  class: 'ReviewingAgentTemplate'
+
