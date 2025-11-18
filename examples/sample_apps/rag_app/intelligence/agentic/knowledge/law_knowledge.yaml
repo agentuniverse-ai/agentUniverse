@@ -11,7 +11,7 @@ insert_processors:
     - "recursive_character_text_splitter"
 rag_router: "nlu_rag_router"
 post_processors:
-    - "dashscope_reranker"
+    - "semantic_merge_processor"
 readers:
     pdf: "default_pdf_reader"
 metadata:
