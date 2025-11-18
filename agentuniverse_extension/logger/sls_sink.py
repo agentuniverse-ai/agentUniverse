@@ -55,12 +55,22 @@ class AsyncSlsSender:
         if self._bg_task is None or self._bg_task.done():
             self._bg_task = self._loop.create_task(self._worker())
 
-    async def put(self, item: LogItem, /) -> None:
-        """异步放入队列；满了直接丢弃（不阻塞业务协程）"""
+    def put(self, item: LogItem, /) -> None:
+        def _safe_put():
+            try:
+                self._queue.put_nowait(item)
+            except asyncio.QueueFull:
+                pass
+
         try:
-            self._queue.put_nowait(item)
-        except asyncio.QueueFull:
-            logger.error("SLS log queue full – drop a log item")
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+
+        if running is self._loop:
+            _safe_put()
+        else:
+            self._loop.call_soon_threadsafe(_safe_put)
 
     async def aclose(self, timeout: float | None = 5.0) -> None:
         """
@@ -295,13 +305,13 @@ class AsyncSlsSink:
     def __init__(self, sender: AsyncSlsSender):
         self._sender = sender
 
-    async def __call__(self, message):
+    def __call__(self, message):
         record = message.record
         item = LogItem(
             contents=[("content", message)],
             timestamp=int(record["time"].timestamp())
         )
-        await self._sender.put(item)
+        self._sender.put(item)
 
 
 class SlsSink:

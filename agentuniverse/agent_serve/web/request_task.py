@@ -90,7 +90,12 @@ class RequestTask:
         first_chunk = True
         start_time = time.time()
         while True:
-            output: str = self.queue.get()
+            try:
+                output = self.queue.get(timeout=1)
+            except queue.Empty:
+                if not self.thread.is_alive():
+                    break
+                continue
             if output is None:
                 break
             if output == EOF_SIGNAL:
@@ -134,7 +139,12 @@ class RequestTask:
         first_chunk = True
         start_time = time.time()
         while True:
-            output: str = self.queue.get()
+            try:
+                output = self.queue.get(timeout=1)
+            except queue.Empty:
+                if not self.thread.is_alive():
+                    break
+                continue
             if output is None:
                 break
             if output == EOF_SIGNAL:
@@ -179,6 +189,9 @@ class RequestTask:
             except asyncio.TimeoutError:
                 await asyncio.sleep(1)
                 print("Waiting for data timed out. Retrying...")
+                if self.async_task and self.async_task.done():
+                    LOGGER.error("Task finished without EOF")
+                    break
                 continue
             if output is None:
                 break
@@ -220,7 +233,12 @@ class RequestTask:
         try:
             self.next_state(TaskStateEnum.RUNNING)
             while True:
-                output: str = self.queue.get()
+                try:
+                    output = self.queue.get(timeout=1)
+                except queue.Empty:
+                    if not self.thread.is_alive():
+                        break
+                    continue
                 if output is None:
                     break
                 if output == EOF_SIGNAL:
