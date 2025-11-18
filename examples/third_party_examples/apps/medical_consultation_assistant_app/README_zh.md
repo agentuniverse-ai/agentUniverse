@@ -85,7 +85,7 @@ if name == '__main__':
 ### 效果演示
 问题"小明最近出现了发热表现，伴有畏寒现象，精神状态萎靡，注意力难以集中，时常感到头晕目眩，整个人呈现出明显的虚弱状态，请推测小明的疾病类型，并为其推荐治疗方法和药物推荐":
 
-![演示图片](../../_picture/result_show.png)
+![演示图片](./docs/_picture/result_show.png)
 
 ## 更多细节
 ### Reader组件
@@ -102,15 +102,15 @@ if name == '__main__':
 - [nlu_rag_router](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/rag_router/nlu_rag_router.yaml)
 
 ### Store组件
-- [disease_symptoms_chroma_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_symptoms_chroma_store.yaml)
-- [disease_therapy_one_chroma_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_therapy_one_chroma_store.yaml)
-- [disease_therapy_two_chroma_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_therapy_two_chroma_store.yaml)
-- [disease_symptoms_sqlite_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_symptoms_sqlite_store.yaml)
-- [disease_therapy_one_sqlite_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_therapy_one_sqlite_store.yaml)
-- [disease_therapy_two_sqlite_store](../../../../examples/sample_apps/rag_app/intelligence/agentic/knowledge/store/disease_therapy_two_sqlite_store.yaml)
+- [disease_symptoms_chroma_store](../../../../examples/third_party_examples/apps/medical_consultation_assistant_app/intelligence/agentic/knowledge/store/disease_symptoms_chroma_store.yaml)
+- [disease_therapy_one_chroma_store](../../../../examples/third_party_examples/apps/medical_consultation_assistant_app/intelligence/agentic/knowledge/store/disease_therapy_one_chroma_store.yaml)
+- [disease_therapy_two_chroma_store](../../../../examples/third_party_examples/apps/medical_consultation_assistant_app/intelligence/agentic/knowledge/store/disease_therapy_two_chroma_store.yaml)
+- [disease_symptoms_sqlite_store](../../../../examples/third_party_examples/apps/medical_consultation_assistant_app/intelligence/agentic/knowledge/store/disease_symptoms_sqlite_store.yaml)
+- [disease_therapy_one_sqlite_store](../../../../examples/third_party_examples/apps/medical_consultation_assistant_app/intelligence/agentic/knowledge/store/disease_therapy_one_sqlite_store.yaml)
+- [disease_therapy_two_sqlite_store](../../../../examples/third_party_examples/apps/medical_consultation_assistant_app/intelligence/agentic/knowledge/store/disease_therapy_two_sqlite_store.yaml)
 
 为了方便您使用，我们已经将存储有相关信息的数据库文件存储如下图：
-![演示图片](../../_picture/db_structure.png)
+![演示图片](./docs/_picture/db_structure.png)
 
 如果您想从头构建知识库的话，您可以运行test文件夹下的__init__.py文件，代码如下：
-![演示图片](../../_picture/init_code.png)
+![演示图片](./docs/_picture/init_code.png)
