@@ -1,0 +1,6 @@
+name: 'voyage_reranker'
+description: 'Document reranker using Voyage AI Rerank API'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.voyage_reranker'
+  class: 'VoyageReranker'
