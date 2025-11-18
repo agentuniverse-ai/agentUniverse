@@ -1,0 +1,29 @@
+name: 'yahoo_finance_tool'
+description: |
+  该工具用于在 Yahoo Finance 检索股票相关信息。工具支持三种操作模式：
+  1. 搜索股票基本信息：通过股票代码(ticker)搜索股票基本信息
+  2. 获取股票历史数据：通过股票代码(ticker)，周期(period)，间隔(interval)获取股票历史数据，
+    其中 period 的可选取值为：1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max;
+    interval 的可选取值为：1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
+  3. 获取股票新闻：通过股票代码(ticker)获取股票相关新闻
+
+  工具输入示例：
+    模式1 - 搜索股票基本信息：
+      ticker: "AAPL"
+      mode: "ticker_info"
+
+    模式2 - 获取股票历史数据：
+      ticker: "MSFT"
+      period: "1mo"
+      interval: "1d"
+      mode: "historical_data"
+  
+    模式3 - 获取股票新闻：
+      ticker: "META" 
+      mode: "ticker_news"
+tool_type: 'api'
+input_keys: ['mode', 'ticker', 'period', 'interval']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.yahoo_finance_tool'
+  class: 'YahooFinanceTool'

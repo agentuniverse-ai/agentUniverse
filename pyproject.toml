@@ -74,6 +74,7 @@ jsonlines = "^4.0.0"
 EbookLib = "^0.18"
 beautifulsoup4 = "^4.12.0"
 # qdrant-client = "^1.15.1" unsupportable version due to numpy version limit
+yfinance = "^0.2.66"
 
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
