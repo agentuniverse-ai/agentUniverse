@@ -1,0 +1,62 @@
+name: 'data_analysis_tool'
+description:  | 
+    Data analysis tool that supports various mathematical operations, including formula calculation, statistical analysis, and data comparison.
+    
+    Supported calculation capabilities:
+    1. Batch formula calculation - Calculate multiple related formulas at once
+    2. Statistical analysis suite - Predefined combinations of statistical calculations
+    3. Data comparison analysis - Comparative calculations of multiple datasets
+    4. Formula chain calculation - Using the result of one formula as input for the next
+    5. Single formula calculation - Simple mathematical formula calculation
+    
+    Available statistical suites:
+    - descriptive_stats: Descriptive statistics - Basic characteristics of data (count, mean, median, min, max, range)
+    - five_number_summary: Five-number summary - Key quantiles of data distribution (min, q1, median, q3, max)
+    - variability_analysis: Variability analysis - Dispersion of data (variance, std_dev, range, iqr)
+    - distribution_analysis: Distribution analysis - Shape characteristics of data distribution (skewness, kurtosis, mean, median)
+    - basic_overview: Basic overview - Quick understanding of basic data situation (count, mean, std_dev, min, max)
+    
+    Supported safe mathematical functions:
+    - Basic operations: +, -, *, /, **(power), sqrt, abs, round
+    - Trigonometric functions: sin, cos, tan
+    - Logarithmic functions: log, log10, exp
+    - Statistical functions: mean, median, min, max, sum, std, var, q1, q3, iqr, skewness, kurtosis, count
+    - Constants: pi, e
+    
+    Unified parameter format:
+    {"operation": "operation type","data": [data content],"config": {configuration parameters}}
+    
+    Operation types and parameter descriptions:
+    - batch_formula: Batch formula calculation
+      data: [{"name": "name", "formula": "formula", "variables": {variables}}]
+      Example: {"operation": "batch_formula", "data": [{"name": "area", "formula": "length * width", "variables": {"length": 5, "width": 3}}, {"name": "perimeter", "formula": "2 * (length + width)", "variables": {"length": 5, "width": 3}}]}
+    
+    - statistical_suite: Statistical analysis suite
+      data: [numeric list]
+      config: {"suite_name": "suite name"}  // Optional values: descriptive_stats, five_number_summary, variability_analysis, distribution_analysis, basic_overview
+      Example: {"operation": "statistical_suite", "data": [1, 2, 3, 4, 5], "config": {"suite_name": "descriptive_stats"}}
+    
+    - data_comparison: Data comparison analysis
+      data: [[dataset1], [dataset2], ...]
+      Example: {"operation": "data_comparison", "data": [[1, 2, 3], [4, 5, 6], [7, 8, 9]]}
+    
+    - formula_chain: Formula chain calculation
+      data: [{"name": "name", "formula": "formula", "variables": {variables}}]
+      Example: {"operation": "formula_chain", "data": [{"name": "step1", "formula": "a + b", "variables": {"a": 10, "b": 5}}, {"name": "step2", "formula": "step1 * 2"}]}
+    
+    - single_formula: Single formula calculation
+      data: "formula string"
+      config: {"variables": {variables}}
+      Example: {"operation": "single_formula", "data": "sqrt(a**2 + b**2)", "config": {"variables": {"a": 3, "b": 4}}}
+    
+    Data format description:
+    - Variable names in formulas must be alphanumeric characters
+    - Numeric lists should be numeric arrays
+    - Datasets should be arrays of multiple numeric lists
+    - Formulas support basic mathematical operators and predefined functions
+tool_type: 'func'
+input_keys: ['operation','data','config']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.data_analysis_tool'
+  class: 'DataAnalysisTool'
