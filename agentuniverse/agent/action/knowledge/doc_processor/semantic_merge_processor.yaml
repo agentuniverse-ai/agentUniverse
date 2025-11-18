@@ -1,0 +1,8 @@
+name: 'semantic_merge_processor'
+description: 'merge similar documents based on TF-IDF and cosine similarity'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.semantic_merge_processor'
+  class: 'SemanticMergeProcessor'
+similarity_threshold: 0.2
+min_group_size: 2

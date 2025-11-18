@@ -75,7 +75,6 @@ class DashscopeReranker(DocProcessor):
             else:
                 origin_docs[index].metadata = {"relevance_score": _result.relevance_score}
             rerank_docs.append(origin_docs[index])
-
         return rerank_docs
 
     def _initialize_by_component_configer(self,
