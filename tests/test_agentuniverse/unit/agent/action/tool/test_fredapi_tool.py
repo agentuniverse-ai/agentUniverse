@@ -1,7 +1,7 @@
 import os
 import unittest
 from agentuniverse.agent.action.tool.tool import ToolInput
-from your_module_name.fred_api_tool import FredApiTool, SearchMode  # 替换为实际模块路径
+from agentuniverse.agent.action.tool.common_tool.fred_api_tool import FredApiTool, SearchMode  # 替换为实际模块路径
 
 class FredApiToolTest(unittest.TestCase):
     """
@@ -11,7 +11,8 @@ class FredApiToolTest(unittest.TestCase):
     def setUp(self) -> None:
         """初始化测试环境"""
         # 从环境变量获取API密钥（测试时需要预先配置）
-        api_key = os.getenv("FRED_API_KEY", "your_real_api_key_here")
+        api_key = os.getenv("FRED_API_KEY", "4de038fe793a491ffbebbd0ee21c3e05")
+        print(api_key, ":api_key")
         self.tool = FredApiTool(api_key=api_key)
 
     def test_search_datasets(self) -> None:
