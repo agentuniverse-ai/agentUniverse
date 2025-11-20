@@ -73,17 +73,20 @@ class FredApiTool(Tool):
         if len(query) <= self.MAX_QUERY_LENGTH:
             return query
 
-        words = query.split()
-        processed_words = []
-        current_length = 0
-        for word in words:
-            word_length = len(word) + 1 
-            if current_length + word_length <= self.MAX_QUERY_LENGTH:
-                processed_words.append(word)
-                current_length += word_length
-            else:
-                break
-        return ' '.join(processed_words)
+        return query[:self.MAX_QUERY_LENGTH]
+        # words = query.split()
+        # print('before words',words)
+        # processed_words = []
+        # current_length = 0
+        # for word in words:
+        #     word_length = len(word) + 1 
+        #     if current_length + word_length <= self.MAX_QUERY_LENGTH:
+        #         processed_words.append(word)
+        #         current_length += word_length
+        #     else:
+        #         break
+        # print('processed_words',processed_words)
+        # return ' '.join(processed_words)
 
     @retry(3, 1.0)
     def _search_datasets(self, keyword: str, **kwargs) -> str:
@@ -187,19 +190,19 @@ class FredApiTool(Tool):
             )
         return "\n" + "-"*80 + "\n".join(output)
 
-    def _format_metadata(self, metadata, series_id: str) -> str:
-        """格式化元数据"""
-        print("格式化元数据",metadata,series_id)
-        return (
-            f"Metadata for {series_id}:\n"
-            f"Title: {metadata.get('title', 'N/A')}\n"
-            f"Observation Start: {metadata.get('observation_start', 'N/A')}\n"
-            f"Observation End: {metadata.get('observation_end', 'N/A')}\n"
-            f"Frequency: {metadata.get('frequency', 'N/A')}\n"
-            f"Units: {metadata.get('units', 'N/A')}\n"
-            f"Seasonal Adjustment: {metadata.get('seasonal_adjustment', 'N/A')}\n"
-            f"Description: {metadata.get('notes', 'N/A')[:200]}..."
-        )
+    # def _format_metadata(self, metadata, series_id: str) -> str:
+    #     """格式化元数据"""
+    #     print("格式化元数据",metadata,series_id)
+    #     return (
+    #         f"Metadata for {series_id}:\n"
+    #         f"Title: {metadata.get('title', 'N/A')}\n"
+    #         f"Observation Start: {metadata.get('observation_start', 'N/A')}\n"
+    #         f"Observation End: {metadata.get('observation_end', 'N/A')}\n"
+    #         f"Frequency: {metadata.get('frequency', 'N/A')}\n"
+    #         f"Units: {metadata.get('units', 'N/A')}\n"
+    #         f"Seasonal Adjustment: {metadata.get('seasonal_adjustment', 'N/A')}\n"
+    #         f"Description: {metadata.get('notes', 'N/A')[:200]}..."
+    #     )
 
     def clear_cache(self):
         """清除缓存"""
