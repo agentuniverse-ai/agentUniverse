@@ -16,7 +16,11 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 
 class Workflow(ComponentBase):
-    """The basic class of the workflow."""
+    """Workflow abstraction that encapsulates graph construction and execution.
+
+    - `build()`: Construct a `Graph` instance from `graph_config`.
+    - `run()`: Execute the graph and accumulate results into `WorkflowOutput`.
+    """
 
     id: Optional[str] = None
     name: Optional[str] = None
@@ -37,12 +41,18 @@ class Workflow(ComponentBase):
         return f'{appname}.{self.component_type.value.lower()}.{self.id}'
 
     def build(self) -> 'Workflow':
+        """Build the graph instance from `graph_config`."""
         if self.graph_config is None:
             raise ValueError('The graph config is None.')
         self.graph = Graph().build(self.id, self.graph_config)
         return self
 
     def run(self, input_params: dict) -> WorkflowOutput:
+        """Run the workflow.
+
+        Args:
+            input_params (dict): Start parameters recorded into `WorkflowOutput`.
+        """
         if self.graph is None:
             raise ValueError('The graph of the workflow is None.')
         workflow_output = WorkflowOutput(workflow_id=self.id, workflow_start_params=input_params)

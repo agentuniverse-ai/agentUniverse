@@ -99,7 +99,10 @@ class LLM(ComponentBase):
         """Asynchronously run the LLM."""
 
     def as_langchain(self) -> BaseLanguageModel:
-        """Convert to the langchain llm class."""
+        """返回 LangChain LLM 实例。
+
+        若配置了 `channel` 且存在对应通道实现，则委托通道生成；否则由具体子类实现。
+        """
         self.init_channel()
         if self._channel_instance:
             return self._channel_instance.as_langchain()
@@ -165,26 +168,12 @@ class LLM(ComponentBase):
         return copied_obj
 
     def max_context_length(self) -> int:
-        """Max context length.
-
-        The total length of input tokens and generated tokens is limited by the model's context length.
-        """
+        """模型上下文窗口长度（输入+输出 token 上限）。"""
         return self._max_context_length
 
     @abstractmethod
     def get_num_tokens(self, text: str) -> int:
-        """Get the number of tokens present in the text.
-
-        Useful for checking if an input will fit in a model's context window.
-
-        Args:
-            text: The string input to tokenize.
-            model: The model you want to calculate
-
-
-        Returns:
-            The integer number of tokens in the text.
-        """
+        """估算文本 token 数量，便于做长度控制。"""
         try:
             encoding = tiktoken.encoding_for_model(self.model_name)
         except KeyError:
@@ -192,7 +181,7 @@ class LLM(ComponentBase):
         return len(encoding.encode(text))
 
     def as_langchain_runnable(self, params=None) -> Runnable:
-        """Get the langchain llm class."""
+        """返回可绑定参数后的 LangChain Runnable。"""
         if params is None:
             params = {}
         return self.as_langchain().bind(**params)

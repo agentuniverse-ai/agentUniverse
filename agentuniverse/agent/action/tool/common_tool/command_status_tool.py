@@ -12,7 +12,20 @@ from agentuniverse.agent.action.tool.common_tool.run_command_tool import get_com
 
 
 class CommandStatusTool(Tool):
+    """Tool for checking the status of running commands.
+    
+    This tool allows checking the status and results of commands executed by RunCommandTool.
+    It retrieves command results by thread ID and returns formatted status information.
+    """
     def execute(self, thread_id: int) -> str:
+        """Check the status of a command by thread ID.
+        
+        Args:
+            thread_id (int): Thread ID of the command to check
+            
+        Returns:
+            str: JSON string containing command status and results, or error message if not found
+        """
         if isinstance(thread_id, str) and thread_id.isdigit():
             thread_id = int(thread_id)
 
