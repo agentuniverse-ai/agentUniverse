@@ -24,6 +24,35 @@ Note - 对于版本的额外说明。
 ***************************************************
 
 # 版本更新记录
+## [0.0.19] - 2025-11-17
+### Added
+- 新增AWS Bedrock模型支持
+- 新增ollama embedding组件支持
+- 新增jina rerank组件支持
+- 新增向量数据库组件支持
+  - 新增Faiss向量数据库支持
+  - 新增Qdrant向量数据库支持
+- 新增一批Reader数据加载组件支持
+  - 新增Notion、GoogleDoc、Confluence云文档加载组件
+  - 新增epub、rar、sevenzip、zip、xlsx等格式文件加载组件
+  - 新增基于PaddleOCR的图像与pdf文件文字提取组件
+  - 新增基于playwright、bs4的网页加载组件
+- 新增github、youtube检索工具
+- 新增McpSessionManager异步安全退出方法
+- 模块Otel-llm-instrumentor新增模型Token消耗记录
+
+### Fixed
+- 修复RecursiveCharacterTextSplitter组件splitter方法参数命名错误问题
+- 修复MCPToolkit中connection_kwargs参数传递丢失问题
+- 修复RequestTask中任务异常退出队列释放异常问题
+
+### Note
+- SlsSender模块put方法安全性优化
+- logging_util中loop event健壮性优化
+- Monitor模块add_invocation_chain方法健壮性优化
+- 部分第三方社区案例、工具收录
+- 其他代码优化与文档更新
+
 ## [0.0.18] - 2025-07-10
 ### Added
 - 新增基于OTel协议的智能体应用可观测能力

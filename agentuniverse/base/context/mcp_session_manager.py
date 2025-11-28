@@ -760,5 +760,13 @@ class MCPSessionManager:
         self.__exit_stack.set(None)
         self.__mcp_session_dict.set(None)
 
+    async def safe_close_stack_async(self) -> None:
+        if isinstance(self.exit_stack, AsyncExitStack):
+            await self.exit_stack.aclose()
+        elif isinstance(self.exit_stack, SyncAsyncExitStack):
+            self.exit_stack.close()
+        self.__exit_stack.set(None)
+        self.__mcp_session_dict.set(None)
+
     def run_async(self, func, *args, **kwargs):
         return self.exit_stack.run_async(func, *args, **kwargs)

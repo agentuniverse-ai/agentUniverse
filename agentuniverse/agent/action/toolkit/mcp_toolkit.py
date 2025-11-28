@@ -99,24 +99,14 @@ class MCPToolkit(Toolkit):
                 server_name=self.server_name,
                 origin_tool_name=tool.name,
                 args_model_schema=tool.inputSchema,
-                input_keys=tool.inputSchema['required'],
-                **self.get_mcp_server_connect_args()
+                input_keys=tool.inputSchema.get('required', []),
+                transport=self.transport,
+                url=self.url,
+                command=self.command,
+                args=self.args,
+                env=self.env,
+                connection_kwargs=self.connection_kwargs
             )
-            # TODO The following revision still has issues that need to be fixed.
-            # tool_instance = MCPTool(
-            #     name=tool_name,
-            #     description=f'{tool.description}\n{str(tool.inputSchema)}',
-            #     server_name=self.server_name,
-            #     origin_tool_name=tool.name,
-            #     args_model_schema=tool.inputSchema,
-            #     input_keys=tool.inputSchema['required'],
-            #     transport=self.transport,
-            #     url=self.url,
-            #     command=self.command,
-            #     args=self.args,
-            #     env=self.env,
-            #     connection_kwargs=self.connection_kwargs
-            # )
             ToolManager().register(tool_instance.get_instance_code(), tool_instance)
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'MCPToolkit':

@@ -24,6 +24,35 @@ Note - Additional remarks regarding the version.
 ***************************************************
 
 # Version Update History
+## [0.0.19] - 2025-11-17
+### Added
+- Added AWS Bedrock model support
+- Added ollama embedding component support
+- Added jina rerank component support
+- Added vector database component support
+  - Faiss vector database support
+  - Qdrant vector database support
+- Added a batch of new Reader data loading components
+  - Added Notion, GoogleDoc, Confluence cloud document loading components
+  - Added file format support for epub, rar, sevenzip, zip, xlsx
+  - Added text extraction components for images and PDF files based on PaddleOCR
+  - Added web page loading components based on playwright and bs4
+- Added GitHub and YouTube retrieval tools
+- Added async safe exit method for McpSessionManager
+- Added model Token consumption recording in the Otel-llm-instrumentor module
+
+### Fixed
+- Fixed parameter naming error in the RecursiveCharacterTextSplitter component's splitter method
+- Fixed missing connection_kwargs parameter propagation in MCPToolkit
+- Fixed abnormal queue release issue when tasks exited exceptionally in RequestTask
+
+### Note
+- Improved security for the SlsSender module's put method
+- Enhanced robustness of loop event handling in logging_util
+- Optimized reliability of the add_invocation_chain method in the Monitor module
+- Included some third-party community examples and tools
+- Performed additional code optimizations and documentation updates
+
 ## [0.0.18] - 2025-07-10
 ### Added
 - Added observability capabilities for agent applications based on the OTel protocol

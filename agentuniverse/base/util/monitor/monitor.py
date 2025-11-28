@@ -200,14 +200,28 @@ class Monitor(BaseModel):
     def get_invocation_chain():
         """Get the invocation chain in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
-        return FrameworkContextManager().get_context(trace_id + '_invocation_chain', []) if trace_id is not None else []
+        current_chain = FrameworkContextManager().get_context(trace_id + '_invocation_chain')
+        if isinstance(current_chain, list):
+            return current_chain
+        else:
+            current_chain = []
+            FrameworkContextManager().set_context(
+                trace_id + '_invocation_chain', current_chain)
+            return current_chain
 
     @staticmethod
     def get_invocation_chain_bak():
         """Get the invocation chain bak version in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
-        return FrameworkContextManager().get_context(trace_id + '_invocation_chain_bak',
-                                                     []) if trace_id is not None else []
+        current_chain = FrameworkContextManager().get_context(
+            trace_id + '_invocation_chain_bak')
+        if isinstance(current_chain, list):
+            return current_chain
+        else:
+            current_chain = []
+            FrameworkContextManager().set_context(
+                trace_id + '_invocation_chain_bak', current_chain)
+            return current_chain
 
     @staticmethod
     def init_token_usage():
@@ -225,9 +239,14 @@ class Monitor(BaseModel):
         if trace_id is not None:
             old_token_usage: dict = FrameworkContextManager().get_context(trace_id + '_token_usage')
             if old_token_usage is not None:
+                result_usage = {}
                 for key, value in cur_token_usage.items():
-                    old_token_usage[key] = old_token_usage[key] + value if key in old_token_usage else value
-                FrameworkContextManager().set_context(trace_id + '_token_usage', old_token_usage)
+                    try:
+                        result_usage[key] = old_token_usage[key] + value if key in old_token_usage else value
+                    except:
+                        # not addable value
+                        pass
+                FrameworkContextManager().set_context(trace_id + '_token_usage', result_usage)
 
     @staticmethod
     def clear_token_usage():

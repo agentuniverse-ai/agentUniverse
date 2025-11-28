@@ -321,6 +321,8 @@ class StreamingResultProcessor:
         if pseudo_result.usage:
             self.metrics_recorder.record_token_usage(pseudo_result.usage,
                                                      self.labels)
+            add_current_token_usage(pseudo_result.usage,
+                                    self.span.context.span_id)
         LLMSpanAttributesSetter.set_success_attributes(self.span, duration,
                                                        pseudo_result)
 
