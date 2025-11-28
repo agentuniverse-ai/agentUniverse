@@ -1,0 +1,12 @@
+name: 'doubao_openai_style_llm'
+description: 'default doubao llm with spi'
+model_name: 'doubao-seed-1-6-lite-251015'
+max_tokens: 32000
+extra_body:
+  thinking:
+    type: "enabled"
+  reasoning_effort: "minimal"  # 可选值：minimal/low/medium/high 四种reasoning_effort思考深度
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.doubao_openai_style_llm'
+  class: 'DouBaoOpenAIStyleLLM'
