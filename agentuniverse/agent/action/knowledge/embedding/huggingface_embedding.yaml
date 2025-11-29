@@ -1,0 +1,10 @@
+name: 'huggingface_embedding'
+description: 'embedding use huggingface models from the hub with support for sentence-transformers models'
+embedding_model_name: 'sentence-transformers/all-MiniLM-L6-v2'
+model_name: 'sentence-transformers/all-MiniLM-L6-v2'
+cache_folder: null
+
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.huggingface_embedding'
+  class: 'HuggingFaceEmbedding'
