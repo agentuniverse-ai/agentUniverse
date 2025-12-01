@@ -1,0 +1,9 @@
+name: 'default_google_genai_llm'
+description: 'default google genai llm'
+model_name: 'gemini-1.5-flash'
+max_tokens: 1000
+api_key: '${GOOGLE_API_KEY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.google_genai_llm'
+  class: 'GoogleGenaiLLM'
