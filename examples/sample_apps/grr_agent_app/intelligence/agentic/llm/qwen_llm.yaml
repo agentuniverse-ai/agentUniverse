@@ -3,6 +3,7 @@ description: 'Qwen LLM configuration for GRR agent app'
 model_name: 'qwen-max'
 max_tokens: 4096
 temperature: 0.7
+api_key: '${DASHSCOPE_API_KEY}'
 metadata:
   type: 'LLM'
   module: 'agentuniverse.llm.default.default_openai_llm'
