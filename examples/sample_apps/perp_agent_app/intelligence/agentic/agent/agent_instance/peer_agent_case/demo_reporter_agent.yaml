@@ -1,0 +1,18 @@
+info:
+  name: 'demo_reporter_agent'
+  description: |  
+    报告生成/制作工具，用于生成美观、整洁、可交互的报告, 输入是你想生成报告的内容, 必须是完整的 json 格式。输出为 HTML 格式的报告。
+    Args:
+      input: 需要绘制报告的内容
+    工具输入示例：
+      示例: 你想要生成一份最新的宏观数据报告，工具的输入应该是：{"input": "根据如下信息，帮我生成一份美观的报告：当月PMI为53.9，上月PMI为53.4..." }
+profile:
+  prompt_version: demo_reporter_agent.cn
+  llm_model:
+    name: 'deepseek_llm'
+    model_name: 'deepseek-chat'
+    temperature: 0.2
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.reporter_agent_template'
+  class: 'ReporterAgentTemplate'

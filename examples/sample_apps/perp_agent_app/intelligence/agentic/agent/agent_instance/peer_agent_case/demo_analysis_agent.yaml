@@ -1,0 +1,23 @@
+info:
+  name: 'demo_analysis_agent'
+  description: | 
+    数据分析工具，用于分析各类数据, 输入是你想分析的内容/主题, 必须是完整的 json 格式。输出为 Markdown 格式。
+    Args:
+          input: 需要分析的内容/主题
+    工具输入示例：
+      示例1: 你想要分析已有的PMI数据时，工具的输入应该是：{"input": "分析下如下的PMI数据：当月PMI为53.9，上月PMI为53.4..."}
+      示例2: 你想要获取并分析CPI数据时，工具的输入应该是：{"input": "查询并分析下2025年10月的PMI数据"}
+profile:
+  prompt_version: demo_analysis_agent.cn
+  llm_model:
+    name: 'deepseek_llm'
+    model_name: 'deepseek-chat'
+    temperature: 0.2
+action:
+  tool:
+    - 'google_search_tool'
+    - 'python_runner'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.react_agent_template'
+  class: 'ReActAgentTemplate'

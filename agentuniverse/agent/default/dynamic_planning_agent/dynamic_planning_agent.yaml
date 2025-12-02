@@ -1,0 +1,14 @@
+info:
+  name: 'DynamicPlanningAgent'
+  description: 'dynamic planning agent'
+profile:
+  llm_model:
+    name: 'deepseek_llm'
+    model_name: 'deepseek-chat'
+    temperature: 0.2
+memory:
+  name: 'dynamic_planning_agent_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.dynamic_planning_agent_template'
+  class: 'DynamicPlanningAgentTemplate'

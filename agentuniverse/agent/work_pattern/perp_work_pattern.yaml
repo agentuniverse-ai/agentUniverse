@@ -1,0 +1,6 @@
+name: 'plan_execute_re_plan_work_pattern'
+description: 'plan execute re plan work pattern'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.perp_work_pattern'
+  class: 'PlanExecuteRePlanWorkPattern'

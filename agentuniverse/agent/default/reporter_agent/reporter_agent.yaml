@@ -1,0 +1,18 @@
+info:
+  name: 'ReporterAgent'
+  description: |
+    Report generation/production tool for generating beautiful, clean, interactive reports. Input must be complete JSON format of the content you want to generate a report for. Output is HTML format report.
+    Args:
+      input: Content needed to generate the report
+    Tool input example:
+      Example: If you want to generate a latest macro data report, the tool input should be: {"input": "Based on the following information, help me generate a beautiful report: current month PMI is 53.9, last month PMI was 53.4..." }
+  profile:
+profile:
+  llm_model:
+    name: 'deepseek_llm'
+    model_name: 'deepseek-chat'
+    temperature: 0.2
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.reporter_agent_template'
+  class: 'ReporterAgentTemplate'
