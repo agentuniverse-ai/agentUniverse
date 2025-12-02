@@ -1,0 +1,6 @@
+name: 'ram_memory_storage'
+description: 'ram memory storage'
+metadata:
+  type: 'MEMORY_STORAGE'
+  module: 'agentuniverse.agent.memory.memory_storage.ram_memory_storage'
+  class: 'RamMemoryStorage'

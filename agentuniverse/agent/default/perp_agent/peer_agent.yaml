@@ -1,0 +1,17 @@
+info:
+  name: 'PerpAgent'
+  description: 'perp agent'
+action:
+  tool:
+    - 'google_search_tool'
+profile:
+  planner: 'DynamicPlanningAgent'
+  executors:
+    - 'AnalysisAgent'
+    - 'ReporterAgent'
+memory:
+  name: 'Memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.perp_agent_template'
+  class: 'PerpAgentTemplate'
