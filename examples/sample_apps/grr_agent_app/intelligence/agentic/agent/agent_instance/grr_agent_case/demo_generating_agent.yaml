@@ -1,0 +1,15 @@
+info:
+  name: 'demo_generating_agent'
+  description: 'Demo generating agent for content creation'
+profile:
+  prompt_version: demo_generating_agent.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.7
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.generating_agent_template'
+  class: 'GeneratingAgentTemplate'

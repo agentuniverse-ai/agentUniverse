@@ -1,0 +1,15 @@
+info:
+  name: 'demo_rewriting_agent'
+  description: 'Demo rewriting agent for content improvement'
+profile:
+  prompt_version: demo_rewriting_agent.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.5
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.rewriting_agent_template'
+  class: 'RewritingAgentTemplate'

@@ -1,0 +1,9 @@
+[CORE_PACKAGE]
+# Scan and register base package
+default = ['agentuniverse']
+# IS agent application package
+is_agent = ['intelligence.agentic']
+
+[SUB_CONFIG_PATH]
+# IS agent application sub-config paths
+is_agent_app = ['./']

@@ -1,0 +1,3 @@
+name: 'is_work_pattern'
+description: 'Implementation-Supervision work pattern for goal-aligned execution with continuous monitoring'
+type: 'WORK_PATTERN'
