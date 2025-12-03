@@ -1,0 +1,6 @@
+name: 'demo_memory'
+description: 'demo memory'
+metadata:
+  type: 'MEMORY'
+  module: 'agentuniverse.agent.memory.chat_memory'
+  class: 'ChatMemory'

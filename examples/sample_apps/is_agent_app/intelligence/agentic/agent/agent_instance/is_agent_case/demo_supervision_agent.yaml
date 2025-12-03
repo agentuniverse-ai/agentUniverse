@@ -1,0 +1,22 @@
+info:
+  name: 'demo_supervision_agent'
+  description: 'Demo supervision agent for monitoring execution progress'
+
+profile:
+  # Prompt configuration
+  prompt_version: 'demo_supervision_agent.cn'
+
+  # LLM configuration
+  llm_model:
+    name: 'default_openai_llm'
+    model_name: 'gpt-4o-2024-11-20'
+    temperature: 0.3
+
+  # Memory configuration
+  memory:
+    name: 'demo_memory'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.supervision_agent_template'
+  class: 'SupervisionAgentTemplate'

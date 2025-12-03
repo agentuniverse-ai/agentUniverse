@@ -1,0 +1,21 @@
+info:
+  name: 'demo_grr_agent'
+  description: 'Demo GRR agent for content generation with iterative refinement'
+profile:
+  generating: 'demo_generating_agent'
+  reviewing: 'demo_reviewing_agent'
+  rewriting: 'demo_rewriting_agent'
+  eval_threshold: 60
+  retry_count: 2
+  expert_framework:
+    context:
+      generating:
+      reviewing:
+      rewriting:
+    selector:
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.grr_agent_template'
+  class: 'GRRAgentTemplate'
