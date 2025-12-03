@@ -8,7 +8,8 @@
 import datetime
 import json
 import os
-from typing import Union, Optional
+from typing import Union, Optional, Dict, List
+from collections import defaultdict
 from loguru import logger
 
 from pydantic import BaseModel
@@ -53,13 +54,54 @@ class Monitor(BaseModel):
     @staticmethod
     def trace_llm_invocation(source: str, llm_input: Union[str, dict], llm_output: Union[str, dict],
                              cost_time: float = None) -> None:
+        """
+        Trace the llm invocation.
+
+        This method will:
+        1. 打印一条包含 token 使用量的结构化日志，便于集中日志检索。
+        2. 在开启 Monitor.activate 的情况下，将调用明细（含 token 使用量）写入 jsonl 文件，
+           方便后续做离线统计与分析。
+        """
+        used_token = Monitor.get_token_usage()
+
+        # 1. 结构化日志，便于在日志系统中检索
         logger.bind(
             log_type=LogTypeEnum.llm_invocation,
-            used_token=Monitor.get_token_usage(),
+            used_token=used_token,
             cost_time=cost_time,
             llm_output=llm_output,
             context_prefix=get_context_prefix()
         ).info("Trace llm invocation.")
+
+        # 2. 按小时将调用明细落盘到 jsonl 文件，便于后续做离线统计
+        monitor = Monitor()
+        if monitor.activate:
+            try:
+                import jsonlines
+            except ImportError:
+                # 与 agent 监控保持一致：只在使用者显式开启监控时才需要额外依赖
+                raise ImportError(
+                    "jsonlines is required to trace llm invocation: `pip install jsonlines`"
+                )
+
+            date = datetime.datetime.now()
+            record = {
+                "source": source,
+                "date": date.strftime("%Y-%m-%d %H:%M:%S"),
+                "llm_input": llm_input,
+                "llm_output": llm_output,
+                "token_usage": used_token,
+                "cost_time": cost_time,
+            }
+
+            filename = f"llm_{source}_{date.strftime('%Y-%m-%d-%H')}.jsonl"
+            path_save = os.path.join(
+                str(monitor._get_or_create_subdir(LLM_INVOCATION_SUBDIR)),
+                filename
+            )
+
+            with jsonlines.open(path_save, 'a') as writer:
+                writer.write(record)
 
     def trace_llm_token_usage(self, llm_obj: object, llm_input: dict, output: LLMOutput) -> None:
         """ Trace the token usage of the given LLM object.
@@ -91,6 +133,9 @@ class Monitor(BaseModel):
     def trace_agent_invocation(self, source: str, agent_input: Union[str, dict],
                                agent_output: OutputObject, cost_time: float = None) -> None:
         """Trace the agent invocation and save it to the monitor jsonl file."""
+        # Get token usage for this agent invocation
+        token_usage = Monitor.get_token_usage()
+        
         if self.activate:
             try:
                 import jsonlines
@@ -105,6 +150,8 @@ class Monitor(BaseModel):
                 "date": date.strftime("%Y-%m-%d %H:%M:%S"),
                 "agent_input": self.serialize_obj(agent_input),
                 "agent_output": self.serialize_obj(agent_output),
+                "token_usage": token_usage,
+                "cost_time": cost_time,
             }
             # files are stored in hours
             filename = f"agent_{source}_{date.strftime('%Y-%m-%d-%H')}.jsonl"
@@ -119,6 +166,7 @@ class Monitor(BaseModel):
             logger.bind(
                 log_type=LogTypeEnum.agent_invocation,
                 cost_time=cost_time,
+                token_usage=token_usage,
                 agent_output=agent_output,
                 context_prefix=get_context_prefix()
             ).info("Trace agent invocation.")
@@ -371,3 +419,316 @@ class Monitor(BaseModel):
                 return o
 
         return recursive_filter(obj)
+
+    def get_llm_statistics(self, start_date: Optional[str] = None, 
+                          end_date: Optional[str] = None,
+                          source: Optional[str] = None) -> Dict:
+        """
+        统计LLM调用数据。
+        
+        Args:
+            start_date: 开始日期，格式 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"
+            end_date: 结束日期，格式 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"
+            source: 过滤特定的LLM source，如果为None则统计所有source
+            
+        Returns:
+            dict: 包含以下字段的统计结果：
+                - total_calls: 总调用次数
+                - total_tokens: 总token数
+                - total_prompt_tokens: 总prompt tokens
+                - total_completion_tokens: 总completion tokens
+                - avg_cost_time: 平均响应时间（秒）
+                - by_source: 按source分组的统计
+        """
+        try:
+            import jsonlines
+        except ImportError:
+            raise ImportError("jsonlines is required: `pip install jsonlines`")
+        
+        llm_dir = self._get_or_create_subdir(LLM_INVOCATION_SUBDIR)
+        if not os.path.exists(llm_dir):
+            return {
+                "total_calls": 0,
+                "total_tokens": 0,
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "avg_cost_time": 0.0,
+                "by_source": {}
+            }
+        
+        # Parse date filters
+        start_dt = None
+        end_dt = None
+        if start_date:
+            try:
+                start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                try:
+                    start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+                except ValueError:
+                    pass
+        if end_date:
+            try:
+                end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                try:
+                    end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+                    end_dt = end_dt.replace(hour=23, minute=59, second=59)
+                except ValueError:
+                    pass
+        
+        stats = {
+            "total_calls": 0,
+            "total_tokens": 0,
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "total_cost_time": 0.0,
+            "by_source": defaultdict(lambda: {
+                "calls": 0,
+                "tokens": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cost_time": 0.0
+            })
+        }
+        
+        # Scan all jsonl files
+        for filename in os.listdir(llm_dir):
+            if not filename.startswith("llm_") or not filename.endswith(".jsonl"):
+                continue
+            
+            file_source = filename.replace("llm_", "").split("_")[0]
+            if source and file_source != source:
+                continue
+            
+            filepath = os.path.join(llm_dir, filename)
+            try:
+                with jsonlines.open(filepath, 'r') as reader:
+                    for record in reader:
+                        record_date_str = record.get("date", "")
+                        if record_date_str:
+                            try:
+                                record_date = datetime.datetime.strptime(record_date_str, "%Y-%m-%d %H:%M:%S")
+                                if start_dt and record_date < start_dt:
+                                    continue
+                                if end_dt and record_date > end_dt:
+                                    continue
+                            except ValueError:
+                                pass
+                        
+                        stats["total_calls"] += 1
+                        source_stats = stats["by_source"][file_source]
+                        source_stats["calls"] += 1
+                        
+                        token_usage = record.get("token_usage", {})
+                        if isinstance(token_usage, dict):
+                            total = token_usage.get("total_tokens", 0)
+                            prompt = token_usage.get("prompt_tokens", 0)
+                            completion = token_usage.get("completion_tokens", 0)
+                            
+                            stats["total_tokens"] += total
+                            stats["total_prompt_tokens"] += prompt
+                            stats["total_completion_tokens"] += completion
+                            
+                            source_stats["tokens"] += total
+                            source_stats["prompt_tokens"] += prompt
+                            source_stats["completion_tokens"] += completion
+                        
+                        cost_time = record.get("cost_time")
+                        if cost_time is not None:
+                            stats["total_cost_time"] += cost_time
+                            source_stats["cost_time"] += cost_time
+            except Exception as e:
+                logger.warning(f"Error reading file {filename}: {e}")
+                continue
+        
+        # Calculate averages
+        if stats["total_calls"] > 0:
+            stats["avg_cost_time"] = stats["total_cost_time"] / stats["total_calls"]
+        else:
+            stats["avg_cost_time"] = 0.0
+        
+        # Calculate averages for each source
+        for source_key in stats["by_source"]:
+            source_stats = stats["by_source"][source_key]
+            if source_stats["calls"] > 0:
+                source_stats["avg_cost_time"] = source_stats["cost_time"] / source_stats["calls"]
+            else:
+                source_stats["avg_cost_time"] = 0.0
+        
+        stats["by_source"] = dict(stats["by_source"])
+        del stats["total_cost_time"]  # Remove intermediate field
+        
+        return stats
+
+    def get_agent_statistics(self, start_date: Optional[str] = None,
+                            end_date: Optional[str] = None,
+                            source: Optional[str] = None) -> Dict:
+        """
+        统计Agent调用数据。
+        
+        Args:
+            start_date: 开始日期，格式 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"
+            end_date: 结束日期，格式 "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM:SS"
+            source: 过滤特定的Agent source，如果为None则统计所有source
+            
+        Returns:
+            dict: 包含以下字段的统计结果：
+                - total_calls: 总调用次数
+                - total_tokens: 总token数
+                - avg_cost_time: 平均响应时间（秒）
+                - by_source: 按source分组的统计
+        """
+        try:
+            import jsonlines
+        except ImportError:
+            raise ImportError("jsonlines is required: `pip install jsonlines`")
+        
+        agent_dir = self._get_or_create_subdir(AGENT_INVOCATION_SUBDIR)
+        if not os.path.exists(agent_dir):
+            return {
+                "total_calls": 0,
+                "total_tokens": 0,
+                "avg_cost_time": 0.0,
+                "by_source": {}
+            }
+        
+        # Parse date filters
+        start_dt = None
+        end_dt = None
+        if start_date:
+            try:
+                start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                try:
+                    start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+                except ValueError:
+                    pass
+        if end_date:
+            try:
+                end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                try:
+                    end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+                    end_dt = end_dt.replace(hour=23, minute=59, second=59)
+                except ValueError:
+                    pass
+        
+        stats = {
+            "total_calls": 0,
+            "total_tokens": 0,
+            "total_cost_time": 0.0,
+            "by_source": defaultdict(lambda: {
+                "calls": 0,
+                "tokens": 0,
+                "cost_time": 0.0
+            })
+        }
+        
+        # Scan all jsonl files
+        for filename in os.listdir(agent_dir):
+            if not filename.startswith("agent_") or not filename.endswith(".jsonl"):
+                continue
+            
+            file_source = filename.replace("agent_", "").split("_")[0]
+            if source and file_source != source:
+                continue
+            
+            filepath = os.path.join(agent_dir, filename)
+            try:
+                with jsonlines.open(filepath, 'r') as reader:
+                    for record in reader:
+                        record_date_str = record.get("date", "")
+                        if record_date_str:
+                            try:
+                                record_date = datetime.datetime.strptime(record_date_str, "%Y-%m-%d %H:%M:%S")
+                                if start_dt and record_date < start_dt:
+                                    continue
+                                if end_dt and record_date > end_dt:
+                                    continue
+                            except ValueError:
+                                pass
+                        
+                        stats["total_calls"] += 1
+                        source_stats = stats["by_source"][file_source]
+                        source_stats["calls"] += 1
+                        
+                        token_usage = record.get("token_usage", {})
+                        if isinstance(token_usage, dict):
+                            total = token_usage.get("total_tokens", 0)
+                            stats["total_tokens"] += total
+                            source_stats["tokens"] += total
+                        
+                        cost_time = record.get("cost_time")
+                        if cost_time is not None:
+                            stats["total_cost_time"] += cost_time
+                            source_stats["cost_time"] += cost_time
+            except Exception as e:
+                logger.warning(f"Error reading file {filename}: {e}")
+                continue
+        
+        # Calculate averages
+        if stats["total_calls"] > 0:
+            stats["avg_cost_time"] = stats["total_cost_time"] / stats["total_calls"]
+        else:
+            stats["avg_cost_time"] = 0.0
+        
+        # Calculate averages for each source
+        for source_key in stats["by_source"]:
+            source_stats = stats["by_source"][source_key]
+            if source_stats["calls"] > 0:
+                source_stats["avg_cost_time"] = source_stats["cost_time"] / source_stats["calls"]
+            else:
+                source_stats["avg_cost_time"] = 0.0
+        
+        stats["by_source"] = dict(stats["by_source"])
+        del stats["total_cost_time"]  # Remove intermediate field
+        
+        return stats
+
+    def estimate_cost(self, token_usage: Dict, 
+                     prompt_price_per_1k: float = 0.0,
+                     completion_price_per_1k: float = 0.0) -> float:
+        """
+        估算token使用成本。
+        
+        Args:
+            token_usage: token使用量字典，包含 prompt_tokens 和 completion_tokens
+            prompt_price_per_1k: 每1000个prompt tokens的价格（单位：元或美元）
+            completion_price_per_1k: 每1000个completion tokens的价格（单位：元或美元）
+            
+        Returns:
+            float: 估算的总成本
+        """
+        prompt_tokens = token_usage.get("prompt_tokens", 0)
+        completion_tokens = token_usage.get("completion_tokens", 0)
+        
+        prompt_cost = (prompt_tokens / 1000.0) * prompt_price_per_1k
+        completion_cost = (completion_tokens / 1000.0) * completion_price_per_1k
+        
+        return prompt_cost + completion_cost
+
+    def get_daily_summary(self, date: Optional[str] = None) -> Dict:
+        """
+        获取指定日期的每日汇总统计。
+        
+        Args:
+            date: 日期，格式 "YYYY-MM-DD"，如果为None则使用今天
+            
+        Returns:
+            dict: 包含LLM和Agent的统计汇总
+        """
+        if date is None:
+            date = datetime.datetime.now().strftime("%Y-%m-%d")
+        
+        start_date = f"{date} 00:00:00"
+        end_date = f"{date} 23:59:59"
+        
+        llm_stats = self.get_llm_statistics(start_date, end_date)
+        agent_stats = self.get_agent_statistics(start_date, end_date)
+        
+        return {
+            "date": date,
+            "llm": llm_stats,
+            "agent": agent_stats
+        }
