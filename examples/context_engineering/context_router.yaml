@@ -1,0 +1,58 @@
+name: 'context_router'
+description: 'Task-specific routing for multi-tier storage'
+
+# Enable multi-tier storage
+enable_warm_tier: true
+enable_cold_tier: true
+
+# Task-specific routing rules
+routing_rules:
+  code_generation:
+    priority_types:
+      - workspace
+      - reference
+      - task
+    search_tiers:
+      - hot
+      - warm
+    write_tier: hot
+    archive_after_hours: 48
+    compression_strategy: selective
+
+  data_analysis:
+    priority_types:
+      - background
+      - workspace
+      - reference
+    search_tiers:
+      - hot
+      - warm
+      - cold
+    write_tier: hot
+    archive_after_hours: 24
+    compression_strategy: summarize
+
+  dialogue:
+    priority_types:
+      - conversation
+      - system
+      - background
+    search_tiers:
+      - hot
+    write_tier: hot
+    archive_after_hours: 72
+    compression_strategy: adaptive
+
+# Default routing rule
+default_rule:
+  priority_types: []
+  search_tiers:
+    - hot
+  write_tier: hot
+  archive_after_hours: 48
+  compression_strategy: adaptive
+
+metadata:
+  type: 'CONTEXT_ROUTER'
+  module: 'agentuniverse.agent.context.router.context_router'
+  class: 'ContextRouter'

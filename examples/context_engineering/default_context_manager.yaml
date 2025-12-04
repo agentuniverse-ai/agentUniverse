@@ -1,0 +1,62 @@
+# Example ContextManager Configuration
+# Central orchestrator for context engineering with proactive budget management
+
+name: 'default_context_manager'
+description: 'Default context manager with task-adaptive strategies'
+
+# Storage backends (multi-tier architecture)
+hot_store_name: 'ram_context_store'      # Hot tier: fast in-memory access
+warm_store_name: 'redis_context_store'   # Warm tier: persistent with TTL
+cold_store_name: 'chroma_context_store'  # Cold tier: long-term archival with vector search
+
+# LLM for token counting
+llm_name: 'default_llm'
+
+# Compression and routing (Phase 2)
+compressor_name: 'adaptive_compressor'   # Intelligent compression strategy selector
+router_name: 'context_router'            # Task-specific routing engine
+enable_compression: true                 # Enable intelligent compression in _make_room()
+
+# Default budget configuration
+default_max_tokens: 8000
+default_reserved_tokens: 1000
+
+# Task-specific configurations
+# These override defaults based on task_type
+task_configs:
+  code_generation:
+    max_tokens: 10000
+    reserved_tokens: 1500
+    budget_ratios:
+      workspace: 0.5   # 50% for code files
+      knowledge: 0.2   # 20% for documentation
+      memory: 0.15     # 15% for conversation history
+      system: 0.05     # 5% for system prompts
+      task: 0.1        # 10% for current task
+    compression_strategy: 'selective'
+
+  data_analysis:
+    max_tokens: 12000
+    reserved_tokens: 2000
+    budget_ratios:
+      background: 0.4   # 40% for data context
+      workspace: 0.3    # 30% for notebooks/scripts
+      knowledge: 0.15   # 15% for documentation
+      memory: 0.1       # 10% for conversation
+      system: 0.05      # 5% for system prompts
+    compression_strategy: 'summarize'
+
+  dialogue:
+    max_tokens: 8000
+    reserved_tokens: 1000
+    budget_ratios:
+      conversation: 0.5  # 50% for chat history
+      background: 0.25   # 25% for context
+      system: 0.15       # 15% for system prompts
+      memory: 0.1        # 10% for long-term memory
+    compression_strategy: 'adaptive'
+
+metadata:
+  type: 'CONTEXT_MANAGER'
+  module: 'agentuniverse.agent.context.context_manager'
+  class: 'ContextManager'

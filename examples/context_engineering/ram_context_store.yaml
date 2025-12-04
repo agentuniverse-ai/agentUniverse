@@ -1,0 +1,15 @@
+# Example RamContextStore Configuration
+# This is the "hot" tier storage for fast in-memory context access
+
+name: 'ram_context_store'
+description: 'In-memory context storage with LRU eviction'
+
+# Storage configuration
+storage_tier: 'hot'
+max_segments: 1000
+ttl_hours: 24
+
+metadata:
+  type: 'CONTEXT_STORE'
+  module: 'agentuniverse.agent.context.store.ram_context_store'
+  class: 'RamContextStore'

@@ -1,0 +1,24 @@
+name: 'redis_context_store'
+description: 'Redis-based warm tier context storage with TTL'
+
+# Storage tier classification
+storage_tier: 'warm'
+
+# Redis connection settings
+redis_host: 'localhost'
+redis_port: 6379
+redis_db: 0
+redis_password: null  # Optional password
+
+# Redis key management
+key_prefix: 'agentuniverse:context:'
+default_ttl_seconds: 86400  # 24 hours
+
+# Storage limits
+max_segments: 10000
+ttl_hours: 24
+
+metadata:
+  type: 'CONTEXT_STORE'
+  module: 'agentuniverse.agent.context.store.redis_context_store'
+  class: 'RedisContextStore'

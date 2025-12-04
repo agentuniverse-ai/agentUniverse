@@ -1,0 +1,42 @@
+# Example Agent with Context Engineering
+# Demonstrates how to enable context-aware agents with proactive budget management
+
+info:
+  name: 'context_aware_agent'
+  description: 'Example agent with advanced context engineering capabilities'
+
+profile:
+  # LLM configuration
+  llm_model:
+    name: 'gpt-4'
+    temperature: 0.7
+    max_tokens: 2000
+
+  # NEW: Enable context manager (opt-in)
+  context_manager: 'default_context_manager'
+  task_type: 'dialogue'  # Options: dialogue, code_generation, data_analysis
+
+  # System prompt
+  prompt_version: 'context_aware_agent.cn'
+  system_prompt: |
+    You are an intelligent assistant with advanced context awareness.
+    You can maintain coherent conversations across multiple turns and
+    remember important information from our discussion.
+
+# Memory configuration (enhanced with context manager)
+memory:
+  name: 'demo_memory'
+  # NEW: Link to context manager for budget-aware retrieval
+  context_manager: 'default_context_manager'
+
+# Knowledge configuration
+action:
+  knowledge:
+    name: 'demo_knowledge'
+    # NEW: Context manager enables dynamic knowledge updates
+    context_manager: 'default_context_manager'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.default.default_agent'
+  class: 'DefaultAgent'

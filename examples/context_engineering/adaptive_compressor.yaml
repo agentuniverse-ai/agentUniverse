@@ -1,0 +1,25 @@
+name: 'adaptive_compressor'
+description: 'Intelligent compression strategy selector'
+
+# Compression configuration
+compression_ratio: 0.6  # Target 40% reduction (0.6 = 60% retained)
+min_quality_threshold: 0.9  # Minimum 90% information preservation
+
+# Enable hybrid strategy (combines multiple approaches)
+enable_hybrid: true
+
+# Available strategies with weights
+strategy_weights:
+  selective: 1.0      # Priority-aware selection
+  summarize: 0.8      # LLM-based summarization
+  truncate: 0.3       # Fast truncation (fallback)
+  hybrid: 1.2         # Combined approach (highest weight)
+
+# Performance thresholds
+time_limit_ms: 500  # Maximum compression time
+batch_size: 100     # Segments to process at once
+
+metadata:
+  type: 'CONTEXT_COMPRESSOR'
+  module: 'agentuniverse.agent.context.compressor.adaptive_compressor'
+  class: 'AdaptiveCompressor'

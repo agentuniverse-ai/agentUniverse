@@ -1,0 +1,41 @@
+# Code Generation Agent with Context Engineering
+# Optimized for multi-file code generation tasks with 50% budget for workspace
+
+info:
+  name: 'code_gen_agent'
+  description: 'Agent specialized for code generation with workspace-focused context'
+
+profile:
+  llm_model:
+    name: 'gpt-4'
+    temperature: 0.3  # Lower temperature for precise code generation
+    max_tokens: 3000
+
+  # Enable context manager with code_generation task type
+  context_manager: 'default_context_manager'
+  task_type: 'code_generation'  # 50% budget allocated to workspace (code files)
+
+  system_prompt: |
+    You are an expert software engineer specializing in code generation.
+    You have access to the codebase context and can write high-quality,
+    maintainable code following project conventions.
+
+memory:
+  name: 'code_memory'
+  context_manager: 'default_context_manager'
+
+action:
+  knowledge:
+    name: 'code_knowledge'
+    description: 'Technical documentation and coding patterns'
+    context_manager: 'default_context_manager'
+
+  tool:
+    - 'code_analyzer'
+    - 'file_editor'
+    - 'test_runner'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.default.default_agent'
+  class: 'DefaultAgent'
