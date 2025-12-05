@@ -1,0 +1,18 @@
+name: 'contract_clause_fragmenter'
+description: 'Fragment legal contracts by individual clauses while preserving hierarchical structure'
+preserve_hierarchy: true
+min_clause_length: 10
+extract_references: true
+skip_on_error: true
+clause_patterns:
+  - '^Article\s+[IVX\d]+\.?\s*'
+  - '^ARTICLE\s+[IVX\d]+\.?\s*'
+  - '^Section\s+\d+(\.\d+)*\.?\s*'
+  - '^SECTION\s+\d+(\.\d+)*\.?\s*'
+  - '^\d+\.(\d+\.)*\s+'
+  - '^第[一二三四五六七八九十百千\d]+条\s*'
+  - '^[一二三四五六七八九十百千\d]+、\s*'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.contract_clause_fragmenter'
+  class: 'ContractClauseFragmenter'

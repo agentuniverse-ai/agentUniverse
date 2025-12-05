@@ -12,11 +12,21 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 from agentuniverse.agent.action.knowledge.doc_processor.code_ast_processor import CodeAstProcessor
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
+# Check if tree-sitter is available
+try:
+    import tree_sitter
+    TREE_SITTER_AVAILABLE = True
+except ImportError:
+    TREE_SITTER_AVAILABLE = False
 
+
+@pytest.mark.skipif(not TREE_SITTER_AVAILABLE, reason="tree-sitter not installed")
 class TestCodeAstProcessor(unittest.TestCase):
 
     def setUp(self):

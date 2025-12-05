@@ -70,7 +70,7 @@ class TestJinaReranker(unittest.TestCase):
         result_docs = self.reranker._process_docs(self.test_docs, self.test_query)
 
         mock_post.assert_called_once_with(
-            'https://api.jina.ai/v1/rerank  ',
+            'https://api.jina.ai/v1/rerank',
             headers={
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer test_api_key'
@@ -78,7 +78,8 @@ class TestJinaReranker(unittest.TestCase):
             json={
                 'model': 'jina-reranker-v2-base-multilingual',
                 'query': 'test query',
-                'documents': [doc.text for doc in self.test_docs]
+                'documents': [doc.text for doc in self.test_docs],
+                'top_n': 10
             }
         )
 
@@ -105,7 +106,7 @@ class TestJinaReranker(unittest.TestCase):
         result_docs = self.reranker._process_docs(self.test_docs, self.test_query)
 
         mock_post.assert_called_once_with(
-            'https://api.jina.ai/v1/rerank  ',
+            'https://api.jina.ai/v1/rerank',
             headers={
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer test_api_key'

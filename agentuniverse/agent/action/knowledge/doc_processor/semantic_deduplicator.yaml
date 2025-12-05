@@ -1,0 +1,13 @@
+name: 'semantic_deduplicator'
+description: 'Remove semantic duplicates from documents using content hashing and embedding-based similarity'
+similarity_threshold: 0.95
+exact_match_threshold: 1.0
+merge_strategy: 'keep_first'  # Options: 'keep_first', 'keep_best', 'merge'
+use_embeddings: true
+embedding_name: 'default_embedding'
+preserve_metadata: true
+skip_on_error: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.semantic_deduplicator'
+  class: 'SemanticDeduplicator'
