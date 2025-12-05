@@ -1,0 +1,6 @@
+name: 'default_json_reader'
+description: 'default json reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.json_reader'
+  class: 'JsonReader'
