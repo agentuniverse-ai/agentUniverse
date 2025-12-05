@@ -1,0 +1,49 @@
+# Custom API Keys Configuration / 自定义API密钥配置
+# IMPORTANT: Add this file to .gitignore to prevent exposing your API keys
+# 重要提示：将此文件添加到 .gitignore 以防止暴露您的API密钥
+
+# ===============================================================
+# LLM API Keys / LLM API密钥
+# ===============================================================
+
+# Qwen (Alibaba DashScope) API Key / 通义千问（阿里云灵积）API密钥
+# Get your API key from: https://dashscope.console.aliyun.com/
+# 从此处获取您的API密钥: https://dashscope.console.aliyun.com/
+[KEY_LIST]
+DASHSCOPE_API_KEY = 'your-dashscope-api-key-here'
+
+# Alternative LLM Options / 其他LLM选项
+# Uncomment and configure if you want to use other LLMs
+# 如果您想使用其他LLM，请取消注释并配置
+
+# OpenAI API Key / OpenAI API密钥
+# OPENAI_API_KEY = 'your-openai-api-key-here'
+
+# OpenAI Base URL (optional, for proxy or custom endpoints)
+# OpenAI基础URL（可选，用于代理或自定义端点）
+# OPENAI_API_BASE = 'https://api.openai.com/v1'
+
+# Azure OpenAI Configuration / Azure OpenAI配置
+# AZURE_OPENAI_API_KEY = 'your-azure-openai-api-key-here'
+# AZURE_OPENAI_ENDPOINT = 'https://your-resource.openai.azure.com/'
+# AZURE_OPENAI_API_VERSION = '2024-02-15-preview'
+
+# Other LLM API Keys / 其他LLM API密钥
+# ANTHROPIC_API_KEY = 'your-anthropic-api-key-here'
+# GOOGLE_API_KEY = 'your-google-api-key-here'
+# HUGGINGFACE_API_KEY = 'your-huggingface-api-key-here'
+
+# ===============================================================
+# Instructions / 使用说明
+# ===============================================================
+# 1. Replace 'your-dashscope-api-key-here' with your actual API key
+#    将 'your-dashscope-api-key-here' 替换为您的实际API密钥
+#
+# 2. Add this file to .gitignore: echo "config/custom_key.toml" >> .gitignore
+#    将此文件添加到.gitignore: echo "config/custom_key.toml" >> .gitignore
+#
+# 3. Never commit this file to version control
+#    切勿将此文件提交到版本控制系统
+#
+# 4. For production deployment, use environment variables or secret management
+#    对于生产部署，使用环境变量或密钥管理服务

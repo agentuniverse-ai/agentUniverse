@@ -1,0 +1,115 @@
+# Simple Q&A Agent Configuration / 简单问答智能体配置
+# This file defines the Simple Q&A Agent's behavior and capabilities
+# 此文件定义简单问答智能体的行为和能力
+
+# Agent information / 智能体信息
+info:
+  # Unique agent identifier / 唯一智能体标识符
+  name: 'simple_qa_agent'
+
+  # Brief description / 简要描述
+  description: 'A simple Q&A agent that answers questions in a friendly and helpful manner / 一个以友好和乐于助人的方式回答问题的简单问答智能体'
+
+# Agent profile / 智能体配置文件
+profile:
+  # Prompt version to use (references the prompt template) / 使用的提示词版本（引用提示词模板）
+  prompt_version: 'simple_qa_prompt.v1'
+
+  # Introduction to the agent / 智能体简介
+  introduction: |
+    You are a helpful and friendly Q&A assistant. Your goal is to provide clear, accurate, and concise answers to user questions.
+    你是一个乐于助人且友好的问答助手。你的目标是为用户的问题提供清晰、准确、简洁的答案。
+
+  # Target objective / 目标
+  target: |
+    Answer the user's question in a helpful and conversational manner.
+    以友好和对话的方式回答用户的问题。
+
+  # Detailed instructions / 详细指令
+  instruction: |
+    ## Guidelines / 指导原则
+
+    1. **Be Clear and Concise** - Provide direct answers without unnecessary complexity
+       **清晰简洁** - 提供直接答案，避免不必要的复杂性
+
+    2. **Be Accurate** - If unsure, say so. Don't make up information.
+       **准确无误** - 如果不确定，请明说。不要编造信息。
+
+    3. **Be Friendly** - Use a warm, conversational tone
+       **友好亲切** - 使用温暖、对话的语气
+
+    4. **Language Adaptation** - Respond in the same language as the question
+       **语言适应** - 用与问题相同的语言回答
+
+    5. **Be Helpful** - Provide context and suggest related topics when relevant
+       **乐于助人** - 在相关时提供背景信息和建议相关主题
+
+  # LLM model configuration / LLM模型配置
+  llm_model:
+    # Reference to the LLM defined in llm/qwen_llm.yaml
+    # 引用在 llm/qwen_llm.yaml 中定义的LLM
+    name: 'qwen_llm'
+
+    # Model identifier / 模型标识符
+    model_name: 'qwen2.5-72b-instruct'
+
+    # Temperature for response generation / 响应生成的温度
+    # 0.7 provides a good balance between creativity and consistency
+    # 0.7在创造性和一致性之间提供良好的平衡
+    temperature: 0.7
+
+    # Maximum tokens in response / 响应中的最大token数
+    max_tokens: 1000
+
+# Action configuration / 行动配置
+action:
+  # Tools available to this agent / 此智能体可用的工具
+  # Empty list means no external tools, pure conversational agent
+  # 空列表表示没有外部工具，纯对话智能体
+  tool: []
+
+  # Knowledge bases available to this agent / 此智能体可用的知识库
+  # Empty list means no external knowledge bases
+  # 空列表表示没有外部知识库
+  knowledge: []
+
+# Memory configuration / 记忆配置
+# Not configured for this simple stateless agent
+# 此简单无状态智能体未配置记忆
+# memory:
+#   name: 'demo_memory'
+
+# Metadata for agentUniverse framework / agentUniverse框架的元数据
+metadata:
+  # Component type / 组件类型
+  type: 'AGENT'
+
+  # Python module path (using built-in ReAct template) / Python模块路径（使用内置ReAct模板）
+  module: 'agentuniverse.agent.template.react_agent_template'
+
+  # Python class name (using built-in ReAct template) / Python类名（使用内置ReAct模板）
+  class: 'ReActAgentTemplate'
+
+# ===============================================================
+# Architecture Notes / 架构说明
+# ===============================================================
+# This agent uses the ReActAgentTemplate, which provides:
+# 此智能体使用 ReActAgentTemplate，它提供：
+#
+# - Reasoning: The agent thinks through the problem
+#   推理：智能体思考问题
+# - Acting: The agent takes actions (in this case, generating responses)
+#   行动：智能体采取行动（在本例中为生成响应）
+#
+# For this simple Q&A agent:
+# 对于这个简单的问答智能体：
+# - No tools are needed (pure LLM responses)
+#   不需要工具（纯LLM响应）
+# - No knowledge bases (relies on LLM's built-in knowledge)
+#   没有知识库（依赖LLM的内置知识）
+# - No memory (stateless, each question is independent)
+#   没有记忆（无状态，每个问题都是独立的）
+#
+# This makes it the simplest possible agentUniverse agent!
+# 这使它成为最简单的 agentUniverse 智能体！
+# ===============================================================
