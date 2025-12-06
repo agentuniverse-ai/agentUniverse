@@ -1,0 +1,9 @@
+channel_name: 'gemini-3-pro-preview-openrouter-official'
+channel_api_key: '${OPENROUTER_API_KEY}'
+channel_api_base: 'https://openrouter.ai/api/v1/chat/completions'
+channel_model_name: 'google/gemini-3-pro-preview'
+model_support_stream: True
+model_support_max_context_length: 1048576
+model_is_openai_protocol_compatible: True
+meta_class: 'agentuniverse.llm.llm_channel.openrouter_llm_channel.OpenRouterLLMChannel'
+

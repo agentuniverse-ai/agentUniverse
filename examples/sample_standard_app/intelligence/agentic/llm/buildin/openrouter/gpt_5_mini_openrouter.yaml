@@ -1,0 +1,10 @@
+name: 'gpt-5-mini-openrouter'
+description: 'openai gpt-5-mini model via OpenRouter'
+model_name: 'openai/gpt-5-mini'
+temperature: 0.5
+max_tokens: 2000
+streaming: True
+max_context_length: 400000
+channel: gpt-5-mini-openrouter-official
+meta_class: 'agentuniverse.llm.default.openrouter_openai_style_llm.OpenRouterOpenAIStyleLLM'
+

@@ -1,0 +1,10 @@
+name: 'grok-code-fast-1-openrouter'
+description: 'x-ai grok-code-fast-1 model via OpenRouter'
+model_name: 'x-ai/grok-code-fast-1'
+temperature: 0.5
+max_tokens: 2000
+streaming: True
+max_context_length: 256000
+channel: grok-code-fast-1-openrouter-official
+meta_class: 'agentuniverse.llm.default.openrouter_openai_style_llm.OpenRouterOpenAIStyleLLM'
+
