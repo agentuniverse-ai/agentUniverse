@@ -1,0 +1,9 @@
+name: 'default_openrouter_llm'
+description: 'default openrouter llm with spi'
+model_name: 'openai/gpt-5-mini'
+max_tokens: 2000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.openrouter_openai_style_llm'
+  class: 'OpenRouterOpenAIStyleLLM'
+

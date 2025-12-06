@@ -1,0 +1,10 @@
+name: 'claude-sonnet-4-5-openrouter'
+description: 'anthropic claude-sonnet-4.5 model via OpenRouter'
+model_name: 'anthropic/claude-sonnet-4.5'
+temperature: 0.5
+max_tokens: 2000
+streaming: True
+max_context_length: 1000000
+channel: claude-sonnet-4-5-openrouter-official
+meta_class: 'agentuniverse.llm.default.openrouter_openai_style_llm.OpenRouterOpenAIStyleLLM'
+

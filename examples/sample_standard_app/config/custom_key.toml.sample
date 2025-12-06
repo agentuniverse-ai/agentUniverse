@@ -61,6 +61,14 @@ GOOGLE_API_KEY=''
 GOOGLE_API_BASE='https://generativelanguage.googleapis.com/v1beta/openai/'
 GOOGLE_PROXY=''
 
+#OpenRouter default name: default_openrouter_llm
+# OpenRouter provides unified access to multiple LLM providers
+# Get your API key from https://openrouter.ai/keys
+OPENROUTER_API_KEY=''
+OPENROUTER_API_BASE='https://openrouter.ai/api/v1/chat/completions'
+OPENROUTER_PROXY=''
+OPENROUTER_ORGANIZATION=''
+
 #  ========================================================================
 #  The following section is used for key configuration of search tools.
 #  ========================================================================

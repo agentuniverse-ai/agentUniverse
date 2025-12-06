@@ -1,0 +1,10 @@
+name: 'gemini-3-pro-preview-openrouter'
+description: 'google gemini-3-pro-preview model via OpenRouter'
+model_name: 'google/gemini-3-pro-preview'
+temperature: 0.5
+max_tokens: 2000
+streaming: True
+max_context_length: 1048576
+channel: gemini-3-pro-preview-openrouter-official
+meta_class: 'agentuniverse.llm.default.openrouter_openai_style_llm.OpenRouterOpenAIStyleLLM'
+
