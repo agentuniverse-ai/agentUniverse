@@ -1,0 +1,6 @@
+name: 'default_web_reader'
+description: 'default web reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.web_reader'
+  class: 'WebReader'
