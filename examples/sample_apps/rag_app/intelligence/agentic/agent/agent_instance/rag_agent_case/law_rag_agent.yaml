@@ -18,11 +18,11 @@ profile:
 
     事件是: {input}
   llm_model:
-    name: 'deepseek_llm'
-    model_name: 'deepseek-chat'
+#    name: 'deepseek_llm'
+#    model_name: 'deepseek-chat'
 #    model_name: 'deepseek-reasoner'
-#    name: 'qwen_llm'
-#    model_name: 'qwen-max'
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
 action:
   tool:
     - 'google_search_tool'

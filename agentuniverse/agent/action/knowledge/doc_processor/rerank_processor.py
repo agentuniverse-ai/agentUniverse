@@ -70,8 +70,9 @@ class RerankProcessor(DocProcessor):
             DocProcessor: Initialized processor instance.
         """
         super()._initialize_by_component_configer(doc_processor_configer)
-        if hasattr(doc_processor_configer, "top_k"):
-            self.top_k = doc_processor_configer.top_k
-        if hasattr(doc_processor_configer, "score_threshold"):
-            self.score_threshold = doc_processor_configer.score_threshold
+        config_dict = doc_processor_configer.__dict__
+        if 'top_k' in config_dict:
+            self.top_k = config_dict['top_k']
+        if 'score_threshold' in config_dict:
+            self.score_threshold = config_dict['score_threshold']
         return self

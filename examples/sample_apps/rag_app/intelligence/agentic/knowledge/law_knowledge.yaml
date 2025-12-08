@@ -1,20 +1,15 @@
 name: "law_knowledge"
-description: "中国民法与刑法相关的知识库"
-stores:
-    - "civil_law_chroma_store"
-    - "criminal_law_chroma_store"
-    - "civil_law_sqlite_store"
-    - "criminal_law_sqlite_store"
-query_paraphrasers:
-    - "custom_query_keyword_extractor"
-insert_processors:
-    - "recursive_character_text_splitter"
-rag_router: "nlu_rag_router"
-post_processors:
-    - "dashscope_reranker"
-readers:
-    pdf: "default_pdf_reader"
-metadata:
-  type: 'KNOWLEDGE'
-  module: 'rag_app.intelligence.agentic.knowledge.law_knowledge'
-  class: 'LawKnowledge'
+description: "法律知识库"
+class: "rag_app.intelligence.agentic.knowledge.law_knowledge.LawKnowledge"
+post_processor:
+  - name: "rerank_processor"
+    class: "agentuniverse.agent.action.knowledge.doc_processor.RerankProcessor"
+    top_k: 5
+    score_threshold: 0.6
+  - name: "filter_processor"
+    class: "agentuniverse.agent.action.knowledge.doc_processor.FilterProcessor"
+    filter_rules:
+      - field: "content_type"
+        operator: "equals"
+        value: "legal"
+    keep_matched: true
