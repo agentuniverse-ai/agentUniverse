@@ -1,0 +1,31 @@
+# 知识召回后置处理器配置示例
+rerank_processor:
+  name: "rerank_processor"
+  description: "召回结果重排处理器"
+  class: "agentuniverse.agent.action.knowledge.doc_processor.RerankProcessor"
+  top_k: 5
+  score_threshold: 0.6
+
+fusion_processor:
+  name: "fusion_processor"  
+  description: "多路召回结果融合处理器"
+  class: "agentuniverse.agent.action.knowledge.doc_processor.FusionProcessor"
+  fusion_strategy: "concat"
+  deduplicate: true
+
+filter_processor:
+  name: "filter_processor"
+  description: "内容过滤处理器"
+  class: "agentuniverse.agent.action.knowledge.doc_processor.FilterProcessor"
+  filter_rules:
+    - field: "content_type"
+      operator: "equals"
+      value: "legal"
+  keep_matched: true
+
+summary_processor:
+  name: "summary_processor"
+  description: "内容摘要处理器"  
+  class: "agentuniverse.agent.action.knowledge.doc_processor.SummaryProcessor"
+  summary_length: 200
+  strategy: "extractive"
