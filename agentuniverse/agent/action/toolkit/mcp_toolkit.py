@@ -64,7 +64,7 @@ class MCPToolkit(Toolkit):
     def tool_names(self) -> list:
         if self.always_refresh:
             self._refresh_tool_info()
-        return [f'{self.name}@{tool_name}' for tool_name in self.include]
+        return [f'{self.name}_{tool_name}' for tool_name in self.include]
 
 
     @property
@@ -92,7 +92,7 @@ class MCPToolkit(Toolkit):
         for tool in tools:
             if tool.name not in self.include:
                 continue
-            tool_name = f'{self.name}@{tool.name}'
+            tool_name = f'{self.name}_{tool.name}'
             tool_instance = MCPTool(
                 name=tool_name,
                 description=f'{tool.description}\n{str(tool.inputSchema)}',
