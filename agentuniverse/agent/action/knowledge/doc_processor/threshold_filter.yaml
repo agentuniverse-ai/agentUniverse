@@ -1,0 +1,39 @@
+name: 'threshold_filter'
+description: 'Multi-mode document filter with logic combination support for score, length, top-k, and percentile filtering'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.threshold_filter'
+  class: 'ThresholdFilter'
+
+# Filter configuration - apply multiple filters with AND/OR logic
+filters:
+  # Score threshold filter - filter by relevance score range
+  - type: 'score'
+    min_score: 0.5
+    # max_score: 1.0  # optional: maximum score threshold
+
+  # Document length filter - filter by text length range
+  - type: 'length'
+    min_length: 50
+    # max_length: 5000  # optional: maximum length threshold
+
+  # Top-K filter - keep top K documents by score
+  # - type: 'topk'
+  #   k: 10
+
+  # Percentile filter - keep top X% documents by score
+  # - type: 'percentile'
+  #   percentile: 0.8  # 0.0 to 1.0, keeps top 80%
+
+# Logic operator for combining multiple filters
+# AND: documents must pass ALL filters (intersection)
+# OR: documents must pass ANY filter (union)
+logic_operator: 'AND'
+
+# Score extraction configuration
+score_field: 'relevance_score'  # metadata field containing scores
+default_score: 0.0               # default score for documents without scores
+
+# Output configuration
+preserve_order: true  # maintain original document order in results
