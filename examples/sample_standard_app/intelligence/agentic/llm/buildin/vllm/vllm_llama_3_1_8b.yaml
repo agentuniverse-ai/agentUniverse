@@ -1,0 +1,10 @@
+name: 'vllm-llama-3.1-8b'
+description: 'Llama 3.1 8B Instruct via vLLM server'
+model_name: 'meta-llama/Llama-3.1-8B-Instruct'
+api_base: '${VLLM_API_BASE}'
+api_key: 'EMPTY'
+temperature: 0.7
+max_tokens: 2048
+streaming: true
+max_context_length: 131072
+meta_class: 'agentuniverse.llm.default.vllm_openai_style_llm.VLLMOpenAIStyleLLM'
