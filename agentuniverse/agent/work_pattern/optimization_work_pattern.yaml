@@ -1,0 +1,6 @@
+name: 'optimization_work_pattern'
+description: 'work pattern for iterative prompt optimization with batches and feedback'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.optimization_work_pattern'
+  class: 'OptimizationWorkPattern'
