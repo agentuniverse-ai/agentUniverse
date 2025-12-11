@@ -1,0 +1,12 @@
+info:
+  name: 'demo_prompt_feedback_agent'
+  description: 'Demo Prompt Feedback Agent'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+  prompt_version: 'default_prompt_feedback_agent.cn'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.default.prompt_feedback_agent.prompt_feedback_agent'
+  class: 'PromptFeedbackAgent'

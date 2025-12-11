@@ -1,0 +1,14 @@
+info:
+  name: 'demo_prompt_exec_agent'
+  description: 'Demo Prompt Execution Agent'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+  introduction: You are an execution agent.
+  target: Execute the given prompt.
+  instruction: "{input}"
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.default.prompt_exec_agent.prompt_exec_agent'
+  class: 'PromptExecAgent'

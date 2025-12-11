@@ -1,0 +1,18 @@
+info:
+  name: 'demo_prompt_optimization_agent'
+  initial_prompt: "You are a physics teacher. Please answer the following question: {input}"
+  description: 'Prompt Optimization Agent Demo'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+  batch_size: 2
+  max_iterations: 3
+  pass_score: 80
+  executing_agent_name: 'demo_prompt_exec_agent'
+  scoring_agent_name: 'demo_prompt_scoring_agent'
+  feedback_agent_name: 'demo_prompt_feedback_agent'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.default.prompt_optimization_agent.prompt_optimization_agent'
+  class: 'PromptOptimizationAgent'
