@@ -2,7 +2,8 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/12/11 11:45
-# @Author  : agentuniverse
+# @Author  : yiying.cy
+# @Email   : yiying.cy@antgroup.com
 # @FileName: prompt_scoring_agent_template.py
 from queue import Queue
 

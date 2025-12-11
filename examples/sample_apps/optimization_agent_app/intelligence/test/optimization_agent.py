@@ -2,25 +2,16 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/12/11 14:55
-# @Author  : agentuniverse
+# @Author  : yiying.cy
+# @Email   : yiying.cy@antgroup.com
 # @FileName: prompt_optimization_agent.py
 
-
-import os
-import sys
-
-# Add the project root to sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from agentuniverse.base.agentuniverse import AgentUniverse
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 
-# Initialize AgentUniverse
-config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config', 'config.toml')
-print(f"Loading config from: {config_path}")
-AgentUniverse().start(config_path=config_path, core_mode=True)
-
+AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 def run_optimization():
     """Run the prompt optimization agent demo."""

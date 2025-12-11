@@ -2,7 +2,8 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/12/11 11:15
-# @Author  : agentuniverse
+# @Author  : yiying.cy
+# @Email   : yiying.cy@antgroup.com
 # @FileName: demo_exec_agent_to_be_adapted.py
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.base.util.logging.logging_util import LOGGER as logger
