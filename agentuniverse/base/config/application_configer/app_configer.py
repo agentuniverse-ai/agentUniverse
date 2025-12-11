@@ -41,6 +41,7 @@ class AppConfiger(object):
         self.__core_rag_router_package_list: Optional[list[str]] = None
         self.__core_query_paraphraser_package_list: Optional[list[str]] = None
         self.__core_memory_compressor_package_list: Optional[list[str]] = None
+        self.__core_memory_extract_package_list: Optional[list[str]] = None
         self.__core_memory_storage_package_list: Optional[list[str]] = None
         self.__core_work_pattern_package_list: Optional[list[str]] = None
         self.__core_log_sink_package_list: Optional[list[str]] = None
@@ -158,6 +159,11 @@ class AppConfiger(object):
     def core_memory_compressor_package_list(self) -> Optional[list[str]]:
         """Return the memory compressor package list of the core."""
         return self.__core_memory_compressor_package_list
+
+    @property
+    def core_memory_extract_package_list(self) -> Optional[list[str]]:
+        """Return the memory extract package list of the core."""
+        return self.__core_memory_extract_package_list
 
     @property
     def core_memory_storage_package_list(self) -> Optional[list[str]]:
@@ -291,6 +297,7 @@ class AppConfiger(object):
         self.__core_rag_router_package_list = configer.value.get('CORE_PACKAGE', {}).get('rag_router')
         self.__core_query_paraphraser_package_list = configer.value.get('CORE_PACKAGE', {}).get('query_paraphraser')
         self.__core_memory_compressor_package_list = configer.value.get('CORE_PACKAGE', {}).get('memory_compressor')
+        self.__core_memory_extract_package_list = configer.value.get('CORE_PACKAGE', {}).get('memory_extract')
         self.__core_memory_storage_package_list = configer.value.get('CORE_PACKAGE', {}).get('memory_storage')
         self.__core_work_pattern_package_list = configer.value.get('CORE_PACKAGE', {}).get('work_pattern')
         self.__core_log_sink_package_list = configer.value.get('CORE_PACKAGE', {}).get('log_sink')

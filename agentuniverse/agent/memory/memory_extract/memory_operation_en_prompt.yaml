@@ -1,0 +1,26 @@
+summarizer: |
+  Based on the following new facts and related historical memories, determine what operations need to be performed on the memories (add, update, delete, or keep unchanged).
+
+  New facts:
+  {new_facts}
+
+  Related historical memories:
+  {related_memories}
+
+  Please return operation instructions in JSON format:
+  {{
+    "memory": [
+      {{
+        "id": "<Memory ID>",           # Use existing ID for update/delete, leave empty for new
+        "text": "<Memory content>",       # Memory content
+        "category": "<Memory category>",       # FACTUAL/EPISODIC/SEMANTIC/EXPERT/DEFAULT
+        "related_role": "<Associated role>",       # USER/AI/ASSISTANT
+        "event": "<Operation type>",      # ADD/UPDATE/DELETE/NONE
+        "old_memory": "<Original memory content>" # Only needed for UPDATE
+      }}
+    ]
+  }}
+
+metadata:
+  type: 'PROMPT'
+  version: 'long_term_memory.memory_operation_en'

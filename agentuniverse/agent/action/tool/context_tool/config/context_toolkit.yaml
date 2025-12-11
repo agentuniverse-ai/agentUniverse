@@ -1,0 +1,28 @@
+name: 'context_toolkit'
+description: |
+  这是一个包含所有上下文管理工具的工具包，用于在会话环境中通过文件的形式管理上下文。
+  典型场景如：让不同的子Agent共享相同的环境上下文，或者将数据、代码、搜索内容等长上下文的内容外置到文件中。
+  当有需要的时候通过各种工具进行读取、修改等操作，最终返回给用户对应的内容或者文件地址。
+  包含的工具：
+    - context_insert: 在指定文件的指定行号后插入文本内容
+    - context_read_files: 读取指定名称的文件内容，支持多文件和行范围读取
+    - context_str_replace: 在指定文件中进行完全匹配的字符串替换
+    - context_append_to_file: 向指定文件末尾追加内容，保留原有内容
+    - context_download_files: 下载上下文文件，提供文件访问路径
+    - context_list_files: 列出保存在上下文的所有文件名称
+    - context_rename_file: 将一个文件重命名为新的名称
+    - context_create_file: 创建或更新上下文文件
+include:
+  - 'context_insert'
+  - 'context_read_files'
+  - 'context_str_replace'
+  - 'context_append_to_file'
+  - 'context_download_files'
+  - 'context_list_files'
+  - 'context_rename_file'
+  - 'context_create_file'
+
+metadata:
+  type: 'TOOLKIT'
+  module: 'agentuniverse.agent.action.toolkit.toolkit'
+  class: 'Toolkit'

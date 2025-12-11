@@ -1,0 +1,39 @@
+summarizer: |
+  Please extract key factual information from the following conversation and categorize it.
+  Extractable information categories include:
+  - FACTUAL: Factual information, such as the user is a teacher, the user prefers emoji outputs, the current business scenario is financial, etc.
+  - EPISODIC: Episodic information, such as user behavior in a specific scenario, user emotions in a specific scenario, etc.
+  - SEMANTIC: Semantic information, such as understanding of related concepts and their relationships
+  - EXPERT: Expert knowledge, such as professional knowledge, problem-solving SOPs, etc.
+  - DEFAULT: Other information that does not belong to the above categories
+  Associated roles include:
+  - USER: User, referring to facts related to the user
+  - ASSISTANT: Assistant, referring to objective, user-independent facts
+  - DEFAULT: Default, facts that cannot be distinguished or involve both
+  
+  Note: Search results and code do not belong to facts and do not need to be extracted.
+  
+  Conversation content:
+  {conversation_text}
+
+  Please extract factual information in the following format:
+  {{
+    "facts": [
+      {{
+        "fact": "Fact 1",
+        "category": "Category",
+        "related_role": "Associated role, USER/AGENT/ASSISTANT"
+      }},
+      {{
+        "fact": "Fact 2",
+        "category": "Category",
+        "related_role": "Associated role, USER/AGENT/ASSISTANT"
+      }},
+      ...
+    ]
+  }}
+  Only return results in JSON format:
+
+metadata:
+  type: 'PROMPT'
+  version: 'long_term_memory.facts_extract_en'

@@ -2,6 +2,7 @@ name: 'demo_memory'
 description: 'demo memory with chroma storage'
 type: 'long_term'
 memory_key: 'chat_history'
+long_term_memory_key: 'long_term_memory'
 max_tokens: 3000
 memory_compressor: default_memory_compressor
 memory_storages:
@@ -10,6 +11,11 @@ memory_storages:
   # you can change to chroma_memory_storage, which will persist the memory into chroma db
   # for more info please refer to doc
   - ram_memory_storage
+long_tern_memory_extractors:
+  # here use a text memory extractor, which will extract the memory from text to text
+  # you can extend the graph extractor to extract the memory from text to graph
+  # or other multimodality extractor to extract the memory from other material like images, videos.
+  - text_memory_extractor
 metadata:
   type: 'MEMORY'
   module: 'agentuniverse.agent.memory.memory'

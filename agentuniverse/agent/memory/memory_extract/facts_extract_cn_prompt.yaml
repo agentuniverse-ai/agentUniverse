@@ -1,0 +1,39 @@
+summarizer: |
+  请从以下对话中提取关键事实信息，并分类。
+  可提取的信息分类包括：
+  - FACTUAL：事实性信息，如用户是一个老师、用户偏好带emoji的输出，当前业务场景是金融场景等
+  - EPISODIC：情景信息，如用户在某个场景下的行为、用户在某个场景下的情绪等
+  - SEMANTIC：语义信息，如相关概念及其关联关系的理解
+  - EXPERT：专家经验，如专业知识、解决问题的SOP等
+  - DEFAULT：其他不属于上面分类的信息
+  关联的角色包括：
+  - USER：用户，指跟用户相关的事实
+  - ASSISTANT：助手，指客观的、用户无关的事实
+  - DEFAULT：默认，无法区分或者都涉及的事实
+  
+  注意：搜索到的结果、以及代码等不属于事实，无需提取。
+  
+  对话内容：
+  {conversation_text}
+
+  请提取事实信息，格式如下：
+  {{
+    "facts": [
+      {{
+        "fact": "事实1",
+        "category": "分类",
+        "related_role": "关联的角色，USER/AGENT/ASSISTANT"
+      }},
+      {{
+        "fact": "事实2",
+        "category": "分类",
+        "related_role": "关联的角色，USER/AGENT/ASSISTANT"
+      }},
+      ...
+    ]
+  }}
+  只返回JSON格式的结果：
+
+metadata:
+  type: 'PROMPT'
+  version: 'long_term_memory.facts_extract_cn'

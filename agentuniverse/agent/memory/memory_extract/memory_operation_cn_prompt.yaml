@@ -1,0 +1,26 @@
+summarizer: |
+  基于以下新事实和相关历史记忆，判断需要对记忆进行哪些操作（添加、更新、删除或保持不变）。
+
+  新事实：
+  {new_facts}
+
+  相关历史记忆：
+  {related_memories}
+
+  请返回JSON格式的操作指令：
+  {{
+    "memory": [
+      {{
+        "id": "<记忆ID>",           # 对于更新/删除使用现有ID，新增留空
+        "text": "<记忆内容>",       # 记忆内容
+        "category": "<记忆分类>",       # FACTUAL/EPISODIC/SEMANTIC/EXPERT/DEFAULT
+        "related_role": "<关联角色>",       # USER/AI/ASSISTANT
+        "event": "<操作类型>",      # ADD/UPDATE/DELETE/NONE
+        "old_memory": "<原记忆内容>" # 仅UPDATE时需要
+      }}
+    ]
+  }}
+
+metadata:
+  type: 'PROMPT'
+  version: 'long_term_memory.memory_operation_cn'

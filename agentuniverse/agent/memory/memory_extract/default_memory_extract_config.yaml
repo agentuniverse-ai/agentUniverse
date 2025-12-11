@@ -1,0 +1,28 @@
+# 长期记忆配置
+name: "default_text_memory_extractor"
+description: "use for text memory extract, extract text memory from input"
+
+# 基础配置
+enabled: true
+top_k: 5
+max_workers: 20
+
+# 存储配置
+memory_storage: "chroma_long_term_memory_storage"
+
+# Prompt配置
+extract_prompt_version: "long_term_memory.facts_extract_cn"
+operation_prompt_version: "long_term_memory.memory_operation_cn"
+
+# 模型配置
+extraction_llm: "deepseek_llm"
+operation_llm: "deepseek_llm"
+
+# 阈值配置
+max_memories_per_user: 1000
+max_memories_per_agent: 1000
+
+metadata:
+  type: 'MEMORY_EXTRACTOR'
+  module: 'agentuniverse.agent.memory.memory_extract.memory_extract'
+  class: 'MemoryExtract'

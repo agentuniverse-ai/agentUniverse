@@ -10,6 +10,7 @@ from typing import List
 from langchain_core.chat_history import BaseChatMessageHistory
 
 from agentuniverse.agent.memory.enum import ChatMessageEnum
+from agentuniverse.agent.memory.memory_extract.memory_extract import MemoryOwnerEnum
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 from agentuniverse.llm.llm import LLM
@@ -85,6 +86,33 @@ def get_memory_string(messages: List[Message], agent_id=None) -> str:
         m_str += f" :{m.content} "
         string_messages.append(m_str)
     return "\n\n".join(string_messages)
+
+
+def get_long_term_memory_string(messages: List[Message]) -> str:
+    """Convert the given messages to a string.
+
+    Args:
+        messages(List[Message]): The list of long tern messages.
+
+
+    Returns:
+        str: The string representation of the messages.
+    """
+    assistant_memory = []
+    user_memory = []
+    default_memory = []
+    for m in messages:
+        m_str = f"Time: {m.metadata.get('updated_at')}, content: {m.content}, category：{m.metadata.get('category','DEFAULT')}"
+        if m.metadata.get('related_role', '') == MemoryOwnerEnum.USER.value:
+            user_memory.append(m_str)
+        elif m.metadata.get('related_role', '') == MemoryOwnerEnum.ASSISTANT.value:
+            assistant_memory.append(m_str)
+        elif m.metadata.get('related_role', '') == MemoryOwnerEnum.DEFAULT.value:
+            default_memory.append(m_str)
+    user_memory_str = "The known long-term memories of the user:" + "\n".join(user_memory)
+    assistant_memory_str = "The known long-term memories of the assistant:" + "\n".join(assistant_memory)
+    default_memory_str = "Other known long-term memories" + "\n".join(default_memory)
+    return f'{user_memory_str}\n\n{assistant_memory_str}\n\n{default_memory_str}'
 
 
 def get_memory_tokens(memories: List[Message], llm_name: str = None) -> int:
