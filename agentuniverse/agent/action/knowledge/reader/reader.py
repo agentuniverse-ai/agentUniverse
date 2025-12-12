@@ -39,6 +39,8 @@ class Reader(ComponentBase):
         Returns:
             Reader: A reader instance.
         """
-        self.name = reader_configer.name
-        self.description = reader_configer.description
+        if hasattr(reader_configer, "name"):
+            self.name = reader_configer.name
+        if hasattr(reader_configer, "description"):
+            self.description = reader_configer.description
         return self
