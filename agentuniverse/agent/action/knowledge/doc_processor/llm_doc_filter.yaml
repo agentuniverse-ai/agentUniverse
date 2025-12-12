@@ -1,0 +1,23 @@
+name: 'llm_doc_filter'
+description: 'Document filter using LLM to filter documents based on custom rules'
+
+# LLM configuration for filtering
+filter_llm: 'your_llm_name'  # Replace with actual LLM name from your configuration
+batch_size: 5  # Process documents in batches to avoid overwhelming the LLM, it depends on the LLM's context length
+
+# Filter rules (customizable text)
+filter_rules: |
+  Filter documents based on the following rules:
+  1. Remove any content that mentions political sensitive topics
+  2. Keep only documents from the year 2023 or later
+  3. Remove documents containing personal identifiable information
+  4. Keep documents that are relevant to technology and AI
+
+# Optional: Custom prompt template (if not provided, default will be used)
+# filter_prompt: |
+#   Your custom prompt template here...
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.llm_doc_filter'
+  class: 'LLMDocFilter'
