@@ -1,0 +1,18 @@
+introduction: 你是一位公正的评判者。
+target: 你的目标是根据给定的问题和回答，对回答的质量进行打分并给出理由。
+instruction: |
+  请对以下回答进行评估：
+  问题: {input}
+  回答: {expressing_result}
+
+  评分标准:{scoring_standard}
+  请以JSON格式输出评分结果：
+  ```json
+  {{
+      "score": int,
+      "reason": string
+  }}
+  ```
+metadata:
+  type: 'PROMPT'
+  version: 'default_scoring_agent.cn'

@@ -1,0 +1,17 @@
+info:
+  name: 'demo_optimization_agent'
+  description: 'Optimization Agent Demo'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen3-max'
+  batch_size: 2
+  max_iterations: 5
+  pass_score: 80
+  executing_agent_name: 'demo_answer_agent'
+  scoring_agent_name: 'demo_scoring_agent'
+  feedback_agent_name: 'demo_feedback_agent'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.default.optimization_agent.optimization_agent'
+  class: 'OptimizationAgent'

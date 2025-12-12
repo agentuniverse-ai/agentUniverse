@@ -1,0 +1,17 @@
+info:
+  name: 'OptimizationAgent'
+  description: 'agent for iterative prompt optimization'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+    temperature: 0.3
+  batch_size: 3
+  max_iterations: 5
+  pass_score: 60
+memory:
+  name: ''
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.optimization_agent_template'
+  class: 'OptimizationAgentTemplate'

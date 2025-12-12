@@ -1,0 +1,14 @@
+info:
+  name: 'AnswerAgent'
+  description: 'executes with current prompt to answer questions'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+    temperature: 0.5
+memory:
+  name: ''
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.answer_agent_template'
+  class: 'AnswerAgentTemplate'

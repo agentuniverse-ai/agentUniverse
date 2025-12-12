@@ -1,0 +1,12 @@
+info:
+  name: 'demo_scoring_agent'
+  description: 'Demo Scoring Agent'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen-flash'
+  prompt_version: 'default_scoring_agent.cn'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.default.scoring_agent.scoring_agent'
+  class: 'ScoringAgent'

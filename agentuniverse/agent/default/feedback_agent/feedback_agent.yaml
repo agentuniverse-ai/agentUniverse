@@ -1,0 +1,14 @@
+info:
+  name: 'FeedbackAgent'
+  description: 'generates improved prompt based on batch evaluations'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+    temperature: 0.2
+memory:
+  name: ''
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.feedback_agent_template'
+  class: 'FeedbackAgentTemplate'

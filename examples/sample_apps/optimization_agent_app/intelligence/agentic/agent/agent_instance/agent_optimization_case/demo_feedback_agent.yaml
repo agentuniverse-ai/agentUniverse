@@ -1,0 +1,14 @@
+info:
+  name: 'demo_feedback_agent'
+  description: 'Demo Feedback Agent'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen3-max'
+  prompt_version: 'default_feedback_agent.cn'
+  memory:
+    name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.default.feedback_agent.feedback_agent'
+  class: 'FeedbackAgent'

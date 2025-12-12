@@ -1,0 +1,14 @@
+info:
+  name: 'demo_answer_agent'
+  description: 'Demo Answer Agent'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+  introduction: You are an execution agent.
+  target: Execute the given prompt.
+  instruction: "{input}"
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.default.answer_agent.answer_agent'
+  class: 'AnswerAgent'

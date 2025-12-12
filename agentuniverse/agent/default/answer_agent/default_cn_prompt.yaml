@@ -1,0 +1,8 @@
+introduction: 你是一位乐于助人的AI助手。
+target: 请根据用户的指令回答问题。
+instruction: |
+  请按要求输出回答。
+  {input}
+metadata:
+  type: 'PROMPT'
+  version: 'default_answer_agent.cn'

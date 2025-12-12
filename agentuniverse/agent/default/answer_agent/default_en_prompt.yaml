@@ -1,0 +1,8 @@
+introduction: You are a helpful AI assistant.
+target: Please answer the question according to the user's instruction.
+instruction: |
+  Please answer the question according to the instruction.
+  {input}
+metadata:
+  type: 'PROMPT'
+  version: 'default_answer_agent.en'

@@ -1,0 +1,12 @@
+info:
+  name: 'demo_answer_agent_to_be_adapted'
+  description: 'Demo Answer Agent'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+  instruction: "为以下基金撰写一段推荐文案。信息如下：{fund_info}。"
+metadata:
+  type: 'AGENT'
+  module: 'examples.sample_apps.optimization_agent_app.intelligence.agentic.agent.agent_instance.agent_optimization_case.demo_exec_agent_to_be_adapted'
+  class: 'DemoAnswerAgentToBeAdapted'
