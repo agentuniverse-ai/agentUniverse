@@ -194,14 +194,15 @@ class MemoryExtract(ComponentBase):
         """Extract factual information using LLM."""
 
         try:
-            # Build extraction prompt
+            # Build extraction prompt - only use the latest 2 messages
+            recent_messages = messages[-2:] if len(messages) >= 2 else messages
             conversation_text = "\n".join([
-                f"{msg.content}" for msg in messages if msg.content
+                f"{msg.content}" for msg in recent_messages if msg.content
             ])
 
             # Load prompt from yaml file
             prompt_template = self._load_prompt(self.extract_prompt_version)
-            prompt = prompt_template.format(conversation_text=conversation_text)
+            prompt = prompt_template.format(conversation_text=conversation_text, date=datetime.now().strftime("%Y-%m-%d"))
 
             llm: LLM = LLMManager().get_instance_obj(self.extraction_llm)
             if llm:
@@ -255,7 +256,7 @@ class MemoryExtract(ComponentBase):
 
             # Load prompt from yaml file
             prompt_template = self._load_prompt(self.operation_prompt_version)
-            prompt = prompt_template.format(new_facts=facts_text, related_memories=memories_text)
+            prompt = prompt_template.format(new_facts=facts_text, related_memories=memories_text, date=datetime.now().strftime("%Y-%m-%d"))
 
             llm: LLM = LLMManager().get_instance_obj(self.operation_llm)
             if llm:
@@ -279,12 +280,13 @@ class MemoryExtract(ComponentBase):
         for operation in operations.memory:
             if operation.event == MemoryOperationEnum.ADD.name:
                 # Create MemoryEntity for batch addition
+                memory_agent_id, memory_user_id = await self.determine_memory_related_info(agent_id, operation, user_id)
                 memory_entity = LongTermMemoryMessage(
                     content=operation.text,
                     category=operation.category or MemoryCategoryEnum.DEFAULT.value,
                     related_role=operation.related_role or MemoryOwnerEnum.DEFAULT.value,
-                    user_id=user_id,
-                    agent_id=agent_id,
+                    user_id=memory_user_id,
+                    agent_id=memory_agent_id,
                     session_id=session_id,
                     created_at=datetime.now(),
                     updated_at=datetime.now()
@@ -292,14 +294,15 @@ class MemoryExtract(ComponentBase):
                 add_memories.append(memory_entity)
             elif operation.event == MemoryOperationEnum.UPDATE.name:
                 # Create MemoryEntity for batch update
+                memory_agent_id, memory_user_id = await self.determine_memory_related_info(agent_id, operation, user_id)
                 if operation.id and operation.text:
                     memory_entity = LongTermMemoryMessage(
                         id=operation.id,
                         content=operation.text,
                         category=operation.category,
                         related_role=operation.related_role,
-                        user_id=user_id,
-                        agent_id=agent_id,
+                        user_id=memory_user_id,
+                        agent_id=memory_agent_id,
                         session_id=session_id,
                         update=True,
                         updated_at=datetime.now()
@@ -322,6 +325,20 @@ class MemoryExtract(ComponentBase):
         if delete_ids:
             await self._delete_memory(delete_ids)
 
+    async def determine_memory_related_info(self, agent_id, operation, user_id):
+        # Determine user_id and agent_id based on related_role
+        memory_user_id = None
+        memory_agent_id = None
+        if operation.related_role == MemoryOwnerEnum.USER.name:
+            memory_user_id = user_id
+            memory_agent_id = None
+        elif operation.related_role == MemoryOwnerEnum.ASSISTANT.name:
+            memory_user_id = None
+            memory_agent_id = agent_id
+        else:  # DEFAULT or other cases
+            memory_user_id = user_id
+            memory_agent_id = agent_id
+        return memory_agent_id, memory_user_id
 
     async def _delete_memory(self, memory_id: List[str]) -> bool:
         """Delete memory."""
