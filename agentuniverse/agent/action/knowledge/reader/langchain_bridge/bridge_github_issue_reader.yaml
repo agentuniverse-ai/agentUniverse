@@ -1,0 +1,26 @@
+name: 'langchain_github_reader'
+description: 'Use langchain github reader to read github content'
+
+loader_class: 'GitHubIssuesLoader'
+loader_module: 'langchain_community.document_loaders.github'
+loader_params:
+  repo: ''  # Repository name (e.g., owner/repo)
+  access_token: ''  # GitHub access token
+  # Optional parameters
+  include_prs: true  # If True include Pull Requests in results, otherwise ignore them.
+  milestone: null  # If integer is passed, it should be a milestone's number field. If '*' is passed, issues with any milestone are accepted. If 'none' is passed, issues without milestones are returned.
+  state: 'all'  # Filter on issue state. Can be one of: 'open', 'closed', 'all'.
+  assignee: null  # Filter on assigned user. Pass 'none' for no user and '*' for any user.
+  creator: null  # Filter on the user that created the issue.
+  mentioned: null  # Filter on a user that's mentioned in the issue.
+  labels: null  # Label names to filter one. Example: bug,ui,@high.
+  sort: null  # What to sort results by. Can be one of: 'created', 'updated', 'comments'. Default is 'created'.
+  direction: null  # The direction to sort the results by. Can be one of: 'asc', 'desc'.
+  since: null  # Only show notifications updated after the given time. This is a timestamp in ISO 8601 format: YYYY-MM-DDTHH:MM:SSZ.
+  page: null  # The page number for paginated results. Defaults to 1 in the GitHub API.
+  per_page: null  # Number of items per page. Defaults to 30 in the GitHub API.
+
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.langchain_bridge.langchain_bridge_reader'
+  class: 'LangchainBridgeReader'

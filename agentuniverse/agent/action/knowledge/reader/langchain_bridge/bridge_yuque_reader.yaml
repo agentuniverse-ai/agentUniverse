@@ -1,0 +1,12 @@
+name: 'langchain_yuque_reader'
+description: 'Use langchain yuque reader to read yuque document'
+loader_class: 'YuqueLoader'
+loader_module: 'langchain_community.document_loaders.yuque'
+loader_params:
+  access_token: ''  # Yuque access token
+
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.langchain_bridge.langchain_bridge_reader'
+  class: 'LangchainBridgeReader'
+
