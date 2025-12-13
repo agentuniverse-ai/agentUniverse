@@ -1,0 +1,6 @@
+name: 'default_rtf_reader'
+description: 'default rtf reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.rtf_reader'
+  class: 'RtfReader'
