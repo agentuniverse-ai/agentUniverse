@@ -223,10 +223,11 @@ class ChromaLongTermMemoryStorage(MemoryStorage):
                 'created_at': message.created_at.isoformat() if message.created_at else None,
                 'updated_at':datetime.now().isoformat()
             }
+            unique_update_metadata = {}
             for key, value in update_metadata.items():
-                if value is None:
-                    del update_metadata[key]
-            return update_metadata
+                if value is not None:
+                    unique_update_metadata[key] = value
+            return unique_update_metadata
         else:
             return {
                 'timestamp': datetime.now().isoformat(),

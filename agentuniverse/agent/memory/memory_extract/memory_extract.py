@@ -8,10 +8,14 @@
 
 import asyncio
 import json
+import queue
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Dict, Set
+from collections import defaultdict
+from threading import Lock
+from queue import Queue
 
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, Field
@@ -117,6 +121,10 @@ class MemoryExtract(ComponentBase):
 
     # Thread pool for asynchronous processing
     _executor: Optional[ThreadPoolExecutor] = None
+    # Session task queues to ensure ordered execution
+    _session_queues: Dict[str, Queue] = defaultdict(Queue)
+    _queue_locks: Dict[str, Lock] = defaultdict(Lock)
+    _queue_processors: Set[str] = set()
 
     class Config:
         arbitrary_types_allowed = True
@@ -139,8 +147,75 @@ class MemoryExtract(ComponentBase):
         if not self.enabled:
             return
 
-        # Use existing thread pool to execute asynchronous tasks, no need to wait
-        self._executor.submit(self._run_extract_and_store, messages, session_id, user_id, agent_id)
+        # Use default session if no session_id provided
+        effective_session_id = session_id or "default_session"
+        
+        # Submit task to session-specific queue
+        self._submit_to_session_queue(messages, effective_session_id, user_id, agent_id)
+
+    def _submit_to_session_queue(self, messages: List[Message], session_id: str, user_id: str, agent_id: str) -> None:
+        """Submit memory extraction task to session-specific queue.
+        
+        Args:
+            messages (List[Message]): List of messages.
+            session_id (str): Session ID.
+            user_id (str): User ID.
+            agent_id (str): Agent ID.
+        """
+        # Add task to session queue
+        task_data = (messages, session_id, user_id, agent_id)
+        self._session_queues[session_id].put(task_data)
+        
+        # Start queue processor if not already running
+        with self._queue_locks[session_id]:
+            if session_id not in self._queue_processors:
+                self._queue_processors.add(session_id)
+                self._executor.submit(self._process_session_queue, session_id)
+
+    def _process_session_queue(self, session_id: str) -> None:
+        """Process tasks in session queue sequentially.
+
+        Args:
+            session_id (str): Session ID.
+        """
+        # Session processor idle timeout (5 minutes)
+        idle_timeout = 300  # 5 minutes in seconds
+        
+        try:
+            last_activity_time = datetime.now()
+            
+            while True:
+                # Calculate remaining timeout
+                current_time = datetime.now()
+                time_since_last_activity = (current_time - last_activity_time).total_seconds()
+                remaining_timeout = max(0, idle_timeout - time_since_last_activity)
+                
+                # Get next task from queue with timeout
+                try:
+                    task_data = self._session_queues[session_id].get(timeout=remaining_timeout)
+                    last_activity_time = datetime.now()  # Reset activity timer
+                except queue.Empty:
+                    # Queue empty for timeout period, exit gracefully
+                    LOGGER.info(f"Session queue processor for session {session_id} exiting due to inactivity")
+                    break
+                
+                # Execute the task
+                try:
+                    messages, session_id, user_id, agent_id = task_data
+                    self._run_extract_and_store(messages, session_id, user_id, agent_id)
+                except Exception as e:
+                    LOGGER.error(f"Memory extraction task failed for session {session_id}: {e}")
+
+        except Exception as e:
+            LOGGER.error(f"Session queue processor failed for session {session_id}: {e}")
+        finally:
+            # Clean up queue processor
+            with self._queue_locks[session_id]:
+                self._queue_processors.discard(session_id)
+                # Clean up empty queue to avoid memory leaks
+                if session_id in self._session_queues and self._session_queues[session_id].empty():
+                    del self._session_queues[session_id]
+                    del self._queue_locks[session_id]
 
     def _run_extract_and_store(self, messages: List[Message], session_id: str, user_id: str, agent_id: str) -> None:
         """Synchronous wrapper method to run async tasks in thread pool."""
