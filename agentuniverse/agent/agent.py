@@ -44,7 +44,7 @@ from agentuniverse.base.context.framework_context_manager import \
 from agentuniverse.base.util.agent_util import process_agent_llm_config
 from agentuniverse.base.util.common_util import stream_output
 from agentuniverse.base.util.logging.logging_util import LOGGER
-from agentuniverse.base.util.memory_util import generate_messages, get_memory_string
+from agentuniverse.base.util.memory_util import generate_messages, get_memory_string, get_long_term_memory_string
 from agentuniverse.base.util.system_util import process_dict_with_funcs, is_system_builtin
 from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 from agentuniverse.llm.llm import LLM
@@ -495,6 +495,23 @@ class Agent(ComponentBase, ABC):
             params["type"] = ['input', 'output']
         return params
 
+    def get_long_term_memory_params(self, agent_input: dict) -> dict:
+        memory_info = self.agent_model.memory
+        top_k = self.agent_model.memory.get('long_term_top_k', 20)
+        agent_id = self.agent_model.info.get('name')
+        if "agent_id" in memory_info:
+            agent_id = memory_info.get('agent_id')
+        params = {
+            'agent_id': agent_id,
+            'top_k': top_k
+        }
+        if agent_input.get('user_id'):
+            params['user_id'] = agent_input.get('user_id')
+        if agent_input.get('input'):
+            params['query'] = agent_input.get('input')
+        # only search input related info
+        return params if params['query'] else None
+
     def get_run_config(self, **kwargs) -> dict:
         llm_name = kwargs.get('llm_name') or self.agent_model.profile.get('llm_model', {}).get('name')
         callbacks = [InvokeCallbackHandler(
@@ -518,6 +535,13 @@ class Agent(ComponentBase, ABC):
             LOGGER.info(f"Load memory with params: {params}")
             memory_messages = memory.get(**params)
             memory_str = get_memory_string(memory_messages, agent_input.get('agent_id'))
+            if memory.long_term_memory_key:
+                long_term_memory_params = self.get_long_term_memory_params(agent_input)
+                if long_term_memory_params:
+                    LOGGER.info(f"Load long term memory with params: {long_term_memory_params}")
+                    long_term_memory_messages = memory.search_long_term_memory(**long_term_memory_params)
+                    long_term_memory_str = get_long_term_memory_string(long_term_memory_messages)
+                    agent_input[memory.long_term_memory_key] = long_term_memory_str
         else:
             return "Up to Now, No Chat History"
         agent_input[memory.memory_key] = memory_str

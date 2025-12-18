@@ -1,0 +1,39 @@
+name: 'context_download_files'
+description: |
+  该工具可以获取上下文中文件的访问路径或者地址，提供给用户或者其他工具使用。
+  
+  输入参数（JSON格式）：
+  ```json
+  {
+    "file_name": "文件名称，多个文件用英文逗号分隔（字符串，必需）",
+    "session_id": "会话ID（字符串，必需）"
+  }
+  ```
+  
+  输出参数（JSON格式）：
+  ```json
+  {
+    "file_list": [
+      {
+        "file": "文件名（字符串）",
+        "fileUrl": "文件相对路径（字符串）",
+        "message": "下载结果消息（字符串）"
+      }
+    ],
+    "message": "总体操作结果消息（字符串）"
+  }
+  ```
+  
+  工具输入示例（JSON格式）：
+  ```json
+  {
+    "file_name": "example.md",
+    "session_id": "your_session_id"
+  }
+  ```
+tool_type: 'func'
+input_keys: ['file_name', 'session_id']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.context_tool.context_download_files'
+  class: 'ContextDownloadFilesTool'

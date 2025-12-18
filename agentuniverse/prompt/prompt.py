@@ -50,6 +50,15 @@ class Prompt(ComponentBase):
         self.input_variables = re.findall(r'\{(.*?)}', self.prompt_template)
         return self
 
+    def build_simple_prompt(self) -> 'Prompt':
+        """Build the prompt class.
+
+        Returns:
+            Prompt: The prompt object.
+        """
+        self.input_variables = re.findall(r'\{(.*?)}', self.prompt_template)
+        return self
+
     def get_instance_code(self) -> str:
         """Return the prompt version of the current prompt."""
         return self.prompt_version

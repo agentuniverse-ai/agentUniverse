@@ -58,6 +58,7 @@ class AgentUniverse(object):
         self.__system_default_query_paraphraser_package = ['agentuniverse.agent.action.knowledge.query_paraphraser']
         self.__system_default_memory_compressor_package = ['agentuniverse.agent.memory.memory_compressor']
         self.__system_default_memory_storage_package = ['agentuniverse.agent.memory.memory_storage']
+        self.__system_default_memory_extract_package = ['agentuniverse.agent.memory.memory_extract']
         self.__system_default_work_pattern_package = ['agentuniverse.agent.work_pattern']
         self.__system_default_log_sink_package = ['agentuniverse.base.util.logging.log_sink.log_sink']
 
@@ -177,6 +178,8 @@ class AgentUniverse(object):
                                                + self.__system_default_query_paraphraser_package)
         core_memory_compressor_package_list = ((app_configer.core_memory_compressor_package_list or app_configer.core_default_package_list)
                                                + self.__system_default_memory_compressor_package)
+        core_memory_extract_package_list = ((app_configer.core_memory_extract_package_list or app_configer.core_default_package_list)
+                                               + self.__system_default_memory_extract_package)
         core_memory_storage_package_list = ((app_configer.core_memory_storage_package_list or app_configer.core_default_package_list)
                                             + self.__system_default_memory_storage_package)
         core_work_pattern_package_list = ((app_configer.core_work_pattern_package_list or app_configer.core_default_package_list)
@@ -209,7 +212,8 @@ class AgentUniverse(object):
             ComponentEnum.MEMORY_STORAGE: core_memory_storage_package_list,
             ComponentEnum.WORK_PATTERN: core_work_pattern_package_list,
             ComponentEnum.LOG_SINK: core_log_sink_package_list,
-            ComponentEnum.LLM_CHANNEL: core_llm_channel_package_list
+            ComponentEnum.LLM_CHANNEL: core_llm_channel_package_list,
+            ComponentEnum.MEMORY_EXTRACTOR: core_memory_extract_package_list
         }
 
         component_configer_list_map = {}

@@ -15,6 +15,8 @@ llm = ['react_agent_app.intelligence.agentic.llm']
 planner = []
 # Scan and register tool components for all paths under this list, with priority over the default.
 tool = ['react_agent_app.intelligence.agentic.tool']
+# Scan and register toolkit components for all paths under this list, with priority over the default.
+toolkit = ['react_agent_app.intelligence.agentic.toolkit']
 # Scan and register memory components for all paths under this list, with priority over the default.
 memory = ['react_agent_app.intelligence.agentic.memory']
 # Scan and register service components for all paths under this list, with priority over the default.
@@ -37,6 +39,8 @@ query_paraphraser = ['react_agent_app.intelligence.agentic.knowledge.query_parap
 memory_compressor = ['react_agent_app.intelligence.agentic.memory.memory_compressor']
 # Scan and register memory_storage components for all paths under this list, with priority over the default.
 memory_storage = ['react_agent_app.intelligence.agentic.memory.memory_storage']
+# Scan and register memory_extract components for all paths under this list, with priority over the default.
+memory_extract = ['react_agent_app.intelligence.agentic.memory.memory_extract']
 
 [SUB_CONFIG_PATH]
 # Log config file path, an absolute path or a relative path based on the dir where the current config file is located.

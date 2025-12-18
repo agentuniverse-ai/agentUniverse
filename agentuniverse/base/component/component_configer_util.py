@@ -13,12 +13,14 @@ from agentuniverse.agent.action.tool.tool_manager import ToolManager
 from agentuniverse.agent.action.toolkit.toolkit_manager import ToolkitManager
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.memory.memory_compressor.memory_compressor_manager import MemoryCompressorManager
+from agentuniverse.agent.memory.memory_extract.memory_extractor_manager import MemoryExtractorManager
 from agentuniverse.agent.memory.memory_manager import MemoryManager
 from agentuniverse.agent.memory.memory_storage.memory_storage_manager import MemoryStorageManager
 from agentuniverse.agent.plan.planner.planner_manager import PlannerManager
 from agentuniverse.agent.work_pattern.work_pattern_manager import WorkPatternManager
 from agentuniverse.agent_serve.service_manager import ServiceManager
 from agentuniverse.agent_serve.service_configer import ServiceConfiger
+from agentuniverse.base.config.component_configer.configers.memory_extract_configer import MemoryExtractConfiger
 from agentuniverse.base.config.component_configer.configers.work_pattern_configer import WorkPatternConfiger
 from agentuniverse.base.config.component_configer.configers.workflow_configer import WorkflowConfiger
 from agentuniverse.database.sqldb_wrapper_manager import SQLDBWrapperManager
@@ -58,6 +60,7 @@ class ComponentConfigerUtil(object):
         ComponentEnum.TOOL: ToolConfiger,
         ComponentEnum.TOOLKIT: ComponentConfiger,
         ComponentEnum.MEMORY: MemoryConfiger,
+        ComponentEnum.MEMORY_EXTRACTOR: MemoryExtractConfiger,
         ComponentEnum.SERVICE: ServiceConfiger,
         ComponentEnum.PROMPT: PromptConfiger,
         ComponentEnum.SQLDB_WRAPPER: SQLDBWrapperConfiger,
@@ -99,6 +102,7 @@ class ComponentConfigerUtil(object):
         ComponentEnum.WORK_PATTERN: WorkPatternManager,
         ComponentEnum.LOG_SINK: LogSinkManager,
         ComponentEnum.LLM_CHANNEL: LLMChannelManager,
+        ComponentEnum.MEMORY_EXTRACTOR: MemoryExtractorManager,
     }
 
     @classmethod

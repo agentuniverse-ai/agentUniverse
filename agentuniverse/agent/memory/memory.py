@@ -13,6 +13,8 @@ from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.memory.enum import MemoryTypeEnum
 from agentuniverse.agent.memory.memory_compressor.memory_compressor import MemoryCompressor
 from agentuniverse.agent.memory.memory_compressor.memory_compressor_manager import MemoryCompressorManager
+from agentuniverse.agent.memory.memory_extract.memory_extract import MemoryExtract, LongTermMemoryMessage
+from agentuniverse.agent.memory.memory_extract.memory_extractor_manager import MemoryExtractorManager
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
 from agentuniverse.agent.memory.memory_storage.memory_storage_manager import MemoryStorageManager
 from agentuniverse.agent.memory.message import Message
@@ -32,6 +34,8 @@ class Memory(ComponentBase):
         description (Optional[str]): The description of the memory class.
         type (MemoryTypeEnum): The type of the memory class including `long-term` and `short-term`.
         memory_key (Optional[str]): The name of the memory key in the prompt.
+        long_term_memory_key (Optional[str]): The name of the long term memory key in the prompt.
+        long_tern_memory_extractors (Optional[List[str]]): The name list of the memory extractor.
         max_tokens (int): The maximum number of tokens allowed in the prompt.
         memory_compressor (Optional[str]): The name of the memory compressor instance.
         memory_storages (Optional[str]): The name list of the memory storage instances.
@@ -42,6 +46,8 @@ class Memory(ComponentBase):
     description: Optional[str] = None
     type: MemoryTypeEnum = None
     memory_key: Optional[str] = 'chat_history'
+    long_term_memory_key: Optional[str] = None
+    long_tern_memory_extractors: Optional[List[str]] = None
     max_tokens: int = 2000
     memory_compressor: Optional[str] = None
     memory_storages: Optional[List[str]] = ['ram_memory_storage']
@@ -58,7 +64,7 @@ class Memory(ComponentBase):
         """Convert the agentUniverse(aU) memory class to the langchain memory class."""
         pass
 
-    def add(self, message_list: List[Message], session_id: str = None, agent_id: str = None,
+    def add(self, message_list: List[Message], session_id: str = None, agent_id: str = None, user_id: str = None,
             **kwargs) -> None:
         """Add messages to the memory."""
         if not message_list:
@@ -67,6 +73,11 @@ class Memory(ComponentBase):
             memory_storage: MemoryStorage = MemoryStorageManager().get_instance_obj(storage)
             if memory_storage:
                 memory_storage.add(message_list, session_id, agent_id, **kwargs)
+        if self.long_tern_memory_extractors:
+            for extractor in self.long_tern_memory_extractors:
+                memory_extractor: MemoryExtract = MemoryExtractorManager().get_instance_obj(extractor)
+                if memory_extractor:
+                    memory_extractor.extract_and_store(message_list, session_id, agent_id, user_id, **kwargs)
 
     def delete(self, session_id: str = None, **kwargs) -> None:
         """Delete messages from the memory."""
@@ -74,6 +85,11 @@ class Memory(ComponentBase):
             memory_storage: MemoryStorage = MemoryStorageManager().get_instance_obj(storage)
             if memory_storage:
                 memory_storage.delete(session_id, **kwargs)
+        if self.long_tern_memory_extractors:
+            for extractor in self.long_tern_memory_extractors:
+                memory_extractor: MemoryExtract = MemoryExtractorManager().get_instance_obj(extractor)
+                if memory_extractor:
+                    memory_extractor.delete_memory_by_session_id(session_id, **kwargs)
 
     def get(self, session_id: str = None, agent_id: str = None, prune: bool = False, **kwargs) -> List[Message]:
         """Get messages from the memory."""
@@ -84,6 +100,22 @@ class Memory(ComponentBase):
                 memories = self.prune(memories)
             return memories
         return []
+
+    def search_long_term_memory(self, query: str = None, top_k=10, session_id: str = None, agent_id: str = None, user_id: str = None,
+                                tags: List[str] = None, time_range:(str, str) = None) -> List[Message]:
+        """Get messages from the long term memory."""
+        long_term_memory_messages = []
+        if self.long_tern_memory_extractors:
+            for extractor in self.long_tern_memory_extractors:
+                memory_extractor: MemoryExtract = MemoryExtractorManager().get_instance_obj(extractor)
+                if memory_extractor:
+                    long_term_memory_messages.extend(memory_extractor.search_memories(query=query, top_k=top_k,
+                                                                                      session_id=session_id,
+                                                                                      agent_id=agent_id,
+                                                                                      user_id=user_id, tags=tags,
+                                                                                      time_range=time_range))
+        return long_term_memory_messages
+
 
     def get_with_no_prune(self, session_id: str = None, agent_id: str = None, **kwargs) -> List[Message]:
         """Get messages from the memory."""
@@ -173,6 +205,10 @@ class Memory(ComponentBase):
             self.memory_retrieval_storage = self.memory_storages[0]
         if component_configer.memory_summarize_agent:
             self.summarize_agent_id = component_configer.memory_summarize_agent
+        if component_configer.long_tern_memory_extractors:
+            self.long_tern_memory_extractors = component_configer.long_tern_memory_extractors
+        if component_configer.long_term_memory_key:
+            self.long_term_memory_key = component_configer.long_term_memory_key
         return self
 
     def create_copy(self):

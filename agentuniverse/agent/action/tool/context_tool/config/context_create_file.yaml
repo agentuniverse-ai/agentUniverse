@@ -1,0 +1,35 @@
+name: 'context_create_file'
+description: |
+  该工具用于创建或更新上下文中的文件。
+  
+  输入参数（JSON格式）：
+  ```json
+  {
+    "file_name": "文件名称（字符串，必需）",
+    "content": "文件内容（字符串，必需）", 
+    "session_id": "会话ID（字符串，必需）"
+  }
+  ```
+  
+  输出参数（JSON格式）：
+  ```json
+  {
+    "message": "操作结果消息（字符串）",
+    "file_url": "文件相对路径（字符串）"
+  }
+  ```
+  
+  工具输入示例（JSON格式）：
+  ```json
+  {
+    "file_name": "example.md",
+    "content": "文件内容",
+    "session_id": "your_session_id"
+  }
+  ```
+tool_type: 'func'
+input_keys: ['file_name', 'content', 'session_id']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.context_tool.context_create_file'
+  class: 'ContextCreateFileTool'

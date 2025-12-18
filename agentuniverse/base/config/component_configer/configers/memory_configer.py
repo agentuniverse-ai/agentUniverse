@@ -24,7 +24,9 @@ class MemoryConfiger(ComponentConfiger):
         self.__max_tokens: Optional[int] = None
         self.__memory_compressor: Optional[str] = None
         self.__memory_storages: Optional[List[str]] = None
+        self.__long_tern_memory_extractors: Optional[List[str]] = None
         self.__memory_retrieval_storage: Optional[str] = None
+        self.__long_term_memory_key: Optional[str] = None
         self.__memory_summarize_agent: Optional[str] = None
 
     @property
@@ -63,9 +65,19 @@ class MemoryConfiger(ComponentConfiger):
         return self.__memory_storages
 
     @property
+    def long_tern_memory_extractors(self) -> Optional[List[str]]:
+        """Return the extractors for long term memory extract."""
+        return self.__long_tern_memory_extractors
+
+    @property
     def memory_retrieval_storage(self) -> Optional[str]:
         """Return the retrieval storage of the Memory."""
         return self.__memory_retrieval_storage
+
+    @property
+    def long_term_memory_key(self) -> Optional[str]:
+        """Return the long term memory key."""
+        return self.__long_term_memory_key
 
     @property
     def memory_summarize_agent(self) -> Optional[str]:
@@ -98,6 +110,8 @@ class MemoryConfiger(ComponentConfiger):
             self.__memory_storages = configer.value.get('memory_storages')
             self.__memory_retrieval_storage = configer.value.get('memory_retrieval_storage')
             self.__memory_summarize_agent = configer.value.get('memory_summarize_agent')
+            self.__long_tern_memory_extractors = configer.value.get('long_tern_memory_extractors')
+            self.__long_term_memory_key = configer.value.get('long_term_memory_key')
         except Exception as e:
             raise Exception(f"Failed to parse the Memory configuration: {e}")
         return self

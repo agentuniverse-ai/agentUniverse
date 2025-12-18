@@ -44,3 +44,6 @@ example_key = 'AnExampleKey'
 #
 ##bing search
 #BING_SUBSCRIPTION_KEY='xxxxxx'
+#
+##context root path
+#CONTEXT_FILE_ROOTPATH='/tmp/agentuniverse_context'

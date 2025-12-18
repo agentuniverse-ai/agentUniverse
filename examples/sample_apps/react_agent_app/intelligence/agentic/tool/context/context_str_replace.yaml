@@ -1,0 +1,37 @@
+name: 'context_str_replace'
+description: |
+  该工具可以在指定上下文中的文件中进行完全匹配的字符串替换。
+  
+  输入参数（JSON格式）：
+  ```json
+  {
+    "file_name": "文件名称（字符串，必需）",
+    "old_str": "要查找和替换的字符串（字符串，必需）",
+    "new_str": "替换后的字符串（字符串，必需）",
+    "session_id": "会话ID（字符串，必需）"
+  }
+  ```
+  
+  输出参数（JSON格式）：
+  ```json
+  {
+    "result": "修改后的文件内容（字符串）",
+    "message": "操作结果消息（字符串）"
+  }
+  ```
+  
+  工具输入示例（JSON格式）：
+  ```json
+  {
+    "file_name": "example.md",
+    "old_str": "旧文本",
+    "new_str": "新文本",
+    "session_id": "your_session_id"
+  }
+  ```
+tool_type: 'func'
+input_keys: ['file_name', 'old_str', 'new_str', 'session_id']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.context_tool.context_str_replace'
+  class: 'ContextStrReplaceTool'

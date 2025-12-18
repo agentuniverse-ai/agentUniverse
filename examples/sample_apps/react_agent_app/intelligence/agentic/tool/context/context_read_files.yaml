@@ -1,0 +1,43 @@
+name: 'context_read_files'
+description: |
+  该工具可以读取上下文中指定名称的文件内容，支持多文件和行范围读取。
+  
+  输入参数（JSON格式）：
+  ```json
+  {
+    "file_name": "文件名称，多个文件用英文逗号分隔（字符串，必需）",
+    "session_id": "会话ID（字符串，必需）",
+    "line_range": "阅读指定的行范围，格式如[1, 10]（字符串，可选）",
+    "display_line_numbers": "是否显示行号，true/false（字符串，可选，默认false）"
+  }
+  ```
+  
+  输出参数（JSON格式）：
+  ```json
+  {
+    "file_list": [
+      {
+        "file": "文件名（字符串）",
+        "content": "文件内容（字符串）",
+        "message": "读取结果消息（字符串）"
+      }
+    ],
+    "message": "总体操作结果消息（字符串）"
+  }
+  ```
+  
+  工具输入示例（JSON格式）：
+  ```json
+  {
+    "file_name": "example.md",
+    "session_id": "your_session_id",
+    "line_range": "[1, 10]",
+    "display_line_numbers": "true"
+  }
+  ```
+tool_type: 'func'
+input_keys: ['file_name', 'session_id']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.context_tool.context_read_files'
+  class: 'ContextReadFilesTool'

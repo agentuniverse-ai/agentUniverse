@@ -12,6 +12,8 @@ action:
   tool:
     - 'google_search_tool'
     - 'python_runner'
+  toolkit:
+    - 'demo_react_context_toolkit'
   knowledge:
     - 'law_knowledge'
 memory:

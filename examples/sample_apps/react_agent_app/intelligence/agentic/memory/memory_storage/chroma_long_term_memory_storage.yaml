@@ -1,0 +1,9 @@
+name: 'demo_chroma_long_term_memory_storage'
+description: 'demo chroma long term memory storage'
+collection_name: 'long_term_memory'
+persist_path: '../../db/long_term_memory.db'
+embedding_model: 'dashscope_embedding'
+metadata:
+  type: 'MEMORY_STORAGE'
+  module: 'agentuniverse.agent.memory.conversation_memory.memory_storage.chroma_long_term_memory_storage'
+  class: 'ChromaLongTermMemoryStorage'

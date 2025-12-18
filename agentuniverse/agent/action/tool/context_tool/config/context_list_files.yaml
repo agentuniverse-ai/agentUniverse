@@ -1,0 +1,31 @@
+name: 'context_list_files'
+description: |
+  该工具可以列出保存在上下文中的所有文件名称。
+  
+  输入参数（JSON格式）：
+  ```json
+  {
+    "session_id": "会话ID（字符串，必需）"
+  }
+  ```
+  
+  输出参数（JSON格式）：
+  ```json
+  {
+    "all_files": "所有文件名，用逗号分隔（字符串）",
+    "message": "操作结果消息（字符串）"
+  }
+  ```
+  
+  工具输入示例（JSON格式）：
+  ```json
+  {
+    "session_id": "your_session_id"
+  }
+  ```
+tool_type: 'func'
+input_keys: ['session_id']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.context_tool.context_list_files'
+  class: 'ContextListFilesTool'
