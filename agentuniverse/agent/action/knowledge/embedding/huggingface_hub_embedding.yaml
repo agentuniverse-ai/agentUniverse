@@ -1,0 +1,10 @@
+name: 'huggingface_hub_embedding'
+description: 'embedding using Hugging Face Hub Inference Providers'
+embedding_model_name: 'intfloat/multilingual-e5-large'
+timeout: 60
+provider: 'hf-inference'
+api_key: ''
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.huggingface_hub_embedding'
+  class: 'HuggingFaceHubEmbedding'
