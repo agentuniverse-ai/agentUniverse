@@ -1,0 +1,8 @@
+[GUNICORN_CONFIG]
+bind = '0.0.0.0:8888'
+backlog = 2048
+worker_class = 'gthread'
+threads = 4
+workers = 5
+timeout = 60
+keepalive = 10
