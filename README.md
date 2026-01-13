@@ -223,3 +223,56 @@ Overview: This document introduces in detailed the mechanisms and principles und
 ### Acknowledgements
 
 This project is partially built upon excellent open-source projects such as Langchain, Pydantic, Gunicorn, Flask, SQLAlchemy, chromadb, etc. (The detailed dependency list can be found in pyproject.toml). We would like to express our heartfelt gratitude to the related projects and their contributors. 🙏🙏🙏
+
+****************************************
+
+## Local Development & Docker Setup
+
+### Requirements
+
+- Python 3.10+
+- Poetry 1.7.1
+- Docker (optional)
+
+### Install dependencies locally
+
+```bash
+pip install poetry==1.7.1
+poetry config virtualenvs.create false
+poetry install
+```
+
+### Basic sanity check
+
+```bash
+python -c "import agentuniverse; print('agentUniverse ready')"
+```
+
+### Build and run with Docker
+
+Build the image:
+
+```bash
+docker build -t agentuniverse .
+```
+
+Run the container:
+
+```bash
+docker run --rm agentuniverse
+```
+
+Expected output:
+
+```
+agentUniverse environment ready
+```
+
+### Running tests
+
+⚠️ Note  
+The upstream test suite depends on external services (LLM providers, plugins, filesystem layout, and runtime configuration).  
+Because of this, the full test suite is not deterministic in an isolated container environment.
+
+This Docker setup validates that the project builds and starts successfully, but does not execute the upstream tests automatically.
+
