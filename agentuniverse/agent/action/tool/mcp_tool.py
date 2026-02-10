@@ -1,11 +1,10 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-import asyncio
-from typing import Any, Optional, Literal, List
+from typing import Optional, Literal, List
 
 from mcp.types import CallToolResult
 
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool, ToolConfigError
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
 from agentuniverse.base.config.component_configer.configers.tool_configer import \
@@ -91,22 +90,33 @@ class MCPTool(Tool):
         return self
 
     async def get_tool_info(self):
+        if self.args_model_schema is not None:
+            return
+
         async with MCPTempClient(
             self.get_mcp_server_connect_args()
         ) as client:
             tools_list = await client.session.list_tools()
-        tools = tools_list.tools
-        tool_info = None
-        for _tool in tools:
-            if _tool.name == self.tool_name:
-                tool_info = _tool
-                break
-        if not tool_info:
-            raise Exception(f'No tool named {self.tool_name} in mcp server {self.server_name}')
-        self.input_keys = tool_info.inputSchema['required']
-        self.args_model_schema = tool_info.inputSchema
+
+        tool_info = next(
+            (t for t in tools_list.tools if t.name == self.tool_name),
+            None,
+        )
+
+        if tool_info is None:
+            raise ToolConfigError(
+                f'No tool named "{self.tool_name}" in MCP server "{self.server_name}". '
+                f'Available: {[t.name for t in tools_list.tools]}'
+            )
+
+        input_schema = tool_info.inputSchema or {}
+        self.args_model_schema = input_schema
+        self.input_keys = input_schema.get("required", [])
+        if not self.name:
+            self.name = tool_info.name
+
         if not self.description:
-            self.description = f'{tool_info.description}\n{str(tool_info.inputSchema)}'
+            self.description = tool_info.description or ""
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'MCPTool':
         if not self.server_name:

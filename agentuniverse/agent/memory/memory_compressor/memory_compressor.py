@@ -7,8 +7,6 @@
 # @FileName: memory_compressor.py
 from typing import Optional, List
 
-from langchain_core.output_parsers import StrOutputParser
-
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.component.component_base import ComponentEnum
 from agentuniverse.base.component.component_base import ComponentBase

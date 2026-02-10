@@ -1,48 +1,40 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 import asyncio
+from typing import List, Any
 import inspect
+from typing import get_origin, get_args, Union
 # @Time    : 2024/3/13 14:29
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: tool.py
-from abc import abstractmethod
-import json
-from typing import List, Optional, get_type_hints, Any
-
-from pydantic import BaseModel
-from langchain.tools import Tool as LangchainTool
+from typing import Optional
 
 from agentuniverse.agent.action.tool.enum import ToolTypeEnum
 from agentuniverse.base.annotation.trace import trace_tool
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
-from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
-from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
-from agentuniverse.base.util.common_util import parse_and_check_json_markdown
+from agentuniverse.base.config.application_configer.application_config_manager import \
+    ApplicationConfigManager
+from agentuniverse.base.config.component_configer.configers.tool_configer import \
+    ToolConfiger
+
+__all__ = ["Tool", "ToolError", "ToolInputError", "ToolConfigError"]
 
 
-class ToolInput(BaseModel):
-    """The basic class for tool input."""
+class ToolError(Exception):
+    """Base exception for Tool-related errors."""
+    pass
 
-    def __init__(self, params: dict, **kwargs):
-        super().__init__(**kwargs)
-        self.__origin_params = params
-        for k, v in params.items():
-            self.__dict__[k] = v
 
-    def to_dict(self):
-        return self.__origin_params
+class ToolInputError(ToolError, ValueError):
+    """Raised when tool input validation fails."""
+    pass
 
-    def to_json_str(self):
-        return json.dumps(self.__origin_params, ensure_ascii=False)
 
-    def add_data(self, key, value):
-        self.__origin_params[key] = value
-        self.__dict__[key] = value
-
-    def get_data(self, key, default=None):
-        return self.__origin_params.get(key, default)
+class ToolConfigError(ToolError):
+    """Raised when tool configuration is invalid."""
+    pass
 
 
 class Tool(ComponentBase):
@@ -61,7 +53,7 @@ class Tool(ComponentBase):
     tool_type: ToolTypeEnum = ToolTypeEnum.FUNC
     input_keys: Optional[List] = None
     tracing: Optional[bool] = None
-    as_mcp_tool: Any = None
+    as_mcp_tool: Optional[Any] = None
 
     # tool's arg model and schema in dict form
     args_model: Any = None
@@ -74,8 +66,6 @@ class Tool(ComponentBase):
     def run(self, **kwargs):
         """The callable method that runs the tool."""
         self.input_check(kwargs)
-        if self.check_execute_signature_deprecated():
-            return self.execute(ToolInput(kwargs))
         return self.execute(**kwargs)
 
     @trace_tool
@@ -86,36 +76,14 @@ class Tool(ComponentBase):
 
     def input_check(self, kwargs: dict) -> None:
         """Check whether the input parameters of the tool contain input keys of the tool"""
-        if self.input_keys:
-            for key in self.input_keys:
-                if key not in kwargs.keys():
-                    raise Exception(f'{self.get_instance_code()} - The input must include key: {key}.')
+        if not self.input_keys:
+            return
+        missing = [k for k in self.input_keys if k not in kwargs]
+        if missing:
+            raise ToolInputError(
+                f"{self.get_instance_code()} - Missing required input key(s): {missing}"
+            )
 
-    @trace_tool
-    def langchain_run(self, *args, callbacks=None, **kwargs):
-        """The callable method that runs the tool."""
-        if self.check_execute_signature_deprecated():
-            """Deprecated in future, use kwargs as tool input instead of ToolInput."""
-            tool_input = ToolInput(kwargs)
-            parse_result = self.parse_react_input(args[0])
-            for key in self.input_keys:
-                tool_input.add_data(key, parse_result[key])
-            return self.execute(tool_input)
-        else:
-            try:
-                parse_result = parse_and_check_json_markdown(args[0],
-                                                            self.input_keys)
-            except Exception as e:
-                return str(e)
-            return self.execute(**parse_result)
-
-    @trace_tool
-    async def async_langchain_run(self, *args, callbacks=None, **kwargs):
-        try:
-            parse_result = parse_and_check_json_markdown(args[0], self.input_keys)
-        except Exception as e:
-            return str(e)
-        return await self.async_execute(**parse_result)
 
     def parse_react_input(self, input_str: str):
         """
@@ -126,30 +94,27 @@ class Tool(ComponentBase):
             self.input_keys[0]: input_str
         }
 
-    @abstractmethod
-    def execute(self, **kwargs):
-        raise NotImplementedError
+    def execute(self, **kwargs) -> Any:
+        """Override this method to implement the tool's synchronous logic."""
+        raise NotImplementedError(
+            f"{self.get_instance_code()} - execute() is not implemented."
+        )
 
-    async def async_execute(self, **kwargs):
-        """The callable method that runs the tool."""
+    async def async_execute(self, **kwargs) -> Any:
+        """Async implementation; defaults to running execute() in a thread pool.
+
+        Override this method if your tool has native async support.
+
+        .. note::
+            The default implementation uses ``asyncio.to_thread``, so make sure
+            ``execute()`` is **thread-safe** if you rely on the default behaviour.
+        """
         return await asyncio.to_thread(self.execute, **kwargs)
 
-    def as_langchain(self) -> LangchainTool:
-        """Convert the agentUniverse(aU) tool class to the langchain tool class."""
-        return LangchainTool(name=self.name,
-                             func=self.langchain_run,
-                             description=self.description)
-
-    async def async_as_langchain(self) -> LangchainTool:
-        return LangchainTool(name=self.name,
-                             func=self.run,
-                             coroutine=self.async_langchain_run,
-                             description=self.description)
-
     def get_instance_code(self) -> str:
-        """Return the full name of the tool."""
+        """Return a globally-unique identifier for this tool instance."""
         appname = ApplicationConfigManager().app_configer.base_info_appname
-        return f'{appname}.{self.component_type.value.lower()}.{self.name}'
+        return f"{appname}.{self.component_type.value.lower()}.{self.name}"
 
     def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'Tool':
         """Initialize the LLM by the ComponentConfiger object.
@@ -175,40 +140,272 @@ class Tool(ComponentBase):
             self.tracing = component_configer.tracing
         return self
 
-    def create_copy(self):
-        copied = self.model_copy()
-        if self.input_keys is not None:
-            copied.input_keys = self.input_keys.copy()
-        return copied
+    def create_copy(self) -> "Tool":
+        """Create a deep copy of this tool instance.
 
-    def check_execute_signature_deprecated(self) -> bool:
-        """Check if the tool use deprecated execute definition which use
-        ToolInput as input args."""
-        if not hasattr(self, 'execute'):
-            return False
+        Uses pydantic ``model_copy(deep=True)`` to ensure all mutable
+        fields (input_keys, args_model_schema, etc.) are independently copied.
+        """
+        return self.model_copy(deep=True)
 
-        execute_method = getattr(self, 'execute')
-        if not callable(execute_method):
-            return False
+    def __repr__(self) -> str:
+        return (
+            f"<{self.__class__.__name__}("
+            f"name={self.name!r}, "
+            f"tool_type={self.tool_type!r}, "
+            f"input_keys={self.input_keys!r})>"
+        )
+
+    # ------------------------------------------------------------------ #
+    #  OpenAI Function-Calling Schema 转换
+    # ------------------------------------------------------------------ #
+
+    def get_function_schema(self) -> dict:
+        """将当前 Tool 转换为 OpenAI function-calling 格式的 tool 定义。
+
+        解析优先级：
+            1. 使用 ``args_model_schema`` （dict）——用户手动/YAML 显式声明的 JSON Schema
+            2. 使用 ``args_model`` （Pydantic Model 类）自动生成 JSON Schema
+            3. 反射子类 ``execute()`` 方法签名，将类型注解转为 JSON Schema
+            4. 兜底：用 ``input_keys`` 构造全 string 的 schema，或返回空 properties
+
+        Returns:
+            dict — 符合 OpenAI ``tools`` 参数格式::
+
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "...",
+                        "description": "...",
+                        "parameters": { ... }
+                    }
+                }
+        """
+        parameters = self._resolve_parameters_schema()
+
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description or "",
+                "parameters": parameters,
+            },
+        }
+
+        # -------------------- 内部：schema 解析调度 -------------------- #
+
+    def _resolve_parameters_schema(self) -> dict:
+        """按优先级依次尝试构建 parameters JSON Schema。"""
+
+        # -------- 优先级 1a: 已有 dict 形式的 schema --------
+        if self.args_model_schema:
+            return self._normalize_schema(self.args_model_schema)
+
+            # -------- 优先级 1b: Pydantic Model 类 --------
+        if self.args_model is not None:
+            try:
+                # pydantic v2
+                if hasattr(self.args_model, "model_json_schema"):
+                    raw = self.args_model.model_json_schema()
+                    # pydantic v1
+                elif hasattr(self.args_model, "schema"):
+                    raw = self.args_model.schema()
+                else:
+                    raw = None
+
+                if raw is not None:
+                    return self._normalize_schema(raw)
+            except Exception:
+                pass  # 降级到下一策略
+
+        # -------- 优先级 2: 反射子类 execute() 签名 --------
+        sig_schema = self._schema_from_execute_signature()
+        if sig_schema is not None:
+            return sig_schema
+
+            # -------- 优先级 3: 兜底 --------
+        return self._fallback_schema()
+
+        # -------------------- 策略 2: 从 execute 签名推导 -------------------- #
+
+    def _schema_from_execute_signature(self) -> Optional[dict]:
+        """反射 **子类** ``execute`` 方法的类型注解，生成 JSON Schema。
+
+        仅当子类对 ``execute`` 定义了具名参数（除 ``self`` 和 ``**kwargs``）时才生效。
+        """
+        # 取子类真正覆写的 execute 方法
+        method = getattr(type(self), "execute", None)
+        if method is None:
+            return None
 
         try:
-            sig = inspect.signature(execute_method)
-            params = sig.parameters
-            if len(params) != 1:
-                return False
-            first_param = list(params.values())[0]
-            try:
-                type_hints = get_type_hints(execute_method)
-                param_name = first_param.name
-                if param_name not in type_hints:
-                    return False
-                param_type = type_hints[param_name]
-                if param_type is not ToolInput:
-                    return False
-            except Exception as e:
-                return False
-            return True
-        except ValueError:
-            return False
-        except TypeError:
-            return False
+            sig = inspect.signature(method)
+        except (ValueError, TypeError):
+            return None
+
+            # 过滤掉 self / *args / **kwargs
+        meaningful_params = {
+            name: p
+            for name, p in sig.parameters.items()
+            if name != "self"
+               and p.kind
+               not in (
+                   inspect.Parameter.VAR_POSITIONAL,
+                   inspect.Parameter.VAR_KEYWORD,
+               )
+        }
+
+        if not meaningful_params:
+            return None
+
+        properties: dict = {}
+        required: list = []
+
+        for name, param in meaningful_params.items():
+            prop_schema = self._annotation_to_property(param.annotation)
+
+            # 无默认值 → required
+            if param.default is inspect.Parameter.empty:
+                required.append(name)
+            else:
+                # 把默认值记录到 schema 里（OpenAI 会参考）
+                if param.default is not None:
+                    prop_schema["default"] = param.default
+
+            properties[name] = prop_schema
+
+        schema: dict = {
+            "type": "object",
+            "properties": properties,
+        }
+        if required:
+            schema["required"] = required
+
+        return schema
+
+        # -------------------- 策略 3: 兜底 -------------------- #
+
+    def _fallback_schema(self) -> dict:
+        """使用 ``input_keys`` 构造最简 schema；无 input_keys 则返回空。"""
+        if self.input_keys:
+            properties = {}
+            for key in self.input_keys:
+                properties[key] = {"type": "string", "description": ""}
+            return {
+                "type": "object",
+                "properties": properties,
+                "required": list(self.input_keys),
+            }
+
+            # 真正的兜底：允许任意 key-value
+        return {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": True,
+        }
+
+        # -------------------- 工具方法 -------------------- #
+
+    @staticmethod
+    def _normalize_schema(raw: dict) -> dict:
+        """将 Pydantic / 用户自定义的 JSON Schema 裁剪为 OpenAI 可接受的格式。
+
+        - 确保顶层包含 ``type: object`` 和 ``properties``。
+        - 移除 OpenAI 不关心且可能报错的顶层字段（``title``, ``$defs``, ``definitions``）。
+        - 保留 ``required`` / ``additionalProperties`` / ``description`` 等。
+        """
+        schema = dict(raw)  # shallow copy
+
+        # 确保基本结构
+        schema.setdefault("type", "object")
+        schema.setdefault("properties", {})
+
+        # 清理 Pydantic 自动生成、但 OpenAI 不需要的字段
+        for key in ("title", "$defs", "definitions"):
+            schema.pop(key, None)
+
+            # 递归清理 properties 里每个字段的 title（可选，保持整洁）
+        for prop_value in schema.get("properties", {}).values():
+            if isinstance(prop_value, dict):
+                prop_value.pop("title", None)
+
+        return schema
+
+    def _annotation_to_property(self, annotation) -> dict:
+        """将单个 Python 类型注解转换为 JSON Schema property dict。
+
+        支持:
+            - 基本类型: str / int / float / bool / list / dict
+            - Optional[X]  →  X 的类型
+            - List[X]      →  {"type": "array", "items": ...}
+            - Dict[K, V]   →  {"type": "object"}
+            - Any / 无注解  →  {"type": "string"}  (安全兜底)
+        """
+        if annotation is inspect.Parameter.empty or annotation is Any:
+            return {"type": "string"}
+
+        return self._python_type_to_json_schema(annotation)
+
+    def _python_type_to_json_schema(self, tp) -> dict:
+        """递归地将 Python 类型映射为 JSON Schema 片段。"""
+
+        _SIMPLE_MAP = {
+            str: "string",
+            int: "integer",
+            float: "number",
+            bool: "boolean",
+            list: "array",
+            dict: "object",
+        }
+
+        # 1. 简单基本类型
+        if tp in _SIMPLE_MAP:
+            return {"type": _SIMPLE_MAP[tp]}
+
+        origin = get_origin(tp)
+        args = get_args(tp)
+
+        # 2. Optional[X] = Union[X, None]
+        if origin is Union:
+            non_none = [a for a in args if a is not type(None)]
+            if len(non_none) == 1:
+                return self._python_type_to_json_schema(non_none[0])
+                # 真正的 Union[A, B, ...] → anyOf
+            return {
+                "anyOf": [self._python_type_to_json_schema(a) for a in
+                          non_none]
+            }
+
+            # 3. List[X]
+        if origin is list:
+            if args:
+                return {
+                    "type": "array",
+                    "items": self._python_type_to_json_schema(args[0]),
+                }
+            return {"type": "array"}
+
+            # 4. Dict[K, V]
+        if origin is dict:
+            result: dict = {"type": "object"}
+            if args and len(args) == 2:
+                result[
+                    "additionalProperties"] = self._python_type_to_json_schema(
+                    args[1])
+            return result
+
+            # 5. 尝试作为简单类型匹配（处理 typing 模块的别名）
+        if hasattr(tp, "__origin__"):
+            base = tp.__origin__
+            if base in _SIMPLE_MAP:
+                return {"type": _SIMPLE_MAP[base]}
+
+                # 6. Pydantic model → 内联 schema
+        if inspect.isclass(tp):
+            if hasattr(tp, "model_json_schema"):
+                return Tool._normalize_schema(tp.model_json_schema())
+            if hasattr(tp, "schema"):
+                return Tool._normalize_schema(tp.schema())
+
+                # 7. 兜底
+        return {"type": "string"}

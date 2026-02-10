@@ -26,6 +26,8 @@ class MCPToolkit(Toolkit):
     always_refresh: bool = False
     connection_kwargs: Optional[dict] = None
 
+    separator: Optional[str] = '__'
+
 
     def get_mcp_server_connect_args(self) -> dict:
         if self.transport == "sse":
@@ -64,14 +66,14 @@ class MCPToolkit(Toolkit):
     def tool_names(self) -> list:
         if self.always_refresh:
             self._refresh_tool_info()
-        return [f'{self.name}@{tool_name}' for tool_name in self.include]
+        return [f'{self.name}{self.separator}{tool_name}' for tool_name in self.include]
 
 
     @property
     def tool_descriptions(self) -> list:
         if self.always_refresh:
             self._refresh_tool_info()
-        tools = [ToolManager().get_instance_obj(f'{self.name}@{tool_name}', new_instance=False) for tool_name in self.include]
+        tools = [ToolManager().get_instance_obj(f'{self.name}{self.separator}{tool_name}', new_instance=False) for tool_name in self.include]
         tool_descriptions = [f'tool name:{tool.name}\ntool description:{tool.description}\n' for tool in tools]
         return tool_descriptions
 
@@ -92,7 +94,7 @@ class MCPToolkit(Toolkit):
         for tool in tools:
             if tool.name not in self.include:
                 continue
-            tool_name = f'{self.name}@{tool.name}'
+            tool_name = f'{self.name}{self.separator}{tool.name}'
             tool_instance = MCPTool(
                 name=tool_name,
                 description=f'{tool.description}\n{str(tool.inputSchema)}',

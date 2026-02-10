@@ -16,7 +16,7 @@ class MemoryTypeEnum(Enum):
 
 
 @enum.unique
-class ChatMessageEnum(Enum):
+class ChatMessageEnum(str, Enum):
     SYSTEM = 'system'
     HUMAN = 'human'
     AI = 'ai'
@@ -24,3 +24,7 @@ class ChatMessageEnum(Enum):
     OUTPUT = 'output'
     USER = 'user'
     ASSISTANT = 'assistant'
+    TOOL = 'tool'
+
+    # Though deprecated by tool, compliance with some old model
+    FUNCTION = 'function'

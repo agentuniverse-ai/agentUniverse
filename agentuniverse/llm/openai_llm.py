@@ -5,41 +5,127 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: openai_llm.py
-from typing import Any, Optional, AsyncIterator, Iterator, Union
+from typing import Optional
 
 import httpx
-from langchain_core.language_models.base import BaseLanguageModel
+import tiktoken
 from openai import OpenAI, AsyncOpenAI
 from pydantic import Field
-import tiktoken
 
-from agentuniverse.llm.langchain_instance import LangchainOpenAI
-from agentuniverse.llm.llm import LLM, LLMOutput
 from agentuniverse.base.util.env_util import get_from_env
+from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
 
 OPENAI_MAX_CONTEXT_LENGTH = {
+    # --- GPT-3.5 (legacy) ---
     "gpt-3.5-turbo": 4096,
     "gpt-3.5-turbo-0301": 4096,
     "gpt-3.5-turbo-0613": 4096,
     "gpt-3.5-turbo-16k": 16384,
     "gpt-3.5-turbo-16k-0613": 16384,
-    "gpt-35-turbo": 4096,
-    "gpt-35-turbo-16k": 16384,
     "gpt-3.5-turbo-1106": 16384,
     "gpt-3.5-turbo-0125": 16384,
-    "gpt-4-0314": 8192,
+    # Azure aliases
+    "gpt-35-turbo": 4096,
+    "gpt-35-turbo-16k": 16384,
+
+    # --- GPT-4 (legacy) ---
     "gpt-4": 8192,
+    "gpt-4-0314": 8192,
+    "gpt-4-0613": 8192,
     "gpt-4-32k": 32768,
     "gpt-4-32k-0613": 32768,
-    "gpt-4-0613": 8192,
+
+    # --- GPT-4 Turbo (legacy-ish) ---
     "gpt-4-1106-preview": 128000,
     "gpt-4-turbo": 128000,
+    "gpt-4-turbo-preview": 128000,
+
+    # --- GPT-4.5 (deprecated preview) ---
+    "gpt-4.5-preview": 128000,
+
+    # --- GPT-4o family ---
     "gpt-4o": 128000,
     "gpt-4o-2024-05-13": 128000,
+    "gpt-4o-2024-08-06": 128000,
+    "gpt-4o-2024-11-20": 128000,
+
+    "gpt-4o-mini": 128000,
+    "gpt-4o-mini-2024-07-18": 128000,
+
+    # audio preview (chat/completions)
+    "gpt-4o-audio-preview": 128000,
+    "gpt-4o-audio-preview-2024-10-01": 128000,
+    "gpt-4o-audio-preview-2024-12-17": 128000,
+    "gpt-4o-audio-preview-2025-06-03": 128000,
+
+    "gpt-4o-mini-audio-preview": 128000,
+    "gpt-4o-mini-audio-preview-2024-12-17": 128000,
+
+    # search preview
+    "gpt-4o-search-preview": 128000,
+    "gpt-4o-mini-search-preview": 128000,
+
+    # realtime
+    "gpt-4o-realtime-preview": 32000,
+    "gpt-4o-mini-realtime-preview": 16000,
+
+    # speech-to-text / text-to-speech
+    "gpt-4o-transcribe": 16000,
+    "gpt-4o-transcribe-diarize": 16000,
+    "gpt-4o-mini-transcribe": 16000,
+    "gpt-4o-mini-tts": 2000,
+
+    # --- GPT Audio / Realtime (GA) ---
+    "gpt-audio": 128000,
+    "gpt-audio-mini": 128000,
+    "gpt-realtime": 32000,
+    "gpt-realtime-mini": 32000,
+
+    # --- GPT-4.1 family (1M context) ---
+    "gpt-4.1": 1047576,
+    "gpt-4.1-mini": 1047576,
+    "gpt-4.1-nano": 1047576,
+
+    # --- GPT-5 family ---
+    "gpt-5": 400000,
+    "gpt-5-mini": 400000,
+    "gpt-5-nano": 400000,
+    "gpt-5-pro": 400000,
+
+    "gpt-5-chat-latest": 128000,
+    "gpt-5.1": 400000,
+    "gpt-5.1-chat-latest": 128000,
+    "gpt-5.2": 400000,
+    "gpt-5.2-chat-latest": 128000,
+    "gpt-5.2-pro": 400000,
+
+    # Codex variants
+    "gpt-5-codex": 400000,
+    "gpt-5.1-codex": 400000,
+    "gpt-5.1-codex-mini": 400000,
+    "gpt-5.1-codex-max": 400000,
+    "gpt-5.2-codex": 400000,
+
+    # --- o-series reasoning models ---
+    "o1": 200000,
+    "o1-pro": 200000,
+    "o1-mini": 128000,
+
+    "o3": 200000,
+    "o3-mini": 200000,
+    "o3-pro": 200000,
+    "o3-deep-research": 200000,
+
+    "o4-mini": 200000,
+    "o4-mini-deep-research": 200000,
+
+    # --- specialized / tooling ---
+    "computer-use-preview": 8192,
+    "codex-mini-latest": 200000,
 }
 
 
-class OpenAILLM(LLM):
+class OpenAILLM(OpenAIStyleLLM):
     """The openai llm class.
 
     Attributes:
@@ -85,73 +171,12 @@ class OpenAILLM(LLM):
             **(self.openai_client_args or {}),
         )
 
-    def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        """Run the OpenAI LLM.
-
-        Args:
-            messages (list): The messages to send to the LLM.
-            **kwargs: Arbitrary keyword arguments.
-        """
-        streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
-        self.client = self._new_client()
-        chat_completion = self.client.chat.completions.create(
-            messages=messages,
-            model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
-            **kwargs,
-        )
-        if not streaming:
-            text = chat_completion.choices[0].message.content
-            return LLMOutput(text=text, raw=chat_completion.model_dump())
-        return self.generate_stream_result(chat_completion)
-
-    async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
-        """Asynchronously run the OpenAI LLM.
-
-        Args:
-            messages (list): The messages to send to the LLM.
-            **kwargs: Arbitrary keyword arguments.
-        """
-        streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
-        self.async_client = self._new_async_client()
-        chat_completion = await self.async_client.chat.completions.create(
-            messages=messages,
-            model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
-            **kwargs,
-        )
-        if not streaming:
-            text = chat_completion.choices[0].message.content
-            return LLMOutput(text=text, raw=chat_completion.model_dump())
-        return self.agenerate_stream_result(chat_completion)
-
-    def as_langchain(self) -> BaseLanguageModel:
-        """Convert the agentUniverse(aU) openai llm class to the langchain openai llm class."""
-        return LangchainOpenAI(self)
-
-    def set_by_agent_model(self, **kwargs):
-        """ Assign values of parameters to the OpenAILLM model in the agent configuration."""
-        copied_obj = super().set_by_agent_model(**kwargs)
-        if 'openai_api_key' in kwargs and kwargs['openai_api_key']:
-            copied_obj.openai_api_key = kwargs['openai_api_key']
-        if 'openai_api_base' in kwargs and kwargs['openai_api_base']:
-            copied_obj.openai_api_base = kwargs['openai_api_base']
-        if 'openai_proxy' in kwargs and kwargs['openai_proxy']:
-            copied_obj.openai_proxy = kwargs['openai_proxy']
-        if 'openai_client_args' in kwargs and kwargs['openai_client_args']:
-            copied_obj.openai_client_args = kwargs['openai_client_args']
-        return copied_obj
-
     def max_context_length(self) -> int:
         """Max context length.
 
           The total length of input tokens and generated tokens is limited by the openai model's context length.
           """
-        return OPENAI_MAX_CONTEXT_LENGTH.get(self.model_name, 4096)
+        return OPENAI_MAX_CONTEXT_LENGTH.get(self.model_name, 8192)
 
     def get_num_tokens(self, text: str) -> int:
         """Get the number of tokens present in the text.
@@ -169,34 +194,3 @@ class OpenAILLM(LLM):
         except KeyError:
             encoding = tiktoken.get_encoding("cl100k_base")
         return len(encoding.encode(text))
-
-    @staticmethod
-    def parse_result(chunk):
-        """Generate the result of the stream."""
-        chat_completion = chunk
-        if not isinstance(chunk, dict):
-            chunk = chunk.dict()
-        if len(chunk["choices"]) == 0:
-            return
-        choice = chunk["choices"][0]
-        message = choice.get("delta")
-        text = message.get("content")
-        if not text:
-            return
-        return LLMOutput(text=text, raw=chat_completion.model_dump())
-
-    @classmethod
-    def generate_stream_result(cls, stream: Iterator) -> Iterator[LLMOutput]:
-        """Generate the result of the stream."""
-        for chunk in stream:
-            llm_output = cls.parse_result(chunk)
-            if llm_output:
-                yield llm_output
-
-    @classmethod
-    async def agenerate_stream_result(cls, stream: AsyncIterator) -> AsyncIterator[LLMOutput]:
-        """Generate the result of the stream."""
-        async for chunk in stream:
-            llm_output = cls.parse_result(chunk)
-            if llm_output:
-                yield llm_output

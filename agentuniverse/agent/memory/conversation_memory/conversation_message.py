@@ -39,13 +39,10 @@ class ConversationMessage(Message):
     id: Optional[str | int] = uuid.uuid4().hex
     trace_id: Optional[str] = None
     conversation_id: Optional[str] = None
-    source: Optional[str] = None
     source_type: Optional[str] = None
     target: Optional[str] = None
     target_type: Optional[str] = None
-    type: Optional[str] = None
     content: Optional[str] = None
-    metadata: Optional[dict] = None
     additional_args: Optional[dict] = Field(default_factory=dict)
 
     @staticmethod

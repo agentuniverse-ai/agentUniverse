@@ -8,8 +8,6 @@
 import re
 from typing import Optional
 
-from langchain_core.prompts import PromptTemplate
-
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.component_configer.configers.prompt_configer import PromptConfiger
@@ -26,15 +24,6 @@ class Prompt(ComponentBase):
 
     def __init__(self, **kwargs):
         super().__init__(component_type=ComponentEnum.PROMPT, **kwargs)
-
-    def as_langchain(self):
-        """Convert the prompt template into a LangChain prompt template.
-
-        Returns:
-            PromptTemplate: The prompt template.
-        """
-        return PromptTemplate(template=self.prompt_template,
-                              input_variables=self.input_variables)
 
     def build_prompt(self, agent_prompt_model: AgentPromptModel, prompt_assemble_order: list[str]) -> 'Prompt':
         """Build the prompt class.

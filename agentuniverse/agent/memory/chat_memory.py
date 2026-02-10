@@ -37,20 +37,6 @@ class ChatMemory(Memory):
     prompt_version: Optional[str] = None
     messages: Optional[List[Message]] = None
 
-    def as_langchain(self) -> BaseChatMemory:
-        """Convert the agentUniverse(aU) chat memory class to the langchain chat memory class."""
-        if self.llm is None:
-            raise ValueError("Must set `llm` when using langchain memory.")
-        if self.type is None or self.type == MemoryTypeEnum.SHORT_TERM:
-            return AuConversationTokenBufferMemory(llm=self.llm.as_langchain(), memory_key=self.memory_key,
-                                                   input_key=self.input_key, output_key=self.output_key,
-                                                   max_token_limit=self.max_tokens, messages=self.messages)
-        elif self.type == MemoryTypeEnum.LONG_TERM:
-            return AuConversationSummaryBufferMemory(llm=self.llm.as_langchain(), memory_key=self.memory_key,
-                                                     input_key=self.input_key, output_key=self.output_key,
-                                                     max_token_limit=self.max_tokens, messages=self.messages,
-                                                     prompt_version=self.prompt_version)
-
     def set_by_agent_model(self, **kwargs):
         """ Assign values of parameters to the ChatMemory model in the agent configuration."""
         copied_obj = super().set_by_agent_model(**kwargs)

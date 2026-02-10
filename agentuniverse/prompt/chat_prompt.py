@@ -6,11 +6,9 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: chat_prompt.py
 import base64
-from typing import List, Optional
 import re
+from typing import List
 from urllib.parse import urlparse
-
-from langchain_core.prompts import ChatPromptTemplate
 
 from agentuniverse.agent.memory.enum import ChatMessageEnum
 from agentuniverse.agent.memory.message import Message
@@ -29,9 +27,6 @@ image_extensions = (
 
 class ChatPrompt(Prompt):
     messages: List[Message] = []
-
-    def as_langchain(self) -> ChatPromptTemplate:
-        return ChatPromptTemplate.from_messages(Message.as_langchain_list(self.messages))
 
     def build_prompt(self, agent_prompt_model: AgentPromptModel, prompt_assemble_order: list[str]) -> 'ChatPrompt':
         """Build the prompt class.
@@ -88,7 +83,7 @@ class ChatPrompt(Prompt):
                             mime_type = f"image/{extension}"
                             content = [
                                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}}]
-                            self.messages.append(Message(type=ChatMessageEnum.HUMAN.value, content=content))
+                            self.messages.append(Message(type=ChatMessageEnum.HUMAN, content=content))
 
     def generate_audio_prompt(self, audio_url: str) -> None:
         """ Generate the prompt with audio url.
@@ -101,4 +96,4 @@ class ChatPrompt(Prompt):
             # Check if the URL is a valid HTTP or HTTPS URL.
             if parsed_url.scheme in ["http", "https"]:
                 content = [{"type": "input_audio", "input_audio": {"data": audio_url}}]
-                self.messages.append(Message(type=ChatMessageEnum.HUMAN.value, content=content))
+                self.messages.append(Message(type=ChatMessageEnum.HUMAN, content=content))

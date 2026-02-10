@@ -16,13 +16,46 @@ from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
 
 QWen_Max_CONTEXT_LENGTH = {
-    "qwen-turbo": 131072,
-    "qwen-plus": 131072,
-    "qwen-max": 32768,
-    "qwen-max-0428": 8000,
-    "qwen-max-0403": 8000,
-    "qwen-max-0107": 8000,
-    "qwen-long": 10000000
+    # Turbo
+    "qwen-turbo": 1_000_000,          # 当前等同 qwen-turbo-2025-02-11
+    "qwen-turbo-latest": 1_000_000,   # 注：开启思考模式时，上下文会降到 131,072（但这里按“最大”口径取 1,000,000）
+    "qwen-turbo-2025-04-28": 1_000_000,
+    "qwen-turbo-0428": 1_000_000,
+    "qwen-turbo-2025-02-11": 1_000_000,
+    "qwen-turbo-0211": 1_000_000,
+    "qwen-turbo-2024-09-19": 131_072,
+    "qwen-turbo-0919": 131_072,
+    "qwen-turbo-2024-06-24": 8_000,
+    "qwen-turbo-0624": 8_000,
+
+    # Plus
+    "qwen-plus": 131_072,             # 当前等同 qwen-plus-2025-01-25
+    "qwen-plus-latest": 131_072,
+    "qwen-plus-2025-04-28": 131_072,
+    "qwen-plus-0428": 131_072,
+    "qwen-plus-2025-01-25": 131_072,
+    "qwen-plus-0125": 131_072,
+    "qwen-plus-2025-01-12": 131_072,
+    "qwen-plus-0112": 131_072,
+
+    # Max
+    "qwen-max": 32_768,               # 当前等同 qwen-max-2024-09-19
+    "qwen-max-latest": 131_072,
+    "qwen-max-2025-01-25": 131_072,
+    "qwen-max-0125": 131_072,
+    "qwen-max-2024-09-19": 32_768,
+    "qwen-max-0919": 32_768,
+    "qwen-max-2024-04-28": 8_000,
+    "qwen-max-0428": 8_000,
+    "qwen-max-2024-04-03": 8_000,
+    "qwen-max-0403": 8_000,
+    "qwen-max-0107": 8_000,
+
+    # Long
+    "qwen-long": 10_000_000,
+    "qwen-long-latest": 10_000_000,
+    "qwen-long-2025-01-25": 10_000_000,
+    "qwen-long-0125": 10_000_000,
 }
 
 
