@@ -7,9 +7,6 @@
 # @FileName: prompt_util.py
 from typing import List
 
-from langchain.chains.summarize import load_summarize_chain
-from langchain_core.documents import Document
-
 from agentuniverse.agent.memory.enum import ChatMessageEnum
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.llm.llm import LLM
@@ -21,21 +18,186 @@ from agentuniverse.prompt.enum import PromptProcessEnum
 
 def summarize_by_stuff(texts: List[str], llm: LLM, summary_prompt):
     """
-    stuff summarization -- general method
+    Stuff summarization method - combines all texts and summarizes in one go.
+
+    Algorithm principle (same as langchain's StuffDocumentsChain):
+    1. Combine all text chunks into a single text
+    2. Format the prompt with the combined text
+    3. Send to LLM for summarization in a single call
+    4. Return the summary result
+
+    This is the simplest approach but may fail if combined text exceeds LLM's context window.
     """
-    stuff_chain = load_summarize_chain(llm.as_langchain(), chain_type='stuff', verbose=True,
-                                       prompt=summary_prompt.as_langchain())
-    return stuff_chain.run([Document(page_content=text) for text in texts])
+    # Combine all texts into one
+    combined_text = "\n\n".join(texts)
+
+    # Format the prompt with the combined text
+    prompt_variables = {}
+    if hasattr(summary_prompt, 'input_variables') and summary_prompt.input_variables:
+        # Use 'text' variable if available, otherwise use first variable
+        if 'text' in summary_prompt.input_variables:
+            prompt_variables['text'] = combined_text
+        else:
+            prompt_variables[summary_prompt.input_variables[0]] = combined_text
+
+    # Format the prompt template
+    if hasattr(summary_prompt, 'prompt_template'):
+        formatted_prompt = summary_prompt.prompt_template.format(**prompt_variables)
+    else:
+        formatted_prompt = combined_text
+
+    # Create messages for LLM
+    messages = [
+        Message(type=ChatMessageEnum.USER, content=formatted_prompt)
+    ]
+
+    # Call LLM
+    result = llm.call(messages=messages)
+
+    # Extract text from result
+    if hasattr(result, 'text'):
+        return result.text
+    elif hasattr(result, 'message') and hasattr(result.message, 'content'):
+        return result.message.content
+    else:
+        return str(result)
 
 
-def summarize_by_map_reduce(texts: List[str], llm: LLM, summary_prompt, combine_prompt):
+def summarize_by_map_reduce(texts: List[str], llm: LLM, summary_prompt, combine_prompt,
+                           token_max: int = 3000, collapse_max_retries: int = None):
     """
-    map reduce summarization -- general method
+    Map-reduce summarization method - handles large documents by hierarchical summarization.
+
+    Algorithm principle (same as langchain's MapReduceDocumentsChain + ReduceDocumentsChain):
+    1. Map phase: Summarize each text chunk individually using summary_prompt
+    2. Collapse phase: If map results exceed token_max, recursively group and collapse them
+    3. Reduce phase: Combine final summaries using combine_prompt to produce final summary
+
+    Args:
+        texts: List of text chunks to summarize
+        llm: LLM instance for generating summaries
+        summary_prompt: Prompt for map phase (summarizing individual chunks)
+        combine_prompt: Prompt for reduce phase (combining summaries)
+        token_max: Maximum tokens for collapse phase (default: 3000)
+        collapse_max_retries: Max retries for collapse, None means unlimited
+
+    The key difference from naive map-reduce is the collapse phase that prevents
+    exceeding context window when combining many summaries.
     """
-    map_reduce_chain = load_summarize_chain(llm.as_langchain(), chain_type='map_reduce', verbose=True,
-                                            map_prompt=summary_prompt.as_langchain(),
-                                            combine_prompt=combine_prompt.as_langchain())
-    return map_reduce_chain.run([Document(page_content=text) for text in texts])
+
+    def _format_prompt_with_text(prompt, text: str) -> str:
+        """Helper to format a prompt template with text."""
+        prompt_variables = {}
+        if hasattr(prompt, 'input_variables') and prompt.input_variables:
+            if 'text' in prompt.input_variables:
+                prompt_variables['text'] = text
+            else:
+                prompt_variables[prompt.input_variables[0]] = text
+
+        if hasattr(prompt, 'prompt_template'):
+            return prompt.prompt_template.format(**prompt_variables)
+        else:
+            return text
+
+    def _call_llm_with_prompt(prompt_text: str) -> str:
+        """Helper to call LLM and extract result text."""
+        messages = [Message(type=ChatMessageEnum.USER, content=prompt_text)]
+        result = llm.call(messages=messages)
+
+        if hasattr(result, 'text'):
+            return result.text
+        elif hasattr(result, 'message') and hasattr(result.message, 'content'):
+            return result.message.content
+        else:
+            return str(result)
+
+    def _get_token_count(text: str) -> int:
+        """Get token count for a text."""
+        return llm.get_num_tokens(text)
+
+    def _get_texts_token_count(text_list: List[str]) -> int:
+        """Get total token count for a list of texts including prompt overhead."""
+        # Combine texts to estimate full prompt size
+        combined = "\n\n".join(text_list)
+        # Add prompt template overhead (approximate)
+        formatted = _format_prompt_with_text(combine_prompt, combined)
+        return _get_token_count(formatted)
+
+    def _split_texts_by_token_limit(text_list: List[str], token_limit: int) -> List[List[str]]:
+        """
+        Split texts into groups where each group's token count doesn't exceed token_limit.
+        Same logic as langchain's split_list_of_docs.
+        """
+        result_groups = []
+        current_group = []
+
+        for text in text_list:
+            current_group.append(text)
+            # Check if current group exceeds limit
+            num_tokens = _get_texts_token_count(current_group)
+
+            if num_tokens > token_limit:
+                if len(current_group) == 1:
+                    # Single text is longer than limit, cannot split further
+                    raise ValueError(
+                        f"A single document was longer than the token limit ({token_limit}). "
+                        f"Cannot handle this. Document token count: {num_tokens}"
+                    )
+                # Remove last text and save current group
+                result_groups.append(current_group[:-1])
+                current_group = [current_group[-1]]
+
+        # Add remaining texts
+        if current_group:
+            result_groups.append(current_group)
+
+        return result_groups
+
+    def _collapse_texts(text_list: List[str]) -> str:
+        """Collapse a list of texts into one by combining them with combine_prompt."""
+        combined_text = "\n\n".join(text_list)
+        formatted_prompt = _format_prompt_with_text(combine_prompt, combined_text)
+        return _call_llm_with_prompt(formatted_prompt)
+
+    # Phase 1: Map - summarize each text chunk individually
+    summaries = []
+    for text in texts:
+        formatted_prompt = _format_prompt_with_text(summary_prompt, text)
+        summary = _call_llm_with_prompt(formatted_prompt)
+        summaries.append(summary)
+
+    # Phase 2: Collapse - recursively reduce summaries if they exceed token_max
+    # This is the key logic from ReduceDocumentsChain._collapse
+    result_texts = summaries
+    num_tokens = _get_texts_token_count(result_texts)
+    retries = 0
+
+    while num_tokens > token_max:
+        # Split into groups that each fit within token_max
+        text_groups = _split_texts_by_token_limit(result_texts, token_max)
+
+        # Collapse each group into a single text
+        result_texts = []
+        for group in text_groups:
+            collapsed = _collapse_texts(group)
+            result_texts.append(collapsed)
+
+        # Check if we've reduced enough
+        num_tokens = _get_texts_token_count(result_texts)
+        retries += 1
+
+        if collapse_max_retries is not None and retries >= collapse_max_retries:
+            raise ValueError(
+                f"Exceeded {collapse_max_retries} retries trying to collapse "
+                f"documents to {token_max} tokens. Current tokens: {num_tokens}"
+            )
+
+    # Phase 3: Reduce - final combination of all collapsed summaries
+    final_combined_text = "\n\n".join(result_texts)
+    final_formatted_prompt = _format_prompt_with_text(combine_prompt, final_combined_text)
+    final_summary = _call_llm_with_prompt(final_formatted_prompt)
+
+    return final_summary
 
 
 def split_text_on_tokens(text: str, text_token: int, chunk_size=800, chunk_overlap=100) -> List[str]:
