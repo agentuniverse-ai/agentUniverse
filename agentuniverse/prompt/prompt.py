@@ -6,12 +6,14 @@
 # @FileName: prompt.py
 """Prompt base module."""
 import re
-from typing import Optional
+from typing import Optional, List
 
+from agentuniverse.agent.memory.enum import ChatMessageEnum
+from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.component_configer.configers.prompt_configer import PromptConfiger
-from agentuniverse.base.util.prompt_util import generate_template
+from agentuniverse.base.util.prompt_util import generate_template, render_str
 from agentuniverse.prompt.prompt_model import AgentPromptModel
 
 
@@ -39,26 +41,36 @@ class Prompt(ComponentBase):
         self.input_variables = re.findall(r'\{(.*?)}', self.prompt_template)
         return self
 
+    def render(self, **kwargs) -> List[Message]:
+        """渲染 prompt 模板，缺少变量时抛出 ValueError。"""
+        if not self.prompt_template:
+            user_str = ''
+        else:
+            user_str = render_str(self.prompt_template, kwargs)
+        return [Message(type=ChatMessageEnum.USER, content=user_str)]
+
     def get_instance_code(self) -> str:
         """Return the prompt version of the current prompt."""
         return self.prompt_version
 
-    def initialize_by_component_configer(self, component_configer: PromptConfiger) -> 'Prompt':
+    def initialize_by_component_configer(self,
+                                         component_configer: PromptConfiger) -> "Prompt":
         """Initialize the prompt by the PromptConfiger object.
 
         Args:
-            component_configer(PromptConfiger): the PromptConfiger object
+            component_configer: the PromptConfiger object.
+
         Returns:
-            Prompt: the prompt object
+            Prompt: the prompt object.
         """
         prompt_values = []
         for k, v in component_configer.configer.value.items():
-            # ignore metadata values
-            if k == 'metadata':
+            if k == "metadata":
                 continue
             self.__dict__[k] = v
-            # splice the values in the prompt configer
-            prompt_values.append(str(v))
+            # few_shot_examples 在配置中可能是 list[dict]，跳过直接拼接
+            if isinstance(v, str):
+                prompt_values.append(v)
 
         if component_configer.metadata_version:
             self.prompt_version = component_configer.metadata_version
