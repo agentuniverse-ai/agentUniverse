@@ -12,9 +12,6 @@ from copy import deepcopy
 from typing import Optional, Dict, List, Any
 from concurrent.futures import wait, ALL_COMPLETED
 
-from langchain_core.utils.json import parse_json_markdown
-from langchain.tools import Tool as LangchainTool
-
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
@@ -269,66 +266,6 @@ class Knowledge(ComponentBase):
         if hasattr(knowledge_configer, "tracing"):
             self.tracing = knowledge_configer.tracing
         return self
-
-    def langchain_query(self, query: str) -> str:
-        """Query the knowledge using LangChain.
-
-        Query documents from the store and return the results.
-        """
-        parse_query = parse_json_markdown(query)
-        knowledge = self.query_knowledge(**parse_query)
-        return "This is Query Result:\n" + self.to_llm(knowledge)
-
-    async def async_langchain_query(self, query: str) -> str:
-        """Query the knowledge using LangChain.
-
-        Query documents from the store and return the results.
-        """
-        parse_query = parse_json_markdown(query)
-        knowledge = await asyncio.to_thread(self.query_knowledge, **parse_query)
-        return "This is Query Result:\n" + self.to_llm(knowledge)
-
-    def as_langchain_tool(self) -> LangchainTool:
-        """Convert the Knowledge object to a LangChain tool.
-
-        Returns:
-            Any: the LangChain tool object
-        """
-        args_description = """
-        This is a knowledge base tool, which stores the content you may need. To use this tool, you need to give a json string with the following format:
-        ```json
-        {
-            "query_str": "<your query here>",
-            "similarity_top_k": <number of results to return>,
-        }
-        ```
-        """
-        return LangchainTool(
-            name=self.name,
-            description=self.description or '' + args_description,
-            func=self.langchain_query,
-        )
-
-    async def async_as_langchain_tool(self) -> LangchainTool:
-        """Convert the Knowledge object to a LangChain tool.
-
-        Returns:
-            Any: the LangChain tool object
-        """
-        args_description = """
-        This is a knowledge base tool, which stores the content you may need. To use this tool, you need to give a json string with the following format:
-        ```json
-        {
-            "query_str": "<your query here>",
-            "similarity_top_k": <number of results to return>,
-        }
-        ```
-        """
-        return LangchainTool(
-            name=self.name,
-            description=self.description or '' + args_description,
-            func=self.async_langchain_query,
-        )
 
     def create_copy(self):
         copied = self.model_copy()

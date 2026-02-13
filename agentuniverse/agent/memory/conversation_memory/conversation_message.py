@@ -9,15 +9,14 @@
 import uuid
 from typing import Optional, List
 
-from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from pydantic import Field
 
+from agentuniverse.agent.memory.conversation_memory.enum import \
+    ConversationMessageSourceType, ConversationMessageEnum
 from agentuniverse.agent.memory.enum import ChatMessageEnum
-from langchain_core.prompts.chat import BaseStringMessagePromptTemplate
-
-from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageSourceType, ConversationMessageEnum
 from agentuniverse.agent.memory.message import Message
-from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
+from agentuniverse.base.context.framework_context_manager import \
+    FrameworkContextManager
 
 
 class ConversationMessage(Message):
@@ -44,41 +43,6 @@ class ConversationMessage(Message):
     target_type: Optional[str] = None
     content: Optional[str] = None
     additional_args: Optional[dict] = Field(default_factory=dict)
-
-    @staticmethod
-    def as_langchain_list(message_list: List['ConversationMessage']):
-        """Convert agentUniverse(aU) message list to langchain message list """
-        messages = []
-        for message in message_list:
-            if message.type == ChatMessageEnum.SYSTEM.value or message.type == ChatMessageEnum.HUMAN.value or message.type == ChatMessageEnum.AI.value:
-                messages.append(message)
-                continue
-            # only got agent message
-            if message.target_type != ConversationMessageSourceType.AGENT.value:
-                continue
-            if message.source_type not in [ConversationMessageSourceType.AGENT.value,
-                                           ConversationMessageSourceType.USER.value]:
-                continue
-            if message.source_type == ConversationMessageSourceType.AGENT.value and message.type == ConversationMessageEnum.OUTPUT.value:
-                messages.append(message)
-            elif message.target_type == ConversationMessageSourceType.AGENT.value and message.type == ConversationMessageEnum.INPUT.value:
-                messages.append(message)
-        return [message.as_langchain() for message in messages]
-
-    def as_langchain(self):
-        """Convert the agentUniverse(aU) message class to the langchain message class."""
-        if self.type == ConversationMessageEnum.INPUT.value:
-            return HumanMessage(content=self.content)
-        elif self.type == ConversationMessageEnum.OUTPUT.value:
-            return AIMessage(content=self.content)
-        elif self.type == ChatMessageEnum.SYSTEM.value:
-            return SystemMessage(content=self.content)
-        elif self.type == ChatMessageEnum.HUMAN.value:
-            return HumanMessage(content=self.content)
-        elif self.type == ChatMessageEnum.AI.value:
-            return AIMessage(content=self.content)
-        else:
-            return BaseStringMessagePromptTemplate.from_template(self.content)
 
     @classmethod
     def from_dict(cls, data: dict):

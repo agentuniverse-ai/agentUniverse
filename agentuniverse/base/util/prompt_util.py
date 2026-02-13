@@ -405,7 +405,7 @@ def summarize_by_stuff(texts: List[str], llm: LLM, summary_prompt):
     if hasattr(result, 'text'):
         return result.text
     elif hasattr(result, 'message') and hasattr(result.message, 'content'):
-        return result.message.content
+        return result.message.content_text
     else:
         return str(result)
 

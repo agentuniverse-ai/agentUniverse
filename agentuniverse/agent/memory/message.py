@@ -14,6 +14,31 @@ from agentuniverse.agent.memory.enum import ChatMessageEnum
 ContentT = Union[str, List[Union[str, Dict[str, Any]]]]
 
 
+def _extract_plain_text(content: Optional[ContentT]) -> str:
+    """从 ContentT 中提取纯文本。
+
+    - str  → 直接返回
+    - list → 遍历每个 part：
+        - str 直接拼接
+        - dict 取 "text" 字段（兼容 OpenAI multi-modal content parts 格式）
+    - None → 返回空字符串
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    parts: List[str] = []
+    for part in content:
+        if isinstance(part, str):
+            parts.append(part)
+        elif isinstance(part, dict):
+            # OpenAI 格式: {"type": "text", "text": "..."} 或直接 {"text": "..."}
+            text = part.get("text")
+            if text is not None:
+                parts.append(str(text))
+    return "".join(parts)
+
+
 class FunctionCall(BaseModel):
     """函数调用详情"""
     name: str
@@ -71,6 +96,30 @@ class Message(BaseModel):
         extra='allow'
     )
 
+    # ---- 纯文本便捷属性 ----
+
+    @property
+    def content_text(self) -> str:
+        """获取 content 的纯文本表示。
+
+        - content 为 str 时直接返回
+        - content 为 list 时提取所有文本部分并拼接
+        - content 为 None 时返回空字符串
+        """
+        return _extract_plain_text(self.content)
+
+    @property
+    def reasoning_text(self) -> str:
+        """获取 reasoning_content 的纯文本表示。
+
+        - reasoning_content 为 str 时直接返回
+        - reasoning_content 为 list 时提取所有文本部分并拼接
+        - reasoning_content 为 None 时返回空字符串
+        """
+        return _extract_plain_text(self.reasoning_content)
+
+        # ---- 序列化 / 反序列化 ----
+
     def to_dict(self, *, include_none: bool = False) -> dict:
         return self.model_dump(exclude_none=not include_none)
 
@@ -79,7 +128,6 @@ class Message(BaseModel):
         if "type" not in d and "role" in d:
             d = {**d, "type": d.pop("role")}
         return cls.model_validate(d)
-
 
     def get_extra_fields(self) -> Dict[str, Any]:
         defined_fields = set(self.model_fields.keys())

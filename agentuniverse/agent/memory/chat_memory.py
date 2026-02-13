@@ -7,14 +7,10 @@
 # @FileName: chat_memory.py
 from typing import Optional, List
 
-from langchain.memory.chat_memory import BaseChatMemory
-
-from agentuniverse.agent.memory.enum import MemoryTypeEnum
 from agentuniverse.agent.memory.memory import Memory
-from agentuniverse.agent.memory.langchain_instance import AuConversationSummaryBufferMemory, \
-    AuConversationTokenBufferMemory
 from agentuniverse.agent.memory.message import Message
-from agentuniverse.base.config.component_configer.configers.memory_configer import MemoryConfiger
+from agentuniverse.base.config.component_configer.configers.memory_configer import \
+    MemoryConfiger
 from agentuniverse.llm.llm import LLM
 
 
