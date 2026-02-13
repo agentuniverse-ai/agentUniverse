@@ -66,6 +66,7 @@ def create_memory_model(table_name: str, DynamicBase: Any) -> Any:
         session_id = Column(String(100), default='')
         agent_id = Column(String(100), default='')
         source = Column(String(500), default='')
+        type = Column(String(100), default='')
         message = Column(Text)
         gmt_created = Column(DateTime, default=func.now())
 
@@ -93,6 +94,7 @@ class DefaultMemoryConverter(BaseMemoryConverter):
         """Convert a Message instance to a SQLAlchemy model."""
         return self.model_class(
             session_id=session_id, agent_id=agent_id, source=source,
+            type=message.type if message.type else '',
             message=json.dumps(message.to_dict(), ensure_ascii=False)
         )
 
@@ -109,6 +111,11 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
         sqldb_wrapper_name (str): The name of the SQLDBWrapper to use for the memory.
         memory_converter (BaseMemoryConverter): The memory converter to use for the memory.
         _sqldb_wrapper (SQLDBWrapper): The SQLDBWrapper instance to use for the memory.
+
+    Note:
+        This class uses the default async implementation from the parent class
+        (asyncio.to_thread) as the SQLDBWrapper does not currently support async operations.
+        Future versions may add native async support using sqlalchemy.ext.asyncio.
     """
 
     sqldb_table_name: Optional[str] = 'memory'
@@ -232,10 +239,12 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             if kwargs.get('type'):
                 if isinstance(kwargs['type'], list):
                     types = kwargs['type']
-                if not isinstance(kwargs['type'], str):
+                elif isinstance(kwargs['type'], str):
+                    types = [kwargs['type']]
+                else:
                     types = [kwargs['type']]
                 type_col = getattr(model_class, 'type')
-                conditions.append(conditions.append(type_col.in_(types)))
+                conditions.append(type_col.in_(types))
 
             # build the query with dynamic conditions
             query = session.query(self.memory_converter.model_class)
