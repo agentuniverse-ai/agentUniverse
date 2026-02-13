@@ -7,13 +7,10 @@
 # @FileName: conversation_message.py
 
 import uuid
-from typing import Optional, List
+from typing import Optional
 
 from pydantic import Field
 
-from agentuniverse.agent.memory.conversation_memory.enum import \
-    ConversationMessageSourceType, ConversationMessageEnum
-from agentuniverse.agent.memory.enum import ChatMessageEnum
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.context.framework_context_manager import \
     FrameworkContextManager
