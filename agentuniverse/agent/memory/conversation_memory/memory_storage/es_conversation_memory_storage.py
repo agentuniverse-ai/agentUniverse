@@ -32,14 +32,16 @@ class ElasticsearchMemoryStorage(MemoryStorage):
     password: Optional[str] = None
     timeout: Optional[int] = 60
     client: Optional[httpx.Client] = None
+    async_client: Optional[httpx.AsyncClient] = None
 
     model_config = {
         "arbitrary_types_allowed": True,  # Allow arbitrary types
     }
 
     def _new_client(self):
-        """Initialize the Elasticsearch HTTP client (via requests)."""
-        self.client = self._client()
+        """Initialize the Elasticsearch HTTP client."""
+        self.client = self._build_client()
+        self.async_client = self._build_async_client()
         self._init_es_index()
 
     def _initialize_by_component_configer(self,
@@ -107,7 +109,6 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             session_id (str): The session id of the memory to delete.
             agent_id (str): The agent id of the memory to delete.
         """
-        url = f'{self.es_url}/{self.index_name}/_delete_by_query'
         query = {
             "query": {
                 "bool": {
@@ -129,7 +130,7 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             })
         if trace_id:
             query['query']['bool']['must'].append({"term": {"trace_id": trace_id}})
-        response = self.client.post(url, json=query)
+        response = self.client.post(f'/{self.index_name}/_delete_by_query', json=query)
         if response.status_code != 200:
             raise Exception(f"Failed to delete documents: {response.text}")
 
@@ -230,20 +231,135 @@ class ElasticsearchMemoryStorage(MemoryStorage):
         messages.reverse()
         return messages
 
-    def _client(self):
-        transport = httpx.HTTPTransport(retries=3)
-        if self.user and self.password:
-            return httpx.Client(
-                base_url=self.es_url,
-                transport=transport,
-                timeout=self.timeout,
-                auth=(self.user, self.password),
-            )
-        return httpx.Client(
-            base_url=self.es_url,
-            transport=transport,
-            timeout=self.timeout,
+    # ================================================================
+    # Asynchronous interface (native httpx.AsyncClient)
+    # ================================================================
+
+    async def async_add(self, message_list: List[ConversationMessage], session_id: str = None,
+                        agent_id: str = None, **kwargs) -> None:
+        """Async version of add using httpx.AsyncClient."""
+        message_list = ConversationMessage.check_and_convert_message(message_list, session_id)
+        actions = []
+        for message in message_list:
+            action = self.memory_converter.to_es_action(message, session_id=session_id, agent_id=agent_id, **kwargs)
+            actions.append(action)
+
+        bulk_data = '\n'.join(actions) + '\n'
+        response = await self.async_client.post(
+            f"/{self.index_name}/_bulk",
+            content=bulk_data,
+            headers={'Content-Type': 'application/x-ndjson'}
         )
+        if response.status_code != 200:
+            raise Exception(f"Failed to add documents: {response.text}")
+
+    async def async_delete(self, session_id: str = None, agent_id: str = None,
+                           trace_id: str = None, **kwargs) -> None:
+        """Async version of delete using httpx.AsyncClient."""
+        query = {
+            "query": {
+                "bool": {
+                    "must": []
+                }
+            }
+        }
+        if session_id:
+            query['query']['bool']['must'].append({"term": {"session_id": session_id}})
+        if agent_id:
+            query['query']['bool']['must'].append({
+                "bool": {
+                    "should": [
+                        {"term": {"source": agent_id}},
+                        {"term": {"target": agent_id}}
+                    ]
+                }
+            })
+        if trace_id:
+            query['query']['bool']['must'].append({"term": {"trace_id": trace_id}})
+        response = await self.async_client.post(
+            f'/{self.index_name}/_delete_by_query',
+            json=query
+        )
+        if response.status_code != 200:
+            raise Exception(f"Failed to delete documents: {response.text}")
+
+    async def async_get(self, session_id: str = None, agent_id: str = None, top_k=50,
+                        trace_id: str = None, **kwargs) -> List[ConversationMessage]:
+        """Async version of get using httpx.AsyncClient."""
+        query = {
+            "query": {
+                "bool": {
+                    "must": []
+                }
+            },
+            "size": top_k,
+            "sort": [
+                {"timestamp": {"order": "desc"}}
+            ]
+        }
+        if session_id:
+            query['query']['bool']['must'].append({"term": {"session_id": session_id}})
+        if 'type' in kwargs:
+            if isinstance(kwargs['type'], list):
+                memory_types = kwargs['type']
+            elif isinstance(kwargs['type'], str):
+                memory_types = [kwargs['type']]
+            else:
+                raise ValueError("type must be a list or a string")
+            query['query']['bool']['must'].append({"terms": {"type": memory_types}})
+        if agent_id:
+            condition = {
+                "bool": {
+                    "must": [
+                        {"match": {"target": agent_id}},
+                        {"match": {"target_type": 'agent'}}
+                    ]
+                }
+            }
+            if kwargs.get('memory_types') and len(kwargs['memory_types']) > 0:
+                types_condition = {
+                    "bool": {
+                        "must": [
+                            {"match": {"source": agent_id}},
+                            {"match": {"source_type": 'agent'}},
+                            {"terms": {"target_type": kwargs['memory_types']}}
+                        ]
+                    }
+                }
+                query['query']['bool']['must'].append(
+                    {"bool": {"should": [condition, types_condition]}})
+            else:
+                query['query']['bool']['must'].append(condition)
+
+        if trace_id:
+            query['query']['bool']['must'].append({"term": {"trace_id": trace_id}})
+        response = await self.async_client.post(
+            f'/{self.index_name}/_search',
+            json=query
+        )
+        if response.status_code != 200:
+            raise Exception(f"Failed to retrieve documents: {response.text}")
+
+        hits = response.json()['hits']['hits']
+        messages = []
+        for hit in hits:
+            messages.append(self.memory_converter.from_es_hit(hit))
+        messages.reverse()
+        return messages
+
+    def _build_client(self):
+        transport = httpx.HTTPTransport(retries=3)
+        kwargs = dict(base_url=self.es_url, transport=transport, timeout=self.timeout)
+        if self.user and self.password:
+            kwargs['auth'] = (self.user, self.password)
+        return httpx.Client(**kwargs)
+
+    def _build_async_client(self):
+        transport = httpx.AsyncHTTPTransport(retries=3)
+        kwargs = dict(base_url=self.es_url, transport=transport, timeout=self.timeout)
+        if self.user and self.password:
+            kwargs['auth'] = (self.user, self.password)
+        return httpx.AsyncClient(**kwargs)
 
 
 class DefaultMemoryConverter:

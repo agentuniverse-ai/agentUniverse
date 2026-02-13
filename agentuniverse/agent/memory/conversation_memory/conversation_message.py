@@ -35,7 +35,7 @@ class ConversationMessage(Message):
         content (Optional[str]): Message content.
         metadata (Optional[dict]): The metadata of the message.
     """
-    id: Optional[str | int] = uuid.uuid4().hex
+    id: Optional[str | int] = Field(default_factory=lambda: uuid.uuid4().hex)
     trace_id: Optional[str] = None
     conversation_id: Optional[str] = None
     source_type: Optional[str] = None
@@ -46,8 +46,10 @@ class ConversationMessage(Message):
 
     @classmethod
     def from_dict(cls, data: dict):
-        """Convert the agentUniverse(aU) message class to the dict."""
-        return cls(**data)
+        """Convert the dict to ConversationMessage."""
+        if "type" not in data and "role" in data:
+            data = {**data, "type": data.pop("role")}
+        return cls.model_validate(data)
 
     @classmethod
     def from_message(cls, message: Message, session_id: str):
@@ -59,9 +61,11 @@ class ConversationMessage(Message):
         if not trace_id:
             trace_id = FrameworkContextManager().get_context('trace_id')
             message.metadata['trace_id'] = trace_id
+        # 将 content 统一转为 str，兼容父类 ContentT 可能为 list 的情况
+        content = message.content_text if not isinstance(message.content, str) else message.content
         return cls(
             id=uuid.uuid4().hex,
-            content=message.content,
+            content=content,
             metadata=message.metadata,
             type=message.type,
             source=message.source,
