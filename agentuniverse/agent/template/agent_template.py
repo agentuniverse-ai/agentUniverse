@@ -6,22 +6,19 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: agent_template.py
 from abc import ABC
-from typing import Optional
+from typing import Optional, List
 from queue import Queue
 
-from langchain_core.output_parsers import StrOutputParser
-
-from agentuniverse.agent.action.toolkit.toolkit_manager import ToolkitManager
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.input_object import InputObject
+from agentuniverse.agent.memory.enum import ChatMessageEnum
 from agentuniverse.agent.memory.memory import Memory
+from agentuniverse.agent.memory.message import Message
+from agentuniverse.ai_context.agent_context import AgentContext
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
-from agentuniverse.base.util.agent_util import assemble_memory_input, assemble_memory_output
-from agentuniverse.base.util.memory_util import get_memory_string
-from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
+from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.prompt.chat_prompt import ChatPrompt
-from agentuniverse.prompt.prompt import Prompt
 
 
 class AgentTemplate(Agent, ABC):
@@ -34,39 +31,99 @@ class AgentTemplate(Agent, ABC):
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
         memory: Memory = self.process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
-        prompt: Prompt = self.process_prompt(agent_input, **kwargs)
-        return self.customized_execute(input_object, agent_input, memory, llm, prompt, **kwargs)
+        return self.customized_execute(input_object, agent_input, memory, llm, **kwargs)
 
     async def async_execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
         memory: Memory = self.process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
-        prompt: Prompt = self.process_prompt(agent_input, **kwargs)
-        return await self.customized_async_execute(input_object, agent_input, memory, llm, prompt, **kwargs)
+        return await self.customized_async_execute(input_object, agent_input, memory, llm, **kwargs)
 
-    def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
-                           **kwargs) -> dict:
-        self.load_memory(memory, agent_input)
-        process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
-        chain = prompt.as_langchain() | llm.as_langchain_runnable(
-            self.agent_model.llm_params()) | StrOutputParser()
-        res = self.invoke_chain(chain, agent_input, input_object, **kwargs)
-        self.add_memory(memory, f"Human: {agent_input.get('input')}, AI: {res}", agent_input=agent_input)
+    def customized_execute(self, input_object: InputObject, agent_input: dict,
+                           memory: Memory, llm: LLM, **kwargs) -> dict:
+        # 1. Create AgentContext (handles system msg, few-shot, user msg, chat history, tools)
+        context = AgentContext.create(
+            agent_model=self.agent_model,
+            session_id=agent_input.get('session_id', ''),
+            input_dict=agent_input,
+            memory=memory,
+            output_stream=input_object.get_data('output_stream'),
+        )
+
+        # 2. Get LLM parameters from agent model config
+        llm = llm.set_by_agent_model(**self.agent_model.llm_params())
+
+        # 3. Run tool-calling loop
+        max_iterations = self.agent_model.profile.get('max_iterations', 10)
+        llm_output = self.run_tool_calling_loop(
+            llm, context, input_object,
+            max_iterations=max_iterations,
+        )
+
+        res = llm_output.text
+
+        # 4. Save memory (full conversation: user input, tool calls, AI response)
+        if memory:
+            memory_messages = self._collect_memory_messages(context, llm_output)
+            self.add_memory(memory, memory_messages, agent_input=agent_input)
+
+        # 5. Emit final output to stream
         self.add_output_stream(input_object.get_data('output_stream'), res)
+
         return {**agent_input, 'output': res}
 
-    async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory,
-                                       llm: LLM, prompt: Prompt, **kwargs) -> dict:
-        assemble_memory_input(memory, agent_input, self.get_memory_params(agent_input))
-        process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
-        chain = prompt.as_langchain() | llm.as_langchain_runnable(
-            self.agent_model.llm_params()) | StrOutputParser()
-        res = await self.async_invoke_chain(chain, agent_input, input_object, **kwargs)
-        if self.memory_name:
-            assemble_memory_output(memory=memory,
-                                   agent_input=agent_input,
-                                   content=f"Human: {agent_input.get('input')}, AI: {res}")
+    async def customized_async_execute(self, input_object: InputObject, agent_input: dict,
+                                       memory: Memory, llm: LLM, **kwargs) -> dict:
+        # 1. Create AgentContext
+        context = AgentContext.create(
+            agent_model=self.agent_model,
+            session_id=agent_input.get('session_id', ''),
+            input_dict=agent_input,
+            memory=memory,
+            output_stream=input_object.get_data('output_stream'),
+        )
+
+        # 2. Get LLM parameters from agent model config
+        llm = llm.set_by_agent_model(**self.agent_model.llm_params())
+
+        # 3. Run async tool-calling loop
+        max_iterations = self.agent_model.profile.get('max_iterations', 10)
+        llm_output = await self.async_run_tool_calling_loop(
+            llm, context, input_object,
+            max_iterations=max_iterations,
+        )
+
+        res = llm_output.text
+
+        # 4. Save memory
+        if memory:
+            memory_messages = self._collect_memory_messages(context, llm_output)
+            self.add_memory(memory, memory_messages, agent_input=agent_input)
+
+        # 5. Emit final output to stream
         self.add_output_stream(input_object.get_data('output_stream'), res)
+
         return {**agent_input, 'output': res}
+
+    def _collect_memory_messages(self, context: AgentContext,
+                                 final_output: LLMOutput) -> List[Message]:
+        """Collect messages to persist to memory.
+
+        Includes: user input, all tool call/result messages, final AI response.
+        Excludes: system message, few-shot messages, prior chat history.
+        """
+        messages = []
+        # current_messages contains: [user_msg, assistant(tool_calls), tool_results, ...]
+        for msg in context.current_messages:
+            messages.append(msg)
+        # Append the final AI response
+        if final_output.message:
+            messages.append(final_output.message)
+        else:
+            messages.append(Message(
+                type=ChatMessageEnum.ASSISTANT,
+                content=final_output.text,
+            ))
+        return messages
 
     def validate_required_params(self):
         pass
@@ -86,14 +143,9 @@ class AgentTemplate(Agent, ABC):
         return super().process_llm(llm_name=self.llm_name)
 
     def process_memory(self, agent_input: dict, **kwargs) -> Memory | None:
-        if 'chat_history' in agent_input and agent_input.get('chat_history'):
-            if isinstance(agent_input.get('chat_history'), list):
-                agent_input['chat_history'] = get_memory_string(agent_input.get('chat_history'),
-                                                                agent_input.get('agent_id'))
-                return None
-            else:
-                return None
-        return super().process_memory(agent_input=agent_input, memory_name=self.memory_name, llm_name=self.llm_name)
+        return super().process_memory(agent_input=agent_input,
+                                      memory_name=self.memory_name,
+                                      llm_name=self.llm_name)
 
     def invoke_tools(self, input_object: InputObject, **kwargs) -> str:
         return super().invoke_tools(input_object=input_object, tool_names=self.tool_names)

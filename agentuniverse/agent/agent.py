@@ -5,7 +5,6 @@
 # @Author  : heji
 # @Email   : lc299034@antgroup.com
 # @FileName: agent.py
-import json
 import uuid
 from abc import abstractmethod, ABC
 from datetime import datetime
@@ -26,8 +25,7 @@ from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.memory.memory_manager import MemoryManager
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.agent.output_object import OutputObject
-from agentuniverse.agent.plan.planner.react_planner.stream_callback import \
-    InvokeCallbackHandler
+from agentuniverse.ai_context.agent_context import AgentContext
 from agentuniverse.base.annotation.trace import trace_agent
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
@@ -242,78 +240,229 @@ class Agent(ComponentBase, ABC):
         params['agent_llm_name'] = kwargs.get('llm_name') or self.agent_model.profile.get('llm_model', {}).get('name')
         return memory.set_by_agent_model(**params)
 
-    def invoke_chain(self, chain: RunnableSerializable[Any, str], agent_input: dict, input_object: InputObject,
-                     **kwargs):
-        if not self.judge_chain_stream(chain):
-            res = chain.invoke(input=agent_input, config=self.get_run_config())
-            return res
-        result = []
-        for token in chain.stream(input=agent_input, config=self.get_run_config()):
-            stream_output(input_object.get_data('output_stream', None), {
-                'type': 'token',
-                'data': {
-                    'chunk': token,
-                    'agent_info': self.agent_model.info
-                }
-            })
-            result.append(token)
-        return self.generate_result(result)
+    def invoke_llm(self, llm: LLM, messages: list,
+                   input_object: InputObject,
+                   tools_schema: list[dict] = None,
+                   **kwargs) -> LLMOutput:
+        """Invoke the LLM with messages, optionally with tool schemas.
 
-    async def async_invoke_chain(self, chain: RunnableSerializable[Any, str], agent_input: dict,
-                                 input_object: InputObject, **kwargs):
-        if not self.judge_chain_stream(chain):
-            res = await chain.ainvoke(input=agent_input, config=self.get_run_config())
-            return res
-        result = []
-        async for token in chain.astream(input=agent_input, config=self.get_run_config()):
-            stream_output(input_object.get_data('output_stream', None), {
-                'type': 'token',
-                'data': {
-                    'chunk': token,
-                    'agent_info': self.agent_model.info
-                }
-            })
-            result.append(token)
-        return self.generate_result(result)
+        Args:
+            llm: The LLM instance.
+            messages: Message list (dicts or Message objects).
+            input_object: The current InputObject.
+            tools_schema: Optional OpenAI function-calling tool schemas.
+            **kwargs: Extra arguments forwarded to llm.call().
 
-    def invoke_llm(self, llm: LLM, messages: list[Message], agent_input: dict,
-                      input_object: InputObject, **kwargs) -> LLMOutput:
+        Returns:
+            LLMOutput with text and/or tool_calls.
+        """
+        from agentuniverse.llm.llm_output import StreamReducer, StreamEventType
 
-        streaming = self.judge_stream(llm, **agent_input)
+        llm_kwargs = dict(kwargs)
+        if tools_schema:
+            llm_kwargs['tools'] = tools_schema
+
+        streaming = self.judge_stream(llm, **kwargs)
         if not streaming:
-            out = llm.call(messages=messages, **kwargs)
-            return out
-        result = []
-        for delta in llm.stream(input=agent_input, config=self.get_run_config()):
-            stream_output(input_object.get_data('output_stream', None), {
-                'type': 'token',
-                'data': {
-                    'chunk': token,
-                    'agent_info': self.agent_model.info
-                }
-            })
-            result.append(token)
-        return self.generate_result(result)
+            return llm.call(messages=messages, **llm_kwargs)
 
+        # Streaming path: aggregate events via StreamReducer
+        reducer = StreamReducer()
+        output_stream = input_object.get_data('output_stream', None)
+        for event in llm.call(messages=messages, streaming=True, **llm_kwargs):
+            reducer.feed(event)
+            if event.type == StreamEventType.TEXT_DELTA and event.text_delta:
+                stream_output(output_stream, {
+                    'type': 'token',
+                    'data': {
+                        'chunk': event.text_delta,
+                        'agent_info': self.agent_model.info
+                    }
+                })
+        return reducer.build()
 
-    async def async_invoke_llm(self, llm: LLM, messages: list[Message], agent_input: dict,
-                                  input_object: InputObject, **kwargs) -> LLMOutput:
-        streaming = self.judge_stream(llm, **agent_input)
+    async def async_invoke_llm(self, llm: LLM, messages: list,
+                               input_object: InputObject,
+                               tools_schema: list[dict] = None,
+                               **kwargs) -> LLMOutput:
+        """Async version of invoke_llm."""
+        from agentuniverse.llm.llm_output import StreamReducer, StreamEventType
+
+        llm_kwargs = dict(kwargs)
+        if tools_schema:
+            llm_kwargs['tools'] = tools_schema
+
+        streaming = self.judge_stream(llm, **kwargs)
         if not streaming:
-            out = await llm.async_call(messages=messages,
-                                       **kwargs)
-            return out.text or ""
-        result = []
-        async for chunk in llm.astream(messages=messages, stream=True, **kwargs):
-            if not chunk or not chunk.text:
-                continue
-            stream_output(input_object.get_data('output_stream', None), {
-                'type': 'token',
-                'data': {'chunk': chunk.text,
-                         'agent_info': self.agent_model.info}
-            })
-            result.append(chunk.text)
-        return "".join(result)
+            return await llm.acall(messages=messages, **llm_kwargs)
+
+        # Streaming path
+        reducer = StreamReducer()
+        output_stream = input_object.get_data('output_stream', None)
+        async for event in await llm.acall(messages=messages, streaming=True, **llm_kwargs):
+            reducer.feed(event)
+            if event.type == StreamEventType.TEXT_DELTA and event.text_delta:
+                stream_output(output_stream, {
+                    'type': 'token',
+                    'data': {
+                        'chunk': event.text_delta,
+                        'agent_info': self.agent_model.info
+                    }
+                })
+        return reducer.build()
+
+    def execute_tool_call(self, tool_call) -> Message:
+        """Execute a single tool call and return a tool-result Message.
+
+        Args:
+            tool_call: A ToolCall object from LLMOutput.
+
+        Returns:
+            Message with type=TOOL containing the tool execution result.
+        """
+        tool_name = tool_call.function.name
+        try:
+            tool: Tool = ToolManager().get_instance_obj(tool_name)
+            if tool is None:
+                return Message(
+                    type=ChatMessageEnum.TOOL,
+                    content=f"Error: Tool '{tool_name}' not found.",
+                    tool_call_id=tool_call.id,
+                    name=tool_name,
+                )
+            arguments = tool_call.function.parse_arguments()
+            result = tool.run(**arguments)
+            return Message(
+                type=ChatMessageEnum.TOOL,
+                content=str(result) if result is not None else "",
+                tool_call_id=tool_call.id,
+                name=tool_name,
+            )
+        except Exception as e:
+            LOGGER.warn(f"Tool '{tool_name}' execution failed: {e}")
+            return Message(
+                type=ChatMessageEnum.TOOL,
+                content=f"Error executing tool '{tool_name}': {e}",
+                tool_call_id=tool_call.id,
+                name=tool_name,
+            )
+
+    async def async_execute_tool_call(self, tool_call) -> Message:
+        """Async version of execute_tool_call."""
+        tool_name = tool_call.function.name
+        try:
+            tool: Tool = ToolManager().get_instance_obj(tool_name)
+            if tool is None:
+                return Message(
+                    type=ChatMessageEnum.TOOL,
+                    content=f"Error: Tool '{tool_name}' not found.",
+                    tool_call_id=tool_call.id,
+                    name=tool_name,
+                )
+            arguments = tool_call.function.parse_arguments()
+            result = await tool.async_run(**arguments)
+            return Message(
+                type=ChatMessageEnum.TOOL,
+                content=str(result) if result is not None else "",
+                tool_call_id=tool_call.id,
+                name=tool_name,
+            )
+        except Exception as e:
+            LOGGER.warn(f"Tool '{tool_name}' execution failed: {e}")
+            return Message(
+                type=ChatMessageEnum.TOOL,
+                content=f"Error executing tool '{tool_name}': {e}",
+                tool_call_id=tool_call.id,
+                name=tool_name,
+            )
+
+    def run_tool_calling_loop(self, llm: LLM, context: AgentContext,
+                              input_object: InputObject,
+                              max_iterations: int = 10,
+                              **kwargs) -> LLMOutput:
+        """Run the LLM tool-calling loop until a final text response or max iterations.
+
+        Args:
+            llm: The LLM instance.
+            context: The AgentContext with messages and tool schemas.
+            input_object: The current InputObject.
+            max_iterations: Maximum number of LLM round-trips.
+            **kwargs: Extra arguments forwarded to invoke_llm.
+
+        Returns:
+            The final LLMOutput (text response or last iteration output).
+        """
+        from concurrent.futures import wait, ALL_COMPLETED
+        from agentuniverse.agent_serve.web.thread_with_result import \
+            ThreadPoolExecutorWithReturnValue
+
+        llm_output = None
+        for i in range(max_iterations):
+            messages = context.build_messages()
+            llm_output = self.invoke_llm(
+                llm, messages, input_object,
+                tools_schema=context.tools_schema or None,
+                **kwargs,
+            )
+
+            if not llm_output.has_tool_calls():
+                return llm_output
+
+            # Append assistant message with tool_calls
+            context.append_message(llm_output.message)
+
+            # Execute tool calls concurrently
+            tool_calls = llm_output.get_tool_calls()
+            if len(tool_calls) == 1:
+                context.append_message(self.execute_tool_call(tool_calls[0]))
+            else:
+                with ThreadPoolExecutorWithReturnValue(
+                    max_workers=min(len(tool_calls), 10),
+                    thread_name_prefix="tool_call",
+                ) as executor:
+                    futures = [
+                        executor.submit(self.execute_tool_call, tc)
+                        for tc in tool_calls
+                    ]
+                    wait(futures, return_when=ALL_COMPLETED)
+                    for future in futures:
+                        context.append_message(future.result())
+
+        LOGGER.warn(f"Agent reached max tool-calling iterations ({max_iterations})")
+        return llm_output
+
+    async def async_run_tool_calling_loop(self, llm: LLM, context: AgentContext,
+                                          input_object: InputObject,
+                                          max_iterations: int = 10,
+                                          **kwargs) -> LLMOutput:
+        """Async version of run_tool_calling_loop."""
+        import asyncio
+
+        llm_output = None
+        for i in range(max_iterations):
+            messages = context.build_messages()
+            llm_output = await self.async_invoke_llm(
+                llm, messages, input_object,
+                tools_schema=context.tools_schema or None,
+                **kwargs,
+            )
+
+            if not llm_output.has_tool_calls():
+                return llm_output
+
+            # Append assistant message with tool_calls
+            context.append_message(llm_output.message)
+
+            # Execute tool calls concurrently
+            tool_calls = llm_output.get_tool_calls()
+            tool_msgs = await asyncio.gather(
+                *(self.async_execute_tool_call(tc) for tc in tool_calls)
+            )
+            for tool_msg in tool_msgs:
+                context.append_message(tool_msg)
+
+        LOGGER.warn(f"Agent reached max tool-calling iterations ({max_iterations})")
+        return llm_output
 
     def judge_stream(self, llm: LLM, **kwargs):
         if llm._channel_instance:
@@ -498,40 +647,23 @@ class Agent(ComponentBase, ABC):
             raise Exception('Au Memory should be string or a dict can be transfer to Message')
         return base
 
-    def add_memory(self, memory: Memory, content: Any, agent_input: dict[str, Any] = {}):
-        if not memory:
+    def add_memory(self, memory: Memory, messages: list[Message],
+                   agent_input: dict[str, Any] = None):
+        """Persist a list of messages to memory.
+
+        Args:
+            memory: The Memory instance to persist to.
+            messages: List of Message objects to save.
+            agent_input: Agent input dict containing session_id etc.
+        """
+        if not memory or not messages:
             return
+        agent_input = agent_input or {}
         session_id = agent_input.get('session_id')
         if not session_id:
             session_id = FrameworkContextManager().get_context('session_id')
         agent_id = self.agent_model.info.get('name')
-        message = [
-            Message(id=str(uuid.uuid4().hex),
-                source=agent_id,
-                content=content if isinstance(content, str) else json.dumps(content, ensure_ascii=False),
-                type=type,
-                metadata={
-                  'agent_id': agent_id,
-                  'session_id': session_id,
-                  'type': type,
-                  'timestamp': datetime.now(),
-                  'gmt_created': datetime.now().isoformat()
-            }),
-            Message(id=str(uuid.uuid4().hex),
-                source=agent_id,
-                content=content if isinstance(content,
-                                              str) else json.dumps(content,
-                                                                   ensure_ascii=False),
-                type=type,
-                metadata={
-                    'agent_id': agent_id,
-                    'session_id': session_id,
-                    'type': type,
-                    'timestamp': datetime.now(),
-                    'gmt_created': datetime.now().isoformat()
-            })
-        ]
-        memory.add([], session_id=session_id, agent_id=agent_id)
+        memory.add(messages, session_id=session_id, agent_id=agent_id)
 
     def summarize_memory(self, agent_input: dict[str, Any] = {}, memory: Memory = None):
         def do_summarize(params):
