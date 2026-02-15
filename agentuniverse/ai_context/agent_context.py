@@ -116,7 +116,7 @@ class AgentContext(BaseModel):
             extra: Optional free-form extension data.
         """
         input_dict = input_dict or {}
-        profile = agent_model.profile or {}
+        profile = _resolve_profile(agent_model.profile or {})
         action = agent_model.action or {}
         agent_id = (agent_model.info or {}).get('name', '')
 
@@ -174,21 +174,21 @@ class AgentContext(BaseModel):
     # Message helpers
     # ------------------------------------------------------------------
 
-    def build_messages(self) -> List[Dict[str, Any]]:
+    def build_messages(self) -> List[Message]:
         """Assemble the full message list for LLM submission.
 
         Concatenation order: system -> few_shot -> chat_history -> current.
         This is the **only** exit point for messages going to the LLM.
+
+        Returns Message objects (not dicts) so that downstream converters
+        like ``au_messages_to_openai`` can read attributes via ``getattr``.
         """
-        result: List[Dict[str, Any]] = []
+        result: List[Message] = []
         if self.system_message is not None:
-            result.append(self.system_message.to_dict())
-        for msg in self.few_shot_messages:
-            result.append(msg.to_dict())
-        for msg in self.chat_history:
-            result.append(msg.to_dict())
-        for msg in self.current_messages:
-            result.append(msg.to_dict())
+            result.append(self.system_message)
+        result.extend(self.few_shot_messages)
+        result.extend(self.chat_history)
+        result.extend(self.current_messages)
         return result
 
     def append_message(self, msg: Message) -> None:
@@ -241,6 +241,53 @@ class AgentContext(BaseModel):
 # ======================================================================
 # Private helpers for message construction
 # ======================================================================
+
+def _resolve_profile(profile: dict) -> dict:
+    """Merge prompt_version content into profile; inline values take priority.
+
+    If ``profile['prompt_version']`` is set, load the corresponding Prompt
+    object via PromptManager.  Uses the Prompt's ``prompt_model``
+    (AgentPromptModel) to pull structured fields — introduction, target,
+    instruction, output_format, few_shot_examples, and custom sections.
+    """
+    prompt_version = profile.get('prompt_version')
+    if not prompt_version:
+        return profile
+
+    from agentuniverse.prompt.prompt_manager import PromptManager
+    version_prompt = PromptManager().get_instance_obj(prompt_version)
+    if version_prompt is None:
+        return profile
+
+    pm = getattr(version_prompt, 'prompt_model', None)
+    if pm is None:
+        return profile
+
+    resolved = dict(profile)
+
+    # Named str fields: introduction, target, output_format, instruction
+    for field in ('introduction', 'target', 'output_format', 'instruction'):
+        if not resolved.get(field):
+            value = getattr(pm, field, None)
+            if value:
+                resolved[field] = value
+
+    # few_shot_examples → few_shot (convert to Message-compatible dicts)
+    if not resolved.get('few_shot') and pm.few_shot_examples:
+        few_shot_msgs = []
+        for ex in pm.few_shot_examples:
+            few_shot_msgs.append({'type': 'human', 'content': ex.input})
+            few_shot_msgs.append({'type': 'ai', 'content': ex.output})
+        resolved['few_shot'] = few_shot_msgs
+
+    # Custom sections
+    named = set(pm._NAMED_STR_FIELDS) | {'few_shot_examples'}
+    for k, v in pm.sections.items():
+        if k not in named and v and not resolved.get(k):
+            resolved[k] = v
+
+    return resolved
+
 
 def _render_template(template: str, variables: Dict[str, Any]) -> str:
     """Best-effort ``str.format_map`` that leaves unresolved placeholders."""

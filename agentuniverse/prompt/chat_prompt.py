@@ -39,6 +39,7 @@ class ChatPrompt(Prompt):
         Returns:
             ChatPrompt: The chat prompt object.
         """
+        self.prompt_model = agent_prompt_model
         self.messages = generate_chat_template(agent_prompt_model, prompt_assemble_order)
         self.input_variables = self.extract_placeholders()
         return self

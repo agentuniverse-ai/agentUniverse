@@ -14,13 +14,23 @@ from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.component_configer.configers.prompt_configer import PromptConfiger
 from agentuniverse.base.util.prompt_util import generate_template, render_str
-from agentuniverse.prompt.prompt_model import AgentPromptModel
+from agentuniverse.prompt.prompt_model import AgentPromptModel, FewShotExample
 
 
 class Prompt(ComponentBase):
-    """Prompt class."""
+    """Prompt class.
+
+    Attributes:
+        prompt_version: Version identifier (e.g. ``demo_agent.cn_v2``).
+        prompt_model: Structured representation of the prompt content,
+            preserving introduction / target / instruction / few_shot_examples /
+            output_format and custom sections.
+        prompt_template: Flat string template (kept for backward compat).
+        input_variables: Placeholder names extracted from prompt_template.
+    """
 
     prompt_version: Optional[str] = None
+    prompt_model: Optional[AgentPromptModel] = None
     prompt_template: Optional[str] = None
     input_variables: Optional[list[str]] = None
 
@@ -37,6 +47,7 @@ class Prompt(ComponentBase):
         Returns:
             Prompt: The prompt object.
         """
+        self.prompt_model = agent_prompt_model
         self.prompt_template = generate_template(agent_prompt_model, prompt_assemble_order)
         self.input_variables = re.findall(r'\{(.*?)}', self.prompt_template)
         return self
@@ -57,25 +68,43 @@ class Prompt(ComponentBase):
                                          component_configer: PromptConfiger) -> "Prompt":
         """Initialize the prompt by the PromptConfiger object.
 
-        Args:
-            component_configer: the PromptConfiger object.
-
-        Returns:
-            Prompt: the prompt object.
+        Parses the YAML config into both:
+        1. An ``AgentPromptModel`` (``self.prompt_model``) that preserves
+           structured fields (introduction, few_shot_examples, etc.).
+        2. A flat ``prompt_template`` string for backward-compat callers
+           that use ``prompt.prompt_template.format(...)``.
         """
-        prompt_values = []
-        for k, v in component_configer.configer.value.items():
+        config = component_configer.configer.value
+        named_fields = set(AgentPromptModel._NAMED_STR_FIELDS)
+
+        model_kwargs = {}
+        custom_sections = {}
+        prompt_values: list[str] = []
+
+        for k, v in config.items():
             if k == "metadata":
                 continue
-            self.__dict__[k] = v
-            # few_shot_examples 在配置中可能是 list[dict]，跳过直接拼接
+
+            # Classify into AgentPromptModel buckets
+            if k in named_fields:
+                model_kwargs[k] = v
+            elif k == 'few_shot_examples' and isinstance(v, list):
+                model_kwargs['few_shot_examples'] = [
+                    FewShotExample(**ex) if isinstance(ex, dict) else ex
+                    for ex in v
+                ]
+            elif isinstance(v, str):
+                custom_sections[k] = v
+
+            # Flat template: only string values
             if isinstance(v, str):
                 prompt_values.append(v)
+
+        self.prompt_model = AgentPromptModel(**model_kwargs, sections=custom_sections)
 
         if component_configer.metadata_version:
             self.prompt_version = component_configer.metadata_version
 
         self.prompt_template = '\n'.join(prompt_values)
-
         self.input_variables = re.findall(r'\{(.*?)}', self.prompt_template)
         return self
