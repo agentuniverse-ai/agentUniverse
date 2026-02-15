@@ -31,50 +31,74 @@ class AgentTemplate(Agent, ABC):
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
         memory: Memory = self.process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
-        return self.customized_execute(input_object, agent_input, memory, llm, **kwargs)
+        agent_context = self._create_agent_context(input_object, agent_input, memory)
+        return self.customized_execute(input_object, agent_input, memory, llm,
+                                       agent_context=agent_context, **kwargs)
 
     async def async_execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
         memory: Memory = self.process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
-        return await self.customized_async_execute(input_object, agent_input, memory, llm, **kwargs)
+        agent_context = self._create_agent_context(input_object, agent_input, memory)
+        return await self.customized_async_execute(input_object, agent_input, memory, llm,
+                                                    agent_context=agent_context, **kwargs)
 
     def customized_execute(self, input_object: InputObject, agent_input: dict,
-                           memory: Memory, llm: LLM, **kwargs) -> dict:
-        # 1. Create AgentContext (handles system msg, few-shot, user msg, chat history, tools)
-        context = AgentContext.create(
-            agent_model=self.agent_model,
-            session_id=agent_input.get('session_id', ''),
-            input_dict=agent_input,
-            memory=memory,
-            output_stream=input_object.get_data('output_stream'),
-        )
+                           memory: Memory, llm: LLM,
+                           agent_context: AgentContext = None,
+                           **kwargs) -> dict:
+        # 1. Build LLM from agent_context
+        llm = agent_context.build_llm()
 
-        # 2. Get LLM parameters from agent model config
-        llm = llm.set_by_agent_model(**self.agent_model.llm_params())
-
-        # 3. Run tool-calling loop
-        max_iterations = self.agent_model.profile.get('max_iterations', 10)
+        # 2. Run tool-calling loop
         llm_output = self.run_tool_calling_loop(
-            llm, context, input_object,
-            max_iterations=max_iterations,
+            llm, agent_context, input_object,
+            max_iterations=agent_context.max_iterations,
         )
 
         res = llm_output.text
 
-        # 4. Save memory (full conversation: user input, tool calls, AI response)
-        if memory:
-            memory_messages = self._collect_memory_messages(context, llm_output)
-            self.add_memory(memory, memory_messages, agent_input=agent_input)
+        # 3. Persist memory
+        self._save_memory(agent_context, llm_output, agent_input)
 
-        # 5. Emit final output to stream
-        self.add_output_stream(input_object.get_data('output_stream'), res)
+        # 4. Emit final output to stream
+        self._emit_final_output(agent_context, res)
 
         return {**agent_input, 'output': res}
 
     async def customized_async_execute(self, input_object: InputObject, agent_input: dict,
-                                       memory: Memory, llm: LLM, **kwargs) -> dict:
-        # 1. Create AgentContext
-        context = AgentContext.create(
+                                       memory: Memory, llm: LLM,
+                                       agent_context: AgentContext = None,
+                                       **kwargs) -> dict:
+        # 1. Build LLM from agent_context
+        llm = agent_context.build_llm()
+
+        # 2. Run async tool-calling loop
+        llm_output = await self.async_run_tool_calling_loop(
+            llm, agent_context, input_object,
+            max_iterations=agent_context.max_iterations,
+        )
+
+        res = llm_output.text
+
+        # 3. Persist memory
+        self._save_memory(agent_context, llm_output, agent_input)
+
+        # 4. Emit final output to stream
+        self._emit_final_output(agent_context, res)
+
+        return {**agent_input, 'output': res}
+
+    # ------------------------------------------------------------------
+    # AgentContext helpers (overridable by subclasses)
+    # ------------------------------------------------------------------
+
+    def _create_agent_context(self, input_object: InputObject,
+                              agent_input: dict, memory: Memory) -> AgentContext:
+        """Create an AgentContext for this run.
+
+        Subclasses may override to customise initialisation.
+        """
+        return AgentContext.create(
             agent_model=self.agent_model,
             session_id=agent_input.get('session_id', ''),
             input_dict=agent_input,
@@ -82,27 +106,23 @@ class AgentTemplate(Agent, ABC):
             output_stream=input_object.get_data('output_stream'),
         )
 
-        # 2. Get LLM parameters from agent model config
-        llm = llm.set_by_agent_model(**self.agent_model.llm_params())
+    def _save_memory(self, context: AgentContext, llm_output: LLMOutput,
+                     agent_input: dict) -> None:
+        """Collect conversation messages and persist to memory.
 
-        # 3. Run async tool-calling loop
-        max_iterations = self.agent_model.profile.get('max_iterations', 10)
-        llm_output = await self.async_run_tool_calling_loop(
-            llm, context, input_object,
-            max_iterations=max_iterations,
-        )
+        Subclasses may override to customise the memory strategy.
+        """
+        if not context.memory:
+            return
+        memory_messages = self._collect_memory_messages(context, llm_output)
+        self.add_memory(context.memory, memory_messages, agent_input=agent_input)
 
-        res = llm_output.text
+    def _emit_final_output(self, context: AgentContext, output_text: str) -> None:
+        """Push the final output to the output stream.
 
-        # 4. Save memory
-        if memory:
-            memory_messages = self._collect_memory_messages(context, llm_output)
-            self.add_memory(memory, memory_messages, agent_input=agent_input)
-
-        # 5. Emit final output to stream
-        self.add_output_stream(input_object.get_data('output_stream'), res)
-
-        return {**agent_input, 'output': res}
+        Subclasses may override to customise the format (e.g. OpenAI protocol).
+        """
+        self.add_output_stream(context.output_stream, output_text)
 
     def _collect_memory_messages(self, context: AgentContext,
                                  final_output: LLMOutput) -> List[Message]:

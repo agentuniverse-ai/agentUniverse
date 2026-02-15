@@ -237,6 +237,63 @@ class AgentContext(BaseModel):
         llm_model = self.profile.setdefault('llm_model', {})
         llm_model.update(kwargs)
 
+    # ------------------------------------------------------------------
+    # LLM builder
+    # ------------------------------------------------------------------
+
+    def build_llm(self) -> Any:
+        """Build and configure an LLM instance from *agent_model* config.
+
+        Returns a fully configured LLM ready for ``call()`` / ``acall()``.
+        """
+        from agentuniverse.llm.llm_manager import LLMManager
+        llm_name = self.llm_model.get('name')
+        llm = LLMManager().get_instance_obj(llm_name)
+        if llm is not None and self.agent_model:
+            llm = llm.set_by_agent_model(**self.agent_model.llm_params())
+        return llm
+
+    # ------------------------------------------------------------------
+    # Streaming helpers
+    # ------------------------------------------------------------------
+
+    def stream_token(self, chunk: str, agent_info: dict = None) -> None:
+        """Push an incremental token to *output_stream*."""
+        if self.output_stream is None:
+            return
+        from agentuniverse.base.util.common_util import stream_output
+        stream_output(self.output_stream, {
+            'type': 'token',
+            'data': {
+                'chunk': chunk,
+                'agent_info': agent_info or {},
+            }
+        })
+
+    def stream_final(self, output: str, agent_info: dict = None) -> None:
+        """Push a final result to *output_stream*.
+
+        Base implementation is a no-op; subclasses may override to customise
+        the final-output format.
+        """
+        pass
+
+    # ------------------------------------------------------------------
+    # Convenience properties
+    # ------------------------------------------------------------------
+
+    @property
+    def llm_params(self) -> dict:
+        """LLM parameters derived from *agent_model*."""
+        if self.agent_model:
+            return self.agent_model.llm_params()
+        return {}
+
+    @property
+    def max_iterations(self) -> int:
+        """Maximum tool-calling iterations from profile config."""
+        return self.profile.get('max_iterations', 10)
+
 
 # ======================================================================
 # Private helpers for message construction

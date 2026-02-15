@@ -243,6 +243,7 @@ class Agent(ComponentBase, ABC):
     def invoke_llm(self, llm: LLM, messages: list,
                    input_object: InputObject,
                    tools_schema: list[dict] = None,
+                   agent_context: AgentContext = None,
                    **kwargs) -> LLMOutput:
         """Invoke the LLM with messages, optionally with tool schemas.
 
@@ -251,6 +252,8 @@ class Agent(ComponentBase, ABC):
             messages: Message list (dicts or Message objects).
             input_object: The current InputObject.
             tools_schema: Optional OpenAI function-calling tool schemas.
+            agent_context: Optional AgentContext; if provided, its
+                *output_stream* is used instead of ``input_object``'s.
             **kwargs: Extra arguments forwarded to llm.call().
 
         Returns:
@@ -268,24 +271,23 @@ class Agent(ComponentBase, ABC):
 
         # Streaming path: aggregate events via StreamReducer
         reducer = StreamReducer()
-        output_stream = input_object.get_data('output_stream', None)
         for event in llm.call(messages=messages, streaming=True, **llm_kwargs):
             reducer.feed(event)
             if event.type == StreamEventType.TEXT_DELTA and event.text_delta:
-                stream_output(output_stream, {
-                    'type': 'token',
-                    'data': {
-                        'chunk': event.text_delta,
-                        'agent_info': self.agent_model.info
-                    }
-                })
+                agent_context.stream_token(event.text_delta, self.agent_model.info)
         return reducer.build()
 
     async def async_invoke_llm(self, llm: LLM, messages: list,
                                input_object: InputObject,
                                tools_schema: list[dict] = None,
+                               agent_context: AgentContext = None,
                                **kwargs) -> LLMOutput:
-        """Async version of invoke_llm."""
+        """Async version of invoke_llm.
+
+        Args:
+            agent_context: Optional AgentContext; if provided, its
+                *output_stream* is used instead of ``input_object``'s.
+        """
         from agentuniverse.llm.llm_output import StreamReducer, StreamEventType
 
         llm_kwargs = dict(kwargs)
@@ -298,17 +300,10 @@ class Agent(ComponentBase, ABC):
 
         # Streaming path
         reducer = StreamReducer()
-        output_stream = input_object.get_data('output_stream', None)
         async for event in await llm.acall(messages=messages, streaming=True, **llm_kwargs):
             reducer.feed(event)
             if event.type == StreamEventType.TEXT_DELTA and event.text_delta:
-                stream_output(output_stream, {
-                    'type': 'token',
-                    'data': {
-                        'chunk': event.text_delta,
-                        'agent_info': self.agent_model.info
-                    }
-                })
+                agent_context.stream_token(event.text_delta, self.agent_model.info)
         return reducer.build()
 
     def execute_tool_call(self, tool_call) -> Message:
@@ -398,12 +393,15 @@ class Agent(ComponentBase, ABC):
 
         llm_output = None
         for i in range(max_iterations):
+            self.on_before_llm_round(context, round_index=i)
             messages = context.build_messages()
             llm_output = self.invoke_llm(
                 llm, messages, input_object,
                 tools_schema=context.tools_schema or None,
+                agent_context=context,
                 **kwargs,
             )
+            self.on_after_llm_round(context, llm_output, round_index=i)
 
             if not llm_output.has_tool_calls():
                 return llm_output
@@ -440,12 +438,15 @@ class Agent(ComponentBase, ABC):
 
         llm_output = None
         for i in range(max_iterations):
+            self.on_before_llm_round(context, round_index=i)
             messages = context.build_messages()
             llm_output = await self.async_invoke_llm(
                 llm, messages, input_object,
                 tools_schema=context.tools_schema or None,
+                agent_context=context,
                 **kwargs,
             )
+            self.on_after_llm_round(context, llm_output, round_index=i)
 
             if not llm_output.has_tool_calls():
                 return llm_output
@@ -463,6 +464,32 @@ class Agent(ComponentBase, ABC):
 
         LOGGER.warn(f"Agent reached max tool-calling iterations ({max_iterations})")
         return llm_output
+
+    # ------------------------------------------------------------------
+    # Per-round hooks (overridable by subclasses)
+    # ------------------------------------------------------------------
+
+    def on_before_llm_round(self, context: AgentContext,
+                            round_index: int) -> None:
+        """Pre-processing hook invoked before each LLM call.
+
+        Subclasses may override to:
+        - Inject transition prompts (append to ``context.current_messages``)
+        - Dynamically adjust ``context.tools_schema``
+        - Add contextual information
+        """
+        pass
+
+    def on_after_llm_round(self, context: AgentContext, llm_output: LLMOutput,
+                           round_index: int) -> None:
+        """Post-processing hook invoked after each LLM call.
+
+        Subclasses may override to:
+        - Log round results
+        - Inspect or transform the LLM output
+        - Update context state
+        """
+        pass
 
     def judge_stream(self, llm: LLM, **kwargs):
         if llm._channel_instance:
