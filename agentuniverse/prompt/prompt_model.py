@@ -5,7 +5,7 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: prompt_model.py
 """Agent Prompt Model module."""
-from typing import Optional, Dict, List
+from typing import ClassVar, Optional, Dict, List, Tuple
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -67,7 +67,7 @@ class AgentPromptModel(BaseModel):
     )
 
     # 所有经典 str 字段名（few_shot_examples 单独处理，因为类型不同）
-    _NAMED_STR_FIELDS = ("introduction", "target", "output_format", "instruction")
+    _NAMED_STR_FIELDS: ClassVar[Tuple[str, ...]] = ("introduction", "target", "output_format", "instruction")
 
     @model_validator(mode="after")
     def _sync_sections(self) -> "AgentPromptModel":
