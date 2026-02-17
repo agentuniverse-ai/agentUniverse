@@ -114,7 +114,8 @@ class RecursiveCharacterTextSplitter(DocProcessor):
                     good_splits.extend(sub_chunks)
                 else:
                     # Last resort: hard split by characters
-                    for start in range(0, len(split), self.chunk_size - self.chunk_overlap):
+                    step = max(1, self.chunk_size - self.chunk_overlap)
+                    for start in range(0, len(split), step):
                         end = min(start + self.chunk_size, len(split))
                         piece = split[start:end]
                         if piece.strip():
@@ -124,7 +125,7 @@ class RecursiveCharacterTextSplitter(DocProcessor):
             elif potential_len > self.chunk_size:
                 _flush_current()
                 current_chunk.append(split)
-                current_len = split_len
+                current_len += split_len + (sep_len if len(current_chunk) > 1 else 0)
             else:
                 current_chunk.append(split)
                 current_len = potential_len

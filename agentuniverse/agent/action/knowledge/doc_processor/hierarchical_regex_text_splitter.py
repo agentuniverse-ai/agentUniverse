@@ -5,6 +5,7 @@
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: hierarchical_regex_text_splitter.py
+import copy
 import re
 import uuid
 from typing import List, Optional
@@ -98,7 +99,7 @@ class HierarchicalRegexTextSplitter(DocProcessor):
         for k, v in hierarchy.items():
             hierarchical_level = v.metadata['hierarchical_level']
             if self.hierarchical_index[hierarchical_level]['need_summary']:
-                agent = AgentManager().get_instance_obj(self.summary_agent)
+                agent = copy.deepcopy(AgentManager().get_instance_obj(self.summary_agent))
                 if self.llm:
                     agent.agent_model.profile['llm_model'] = self.llm
                 else:
@@ -124,9 +125,11 @@ class HierarchicalRegexTextSplitter(DocProcessor):
         # merge all documents first
         merged_docs = origin_docs
         if self.merge_first and len(origin_docs) > 0:
-            for _doc in origin_docs[1:]:
-                origin_docs[0].text += "\n" + _doc.text
-            merged_docs = [origin_docs[0]]
+            merged_text = "\n".join(_doc.text for _doc in origin_docs)
+            merged_docs = [Document(
+                text=merged_text,
+                metadata=origin_docs[0].metadata.copy() if origin_docs[0].metadata else None
+            )]
         hierarchical_docs = []
         for _doc in merged_docs:
             hierarchical_docs.extend(self._hierarchical_split_single_doc(_doc))
@@ -152,4 +155,3 @@ class HierarchicalRegexTextSplitter(DocProcessor):
         if hasattr(doc_processor_configer, "summary_agent"):
             self.summary_agent = doc_processor_configer.summary_agent
         return self
-

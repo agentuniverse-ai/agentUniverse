@@ -80,7 +80,7 @@ class TokenTextSplitter(DocProcessor):
             if end >= len(tokens):
                 break
             # Move forward by (chunk_size - chunk_overlap) tokens
-            start += self.chunk_size - self.chunk_overlap
+            start += max(1, self.chunk_size - self.chunk_overlap)
 
         return chunks
 
