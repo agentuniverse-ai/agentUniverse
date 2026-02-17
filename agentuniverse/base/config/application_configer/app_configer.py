@@ -25,7 +25,6 @@ class AppConfiger(object):
         self.__core_agent_package_list: Optional[list[str]] = None
         self.__core_knowledge_package_list: Optional[list[str]] = None
         self.__core_llm_package_list: Optional[list[str]] = None
-        self.__core_planner_package_list: Optional[list[str]] = None
         self.__core_tool_package_list: Optional[list[str]] = None
         self.__core_toolkit_package_list: Optional[list[str]] = None
         self.__core_memory_package_list: Optional[list[str]] = None
@@ -81,11 +80,6 @@ class AppConfiger(object):
     def core_llm_package_list(self) -> Optional[list[str]]:
         """Return the llm package list of the core."""
         return self.__core_llm_package_list
-
-    @property
-    def core_planner_package_list(self) -> Optional[list[str]]:
-        """Return the planner package list of the core."""
-        return self.__core_planner_package_list
 
     @property
     def core_tool_package_list(self) -> Optional[list[str]]:
@@ -275,7 +269,6 @@ class AppConfiger(object):
         self.__core_agent_package_list = configer.value.get('CORE_PACKAGE', {}).get('agent')
         self.__core_knowledge_package_list = configer.value.get('CORE_PACKAGE', {}).get('knowledge')
         self.__core_llm_package_list = configer.value.get('CORE_PACKAGE', {}).get('llm')
-        self.__core_planner_package_list = configer.value.get('CORE_PACKAGE', {}).get('planner')
         self.__core_tool_package_list = configer.value.get('CORE_PACKAGE', {}).get('tool')
         self.__core_toolkit_package_list = configer.value.get('CORE_PACKAGE', {}).get('toolkit')
         self.__core_memory_package_list = configer.value.get('CORE_PACKAGE', {}).get('memory')

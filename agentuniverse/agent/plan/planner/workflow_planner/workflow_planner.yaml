@@ -1,6 +1,0 @@
-name: 'workflow_planner'
-description: 'workflow planner'
-metadata:
-  type: 'PLANNER'
-  module: 'agentuniverse.agent.plan.planner.workflow_planner.workflow_planner'
-  class: 'WorkflowPlanner'

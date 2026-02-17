@@ -1,6 +1,0 @@
-name: 'nl2api_planner'
-description: 'nl2api planner'
-metadata:
-  type: 'PLANNER'
-  module: 'agentuniverse.agent.plan.planner.nl2api_planner.nl2api_planner'
-  class: 'Nl2ApiPlanner'

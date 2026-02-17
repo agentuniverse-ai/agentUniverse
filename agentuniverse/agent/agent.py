@@ -199,13 +199,12 @@ class Agent(ComponentBase, ABC):
         profile: Optional[dict] = agent_config.profile
         profile = process_dict_with_funcs(profile, component_configer.yaml_func_instance)
         profile = process_agent_llm_config(info.get('name'), profile, component_configer.default_llm_configer)
-        plan: Optional[dict] = agent_config.plan
         memory: Optional[dict] = agent_config.memory
         memory = process_dict_with_funcs(memory, component_configer.yaml_func_instance)
         action: Optional[dict] = agent_config.action
         action = process_dict_with_funcs(action, component_configer.yaml_func_instance)
         agent_model: Optional[AgentModel] = AgentModel(info=info, profile=profile,
-                                                       plan=plan, memory=memory, action=action)
+                                                       memory=memory, action=action)
         self.agent_model = agent_model
         return self
 

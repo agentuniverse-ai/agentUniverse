@@ -48,7 +48,6 @@ class AgentUniverse(object):
         self.__system_default_llm_package = ['agentuniverse.llm.default']
         self.__system_default_tool_package = ['agentuniverse.agent.action.tool']
         self.__system_default_toolkit_package = ['agentuniverse.agent.action.toolkit']
-        self.__system_default_planner_package = ['agentuniverse.agent.plan.planner']
         self.__system_default_memory_package = ['agentuniverse.agent.memory.default']
         self.__system_default_prompt_package = ['agentuniverse.agent', 'agentuniverse.base.util']
         self.__system_default_embedding_package = ['agentuniverse.agent.action.knowledge.embedding']
@@ -151,8 +150,6 @@ class AgentUniverse(object):
         core_knowledge_package_list = app_configer.core_knowledge_package_list or app_configer.core_default_package_list
         core_llm_package_list = ((app_configer.core_llm_package_list or app_configer.core_default_package_list)
                                  + self.__system_default_llm_package)
-        core_planner_package_list = ((app_configer.core_planner_package_list or app_configer.core_default_package_list)
-                                     + self.__system_default_planner_package)
         core_tool_package_list = ((app_configer.core_tool_package_list or app_configer.core_default_package_list)
                                     + self.__system_default_tool_package)
         core_toolkit_package_list = ((app_configer.core_toolkit_package_list or app_configer.core_tool_package_list or app_configer.core_default_package_list)
@@ -191,7 +188,6 @@ class AgentUniverse(object):
             ComponentEnum.AGENT: core_agent_package_list,
             ComponentEnum.KNOWLEDGE: core_knowledge_package_list,
             ComponentEnum.LLM: core_llm_package_list,
-            ComponentEnum.PLANNER: core_planner_package_list,
             ComponentEnum.TOOL: core_tool_package_list,
             ComponentEnum.TOOLKIT: core_toolkit_package_list,
             ComponentEnum.SERVICE: core_service_package_list,

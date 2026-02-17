@@ -13,7 +13,6 @@ class ComponentEnum(Enum):
     AGENT = "AGENT"
     KNOWLEDGE = "KNOWLEDGE"
     LLM = "LLM"
-    PLANNER = "PLANNER"
     TOOL = "TOOL"
     TOOLKIT = "TOOLKIT"
     DEFAULT = "DEFAULT"

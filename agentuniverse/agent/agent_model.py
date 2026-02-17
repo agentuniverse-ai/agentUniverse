@@ -14,7 +14,6 @@ class AgentModel(BaseModel):
 
     info: Optional[dict] = dict()
     profile: Optional[dict] = dict()
-    plan: Optional[dict] = dict()
     memory: Optional[dict] = dict()
     action: Optional[dict] = dict()
     work_pattern: Optional[dict] = dict()

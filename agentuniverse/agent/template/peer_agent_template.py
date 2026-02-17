@@ -171,27 +171,21 @@ class PeerAgentTemplate(AgentTemplate):
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'PeerAgentTemplate':
         super().initialize_by_component_configer(component_configer)
-        planner_config = self.agent_model.plan.get('planner', {})
-        if self.agent_model.profile.get('planning') is not None or planner_config.get('planning') is not None:
-            self.planning_agent_name = self.agent_model.profile.get('planning') \
-                if self.agent_model.profile.get('planning') is not None else planner_config.get('planning')
-        if self.agent_model.profile.get('executing') is not None or planner_config.get('executing') is not None:
-            self.executing_agent_name = self.agent_model.profile.get('executing') \
-                if self.agent_model.profile.get('executing') is not None else planner_config.get('executing')
-        if self.agent_model.profile.get('expressing') is not None or planner_config.get('expressing') is not None:
-            self.expressing_agent_name = self.agent_model.profile.get('expressing') \
-                if self.agent_model.profile.get('expressing') is not None else planner_config.get('expressing')
-        if self.agent_model.profile.get('reviewing') is not None or planner_config.get('reviewing') is not None:
-            self.reviewing_agent_name = self.agent_model.profile.get('reviewing') \
-                if self.agent_model.profile.get('reviewing') is not None else planner_config.get('reviewing')
-        if self.agent_model.profile.get('eval_threshold') or planner_config.get('eval_threshold'):
-            self.eval_threshold = self.agent_model.profile.get('eval_threshold') or planner_config.get('eval_threshold')
-        if self.agent_model.profile.get('retry_count') or planner_config.get('retry_count'):
-            self.retry_count = self.agent_model.profile.get('retry_count') or planner_config.get('retry_count')
-        if self.agent_model.profile.get('jump_step') or planner_config.get('jump_step'):
-            self.jump_step = self.agent_model.profile.get('jump_step') or planner_config.get('jump_step')
-        if self.agent_model.profile.get('expert_framework') or planner_config.get('expert_framework'):
-            self.expert_framework = \
-                self.agent_model.profile.get('expert_framework') or planner_config.get('expert_framework')
+        if self.agent_model.profile.get('planning') is not None:
+            self.planning_agent_name = self.agent_model.profile.get('planning')
+        if self.agent_model.profile.get('executing') is not None:
+            self.executing_agent_name = self.agent_model.profile.get('executing')
+        if self.agent_model.profile.get('expressing') is not None:
+            self.expressing_agent_name = self.agent_model.profile.get('expressing')
+        if self.agent_model.profile.get('reviewing') is not None:
+            self.reviewing_agent_name = self.agent_model.profile.get('reviewing')
+        if self.agent_model.profile.get('eval_threshold'):
+            self.eval_threshold = self.agent_model.profile.get('eval_threshold')
+        if self.agent_model.profile.get('retry_count'):
+            self.retry_count = self.agent_model.profile.get('retry_count')
+        if self.agent_model.profile.get('jump_step'):
+            self.jump_step = self.agent_model.profile.get('jump_step')
+        if self.agent_model.profile.get('expert_framework'):
+            self.expert_framework = self.agent_model.profile.get('expert_framework')
         self.memory_name = self.agent_model.memory.get('name')
         return self
