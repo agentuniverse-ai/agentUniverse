@@ -7,12 +7,10 @@
 # @FileName: planning_agent_template.py
 from queue import Queue
 
-from langchain_core.utils.json import parse_json_markdown
-
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
-from agentuniverse.base.util.common_util import stream_output
+from agentuniverse.base.util.common_util import stream_output, parse_json_markdown
 from agentuniverse.base.util.logging.logging_util import LOGGER
 
 
@@ -37,7 +35,6 @@ class PlanningAgentTemplate(AgentTemplate):
         final_result['framework'] = output.get('framework')
         final_result['thought'] = output.get('thought', '')
 
-        # add planning agent log info.
         logger_info = f"\nPlanning agent execution result is :\n"
         for index, one_framework in enumerate(final_result.get('framework')):
             logger_info += f"[{index + 1}] {one_framework} \n"
@@ -63,7 +60,6 @@ class PlanningAgentTemplate(AgentTemplate):
             output = parse_json_markdown(agent_output).get('framework')
         except:
             output = agent_output
-        # add planning agent final result into the stream output.
         stream_output(output_stream,
                       {"data": {
                           'output': output,

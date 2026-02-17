@@ -1,6 +1,7 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 import asyncio
+import json
 from typing import List, Any
 import inspect
 from typing import get_origin, get_args, Union
@@ -9,6 +10,8 @@ from typing import get_origin, get_args, Union
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: tool.py
 from typing import Optional
+
+from pydantic import BaseModel
 
 from agentuniverse.agent.action.tool.enum import ToolTypeEnum
 from agentuniverse.base.annotation.trace import trace_tool
@@ -19,7 +22,7 @@ from agentuniverse.base.config.application_configer.application_config_manager i
 from agentuniverse.base.config.component_configer.configers.tool_configer import \
     ToolConfiger
 
-__all__ = ["Tool", "ToolError", "ToolInputError", "ToolConfigError"]
+__all__ = ["Tool", "ToolInput", "ToolError", "ToolInputError", "ToolConfigError"]
 
 
 class ToolError(Exception):
@@ -35,6 +38,29 @@ class ToolInputError(ToolError, ValueError):
 class ToolConfigError(ToolError):
     """Raised when tool configuration is invalid."""
     pass
+
+
+class ToolInput(BaseModel):
+    """The basic class for tool input."""
+
+    def __init__(self, params: dict, **kwargs):
+        super().__init__(**kwargs)
+        self.__origin_params = params
+        for k, v in params.items():
+            self.__dict__[k] = v
+
+    def to_dict(self):
+        return self.__origin_params
+
+    def to_json_str(self):
+        return json.dumps(self.__origin_params, ensure_ascii=False)
+
+    def add_data(self, key, value):
+        self.__origin_params[key] = value
+        self.__dict__[key] = value
+
+    def get_data(self, key, default=None):
+        return self.__origin_params.get(key, default)
 
 
 class Tool(ComponentBase):

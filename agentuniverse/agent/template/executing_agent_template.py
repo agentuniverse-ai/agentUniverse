@@ -11,22 +11,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from typing import Optional
 
-from langchain_core.output_parsers import StrOutputParser
-
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.conversation_memory.conversation_memory_module import ConversationMemoryModule
 from agentuniverse.agent.memory.memory import Memory
-from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
+from agentuniverse.ai_context.agent_context import AgentContext
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
-from agentuniverse.base.util.agent_util import assemble_memory_input, assemble_memory_output
 from agentuniverse.base.util.common_util import stream_output
 from agentuniverse.base.util.logging.logging_util import LOGGER
-from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
-from agentuniverse.prompt.prompt import Prompt
 
 
 class ExecutingAgentTemplate(AgentTemplate):
@@ -47,18 +42,24 @@ class ExecutingAgentTemplate(AgentTemplate):
         agent_input['expert_framework'] = input_object.get_data('expert_framework', {}).get('executing')
         return agent_input
 
-    def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
+    def customized_execute(self, input_object: InputObject, agent_input: dict,
+                           memory: Memory, llm: LLM,
+                           agent_context: AgentContext = None,
                            **kwargs) -> dict:
-        return self._execute_tasks(input_object, agent_input, memory, llm, prompt)
+        return self._execute_tasks(input_object, agent_input, memory, llm, agent_context)
 
-    async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
-                                       prompt: Prompt, **kwargs) -> dict:
+    async def customized_async_execute(self, input_object: InputObject, agent_input: dict,
+                                       memory: Memory, llm: LLM,
+                                       agent_context: AgentContext = None,
+                                       **kwargs) -> dict:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._execute_tasks, input_object, agent_input, memory,
-                                          llm, prompt)
+        return await loop.run_in_executor(None, self._execute_tasks, input_object, agent_input,
+                                          memory, llm, agent_context)
 
-    def _execute_tasks(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
-                       prompt: Prompt, **kwargs) -> dict:
+    def _execute_tasks(self, input_object: InputObject, agent_input: dict,
+                       memory: Memory, llm: LLM,
+                       agent_context: AgentContext = None,
+                       **kwargs) -> dict:
         self._context_values: dict = FrameworkContextManager().get_all_contexts()
         _context_values: dict = FrameworkContextManager().get_all_contexts()
         framework = agent_input.get('framework', [])
@@ -71,8 +72,9 @@ class ExecutingAgentTemplate(AgentTemplate):
                                 thread_name_prefix="executing_agent_template") as thread_executor:
             futures = []
             for i, subtask in enumerate(framework):
-                future = thread_executor.submit(self._execute_subtask, subtask, input_object, agent_input, i, memory,
-                                                llm, prompt, context_values=_context_values)
+                future = thread_executor.submit(self._execute_subtask, subtask, input_object,
+                                                agent_input, i, memory, llm, agent_context,
+                                                context_values=_context_values)
                 futures.append(future)
                 time.sleep(1)
 
@@ -82,7 +84,8 @@ class ExecutingAgentTemplate(AgentTemplate):
         return {'executing_result': [result for result in executing_result],
                 'output_stream': input_object.get_data('output_stream', None)}
 
-    def _execute_subtask(self, subtask, input_object, agent_input, index, memory, llm, prompt, **kwargs) -> dict:
+    def _execute_subtask(self, subtask, input_object, agent_input, index,
+                         memory, llm, agent_context, **kwargs) -> dict:
         context_tokens = {}
         FrameworkContextManager().set_all_contexts(kwargs.get('context_values', {}))
         try:
@@ -104,12 +107,14 @@ class ExecutingAgentTemplate(AgentTemplate):
             agent_input_copy['background'] = f"knowledge result: {knowledge_res} \n\n tools result: {tools_res}"
             agent_input_copy['input'] = subtask
 
-            process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input_copy)
-            self.load_memory(memory, agent_input_copy)
-            chain = prompt.as_langchain() | llm.as_langchain_runnable(
-                self.agent_model.llm_params()) | StrOutputParser()
-            res = self.invoke_chain(chain, agent_input_copy, input_object_copy)
-            self.add_memory(memory, f"Human: {agent_input.get('input')}, AI: {res}", agent_input=agent_input)
+            # Build a per-subtask AgentContext and invoke LLM
+            sub_context = self._create_agent_context(input_object_copy, agent_input_copy, memory)
+            sub_llm = sub_context.build_llm()
+            messages = sub_context.build_messages()
+            llm_output = self.invoke_llm(sub_llm, messages, input_object_copy, agent_context=sub_context)
+            res = llm_output.text
+
+            self._save_memory(sub_context, llm_output, agent_input)
             ConversationMemoryModule().add_agent_result_info(
                 agent_instance=self,
                 agent_result={'output': res},
@@ -123,19 +128,16 @@ class ExecutingAgentTemplate(AgentTemplate):
                 'output': f"Answer {index + 1}: {res}"
             }
         finally:
-            # clear the framework context.
             for var_name, token in context_tokens.items():
                 FrameworkContextManager().reset_context(var_name, token)
 
     def parse_result(self, agent_result: dict) -> dict:
-        # add executing agent final result into the stream output.
         stream_output(agent_result.pop('output_stream'),
                       {"data": {
                           'output': agent_result.get('executing_result'),
                           "agent_info": self.agent_model.info
                       }, "type": "executing"})
 
-        # add executing agent log info.
         logger_info = f"\nExecuting agent execution result is :\n"
         if agent_result.get('executing_result'):
             for index, one_exec_res in enumerate(agent_result.get('executing_result')):
@@ -152,7 +154,6 @@ class ExecutingAgentTemplate(AgentTemplate):
         for tool_name in self.tool_names:
             tool = ToolManager().get_instance_obj(tool_name)
             if tool is not None:
-                # note: only insert the first key of tool input.
                 input_object.add_data(tool.input_keys[0], subtask)
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'ExecutingAgentTemplate':

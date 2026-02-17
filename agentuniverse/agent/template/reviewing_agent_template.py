@@ -7,12 +7,10 @@
 # @FileName: reviewing_agent_template.py
 from queue import Queue
 
-from langchain_core.utils.json import parse_json_markdown
-
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
-from agentuniverse.base.util.common_util import stream_output
+from agentuniverse.base.util.common_util import stream_output, parse_json_markdown
 from agentuniverse.base.util.logging.logging_util import LOGGER
 
 
@@ -48,7 +46,6 @@ class ReviewingAgentTemplate(AgentTemplate):
         final_result['output'] = output
         final_result['score'] = score
         final_result['suggestion'] = output.get('suggestion')
-        # add reviewing agent log info.
         logger_info = f"\nReviewing agent execution result is :\n"
         reviewing_info_str = f"review suggestion: {final_result.get('suggestion')} \n"
         reviewing_info_str += f"review score: {final_result.get('score')} \n"
@@ -59,7 +56,6 @@ class ReviewingAgentTemplate(AgentTemplate):
     def add_output_stream(self, output_stream: Queue, agent_output: str) -> None:
         if not output_stream:
             return
-        # add reviewing agent final result into the stream output.
         stream_output(output_stream,
                       {"data": {
                           'output': agent_output,
@@ -67,13 +63,6 @@ class ReviewingAgentTemplate(AgentTemplate):
                       }, "type": "reviewing"})
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'ReviewingAgentTemplate':
-        """Initialize the Agent by the AgentConfiger object.
-
-        Args:
-            component_configer(AgentConfiger): the ComponentConfiger object
-        Returns:
-            ReviewingAgentTemplate: the ReviewingAgentTemplate object
-        """
         super().initialize_by_component_configer(component_configer)
         self.prompt_version = self.agent_model.profile.get('prompt_version', 'default_reviewing_agent.cn')
         self.validate_required_params()

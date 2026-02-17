@@ -5,14 +5,18 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: nl2api_agent_template.py
-from agentuniverse.agent.action.tool.tool import Tool
-from agentuniverse.agent.action.tool.tool_manager import ToolManager
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
 
 
 class Nl2ApiAgentTemplate(AgentTemplate):
+    """NL2API agent template.
+
+    Kept for backward compatibility. The base AgentTemplate now handles
+    tool calling via AgentContext, so this class only provides default
+    input/output keys and a default prompt_version.
+    """
 
     def input_keys(self) -> list[str]:
         return ['input']
@@ -22,19 +26,10 @@ class Nl2ApiAgentTemplate(AgentTemplate):
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         agent_input['input'] = input_object.get_data('input')
-        agent_input['tools'] = self.build_tools_context()
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
         return {**agent_result, 'output': agent_result['output']}
-
-    def build_tools_context(self) -> str:
-        tools_context = ''
-        if self.tool_names:
-            for tool_name in self.tool_names:
-                tool: Tool = ToolManager().get_instance_obj(tool_name)
-                tools_context += f"tool name: {tool.name}, tool description: {tool.description}\n"
-        return tools_context
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'Nl2ApiAgentTemplate':
         super().initialize_by_component_configer(component_configer)

@@ -6,14 +6,17 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: rag_agent_template.py
 from agentuniverse.agent.input_object import InputObject
-from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
-from agentuniverse.llm.llm import LLM
-from agentuniverse.prompt.prompt import Prompt
 
 
 class RagAgentTemplate(AgentTemplate):
+    """RAG agent template.
+
+    Kept for backward compatibility. The base AgentTemplate now handles
+    tool calling and knowledge invocation via AgentContext, so this class
+    only provides default input/output keys and a default prompt_version.
+    """
 
     def input_keys(self) -> list[str]:
         return ['input']
@@ -27,22 +30,6 @@ class RagAgentTemplate(AgentTemplate):
 
     def parse_result(self, agent_result: dict) -> dict:
         return {**agent_result, 'output': agent_result['output']}
-
-    def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
-                           **kwargs) -> dict:
-        tool_res: str = self.invoke_tools(input_object)
-        knowledge_res: str = self.invoke_knowledge(agent_input.get('input'), input_object)
-        agent_input['background'] = (agent_input['background']
-                                     + f"tool_res: {tool_res} \n\n knowledge_res: {knowledge_res}")
-        return super().customized_execute(input_object, agent_input, memory, llm, prompt, **kwargs)
-
-    async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
-                                       prompt: Prompt, **kwargs) -> dict:
-        tool_res: str = await self.async_invoke_tools(input_object)
-        knowledge_res: str = self.invoke_knowledge(agent_input.get('input'), input_object)
-        agent_input['background'] = (agent_input['background']
-                                     + f"tool_res: {tool_res} \n\n knowledge_res: {knowledge_res}")
-        return await super().customized_async_execute(input_object, agent_input, memory, llm, prompt, **kwargs)
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'RagAgentTemplate':
         super().initialize_by_component_configer(component_configer)
