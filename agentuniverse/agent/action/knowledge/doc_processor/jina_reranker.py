@@ -9,13 +9,16 @@
 from typing import List, Optional
 import requests
 
+import aiohttp
+
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.base.util.env_util import get_from_env
 
-api_base = "https://api.jina.ai/v1/rerank"
+JINA_RERANK_URL = "https://api.jina.ai/v1/rerank"
+
 
 class JinaReranker(DocProcessor):
     """Document reranker using Jina AI's Rerank API.
@@ -27,62 +30,80 @@ class JinaReranker(DocProcessor):
     model_name: str = "jina-reranker-v2-base-multilingual"
     top_n: int = 10
 
-    def _process_docs(self, origin_docs: List[Document], query: Query = None) -> List[Document]:
-        """Rerank documents based on their relevance to the query.
-
-        Args:
-            origin_docs: List of documents to be reranked.
-            query: Query object containing the search query string.
-
-        Returns:
-            List[Document]: Reranked documents sorted by relevance score.
-
-        Raises:
-            Exception: If the query is missing, the API key is not set, or the API call fails.
-        """
+    def _validate_inputs(self, origin_docs: List[Document], query: Query = None):
         if not query or not query.query_str:
             raise Exception("Jina AI reranker needs an origin string query.")
         if not self.api_key:
             raise Exception(
                 "Jina AI API key is not set. Please configure it in the component or environment variables.")
-        if not origin_docs:
-            return []
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-        }
-
-        payload = {
+    def _build_payload(self, origin_docs: List[Document], query: Query) -> dict:
+        return {
             "model": self.model_name,
             "query": query.query_str,
             "documents": [doc.text for doc in origin_docs],
             "top_n": self.top_n,
         }
 
+    def _build_headers(self) -> dict:
+        return {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+
+    @staticmethod
+    def _build_rerank_docs(origin_docs: List[Document], results: list) -> List[Document]:
+        rerank_docs = []
+        for result in results:
+            index = result.get("index")
+            relevance_score = result.get("relevance_score")
+            if index is None or relevance_score is None:
+                continue
+            if origin_docs[index].metadata:
+                origin_docs[index].metadata["relevance_score"] = relevance_score
+            else:
+                origin_docs[index].metadata = {"relevance_score": relevance_score}
+            rerank_docs.append(origin_docs[index])
+        return rerank_docs
+
+    def _process_docs(self, origin_docs: List[Document], query: Query = None) -> List[Document]:
+        """Rerank documents based on their relevance to the query."""
+        self._validate_inputs(origin_docs, query)
+        if not origin_docs:
+            return []
+
         try:
-            response = requests.post(api_base, headers=headers, json=payload)
+            response = requests.post(
+                JINA_RERANK_URL,
+                headers=self._build_headers(),
+                json=self._build_payload(origin_docs, query),
+            )
             response.raise_for_status()
             results = response.json().get("results", [])
         except requests.exceptions.RequestException as e:
             raise Exception(f"Jina AI rerank API call error: {e}")
 
-        rerank_docs = []
-        for result in results:
-            index = result.get("index")
-            relevance_score = result.get("relevance_score")
+        return self._build_rerank_docs(origin_docs, results)
 
-            if index is None or relevance_score is None:
-                continue
+    async def _async_process_docs(self, origin_docs: List[Document],
+                                  query: Query = None) -> List[Document]:
+        """Async rerank using aiohttp to call the Jina API."""
+        self._validate_inputs(origin_docs, query)
+        if not origin_docs:
+            return []
 
-            if origin_docs[index].metadata:
-                origin_docs[index].metadata["relevance_score"] = relevance_score
-            else:
-                origin_docs[index].metadata = {"relevance_score": relevance_score}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                JINA_RERANK_URL,
+                headers=self._build_headers(),
+                json=self._build_payload(origin_docs, query),
+                timeout=aiohttp.ClientTimeout(total=300),
+            ) as resp:
+                resp.raise_for_status()
+                resp_json = await resp.json()
 
-            rerank_docs.append(origin_docs[index])
-
-        return rerank_docs
+        results = resp_json.get("results", [])
+        return self._build_rerank_docs(origin_docs, results)
 
     def _initialize_by_component_configer(self, doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
         """Initialize reranker parameters from component configuration.

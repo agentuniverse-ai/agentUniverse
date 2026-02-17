@@ -73,7 +73,8 @@ class DoubaoEmbedding(Embedding):
 
     async def async_get_embeddings(self, texts: List[str],
                                    **kwargs) -> List[List[float]]:
-        return self.get_embeddings(texts)
+        import asyncio
+        return await asyncio.to_thread(self.get_embeddings, texts)
 
     def _initialize_by_component_configer(
             self, embedding_configer: ComponentConfiger) -> 'Embedding':

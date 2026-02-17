@@ -95,16 +95,6 @@ class AzureOpenAIEmbedding(Embedding):
             raise Exception(f"Failed to get embeddings: {e}")
 
 
-    def as_langchain(self) -> Any:
-        """
-        Convert the AzureOpenAIEmbedding instance to a LangChainAzureOpenAIEmbedding instance.
-        """
-        self._initialize_clients()
-
-        from langchain_community.embeddings.azure_openai import AzureOpenAIEmbeddings
-        return AzureOpenAIEmbeddings(openai_api_key=self.azure_api_key, client=self.client.embeddings, async_client=self.async_client.embeddings, azure_endpoint=f"https://{self.resource_name}.openai.azure.com/")
-
-
     def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> 'Embedding':
         """
         Initialize the embedding by the ComponentConfiger object.

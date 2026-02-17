@@ -1,66 +1,59 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-import asyncio
+
 # @Time    : 2024/3/22 15:44
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: knowledge.py
 import os
 import re
-import traceback
 from copy import deepcopy
 from typing import Optional, Dict, List, Any
-from concurrent.futures import wait, ALL_COMPLETED
 
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
+from agentuniverse.agent.action.knowledge.store.store import Store
 from agentuniverse.agent.action.knowledge.store.store_manager import StoreManager
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor_manager import DocProcessorManager
 from agentuniverse.agent.action.knowledge.query_paraphraser.query_paraphraser import QueryParaphraser
 from agentuniverse.agent.action.knowledge.query_paraphraser.query_paraphraser_manager import QueryParaphraserManager
-from agentuniverse.agent.action.knowledge.rag_router.rag_router_manager import RagRouterManager
-from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.reader.reader_manager import ReaderManager
 from agentuniverse.base.annotation.trace import trace_knowledge
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.util.logging.logging_util import LOGGER
-from agentuniverse.agent_serve.web.thread_with_result import ThreadPoolExecutorWithReturnValue
 
 
 class Knowledge(ComponentBase):
-    """
-    The basic class for the knowledge model.
+    """The basic class for the knowledge model.
+
+    Knowledge manages the full lifecycle of knowledge data: loading,
+    processing, storing, and retrieving documents for RAG pipelines.
+
+    Storage resolution (in priority order):
+        1. ``store`` (new, recommended) — a single Store name.
+           All CRUD operations go through this one store.  It can be a
+           simple store or a user-defined composite (e.g. a custom
+           ``HybridKnowledgeStore`` with vector + SQL backends).
+        2. ``stores`` (legacy) — if ``store`` is not set, these legacy
+           fields are used.  A ``LegacyHybridKnowledgeStore`` is
+           auto-constructed to wrap them, preserving the old fan-out-write
+           / rag-router-read behavior behind a unified Store interface.
 
     Attributes:
-        name (str): The name of the knowledge.
-
-        description (str): The description of the knowledge.
-
-        stores (List[str]): The stores for the knowledge, which are used to store knowledge
-            and provide retrieval capabilities, such as ChromaDB store, Redis Store or Qdrant Store.
-
-        query_paraphrasers (List[str]): Query paraphrasers used to paraphrase the original query string,
-            such as extracting keywords and splitting into sub-queries.
-
-        insert_processors (List[str]): DocProcessors used in the knowledge insertion step,
-            such as text splitter and text cleaner.
-
-        rag_router (str): RAG router used to decide which stores to use in
-            the RAG step.
-
-        post_processors (List[str]): DocProcessors used in the RAG step to process retrieved
-            documents, such as reranking and filtering.
-
-        readers (Dict[str, str]): The readers of the knowledge, which are used to load data and generate knowledge.
-            Each reader refers to a specific file type.
-
-        insert_executor (ThreadPoolExecutor): Used for performing insert and search
-        operations concurrently in multiple stores.
-
-        ext_info (Optional[Dict]): The extended information of the knowledge.
+        name: The name of the knowledge.
+        description: The description of the knowledge.
+        store: The name of the single Store to use (recommended).
+        stores: (Deprecated) List of store names for write fan-out.
+        query_paraphrasers: Query paraphrasers for the original query.
+        insert_processors: DocProcessors for the knowledge insertion step.
+        update_processors: DocProcessors for the knowledge update step.
+        rag_router: RAG router for deciding which stores to query.
+        post_processors: DocProcessors for post-processing retrieved docs.
+        readers: Mapping of file type to reader instance name.
+        ext_info: Extended information of the knowledge.
     """
 
     class Config:
@@ -68,31 +61,81 @@ class Knowledge(ComponentBase):
 
     name: str = ""
     description: Optional[str] = None
+
+    # New: single store entry point (recommended)
+    store: Optional[str] = None
+
+    # Deprecated: legacy multi-store fields, kept for backward compatibility.
+    # If store is set, these are ignored.
     stores: List[str] = []
+
     query_paraphrasers: List[str] = []
     insert_processors: List[str] = []
     update_processors: List[str] = []
     rag_router: str = "base_router"
     post_processors: List[str] = []
     readers: Dict[str, str] = dict()
-    insert_executor: Optional[ThreadPoolExecutorWithReturnValue] = None
-    query_executor: Optional[ThreadPoolExecutorWithReturnValue] = None
     tracing: Optional[bool] = None
     ext_info: Optional[Dict] = None
 
+    # Cached resolved store instance (not serialized)
+    _resolved_store: Optional[Store] = None
+
     def __init__(self, **kwargs):
         super().__init__(component_type=ComponentEnum.KNOWLEDGE, **kwargs)
-        self.insert_executor = ThreadPoolExecutorWithReturnValue(
-            max_workers=5,
-            thread_name_prefix="Knowledge store"
-        )
-        self.query_executor = ThreadPoolExecutorWithReturnValue(
-            max_workers=10,
-            thread_name_prefix="Knowledge query"
-        )
+
+    # ================================================================
+    # Store resolution
+    # ================================================================
+
+    def _resolve_store(self) -> Optional[Store]:
+        """Resolve the effective Store instance.
+
+        Resolution order:
+            1. If ``store`` is set → look it up from the manager.
+            2. Else if legacy ``stores`` is set → build a
+               ``LegacyHybridKnowledgeStore`` wrapping them.
+            3. Otherwise → None.
+
+        The result is cached in ``_resolved_store`` for the lifetime of
+        this Knowledge instance.  Call ``_invalidate_store()`` if config
+        changes.
+
+        Returns:
+            The resolved Store, or None if nothing is configured.
+        """
+        if self._resolved_store is not None:
+            return self._resolved_store
+
+        # Path 1: new single-store field
+        if self.store:
+            self._resolved_store = StoreManager().get_instance_obj(self.store)
+            return self._resolved_store
+
+        # Path 2: legacy multi-store → wrap in LegacyHybridKnowledgeStore
+        if self.stores:
+            from agentuniverse.agent.action.knowledge.store.hybrid_store import \
+                LegacyHybridKnowledgeStore
+            hybrid = LegacyHybridKnowledgeStore()
+            hybrid.name = f'_legacy_hybrid_{self.name or "knowledge"}'
+            hybrid.store_names = list(self.stores)
+            hybrid.rag_router = self.rag_router
+            hybrid.post_processors = list(self.post_processors)
+            self._resolved_store = hybrid
+            return self._resolved_store
+
+        return None
+
+    def _invalidate_store(self):
+        """Clear cached store so next access re-resolves."""
+        self._resolved_store = None
+
+    # ================================================================
+    # Internal pipeline helpers
+    # ================================================================
 
     def _load_data(self, *args: Any, **kwargs: Any) -> List[Document]:
-        # check if source is a local file or remote url
+        """Load data from the configured source."""
         if kwargs.get("source_path"):
             source_path = kwargs.get("source_path")
         else:
@@ -118,10 +161,43 @@ class Knowledge(ComponentBase):
             reader = ReaderManager().get_file_default_reader(source_type)
         return reader.load_data(source_path)
 
+    async def _async_load_data(self, *args: Any, **kwargs: Any) -> List[Document]:
+        """Async version of :meth:`_load_data`."""
+        if kwargs.get("source_path"):
+            source_path = kwargs.get("source_path")
+        else:
+            raise Exception("No file to load.")
+        url_pattern = re.compile(
+            r'^(https?:\/\/)?'
+            r'((([a-zA-Z0-9]{1,256}\.[a-zA-Z0-9]{1,6})|'
+            r'(\d{1,3}\.){3}\d{1,3})'
+            r'(:\d{1,5})?)'
+            r'(\/[a-zA-Z0-9@:%._\+~#=]*)*\/?'
+            r'(\?[a-zA-Z0-9@:%._\+~#&//=]*)?$'
+        )
+
+        if url_pattern.match(source_path):
+            source_type = "url"
+        elif os.path.isfile(source_path):
+            source_type = os.path.splitext(source_path)[1][1:]
+        else:
+            raise Exception(f"Knowledge load data error: Unknown source type:{source_path}")
+        if source_type in self.readers:
+            reader = ReaderManager().get_instance_obj(self.readers[source_type])
+        else:
+            reader = ReaderManager().get_file_default_reader(source_type)
+        return await reader.async_load_data(source_path)
+
     def _insert_process(self, origin_docs: List[Document]) -> List[Document]:
         for _processor_code in self.insert_processors:
             doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
             origin_docs = doc_processor.process_docs(origin_docs)
+        return origin_docs
+
+    async def _async_insert_process(self, origin_docs: List[Document]) -> List[Document]:
+        for _processor_code in self.insert_processors:
+            doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
+            origin_docs = await doc_processor.async_process_docs(origin_docs)
         return origin_docs
 
     def _update_process(self, origin_docs: List[Document]) -> List[Document]:
@@ -130,10 +206,22 @@ class Knowledge(ComponentBase):
             origin_docs = doc_processor.process_docs(origin_docs)
         return origin_docs
 
+    async def _async_update_process(self, origin_docs: List[Document]) -> List[Document]:
+        for _processor_code in self.update_processors:
+            doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
+            origin_docs = await doc_processor.async_process_docs(origin_docs)
+        return origin_docs
+
     def _rag_post_process(self, origin_docs: List[Document], query: Query):
         for _processor_code in self.post_processors:
             doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
             origin_docs = doc_processor.process_docs(origin_docs, query=query)
+        return origin_docs
+
+    async def _async_rag_post_process(self, origin_docs: List[Document], query: Query):
+        for _processor_code in self.post_processors:
+            doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
+            origin_docs = await doc_processor.async_process_docs(origin_docs, query=query)
         return origin_docs
 
     def _paraphrase_query(self, origin_query: Query) -> Query:
@@ -143,6 +231,17 @@ class Knowledge(ComponentBase):
             origin_query = query_paraphraser.query_paraphrase(origin_query)
         return origin_query
 
+    async def _async_paraphrase_query(self, origin_query: Query) -> Query:
+        for _paraphraser_code in self.query_paraphrasers:
+            query_paraphraser: QueryParaphraser = QueryParaphraserManager().get_instance_obj(
+                _paraphraser_code)
+            origin_query = await query_paraphraser.async_query_paraphrase(origin_query)
+        return origin_query
+
+    # ================================================================
+    # Insert
+    # ================================================================
+
     def insert_knowledge(self, **kwargs) -> None:
         """Insert the knowledge.
 
@@ -150,53 +249,60 @@ class Knowledge(ComponentBase):
         """
         document_list: List[Document] = self._load_data(**kwargs)
         document_list = self._insert_process(document_list)
-        futures = []
-        if "stores" in kwargs:
-            stores = kwargs["stores"]
+
+        resolved = self._resolve_store()
+        if resolved:
+            resolved.insert_document(document_list)
+            LOGGER.info("Knowledge insert complete.")
         else:
-            stores = self.stores
-        for _store_code in stores:
-            futures.append(
-                self.insert_executor.submit(
-                    StoreManager().get_instance_obj(_store_code).insert_document,
-                    document_list))
-        wait(futures, return_when=ALL_COMPLETED)
-        for future in futures:
-            try:
-                future.result()
-            except Exception as e:
-                traceback.print_exc()
-                LOGGER.error(f"Exception occurred in knowledge insert: {e}")
-        LOGGER.info("Knowledge insert complete.")
+            LOGGER.warning("No store configured for knowledge insert.")
+
+    async def async_insert_knowledge(self, **kwargs) -> None:
+        """Async version of :meth:`insert_knowledge`."""
+        document_list: List[Document] = await self._async_load_data(**kwargs)
+        document_list = await self._async_insert_process(document_list)
+
+        resolved = self._resolve_store()
+        if resolved:
+            await resolved.async_insert_document(document_list)
+            LOGGER.info("Knowledge insert complete.")
+        else:
+            LOGGER.warning("No store configured for knowledge insert.")
+
+    # ================================================================
+    # Update
+    # ================================================================
 
     def update_knowledge(self, **kwargs) -> None:
         """Update the knowledge.
 
-        Load data by the reader and update the documents into the store.
+        Load data by the reader and update the documents in the store.
         """
         document_list: List[Document] = self._load_data(**kwargs)
         document_list = self._update_process(document_list)
-        futures = []
-        if "stores" in kwargs:
-            stores = kwargs["stores"]
-        else:
-            stores = self.stores
-        for _store_code in stores:
-            futures.append(
-                self.insert_executor.submit(
-                    StoreManager().get_instance_obj(_store_code).update_document,
-                    document_list))
-        wait(futures, return_when=ALL_COMPLETED)
-        for future in futures:
-            try:
-                future.result()
-            except Exception as e:
-                traceback.print_exc()
-                LOGGER.error(f"Exception occurred in knowledge update: {e}")
-        LOGGER.info("Knowledge update complete.")
 
-    def _route_rag(self, query: Query):
-        return RagRouterManager().get_instance_obj(self.rag_router).rag_route(query, self.stores)
+        resolved = self._resolve_store()
+        if resolved:
+            resolved.update_document(document_list)
+            LOGGER.info("Knowledge update complete.")
+        else:
+            LOGGER.warning("No store configured for knowledge update.")
+
+    async def async_update_knowledge(self, **kwargs) -> None:
+        """Async version of :meth:`update_knowledge`."""
+        document_list: List[Document] = await self._async_load_data(**kwargs)
+        document_list = await self._async_update_process(document_list)
+
+        resolved = self._resolve_store()
+        if resolved:
+            await resolved.async_update_document(document_list)
+            LOGGER.info("Knowledge update complete.")
+        else:
+            LOGGER.warning("No store configured for knowledge update.")
+
+    # ================================================================
+    # Query
+    # ================================================================
 
     @trace_knowledge
     def query_knowledge(self, **kwargs) -> List[Document]:
@@ -206,49 +312,60 @@ class Knowledge(ComponentBase):
         """
         query = Query(**kwargs)
         query = self._paraphrase_query(query)
-        query_tasks = self._route_rag(query)
 
-        futures = []
-        for query_task in query_tasks:
-            futures.append(
-                self.query_executor.submit(
-                    StoreManager().get_instance_obj(query_task[1]).query,
-                    query_task[0]))
-        wait(futures, return_when=ALL_COMPLETED)
-        retrieved_docs = {}
-        for future in futures:
-            try:
-                task_result = future.result()
-                for _doc in task_result:
-                    if _doc.id not in retrieved_docs:
-                        retrieved_docs[_doc.id] = _doc
-            except Exception as e:
-                traceback.print_exc()
-                LOGGER.error(f"Exception occurred in knowledge query: {e}")
-        retrieved_docs = list(retrieved_docs.values())
+        resolved = self._resolve_store()
+        if not resolved:
+            LOGGER.warning("No store configured for knowledge query.")
+            return []
+
+        retrieved_docs = resolved.query(query)
         retrieved_docs = self._rag_post_process(retrieved_docs, query)
         return retrieved_docs
+
+    async def async_query_knowledge(self, **kwargs) -> List[Document]:
+        """Async version of :meth:`query_knowledge`."""
+        query = Query(**kwargs)
+        query = await self._async_paraphrase_query(query)
+
+        resolved = self._resolve_store()
+        if not resolved:
+            LOGGER.warning("No store configured for knowledge query.")
+            return []
+
+        retrieved_docs = await resolved.async_query(query)
+        retrieved_docs = await self._async_rag_post_process(retrieved_docs, query)
+        return retrieved_docs
+
+    # ================================================================
+    # Utilities
+    # ================================================================
 
     def to_llm(self, retrieved_docs: List[Document]) -> Any:
         """Transfer list docs to llm input"""
         retrieved_texts = [doc.text for doc in retrieved_docs]
         return "\n=========================================\n".join(retrieved_texts)
 
+    # ================================================================
+    # Configuration
+    # ================================================================
+
     def _initialize_by_component_configer(self,
                                           knowledge_configer: ComponentConfiger) \
             -> 'Knowledge':
-        """Initialize the reader by the ComponentConfiger object.
+        """Initialize the knowledge by the ComponentConfiger object.
 
         Args:
-            reader_configer(ComponentConfiger): A configer contains reader
+            knowledge_configer(ComponentConfiger): A configer contains knowledge
             basic info.
         Returns:
-            Reader: A reader instance.
+            Knowledge: A knowledge instance.
         """
         if knowledge_configer.name:
             self.name = knowledge_configer.name
         if knowledge_configer.description:
             self.description = knowledge_configer.description
+        if hasattr(knowledge_configer, "store"):
+            self.store = knowledge_configer.store
         if hasattr(knowledge_configer, "stores"):
             self.stores = knowledge_configer.stores
         if hasattr(knowledge_configer, "query_paraphrasers"):
@@ -265,6 +382,10 @@ class Knowledge(ComponentBase):
             self.readers = knowledge_configer.readers
         if hasattr(knowledge_configer, "tracing"):
             self.tracing = knowledge_configer.tracing
+
+        # Invalidate cached store so it re-resolves with new config
+        self._invalidate_store()
+
         return self
 
     def create_copy(self):
@@ -277,4 +398,6 @@ class Knowledge(ComponentBase):
         copied.readers = deepcopy(self.readers)
         if self.ext_info is not None:
             copied.ext_info = deepcopy(self.ext_info)
+        # Clear cached store on copy — each copy resolves independently
+        copied._resolved_store = None
         return copied

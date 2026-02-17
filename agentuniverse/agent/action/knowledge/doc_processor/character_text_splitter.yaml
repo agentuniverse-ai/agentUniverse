@@ -1,8 +1,8 @@
 name: 'character_text_splitter'
-description: 'langchain character text splitter'
+description: 'character text splitter'
 chunk_size: 200
 chunk_overlap: 20
-separators: "/n/n"
+separator: "\n\n"
 metadata:
   type: 'DOC_PROCESSOR'
   module: 'agentuniverse.agent.action.knowledge.doc_processor.character_text_splitter'

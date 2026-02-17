@@ -8,7 +8,6 @@
 
 from typing import List, Optional, Any
 
-from langchain_community.embeddings.openai import OpenAIEmbeddings
 from openai import OpenAI, AsyncOpenAI, BadRequestError
 from pydantic import Field
 
@@ -92,11 +91,6 @@ class OpenAIEmbedding(Embedding):
             return [embedding.embedding for embedding in data]
         except BadRequestError as e:
             raise ValueError(e.message)
-
-    def as_langchain(self) -> OpenAIEmbeddings:
-        """Convert the agentUniverse(aU) openai embedding class to the langchain openai embedding class."""
-        return OpenAIEmbeddings(openai_api_key=self.openai_api_key,
-                                client=self.client.embeddings, async_client=self.async_client.embeddings)
 
     def _initialize_by_component_configer(self,
                                           embedding_configer: ComponentConfiger) \

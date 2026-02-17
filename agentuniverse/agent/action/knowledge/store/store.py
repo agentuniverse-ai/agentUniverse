@@ -5,6 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: store.py
+import asyncio
 from typing import Any, List, Optional
 
 from agentuniverse.base.component.component_base import ComponentEnum
@@ -21,6 +22,10 @@ class Store(ComponentBase):
     Store of the knowledge, store class is used to store knowledge
     and provide retrieval capabilities,
     vector storage, such as ChromaDB store, Qdrant Store, or non-vector storage, such as Redis Store.
+
+    All async methods default to running the synchronous counterpart via
+    ``asyncio.to_thread``.  Subclasses with native async clients should
+    override the async methods for better performance.
     """
     component_type: ComponentEnum = ComponentEnum.STORE
     name: Optional[str] = None
@@ -66,7 +71,7 @@ class Store(ComponentBase):
 
     async def async_query(self, query: Query, **kwargs) -> List[Document]:
         """Asynchronously query documents."""
-        raise NotImplementedError
+        return await asyncio.to_thread(self.query, query, **kwargs)
 
     def insert_document(self, documents: List[Document], **kwargs):
         """Insert documents into the store."""
@@ -74,7 +79,7 @@ class Store(ComponentBase):
 
     async def async_insert_document(self, documents: List[Document], **kwargs):
         """Asynchronously insert documents into the store."""
-        raise NotImplementedError
+        return await asyncio.to_thread(self.insert_document, documents, **kwargs)
 
     def delete_document(self, document_id: str, **kwargs):
         """Delete the specific document by the document id."""
@@ -82,7 +87,7 @@ class Store(ComponentBase):
 
     async def async_delete_document(self, document_id: str, **kwargs):
         """Asynchronously delete the specific document by the document id."""
-        raise NotImplementedError
+        return await asyncio.to_thread(self.delete_document, document_id, **kwargs)
 
     def upsert_document(self, documents: List[Document], **kwargs):
         """Upsert document into the store."""
@@ -90,7 +95,7 @@ class Store(ComponentBase):
 
     async def async_upsert_document(self, documents: List[Document], **kwargs):
         """Asynchronously upsert documents into the store."""
-        raise NotImplementedError
+        return await asyncio.to_thread(self.upsert_document, documents, **kwargs)
 
     def update_document(self, documents: List[Document], **kwargs):
         """Update document into the store."""
@@ -98,7 +103,7 @@ class Store(ComponentBase):
 
     async def async_update_document(self, documents: List[Document], **kwargs):
         """Asynchronously update documents into the store."""
-        raise NotImplementedError
+        return await asyncio.to_thread(self.update_document, documents, **kwargs)
 
     def create_copy(self):
         # TODO: Store copy need to solve thread lock problem
