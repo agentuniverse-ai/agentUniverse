@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from agentuniverse_product.service.model.knowledge_dto import KnowledgeDTO
 from agentuniverse_product.service.model.llm_dto import LlmDTO
-from agentuniverse_product.service.model.planner_dto import PlannerDTO
 from agentuniverse_product.service.model.prompt_dto import PromptDTO
 from agentuniverse_product.service.model.tool_dto import ToolDTO
 
@@ -26,6 +25,8 @@ class AgentDTO(BaseModel):
     llm: Optional[LlmDTO] = Field(description="agent llm", default=None)
     tool: Optional[list[ToolDTO]] = Field(description="agent tool list", default=[])
     memory: Optional[str] = Field(description="agent memory id", default='')
-    planner: Optional[PlannerDTO] = Field(description="agent planner", default=None)
+    agent_type: Optional[str] = Field(description="agent type: react/rag/peer/workflow", default=None)
+    workflow_id: Optional[str] = Field(description="workflow id for workflow agents", default=None)
+    members: Optional[list] = Field(description="peer agent members", default=None)
     knowledge: Optional[list[KnowledgeDTO]] = Field(description="agent knowledge list", default=[])
     mtime: Optional[float] = Field(description="product last modification time.", default=None)
