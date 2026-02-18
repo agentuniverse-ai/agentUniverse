@@ -1,5 +1,6 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
+import asyncio
 from typing import Optional, Literal, List
 
 from mcp.types import CallToolResult
@@ -11,7 +12,6 @@ from agentuniverse.base.config.component_configer.configers.tool_configer import
     ToolConfiger
 from agentuniverse.base.context.mcp_session_manager import MCPSessionManager, \
     MCPTempClient
-from agentuniverse.base.util.async_util import run_async_from_sync
 
 
 # @Time    : 2025/4/14 18:11
@@ -37,34 +37,38 @@ class MCPTool(Tool):
         return self.origin_tool_name if self.origin_tool_name else self.name
 
     def execute(self, **kwargs) -> CallToolResult:
-        session = MCPSessionManager().get_mcp_server_session_sync(
+        session = MCPSessionManager().get_mcp_server_session(
             server_name=self.server_name,
             **self.get_mcp_server_connect_args()
         )
-        result = MCPSessionManager().run_async(session.call_tool, self.tool_name, kwargs)
+        result = MCPSessionManager().managed_stack.run_async(
+            session.call_tool, self.tool_name, kwargs
+        )
         return result
 
     async def async_execute(self, **kwargs) -> CallToolResult:
-        session = await MCPSessionManager().get_mcp_server_session(
+        session = await MCPSessionManager().get_mcp_server_session_async(
             server_name=self.server_name,
             **self.get_mcp_server_connect_args()
         )
-        result = await session.call_tool(self.tool_name, kwargs)
+        result = await asyncio.to_thread(
+            MCPSessionManager().managed_stack.run_async,
+            session.call_tool, self.tool_name, kwargs
+        )
         return result
 
-
     def get_mcp_server_connect_args(self) -> dict:
-        if self.transport == "sse":
+        if self.transport == "stdio":
             connect_args = {
-                'transport': self.transport,
-                'url': self.url
-            }
-        elif self.transport == "stdio":
-            return {
                 'transport': self.transport,
                 "command": self.command,
                 "args": self.args,
                 'env': self.env
+            }
+        elif self.transport == "sse":
+            connect_args = {
+                'transport': self.transport,
+                'url': self.url
             }
         elif self.transport == "streamable_http":
             connect_args = {
@@ -89,14 +93,12 @@ class MCPTool(Tool):
         self._initialize_by_component_configer(component_configer)
         return self
 
-    async def get_tool_info(self):
+    def get_tool_info(self):
         if self.args_model_schema is not None:
             return
 
-        async with MCPTempClient(
-            self.get_mcp_server_connect_args()
-        ) as client:
-            tools_list = await client.session.list_tools()
+        with MCPTempClient(self.get_mcp_server_connect_args()) as client:
+            tools_list = client.list_tools()
 
         tool_info = next(
             (t for t in tools_list.tools if t.name == self.tool_name),
@@ -122,6 +124,5 @@ class MCPTool(Tool):
         if not self.server_name:
             # use an unique name to manage session
             self.server_name = self.name
-        coro = self.get_tool_info()
-        run_async_from_sync(coro, timeout=10)
+        self.get_tool_info()
         return self

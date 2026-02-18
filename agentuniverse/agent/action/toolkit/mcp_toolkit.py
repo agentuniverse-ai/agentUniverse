@@ -1,6 +1,5 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-import asyncio
 # @Time    : 2024/3/13 14:29
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
@@ -13,7 +12,6 @@ from agentuniverse.agent.action.toolkit.toolkit import Toolkit
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
 from agentuniverse.base.context.mcp_session_manager import MCPTempClient
-from agentuniverse.base.util.async_util import run_async_from_sync
 
 
 class MCPToolkit(Toolkit):
@@ -28,19 +26,18 @@ class MCPToolkit(Toolkit):
 
     separator: Optional[str] = '__'
 
-
     def get_mcp_server_connect_args(self) -> dict:
-        if self.transport == "sse":
+        if self.transport == "stdio":
             connect_args = {
-                'transport': self.transport,
-                'url': self.url
-            }
-        elif self.transport == "stdio":
-            return {
                 'transport': self.transport,
                 "command": self.command,
                 "args": self.args,
                 'env': self.env
+            }
+        elif self.transport == "sse":
+            connect_args = {
+                'transport': self.transport,
+                'url': self.url
             }
         elif self.transport == "streamable_http":
             connect_args = {
@@ -68,7 +65,6 @@ class MCPToolkit(Toolkit):
             self._refresh_tool_info()
         return [f'{self.name}{self.separator}{tool_name}' for tool_name in self.include]
 
-
     @property
     def tool_descriptions(self) -> list:
         if self.always_refresh:
@@ -81,12 +77,10 @@ class MCPToolkit(Toolkit):
     def func_call_list(self) -> list:
         raise NotImplementedError
 
+    def get_all_tools(self):
+        with MCPTempClient(self.get_mcp_server_connect_args()) as client:
+            tools_list = client.list_tools()
 
-    async def get_all_tools(self):
-        async with MCPTempClient(
-            self.get_mcp_server_connect_args()
-        ) as client:
-            tools_list = await client.session.list_tools()
         tools = tools_list.tools
         if not self.include:
             self.include = [tool.name for tool in tools]
@@ -114,8 +108,5 @@ class MCPToolkit(Toolkit):
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'MCPToolkit':
         if not self.server_name:
             self.server_name = self.name
-        coro = self.get_all_tools()
-        run_async_from_sync(coro, 60)
+        self.get_all_tools()
         return self
-
-

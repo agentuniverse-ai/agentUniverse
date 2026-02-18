@@ -16,6 +16,7 @@ from .web_util import request_param, service_run_queue, make_standard_response, 
     FlaskServerManager
 from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
+from ...base.context.mcp_session_manager import MCPSessionManager
 from ...base.util.logging.logging_util import LOGGER
 
 
@@ -71,6 +72,7 @@ def before():
         context_prefix=get_context_prefix()
     ).info("Before request.")
     g.start_time = time.time()
+    MCPSessionManager().init_session()
 
 
 @app.after_request
@@ -87,8 +89,13 @@ def after_request(response):
 @app.teardown_request
 def teardown_resource(exception):
     """
-    Clear the context
+    Clear the context and close MCP sessions.
+
+    MCP session close MUST happen here (in the request thread) rather than
+    in end_context(), because the ManagedExitStack is owned by this request.
+    Sub-threads that received sessions via save/recover only detach references.
     """
+    MCPSessionManager().close_session()
     ContextCoordinator.end_context()
 
 
