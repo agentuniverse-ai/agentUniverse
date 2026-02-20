@@ -72,15 +72,15 @@ class AgentUniverseProduct(object):
         system_sqldb_wrapper = SQLDBWrapperManager().get_instance_obj('__system_db__')
         if system_sqldb_wrapper is None:
             raise Exception('system db has not been initialized.')
-        with system_sqldb_wrapper.sql_database._engine.connect() as conn:
+        with system_sqldb_wrapper.engine.connect() as conn:
             # init session db
             if not conn.dialect.has_table(conn, SESSION_TABLE_NAME):
                 SessionORM.metadata.create_all(
-                    system_sqldb_wrapper.sql_database._engine)
+                    system_sqldb_wrapper.engine)
             # init message db
             if not conn.dialect.has_table(conn, MESSAGE_TABLE_NAME):
                 MessageORM.metadata.create_all(
-                    system_sqldb_wrapper.sql_database._engine)
+                    system_sqldb_wrapper.engine)
 
     def __scan_and_register_product(self, app_configer: AppConfiger):
         """Scan the product component directory and register the product components.

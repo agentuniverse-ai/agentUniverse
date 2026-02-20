@@ -154,7 +154,7 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
 
     def _create_table_if_not_exists(self) -> None:
         """Create the db table if it does not exist."""
-        with self._sqldb_wrapper.sql_database._engine.connect() as conn:
+        with self._sqldb_wrapper.engine.connect() as conn:
             if not conn.dialect.has_table(conn, self.sqldb_table_name):
                 self.memory_converter.get_sql_model_class().__table__.create(conn)
 

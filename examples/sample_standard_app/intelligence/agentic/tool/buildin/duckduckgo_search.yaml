@@ -1,13 +1,9 @@
 name: 'duckduckgo_search'
-description: ''
+description: 'Search the web using DuckDuckGo and return results.'
 tool_type: 'api'
 input_keys: ['input']
-langchain:
-  module: langchain_community.tools
-  class_name: DuckDuckGoSearchResults
-  init_params:
-    backend: news
+backend: news
 metadata:
   type: 'TOOL'
-  module: 'agentuniverse.agent.action.tool.common_tool.langchain_tool'
-  class: 'LangChainTool'
+  module: 'agentuniverse.agent.action.tool.common_tool.duckduckgo_search_tool'
+  class: 'DuckDuckGoSearchTool'
