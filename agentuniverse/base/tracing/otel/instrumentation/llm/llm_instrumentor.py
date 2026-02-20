@@ -238,20 +238,25 @@ class StreamingResultProcessor:
         """Process async streaming result."""
         llm_output = []
         usage = None
-        first_token = True
+        first_token_recorded = False
 
         try:
             async for chunk in result:
-                if first_token:
-                    first_token = False
-                    duration = time.time() - self.start_time
-                    self.metrics_recorder.record_first_token(duration,
-                                                             self.labels)
-                    LLMSpanAttributesSetter.set_first_token_attributes(
-                        self.span, duration)
+                # Extract text content: LLMStreamEvent uses text_delta, LLMOutput uses text
+                text_delta = getattr(chunk, 'text_delta', None)
+                text = text_delta if text_delta else (getattr(chunk, 'text', None) or None)
 
-                llm_output.append(chunk.text)
-                if chunk.usage:
+                if text:
+                    llm_output.append(text)
+                    if not first_token_recorded:
+                        first_token_recorded = True
+                        duration = time.time() - self.start_time
+                        self.metrics_recorder.record_first_token(duration,
+                                                                 self.labels)
+                        LLMSpanAttributesSetter.set_first_token_attributes(
+                            self.span, duration)
+
+                if getattr(chunk, 'usage', None):
                     usage = chunk.usage
                 yield chunk
             if usage:
@@ -270,21 +275,25 @@ class StreamingResultProcessor:
         """Process sync streaming result."""
         llm_output = []
         usage = None
-        first_token = True
+        first_token_recorded = False
 
         try:
             for chunk in result:
-                if first_token:
-                    first_token = False
-                    duration = time.time() - self.start_time
-                    self.metrics_recorder.record_first_token(duration,
-                                                             self.labels)
-                    LLMSpanAttributesSetter.set_first_token_attributes(
-                        self.span, duration)
+                # Extract text content: LLMStreamEvent uses text_delta, LLMOutput uses text
+                text_delta = getattr(chunk, 'text_delta', None)
+                text = text_delta if text_delta else (getattr(chunk, 'text', None) or None)
 
-                llm_output.append(
-                    chunk.text if hasattr(chunk, 'text') else str(chunk))
-                if hasattr(chunk, 'usage') and chunk.usage:
+                if text:
+                    llm_output.append(text)
+                    if not first_token_recorded:
+                        first_token_recorded = True
+                        duration = time.time() - self.start_time
+                        self.metrics_recorder.record_first_token(duration,
+                                                                 self.labels)
+                        LLMSpanAttributesSetter.set_first_token_attributes(
+                            self.span, duration)
+
+                if getattr(chunk, 'usage', None):
                     usage = chunk.usage
                 yield chunk
             if usage:

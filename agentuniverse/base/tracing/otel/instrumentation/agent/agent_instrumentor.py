@@ -221,12 +221,18 @@ class AgentSpanAttributesSetter:
 
     @staticmethod
     def set_success_attributes(span: Span, duration: float,
-                               result: OutputObject) -> None:
+                               result) -> None:
         """Set success-related span attributes."""
         span.set_attribute(SpanAttributes.AGENT_DURATION, duration)
         span.set_attribute(SpanAttributes.AGENT_STATUS, "success")
+        if isinstance(result, OutputObject):
+            output_data = result.to_dict()
+        elif isinstance(result, dict):
+            output_data = result
+        else:
+            output_data = str(result)
         span.set_attribute(SpanAttributes.AGENT_OUTPUT,
-                           safe_json_dumps(result.to_dict(), ensure_ascii=False))
+                           safe_json_dumps(output_data, ensure_ascii=False))
         span.set_attribute(SpanAttributes.AGENT_USAGE_TOTAL_TOKENS,
                            get_current_token_usage().total_tokens)
         span.set_attribute(SpanAttributes.AGENT_USAGE_COMPLETION_TOKENS,
