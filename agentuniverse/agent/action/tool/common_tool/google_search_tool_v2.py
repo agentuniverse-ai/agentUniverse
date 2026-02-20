@@ -6,14 +6,15 @@
 # @FileName: google_search_tool.py
 
 import json
-import requests
 from typing import Optional, Dict, Any, List
-from urllib.parse import quote_plus
+
+import httpx
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.util.env_util import get_from_env
-from langchain_community.utilities.google_serper import GoogleSerperAPIWrapper
 from pydantic import Field
+
+SERPER_API_URL = "https://google.serper.dev/search"
 
 
 class GoogleSearchTool(Tool):
@@ -36,11 +37,49 @@ class GoogleSearchTool(Tool):
     default_gl: str = Field(default="us", description="地理位置代码")
     default_hl: str = Field(default="en", description="语言代码")
 
-    def execute(self, query: str, search_type: str = "search", k: int = None, 
+    def _build_request(self, query: str, search_type: str, k: int, gl: str, hl: str) -> tuple:
+        headers = {
+            "X-API-KEY": self.serper_api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "q": query,
+            "num": k,
+            "gl": gl,
+            "hl": hl,
+            "type": search_type,
+        }
+        return headers, payload
+
+    def _parse_results(self, response_json: dict) -> str:
+        snippets = []
+        if "answerBox" in response_json:
+            box = response_json["answerBox"]
+            answer = box.get("answer") or box.get("snippet") or box.get("snippetHighlighted")
+            if answer:
+                snippets.append(str(answer))
+
+        if "knowledgeGraph" in response_json:
+            kg = response_json["knowledgeGraph"]
+            title = kg.get("title", "")
+            description = kg.get("description", "")
+            if title:
+                snippets.append(f"{title}: {description}")
+
+        for result in response_json.get("organic", []):
+            snippet = result.get("snippet")
+            if snippet:
+                snippets.append(snippet)
+
+        if not snippets:
+            return "No good Google Search Result was found"
+        return "\n\n".join(snippets)
+
+    def execute(self, query: str, search_type: str = "search", k: int = None,
                 gl: str = None, hl: str = None, **kwargs) -> str:
         """
         执行Google搜索
-        
+
         Args:
             query: 搜索查询词
             search_type: 搜索类型 ("search", "images", "news", "places")
@@ -48,26 +87,22 @@ class GoogleSearchTool(Tool):
             gl: 地理位置代码
             hl: 语言代码
             **kwargs: 其他参数
-            
+
         Returns:
             格式化的搜索结果字符串
         """
         if not self.serper_api_key:
             return self._get_mock_result(query)
-            
+
         k = k or self.default_k
         gl = gl or self.default_gl
         hl = hl or self.default_hl
-        
+
         try:
-            search = GoogleSerperAPIWrapper(
-                serper_api_key=self.serper_api_key, 
-                k=k, 
-                gl=gl, 
-                hl=hl, 
-                type=search_type
-            )
-            result = search.run(query=query)
+            headers, payload = self._build_request(query, search_type, k, gl, hl)
+            response = httpx.post(SERPER_API_URL, headers=headers, json=payload, timeout=20)
+            response.raise_for_status()
+            result = self._parse_results(response.json())
             return self._format_search_result(result, query, search_type)
         except Exception as e:
             return f"搜索出错: {str(e)}"
@@ -77,20 +112,17 @@ class GoogleSearchTool(Tool):
         """异步执行Google搜索"""
         if not self.serper_api_key:
             return self._get_mock_result(query)
-            
+
         k = k or self.default_k
         gl = gl or self.default_gl
         hl = hl or self.default_hl
-        
+
         try:
-            search = GoogleSerperAPIWrapper(
-                serper_api_key=self.serper_api_key, 
-                k=k, 
-                gl=gl, 
-                hl=hl, 
-                type=search_type
-            )
-            result = await search.arun(query=query)
+            headers, payload = self._build_request(query, search_type, k, gl, hl)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(SERPER_API_URL, headers=headers, json=payload, timeout=20)
+                response.raise_for_status()
+                result = self._parse_results(response.json())
             return self._format_search_result(result, query, search_type)
         except Exception as e:
             return f"搜索出错: {str(e)}"
@@ -102,7 +134,7 @@ class GoogleSearchTool(Tool):
             if isinstance(result, str) and result.startswith('['):
                 data = json.loads(result)
                 formatted = f"🔍 Google {search_type.title()} 搜索结果 (查询: {query}):\n\n"
-                
+
                 for i, item in enumerate(data[:5], 1):  # 只显示前5个结果
                     if isinstance(item, dict):
                         title = item.get('title', '无标题')
@@ -111,7 +143,7 @@ class GoogleSearchTool(Tool):
                         formatted += f"{i}. **{title}**\n"
                         formatted += f"   🔗 {link}\n"
                         formatted += f"   📝 {snippet}\n\n"
-                
+
                 return formatted
             else:
                 # 如果不是JSON格式，直接返回原始结果
@@ -157,11 +189,41 @@ class GoogleScholarSearchTool(Tool):
     serper_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("SERPER_API_KEY"))
     default_k: int = Field(default=10, description="默认返回结果数量")
 
-    def execute(self, query: str, year: str = None, author: str = None, 
+    def _build_request(self, query: str, k: int) -> tuple:
+        headers = {
+            "X-API-KEY": self.serper_api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "q": query,
+            "num": k,
+            "gl": "us",
+            "hl": "en",
+        }
+        return headers, payload
+
+    def _parse_results(self, response_json: dict) -> str:
+        snippets = []
+        if "answerBox" in response_json:
+            box = response_json["answerBox"]
+            answer = box.get("answer") or box.get("snippet") or box.get("snippetHighlighted")
+            if answer:
+                snippets.append(str(answer))
+
+        for result in response_json.get("organic", []):
+            snippet = result.get("snippet")
+            if snippet:
+                snippets.append(snippet)
+
+        if not snippets:
+            return "No good Google Search Result was found"
+        return "\n\n".join(snippets)
+
+    def execute(self, query: str, year: str = None, author: str = None,
                 journal: str = None, k: int = None, **kwargs) -> str:
         """
         执行Google学术搜索
-        
+
         Args:
             query: 搜索查询词
             year: 年份筛选 (如: "2020..2024")
@@ -169,27 +231,23 @@ class GoogleScholarSearchTool(Tool):
             journal: 期刊筛选
             k: 返回结果数量
             **kwargs: 其他参数
-            
+
         Returns:
             格式化的学术搜索结果字符串
         """
         if not self.serper_api_key:
             return self._get_mock_scholar_result(query)
-            
+
         k = k or self.default_k
-        
+
         # 构建学术搜索查询
         scholar_query = self._build_scholar_query(query, year, author, journal)
-        
+
         try:
-            search = GoogleSerperAPIWrapper(
-                serper_api_key=self.serper_api_key, 
-                k=k, 
-                gl="us", 
-                hl="en", 
-                type="search"
-            )
-            result = search.run(query=scholar_query)
+            headers, payload = self._build_request(scholar_query, k)
+            response = httpx.post(SERPER_API_URL, headers=headers, json=payload, timeout=20)
+            response.raise_for_status()
+            result = self._parse_results(response.json())
             return self._format_scholar_result(result, query, scholar_query)
         except Exception as e:
             return f"学术搜索出错: {str(e)}"
@@ -199,35 +257,32 @@ class GoogleScholarSearchTool(Tool):
         """异步执行Google学术搜索"""
         if not self.serper_api_key:
             return self._get_mock_scholar_result(query)
-            
+
         k = k or self.default_k
         scholar_query = self._build_scholar_query(query, year, author, journal)
-        
+
         try:
-            search = GoogleSerperAPIWrapper(
-                serper_api_key=self.serper_api_key, 
-                k=k, 
-                gl="us", 
-                hl="en", 
-                type="search"
-            )
-            result = await search.arun(query=scholar_query)
+            headers, payload = self._build_request(scholar_query, k)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(SERPER_API_URL, headers=headers, json=payload, timeout=20)
+                response.raise_for_status()
+                result = self._parse_results(response.json())
             return self._format_scholar_result(result, query, scholar_query)
         except Exception as e:
             return f"学术搜索出错: {str(e)}"
 
-    def _build_scholar_query(self, query: str, year: str = None, author: str = None, 
+    def _build_scholar_query(self, query: str, year: str = None, author: str = None,
                            journal: str = None) -> str:
         """构建学术搜索查询"""
         scholar_query = f"site:scholar.google.com {query}"
-        
+
         if author:
             scholar_query += f" author:\"{author}\""
         if journal:
             scholar_query += f" journal:\"{journal}\""
         if year:
             scholar_query += f" {year}"
-            
+
         return scholar_query
 
     def _format_scholar_result(self, result: str, original_query: str, scholar_query: str) -> str:
@@ -236,17 +291,17 @@ class GoogleScholarSearchTool(Tool):
             if isinstance(result, str) and result.startswith('['):
                 data = json.loads(result)
                 formatted = f"📚 Google学术搜索结果 (查询: {original_query}):\n\n"
-                
+
                 for i, item in enumerate(data[:5], 1):
                     if isinstance(item, dict):
                         title = item.get('title', '无标题')
                         link = item.get('link', '')
                         snippet = item.get('snippet', '无摘要')
-                        
+
                         formatted += f"{i}. **{title}**\n"
                         formatted += f"   🔗 {link}\n"
                         formatted += f"   📖 {snippet}\n\n"
-                
+
                 return formatted
             else:
                 return f"📚 Google学术搜索结果 (查询: {original_query}):\n\n{result}"
