@@ -85,6 +85,10 @@ class Prompt(ComponentBase):
             if k == "metadata":
                 continue
 
+            # Backward compat: expose every YAML field as an instance attribute
+            # so that getattr(prompt, 'introduction', '') etc. still works.
+            self.__dict__[k] = v
+
             # Classify into AgentPromptModel buckets
             if k in named_fields:
                 model_kwargs[k] = v

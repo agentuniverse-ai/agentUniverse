@@ -4,21 +4,17 @@
 # @Author  : jijiawei
 # @Email   : jijiawei.jjw@antgroup.com
 # @FileName: recommend_sop_agent.py
-from langchain_core.output_parsers import StrOutputParser
-
-from agentuniverse.base.util.prompt_util import process_llm_token
-
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
-
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
+from agentuniverse.ai_context.agent_context import AgentContext
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.llm.llm import LLM
-from agentuniverse.prompt.prompt import Prompt
+from agentuniverse.prompt.chat_prompt import ChatPrompt
 from basic_sop_app.intelligence.utils.constant import product_info
 
 
@@ -56,13 +52,9 @@ class RecommendSopAgent(AgentTemplate):
         """
         return {**agent_result}
 
-    def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
-        memory: Memory = self.process_memory(agent_input, **kwargs)
-        llm: LLM = self.process_llm(**kwargs)
-        return self.customized_execute(input_object, agent_input, memory, llm, **kwargs)
-
-    def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory,
-                           llm: LLM, **kwargs) -> dict:
+    def customized_execute(self, input_object: InputObject, agent_input: dict,
+                           memory: Memory, llm: LLM,
+                           agent_context: AgentContext = None, **kwargs) -> dict:
 
         # invoke choose_product_info_agent to target required items
         choose_product_info_agent: Agent = AgentManager().get_instance_obj('choose_product_info_agent')
@@ -104,13 +96,13 @@ class RecommendSopAgent(AgentTemplate):
         agent_input['product_names'] = product_names
         agent_input['product_recommendation'] = product_recommendation
 
-        # process prompt and token
-        prompt: Prompt = self.process_prompt(agent_input, **kwargs)
-        process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
+        # process prompt and render messages
+        prompt: ChatPrompt = self.process_prompt(agent_input, **kwargs)
+        messages = prompt.render(**agent_input)
 
         # invoke llm
-        chain = prompt.as_langchain() | llm.as_langchain_runnable(
-            self.agent_model.llm_params()) | StrOutputParser()
-        res = self.invoke_chain(chain, agent_input, input_object, **kwargs)
+        llm = agent_context.build_llm()
+        llm_output = self.invoke_llm(llm, messages, input_object, agent_context=agent_context)
+        res = llm_output.text
         LOGGER.info(f"product recommend sop agent res: {res}")
         return {'output': res}

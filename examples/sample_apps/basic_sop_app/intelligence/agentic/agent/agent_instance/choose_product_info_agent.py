@@ -7,8 +7,7 @@
 # @FileName: choose_product_info_agent.py
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
-from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
-from langchain_core.utils.json import parse_json_markdown
+from agentuniverse.base.util.common_util import parse_json_markdown
 
 
 class ChooseProductInfoAgent(AgentTemplate):
