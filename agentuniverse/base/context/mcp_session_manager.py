@@ -107,8 +107,15 @@ class ManagedExitStack:
         """Signal the owner task to close all CMs and shut down the portal."""
         try:
             self._send_cmd('close')
+        except RuntimeError:
+            # Portal may already be stopped (e.g. background thread exited);
+            # proceed to shut down the portal context manager anyway.
+            pass
         finally:
-            self._portal_cm.__exit__(None, None, None)
+            try:
+                self._portal_cm.__exit__(None, None, None)
+            except RuntimeError:
+                pass
 
 
 class MCPTempClient:
@@ -240,7 +247,12 @@ class MCPSessionManager:
         """
         stack = self.__managed_stack.get(None)
         if stack is not None:
-            stack.close()
+            try:
+                stack.close()
+            except RuntimeError:
+                # Portal may already have been shut down; ignore and
+                # continue with ContextVar cleanup.
+                pass
         self.__managed_stack.set(None)
         self.__mcp_session_dict.set(None)
 
