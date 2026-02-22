@@ -2,6 +2,7 @@ info:
   name: 'openai_protocol_reviewing_agent'
   description: 'demo openai protocol reviewing agent'
 profile:
+  prompt_version: 'default_reviewing_agent.cn'
   llm_model:
     name: 'qwen_llm'
     temperature: 0.1
