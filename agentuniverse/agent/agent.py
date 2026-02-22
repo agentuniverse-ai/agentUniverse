@@ -736,3 +736,21 @@ class Agent(ComponentBase, ABC):
         if self.agent_model is not None:
             copied.agent_model = self.agent_model.model_copy(deep=True)
         return copied
+
+    # ------------------------------------------------------------------
+    # AgentContext helpers (overridable by subclasses)
+    # ------------------------------------------------------------------
+
+    def _create_agent_context(self, input_object: InputObject,
+                              agent_input: dict, memory: Memory) -> AgentContext:
+        """Create an AgentContext for this run.
+
+        Subclasses may override to customise initialisation.
+        """
+        return AgentContext.create(
+            agent_model=self.agent_model,
+            session_id=agent_input.get('session_id', ''),
+            input_dict=agent_input,
+            memory=memory,
+            output_stream=input_object.get_data('output_stream'),
+        )
