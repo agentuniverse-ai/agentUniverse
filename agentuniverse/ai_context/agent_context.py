@@ -8,8 +8,10 @@
 
 from __future__ import annotations
 
+import base64
 import string
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
@@ -131,6 +133,10 @@ class AgentContext(BaseModel):
         user_msg = _build_user_message(profile, input_dict)
         if user_msg is not None:
             current_messages.append(user_msg)
+
+        # -- Multimodal content (images / audio) --
+        _append_image_messages(current_messages, input_dict.get('image_urls') or [])
+        _append_audio_message(current_messages, input_dict.get('audio_url') or '')
 
         # -- Chat history from memory --
         chat_history: List[Message] = []
@@ -397,3 +403,47 @@ def _build_user_message(
         return None
     content = _render_template(instruction, input_dict)
     return Message(type=ChatMessageEnum.HUMAN, content=content)
+
+
+_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg")
+
+
+def _append_image_messages(
+    messages: List[Message],
+    image_urls: List,
+) -> None:
+    """Append multimodal image messages for each image URL."""
+    if not image_urls:
+        return
+    for image_url in image_urls:
+        if isinstance(image_url, dict) and "url" in image_url:
+            content = [{"type": "image_url", "image_url": image_url}]
+            messages.append(Message(type=ChatMessageEnum.HUMAN, content=content))
+            continue
+
+        parsed = urlparse(image_url)
+        if parsed.scheme in ("http", "https"):
+            content = [{"type": "image_url", "image_url": {"url": image_url}}]
+            messages.append(Message(type=ChatMessageEnum.HUMAN, content=content))
+        elif parsed.scheme == "file" or not parsed.scheme:
+            if parsed.path.lower().endswith(_IMAGE_EXTENSIONS):
+                with open(parsed.path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                    ext = parsed.path.lower().rsplit(".", 1)[-1]
+                    mime = f"image/{ext}"
+                    content = [{"type": "image_url",
+                                "image_url": {"url": f"data:{mime};base64,{b64}"}}]
+                    messages.append(Message(type=ChatMessageEnum.HUMAN, content=content))
+
+
+def _append_audio_message(
+    messages: List[Message],
+    audio_url: str,
+) -> None:
+    """Append a multimodal audio message for the given audio URL."""
+    if not audio_url:
+        return
+    parsed = urlparse(audio_url)
+    if parsed.scheme in ("http", "https"):
+        content = [{"type": "input_audio", "input_audio": {"data": audio_url}}]
+        messages.append(Message(type=ChatMessageEnum.HUMAN, content=content))
