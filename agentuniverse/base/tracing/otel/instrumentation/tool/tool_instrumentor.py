@@ -30,7 +30,8 @@ from agentuniverse.agent.memory.conversation_memory.conversation_memory_module i
 from agentuniverse.base.annotation.trace import _get_tool_info, \
     InvocationChainContext
 from agentuniverse.base.tracing.au_trace_manager import init_new_token_usage, \
-    get_current_token_usage, add_current_token_usage_to_parent
+    get_current_token_usage, add_current_token_usage_to_parent, \
+    remove_token_usage
 from .consts import (
     INSTRUMENTOR_NAME,
     INSTRUMENTOR_VERSION,
@@ -90,7 +91,10 @@ class ToolSpanManager:
 
     def cleanup(self):
         """Cleanup span and context."""
+        span_id = self.span.context.span_id if self.span else None
         add_current_token_usage_to_parent()
+        if span_id:
+            remove_token_usage(span_id)
         if self.span:
             self.span.end()
             self.span = None
@@ -128,15 +132,16 @@ class ToolMetricsRecorder:
         self.metrics[MetricNames.TOOL_CALL_DURATION].record(duration, error_labels)
 
     def record_total_token_usage(self, labels: Dict[str, str]) -> None:
-        """Record start of Agent call."""
-        self.metrics[MetricNames.TOOL_TOTAL_TOKENS].record(get_current_token_usage().total_tokens, labels)
-        self.metrics[MetricNames.TOOL_PROMPT_TOKENS].record(get_current_token_usage().prompt_tokens, labels)
+        """Record accumulated token usage for this tool span."""
+        usage = get_current_token_usage()
+        self.metrics[MetricNames.TOOL_TOTAL_TOKENS].record(usage.total_tokens, labels)
+        self.metrics[MetricNames.TOOL_PROMPT_TOKENS].record(usage.prompt_tokens, labels)
         self.metrics[MetricNames.TOOL_COMPLETION_TOKENS].record(
-            get_current_token_usage().completion_tokens, labels)
+            usage.completion_tokens, labels)
         self.metrics[MetricNames.TOOL_REASONING_TOKENS].record(
-            get_current_token_usage().reasoning_tokens, labels)
+            usage.reasoning_tokens, labels)
         self.metrics[MetricNames.TOOL_CACHED_TOKENS].record(
-            get_current_token_usage().cached_tokens, labels)
+            usage.cached_tokens, labels)
 
 
 class ToolSpanAttributesSetter:

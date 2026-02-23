@@ -10,15 +10,11 @@ from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.template.agent_template import AgentTemplate
 
-from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 from agentuniverse.base.util.agent_util import assemble_memory_input, assemble_memory_output
-from agentuniverse.base.util.prompt_util import process_llm_token
-from agentuniverse.base.util.reasoning_output_parse import ReasoningOutputParser
 
+from agentuniverse.ai_context.agent_context import AgentContext
 from agentuniverse.llm.llm import LLM
-from agentuniverse.prompt.prompt import Prompt
-
-from langchain_core.output_parsers import StrOutputParser
+from agentuniverse.prompt.chat_prompt import ChatPrompt
 
 
 class DemoAgent(AgentTemplate):
@@ -78,7 +74,7 @@ class DemoAgent(AgentTemplate):
                1) Prepare memory/LLM/prompt.
                2) Optionally invoke tools.
                3) Optionally query knowledge sources.
-               4) Call `customized_execute` to run chain and assemble memory.
+               4) Call `customized_execute` to run LLM and assemble memory.
 
                Args:
                    input_object: The request wrapper. Must contain `"input"`.
@@ -93,21 +89,21 @@ class DemoAgent(AgentTemplate):
                """
         memory: Memory = self.process_memory(agent_input)
         llm: LLM = self.process_llm()
-        prompt: Prompt = self.process_prompt(agent_input)
+        prompt: ChatPrompt = self.process_prompt(agent_input)
+        agent_context = self._create_agent_context(input_object, agent_input, memory)
         tool_res: str = self.invoke_tools(input_object)
         knowledge_res: str = self.invoke_knowledge(agent_input.get('input'), input_object)
         agent_input['background'] = (agent_input['background']
                                      + f"tool_res: {tool_res} \n\n knowledge_res: {knowledge_res}")
-        return self.customized_execute(input_object, agent_input, memory, llm, prompt)
+        return self.customized_execute(input_object, agent_input, memory, llm, agent_context=agent_context)
 
-    def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
-                           **kwargs) -> dict:
-        """Run the prompt+LLM chain and manage memory IO.
+    def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
+                           agent_context: AgentContext = None, **kwargs) -> dict:
+        """Run the prompt+LLM invocation and manage memory IO.
 
                 This method:
                 - Writes the user input to memory (pre-call).
-                - Builds a runnable chain: `prompt -> llm -> ReasoningOutputParser`.
-                - Invokes chain to get the final text.
+                - Renders prompt into messages and invokes LLM directly.
                 - Writes the (human, ai) pair to memory (post-call).
 
                 Args:
@@ -115,20 +111,20 @@ class DemoAgent(AgentTemplate):
                     agent_input: Mutable dict containing `"input"` and context fields.
                     memory: Memory component, used for conversational history.
                     llm: LLM component configured for this agent.
-                    prompt: Prompt component configured for this agent.
-                    **kwargs: Extra kwargs forwarded to `invoke_chain`.
+                    agent_context: Agent runtime context for LLM invocation.
+                    **kwargs: Extra kwargs.
 
                 Returns:
                     dict: A dict merged from `agent_input` with an `"output"` field.
 
                 Raises:
-                    RuntimeError: If chain invocation fails.
+                    RuntimeError: If LLM invocation fails.
                 """
         assemble_memory_input(memory, agent_input)
-        process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
-        chain = prompt.as_langchain() | llm.as_langchain_runnable(
-            self.agent_model.llm_params()) | ReasoningOutputParser()
-        res = self.invoke_chain(chain, agent_input, input_object, **kwargs)
+        prompt: ChatPrompt = self.process_prompt(agent_input)
+        messages = prompt.render(**agent_input)
+        llm_output = self.invoke_llm(llm, messages, input_object, agent_context=agent_context)
+        res = llm_output.text
         assemble_memory_output(memory=memory,
                                agent_input=agent_input,
                                content=f"Human: {agent_input.get('input')}, AI: {res}")

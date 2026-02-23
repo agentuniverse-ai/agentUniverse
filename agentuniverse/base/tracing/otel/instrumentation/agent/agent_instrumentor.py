@@ -32,7 +32,8 @@ from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.base.annotation.trace import _get_agent_info, \
     InvocationChainContext
 from agentuniverse.base.tracing.au_trace_manager import init_new_token_usage, \
-    get_current_token_usage, add_current_token_usage_to_parent
+    get_current_token_usage, add_current_token_usage_to_parent, \
+    remove_token_usage
 from .consts import (
     INSTRUMENTOR_NAME,
     INSTRUMENTOR_VERSION,
@@ -146,7 +147,10 @@ class AgentSpanManager:
 
     def cleanup(self):
         """Cleanup span and context."""
+        span_id = self.span.context.span_id if self.span else None
         add_current_token_usage_to_parent()
+        if span_id:
+            remove_token_usage(span_id)
         if self.span:
             self.span.end()
             self.span = None
@@ -189,17 +193,18 @@ class AgentMetricsRecorder:
         self.metrics[MetricNames.AGENT_CALL_DURATION].record(duration, error_labels)
 
     def record_total_token_usage(self, labels: Dict[str, str]) -> None:
-        """Record start of Agent call."""
+        """Record accumulated token usage for this agent span."""
+        usage = get_current_token_usage()
         self.metrics[MetricNames.AGENT_TOTAL_TOKENS].record(
-            get_current_token_usage().total_tokens, labels)
+            usage.total_tokens, labels)
         self.metrics[MetricNames.AGENT_COMPLETION_TOKENS].record(
-            get_current_token_usage().completion_tokens, labels)
+            usage.completion_tokens, labels)
         self.metrics[MetricNames.AGENT_PROMPT_TOKENS].record(
-            get_current_token_usage().prompt_tokens, labels)
+            usage.prompt_tokens, labels)
         self.metrics[MetricNames.AGENT_CACHED_TOKENS].record(
-            get_current_token_usage().cached_tokens, labels)
+            usage.cached_tokens, labels)
         self.metrics[MetricNames.AGENT_REASONING_TOKENS].record(
-            get_current_token_usage().reasoning_tokens, labels)
+            usage.reasoning_tokens, labels)
 
 
 class AgentSpanAttributesSetter:

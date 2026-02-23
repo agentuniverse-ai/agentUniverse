@@ -5,14 +5,11 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: insurance_expressing_agent.py
-from langchain_core.output_parsers import StrOutputParser
-
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.base.util.logging.logging_util import LOGGER
-from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
-from agentuniverse.prompt.prompt import Prompt
+from agentuniverse.prompt.chat_prompt import ChatPrompt
 
 
 class InsuranceExpressingAgent(Agent):
@@ -38,11 +35,12 @@ class InsuranceExpressingAgent(Agent):
         # 1. get the llm instance.
         llm: LLM = self.process_llm(**kwargs)
         # 2. get the agent prompt.
-        prompt: Prompt = self.process_prompt(agent_input, **kwargs)
-        process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
+        prompt: ChatPrompt = self.process_prompt(agent_input, **kwargs)
+        memory = self.process_memory(agent_input, **kwargs)
+        agent_context = self._create_agent_context(input_object, agent_input, memory)
         # 3. invoke agent.
-        chain = prompt.as_langchain() | llm.as_langchain_runnable(
-            self.agent_model.llm_params()) | StrOutputParser()
-        res = self.invoke_chain(chain, agent_input, input_object, **kwargs)
+        messages = prompt.render(**agent_input)
+        llm_output = self.invoke_llm(llm, messages, input_object, agent_context=agent_context)
+        res = llm_output.text
         # 4. return result.
         return {**agent_input, 'output': res}

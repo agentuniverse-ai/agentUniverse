@@ -27,7 +27,7 @@ from opentelemetry.trace import Status, StatusCode, Span
 from agentuniverse.base.annotation.trace import _get_llm_info, _llm_plugins
 from agentuniverse.base.tracing.au_trace_manager import init_new_token_usage, \
     get_current_token_usage, add_current_token_usage_to_parent, \
-    add_current_token_usage
+    add_current_token_usage, remove_token_usage
 from agentuniverse.base.util.monitor.monitor import Monitor
 from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
 from .consts import (
@@ -90,13 +90,17 @@ class LLMSpanManager:
     def cleanup(self):
         """Manually cleanup span and context."""
         if self.span:
+            span_id = self.span.context.span_id
             try:
+                parent = getattr(self.span, 'parent', None)
+                parent_span_id = parent.span_id if parent else None
                 add_current_token_usage_to_parent(
-                    get_current_token_usage(self.span.context.span_id),
-                    self.span.parent.span_id
+                    get_current_token_usage(span_id),
+                    parent_span_id
                 )
-            except:
+            except (KeyError, AttributeError):
                 pass
+            remove_token_usage(span_id)
             self.span.end()
             self.span = None
         if self.token and self.auto_cleanup:
@@ -184,6 +188,9 @@ class LLMSpanAttributesSetter:
         span.set_attribute(SpanAttributes.AU_LLM_DURATION, duration)
         span.set_attribute(SpanAttributes.AU_LLM_STATUS, "success")
         span.set_attribute(SpanAttributes.AU_LLM_OUTPUT, result.text)
+        if result.reasoning_text:
+            span.set_attribute(SpanAttributes.AU_LLM_REASONING_OUTPUT,
+                               result.reasoning_text)
 
         if result.usage:
             span.set_attribute(SpanAttributes.AU_LLM_USAGE_PROMPT_TOKENS,
@@ -206,6 +213,16 @@ class LLMSpanAttributesSetter:
         span.set_attribute(SpanAttributes.AU_LLM_ERROR_MESSAGE, error_str)
         span.set_attribute(SpanAttributes.AU_LLM_DURATION, duration)
         span.set_status(Status(StatusCode.ERROR, str(error)))
+        # Record any partial token usage accumulated before the error
+        usage = get_current_token_usage()
+        span.set_attribute(SpanAttributes.AU_LLM_USAGE_PROMPT_TOKENS,
+                           usage.prompt_tokens)
+        span.set_attribute(SpanAttributes.AU_LLM_USAGE_COMPLETION_TOKENS,
+                           usage.completion_tokens)
+        span.set_attribute(SpanAttributes.AU_LLM_USAGE_TOTAL_TOKENS,
+                           usage.total_tokens)
+        span.set_attribute(SpanAttributes.AU_LLM_USAGE_DETAIL_TOKENS,
+                           safe_json_dumps(usage.to_dict()))
 
     @staticmethod
     def set_first_token_attributes(span: Span, duration: float) -> None:
@@ -237,6 +254,7 @@ class StreamingResultProcessor:
                                    result: AsyncGenerator) -> AsyncGenerator:
         """Process async streaming result."""
         llm_output = []
+        reasoning_output = []
         usage = None
         first_token_recorded = False
 
@@ -244,7 +262,8 @@ class StreamingResultProcessor:
             async for chunk in result:
                 # Extract text content: LLMStreamEvent uses text_delta, LLMOutput uses text
                 text_delta = getattr(chunk, 'text_delta', None)
-                text = text_delta if text_delta else (getattr(chunk, 'text', None) or None)
+                text_attr = getattr(chunk, 'text', None)
+                text = text_delta if text_delta else (text_attr if isinstance(text_attr, str) else None)
 
                 if text:
                     llm_output.append(text)
@@ -256,12 +275,17 @@ class StreamingResultProcessor:
                         LLMSpanAttributesSetter.set_first_token_attributes(
                             self.span, duration)
 
+                # Collect reasoning deltas
+                reasoning_delta = getattr(chunk, 'reasoning_delta', None)
+                if reasoning_delta:
+                    reasoning_output.append(reasoning_delta)
+
                 if getattr(chunk, 'usage', None):
                     usage = chunk.usage
                 yield chunk
             if usage:
                 add_current_token_usage(usage, self.span_manager.span.context.span_id)
-            self._finalize_streaming_result(llm_output, usage)
+            self._finalize_streaming_result(llm_output, reasoning_output, usage)
 
         except Exception as e:
             duration = time.time() - self.start_time
@@ -274,6 +298,7 @@ class StreamingResultProcessor:
     def process_sync_stream(self, result) -> Generator:
         """Process sync streaming result."""
         llm_output = []
+        reasoning_output = []
         usage = None
         first_token_recorded = False
 
@@ -281,7 +306,8 @@ class StreamingResultProcessor:
             for chunk in result:
                 # Extract text content: LLMStreamEvent uses text_delta, LLMOutput uses text
                 text_delta = getattr(chunk, 'text_delta', None)
-                text = text_delta if text_delta else (getattr(chunk, 'text', None) or None)
+                text_attr = getattr(chunk, 'text', None)
+                text = text_delta if text_delta else (text_attr if isinstance(text_attr, str) else None)
 
                 if text:
                     llm_output.append(text)
@@ -293,12 +319,17 @@ class StreamingResultProcessor:
                         LLMSpanAttributesSetter.set_first_token_attributes(
                             self.span, duration)
 
+                # Collect reasoning deltas
+                reasoning_delta = getattr(chunk, 'reasoning_delta', None)
+                if reasoning_delta:
+                    reasoning_output.append(reasoning_delta)
+
                 if getattr(chunk, 'usage', None):
                     usage = chunk.usage
                 yield chunk
             if usage:
                 add_current_token_usage(usage, self.span_manager.span.context.span_id)
-            self._finalize_streaming_result(llm_output, usage)
+            self._finalize_streaming_result(llm_output, reasoning_output, usage)
 
         except Exception as e:
             duration = time.time() - self.start_time
@@ -309,9 +340,11 @@ class StreamingResultProcessor:
             self.span_manager.cleanup()
 
     def _finalize_streaming_result(self, llm_output: list,
+                                   reasoning_output: list,
                                    usage: Optional[TokenUsage]) -> None:
         """Finalize streaming result processing."""
         output_str = "".join(llm_output)
+        reasoning_str = "".join(reasoning_output) if reasoning_output else None
         duration = time.time() - self.start_time
 
         Monitor().trace_llm_invocation(
@@ -321,7 +354,8 @@ class StreamingResultProcessor:
             cost_time=duration
         )
 
-        pseudo_result = LLMOutput(text=output_str, usage=usage)
+        pseudo_result = LLMOutput(text=output_str, reasoning_text=reasoning_str,
+                                  usage=usage)
         Monitor().trace_llm_token_usage(self.llm_instance, self.llm_input,
                                         pseudo_result)
 
@@ -330,8 +364,8 @@ class StreamingResultProcessor:
         if pseudo_result.usage:
             self.metrics_recorder.record_token_usage(pseudo_result.usage,
                                                      self.labels)
-            add_current_token_usage(pseudo_result.usage,
-                                    self.span.context.span_id)
+            # Note: add_current_token_usage is already called in the stream
+            # loop above, so we do NOT call it again here to avoid double counting.
         LLMSpanAttributesSetter.set_success_attributes(self.span, duration,
                                                        pseudo_result)
 

@@ -132,7 +132,7 @@ class AuTraceContext:
 
     def add_current_token_usage(self, token_usage, span_id=None):
         span_id = span_id or trace.get_current_span().get_span_context().span_id
-        if not span_id:
+        if not span_id or span_id not in self._token_count_dict:
             return
         try:
             asyncio.get_running_loop()
@@ -158,8 +158,13 @@ class AuTraceContext:
         span_id = span_id or trace.get_current_span().get_span_context().span_id
         if not span_id:
             return TokenUsage()
-        return self._token_count_dict[span_id]
+        return self._token_count_dict.get(span_id, TokenUsage())
 
+    def remove_token_usage(self, span_id=None):
+        """Remove token usage entry for a completed span to prevent memory leak."""
+        span_id = span_id or trace.get_current_span().get_span_context().span_id
+        if span_id:
+            self._token_count_dict.pop(span_id, None)
 
     def to_dict(self) -> dict:
         return {

@@ -10,12 +10,9 @@ from typing import Any, Optional, List, Union, Iterator
 
 import tiktoken
 from agentuniverse.base.annotation.trace import trace_llm
-from langchain_core.language_models import BaseLanguageModel
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_output import LLMOutput
-from demo_startup_app_with_single_agent.intelligence.agentic.llm.langchian_instance.langchain_instance import \
-    LangChainInstance
 
 
 class InsuranceMayaLLM(LLM):
@@ -227,7 +224,3 @@ class InsuranceMayaLLM(LLM):
             self.query_field = ext_info["query_field"]
         super().initialize_by_component_configer(configer)
         return self
-
-    def as_langchain(self) -> BaseLanguageModel:
-        """Convert the agentUniverse(aU) openai llm class to the langchain openai llm class."""
-        return LangChainInstance(streaming=self.streaming, llm=self, llm_type="Maya")

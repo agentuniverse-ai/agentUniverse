@@ -6,8 +6,7 @@
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: rag_agent_case_template.py
 
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.utils.json import parse_json_markdown
+from agentuniverse.base.util.common_util import parse_json_markdown
 
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
 from agentuniverse.agent.agent_manager import AgentManager
@@ -15,9 +14,9 @@ from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.agent.template.rag_agent_template import RagAgentTemplate
-from agentuniverse.base.util.prompt_util import process_llm_token
+from agentuniverse.ai_context.agent_context import AgentContext
 from agentuniverse.llm.llm import LLM
-from agentuniverse.prompt.prompt import Prompt
+from agentuniverse.prompt.chat_prompt import ChatPrompt
 
 
 class RagAgentCaseTemplate(RagAgentTemplate):
@@ -41,8 +40,8 @@ class RagAgentCaseTemplate(RagAgentTemplate):
             background.append(tool.run(input=question))
         return "Google Search Result: \n" + "\n\n".join(background)
 
-    def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
-                           **kwargs) -> dict:
+    def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
+                           agent_context: AgentContext = None, **kwargs) -> dict:
         # invoke tool
         knowledge_res: str = self.execute_query(agent_input.get('input'))
         agent_input['background'] = knowledge_res
@@ -55,11 +54,11 @@ class RagAgentCaseTemplate(RagAgentTemplate):
         summarize_memory = self.load_summarize_memory(memory, agent_input)
         agent_input['background'] = (agent_input['background']
                                      + f"\nsummarize_memory:\n {summarize_memory}")
-        process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
-        # 4. invoke chain
-        chain = prompt.as_langchain() | llm.as_langchain_runnable(
-            self.agent_model.llm_params()) | StrOutputParser()
-        res = self.invoke_chain(chain, agent_input, input_object, **kwargs)
+        # 4. invoke llm
+        prompt: ChatPrompt = self.process_prompt(agent_input, **kwargs)
+        messages = prompt.render(**agent_input)
+        llm_output = self.invoke_llm(llm, messages, input_object, agent_context=agent_context)
+        res = llm_output.text
         # 5. stream output
         self.add_output_stream(input_object.get_data('output_stream'), res)
         # 6. add answer memory

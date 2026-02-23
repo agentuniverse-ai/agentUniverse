@@ -732,11 +732,24 @@ def process_llm_token(agent_llm: LLM, lc_prompt_template, profile: dict, planner
 
 # ---------Template Render Utilities---------------
 _PLACEHOLDER_RE = re.compile(r"\{(.*?)\}")
+_ESCAPED_OPEN = "\x00__LBRACE__\x00"
+_ESCAPED_CLOSE = "\x00__RBRACE__\x00"
+
+
+def _strip_escaped_braces(template: str) -> str:
+    """将 {{ 和 }} 替换为内部占位符，避免被当作模板变量解析。"""
+    return template.replace("{{", _ESCAPED_OPEN).replace("}}", _ESCAPED_CLOSE)
+
+
+def _restore_escaped_braces(text: str) -> str:
+    """将内部占位符还原为字面量 { 和 }，与 Python str.format() 的 {{ / }} 转义行为一致。"""
+    return text.replace(_ESCAPED_OPEN, "{").replace(_ESCAPED_CLOSE, "}")
 
 
 def check_missing(template: str, kwargs: Dict[str, Any]) -> None:
     """检查模板中所有占位符是否都能被填充。"""
-    placeholders = set(_PLACEHOLDER_RE.findall(template))
+    stripped = _strip_escaped_braces(template)
+    placeholders = set(_PLACEHOLDER_RE.findall(stripped))
     missing = placeholders - set(kwargs.keys())
     if missing:
         raise ValueError(
@@ -746,12 +759,12 @@ def check_missing(template: str, kwargs: Dict[str, Any]) -> None:
 
 
 def render_str(template: str, kwargs: Dict[str, Any]) -> str:
-    """渲染单个字符串，缺变量则报错。"""
+    """渲染单个字符串，缺变量则报错。支持 {{ / }} 转义为字面量花括号。"""
     check_missing(template, kwargs)
-    result = template
+    result = _strip_escaped_braces(template)
     for key, value in kwargs.items():
         result = result.replace("{" + key + "}", str(value))
-    return result
+    return _restore_escaped_braces(result)
 
 
 def render_content(
