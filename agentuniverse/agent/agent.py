@@ -305,11 +305,13 @@ class Agent(ComponentBase, ABC):
                 agent_context.stream_token(event.text_delta, self.agent_model.info)
         return reducer.build()
 
-    def execute_tool_call(self, tool_call) -> Message:
+    def execute_tool_call(self, tool_call,
+                          agent_context: AgentContext = None) -> Message:
         """Execute a single tool call and return a tool-result Message.
 
         Args:
             tool_call: A ToolCall object from LLMOutput.
+            agent_context: Optional AgentContext for the current run.
 
         Returns:
             Message with type=TOOL containing the tool execution result.
@@ -341,7 +343,8 @@ class Agent(ComponentBase, ABC):
                 name=tool_name,
             )
 
-    async def async_execute_tool_call(self, tool_call) -> Message:
+    async def async_execute_tool_call(self, tool_call,
+                                      agent_context: AgentContext = None) -> Message:
         """Async version of execute_tool_call."""
         tool_name = tool_call.function.name
         try:
@@ -411,14 +414,14 @@ class Agent(ComponentBase, ABC):
             # Execute tool calls concurrently
             tool_calls = llm_output.get_tool_calls()
             if len(tool_calls) == 1:
-                context.append_message(self.execute_tool_call(tool_calls[0]))
+                context.append_message(self.execute_tool_call(tool_calls[0], agent_context=context))
             else:
                 with ThreadPoolExecutorWithReturnValue(
                     max_workers=min(len(tool_calls), 10),
                     thread_name_prefix="tool_call",
                 ) as executor:
                     futures = [
-                        executor.submit(self.execute_tool_call, tc)
+                        executor.submit(self.execute_tool_call, tc, context)
                         for tc in tool_calls
                     ]
                     wait(futures, return_when=ALL_COMPLETED)
@@ -456,7 +459,7 @@ class Agent(ComponentBase, ABC):
             # Execute tool calls concurrently
             tool_calls = llm_output.get_tool_calls()
             tool_msgs = await asyncio.gather(
-                *(self.async_execute_tool_call(tc) for tc in tool_calls)
+                *(self.async_execute_tool_call(tc, agent_context=context) for tc in tool_calls)
             )
             for tool_msg in tool_msgs:
                 context.append_message(tool_msg)

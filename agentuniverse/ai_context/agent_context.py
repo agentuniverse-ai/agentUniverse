@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from agentuniverse.agent.agent_model import AgentModel
 from agentuniverse.agent.memory.enum import ChatMessageEnum
 from agentuniverse.agent.memory.message import Message
-from agentuniverse.ai_context.tool_utils import build_tools_schema
+from agentuniverse.ai_context.tool_utils import build_tools_schema, register_knowledge_as_tools
 
 
 __all__ = ["AgentContext"]
@@ -160,6 +160,13 @@ class AgentContext(BaseModel):
                 if toolkit:
                     tool_name_list.extend(toolkit.tool_names)
         tools_schema = build_tools_schema(tool_name_list)
+
+        # -- Knowledge as tools (from action.knowledge) --
+        knowledge_names: List[str] = action.get('knowledge', []) or []
+        if knowledge_names:
+            k_tool_names, k_schemas = register_knowledge_as_tools(knowledge_names)
+            tool_name_list.extend(k_tool_names)
+            tools_schema.extend(k_schemas)
 
         return cls(
             agent_id=agent_id,

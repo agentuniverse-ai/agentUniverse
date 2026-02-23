@@ -345,6 +345,63 @@ class Knowledge(ComponentBase):
         retrieved_texts = [doc.text for doc in retrieved_docs]
         return "\n=========================================\n".join(retrieved_texts)
 
+    def as_tool_schema(self) -> dict:
+        """Return the OpenAI function-calling schema when this knowledge is
+        exposed as a tool.
+
+        Subclasses can override this method to customise the tool name,
+        description, or parameters schema.  For example, a knowledge base
+        that supports filtering by date could add extra parameters::
+
+            def as_tool_schema(self) -> dict:
+                schema = super().as_tool_schema()
+                schema['function']['parameters']['properties']['date_filter'] = {
+                    'type': 'string',
+                    'description': 'ISO date to filter documents by.',
+                }
+                return schema
+
+        Returns:
+            dict in OpenAI ``tools`` format::
+
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "...",
+                        "description": "...",
+                        "parameters": { ... }
+                    }
+                }
+        """
+        from agentuniverse.agent.action.knowledge.knowledge_tool import (
+            KNOWLEDGE_TOOL_PREFIX,
+        )
+        return {
+            "type": "function",
+            "function": {
+                "name": f"{KNOWLEDGE_TOOL_PREFIX}{self.name}",
+                "description": (
+                    self.description
+                    or f"Search the '{self.name}' knowledge base. "
+                       f"Use this tool to retrieve relevant documents "
+                       f"by providing a query string."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": (
+                                "The search query to retrieve relevant "
+                                "documents from the knowledge base."
+                            ),
+                        }
+                    },
+                    "required": ["query"],
+                },
+            },
+        }
+
     # ================================================================
     # Configuration
     # ================================================================
