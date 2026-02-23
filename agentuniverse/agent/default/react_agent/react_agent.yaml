@@ -5,7 +5,6 @@ profile:
   llm_model:
     name: 'default_qwen_llm'
     model_name: 'qwen-max'
-    stop: 'Observation'
     temperature: 0.1
 action:
   tool:
