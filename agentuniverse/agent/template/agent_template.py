@@ -28,6 +28,12 @@ class AgentTemplate(Agent, ABC):
     prompt_version: Optional[str] = None
     conversation_memory_name: Optional[str] = None
 
+    def _create_agent_context(self, input_object: InputObject,
+                              agent_input: dict, memory: Memory) -> 'AgentContext':
+        if self.prompt_version and not self.agent_model.profile.get('prompt_version'):
+            self.agent_model.profile['prompt_version'] = self.prompt_version
+        return super()._create_agent_context(input_object, agent_input, memory)
+
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
         memory: Memory = self.process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
