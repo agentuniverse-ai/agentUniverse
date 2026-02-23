@@ -7,13 +7,59 @@
 # @FileName: translation_by_token_agent.py
 from queue import Queue
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
+
+
+def split_text_by_chunk_size(text: str, chunk_size: int) -> list[str]:
+    """Split text into chunks of approximately chunk_size characters.
+
+    Tries to split on paragraph boundaries (\n\n), then newlines (\n),
+    then spaces, falling back to hard splits if necessary.
+    """
+    if len(text) <= chunk_size:
+        return [text]
+
+    separators = ["\n\n", "\n", " ", ""]
+    chunks = []
+    remaining = text
+
+    for sep in separators:
+        if not remaining:
+            break
+        if sep == "":
+            # Hard split as last resort
+            while remaining:
+                chunks.append(remaining[:chunk_size])
+                remaining = remaining[chunk_size:]
+            break
+
+        new_remaining = ""
+        current_chunk = ""
+        parts = remaining.split(sep)
+        for i, part in enumerate(parts):
+            candidate = current_chunk + (sep if current_chunk else "") + part
+            if len(candidate) <= chunk_size:
+                current_chunk = candidate
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                if len(part) <= chunk_size:
+                    current_chunk = part
+                else:
+                    # This part is too large, pass to next separator level
+                    new_remaining += (sep if new_remaining else "") + part
+                    current_chunk = ""
+
+        if current_chunk:
+            chunks.append(current_chunk)
+        remaining = new_remaining
+
+    return chunks
 
 
 def calculate_chunk_size(token_count: int, token_limit: int) -> int:
@@ -93,8 +139,7 @@ class TranslationAgent(Agent):
         agent_input['execute_type'] = 'multi'
         chunk_result = list[str]()
         chunk_size = calculate_chunk_size(text_tokens, llm.max_tokens)
-        source_text_chunks = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=0).split_text(
-            source_text)
+        source_text_chunks = split_text_by_chunk_size(source_text, chunk_size)
 
         for i in range(len(source_text_chunks)):
             tagged_text = (
