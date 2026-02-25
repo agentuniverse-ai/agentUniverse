@@ -112,7 +112,7 @@ class YuqueReader(Reader):
         """Close HTTP session"""
         try:
             self.session.close()
-        except:
+        except Exception:
             pass
 
 # if __name__ == '__main__':
