@@ -229,7 +229,7 @@ def assemble_peer_planner_members(planner: dict, agent_model: AgentModel) -> lis
         for i, member_key in enumerate(member_keys):
             planner_data.setdefault(member_key, default_member_names[i])
         return assemble_planner_members(planner_data, member_keys)
-    except:
+    except Exception:
         return []
 
 
