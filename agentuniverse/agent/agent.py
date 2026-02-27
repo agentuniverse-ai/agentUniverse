@@ -327,6 +327,8 @@ class Agent(ComponentBase, ABC):
                     name=tool_name,
                 )
             arguments = tool_call.function.parse_arguments()
+            if tool.require_agent_context and agent_context is not None:
+                arguments['agent_context'] = agent_context
             result = tool.run(**arguments)
             return Message(
                 type=ChatMessageEnum.TOOL,
@@ -357,6 +359,8 @@ class Agent(ComponentBase, ABC):
                     name=tool_name,
                 )
             arguments = tool_call.function.parse_arguments()
+            if tool.require_agent_context and agent_context is not None:
+                arguments['agent_context'] = agent_context
             result = await tool.async_run(**arguments)
             return Message(
                 type=ChatMessageEnum.TOOL,
@@ -508,6 +512,10 @@ class Agent(ComponentBase, ABC):
             'text': "".join(text),
             'reasoning_content': "".join(reasoning_content)
         }
+
+    @property
+    def skill_names(self) -> list:
+        return self.agent_model.action.get('skill', []) or []
 
     @property
     def tool_names(self) -> list:

@@ -43,6 +43,8 @@ from agentuniverse.agent.action.knowledge.reader.reader_manager import ReaderMan
 from agentuniverse.agent.action.knowledge.query_paraphraser.query_paraphraser_manager import QueryParaphraserManager
 from agentuniverse.agent.action.knowledge.store.store_manager import StoreManager
 from agentuniverse.agent.action.knowledge.rag_router.rag_router_manager import RagRouterManager
+from agentuniverse.agent.action.skill.skill_manager import SkillManager
+from agentuniverse.base.config.component_configer.configers.skill_configer import SkillConfiger
 
 
 class ComponentConfigerUtil(object):
@@ -70,7 +72,8 @@ class ComponentConfigerUtil(object):
         ComponentEnum.WORK_PATTERN: WorkPatternConfiger,
         ComponentEnum.LOG_SINK: ComponentConfiger,
         ComponentEnum.DEFAULT: ComponentConfiger,
-        ComponentEnum.LLM_CHANNEL: ComponentConfiger
+        ComponentEnum.LLM_CHANNEL: ComponentConfiger,
+        ComponentEnum.SKILL: SkillConfiger,
     }
 
     __COMPONENT_MANAGER_CLZ_MAP = {
@@ -95,6 +98,7 @@ class ComponentConfigerUtil(object):
         ComponentEnum.WORK_PATTERN: WorkPatternManager,
         ComponentEnum.LOG_SINK: LogSinkManager,
         ComponentEnum.LLM_CHANNEL: LLMChannelManager,
+        ComponentEnum.SKILL: SkillManager,
     }
 
     @classmethod

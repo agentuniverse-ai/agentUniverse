@@ -59,6 +59,7 @@ class AgentUniverse(object):
         self.__system_default_memory_storage_package = ['agentuniverse.agent.memory.memory_storage']
         self.__system_default_work_pattern_package = ['agentuniverse.agent.work_pattern']
         self.__system_default_log_sink_package = ['agentuniverse.base.util.logging.log_sink.log_sink']
+        self.__system_default_skill_package = ['agentuniverse.agent.action.skill']
 
     def start(self, config_path: str = None, core_mode: bool = False):
         """Start the agentUniverse framework.
@@ -218,6 +219,17 @@ class AgentUniverse(object):
         for component_enum, component_configer_list in component_configer_list_map.items():
             self.__register(component_enum, component_configer_list)
 
+        # -- Register LoadSkillTool as built-in tool --
+        from agentuniverse.agent.action.skill.load_skill_tool import LoadSkillTool
+        from agentuniverse.agent.action.tool.tool_manager import ToolManager
+        load_skill_tool = LoadSkillTool()
+        ToolManager().register(load_skill_tool.get_instance_code(), load_skill_tool)
+
+        # -- Scan and register SKILL.md files --
+        core_skill_package_list = app_configer.core_skill_package_list or app_configer.core_default_package_list
+        if core_skill_package_list:
+            self.__scan_and_register_skills(core_skill_package_list)
+
     def scan(self,
              package_list: [str],
              config_type_enum: ConfigTypeEnum,
@@ -299,6 +311,9 @@ class AgentUniverse(object):
                     if toolkit_name_list and isinstance(toolkit_name_list, list):
                         self.__config_container.app_configer.agent_toolkit_set.update(
                             toolkit_name_list)
+                    skill_name_list = configer_instance.action.get('skill')
+                    if skill_name_list and isinstance(skill_name_list, list):
+                        self.__config_container.app_configer.agent_skill_set.update(skill_name_list)
             elif component_enum.value == ComponentEnum.LLM.value:
                 # Register LLM components only if llm names are already in the agent LLM set
                 if hasattr(configer_instance, 'name') and configer_instance.name:
@@ -330,6 +345,40 @@ class AgentUniverse(object):
                 continue
             component_instance.component_config_path = component_configer.configer.path
             component_manager_clz().register(component_instance.get_instance_code(), component_instance)
+
+    def __scan_and_register_skills(self, package_list: list):
+        """Scan directories for SKILL.md files and register them as Skill components."""
+        from agentuniverse.base.config.component_configer.configers.skill_configer import SkillConfiger
+        from agentuniverse.agent.action.skill.skill import Skill
+        from agentuniverse.agent.action.skill.skill_manager import SkillManager
+
+        agent_skill_set = self.__config_container.app_configer.agent_skill_set
+
+        for package_name in package_list:
+            try:
+                package_path = self.__package_name_to_path(package_name)
+            except ImportError:
+                LOGGER.warn(f"Skill package '{package_name}' not found, skipping.")
+                continue
+            path = Path(package_path)
+            for skill_md in path.rglob('SKILL.md'):
+                try:
+                    skill_configer = SkillConfiger.from_skill_md(str(skill_md))
+                    if not skill_configer.name:
+                        continue
+                    # Lazy-load filtering: only register skills referenced by agents
+                    if skill_configer.name not in agent_skill_set:
+                        self.__config_container.app_configer.skill_configer_map[
+                            skill_configer.name] = skill_configer
+                        continue
+                    # Instantiate and register
+                    skill_instance = Skill().initialize_by_component_configer(skill_configer)
+                    if skill_instance:
+                        skill_instance.component_config_path = str(skill_md)
+                        SkillManager().register(
+                            skill_instance.get_instance_code(), skill_instance)
+                except Exception as ex:
+                    LOGGER.warn(f"Failed to load skill from {skill_md}: {ex}")
 
     def __package_name_to_path(self, package_name: str) -> str:
         """Convert the package name to the package path.

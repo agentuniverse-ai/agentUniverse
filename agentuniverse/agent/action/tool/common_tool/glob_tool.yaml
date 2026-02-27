@@ -1,0 +1,11 @@
+name: 'Glob'
+description: |
+  Fast file pattern matching tool that works with any codebase size.
+  Supports glob patterns like "**/*.py" or "src/**/*.ts".
+  Returns matching file paths sorted by modification time (newest first).
+tool_type: 'api'
+input_keys: ['pattern']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.glob_tool'
+  class: 'GlobTool'

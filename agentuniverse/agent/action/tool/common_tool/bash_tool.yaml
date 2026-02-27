@@ -1,0 +1,11 @@
+name: 'Bash'
+description: |
+  Execute shell commands on the local machine.
+  Supports both blocking (synchronous) and non-blocking (asynchronous) execution.
+  Returns stdout, stderr, exit code, and duration.
+tool_type: 'api'
+input_keys: ['command', 'cwd']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.run_command_tool'
+  class: 'RunCommandTool'

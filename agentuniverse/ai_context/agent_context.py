@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import base64
 import string
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
@@ -149,24 +149,12 @@ class AgentContext(BaseModel):
                 top_k=memory_config.get('top_k', 20),
             )
 
-        # -- Tools (from action.tool + action.toolkit) --
-        tool_name_list: List[str] = list(action.get('tool', []) or [])
-        toolkit_names: List[str] = action.get('toolkit', []) or []
-        if toolkit_names:
-            from agentuniverse.agent.action.toolkit.toolkit_manager import \
-                ToolkitManager
-            for toolkit_name in toolkit_names:
-                toolkit = ToolkitManager().get_instance_obj(toolkit_name)
-                if toolkit:
-                    tool_name_list.extend(toolkit.tool_names)
-        tools_schema = build_tools_schema(tool_name_list)
-
-        # -- Knowledge as tools (from action.knowledge) --
-        knowledge_names: List[str] = action.get('knowledge', []) or []
-        if knowledge_names:
-            k_tool_names, k_schemas = register_knowledge_as_tools(knowledge_names)
-            tool_name_list.extend(k_tool_names)
-            tools_schema.extend(k_schemas)
+        # -- Tools + Knowledge + Skills --
+        tool_name_list, tools_schema = _build_tools(action)
+        _inject_knowledge_tools(action, tool_name_list, tools_schema)
+        system_message = _inject_skills(
+            action, tool_name_list, tools_schema, system_message,
+        )
 
         return cls(
             agent_id=agent_id,
@@ -398,6 +386,106 @@ def _build_few_shot_messages(profile: dict) -> List[Message]:
     if not few_shot:
         return []
     return [Message.from_dict(item) for item in few_shot]
+
+
+def _build_tools(
+    action: dict,
+) -> Tuple[List[str], List[Dict[str, Any]]]:
+    """Resolve tool names from action.tool + action.toolkit and build schemas."""
+    tool_name_list: List[str] = list(action.get('tool', []) or [])
+    toolkit_names: List[str] = action.get('toolkit', []) or []
+    if toolkit_names:
+        from agentuniverse.agent.action.toolkit.toolkit_manager import \
+            ToolkitManager
+        for toolkit_name in toolkit_names:
+            toolkit = ToolkitManager().get_instance_obj(toolkit_name)
+            if toolkit:
+                tool_name_list.extend(toolkit.tool_names)
+    tools_schema = build_tools_schema(tool_name_list)
+    return tool_name_list, tools_schema
+
+
+def _inject_knowledge_tools(
+    action: dict,
+    tool_name_list: List[str],
+    tools_schema: List[Dict[str, Any]],
+) -> None:
+    """Register knowledge sources as tools and append to the tool set."""
+    knowledge_names: List[str] = action.get('knowledge', []) or []
+    if knowledge_names:
+        k_tool_names, k_schemas = register_knowledge_as_tools(knowledge_names)
+        tool_name_list.extend(k_tool_names)
+        tools_schema.extend(k_schemas)
+
+
+# Base tools automatically available when skills are configured.
+_BASE_SKILL_TOOLS = ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash']
+
+
+def _inject_skills(
+    action: dict,
+    tool_name_list: List[str],
+    tools_schema: List[Dict[str, Any]],
+    system_message: Optional[Message],
+) -> Optional[Message]:
+    """Inject load_skill tool, base tools and skill descriptions.
+
+    Returns the (possibly updated) system message.
+    """
+    skill_names: List[str] = action.get('skill', []) or []
+    if not skill_names:
+        return system_message
+
+    from agentuniverse.agent.action.skill.skill_manager import SkillManager
+    from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+    tool_mgr = ToolManager()
+
+    # 1. Add load_skill tool
+    load_skill_tool = tool_mgr.get_instance_obj('load_skill', new_instance=False)
+    if load_skill_tool and 'load_skill' not in tool_name_list:
+        tool_name_list.append('load_skill')
+        tools_schema.append(load_skill_tool.get_function_schema())
+
+    # 2. Add base tools so the agent can perform common operations
+    #    without requiring each skill to declare them explicitly.
+    for bt_name in _BASE_SKILL_TOOLS:
+        if bt_name not in tool_name_list:
+            bt = tool_mgr.get_instance_obj(bt_name, new_instance=False)
+            if bt is not None:
+                tool_name_list.append(bt_name)
+                tools_schema.append(bt.get_function_schema())
+
+    # 3. Build skill list descriptions, append to system message
+    skill_desc_lines = []
+    for sn in skill_names:
+        sk = SkillManager().get_instance_obj(sn, new_instance=False)
+        if sk:
+            if sk.disable_model_invocation:
+                skill_desc_lines.append(
+                    f"- {sk.name}: {sk.description} [user-invocation only]")
+            else:
+                skill_desc_lines.append(f"- {sk.name}: {sk.description}")
+
+    if skill_desc_lines:
+        skill_section = (
+            "\n\n## Available Skills\n"
+            "When the user's task relates to the following skills, "
+            "call load_skill tool to load the corresponding skill:\n"
+            + "\n".join(skill_desc_lines)
+        )
+        if system_message is not None:
+            system_message = Message(
+                type=ChatMessageEnum.SYSTEM,
+                content=system_message.content + skill_section,
+            )
+        else:
+            system_message = Message(
+                type=ChatMessageEnum.SYSTEM,
+                content=skill_section,
+            )
+
+    return system_message
 
 
 def _build_user_message(

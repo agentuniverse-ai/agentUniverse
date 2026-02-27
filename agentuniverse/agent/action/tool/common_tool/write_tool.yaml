@@ -1,0 +1,11 @@
+name: 'Write'
+description: |
+  Write content to a file on the local filesystem.
+  Creates parent directories automatically if they do not exist.
+  Supports both overwrite and append modes.
+tool_type: 'api'
+input_keys: ['file_path', 'content']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.write_file_tool'
+  class: 'WriteFileTool'

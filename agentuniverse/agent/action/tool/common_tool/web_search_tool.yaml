@@ -1,0 +1,11 @@
+name: 'WebSearch'
+description: |
+  Search the web using DuckDuckGo and return structured results.
+  Supports domain filtering via allowed_domains and blocked_domains.
+  Returns titles, URLs, and snippets for each result.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.web_search_tool'
+  class: 'WebSearchTool'

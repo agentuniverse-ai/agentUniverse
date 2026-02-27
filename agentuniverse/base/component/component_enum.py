@@ -33,6 +33,7 @@ class ComponentEnum(Enum):
     MEMORY_STORAGE = "MEMORY_STORAGE"
     LOG_SINK = "LOG_SINK"
     LLM_CHANNEL = "LLM_CHANNEL"
+    SKILL = "SKILL"
 
     @staticmethod
     def to_value_list():

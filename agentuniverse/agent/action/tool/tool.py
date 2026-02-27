@@ -85,6 +85,8 @@ class Tool(ComponentBase):
     args_model: Any = None
     args_model_schema: Optional[dict] = None
 
+    require_agent_context: bool = False
+
     def __init__(self, **kwargs):
         super().__init__(component_type=ComponentEnum.TOOL, **kwargs)
 
@@ -270,6 +272,7 @@ class Tool(ComponentBase):
             return None
 
             # 过滤掉 self / *args / **kwargs
+            # 当 require_agent_context=True 时，排除 agent_context 参数（不暴露给 LLM）
         meaningful_params = {
             name: p
             for name, p in sig.parameters.items()
@@ -279,6 +282,7 @@ class Tool(ComponentBase):
                    inspect.Parameter.VAR_POSITIONAL,
                    inspect.Parameter.VAR_KEYWORD,
                )
+               and not (self.require_agent_context and name == "agent_context")
         }
 
         if not meaningful_params:
