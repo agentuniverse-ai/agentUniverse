@@ -115,6 +115,7 @@ This feature is jointly developed by [difizen](https://github.com/difizen/magent
 
 ****************************************
 
+* [AnchorBrowser](https://anchorbrowser.io) - Cloud browser platform providing managed Chromium instances for AI agents — supports Puppeteer, Playwright, and Claude/GPT computer use APIs with enterprise-grade stealth.
 ## Why use agentUniverse
 
 ### Concept
