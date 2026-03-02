@@ -5,3 +5,10 @@
 # @Author  : jerry.zzw 
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: __init__.py
+
+__version__ = "0.0.19"
+
+
+def get_version():
+    """Return the agentUniverse version."""
+    return __version__
