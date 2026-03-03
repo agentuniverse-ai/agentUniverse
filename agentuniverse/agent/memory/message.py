@@ -13,6 +13,44 @@ from agentuniverse.agent.memory.enum import ChatMessageEnum
 
 ContentT = Union[str, List[Union[str, Dict[str, Any]]]]
 
+# OpenAI 多模态 content part 中合法的 type 值
+_OPENAI_CONTENT_PART_TYPES = frozenset({
+    "text", "image_url", "input_audio", "file", "refusal",
+})
+
+
+def _is_openai_content_part(item: Any) -> bool:
+    """检查单个元素是否符合 OpenAI content part 格式。
+
+    合法的 content part:
+    - str（纯文本，openai_normalize_content 会自动包装为 {"type": "text", "text": ...}）
+    - dict 且包含 "type" 字段，且 type 值属于已知的 OpenAI content part 类型
+    """
+    if isinstance(item, str):
+        return True
+    if isinstance(item, dict):
+        return item.get("type") in _OPENAI_CONTENT_PART_TYPES
+    return False
+
+
+def normalize_tool_result(result: Any) -> ContentT:
+    """将工具返回值转换为 ContentT，尽量保留多模态内容。
+
+    - None → 空字符串
+    - str  → 直接返回
+    - list → 如果每个元素都符合 OpenAI 多模态 content part 格式则保留，否则退化为 str
+    - 其它 → str(result)
+    """
+    if result is None:
+        return ""
+    if isinstance(result, str):
+        return result
+    if isinstance(result, list) and len(result) > 0:
+        if all(_is_openai_content_part(item) for item in result):
+            return result
+        return str(result)
+    return str(result)
+
 
 def _extract_plain_text(content: Optional[ContentT]) -> str:
     """从 ContentT 中提取纯文本。

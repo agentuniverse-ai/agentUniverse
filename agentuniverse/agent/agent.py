@@ -23,7 +23,7 @@ from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.enum import ChatMessageEnum
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.memory.memory_manager import MemoryManager
-from agentuniverse.agent.memory.message import Message
+from agentuniverse.agent.memory.message import Message, normalize_tool_result
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.ai_context.agent_context import AgentContext
 from agentuniverse.base.annotation.trace import trace_agent
@@ -332,7 +332,7 @@ class Agent(ComponentBase, ABC):
             result = tool.run(**arguments)
             return Message(
                 type=ChatMessageEnum.TOOL,
-                content=str(result) if result is not None else "",
+                content=normalize_tool_result(result),
                 tool_call_id=tool_call.id,
                 name=tool_name,
             )
@@ -364,7 +364,7 @@ class Agent(ComponentBase, ABC):
             result = await tool.async_run(**arguments)
             return Message(
                 type=ChatMessageEnum.TOOL,
-                content=str(result) if result is not None else "",
+                content=normalize_tool_result(result),
                 tool_call_id=tool_call.id,
                 name=tool_name,
             )
