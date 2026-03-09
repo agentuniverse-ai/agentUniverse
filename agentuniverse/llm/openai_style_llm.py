@@ -82,6 +82,7 @@ class OpenAIStyleLLM(LLM):
         )
 
     def _get_client(self, api_base: Optional[str]) -> OpenAI:
+        api_base = api_base or self.api_base
         if not api_base:
             return self._new_client()
         c = self._client_pool.get(api_base)
@@ -92,13 +93,14 @@ class OpenAIStyleLLM(LLM):
                 base_url=api_base,
                 timeout=self.request_timeout,
                 max_retries=self.max_retries,
-                http_client=self._httpx_client,
+                http_client=httpx.Client(proxy=self.proxy) if self.proxy else None,
                 **(self.client_args or {}),
             )
             self._client_pool[api_base] = c
         return c
 
     def _get_async_client(self, api_base: Optional[str]) -> AsyncOpenAI:
+        api_base = api_base or self.api_base
         if not api_base:
             return self._new_async_client()
 
@@ -110,7 +112,7 @@ class OpenAIStyleLLM(LLM):
                 base_url=api_base,
                 timeout=self.request_timeout,
                 max_retries=self.max_retries,
-                http_client=self._async_httpx_client,
+                http_client=httpx.AsyncClient(proxy=self.proxy) if self.proxy else None,
                 **(self.client_args or {}),
             )
             self._async_client_pool[api_base] = c
