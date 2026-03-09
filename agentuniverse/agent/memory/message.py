@@ -84,6 +84,8 @@ class FunctionCall(BaseModel):
 
     def parse_arguments(self) -> Dict[str, Any]:
         import json
+        if not self.arguments or not self.arguments.strip():
+            return {}
         return json.loads(self.arguments)
 
 
@@ -95,10 +97,14 @@ class ToolCall(BaseModel):
 
     @classmethod
     def create(cls, id: str, name: str,
-               arguments: Union[str, Dict]) -> "ToolCall":
+               arguments: Union[str, Dict, None] = None) -> "ToolCall":
         import json
-        if isinstance(arguments, dict):
+        if arguments is None:
+            arguments = "{}"
+        elif isinstance(arguments, dict):
             arguments = json.dumps(arguments, ensure_ascii=False)
+        elif not arguments.strip():
+            arguments = "{}"
         return cls(id=id,
                    function=FunctionCall(name=name, arguments=arguments))
 

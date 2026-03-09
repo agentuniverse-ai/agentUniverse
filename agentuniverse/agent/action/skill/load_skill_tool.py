@@ -154,7 +154,7 @@ class LoadSkillTool(Tool):
         )
 
         # 2. Append skill's allowed_tools to agent_context
-        if agent_context and skill.allowed_tools:
+        if agent_context and (skill.allowed_tools or skill.allowed_toolkits):
             self._add_tools_to_context(skill, agent_context)
 
         # 3. Build return text
