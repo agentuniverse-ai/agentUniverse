@@ -47,6 +47,7 @@ class Skill(ComponentBase):
     description: Optional[str] = None
     instructions: str = ""
     allowed_tools: Optional[List[str]] = None
+    allowed_toolkits: Optional[List[str]] = None
     context: str = "inline"
     sub_agent: Optional[str] = None
     model: Optional[str] = None
@@ -75,6 +76,7 @@ class Skill(ComponentBase):
         self.description = component_configer.description
         self.instructions = component_configer.instructions or ""
         self.allowed_tools = component_configer.allowed_tools
+        self.allowed_toolkits = component_configer.allowed_toolkits
         self.context = component_configer.context or "inline"
         self.sub_agent = component_configer.sub_agent
         self.model = component_configer.model
@@ -96,19 +98,32 @@ class Skill(ComponentBase):
         return self.model_copy(deep=True)
 
     def get_tool_names(self) -> List[str]:
-        """Extract pure tool names from allowed_tools (strip wildcard constraints).
+        """Extract pure tool names from allowed_tools and allowed_toolkits.
 
-        Example:
+        For allowed_tools, strips wildcard constraints:
             ["bash_executor(cmd:git *)", "file_reader"] -> ["bash_executor", "file_reader"]
+
+        For allowed_toolkits, expands each toolkit into its constituent tool names
+        via ToolkitManager.
 
         The original wildcard specs are preserved in allowed_tools for future
         permission system use.
         """
-        if not self.allowed_tools:
-            return []
         names = []
-        for spec in self.allowed_tools:
-            match = re.match(r'^([\w-]+)', spec.strip())
-            if match:
-                names.append(match.group(1))
+        # 1. Extract from allowed_tools
+        if self.allowed_tools:
+            for spec in self.allowed_tools:
+                match = re.match(r'^([\w-]+)', spec.strip())
+                if match:
+                    names.append(match.group(1))
+        # 2. Expand allowed_toolkits
+        if self.allowed_toolkits:
+            from agentuniverse.agent.action.toolkit.toolkit_manager import ToolkitManager
+            for toolkit_name in self.allowed_toolkits:
+                toolkit = ToolkitManager().get_instance_obj(toolkit_name, new_instance=False)
+                if toolkit:
+                    names.extend(toolkit.tool_names)
+                else:
+                    from agentuniverse.base.util.logging.logging_util import LOGGER
+                    LOGGER.warn(f"Skill '{self.name}': toolkit '{toolkit_name}' not found, skipped.")
         return names

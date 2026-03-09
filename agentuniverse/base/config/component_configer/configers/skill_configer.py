@@ -25,6 +25,7 @@ class SkillConfiger(ComponentConfiger):
         self.__description: Optional[str] = None
         self.__instructions: Optional[str] = None
         self.__allowed_tools: Optional[List[str]] = None
+        self.__allowed_toolkits: Optional[List[str]] = None
         self.__context: str = "inline"
         self.__sub_agent: Optional[str] = None
         self.__model: Optional[str] = None
@@ -59,6 +60,13 @@ class SkillConfiger(ComponentConfiger):
             instance.__allowed_tools = [t.strip() for t in raw_tools.split(',') if t.strip()]
         else:
             instance.__allowed_tools = raw_tools  # list or None
+
+        # allowed_toolkits: support list and comma-separated string
+        raw_toolkits = frontmatter.get('allowed_toolkits') or frontmatter.get('allowed-toolkits')
+        if isinstance(raw_toolkits, str):
+            instance.__allowed_toolkits = [t.strip() for t in raw_toolkits.split(',') if t.strip()]
+        else:
+            instance.__allowed_toolkits = raw_toolkits  # list or None
 
         instance.__context = frontmatter.get('context', 'inline')
         instance.__sub_agent = frontmatter.get('sub_agent') or frontmatter.get('sub-agent')
@@ -119,6 +127,10 @@ class SkillConfiger(ComponentConfiger):
     @property
     def allowed_tools(self) -> Optional[List[str]]:
         return self.__allowed_tools
+
+    @property
+    def allowed_toolkits(self) -> Optional[List[str]]:
+        return self.__allowed_toolkits
 
     @property
     def context(self) -> str:
