@@ -60,13 +60,6 @@ async def acall(self, *args: Any, **kwargs: Any):
         raise e
 
 
-def as_langchain(self) -> BaseLanguageModel:
-    """Convert to the langchain llm class."""
-    self.init_channel()
-    # If channel instance exists, execute channel's langchain model conversion method
-    if self._channel_instance:
-        return self._channel_instance.as_langchain()
-    pass
 ```
 
 ## Model Channel Configurable Parameters

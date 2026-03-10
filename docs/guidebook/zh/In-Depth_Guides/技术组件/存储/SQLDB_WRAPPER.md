@@ -1,6 +1,6 @@
 # SQLDB Wrapper
 
-agentUniverse基于SQLAlchemy和langchain的SQLDatabase，提供了一个方便用户使用大多数基于SQL的数据库的`SQLDBWrapper`类，如SQLite、MySQL、Oracle等，具体请参考[SQLAlchemy官方网站](https://docs.sqlalchemy.org/en/20/dialects/)。通过`SQLDBWrapper`，您可以方便的同时管理多种不同的数据库连接对象。
+agentUniverse基于SQLAlchemy，提供了一个方便用户使用大多数基于SQL的数据库的`SQLDBWrapper`类，如SQLite、MySQL、Oracle等，具体请参考[SQLAlchemy官方网站](https://docs.sqlalchemy.org/en/20/dialects/)。通过`SQLDBWrapper`，您可以方便的同时管理多种不同的数据库连接对象。
 
 ## 注册方式
 
@@ -29,7 +29,7 @@ metadata:
 - **`name`**:SQLDBWrapper的名称，用于标识唯一的一个实例。
 - **`description`**:对SQLDBWrapper的名称功能的描述。
 - **`db_uri`**:一个SQLAlchemy风的数据库uri，用于创建SQLAlchemy引擎。
-- **`sql_database_args`**:可选参数，`LangChain`中`SQLDatabase`类的配置参数，具体可参考[LangChain官网](https://python.langchain.com/v0.1/docs/integrations/toolkits/sql_database/)。
+- **`sql_database_args`**:可选参数，SQLDatabase类的配置参数，如`include_tables`、`max_string_length`等。
 - **`engine_args`**:可选参数，用于配置SQLAlchemy的引擎参数。具体可配置内容请参考[SQLAlchemy网页](https://docs.sqlalchemy.org/en/20/core/engines.html#sqlalchemy.create_engine)。
 - **`metadata`**:表示该配置是一个SQLDB_WRAPPER配置，无需改动。
 

@@ -80,3 +80,22 @@ store = ['sample_standard_app.intelligence.agentic.knowledge.store']
 - [Chroma](../../../In-Depth_Guides/Tech_Capabilities/Storage/ChromaDB.md)
 - [Milvus](../../../In-Depth_Guides/Tech_Capabilities/Storage/Milvus.md)
 - [Sqlite](../../../In-Depth_Guides/Tech_Capabilities/Storage/Sqlite.md)
+- HybridKnowledgeStore
+
+### HybridKnowledgeStore
+A composite knowledge store that delegates operations to multiple sub-stores. All CRUD operations are executed in parallel across all child stores, and query results are automatically deduplicated.
+
+```yaml
+name: 'my_hybrid_store'
+description: 'vector + kv hybrid store'
+store_names:
+  - chroma_store
+  - sqlite_store
+metadata:
+  type: 'STORE'
+  module: 'agentuniverse.agent.action.knowledge.store.hybrid_store'
+  class: 'HybridKnowledgeStore'
+```
+
+## Knowledge Tool
+Knowledge components can be automatically wrapped as tools for LLM function calling. When an agent is configured with Knowledge, the framework automatically registers it as a callable tool with the `__knowledge_tool__` prefix.

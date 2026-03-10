@@ -87,17 +87,6 @@ async def acall(self, *args: Any, **kwargs: Any) -> Union[LLMOutput, AsyncIterat
     """Asynchronously run the LLM."""
 ```
 
-#### The as_langchain method
-agentUniverse utilizes the capabilities of langchain at a lower level. It is compatible with the LLM definition methods used by langchain. If your project has already been using langchain, then all you need to do in this method is to incorporate the BaseLanguageModel, which is a fundamental model from the Langchain framework, to merge agentUniverse with langchain. agentUniverse can support integration with any similar orchestration framework, such as Semantic Kernel, though currently, our focus is on langchain.
-
-```python
-from langchain_core.language_models.base import BaseLanguageModel
-
-def as_langchain(self) -> BaseLanguageModel:
-        """Convert to the langchain llm class."""
-        pass
-```
-
 #### The max_context_length method
 This method defines the maximum context length for an LLM model. For example, the max_context_length method returns 8192 for GPT-4 and 4096 for GPT-3.5-turbo. This information can be found in the model's official documentation.
 
@@ -111,12 +100,10 @@ Taking the OpenAI LLM series as an example, let's consider OpenAILLM.py.
 from typing import Any, Optional, AsyncIterator, Iterator, Union
 
 import httpx
-from langchain_core.language_models.base import BaseLanguageModel
 from openai import OpenAI, AsyncOpenAI
 from pydantic import Field
 import tiktoken
 
-from agentuniverse.llm.langchain_instance import LangchainOpenAI
 from agentuniverse.llm.llm import LLM, LLMOutput
 from agentuniverse.base.util.env_util import get_from_env
 
@@ -234,10 +221,6 @@ class OpenAILLM(LLM):
                 return LLMOutput(text=text, raw=chat_completion.model_dump())
             return self.agenerate_stream_result(chat_completion)
 
-    def as_langchain(self) -> BaseLanguageModel:
-        """Convert the agentUniverse(AU) openai llm class to the langchain openai llm class."""
-        return LangchainOpenAI(self)
-
     def max_context_length(self) -> int:
         """Max context length.
 
@@ -293,137 +276,7 @@ class OpenAILLM(LLM):
             if llm_output:
                 yield llm_output
 ```
-In the aforementioned example, we connect to the standard OpenAI client SDK through the `_new_client` and `_new_async_client` methods. The implementation of `call` and `acall` accomplishes the standard synchronous and asynchronous invocation methods of OpenAI. By introducing the LangchainOpenAI object in `as_langchain`, we complete the integration with the langchain framework.
-
-LangchainOpenAI.py is an object of the BaseLanguageModel from langchain. You can refer to the following example.
-
-```python
-from typing import Any, List, Optional, AsyncIterator
-
-from langchain.callbacks.manager import AsyncCallbackManagerForLLMRun, CallbackManagerForLLMRun
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import BaseMessage, ChatResult
-from langchain_community.chat_models.openai import _convert_delta_to_message_chunk
-from langchain_core.language_models.chat_models import generate_from_stream, agenerate_from_stream
-from langchain_core.messages import AIMessageChunk
-from langchain_core.outputs import ChatGenerationChunk
-
-from agentuniverse.llm.llm import LLM
-
-
-class LangchainOpenAI(ChatOpenAI):
-    """Langchain OpenAI LLM wrapper."""
-
-    llm: Optional[LLM] = None
-
-    def __init__(self, llm: LLM):
-        """The __init__ method.
-
-        The agentUniverse LLM instance is passed to this class as an argument.
-        Convert the attributes of agentUniverse(AU) LLM instance to the LangchainOpenAI object for initialization
-
-        Args:
-            llm (LLM): the agentUniverse(AU) LLM instance.
-        """
-        init_params = dict()
-        init_params['model_name'] = llm.model_name if llm.model_name else 'gpt-3.5-turbo'
-        init_params['temperature'] = llm.temperature if llm.temperature else 0.7
-        init_params['request_timeout'] = llm.request_timeout
-        init_params['max_tokens'] = llm.max_tokens
-        init_params['max_retries'] = llm.max_retries if llm.max_retries else 2
-        init_params['streaming'] = llm.streaming if llm.streaming else False
-        init_params['openai_api_key'] = llm.openai_api_key if llm.openai_api_key else 'blank'
-        init_params['openai_organization'] = llm.openai_organization
-        init_params['openai_api_base'] = llm.openai_api_base
-        init_params['openai_proxy'] = llm.openai_proxy
-        super().__init__(**init_params)
-        self.llm = llm
-
-    def _generate(
-            self,
-            messages: List[BaseMessage],
-            stop: Optional[List[str]] = None,
-            run_manager: Optional[CallbackManagerForLLMRun] = None,
-            stream: Optional[bool] = None,
-            **kwargs,
-    ) -> ChatResult:
-        """Run the Langchain OpenAI LLM."""
-        should_stream = stream if stream is not None else self.streaming
-        message_dicts, params = self._create_message_dicts(messages, stop)
-        params = {**params, **kwargs}
-        llm_output = self.llm.call(messages=message_dicts, **params)
-        if not should_stream:
-            return self._create_chat_result(llm_output.raw)
-        stream_iter = self.as_langchain_chunk(llm_output)
-        return generate_from_stream(stream_iter)
-
-    async def _agenerate(
-            self,
-            messages: List[BaseMessage],
-            stop: Optional[List[str]] = None,
-            run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
-            stream: Optional[bool] = None,
-            **kwargs: Any,
-    ) -> ChatResult:
-        """Asynchronously run the Langchain OpenAI LLM."""
-        should_stream = stream if stream is not None else self.streaming
-        message_dicts, params = self._create_message_dicts(messages, stop)
-        params = {**params, **kwargs}
-        llm_output = await self.llm.acall(messages=message_dicts, **params)
-        if not should_stream:
-            return self._create_chat_result(llm_output.raw)
-        stream_iter = self.as_langchain_achunk(llm_output)
-        return await agenerate_from_stream(stream_iter)
-
-    @staticmethod
-    def as_langchain_chunk(stream, run_manager=None):
-        default_chunk_class = AIMessageChunk
-        for llm_result in stream:
-            chunk = llm_result.raw
-            if not isinstance(chunk, dict):
-                chunk = chunk.dict()
-            if len(chunk["choices"]) == 0:
-                continue
-            choice = chunk["choices"][0]
-            chunk = _convert_delta_to_message_chunk(
-                choice["delta"], default_chunk_class
-            )
-            finish_reason = choice.get("finish_reason")
-            generation_info = (
-                dict(finish_reason=finish_reason) if finish_reason is not None else None
-            )
-            default_chunk_class = chunk.__class__
-            chunk = ChatGenerationChunk(message=chunk, generation_info=generation_info)
-            yield chunk
-            if run_manager:
-                run_manager.on_llm_new_token(chunk.text, chunk=chunk)
-
-    @staticmethod
-    async def as_langchain_achunk(stream_iterator: AsyncIterator, run_manager=None) \
-            -> AsyncIterator[ChatGenerationChunk]:
-        default_chunk_class = AIMessageChunk
-        async for llm_result in stream_iterator:
-            chunk = llm_result.raw
-            if not isinstance(chunk, dict):
-                chunk = chunk.dict()
-            if len(chunk["choices"]) == 0:
-                continue
-            choice = chunk["choices"][0]
-            chunk = _convert_delta_to_message_chunk(
-                choice["delta"], default_chunk_class
-            )
-            finish_reason = choice.get("finish_reason")
-            generation_info = (
-                dict(finish_reason=finish_reason) if finish_reason is not None else None
-            )
-            default_chunk_class = chunk.__class__
-            chunk = ChatGenerationChunk(message=chunk, generation_info=generation_info)
-            yield chunk
-            if run_manager:
-                await run_manager.on_llm_new_token(token=chunk.text, chunk=chunk)
-```
-
-Within the integration object of agentUniverse and langchain, you only need to refactor the `_generate` and `_agenerate` methods of the langchain's LLM model. The focus here is on utilizing the `self.llm.call` and `self.llm.acall` methods. Other aspects will be mentioned in the practical tips section later on and will not be elaborated here.
+In the aforementioned example, we connect to the standard OpenAI client SDK through the `_new_client` and `_new_async_client` methods. The implementation of `call` and `acall` accomplishes the standard synchronous and asynchronous invocation methods of OpenAI.
 
 ## Pay attention to the package path where your defined LLM is located.
 
@@ -455,8 +308,6 @@ OPENAI_API_KEY='xxx'
 ## Other Tips for Creating LLM Model Components
 ### Adding LLM Streaming Capabilities
 In the example provided in [Customizing the Corresponding LLM Domain Behavior](#An Actual Example of LLM Domain Behavior Definition), streaming capabilities have already been outlined. You can focus on the methods `generate_stream_result` and `agenerate_stream_result` within `call` and `acall`.
-
-If you are using the Langchain-related LLM class and need to implement streaming return in `_generate` and `_agenerate`, you should pay particular attention to the methods `as_langchain_chunk` and `as_langchain_achunk` in the example LangchainOpenAI.py.
 
 ### Creating from Existing LLMs Object
 agentUniverse allows for the quick creation of LLM instances from existing LLM component objects.

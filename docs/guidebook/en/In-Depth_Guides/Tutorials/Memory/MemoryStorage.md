@@ -147,4 +147,26 @@ metadata:
   type: 'SQLDB_WRAPPER'
 ```
 
+### [hybrid_memory_storage](../../../../../../agentuniverse/agent/memory/memory_storage/hybrid_memory_storage.py)
+
+A composite memory storage that delegates operations to multiple child storage backends. All write operations are executed in parallel across all child storages, and read operations return the first non-empty result.
+
+```yaml
+name: 'my_hybrid_storage'
+description: 'vector + kv hybrid memory storage'
+storage_names:
+  - chroma_memory_storage
+  - mysql_memory_storage
+metadata:
+  type: 'MEMORY_STORAGE'
+  module: 'agentuniverse.agent.memory.memory_storage.hybrid_memory_storage'
+  class: 'HybridMemoryStorage'
+```
+
+The `storage_names` field lists the names of child storage instances. Add and delete operations are fanned out to all child storages in parallel, while get operations return data from the first child storage that has results.
+
+### [qdrant_memory_storage](../../../../../../agentuniverse/agent/memory/memory_storage/qdrant_memory_storage.py)
+
+Qdrant vector database memory storage, supporting vector-based memory retrieval.
+
 Here, `db_uri` is the database connection address, and `engine_args` are the engine parameters for SqlAlchemy.

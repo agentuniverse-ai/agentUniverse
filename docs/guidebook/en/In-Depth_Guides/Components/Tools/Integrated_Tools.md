@@ -161,7 +161,6 @@ metadata:
 Configuration to Refer to When Sending a POST Request：
 ```yaml
 name: 'requests_post'
-# description copy from langchain RequestPOSTTool
 description: 'Use this when you want to POST to a website.
     Input should be a json string with two keys: "url" and "data".
     The value of "url" should be a string, and the value of "data" should be a dictionary of 
@@ -186,5 +185,72 @@ Parameter Description:
     headers: the HTTP headers necessary for sending the request.
     json_parse: indicates whether the input parameters should be serialized as JSON and sent in the request body (True for POST requests) or not (False for GET requests, where parameters are typically sent as a query string).
     response_content_type: the output format for the HTTP request result. If set to 'json', the result will be returned in JSON format; if set to 'text', it will be returned as plain text.
-This tool can be used directly without  requiring any keys.
+This tool can be used directly without requiring any keys.
 
+## 4. New Built-in Tools
+
+The following built-in tools are newly added under the `agentuniverse.agent.action.tool.common_tool` package.
+
+### 4.1 DuckDuckGo Search Tool
+A web search tool based on DuckDuckGo, no API key required.
+```yaml
+name: 'duckduckgo_search'
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.duckduckgo_search_tool'
+  class: 'DuckDuckGoSearchTool'
+```
+
+### 4.2 Web Search Tool
+Enhanced search with domain filtering.
+```yaml
+name: 'web_search_tool'
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.web_search_tool'
+  class: 'WebSearchTool'
+```
+
+### 4.3 Web Fetch Tool
+Fetches URL content and converts HTML to readable text.
+```yaml
+name: 'web_fetch_tool'
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.web_fetch_tool'
+  class: 'WebFetchTool'
+```
+
+### 4.4 Bash Command Tool
+Executes shell commands.
+```yaml
+name: 'bash_tool'
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.run_command_tool'
+  class: 'RunCommandTool'
+```
+
+### 4.5 File Tools (Read / Write / Edit)
+- **Read**: `ViewFileTool` - Read file content with optional line range
+- **Write**: `WriteFileTool` - Write or append content to files
+- **Edit**: `EditTool` - Exact string replacements in files
+
+### 4.6 Search Tools (Glob / Grep)
+- **Glob**: `GlobTool` - Fast file pattern matching
+- **Grep**: `GrepTool` - Regex-based file content search
+
+### 4.7 SQL Database Tools
+- **QuerySqlDbTool**: Execute SQL queries
+- **ListSqlDbTool**: List all table names
+- **InfoSqlDbTool**: Get table schema information
+
+### 4.8 Human Input Tool
+Interactive terminal input tool.
+```yaml
+name: 'human_input_run'
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.human_input_tool'
+  class: 'HumanInputTool'
+```

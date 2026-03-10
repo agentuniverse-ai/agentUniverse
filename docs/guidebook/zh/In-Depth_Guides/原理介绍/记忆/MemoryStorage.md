@@ -141,3 +141,25 @@ metadata:
 ```
 
 其中db_uri为数据库连接地址，engine_args为sqlalchemy的engine参数。
+
+### [hybrid_memory_storage](../../../../../../agentuniverse/agent/memory/memory_storage/hybrid_memory_storage.py)
+
+混合记忆存储器，可以将多个子MemoryStorage组合使用。所有写入操作会并行分发到所有子存储器，读取操作返回第一个非空结果。
+
+```yaml
+name: 'my_hybrid_storage'
+description: 'vector + kv hybrid memory storage'
+storage_names:
+  - chroma_memory_storage
+  - mysql_memory_storage
+metadata:
+  type: 'MEMORY_STORAGE'
+  module: 'agentuniverse.agent.memory.memory_storage.hybrid_memory_storage'
+  class: 'HybridMemoryStorage'
+```
+
+其中`storage_names`为子存储器的名称列表。写入（add）和删除（delete）操作会并行分发到所有子存储器，获取（get）操作默认返回第一个有结果的子存储器的数据。
+
+### [qdrant_memory_storage](../../../../../../agentuniverse/agent/memory/memory_storage/qdrant_memory_storage.py)
+
+Qdrant向量数据库记忆存储器，支持向量检索方式的记忆获取。

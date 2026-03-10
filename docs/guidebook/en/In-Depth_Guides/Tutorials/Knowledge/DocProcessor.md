@@ -87,7 +87,7 @@ This component splits the original text based on the number of characters.
 The component definition file is as follows:
 ```yaml
 name: 'character_text_splitter'
-description: 'langchain character text splitter'
+description: 'character text splitter'
 chunk_size: 200
 chunk_overlap: 20
 separators: "/n/n"
@@ -107,7 +107,7 @@ The component definition file is as follows:
 
 ```yaml
 name: 'token_text_splitter'
-description: 'langchain token text splitter'
+description: 'token text splitter'
 chunk_size: 200
 chunk_overlap: 20
 tokenizer: 'default_tokenizer'
@@ -127,7 +127,7 @@ This component recursively splits the original text based on the specified separ
 The component definition file is as follows:
 ```yaml
 name: 'recursive_character_text_splitter'
-description: 'langchain recursive character text splitter'
+description: 'recursive character text splitter'
 chunk_size: 200
 chunk_overlap: 20
 separators:
