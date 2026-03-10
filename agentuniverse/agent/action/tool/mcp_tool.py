@@ -1,6 +1,5 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-import asyncio
 from typing import Optional, Literal, List
 
 from mcp.types import CallToolResult
@@ -51,11 +50,7 @@ class MCPTool(Tool):
             server_name=self.server_name,
             **self.get_mcp_server_connect_args()
         )
-        result = await asyncio.to_thread(
-            MCPSessionManager().managed_stack.run_async,
-            session.call_tool, self.tool_name, kwargs
-        )
-        return result
+        return await session.call_tool(self.tool_name, kwargs)
 
     def get_mcp_server_connect_args(self) -> dict:
         if self.transport == "stdio":

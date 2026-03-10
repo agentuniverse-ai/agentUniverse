@@ -4,7 +4,7 @@ import asyncio
 import os
 import threading
 from concurrent.futures import Future
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 # @Time    : 2024/3/11 16:02
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
@@ -118,6 +118,86 @@ class ManagedExitStack:
                 pass
 
 
+class AsyncManagedExitStack:
+    """Async counterpart of ManagedExitStack.
+
+    Uses a dedicated asyncio.Task (instead of a background thread + portal)
+    as the owner of an AsyncExitStack.  All __aenter__/__aexit__ operations
+    are dispatched to the owner task via an asyncio.Queue, satisfying
+    anyio's requirement that cancel scopes are entered/exited in the
+    same task.
+
+    session.call_tool() etc. can still be called directly from any task —
+    only context-manager lifecycle needs the owner.
+    """
+
+    def __init__(self) -> None:
+        self._queue: asyncio.Queue = asyncio.Queue()
+        self._ready: asyncio.Event = asyncio.Event()
+        self._owner_task: asyncio.Task | None = None
+        self._start_lock: asyncio.Lock = asyncio.Lock()
+        self._started: bool = False
+
+    async def _ensure_started(self) -> None:
+        if self._started:
+            return
+        async with self._start_lock:
+            if self._started:
+                return
+            self._owner_task = asyncio.create_task(self._owner_loop())
+            await self._ready.wait()
+            self._started = True
+
+    async def _owner_loop(self) -> None:
+        """Single long-lived task that owns the AsyncExitStack."""
+        async with AsyncExitStack() as stack:
+            self._ready.set()
+            while True:
+                cmd, args, future = await self._queue.get()
+                try:
+                    if cmd == 'enter':
+                        result = await stack.enter_async_context(args[0])
+                        future.set_result(result)
+                    elif cmd == 'run':
+                        func, func_args = args
+                        result = await func(*func_args)
+                        future.set_result(result)
+                    elif cmd == 'close':
+                        future.set_result(None)
+                        break
+                except Exception as e:
+                    future.set_exception(e)
+        # After break, the `async with` block exits naturally,
+        # calling stack.aclose() which runs all __aexit__ in THIS task.
+
+    async def enter_async_context(self, cm) -> Any:
+        """Enter an async context manager in the owner task."""
+        await self._ensure_started()
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        await self._queue.put(('enter', (cm,), future))
+        return await future
+
+    async def run_async(self, func, *args) -> Any:
+        """Run an async callable in the owner task."""
+        await self._ensure_started()
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        await self._queue.put(('run', (func, args), future))
+        return await future
+
+    async def aclose(self) -> None:
+        """Signal the owner task to close all CMs and shut down."""
+        if not self._started:
+            return
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        await self._queue.put(('close', (), future))
+        await future
+        if self._owner_task:
+            await self._owner_task
+
+
 class MCPTempClient:
     """A temporary MCP client that auto-connects and cleans up via `with`.
 
@@ -175,6 +255,10 @@ class MCPSessionManager:
     def __init__(self):
         self.__mcp_session_dict: ContextVar[dict | None] = ContextVar("__mcp_session_dict__")
         self.__managed_stack: ContextVar[ManagedExitStack | None] = ContextVar("__mcp_managed_stack__")
+        # Async-native session management (no ManagedExitStack / to_thread)
+        self.__async_exit_stack: ContextVar[AsyncManagedExitStack | None] = ContextVar("__async_exit_stack__")
+        self.__async_session_dict: ContextVar[dict | None] = ContextVar("__async_session_dict__")
+        self.__async_connect_lock: ContextVar[asyncio.Lock | None] = ContextVar("__async_connect_lock__")
 
     def init_session(self) -> None:
         """Initialize a new MCP session scope for the current request."""
@@ -195,6 +279,30 @@ class MCPSessionManager:
         if val is None:
             val = ManagedExitStack()
             self.__managed_stack.set(val)
+        return val
+
+    @property
+    def async_exit_stack(self) -> AsyncManagedExitStack:
+        val = self.__async_exit_stack.get(None)
+        if val is None:
+            val = AsyncManagedExitStack()
+            self.__async_exit_stack.set(val)
+        return val
+
+    @property
+    def async_session_dict(self) -> dict:
+        val = self.__async_session_dict.get(None)
+        if val is None:
+            val = {}
+            self.__async_session_dict.set(val)
+        return val
+
+    @property
+    def async_connect_lock(self) -> asyncio.Lock:
+        val = self.__async_connect_lock.get(None)
+        if val is None:
+            val = asyncio.Lock()
+            self.__async_connect_lock.set(val)
         return val
 
     # ------------------------------------------------------------------ #
@@ -256,6 +364,53 @@ class MCPSessionManager:
         self.__managed_stack.set(None)
         self.__mcp_session_dict.set(None)
 
+    async def init_session_async(self) -> None:
+        """Initialize a new async MCP session scope for the current request."""
+        self.__async_exit_stack.set(AsyncManagedExitStack())
+        self.__async_session_dict.set({})
+        self.__async_connect_lock.set(asyncio.Lock())
+
+    async def close_session_async(self) -> None:
+        """Close all async MCP connections and clean up.
+
+        Should only be called by the request owner (the code path that
+        called init_session_async).
+        """
+        stack = self.__async_exit_stack.get(None)
+        if stack is not None:
+            await stack.aclose()
+        self.__async_exit_stack.set(None)
+        self.__async_session_dict.set(None)
+        self.__async_connect_lock.set(None)
+
+    @contextmanager
+    def session_scope(self):
+        """Sync context manager for request-scoped MCP sessions.
+
+        Usage::
+            with MCPSessionManager().session_scope():
+                agent.run(**kwargs)
+        """
+        self.init_session()
+        try:
+            yield
+        finally:
+            self.close_session()
+
+    @asynccontextmanager
+    async def async_session_scope(self):
+        """Async context manager for request-scoped MCP sessions.
+
+        Usage::
+            async with MCPSessionManager().async_session_scope():
+                await agent.async_run(**kwargs)
+        """
+        await self.init_session_async()
+        try:
+            yield
+        finally:
+            await self.close_session_async()
+
     # ------------------------------------------------------------------ #
     #  Get or create session
     # ------------------------------------------------------------------ #
@@ -283,17 +438,22 @@ class MCPSessionManager:
         transport: Literal["stdio", "sse", "websocket", "streamable_http"] = "stdio",
         **kwargs,
     ) -> ClientSession:
-        """Get a cached session or create a new connection (async).
+        """Get a cached async session or create a new connection.
 
-        Uses asyncio.to_thread to avoid blocking the caller's event loop.
+        Uses double-check locking to avoid duplicate connections when
+        multiple coroutines concurrently request the same server.
         """
-        session = self.mcp_session_dict.get(server_name)
+        session = self.async_session_dict.get(server_name)
         if session is not None:
             return session
-        return await asyncio.to_thread(
-            self.connect_to_server,
-            server_name=server_name, transport=transport, **kwargs
-        )
+        async with self.async_connect_lock:
+            # Double check after acquiring lock
+            session = self.async_session_dict.get(server_name)
+            if session is not None:
+                return session
+            return await self._async_connect_to_server(
+                server_name=server_name, transport=transport, **kwargs
+            )
 
     # ------------------------------------------------------------------ #
     #  Connect (unified — one implementation per transport)
@@ -437,4 +597,123 @@ class MCPSessionManager:
 
         if managed_stack is None:
             self.mcp_session_dict[server_name] = session
+        return session
+
+    # ------------------------------------------------------------------ #
+    #  Async-native connect (no ManagedExitStack / to_thread)
+    # ------------------------------------------------------------------ #
+
+    async def _async_connect_to_server(
+        self,
+        server_name: str,
+        transport: Literal["stdio", "sse", "websocket", "streamable_http"] = "stdio",
+        **kwargs,
+    ) -> ClientSession:
+        if transport == "stdio":
+            return await self._async_connect_via_stdio(server_name, **kwargs)
+        elif transport == "sse":
+            return await self._async_connect_via_sse(server_name, **kwargs)
+        elif transport == "streamable_http":
+            return await self._async_connect_via_streamable_http(server_name, **kwargs)
+        elif transport == "websocket":
+            return await self._async_connect_via_websocket(server_name, **kwargs)
+        else:
+            raise ValueError(
+                f"Unsupported transport: {transport}. "
+                f"Must be one of: stdio, sse, websocket, streamable_http"
+            )
+
+    async def _async_connect_via_stdio(
+        self,
+        server_name: str,
+        *,
+        command: str,
+        args: list[str],
+        env: dict[str, str] | None = None,
+        encoding: str = DEFAULT_ENCODING,
+        encoding_error_handler: EncodingErrorHandler = DEFAULT_ENCODING_ERROR_HANDLER,
+        session_kwargs: dict | None = None,
+    ) -> ClientSession:
+        env = env or {}
+        if "PATH" not in env:
+            env["PATH"] = os.environ.get("PATH", "")
+
+        server_params = StdioServerParameters(
+            command=command,
+            args=args,
+            env=env,
+            encoding=encoding,
+            encoding_error_handler=encoding_error_handler,
+        )
+
+        stack = self.async_exit_stack
+        read, write = await stack.enter_async_context(stdio_client(server_params))
+        session_kwargs = session_kwargs or {}
+        session = await stack.enter_async_context(ClientSession(read, write, **session_kwargs))
+        await stack.run_async(session.initialize)
+        self.async_session_dict[server_name] = session
+        return session
+
+    async def _async_connect_via_sse(
+        self,
+        server_name: str,
+        *,
+        url: str,
+        headers: dict | None = None,
+        timeout: float = DEFAULT_HTTP_TIMEOUT,
+        sse_read_timeout: float = DEFAULT_SSE_READ_TIMEOUT,
+        session_kwargs: dict | None = None,
+    ) -> ClientSession:
+        stack = self.async_exit_stack
+        read, write = await stack.enter_async_context(
+            sse_client(url, headers, timeout, sse_read_timeout)
+        )
+        session_kwargs = session_kwargs or {}
+        session = await stack.enter_async_context(ClientSession(read, write, **session_kwargs))
+        await stack.run_async(session.initialize)
+        self.async_session_dict[server_name] = session
+        return session
+
+    async def _async_connect_via_streamable_http(
+        self,
+        server_name: str,
+        *,
+        url: str,
+        headers: dict[str, Any] | None = None,
+        timeout: timedelta = DEFAULT_STREAMABLE_HTTP_TIMEOUT,
+        sse_read_timeout: timedelta = DEFAULT_STREAMABLE_HTTP_SSE_READ_TIMEOUT,
+        session_kwargs: dict[str, Any] | None = None,
+    ) -> ClientSession:
+        stack = self.async_exit_stack
+        read, write, _ = await stack.enter_async_context(
+            streamablehttp_client(url, headers, timeout, sse_read_timeout)
+        )
+        session_kwargs = session_kwargs or {}
+        session = await stack.enter_async_context(ClientSession(read, write, **session_kwargs))
+        await stack.run_async(session.initialize)
+        self.async_session_dict[server_name] = session
+        return session
+
+    async def _async_connect_via_websocket(
+        self,
+        server_name: str,
+        *,
+        url: str,
+        session_kwargs: dict[str, Any] | None = None,
+    ) -> ClientSession:
+        try:
+            from mcp.client.websocket import websocket_client
+        except ImportError:
+            raise ImportError(
+                "Could not import websocket_client. "
+                "To use Websocket connections, please install the required "
+                "dependency with: 'pip install mcp[ws]' or 'pip install websockets'"
+            ) from None
+
+        stack = self.async_exit_stack
+        read, write = await stack.enter_async_context(websocket_client(url))
+        session_kwargs = session_kwargs or {}
+        session = await stack.enter_async_context(ClientSession(read, write, **session_kwargs))
+        await stack.run_async(session.initialize)
+        self.async_session_dict[server_name] = session
         return session
