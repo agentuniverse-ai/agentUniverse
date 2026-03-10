@@ -183,8 +183,6 @@ The properties and domain behaviors of the agent are both dependent on the Agent
 
 #### An actual example of an agent domain behavior definition.
 ```python
-from langchain_core.output_parsers import StrOutputParser
-
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.llm.llm import LLM
@@ -208,10 +206,9 @@ class DemoAgent(Agent):
     def execute(self, input_object: InputObject, agent_input: dict) -> dict:
         llm: LLM = self.process_llm()
         prompt: Prompt = self.process_prompt(agent_input)
-        chain = prompt.as_langchain() | llm.as_langchain_runnable(
-            self.agent_model.llm_params()) | StrOutputParser()
-        res = self.invoke_chain(chain, agent_input, input_object)
-        return {**agent_input, 'output': res}
+        messages = prompt.generate_messages(agent_input)
+        llm_output = llm.call(messages=messages)
+        return {**agent_input, 'output': llm_output.text}
 ```
 The above provides an actual example of an agent domain behavior definition.
 

@@ -1,6 +1,6 @@
 # SQLDB Wrapper
 
-Based on SQLAlchemy and Langchain's SQLDatabase, agentUniverse offers a `SQLDBWrapper` class that allows users to conveniently utilize most SQL-based databases, such as SQLite, MySQL, Oracle, and more. For detailed information, please refer to the [SQLAlchemy official website](https://docs.sqlalchemy.org/en/20/dialects/). With SQLDBWrapper, users can easily manage multiple different database connection objects simultaneously.
+Based on SQLAlchemy, agentUniverse offers a `SQLDBWrapper` class that allows users to conveniently utilize most SQL-based databases, such as SQLite, MySQL, Oracle, and more. For detailed information, please refer to the [SQLAlchemy official website](https://docs.sqlalchemy.org/en/20/dialects/). With SQLDBWrapper, users can easily manage multiple different database connection objects simultaneously.
 
 ## Registration Method
 
@@ -29,7 +29,7 @@ metadata:
 - **`name`**: The name of the SQLDBWrapper, used to uniquely identify an instance.
 - **`description`**: A brief description of the functionality of the SQLDBWrapper's.
 - **`db_uri`**: A SQLAlchemy-style database URI, which is used to create a SQLAlchemy engine.
-- **`sql_database_args`**: Optional parameters for the SQLDatabase class in `LangChain`. For specific details, refer to [LangChain's official website](https://python.langchain.com/v0.1/docs/integrations/toolkits/sql_database/).
+- **`sql_database_args`**: Optional parameters for the SQLDatabase class, such as `include_tables`, `max_string_length`, etc.
 - **`engine_args`**:  Optional parameters used to configure SQLAlchemy engine settings. For specific configurable options, please refer to [SQLAlchemy's webpage](https://docs.sqlalchemy.org/en/20/core/engines.html#sqlalchemy.create_engine).
 - **`metadata`**: Indicates that this configuration is specific to the `SQLDB_WRAPPER`and should not be changed.
 

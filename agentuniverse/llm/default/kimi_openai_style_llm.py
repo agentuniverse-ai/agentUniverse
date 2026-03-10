@@ -15,9 +15,26 @@ from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
 
 KIMI_Max_CONTEXT_LENGTH = {
-    "moonshot-v1-8k": 8000,
-    "moonshot-v1-32k": 32000,
-    "moonshot-v1-128k": 128000
+    # ===== Moonshot-v1 (text) =====
+    "moonshot-v1-8k": 8192,        # 8,192 tokens
+    "moonshot-v1-32k": 32768,      # 32,768 tokens
+    "moonshot-v1-128k": 131072,    # 131,072 tokens
+    "moonshot-v1-auto": 131072,
+
+    # ===== Moonshot-v1 (vision preview) =====
+    "moonshot-v1-8k-vision-preview": 8192,
+    "moonshot-v1-32k-vision-preview": 32768,
+    "moonshot-v1-128k-vision-preview": 131072,
+
+    # ===== Kimi K2 (text / agentic) =====
+    "kimi-k2-0711-preview": 131072,       # 128K
+    "kimi-k2-0905-preview": 262144,       # 256K
+    "kimi-k2-turbo-preview": 262144,      # 256K (高速版，对标最新 k2)
+    "kimi-k2-thinking": 262144,           # 256K (思考模型)
+    "kimi-k2-thinking-turbo": 262144,     # 256K (思考+高速)
+
+    # ===== Kimi K2.5 (native multimodal) =====
+    "kimi-k2.5": 262144,                 # 256K (多模态：文本+图像)
 }
 
 

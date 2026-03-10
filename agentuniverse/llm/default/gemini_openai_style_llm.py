@@ -16,8 +16,15 @@ from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
 
 # Define maximum context lengths for different Gemini models
 GEMINI_MAX_CONTEXT_LENGTH = {
-    "gemini-2.0-flash": 1048576  # Example value, adjust as needed
-    # Add more Gemini models and their context lengths as needed
+    "gemini-3.0-pro": 2097152,        # ~2M tokens (2^21)
+    "gemini-3.0-flash": 1048576,
+    "gemini-2.0-pro": 2097152,
+    "gemini-2.0-flash": 1048576,  # ~1M tokens (2^20)
+    "gemini-1.5-pro": 2097152,  # ~2M tokens (2^21)
+    "gemini-1.5-flash": 1048576,  # ~1M tokens (2^20)
+    "gemini-1.5-flash-8b": 1048576,  # ~1M tokens
+    "gemini-1.0-pro": 32768,  # 32k tokens (2^15)
+    "gemini-1.0-pro-vision": 16384,  # 16k tokens
 }
 
 

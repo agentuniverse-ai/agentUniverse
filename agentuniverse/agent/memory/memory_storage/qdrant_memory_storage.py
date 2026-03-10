@@ -12,6 +12,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, ClassVar
 import uuid
 from qdrant_client import QdrantClient
+try:
+    from qdrant_client import AsyncQdrantClient
+    ASYNC_QDRANT_AVAILABLE = True
+except ImportError:
+    ASYNC_QDRANT_AVAILABLE = False
+    AsyncQdrantClient = None
 from qdrant_client.models import (
     Distance,
     VectorParams,
@@ -45,6 +51,11 @@ class QdrantMemoryStorage(MemoryStorage):
         collection_name (Optional[str]): Qdrant collection name.
         distance (Optional[str]): Distance metric, one of "COSINE", "EUCLID", "DOT".
         embedding_model (Optional[str]): Embedding model instance key managed by `EmbeddingManager`.
+
+    Note:
+        This class provides native async implementations using AsyncQdrantClient
+        when available. If AsyncQdrantClient is not installed, falls back to
+        the parent class's thread-based async implementation.
     """
 
     class Config:
@@ -56,6 +67,7 @@ class QdrantMemoryStorage(MemoryStorage):
     embedding_model: Optional[str] = None
 
     client: Optional[QdrantClient] = None
+    async_client: Optional[Any] = None
 
     VECTOR_NAME: ClassVar[str] = "embedding"
 
@@ -88,11 +100,29 @@ class QdrantMemoryStorage(MemoryStorage):
         self.client = QdrantClient(**args)
         return self.client
 
+    def _ensure_async_client(self) -> AsyncQdrantClient:
+        if not ASYNC_QDRANT_AVAILABLE:
+            raise ImportError("AsyncQdrantClient is not available. Please install qdrant-client with async support.")
+        if self.async_client is not None:
+            return self.async_client
+        args = self.connection_args or DEFAULT_CONNECTION_ARGS
+        self.async_client = AsyncQdrantClient(**args)
+        return self.async_client
+
     def _ensure_collection(self, dim: int) -> None:
         client = self._ensure_client()
         if not client.collection_exists(self.collection_name):
             metric = self._metric_from_str()
             client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config={self.VECTOR_NAME: VectorParams(size=dim, distance=metric)},
+            )
+
+    async def _ensure_collection_async(self, dim: int) -> None:
+        client = self._ensure_async_client()
+        if not await client.collection_exists(self.collection_name):
+            metric = self._metric_from_str()
+            await client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config={self.VECTOR_NAME: VectorParams(size=dim, distance=metric)},
             )
@@ -143,7 +173,7 @@ class QdrantMemoryStorage(MemoryStorage):
             if self.embedding_model:
                 try:
                     vector = (
-                        EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([str(message.content)])
+                        EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([message.content_text])
                     )[0]
                 except Exception:
                     vector = []
@@ -154,7 +184,7 @@ class QdrantMemoryStorage(MemoryStorage):
                 raise ValueError("No vectors available for message. Cannot store message without embeddings.")
 
             payload = {
-                "content": message.content,
+                "content": message.content_text,
                 **metadata,
             }
 
@@ -236,3 +266,125 @@ class QdrantMemoryStorage(MemoryStorage):
         except Exception as e:
             print("QdrantMemoryStorage.to_messages failed, exception= " + str(e))
         return message_list
+
+    # ================================================================
+    # Asynchronous interface (native async implementation)
+    # ================================================================
+
+    async def async_delete(self, session_id: str = None, agent_id: str = None, **kwargs) -> None:
+        """Async version of delete using AsyncQdrantClient."""
+        if not ASYNC_QDRANT_AVAILABLE:
+            await super().async_delete(session_id, agent_id, **kwargs)
+            return
+
+        client = self._ensure_async_client()
+        filt = self._build_filter(session_id=session_id, agent_id=agent_id, source=None, type_value=kwargs.get("type"))
+        if not filt:
+            return
+        await client.delete(collection_name=self.collection_name, points_selector=filt)
+
+    async def async_add(self, message_list: List[Message], session_id: str = None, agent_id: str = None, **kwargs) -> None:
+        """Async version of add using AsyncQdrantClient."""
+        if not ASYNC_QDRANT_AVAILABLE:
+            await super().async_add(message_list, session_id, agent_id, **kwargs)
+            return
+
+        if not message_list:
+            return
+        client = self._ensure_async_client()
+
+        points: List[PointStruct] = []
+        for message in message_list:
+            metadata = dict(message.metadata or {})
+            metadata.update({"gmt_created": datetime.now().isoformat()})
+            if session_id:
+                metadata["session_id"] = session_id
+            if agent_id:
+                metadata["agent_id"] = agent_id
+            if message.source:
+                metadata["source"] = message.source
+            if message.type:
+                metadata["type"] = message.type
+
+            vector: List[float] = []
+            if self.embedding_model:
+                try:
+                    vector = (
+                        EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([message.content_text])
+                    )[0]
+                except Exception:
+                    vector = []
+
+            if vector:
+                await self._ensure_collection_async(dim=len(vector))
+            else:
+                raise ValueError("No vectors available for message. Cannot store message without embeddings.")
+
+            payload = {
+                "content": message.content_text,
+                **metadata,
+            }
+
+            try:
+                point_id = str(uuid.UUID(str(message.id))) if message.id else str(uuid.uuid4())
+            except Exception:
+                point_id = str(uuid.uuid4())
+
+            points.append(
+                PointStruct(
+                    id=point_id,
+                    vector={self.VECTOR_NAME: vector} if vector else {},
+                    payload=payload,
+                )
+            )
+
+        if points:
+            await client.upsert(collection_name=self.collection_name, points=points)
+
+    async def async_get(
+        self, session_id: str = None, agent_id: str = None, top_k=10, input: str = "", source: str = None, **kwargs
+    ) -> List[Message]:
+        """Async version of get using AsyncQdrantClient."""
+        if not ASYNC_QDRANT_AVAILABLE:
+            return await super().async_get(session_id, agent_id, top_k, input=input, source=source, **kwargs)
+
+        client = self._ensure_async_client()
+        filt = self._build_filter(
+            session_id=session_id, agent_id=agent_id, source=source, type_value=kwargs.get("type")
+        )
+
+        if input:
+            vector: List[float] = []
+            if self.embedding_model:
+                try:
+                    vector = (EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([input]))[0]
+                except Exception:
+                    vector = []
+            if vector:
+                results = await client.query_points(
+                    collection_name=self.collection_name,
+                    query=vector,
+                    using=self.VECTOR_NAME,
+                    limit=top_k,
+                    with_payload=True,
+                    with_vectors=False,
+                    query_filter=filt,
+                )
+                messages = self.to_messages(results)
+                messages.reverse()
+                return messages
+            else:
+                return []
+
+        scroll_result = await client.scroll(
+            collection_name=self.collection_name,
+            scroll_filter=filt,
+            limit=top_k,
+            with_payload=True,
+            with_vectors=False,
+        )
+        points = scroll_result[0]
+        messages = self.to_messages(points)
+        messages = sorted(messages, key=lambda msg: (msg.metadata or {}).get("gmt_created", ""))
+        messages.reverse()
+        return messages[:top_k]

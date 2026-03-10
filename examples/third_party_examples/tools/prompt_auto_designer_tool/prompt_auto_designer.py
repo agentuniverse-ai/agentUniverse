@@ -118,9 +118,10 @@ class PromptAutoDesigner:
     def _invoke_llm(self, prompt_version: str, payload: dict[str, Any]) -> str:
         prompt = self._get_prompt(prompt_version)
         llm = self._resolve_llm()
-        chain = prompt.as_langchain() | llm.as_langchain_runnable()
+        messages = prompt.render(**payload)
         try:
-            return chain.invoke(payload)
+            llm_output = llm.call(messages=messages)
+            return llm_output.text
         except Exception as exc:
             raise PromptAutoDesignerError(
                 f"LLM 调用失败，prompt_version={prompt_version}, payload_keys={list(payload.keys())}"

@@ -1,5 +1,5 @@
 name: 'token_text_splitter'
-description: 'langchain token text splitter'
+description: 'token text splitter'
 chunk_size: 200
 chunk_overlap: 20
 metadata:

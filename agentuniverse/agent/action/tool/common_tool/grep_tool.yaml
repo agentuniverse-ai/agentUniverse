@@ -1,0 +1,13 @@
+name: 'Grep'
+description: |
+  Search file contents using regular expressions.
+  Supports file type filtering, glob patterns, context lines, and multiple output modes:
+  - files_with_matches: returns matching file paths
+  - content: returns matching lines with context
+  - count: returns match counts per file
+tool_type: 'api'
+input_keys: ['pattern']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.grep_tool'
+  class: 'GrepTool'

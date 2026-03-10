@@ -1,0 +1,11 @@
+name: 'Read'
+description: |
+  Read a file from the local filesystem.
+  Supports reading specific line ranges via start_line and end_line parameters.
+  Returns file content with line count information.
+tool_type: 'api'
+input_keys: ['file_path']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.view_file_tool'
+  class: 'ViewFileTool'

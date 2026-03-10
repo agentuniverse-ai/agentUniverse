@@ -8,7 +8,7 @@
 import copy
 import os
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from agentuniverse.agent.action.knowledge.knowledge import Knowledge
 from agentuniverse.agent.action.knowledge.knowledge_manager import KnowledgeManager
@@ -37,10 +37,8 @@ from agentuniverse_product.base.util.yaml_util import update_nested_yaml_value
 from agentuniverse_product.service.model.agent_dto import AgentDTO
 from agentuniverse_product.service.model.knowledge_dto import KnowledgeDTO
 from agentuniverse_product.service.model.llm_dto import LlmDTO
-from agentuniverse_product.service.model.planner_dto import PlannerDTO
 from agentuniverse_product.service.model.prompt_dto import PromptDTO
 from agentuniverse_product.service.model.tool_dto import ToolDTO
-from agentuniverse_product.service.util.common_util import dict_does_not_contain_keys
 
 
 def assemble_product_config_data(agent_dto: AgentDTO) -> Dict:
@@ -77,9 +75,9 @@ def validate_create_agent_parameters(agent_dto: AgentDTO) -> None:
     agent = AgentManager().get_instance_obj(agent_dto.id, new_instance=False)
     if agent:
         raise ValueError("Agent instance corresponding to the agent id already exists.")
-    if agent_dto.planner is None:
-        raise ValueError("The planner in agent cannot be None.")
-    if agent_dto.planner.id != 'workflow_planner':
+    if agent_dto.agent_type is None:
+        raise ValueError("The agent_type in agent cannot be None.")
+    if agent_dto.agent_type != 'workflow':
         if agent_dto.prompt is None:
             raise ValueError("The prompt in agent cannot be None.")
         if agent_dto.llm is None:
@@ -104,8 +102,8 @@ def assemble_agent_config_data(agent_dto: AgentDTO) -> Dict:
         },
         'action': {}
     }
-    if agent_dto.planner.workflow_id:
-        agent_config_data['profile']['workflow_id'] = agent_dto.planner.workflow_id
+    if agent_dto.workflow_id:
+        agent_config_data['profile']['workflow_id'] = agent_dto.workflow_id
 
     if agent_dto.llm:
         llm = LLMManager().get_instance_obj(agent_dto.llm.id, new_instance=False)
@@ -124,13 +122,16 @@ def assemble_agent_config_data(agent_dto: AgentDTO) -> Dict:
     if agent_dto.knowledge:
         agent_config_data['action']['knowledge'] = [knowledge.id for knowledge in agent_dto.knowledge]
 
-    if agent_dto.planner.id == 'workflow_planner':
+    if agent_dto.agent_type == 'workflow':
         metadata_class = 'WorkflowAgent'
         metadata_agent_path = 'workflow_agent'
-    elif agent_dto.planner.id == 'react_planner':
+    elif agent_dto.agent_type == 'react':
         metadata_class = 'ReActAgent'
         metadata_agent_path = 'react_agent'
         agent_config_data['profile']['prompt_version'] = 'default_react_agent.cn'
+    elif agent_dto.agent_type == 'peer':
+        metadata_class = 'PeerAgent'
+        metadata_agent_path = 'peer_agent'
     else:
         metadata_class = 'RagAgent'
         metadata_agent_path = 'rag_agent'
@@ -191,6 +192,66 @@ def unregister_product(file_path: str):
     ProductManager().unregister(component_instance.get_instance_code())
 
 
+def get_agent_type(agent: Agent) -> str:
+    """Return the agent type string based on the agent's template class.
+
+    Args:
+        agent (Agent): The agent instance.
+
+    Returns:
+        str: The agent type ('react', 'rag', 'peer', 'workflow', or '').
+    """
+    if not agent:
+        return ''
+    if isinstance(agent, WorkflowAgent):
+        return 'workflow'
+    if isinstance(agent, PeerAgentTemplate):
+        return 'peer'
+    if isinstance(agent, ReActAgentTemplate):
+        return 'react'
+    if isinstance(agent, RagAgentTemplate):
+        return 'rag'
+    return ''
+
+
+def get_peer_members(agent: Agent) -> Optional[List[AgentDTO]]:
+    """Get peer agent members from agent profile.
+
+    Args:
+        agent (Agent): The agent instance (should be a PeerAgentTemplate).
+
+    Returns:
+        Optional[List[AgentDTO]]: List of member AgentDTOs, or None if not a peer agent.
+    """
+    if not isinstance(agent, PeerAgentTemplate):
+        return None
+    agent_model: AgentModel = agent.agent_model
+    member_keys = ['planning', 'executing', 'expressing', 'reviewing']
+    default_member_names = ['PlanningAgent', 'ExecutingAgent', 'ExpressingAgent', 'ReviewingAgent']
+    members = []
+    try:
+        profile = copy.deepcopy(agent_model.profile)
+        for i, member_key in enumerate(member_keys):
+            profile.setdefault(member_key, default_member_names[i])
+        for member_key in member_keys:
+            member_name = profile.get(member_key)
+            if not member_name:
+                continue
+            if isinstance(member_name, str):
+                member_name = [member_name]
+            for name in member_name:
+                member_agent: Agent = AgentManager().get_instance_obj(name)
+                product: Product = ProductManager().get_instance_obj(name)
+                if member_agent:
+                    agent_dto = AgentDTO(id=name,
+                                         nickname=product.nickname if product else '',
+                                         avatar=product.avatar if product else '')
+                    members.append(assemble_agent_dto(member_agent, agent_dto))
+    except Exception:
+        return []
+    return members
+
+
 def assemble_agent_dto(agent: Agent, agent_dto: AgentDTO) -> AgentDTO:
     """Assemble agent dto from agent instance."""
     agent_model: AgentModel = agent.agent_model
@@ -200,52 +261,10 @@ def assemble_agent_dto(agent: Agent, agent_dto: AgentDTO) -> AgentDTO:
     agent_dto.memory = agent_model.memory.get('name', '')
     agent_dto.tool = get_tool_dto_list(agent_model)
     agent_dto.knowledge = get_knowledge_dto_list(agent_model)
-    agent_dto.planner = get_planner_dto(agent)
+    agent_dto.agent_type = get_agent_type(agent)
+    agent_dto.workflow_id = agent_model.profile.get('workflow_id')
+    agent_dto.members = get_peer_members(agent)
     return agent_dto
-
-
-def get_planner_dto(agent: Agent) -> PlannerDTO | None:
-    """Get planner dto."""
-    agent_model: AgentModel = agent.agent_model
-    planner = agent_model.plan.get('planner', {})
-    planner_name = planner.get('name') or get_default_planner_name(agent)
-    if not planner_name:
-        return None
-    workflow_id = planner.get('workflow_id') if planner.get('workflow_id') else agent_model.profile.get('workflow_id')
-    members = None
-    if planner_name == 'peer_planner':
-        members = assemble_peer_planner_members(planner, agent_model)
-    return PlannerDTO(nickname='', id=planner_name, members=members,
-                      workflow_id=workflow_id)
-
-
-def assemble_peer_planner_members(planner: dict, agent_model: AgentModel) -> list[AgentDTO]:
-    """Assemble members for 'peer_planner'."""
-    member_keys = ['planning', 'executing', 'expressing', 'reviewing']
-    default_member_names = ['PlanningAgent', 'ExecutingAgent', 'ExpressingAgent', 'ReviewingAgent']
-    try:
-        planner_data: dict = agent_model.profile if dict_does_not_contain_keys(planner, member_keys) else planner
-        planner_data: dict = copy.deepcopy(planner_data)
-        for i, member_key in enumerate(member_keys):
-            planner_data.setdefault(member_key, default_member_names[i])
-        return assemble_planner_members(planner_data, member_keys)
-    except:
-        return []
-
-
-def get_default_planner_name(agent: Agent) -> str:
-    """Return the default planner name based on the agent type."""
-    if not agent:
-        return ''
-    if isinstance(agent, ReActAgentTemplate):
-        return 'react_planner'
-    elif isinstance(agent, RagAgentTemplate):
-        return 'rag_planner'
-    elif isinstance(agent, PeerAgentTemplate):
-        return 'peer_planner'
-    elif isinstance(agent, WorkflowAgent):
-        return 'workflow_planner'
-    return ''
 
 
 def get_knowledge_dto_list(agent_model: AgentModel) -> List[KnowledgeDTO]:
@@ -316,49 +335,6 @@ def get_llm_dto(agent_model: AgentModel) -> LlmDTO | None:
     llm_temperature = llm_model.get('temperature') if llm_model.get('temperature') else llm.temperature
     return LlmDTO(id=llm_id, nickname=product.nickname if product else '', temperature=llm_temperature,
                   model_name=[llm_model_name])
-
-
-def assemble_planner_members(planner: dict, member_keys: List[str]) -> List[AgentDTO]:
-    """Assemble planner members by looking up the configured multi-agent groups in the planner.
-
-    Args:
-        planner (dict): The planner dictionary in agent configuration.
-        member_keys (List[str]): The multi-agent member keys to look up in the planner.
-
-    Returns:
-        List[AgentDTO]: The list of agent DTOs representing the planner members.
-    """
-    members = []
-    if not planner or not member_keys:
-        return members
-
-    for member_key in member_keys:
-        current_value = planner
-        # get the corresponding agent instances configured in the planner through member_keys
-        for path in member_key.split('.'):
-            if isinstance(current_value, dict) and path in current_value:
-                current_value = current_value[path]
-            else:
-                current_value = None
-                break
-
-        if not current_value:
-            continue
-
-        if isinstance(current_value, str):
-            current_value = [current_value]
-
-        if isinstance(current_value, list):
-            for val in current_value:
-                # assemble each agent instance
-                agent: Agent = AgentManager().get_instance_obj(val)
-                product: Product = ProductManager().get_instance_obj(val)
-                if agent:
-                    agent_dto = AgentDTO(id=val, nickname=product.nickname if product else '',
-                                         avatar=product.avatar if product else '')
-                    members.append(assemble_agent_dto(agent, agent_dto))
-
-    return members
 
 
 def update_agent_config(agent: Agent, agent_dto: AgentDTO, agent_config_path: str) -> None:

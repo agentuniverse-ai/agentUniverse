@@ -97,21 +97,6 @@ class OllamaEmbedding(Embedding):
         except Exception as e:
             raise Exception(f"Failed to get embeddings: {e}")
 
-    def as_langchain(self) -> Any:
-        """
-        Convert the OllamaEmbedding instance to a LangChain OllamaEmbeddings instance.
-        """
-        self._initialize_clients()
-
-        try:
-            from langchain_community.embeddings import OllamaEmbeddings
-            return OllamaEmbeddings(
-                base_url=self.ollama_base_url,
-                model=self.embedding_model_name
-            )
-        except ImportError:
-            raise Exception("langchain_community is required for LangChain integration")
-
     def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> 'Embedding':
         """
         Initialize the embedding by the ComponentConfiger object.

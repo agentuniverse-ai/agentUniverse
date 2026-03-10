@@ -5,10 +5,9 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: embedding.py
+import asyncio
 from abc import abstractmethod
 from typing import List, Optional
-
-from langchain_core.embeddings import Embeddings as LCEmbeddings
 
 from agentuniverse.base.component.component_base import ComponentEnum
 from agentuniverse.base.component.component_base import ComponentBase
@@ -33,14 +32,15 @@ class Embedding(ComponentBase):
     def get_embeddings(self, text: List[str], **kwargs) -> List[List[float]]:
         """Get embeddings."""
 
-    @abstractmethod
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[
         List[float]]:
-        """Asynchronously get embeddings."""
+        """Asynchronously get embeddings.
 
-    def as_langchain(self) -> LCEmbeddings:
-        """Convert the agentUniverse(aU) embedding class to the langchain embedding class."""
-        pass
+        Default implementation delegates to the synchronous method via
+        ``asyncio.to_thread``.  Subclasses with native async clients should
+        override this for better performance.
+        """
+        return await asyncio.to_thread(self.get_embeddings, texts, **kwargs)
 
     def _initialize_by_component_configer(self,
                                           embedding_configer: ComponentConfiger) \

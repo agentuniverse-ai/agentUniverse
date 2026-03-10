@@ -14,7 +14,7 @@ AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 def chat(question: str):
     instance: Agent = AgentManager().get_instance_obj('demo_agent_with_basic_toolkit')
-    instance.run(input=question)
+    print(instance.run(input=question).get_data('output'))
 
 
 if __name__ == '__main__':

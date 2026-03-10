@@ -87,7 +87,7 @@ doc_processor = ['sample_standard_app.intelligence.agentic.knowledge.doc_process
 组件定义文件如下：
 ```yaml
 name: 'character_text_splitter'
-description: 'langchain character text splitter'
+description: 'character text splitter'
 chunk_size: 200
 chunk_overlap: 20
 separators: "/n/n"
@@ -107,7 +107,7 @@ metadata:
 
 ```yaml
 name: 'token_text_splitter'
-description: 'langchain token text splitter'
+description: 'token text splitter'
 chunk_size: 200
 chunk_overlap: 20
 tokenizer: 'default_tokenizer'
@@ -127,7 +127,7 @@ metadata:
 组件定义文件如下：
 ```yaml
 name: 'recursive_character_text_splitter'
-description: 'langchain recursive character text splitter'
+description: 'recursive character text splitter'
 chunk_size: 200
 chunk_overlap: 20
 separators:

@@ -7,13 +7,12 @@
 # @FileName: dataset_eval_agent.py
 from typing import Tuple, List
 
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.utils.json import parse_json_markdown
 from openpyxl.reader.excel import load_workbook
 import pandas as pd
 
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.input_object import InputObject
+from agentuniverse.base.util.common_util import parse_json_markdown
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
@@ -128,8 +127,9 @@ class DatasetEvalAgent(Agent):
 
                 llm: LLM = self.handle_llm()
 
-                chain = version_prompt.as_langchain() | llm.as_langchain() | StrOutputParser()
-                res = chain.invoke(input={'query': query, 'answer': answer})
+                messages = version_prompt.render(query=query, answer=answer)
+                llm_output = llm.call(messages=messages)
+                res = llm_output.text
 
                 dim_score_json = {'line': line_num}
                 dimensions = []

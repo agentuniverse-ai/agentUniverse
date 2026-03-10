@@ -1,4 +1,7 @@
-# How to Define a Planner Component
+# How to Define a Planner Component (Deprecated)
+
+> **Note:** The Planner component has been deprecated in the new version. Please use Agent Templates instead. See the migration guide on the [Planner](Planner.md) page.
+
 Based on the design features of agentUniverse domain components, creating a Planner definition involves two parts, similar to other components:
 
 * planner_xx.yaml

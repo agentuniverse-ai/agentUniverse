@@ -7,17 +7,13 @@
 # @FileName: conversation_message.py
 
 import uuid
-from typing import Optional, List
+from typing import Optional
 
-from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from pydantic import Field
 
-from agentuniverse.agent.memory.enum import ChatMessageEnum
-from langchain_core.prompts.chat import BaseStringMessagePromptTemplate
-
-from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageSourceType, ConversationMessageEnum
 from agentuniverse.agent.memory.message import Message
-from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
+from agentuniverse.base.context.framework_context_manager import \
+    FrameworkContextManager
 
 
 class ConversationMessage(Message):
@@ -36,57 +32,21 @@ class ConversationMessage(Message):
         content (Optional[str]): Message content.
         metadata (Optional[dict]): The metadata of the message.
     """
-    id: Optional[str | int] = uuid.uuid4().hex
+    id: Optional[str | int] = Field(default_factory=lambda: uuid.uuid4().hex)
     trace_id: Optional[str] = None
     conversation_id: Optional[str] = None
-    source: Optional[str] = None
     source_type: Optional[str] = None
     target: Optional[str] = None
     target_type: Optional[str] = None
-    type: Optional[str] = None
     content: Optional[str] = None
-    metadata: Optional[dict] = None
     additional_args: Optional[dict] = Field(default_factory=dict)
-
-    @staticmethod
-    def as_langchain_list(message_list: List['ConversationMessage']):
-        """Convert agentUniverse(aU) message list to langchain message list """
-        messages = []
-        for message in message_list:
-            if message.type == ChatMessageEnum.SYSTEM.value or message.type == ChatMessageEnum.HUMAN.value or message.type == ChatMessageEnum.AI.value:
-                messages.append(message)
-                continue
-            # only got agent message
-            if message.target_type != ConversationMessageSourceType.AGENT.value:
-                continue
-            if message.source_type not in [ConversationMessageSourceType.AGENT.value,
-                                           ConversationMessageSourceType.USER.value]:
-                continue
-            if message.source_type == ConversationMessageSourceType.AGENT.value and message.type == ConversationMessageEnum.OUTPUT.value:
-                messages.append(message)
-            elif message.target_type == ConversationMessageSourceType.AGENT.value and message.type == ConversationMessageEnum.INPUT.value:
-                messages.append(message)
-        return [message.as_langchain() for message in messages]
-
-    def as_langchain(self):
-        """Convert the agentUniverse(aU) message class to the langchain message class."""
-        if self.type == ConversationMessageEnum.INPUT.value:
-            return HumanMessage(content=self.content)
-        elif self.type == ConversationMessageEnum.OUTPUT.value:
-            return AIMessage(content=self.content)
-        elif self.type == ChatMessageEnum.SYSTEM.value:
-            return SystemMessage(content=self.content)
-        elif self.type == ChatMessageEnum.HUMAN.value:
-            return HumanMessage(content=self.content)
-        elif self.type == ChatMessageEnum.AI.value:
-            return AIMessage(content=self.content)
-        else:
-            return BaseStringMessagePromptTemplate.from_template(self.content)
 
     @classmethod
     def from_dict(cls, data: dict):
-        """Convert the agentUniverse(aU) message class to the dict."""
-        return cls(**data)
+        """Convert the dict to ConversationMessage."""
+        if "type" not in data and "role" in data:
+            data = {**data, "type": data.pop("role")}
+        return cls.model_validate(data)
 
     @classmethod
     def from_message(cls, message: Message, session_id: str):
@@ -98,9 +58,11 @@ class ConversationMessage(Message):
         if not trace_id:
             trace_id = FrameworkContextManager().get_context('trace_id')
             message.metadata['trace_id'] = trace_id
+        # 将 content 统一转为 str，兼容父类 ContentT 可能为 list 的情况
+        content = message.content_text if not isinstance(message.content, str) else message.content
         return cls(
             id=uuid.uuid4().hex,
-            content=message.content,
+            content=content,
             metadata=message.metadata,
             type=message.type,
             source=message.source,

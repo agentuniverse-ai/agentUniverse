@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "agentUniverse"
-version = "0.0.19"
+version = "0.1.0a1"
 description = "agentUniverse is a framework for developing applications powered by multi-agent base on large language model."
 
 authors = ["AntGroup <jerry.zzw@antgroup.com>"]
@@ -26,9 +26,6 @@ requests = "^2.32.0"
 cffi = "^1.15.1"
 flask = "^2.3.2"
 werkzeug = "^3.0.3"
-langchain = "0.1.20"
-langchain-core = "0.1.52"
-langchain-community = "0.0.38"
 openai = '1.55.3'
 tiktoken = '<1.0.0'
 loguru = '0.7.2'
@@ -36,18 +33,17 @@ flask_cors = '4.0.0'
 SQLAlchemy = '2.0.25'
 pydantic = "^2.6.4"
 gunicorn = "^22.0.0"
-grpcio = "1.63.0"
-chromadb = "0.4.24"
-opentelemetry-api = "^1.25.0"
-opentelemetry-sdk = "^1.25.0"
-opentelemetry-semantic-conventions = ">=0.48b0"
-opentelemetry-exporter-otlp-proto-grpc = "^1.25.0"
-opentelemetry-exporter-otlp-proto-http = "^1.25.0"
+chromadb = ">=0.4.24,<1.0.0"
+opentelemetry-api = "^1.30.0"
+opentelemetry-sdk = "^1.30.0"
+opentelemetry-semantic-conventions = ">=0.51b0"
+opentelemetry-exporter-otlp-proto-grpc = "^1.30.0"
+opentelemetry-exporter-otlp-proto-http = "^1.30.0"
 sphinx = "^7.2.6"
 Jinja2 = "^3.1.4"
 tqdm = "^4.66.3"
 sphinx-rtd-theme = "^2.0.0"
-aliyun-log-python-sdk = { version = "0.8.8", optional = true}
+aliyun-log-python-sdk = { version = "*", optional = true}
 pymilvus = { version = "^2.4.3", optional = true}
 googleapis-common-protos = "^1.63.0"
 myst-parser = "^2.0.0"
@@ -55,7 +51,6 @@ qianfan = "^0.3.12"
 dashscope = "^1.19.1"
 anthropic = "^0.26.0"
 ollama = '^0.2.1'
-langchain-anthropic = '^0.1.13'
 numpy = '^1.26.0'
 pandas = "^2.2.2"
 pyarrow = "^16.1.0"

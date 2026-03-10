@@ -1,32 +1,28 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # @Time    : 2025/2/26 09:47
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: openai_protocol_template.py
 import datetime
 import json
 from queue import Queue
-from typing import Any, List, Dict
-
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnableSerializable, RunnableConfig
+from typing import List, Dict
 
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.agent.output_object import OutputObject
-from agentuniverse.agent.plan.planner.react_planner.stream_callback import InvokeCallbackHandler, \
-    OpenAIProtocolStreamOutPutCallbackHandler
-
 from agentuniverse.agent.template.agent_template import AgentTemplate
+from agentuniverse.ai_context.agent_context import AgentContext
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
-from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
-from agentuniverse.prompt.prompt import Prompt
+from agentuniverse.llm.llm_output import LLMOutput
 
 
 class OpenAIProtocolTemplate(AgentTemplate):
+
+    _streamed: bool = False
 
     def run(self, **kwargs) -> OutputObject:
         """Agent instance running entry.
@@ -87,7 +83,6 @@ class OpenAIProtocolTemplate(AgentTemplate):
                 message['type'] = 'ai'
         return [Message.from_dict(message) for message in messages], image_urls
 
-
     def parse_openai_protocol_output(self, output_object: OutputObject) -> OutputObject:
         res = {
             "object": "chat.completion",
@@ -110,6 +105,84 @@ class OpenAIProtocolTemplate(AgentTemplate):
         }
         return OutputObject(params=res)
 
+    def invoke_llm(self, llm: LLM, messages: list,
+                   input_object: InputObject,
+                   tools_schema: list[dict] = None,
+                   agent_context: AgentContext = None,
+                   **kwargs) -> LLMOutput:
+        from agentuniverse.llm.llm_output import StreamReducer, StreamEventType
+
+        llm_kwargs = dict(kwargs)
+        if tools_schema:
+            llm_kwargs['tools'] = tools_schema
+
+        streaming = self.judge_stream(llm, **kwargs)
+        if not streaming:
+            self._streamed = False
+            return llm.call(messages=messages, **llm_kwargs)
+
+        self._streamed = True
+        output_stream = agent_context.output_stream if agent_context else None
+        reducer = StreamReducer()
+        for event in llm.call(messages=messages, streaming=True, **llm_kwargs):
+            reducer.feed(event)
+            if event.type == StreamEventType.TEXT_DELTA and event.text_delta:
+                self.add_output_stream(output_stream, event.text_delta)
+        return reducer.build()
+
+    async def async_invoke_llm(self, llm: LLM, messages: list,
+                               input_object: InputObject,
+                               tools_schema: list[dict] = None,
+                               agent_context: AgentContext = None,
+                               **kwargs) -> LLMOutput:
+        from agentuniverse.llm.llm_output import StreamReducer, StreamEventType
+
+        llm_kwargs = dict(kwargs)
+        if tools_schema:
+            llm_kwargs['tools'] = tools_schema
+
+        streaming = self.judge_stream(llm, **kwargs)
+        if not streaming:
+            self._streamed = False
+            return await llm.acall(messages=messages, **llm_kwargs)
+
+        self._streamed = True
+        output_stream = agent_context.output_stream if agent_context else None
+        reducer = StreamReducer()
+        async for event in await llm.acall(messages=messages, streaming=True, **llm_kwargs):
+            reducer.feed(event)
+            if event.type == StreamEventType.TEXT_DELTA and event.text_delta:
+                self.add_output_stream(output_stream, event.text_delta)
+        return reducer.build()
+
+    def _emit_final_output(self, context: AgentContext, output_text: str) -> None:
+        """Override to emit OpenAI protocol formatted output.
+
+        If streaming already pushed tokens, only emit a trailing newline marker
+        to signal the end of the stream, avoiding duplicate content.
+        """
+        if not context.output_stream:
+            return
+        if self._streamed:
+            self.add_output_stream(context.output_stream, '\n\n')
+            return
+        output = {
+            "object": "chat.completion.chunk",
+            "id": FrameworkContextManager().get_context('trace_id'),
+            "created": int(datetime.datetime.now().timestamp()),
+            "model": self.agent_model.info.get('name'),
+            "choices": [
+                {
+                    "delta": {
+                        "role": "assistant",
+                        "content": output_text
+                    },
+                    "index": 0,
+                }
+            ]
+        }
+        context.output_stream.put(json.dumps(output))
+
     def add_output_stream(self, output_stream: Queue, agent_output: str) -> None:
         if not output_stream:
             return
@@ -130,34 +203,15 @@ class OpenAIProtocolTemplate(AgentTemplate):
         }
         output_stream.put(json.dumps(output))
 
-    def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
-                           **kwargs) -> dict:
-        self.load_memory(memory, agent_input)
-        process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
-        chain = prompt.as_langchain() | llm.as_langchain_runnable(
-            self.agent_model.llm_params()) | StrOutputParser()
-        res = self.invoke_chain(chain, agent_input, input_object, **kwargs)
-        self.add_memory(memory, f"Human: {agent_input.get('input')}, AI: {res}", agent_input=agent_input)
-        return {**agent_input, 'output': res}
+    def input_keys(self) -> list[str]:
+        return ['input']
 
-    def _get_run_config(self, input_object: InputObject) -> RunnableConfig:
-        config = RunnableConfig()
-        callbacks = []
-        output_stream = input_object.get_data('output_stream')
-        callbacks.append(OpenAIProtocolStreamOutPutCallbackHandler(output_stream, agent_info=self.agent_model.info))
-        callbacks.append(InvokeCallbackHandler(source=self.agent_model.info.get('name'),
-                                               llm_name=self.agent_model.profile.get('llm_model').get('name')))
-        config.setdefault("callbacks", callbacks)
-        return config
+    def output_keys(self) -> list[str]:
+        return ['output']
 
-    def invoke_chain(self, chain: RunnableSerializable[Any, str], agent_input: dict, input_object: InputObject,
-                     **kwargs):
-        if not self.judge_chain_stream(chain):
-            res = chain.invoke(input=agent_input, config=self.get_run_config())
-            return res
-        result = []
-        for token in chain.stream(input=agent_input, config=self.get_run_config()):
-            self.add_output_stream(input_object.get_data('output_stream', None), token)
-            result.append(token)
-        self.add_output_stream(input_object.get_data('output_stream', None), '\n\n')
-        return self.generate_result(result)
+    def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        agent_input['input'] = input_object.get_data('input')
+        return agent_input
+
+    def parse_result(self, agent_result: dict) -> dict:
+        return {**agent_result, 'output': agent_result['output']}

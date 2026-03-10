@@ -34,6 +34,7 @@ class SpanAttributes:
     AU_LLM_CHANNEL_NAME = "au.llm.channel_name"
     AU_LLM_INPUT = "au.llm.input"
     AU_LLM_OUTPUT = "au.llm.output"
+    AU_LLM_REASONING_OUTPUT = "au.llm.reasoning_output"
     AU_LLM_LLM_PARAMS = "au.llm.llm_params"
     AU_LLM_STREAMING = "au.llm.streaming"
     # Trace attributes

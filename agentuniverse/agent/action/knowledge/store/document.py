@@ -7,7 +7,6 @@
 import uuid
 from typing import Dict, Any, Optional, List, Set
 
-from langchain_core.documents.base import Document as LCDocument
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -35,28 +34,3 @@ class Document(BaseModel):
         if not values.get('id'):
             values['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, text))
         return values
-
-    def as_langchain(self) -> LCDocument:
-        """Convert to LangChain document format."""
-        metadata = self.metadata or {}
-        return LCDocument(page_content=self.text, metadata=metadata)
-
-    @staticmethod
-    def as_langchain_list(document_list) -> List[LCDocument]:
-        """Convert agentUniverse(aU) document list to langchain document list """
-        langchain_document_list = []
-        if document_list is None:
-            return langchain_document_list
-        for document in document_list:
-            langchain_document_list.append(LCDocument(page_content=document.text, metadata=document.metadata))
-        return langchain_document_list
-
-    @staticmethod
-    def from_langchain_list(lc_document_list: List[LCDocument]):
-        """Convert langchain document list to agentUniverse(aU) document list """
-        document_list = []
-        if lc_document_list is None:
-            return document_list
-        for lc_document in lc_document_list:
-            document_list.append(Document(text=lc_document.page_content, metadata=lc_document.metadata))
-        return document_list

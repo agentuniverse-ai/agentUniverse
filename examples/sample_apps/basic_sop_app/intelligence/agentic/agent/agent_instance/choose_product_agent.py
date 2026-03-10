@@ -5,13 +5,16 @@
 # @Email   : jijiawei.jjw@antgroup.com
 # @FileName: choose_product_agent.py
 from agentuniverse.agent.input_object import InputObject
+from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.template.agent_template import AgentTemplate
+from agentuniverse.ai_context.agent_context import AgentContext
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
+from agentuniverse.base.util.common_util import parse_json_markdown
+from agentuniverse.llm.llm import LLM
 from agentuniverse.prompt.chat_prompt import ChatPrompt
 from agentuniverse.prompt.prompt import Prompt
 from agentuniverse.prompt.prompt_manager import PromptManager
 from agentuniverse.prompt.prompt_model import AgentPromptModel
-from langchain_core.utils.json import parse_json_markdown
 
 
 class ChooseProductAgent(AgentTemplate):
@@ -55,6 +58,19 @@ class ChooseProductAgent(AgentTemplate):
         final_result['company'] = output.get('company')
         return final_result
 
+    def customized_execute(self, input_object: InputObject, agent_input: dict,
+                           memory: Memory, llm: LLM,
+                           agent_context: AgentContext = None, **kwargs) -> dict:
+        # Use custom prompt logic (conditional prompt version selection)
+        prompt: ChatPrompt = self.process_prompt(agent_input, **kwargs)
+        messages = prompt.render(**agent_input)
+
+        # Invoke LLM
+        llm = agent_context.build_llm()
+        llm_output = self.invoke_llm(llm, messages, input_object, agent_context=agent_context)
+        res = llm_output.text
+        return {'output': res}
+
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
         expert_framework = agent_input.pop('expert_framework', '') or ''
 
@@ -67,7 +83,7 @@ class ChooseProductAgent(AgentTemplate):
                                                                   target=profile.get('target'),
                                                                   instruction=profile_instruction)
 
-        # get the prompt by the prompt version
+        # get the prompt by the prompt version (conditional logic based on input)
         input = agent_input.get('input')
         if "医疗险" in input:
             version_prompt: Prompt = PromptManager().get_instance_obj('choose_product_agent_v2.cn')
@@ -78,10 +94,11 @@ class ChooseProductAgent(AgentTemplate):
             raise Exception("Either the `prompt_version` or `introduction & target & instruction`"
                             " in agent profile configuration should be provided.")
         if version_prompt:
+            pm = version_prompt.prompt_model
             version_prompt_model: AgentPromptModel = AgentPromptModel(
-                introduction=getattr(version_prompt, 'introduction', ''),
-                target=getattr(version_prompt, 'target', ''),
-                instruction=expert_framework + getattr(version_prompt, 'instruction', ''))
+                introduction=getattr(pm, 'introduction', '') or '',
+                target=getattr(pm, 'target', '') or '',
+                instruction=expert_framework + (getattr(pm, 'instruction', '') or ''))
             profile_prompt_model = profile_prompt_model + version_prompt_model
 
         chat_prompt = ChatPrompt().build_prompt(profile_prompt_model, ['introduction', 'target', 'instruction'])

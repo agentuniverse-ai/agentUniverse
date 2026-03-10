@@ -5,23 +5,30 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: llm_channel.py
-from typing import Optional, Any, Union, Iterator, AsyncIterator
+from typing import Optional, Any, Union, Iterator, AsyncIterator, List
 
 import httpx
 import openai
 import tiktoken
 from openai import OpenAI, AsyncOpenAI
-from langchain_core.language_models import BaseLanguageModel
 
-from agentuniverse.agent.memory.message import Message
+from agentuniverse.agent.memory.enum import ChatMessageEnum
+from agentuniverse.agent.memory.message import Message, ToolCall, FunctionCall
 from agentuniverse.base.annotation.trace import trace_llm
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
-from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
-from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
-from agentuniverse.llm.llm_channel.langchain_instance.default_channel_langchain_instance import \
-    DefaultChannelLangchainInstance
-from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
+from agentuniverse.base.config.application_configer.application_config_manager import \
+    ApplicationConfigManager
+from agentuniverse.base.config.component_configer.component_configer import \
+    ComponentConfiger
+from agentuniverse.llm.llm_output import (
+    LLMOutput,
+    TokenUsage,
+    LLMStreamEvent,
+    StreamEventType,
+    ToolCallDelta,
+)
+from agentuniverse.llm.transfer_utils import au_messages_to_openai
 
 
 class LLMChannel(ComponentBase):
@@ -46,7 +53,6 @@ class LLMChannel(ComponentBase):
     component_type: ComponentEnum = ComponentEnum.LLM_CHANNEL
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'LLMChannel':
-
         super()._initialize_by_component_configer(component_configer)
         if hasattr(component_configer, "channel_name"):
             self.channel_name = component_configer.channel_name
@@ -72,8 +78,14 @@ class LLMChannel(ComponentBase):
             self.model_is_openai_protocol_compatible = component_configer.model_is_openai_protocol_compatible
         if component_configer.configer.value.get("extra_headers"):
             self.ext_headers = component_configer.configer.value.get("extra_headers", {})
-        if component_configer.configer.value.get("extra_params"):
-            self.ext_params = component_configer.configer.value.get("extra_params", {})
+        if component_configer.configer.value.get("extra_body"):
+            self.ext_params = component_configer.configer.value.get("extra_body", {})
+            self.ext_params["stream_options"] = {
+                "include_usage": True
+            }
+        elif component_configer.configer.value.get("extra_params"):
+            self.ext_params = component_configer.configer.value.get(
+                "extra_params", {})
             self.ext_params["stream_options"] = {
                 "include_usage": True
             }
@@ -116,6 +128,140 @@ class LLMChannel(ComponentBase):
                 if not self.__dict__.get(key):
                     self.__dict__[key] = value
 
+    # ---------------------------
+    # Small helpers
+    # ---------------------------
+    @staticmethod
+    def _to_dict(obj: Any) -> dict:
+        if obj is None:
+            return {}
+        if isinstance(obj, dict):
+            return obj
+        if hasattr(obj, "model_dump"):
+            return obj.model_dump()
+        if hasattr(obj, "dict"):
+            return obj.dict()
+        return dict(obj)
+
+    def _build_message_from_openai_message(self, msg: dict) -> Message:
+        """Convert an OpenAI message dict to our Message type."""
+        tool_calls: Optional[List[ToolCall]] = None
+        function_call: Optional[FunctionCall] = None
+
+        if msg.get("tool_calls"):
+            tool_calls = []
+            for i, tc in enumerate(msg.get("tool_calls") or []):
+                tc = tc or {}
+                if tc.get("type", "function") != "function":
+                    continue
+                fn = (tc.get("function") or {}) if isinstance(tc.get("function"), dict) else {}
+                tool_calls.append(
+                    ToolCall.create(
+                        id=tc.get("id") or f"call_{i}",
+                        name=fn.get("name", ""),
+                        arguments=fn.get("arguments", ""),
+                    )
+                )
+
+        if not tool_calls and msg.get("function_call"):
+            fc = msg.get("function_call") or {}
+            function_call = FunctionCall(
+                name=fc.get("name", ""),
+                arguments=fc.get("arguments", "") or "",
+            )
+
+        return Message(
+            type=ChatMessageEnum.ASSISTANT,
+            content=msg.get("content"),
+            reasoning_content=msg.get("reasoning") or msg.get("reasoning_content"),
+            refusal=msg.get("refusal"),
+            tool_calls=tool_calls,
+            function_call=function_call,
+            name=msg.get("name"),
+        )
+
+    def _build_llm_output_from_chat_completion(self, chat_completion: Any) -> LLMOutput:
+        """Non-streaming: build final LLMOutput with message/tool_calls/usage/finish_reason."""
+        raw = self._to_dict(chat_completion)
+
+        choices = raw.get("choices") or []
+        choice0 = choices[0] if choices else {}
+
+        msg = choice0.get("message") or {}
+        content = msg.get("content")
+        text = content if isinstance(content, str) else ""
+
+        message = self._build_message_from_openai_message(msg)
+        usage = TokenUsage.from_openai(raw.get("usage"))
+        reasoning_text = msg.get("reasoning") or msg.get("reasoning_content")
+
+        return LLMOutput(
+            raw=raw,
+            text=text,
+            message=message,
+            response_id=raw.get("id"),
+            finish_reason=choice0.get("finish_reason"),
+            usage=usage,
+            reasoning_text=reasoning_text,
+        )
+
+    def _iter_stream_events_from_chunk(self, chunk: dict) -> Iterator[LLMStreamEvent]:
+        """Streaming: parse one chunk into 0..n LLMStreamEvent."""
+        response_id = chunk.get("id")
+
+        if chunk.get("usage"):
+            yield LLMStreamEvent(type=StreamEventType.USAGE, usage=TokenUsage.from_openai(chunk.get("usage")))
+
+        choices = chunk.get("choices") or []
+        for choice in choices:
+            choice = choice or {}
+            delta = choice.get("delta") or {}
+
+            if "content" in delta:
+                c = delta.get("content")
+                if c:
+                    yield LLMStreamEvent.text(c)
+
+            r = delta.get("reasoning") or delta.get("reasoning_content")
+            if r:
+                yield LLMStreamEvent.reasoning(r)
+
+            if delta.get("tool_calls"):
+                for tc in delta.get("tool_calls") or []:
+                    tc = tc or {}
+                    fn = tc.get("function") or {}
+                    yield LLMStreamEvent.tool_call(
+                        ToolCallDelta(
+                            index=tc.get("index", 0),
+                            id=tc.get("id"),
+                            name=fn.get("name"),
+                            arguments_delta=fn.get("arguments") or "",
+                        )
+                    )
+
+            if delta.get("function_call"):
+                fc = delta.get("function_call") or {}
+                yield LLMStreamEvent.tool_call(
+                    ToolCallDelta(
+                        index=0,
+                        id=None,
+                        name=fc.get("name"),
+                        arguments_delta=fc.get("arguments") or "",
+                    )
+                )
+
+            finish_reason = choice.get("finish_reason")
+            if finish_reason:
+                usage_obj = TokenUsage.from_openai(chunk.get("usage")) if chunk.get("usage") else None
+                yield LLMStreamEvent.done(
+                    finish_reason=finish_reason,
+                    usage=usage_obj,
+                    response_id=response_id,
+                )
+
+    # ---------------------------
+    # Public call interface
+    # ---------------------------
     @trace_llm
     def call(self, *args: Any, **kwargs: Any):
         """Run the LLM."""
@@ -126,16 +272,20 @@ class LLMChannel(ComponentBase):
         """Asynchronously run the LLM."""
         return await self._acall(*args, **kwargs)
 
-    def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
+    # ---------------------------
+    # Core call
+    # ---------------------------
+    def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMStreamEvent]]:
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.channel_model_config.get('streaming')
         if 'stream' in kwargs:
             streaming = kwargs.pop('stream')
         if self.model_support_stream is False and streaming is True:
             streaming = False
+
         support_max_tokens = self.model_support_max_tokens
         max_tokens = kwargs.pop('max_tokens', None) or self.channel_model_config.get('max_tokens',
                                                                                      None) or support_max_tokens
-        if support_max_tokens:
+        if support_max_tokens and max_tokens:
             max_tokens = min(support_max_tokens, max_tokens)
 
         ext_params = self.ext_params.copy()
@@ -143,10 +293,13 @@ class LLMChannel(ComponentBase):
         ext_params = {**ext_params, **extra_body}
         if not streaming:
             ext_params.pop("stream_options", None)
+
         self.client = self._new_client()
         self.client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.channel_api_base
+
+        openai_messages = au_messages_to_openai(messages)
         chat_completion = self.client.chat.completions.create(
-            messages=messages,
+            messages=openai_messages,
             model=kwargs.pop('model', self.channel_model_name),
             temperature=kwargs.pop('temperature', self.channel_model_config.get('temperature')),
             stream=kwargs.pop('stream', streaming),
@@ -156,13 +309,10 @@ class LLMChannel(ComponentBase):
             **kwargs,
         )
         if not streaming:
-            text = chat_completion.choices[0].message.content
-            return LLMOutput(text=text, raw=chat_completion.model_dump(),
-                             message=Message(content=chat_completion.choices[0].message.content,
-                                             type=chat_completion.choices[0].message.role))
-        return self.generate_stream_result(chat_completion)
+            return self._build_llm_output_from_chat_completion(chat_completion)
+        return self.generate_stream_events(chat_completion)
 
-    async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
+    async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMStreamEvent]]:
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.channel_model_config.get('streaming')
         if 'stream' in kwargs:
             streaming = kwargs.pop('stream')
@@ -172,17 +322,21 @@ class LLMChannel(ComponentBase):
         support_max_tokens = self.model_support_max_tokens
         max_tokens = kwargs.pop('max_tokens', None) or self.channel_model_config.get('max_tokens',
                                                                                      None) or support_max_tokens
-        if support_max_tokens:
+        if support_max_tokens and max_tokens:
             max_tokens = min(support_max_tokens, max_tokens)
+
         ext_params = self.ext_params.copy()
         extra_body = kwargs.pop("extra_body", {})
         ext_params = {**ext_params, **extra_body}
         if not streaming:
             ext_params.pop("stream_options", None)
+
         self.async_client = self._new_async_client()
         self.async_client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.channel_api_base
+
+        openai_messages = au_messages_to_openai(messages)
         chat_completion = await self.async_client.chat.completions.create(
-            messages=messages,
+            messages=openai_messages,
             model=kwargs.pop('model', self.channel_model_name),
             temperature=kwargs.pop('temperature', self.channel_model_config.get('temperature')),
             stream=kwargs.pop('stream', streaming),
@@ -192,35 +346,35 @@ class LLMChannel(ComponentBase):
             **kwargs,
         )
         if not streaming:
-            text = chat_completion.choices[0].message.content
-            return LLMOutput(text=text, raw=chat_completion.model_dump(),
-                             message=Message(content=chat_completion.choices[0].message.content,
-                                             type=chat_completion.choices[0].message.role))
-        return self.agenerate_stream_result(chat_completion)
+            return self._build_llm_output_from_chat_completion(chat_completion)
+        return self.agenerate_stream_events(chat_completion)
 
-    def as_langchain(self) -> BaseLanguageModel:
-        """Convert to the langchain llm class."""
-        return DefaultChannelLangchainInstance(self)
+    # ---------------------------
+    # Streaming generators
+    # ---------------------------
+    def generate_stream_events(self, stream: openai.Stream) -> Iterator[LLMStreamEvent]:
+        """Streaming: yield structured events."""
+        try:
+            for chunk in stream:
+                d = self._to_dict(chunk)
+                yield from self._iter_stream_events_from_chunk(d)
+        except Exception as e:
+            yield LLMStreamEvent.err(str(e))
 
-    def get_num_tokens(self, text: str, model=None) -> int:
-        """Get the number of tokens present in the text.
+    async def agenerate_stream_events(self, stream: AsyncIterator) -> AsyncIterator[LLMStreamEvent]:
+        """Async streaming: yield structured events."""
+        try:
+            async for chunk in stream:
+                d = self._to_dict(chunk)
+                for evt in self._iter_stream_events_from_chunk(d):
+                    yield evt
+        except Exception as e:
+            yield LLMStreamEvent.err(str(e))
 
-        Useful for checking if an input will fit in an openai model's context window.
-
-        Args:
-            text: The string input to tokenize.
-
-        Returns:
-            The integer number of tokens in the text.
-        """
-
-        encoding = tiktoken.get_encoding("cl100k_base")
-        return len(encoding.encode(text))
-
-    def max_context_length(self) -> int:
-        return self.channel_model_config.get('max_context_length')
-
-    def _new_client(self):
+    # ---------------------------
+    # Client builders
+    # ---------------------------
+    def _new_client(self) -> OpenAI:
         """Initialize the openai client."""
         if self.client is not None:
             return self.client
@@ -234,7 +388,7 @@ class LLMChannel(ComponentBase):
             **(self.channel_model_config.get('client_args') or {}),
         )
 
-    def _new_async_client(self):
+    def _new_async_client(self) -> AsyncOpenAI:
         """Initialize the openai async client."""
         if self.async_client is not None:
             return self.async_client
@@ -248,42 +402,16 @@ class LLMChannel(ComponentBase):
             **(self.channel_model_config.get('client_args') or {}),
         )
 
-    def generate_stream_result(self, stream: openai.Stream):
-        """Generate the result of the stream."""
-        for chunk in stream:
-            llm_output = self.parse_result(chunk)
-            if llm_output:
-                yield llm_output
+    # ---------------------------
+    # Token utils
+    # ---------------------------
+    def get_num_tokens(self, text: str, model=None) -> int:
+        """Get the number of tokens present in the text."""
+        encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
 
-    async def agenerate_stream_result(self, stream: AsyncIterator) -> AsyncIterator[LLMOutput]:
-        """Generate the result of the stream."""
-        async for chunk in stream:
-            llm_output = self.parse_result(chunk)
-            if llm_output:
-                yield llm_output
-
-    @staticmethod
-    def parse_result(chunk):
-        """Generate the result of the stream."""
-        chat_completion = chunk
-        if not isinstance(chunk, dict):
-            chunk = chunk.model_dump()
-
-        if len(chunk["choices"]) == 0:
-            return LLMOutput(text="", raw=chunk,
-                             usage=TokenUsage.from_openai(chunk.get('usage', {})))
-        choice = chunk["choices"][0]
-        message = choice.get("delta")
-        text = message.get("content")
-        role = message.get("role")
-        if text is None:
-            text = ""
-        return LLMOutput(
-            text=text,
-            raw=chat_completion.model_dump(),
-            message=Message(content=text, type=role),
-            usage=TokenUsage.from_openai(chunk.get('usage', {}))
-        )
+    def max_context_length(self) -> int:
+        return self.channel_model_config.get('max_context_length')
 
     def get_instance_code(self) -> str:
         """Return the full name of the component."""

@@ -34,9 +34,8 @@
   * 2.2.5 [Memory](In-Depth_Guides/Tutorials/Memory/Memory.md)
     * 2.2.5.1 [Define And Use](In-Depth_Guides/Tutorials/Memory/Memory_Define_And_Use.md)
     * 2.2.5.2 [Related Domain Objects](In-Depth_Guides/Tutorials/Memory/Memory_Related_Domain_Objects.md)
-  * 2.2.6 [Planner](In-Depth_Guides/Tutorials/Plan/Planner.md)
-    * 2.2.5.1 [Define And Use](In-Depth_Guides/Tutorials/Plan/Planner_Define_And_Use.md)
-    * 2.2.5.2 [Related Domain Objects](In-Depth_Guides/Tutorials/Plan/Planner_Related_Domain_Objects.md)
+  * 2.2.6 [Skill](In-Depth_Guides/Tutorials/Skill/Skill.md)
+  * 2.2.7 [Planner](In-Depth_Guides/Tutorials/Plan/Planner.md) *(Deprecated, use Agent Templates instead)*
 * 2.3 Technical Components
   * 2.3.1 [RAG](In-Depth_Guides/Tutorials/RAG.md) 
     * 2.3.1.1 [How to Build Knowledge Base](How-to/Build%20and%20Use%20a%20Knowledge%20Base/How_to_Build_Knowledge_Base.md) 
@@ -72,10 +71,8 @@
     * 3.1.2.10 [General OpenAI Protocol Style Wrapper](In-Depth_Guides/Components/LLMs/OpenAIStyleLLM_Use.md)
   * 3.1.3 List of Tools
     * 3.1.3.1 [Integration Tool Details](In-Depth_Guides/Components/Tools/Integrated_Tools.md)
-    * 3.1.3.2 [LangChain Tool Wrapper](In-Depth_Guides/Components/Tools/Integrated_LangChain_Tools.md)
   * 3.1.4 List of Knowledge
   * 3.1.5 List of Memories
-  * 3.1.6 List of Planners
 * 3.2 Technical Components
   * 3.2.1 RPC
     * 3.2.1.1 [gRPC](In-Depth_Guides/Tech_Capabilities/Service/gRPC.md)

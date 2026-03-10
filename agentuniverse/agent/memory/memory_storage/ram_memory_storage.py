@@ -16,6 +16,11 @@ class RamMemoryStorage(MemoryStorage):
 
     Attributes:
         messages (dict[str, dict[str, list[Message]]]): The messages in the ram memory.
+
+    Note:
+        This class provides native async implementations for all async methods.
+        Since RAM operations are synchronous and fast, the async methods are
+        directly implemented without blocking I/O.
     """
 
     messages: Optional[Dict[str, Dict[str, List[Message]]]] = dict()
@@ -50,6 +55,51 @@ class RamMemoryStorage(MemoryStorage):
     def get(self, session_id: str = '', agent_id: str = '', top_k=10, **kwargs) -> \
             List[Message]:
         """Get messages from the memory db.
+
+        Args:
+            session_id (str): The session id of the memory to get.
+            agent_id (str): The agent id of the memory to get.
+            top_k (int): The number of messages to get.
+
+        Returns:
+            List[Message]: The list of aU messages.
+        """
+        memories = self.messages.get(session_id, {}).get(agent_id, [])
+        return memories[-top_k:]
+
+    # ================================================================
+    # Asynchronous interface (direct implementation)
+    # ================================================================
+
+    async def async_add(self, message_list: List[Message], session_id: str = '', agent_id: str = '', **kwargs) -> None:
+        """Async version of add (direct implementation for in-memory operations).
+
+        Args:
+            message_list (List[Message]): The list of messages to add.
+            session_id (str): The session id of the memory to add.
+            agent_id (str): The agent id of the memory to add.
+        """
+        if not message_list:
+            return
+        session = self.messages.setdefault(session_id, {})
+        agent_messages = session.setdefault(agent_id, [])
+        agent_messages.extend(message_list)
+
+    async def async_delete(self, session_id: str = None, agent_id: str = None, **kwargs) -> None:
+        """Async version of delete (direct implementation for in-memory operations).
+
+        Args:
+            session_id (str): The session id of the memory to delete.
+            agent_id (str): The agent id of the memory to delete.
+        """
+        if session_id is not None:
+            if agent_id is None:
+                self.messages.pop(session_id, None)
+            else:
+                self.messages.get(session_id, {}).pop(agent_id, None)
+
+    async def async_get(self, session_id: str = '', agent_id: str = '', top_k=10, **kwargs) -> List[Message]:
+        """Async version of get (direct implementation for in-memory operations).
 
         Args:
             session_id (str): The session id of the memory to get.

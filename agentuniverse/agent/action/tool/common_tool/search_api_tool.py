@@ -8,18 +8,21 @@
 
 from typing import Optional
 
+import httpx
+
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.util.env_util import get_from_env
-from langchain_community.utilities import SearchApiAPIWrapper
 from pydantic import Field
+
+SEARCHAPI_BASE_URL = "https://www.searchapi.io/api/v1/search"
 
 
 class SearchAPITool(Tool):
     """
     The demo search tool.
 
-    Implement the execute method of demo google search tool, using the `SearchApiAPIWrapper` to implement a simple search.
+    Implement the execute method of demo google search tool, using the SearchAPI.io API to implement a simple search.
 
     Note:
         You need to sign up for a free account at https://www.searchapi.io/ and get the SEARCHAPI_API_KEY api key (100 free queries).
@@ -34,40 +37,74 @@ class SearchAPITool(Tool):
     search_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("SEARCHAPI_API_KEY"))
     engine: str = "google"
     search_params: dict = {}
-    search_api_wrapper: Optional[SearchApiAPIWrapper] = None
     search_type: str = "common"
 
-    def _load_api_wapper(self):
-        if not self.search_api_key:
-            raise ValueError("Please set the SEARCHAPI_API_KEY environment variable.")
-        if not self.search_api_wrapper:
-            self.search_api_wrapper = SearchApiAPIWrapper(searchapi_api_key=self.search_api_key, engine=self.engine)
-        return self.search_api_wrapper
+    def _build_params(self, query: str, extra_params: dict) -> dict:
+        params = {
+            "api_key": self.search_api_key,
+            "engine": self.engine,
+            "q": query,
+        }
+        params.update(extra_params)
+        return params
 
-    def execute(self, input: str, **kwargs):
-        self._load_api_wapper()
+    def _parse_results_to_string(self, response_json: dict) -> str:
+        snippets = []
+        if "answer_box" in response_json:
+            box = response_json["answer_box"]
+            answer = box.get("answer") or box.get("snippet") or box.get("result")
+            if answer:
+                snippets.append(str(answer))
+
+        if "knowledge_graph" in response_json:
+            kg = response_json["knowledge_graph"]
+            title = kg.get("title", "")
+            description = kg.get("description", "")
+            if title:
+                snippets.append(f"{title}: {description}")
+
+        for result in response_json.get("organic_results", []):
+            snippet = result.get("snippet")
+            if snippet:
+                snippets.append(snippet)
+
+        if not snippets:
+            return "No good search results found"
+        return "\n\n".join(snippets)
+
+    def _resolve_search_params(self, kwargs: dict) -> dict:
         search_params = {}
         for k, v in self.search_params.items():
             if k in kwargs:
                 search_params[k] = kwargs.get(k)
                 continue
             search_params[k] = v
-        if self.search_type == "json":
-            return self.search_api_wrapper.results(query=input, **search_params)
-        return self.search_api_wrapper.run(query=input, **search_params)
+        return search_params
 
-    async def async_execute(self, tool_input: ToolInput):
-        self._load_api_wapper()
-        search_params = {}
-        for k, v in self.search_params.items():
-            if k in tool_input.to_dict():
-                search_params[k] = tool_input.get_data(k)
-                continue
-            search_params[k] = v
-        input = tool_input.get_data("input")
+    def execute(self, input: str, **kwargs):
+        if not self.search_api_key:
+            raise ValueError("Please set the SEARCHAPI_API_KEY environment variable.")
+        search_params = self._resolve_search_params(kwargs)
+        params = self._build_params(input, search_params)
+        response = httpx.get(SEARCHAPI_BASE_URL, params=params, timeout=20)
+        response.raise_for_status()
+        response_json = response.json()
         if self.search_type == "json":
-            return await self.search_api_wrapper.aresults(query=input, **search_params)
-        return await self.search_api_wrapper.arun(query=input, **search_params)
+            return response_json
+        return self._parse_results_to_string(response_json)
+
+    async def async_execute(self, input: str, **kwargs):
+        if not self.search_api_key:
+            raise ValueError("Please set the SEARCHAPI_API_KEY environment variable.")
+        search_params = self._resolve_search_params(kwargs)
+        params = self._build_params(input, search_params)
+        async with httpx.AsyncClient() as client:
+            response = await client.get(SEARCHAPI_BASE_URL, params=params, timeout=20)
+            response.raise_for_status()
+            response_json = response.json()
+        if self.search_type == "json":
+            return response_json
+        return self._parse_results_to_string(response_json)
 
     def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'Tool':
         """Initialize the tool by the component configer."""

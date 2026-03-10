@@ -36,8 +36,8 @@ class ToolManager(ComponentManagerBase):
             # Retrieve the tool configuration map
             tool_configer_map: dict[str, ToolConfiger] = ApplicationConfigManager().app_configer.tool_configer_map
             toolkit_configer_map = ApplicationConfigManager().app_configer.toolkit_configer_map
-            if toolkit_configer_map and '@' in component_instance_name:
-                toolkit_name, tool_name = component_instance_name.split('@')
+            if toolkit_configer_map and '__' in component_instance_name:
+                toolkit_name, tool_name = component_instance_name.split('__')
                 from agentuniverse.agent.action.toolkit.toolkit_manager import \
                     ToolkitManager
                 ToolkitManager().get_instance_obj(toolkit_name)

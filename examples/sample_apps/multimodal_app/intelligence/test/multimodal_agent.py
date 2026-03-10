@@ -19,7 +19,7 @@ def chat_with_images():
     res_info = f"\n图中描绘的景象是:\n"
     res_info += output_object.get_data('output')
     print(res_info)
-    output_object = instance.run(input="做一首诗描述这个场景")
+    output_object = instance.run(input="做一首诗描述这个场景", session_id='test_image')
     res_info = f"\n做一首诗描述这个场景:\n"
     res_info += output_object.get_data('output')
     print(res_info)

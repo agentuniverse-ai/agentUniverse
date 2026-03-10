@@ -5,9 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: memory_util.py
-from typing import List
-
-from langchain_core.chat_history import BaseChatMessageHistory
+from typing import List, Optional
 
 from agentuniverse.agent.memory.enum import ChatMessageEnum
 from agentuniverse.agent.memory.message import Message
@@ -32,58 +30,104 @@ def generate_messages(memories: list) -> List[Message]:
         elif isinstance(m, dict):
             messages.append(Message.from_dict(m))
         elif isinstance(m, str):
-            message: Message = Message(content=m, metadata={})
-            messages.append(message)
+            messages.append(Message(
+                type=ChatMessageEnum.HUMAN,
+                content=m,
+                metadata={}
+            ))
     return messages
 
 
-def generate_memories(chat_messages: BaseChatMessageHistory) -> list:
+def generate_memories(chat_messages) -> list:
     return [
         {"content": message.content, "type": 'ai' if message.type == 'AIMessageChunk' else message.type}
         for message in chat_messages.messages
     ] if chat_messages.messages else []
 
 
-def get_memory_string(messages: List[Message], agent_id=None) -> str:
+def _extract_text_content(content) -> str:
+    """Extract plain text from ContentT (str or multimodal list).
+
+    Args:
+        content: Message content, either str or List[Union[str, Dict]].
+
+    Returns:
+        str: Extracted text content.
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    # multimodal content list
+    parts = []
+    for item in content:
+        if isinstance(item, str):
+            parts.append(item)
+        elif isinstance(item, dict) and item.get("type") == "text":
+            parts.append(item.get("text", ""))
+    return "".join(parts)
+
+
+def get_memory_string(messages: List[Message], agent_id: Optional[str] = None) -> str:
     """Convert the given messages to a string.
 
     Args:
-        messages(List[Message]): The list of messages.
-
+        messages: The list of messages.
+        agent_id: Optional agent id for replacing agent references.
 
     Returns:
         str: The string representation of the messages.
     """
     current_trace_id = FrameworkContextManager().get_context("trace_id")
     string_messages = []
+
     for m in messages:
-        if m.type == ChatMessageEnum.SYSTEM.value:
-            role = 'System'
-        elif m.type == ChatMessageEnum.HUMAN.value:
-            role = 'Human'
-        elif m.type == ChatMessageEnum.AI.value:
-            role = "AI"
-        elif m.type == ChatMessageEnum.INPUT.value or m.type == ChatMessageEnum.OUTPUT.value:
-            if current_trace_id == m.trace_id:
+        msg_type = m.type
+        text_content = _extract_text_content(m.content)
+
+        # Handle INPUT/OUTPUT types with special formatting
+        if msg_type in (ChatMessageEnum.INPUT.value, ChatMessageEnum.OUTPUT.value):
+            trace_id = getattr(m, 'trace_id', None)
+            if current_trace_id and current_trace_id == trace_id:
                 continue
-            role: str = m.metadata.get('prefix', "")
+            role: str = (m.metadata or {}).get('prefix', "")
             if agent_id:
                 role = role.replace(f"智能体 {agent_id}", " 你")
                 role = role.replace(f"Agent {agent_id}", " You")
-            m_str = f"{m.metadata.get('timestamp')} {role}:{m.content}"
-            string_messages.append(m_str)
+            timestamp = (m.metadata or {}).get('timestamp', "")
+            string_messages.append(f"{timestamp} {role}:{text_content}")
             continue
-        else:
-            role = ""
-        m_str = ""
+
+        # Standard role mapping
+        role_map = {
+            ChatMessageEnum.SYSTEM.value: "System",
+            ChatMessageEnum.HUMAN.value: "Human",
+            ChatMessageEnum.USER.value: "Human",
+            ChatMessageEnum.AI.value: "AI",
+            ChatMessageEnum.ASSISTANT.value: "AI",
+            ChatMessageEnum.TOOL.value: "Tool",
+        }
+        role = role_map.get(msg_type, "")
+
+        parts = []
         if m.metadata and m.metadata.get('gmt_created'):
-            m_str += f"{m.metadata.get('gmt_created')} "
+            parts.append(m.metadata['gmt_created'])
         if m.source:
-            m_str += f" Message source: {m.source} "
+            parts.append(f"Message source: {m.source}")
         if role:
-            m_str += f"Message role: {role} "
-        m_str += f" :{m.content} "
-        string_messages.append(m_str)
+            parts.append(f"Message role: {role}")
+        parts.append(f":{text_content}")
+
+        # Append tool call info if present
+        if m.has_tool_calls() and m.tool_calls:
+            tool_info = ", ".join(
+                f"{tc.function.name}({tc.function.arguments})"
+                for tc in m.tool_calls
+            )
+            parts.append(f"[Tool calls: {tool_info}]")
+
+        string_messages.append(" ".join(parts))
+
     return "\n\n".join(string_messages)
 
 
@@ -91,8 +135,8 @@ def get_memory_tokens(memories: List[Message], llm_name: str = None) -> int:
     """Get the number of tokens in the given memories.
 
     Args:
-        memories(List[Message]): The list of messages.
-        llm_name(str): The name of the LLM to use for token counting.
+        memories: The list of messages.
+        llm_name: The name of the LLM to use for token counting.
 
     Returns:
         int: The number of tokens in the given memories.

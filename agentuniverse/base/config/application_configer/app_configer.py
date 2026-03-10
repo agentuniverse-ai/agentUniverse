@@ -25,7 +25,6 @@ class AppConfiger(object):
         self.__core_agent_package_list: Optional[list[str]] = None
         self.__core_knowledge_package_list: Optional[list[str]] = None
         self.__core_llm_package_list: Optional[list[str]] = None
-        self.__core_planner_package_list: Optional[list[str]] = None
         self.__core_tool_package_list: Optional[list[str]] = None
         self.__core_toolkit_package_list: Optional[list[str]] = None
         self.__core_memory_package_list: Optional[list[str]] = None
@@ -45,6 +44,7 @@ class AppConfiger(object):
         self.__core_work_pattern_package_list: Optional[list[str]] = None
         self.__core_log_sink_package_list: Optional[list[str]] = None
         self.__core_llm_channel_package_list: Optional[list[str]] = None
+        self.__core_skill_package_list: Optional[list[str]] = None
         self.__conversation_memory_configer: Optional[dict] = {}
         self.__root_package_name: Optional[str] = None
         self.__yaml_func_instance = None
@@ -55,6 +55,8 @@ class AppConfiger(object):
         self.__agent_llm_set: Optional[set[str]] = set()
         self.__agent_tool_set: Optional[set[str]] = set()
         self.__agent_toolkit_set: Optional[set[str]] = set()
+        self.__agent_skill_set: Optional[set[str]] = set()
+        self.__skill_configer_map: Dict[str, Any] = {}
         self.__llm_plugins: Optional[Any] = set()
 
     @property
@@ -81,11 +83,6 @@ class AppConfiger(object):
     def core_llm_package_list(self) -> Optional[list[str]]:
         """Return the llm package list of the core."""
         return self.__core_llm_package_list
-
-    @property
-    def core_planner_package_list(self) -> Optional[list[str]]:
-        """Return the planner package list of the core."""
-        return self.__core_planner_package_list
 
     @property
     def core_tool_package_list(self) -> Optional[list[str]]:
@@ -180,6 +177,11 @@ class AppConfiger(object):
         return self.__core_llm_channel_package_list
 
     @property
+    def core_skill_package_list(self) -> Optional[list[str]]:
+        """Return the skill package list of the core."""
+        return self.__core_skill_package_list
+
+    @property
     def conversation_memory_configer(self) -> dict:
         return self.__conversation_memory_configer
 
@@ -243,6 +245,22 @@ class AppConfiger(object):
     def agent_toolkit_set(self) -> set:
         return self.__agent_toolkit_set
 
+    @property
+    def agent_skill_set(self) -> set:
+        return self.__agent_skill_set
+
+    @agent_skill_set.setter
+    def agent_skill_set(self, value: set):
+        self.__agent_skill_set = value
+
+    @property
+    def skill_configer_map(self) -> Dict[str, Any]:
+        return self.__skill_configer_map
+
+    @skill_configer_map.setter
+    def skill_configer_map(self, value: Dict[str, Any]):
+        self.__skill_configer_map = value
+
     @agent_tool_set.setter
     def agent_tool_set(self, value: set):
         self.__agent_tool_set = value
@@ -275,7 +293,6 @@ class AppConfiger(object):
         self.__core_agent_package_list = configer.value.get('CORE_PACKAGE', {}).get('agent')
         self.__core_knowledge_package_list = configer.value.get('CORE_PACKAGE', {}).get('knowledge')
         self.__core_llm_package_list = configer.value.get('CORE_PACKAGE', {}).get('llm')
-        self.__core_planner_package_list = configer.value.get('CORE_PACKAGE', {}).get('planner')
         self.__core_tool_package_list = configer.value.get('CORE_PACKAGE', {}).get('tool')
         self.__core_toolkit_package_list = configer.value.get('CORE_PACKAGE', {}).get('toolkit')
         self.__core_memory_package_list = configer.value.get('CORE_PACKAGE', {}).get('memory')
@@ -295,6 +312,7 @@ class AppConfiger(object):
         self.__core_work_pattern_package_list = configer.value.get('CORE_PACKAGE', {}).get('work_pattern')
         self.__core_log_sink_package_list = configer.value.get('CORE_PACKAGE', {}).get('log_sink')
         self.__core_llm_channel_package_list = configer.value.get('CORE_PACKAGE', {}).get('llm_channel')
+        self.__core_skill_package_list = configer.value.get('CORE_PACKAGE', {}).get('skill')
         self.__conversation_memory_configer = configer.value.get('CONVERSATION_MEMORY', {})
         self.__llm_plugins = self.load_llm_plugins(configer.value.get("PLUGINS", {}).get("llm_plugins", []))
         return self

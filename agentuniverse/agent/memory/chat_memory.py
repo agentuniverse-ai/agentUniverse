@@ -7,14 +7,10 @@
 # @FileName: chat_memory.py
 from typing import Optional, List
 
-from langchain.memory.chat_memory import BaseChatMemory
-
-from agentuniverse.agent.memory.enum import MemoryTypeEnum
 from agentuniverse.agent.memory.memory import Memory
-from agentuniverse.agent.memory.langchain_instance import AuConversationSummaryBufferMemory, \
-    AuConversationTokenBufferMemory
 from agentuniverse.agent.memory.message import Message
-from agentuniverse.base.config.component_configer.configers.memory_configer import MemoryConfiger
+from agentuniverse.base.config.component_configer.configers.memory_configer import \
+    MemoryConfiger
 from agentuniverse.llm.llm import LLM
 
 
@@ -36,20 +32,6 @@ class ChatMemory(Memory):
     output_key: Optional[str] = 'output'
     prompt_version: Optional[str] = None
     messages: Optional[List[Message]] = None
-
-    def as_langchain(self) -> BaseChatMemory:
-        """Convert the agentUniverse(aU) chat memory class to the langchain chat memory class."""
-        if self.llm is None:
-            raise ValueError("Must set `llm` when using langchain memory.")
-        if self.type is None or self.type == MemoryTypeEnum.SHORT_TERM:
-            return AuConversationTokenBufferMemory(llm=self.llm.as_langchain(), memory_key=self.memory_key,
-                                                   input_key=self.input_key, output_key=self.output_key,
-                                                   max_token_limit=self.max_tokens, messages=self.messages)
-        elif self.type == MemoryTypeEnum.LONG_TERM:
-            return AuConversationSummaryBufferMemory(llm=self.llm.as_langchain(), memory_key=self.memory_key,
-                                                     input_key=self.input_key, output_key=self.output_key,
-                                                     max_token_limit=self.max_tokens, messages=self.messages,
-                                                     prompt_version=self.prompt_version)
 
     def set_by_agent_model(self, **kwargs):
         """ Assign values of parameters to the ChatMemory model in the agent configuration."""

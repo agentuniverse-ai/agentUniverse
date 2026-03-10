@@ -24,6 +24,101 @@ Note - 对于版本的额外说明。
 ***************************************************
 
 # 版本更新记录
+## [0.1.0a1] - 2026-03-13
+### Added
+- 新增Skill技能系统
+全新的模块化能力扩展机制，将指令 + 工具打包为可复用的技能单元。
+  - 通过 `SKILL.md` 文件定义（YAML frontmatter + Markdown 指令）
+  - 支持 **inline 模式**（工具注入当前上下文）和 **fork 模式**（隔离子智能体执行）
+  - 支持 `allowed_tools`、`allowed_toolkits` 精细控制工具访问权限
+  - 内置 `LoadSkillTool` 实现运行时动态加载
+  - 内置 `SkillForkAgentTemplate` 支持 fork 模式下的隔离执行
+  - 示例：`algorithmic-art`（算法艺术生成）、`mcp-builder`（MCP 服务器开发指南）
+- 新增AI Context（AgentContext）运行时状态容器
+全新的运行时状态容器，替代原有的上下文传递方式。
+  - 分层消息管理：system_message → few_shot → chat_history → current_messages
+  - 内置工具/知识/技能的自动解析与 schema 构建
+  - 多模态支持（图片 URL/Base64/本地文件、音频）
+  - 流式输出辅助方法（`stream_token` / `stream_final`）
+- 新增内置工具
+  - `RunCommandTool`：Bash 命令执行（同步/异步）
+  - `ViewFileTool`：文件读取，支持行范围
+  - `WriteFileTool`：文件写入/追加
+  - `EditTool`：精确字符串替换
+  - `GlobTool`：Glob 模式文件搜索
+  - `GrepTool`：正则内容搜索
+- 新增HybridKnowledgeStore混合知识存储
+  - 组合多个子 Store 统一管理
+  - CRUD 操作并行分发到所有子 Store
+  - 查询结果自动去重合并
+- 新增HybridMemoryStorage混合记忆存储
+  - 组合多个子 MemoryStorage 后端
+  - 写入并行分发，读取返回首个非空结果
+  - 适用于向量 + KV 等多后端场景
+- 新增Knowledge Tool（知识工具）
+  - Knowledge 组件可自动包装为 LLM function calling 工具
+  - 工具名以 `__knowledge_tool__` 为前缀
+  - 支持自定义 schema
+
+### Changed
+- 完全移除LangChain依赖，所有组件改为原生实现
+- LLM全面重构
+  - 所有内置 LLM（OpenAI、Claude、Ollama、Qwen、WenXin、Bedrock、Kimi、DeepSeek、GLM、BaiChuan、Gemini）改为直接调用官方 SDK
+  - 新增 `transfer_utils.py` 统一消息格式转换（au_messages_to_openai）
+  - LLM Channel 层重构，移除 langchain 中间层
+  - Bedrock / Claude / Ollama LLM 大幅增强
+- Memory系统重构
+  - Memory 基类重写，不再依赖 langchain
+  - 新增 `RamMemoryStorage`（纯内存存储，适合开发/测试）
+  - `MemoryCompressor` 重构
+  - `Message` 类增强，支持更丰富的消息结构
+  - Qdrant MemoryStorage 增强
+  - ES ConversationMemory 存储重构
+- Agent核心重构
+  - Agent 基类重写，移除 langchain 依赖
+  - 新增 `OpenAIProtocolTemplate` 增强
+  - 新增 `ContextualIterationAgentTemplate` 增强
+  - React Agent 模版重写，使用原生 tool calling
+  - React Prompt 更新（中英文）
+- Prompt系统增强
+  - `prompt_util.py` 大幅扩展
+  - 多模态 prompt 处理支持
+  - `PromptModel` / `ChatPrompt` 增强
+- Tool系统增强
+  - Tool 基类大幅增强
+  - MCP Tool / MCP Toolkit 改进
+  - MCP Session Manager 重构
+- Knowledge系统增强
+  - Knowledge 基类重构，支持异步操作
+  - DocProcessor 系列组件移除 langchain 依赖，改为原生实现
+  - 文本分割器（Character/Token/Recursive）全部原生重写
+  - Reranker（Dashscope/Jina）原生重写
+  - Markdown Reader 增强
+
+### Deprecated
+- Planner计划组件已废弃，使用 Agent Template（智能体模版）替代，对应关系见文档
+
+### Fixed
+- 修复MCP session管理bug
+- 修复空参数工具调用问题
+- 修复OpenAI Style LLM api_base配置bug
+- 修复工具结果多模态内容处理
+- 修复Instrument追踪bug
+- 修复多个示例应用兼容性问题
+
+### Note
+- 更新30+文档文件，移除所有LangChain相关内容
+- 新增Skill技能系统文档（中英文）
+- 新增11个内置工具文档
+- 新增HybridKnowledgeStore / HybridMemoryStorage / KnowledgeTool文档
+- Planner文档标记为废弃并提供迁移指南
+- 更新中英文目录索引
+- **迁移指南**：
+  1. 移除 langchain 依赖：如果你的自定义代码使用了 `as_langchain()` 方法或 langchain 相关 import，需要改为直接使用 LLM 的 `call()` / `acall()` 方法
+  2. Planner → Agent Template：将 Planner 配置迁移到对应的 Agent Template（如 `ReactPlanner` → `ReactAgentTemplate`）
+  3. LangChainTool → Tool：将 LangChain 工具迁移为原生 Tool 实现，重写 `execute` 方法
+  4. pyproject.toml：可以移除项目中的 `langchain`、`langchain-core`、`langchain-community` 等依赖
+
 ## [0.0.19] - 2025-11-17
 ### Added
 - 新增AWS Bedrock模型支持

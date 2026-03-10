@@ -23,4 +23,4 @@ In addition to rich collaboration modes, agentUniverse also includes the followi
 * **Prompt-Friendly and Management**: The framework has built-in a complete set of prompt management mechanisms. You can manage prompts in multiple versions, switch between them, and specialize them based on expert domain knowledge.
 
 ## Acknowledgments
-This project is partially based on open-source projects like Langchain, Pydantic, Gunicorn, Flask, SQLAlchemy, Chromadb, and others (a detailed dependency list can be found in requirements.txt). Special thanks are given to the creators and contributors of these related projects and associated parties.
+This project is partially based on open-source projects like Pydantic, Gunicorn, Flask, SQLAlchemy, Chromadb, and others (a detailed dependency list can be found in requirements.txt). Special thanks are given to the creators and contributors of these related projects and associated parties.

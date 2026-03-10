@@ -24,6 +24,101 @@ Note - Additional remarks regarding the version.
 ***************************************************
 
 # Version Update History
+## [0.1.0a1] - 2026-03-13
+### Added
+- Added Skill System
+A brand-new modular capability extension mechanism that packages instructions and tools into reusable skill units.
+  - Defined via `SKILL.md` files (YAML frontmatter + Markdown instructions)
+  - Supports **inline mode** (tool injection into current context) and **fork mode** (isolated sub-agent execution)
+  - Supports fine-grained tool access control via `allowed_tools` and `allowed_toolkits`
+  - Built-in `LoadSkillTool` for runtime dynamic loading
+  - Built-in `SkillForkAgentTemplate` for isolated execution in fork mode
+  - Examples: `algorithmic-art` (algorithmic art generation), `mcp-builder` (MCP server development guide)
+- Added AI Context (AgentContext) Runtime State Container
+A new runtime state container replacing the previous context passing mechanism.
+  - Layered message management: system_message → few_shot → chat_history → current_messages
+  - Automatic parsing and schema construction for built-in tools, knowledge, and skills
+  - Multimodal support (image URL/Base64/local files, audio)
+  - Streaming output helper methods (`stream_token` / `stream_final`)
+- Added New Built-in Tools
+  - `RunCommandTool`: Bash command execution (sync/async)
+  - `ViewFileTool`: File reading with line range support
+  - `WriteFileTool`: File writing/appending
+  - `EditTool`: Precise string replacement
+  - `GlobTool`: Glob pattern file search
+  - `GrepTool`: Regex content search
+- Added HybridKnowledgeStore
+  - Combines multiple sub-stores under unified management
+  - CRUD operations dispatched in parallel to all sub-stores
+  - Automatic deduplication and merging of query results
+- Added HybridMemoryStorage
+  - Combines multiple MemoryStorage backends
+  - Writes dispatched in parallel; reads return the first non-empty result
+  - Suitable for multi-backend scenarios such as vector + KV storage
+- Added Knowledge Tool
+  - Knowledge components can be automatically wrapped as LLM function calling tools
+  - Tool names prefixed with `__knowledge_tool__`
+  - Supports custom schema
+
+### Changed
+- Completely removed LangChain dependency; all components rewritten with native implementations
+- Comprehensive LLM Refactoring
+  - All built-in LLMs (OpenAI, Claude, Ollama, Qwen, WenXin, Bedrock, Kimi, DeepSeek, GLM, BaiChuan, Gemini) now call official SDKs directly
+  - Added `transfer_utils.py` for unified message format conversion (au_messages_to_openai)
+  - LLM Channel layer refactored, removed langchain middleware
+  - Significant enhancements to Bedrock / Claude / Ollama LLMs
+- Memory System Refactoring
+  - Memory base class rewritten, no longer depends on langchain
+  - Added `RamMemoryStorage` (in-memory storage for development/testing)
+  - `MemoryCompressor` refactored
+  - `Message` class enhanced with richer message structures
+  - Qdrant MemoryStorage enhanced
+  - ES ConversationMemory storage refactored
+- Agent Core Refactoring
+  - Agent base class rewritten, removed langchain dependency
+  - Enhanced `OpenAIProtocolTemplate`
+  - Enhanced `ContextualIterationAgentTemplate`
+  - React Agent template rewritten with native tool calling
+  - React Prompt updated (Chinese and English)
+- Prompt System Enhancements
+  - `prompt_util.py` significantly expanded
+  - Multimodal prompt processing support
+  - `PromptModel` / `ChatPrompt` enhanced
+- Tool System Enhancements
+  - Tool base class significantly enhanced
+  - MCP Tool / MCP Toolkit improved
+  - MCP Session Manager refactored
+- Knowledge System Enhancements
+  - Knowledge base class refactored with async operation support
+  - DocProcessor components rewritten with native implementations, removed langchain dependency
+  - Text splitters (Character/Token/Recursive) all rewritten natively
+  - Rerankers (Dashscope/Jina) rewritten natively
+  - Markdown Reader enhanced
+
+### Deprecated
+- Planner component deprecated; use Agent Template instead. See documentation for mapping details
+
+### Fixed
+- Fixed MCP session management bug
+- Fixed empty parameter tool call issue
+- Fixed OpenAI Style LLM api_base configuration bug
+- Fixed tool result multimodal content handling
+- Fixed Instrument tracing bug
+- Fixed multiple sample application compatibility issues
+
+### Note
+- Updated 30+ documentation files, removed all LangChain-related content
+- Added Skill system documentation (Chinese and English)
+- Added documentation for 11 built-in tools
+- Added HybridKnowledgeStore / HybridMemoryStorage / KnowledgeTool documentation
+- Planner documentation marked as deprecated with migration guide
+- Updated Chinese and English table of contents
+- **Migration Guide**:
+  1. Remove langchain dependency: If your custom code uses the `as_langchain()` method or langchain-related imports, switch to using the LLM's `call()` / `acall()` methods directly
+  2. Planner → Agent Template: Migrate Planner configurations to the corresponding Agent Template (e.g., `ReactPlanner` → `ReactAgentTemplate`)
+  3. LangChainTool → Tool: Migrate LangChain tools to native Tool implementations by overriding the `execute` method
+  4. pyproject.toml: You can remove `langchain`, `langchain-core`, `langchain-community` and other related dependencies from your project
+
 ## [0.0.19] - 2025-11-17
 ### Added
 - Added AWS Bedrock model support

@@ -1,6 +1,0 @@
-name: 'planning_planner'
-description: 'planning planner'
-metadata:
-  type: 'PLANNER'
-  module: 'agentuniverse.agent.plan.planner.planning_planner.planning_planner'
-  class: 'PlanningPlanner'

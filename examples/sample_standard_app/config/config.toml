@@ -48,6 +48,8 @@ memory_storage = ['${ROOT_PACKAGE}.intelligence.agentic.memory.memory_storage']
 log_sink = ['${ROOT_PACKAGE}.intelligence.utils.log_sink']
 
 llm_channel = ['${ROOT_PACKAGE}.intelligence.agentic.llm']
+# Scan and register skill components (SKILL.md files) for all paths under this list.
+skill = ['${ROOT_PACKAGE}.intelligence.agentic.skill']
 
 [SUB_CONFIG_PATH]
 # Log config file path, an absolute path or a relative path based on the dir where the current config file is located.

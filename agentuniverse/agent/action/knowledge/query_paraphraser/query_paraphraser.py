@@ -6,6 +6,7 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: query_paraphraser.py
 
+import asyncio
 from abc import abstractmethod
 from typing import Optional
 
@@ -26,6 +27,13 @@ class QueryParaphraser(ComponentBase):
     def query_paraphrase(self, origin_query: Query) -> Query:
         """Paraphrase the origin query string to different style."""
 
+    async def async_query_paraphrase(self, origin_query: Query) -> Query:
+        """Async version of :meth:`query_paraphrase`.
+
+        Default implementation delegates to the synchronous method via
+        ``asyncio.to_thread``.  Subclasses may override for true async.
+        """
+        return await asyncio.to_thread(self.query_paraphrase, origin_query)
 
     def _initialize_by_component_configer(self,
                                          query_paraphraser_config: ComponentConfiger) \

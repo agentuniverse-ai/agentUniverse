@@ -19,7 +19,6 @@ class AgentConfiger(ComponentConfiger):
         super().__init__(configer)
         self.__info: Optional[dict] = dict()
         self.__profile: Optional[dict] = dict()
-        self.__plan: Optional[dict] = dict()
         self.__memory: Optional[dict] = dict()
         self.__action: Optional[dict] = dict()
 
@@ -37,11 +36,6 @@ class AgentConfiger(ComponentConfiger):
     def profile(self) -> Optional[dict]:
         """Return the name of the Agent."""
         return self.__profile
-
-    @property
-    def plan(self) -> Optional[dict]:
-        """Return the description of the Agent."""
-        return self.__plan
 
     @property
     def info(self) -> Optional[dict]:
@@ -70,7 +64,6 @@ class AgentConfiger(ComponentConfiger):
                 self.metadata_module = get_module_path(configer.path, get_project_root_path().name)
             self.__info = configer_value.get('info') or self.__info
             self.__profile = configer_value.get('profile') or self.__profile
-            self.__plan = configer_value.get('plan') or self.__plan
             self.__memory = configer_value.get('memory') or self.__memory
             self.__action = configer_value.get('action') or self.__action
         except Exception as e:

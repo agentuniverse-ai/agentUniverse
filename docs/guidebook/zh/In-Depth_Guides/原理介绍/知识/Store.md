@@ -80,3 +80,22 @@ store = ['sample_standard_app.intelligence.agentic.knowledge.store']
 - [Chroma](../../技术组件/存储/ChromaDB.md)
 - [Milvus](../../技术组件/存储/Milvus.md)
 - [Sqlite](../../技术组件/存储/Sqlite.md)
+- HybridKnowledgeStore（混合存储）
+
+### HybridKnowledgeStore
+混合知识存储组件，可以将多个子Store组合使用。所有的CRUD操作会并行分发到所有子Store，查询时会自动去重合并结果。
+
+```yaml
+name: 'my_hybrid_store'
+description: 'vector + kv hybrid store'
+store_names:
+  - chroma_store
+  - sqlite_store
+metadata:
+  type: 'STORE'
+  module: 'agentuniverse.agent.action.knowledge.store.hybrid_store'
+  class: 'HybridKnowledgeStore'
+```
+
+## Knowledge Tool（知识工具）
+Knowledge组件可以被自动包装为工具，供LLM通过function calling进行调用。当智能体配置了Knowledge后，框架会自动将其注册为可调用的工具，工具名称以`__knowledge_tool__`为前缀。

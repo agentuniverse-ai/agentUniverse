@@ -31,7 +31,6 @@ class ExpressingAgentTemplate(AgentTemplate):
     def parse_result(self, agent_result: dict) -> dict:
         final_result = dict()
         final_result['output'] = agent_result['output']
-        # add expressing agent log info.
         logger_info = f"\nExpressing agent execution result is :\n"
         logger_info += f"{final_result.get('output')}"
         LOGGER.info(logger_info)
@@ -61,7 +60,6 @@ class ExpressingAgentTemplate(AgentTemplate):
     def add_output_stream(self, output_stream: Queue, agent_output: str) -> None:
         if not output_stream:
             return
-        # add expressing agent final result into the stream output.
         stream_output(output_stream,
                       {"data": {
                           'output': agent_output,

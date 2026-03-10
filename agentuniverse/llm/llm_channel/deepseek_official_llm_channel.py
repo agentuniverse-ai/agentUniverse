@@ -10,9 +10,9 @@ from typing import Optional
 from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 
 DEEPSEEK_MAX_CONTEXT_LENGTH = {
-    "deepseek-chat": 64000,
-    "deepseek-coder": 32000,
-    "deepseek-reasoner": 64000
+    "deepseek-chat": 128000,
+    "deepseek-coder": 128000,
+    "deepseek-reasoner": 128000
 }
 
 

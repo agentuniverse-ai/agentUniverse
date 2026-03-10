@@ -1,0 +1,18 @@
+info:
+  name: 'mcp_skill_agent'
+  description: 'Agent that uses skills to assist users with various tasks.'
+profile:
+  prompt_version: mcp_skill_agent.v1
+  max_iterations: 30
+  llm_model:
+    name: 'deepseek_reasoner'
+action:
+  tool: []
+  toolkit: []
+  skill:
+    - 'algorithmic-art'
+    - 'mcp-builder'
+  knowledge: []
+memory:
+  name: 'demo_memory'
+meta_class: sample_standard_app.intelligence.agentic.agent.agent_instance.mcp_skill_agent.McpSkillAgent

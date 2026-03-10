@@ -5,9 +5,6 @@ profile:
   llm_model:
     name: 'default_qwen_llm'
     model_name: 'qwen2.5-72b-instruct'
-plan:
-  planner:
-    name: 'rag_planner'
 metadata:
   type: 'AGENT'
   module: 'agentuniverse.agent.default.summary_agent.simple_summary_agent'

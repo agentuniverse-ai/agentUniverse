@@ -15,7 +15,6 @@ from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.memory.memory_compressor.memory_compressor_manager import MemoryCompressorManager
 from agentuniverse.agent.memory.memory_manager import MemoryManager
 from agentuniverse.agent.memory.memory_storage.memory_storage_manager import MemoryStorageManager
-from agentuniverse.agent.plan.planner.planner_manager import PlannerManager
 from agentuniverse.agent.work_pattern.work_pattern_manager import WorkPatternManager
 from agentuniverse.agent_serve.service_manager import ServiceManager
 from agentuniverse.agent_serve.service_configer import ServiceConfiger
@@ -26,7 +25,6 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
 from agentuniverse.base.config.component_configer.configers.knowledge_configer import KnowledgeConfiger
 from agentuniverse.base.config.component_configer.configers.memory_configer import MemoryConfiger
-from agentuniverse.base.config.component_configer.configers.planner_configer import PlannerConfiger
 from agentuniverse.base.config.component_configer.configers.prompt_configer import PromptConfiger
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.config.component_configer.configers.sqldb_wrapper_config import SQLDBWrapperConfiger
@@ -45,6 +43,8 @@ from agentuniverse.agent.action.knowledge.reader.reader_manager import ReaderMan
 from agentuniverse.agent.action.knowledge.query_paraphraser.query_paraphraser_manager import QueryParaphraserManager
 from agentuniverse.agent.action.knowledge.store.store_manager import StoreManager
 from agentuniverse.agent.action.knowledge.rag_router.rag_router_manager import RagRouterManager
+from agentuniverse.agent.action.skill.skill_manager import SkillManager
+from agentuniverse.base.config.component_configer.configers.skill_configer import SkillConfiger
 
 
 class ComponentConfigerUtil(object):
@@ -54,7 +54,6 @@ class ComponentConfigerUtil(object):
         ComponentEnum.AGENT: AgentConfiger,
         ComponentEnum.KNOWLEDGE: KnowledgeConfiger,
         ComponentEnum.LLM: LLMConfiger,
-        ComponentEnum.PLANNER: PlannerConfiger,
         ComponentEnum.TOOL: ToolConfiger,
         ComponentEnum.TOOLKIT: ComponentConfiger,
         ComponentEnum.MEMORY: MemoryConfiger,
@@ -73,14 +72,14 @@ class ComponentConfigerUtil(object):
         ComponentEnum.WORK_PATTERN: WorkPatternConfiger,
         ComponentEnum.LOG_SINK: ComponentConfiger,
         ComponentEnum.DEFAULT: ComponentConfiger,
-        ComponentEnum.LLM_CHANNEL: ComponentConfiger
+        ComponentEnum.LLM_CHANNEL: ComponentConfiger,
+        ComponentEnum.SKILL: SkillConfiger,
     }
 
     __COMPONENT_MANAGER_CLZ_MAP = {
         ComponentEnum.AGENT: AgentManager,
         ComponentEnum.KNOWLEDGE: KnowledgeManager,
         ComponentEnum.LLM: LLMManager,
-        ComponentEnum.PLANNER: PlannerManager,
         ComponentEnum.TOOL: ToolManager,
         ComponentEnum.TOOLKIT: ToolkitManager,
         ComponentEnum.MEMORY: MemoryManager,
@@ -99,6 +98,7 @@ class ComponentConfigerUtil(object):
         ComponentEnum.WORK_PATTERN: WorkPatternManager,
         ComponentEnum.LOG_SINK: LogSinkManager,
         ComponentEnum.LLM_CHANNEL: LLMChannelManager,
+        ComponentEnum.SKILL: SkillManager,
     }
 
     @classmethod

@@ -1,5 +1,5 @@
 name: 'recursive_character_text_splitter'
-description: 'langchain recursive character text splitter'
+description: 'recursive character text splitter'
 chunk_size: 200
 chunk_overlap: 20
 separators:

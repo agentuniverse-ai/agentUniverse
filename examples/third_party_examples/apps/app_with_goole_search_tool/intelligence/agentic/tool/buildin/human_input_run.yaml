@@ -1,11 +1,8 @@
 name: 'human_input_run'
-description: ''
+description: 'Prompt the user for text input via the terminal.'
 tool_type: 'api'
 input_keys: ['input']
-langchain:
-  module: langchain_community.tools
-  class_name: HumanInputRun
 metadata:
   type: 'TOOL'
-  module: 'agentuniverse.agent.action.tool.common_tool.langchain_tool'
-  class: 'LangChainTool'
+  module: 'agentuniverse.agent.action.tool.common_tool.human_input_tool'
+  class: 'HumanInputTool'

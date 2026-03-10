@@ -10,12 +10,14 @@ from typing import Optional
 from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 
 CLAUDE_MAX_CONTEXT_LENGTH = {
-    "claude-3-opus-20240229": 200000,
-    "claude-3-sonnet-20240229": 200000,
-    "claude-3-haiku-20240307": 200000,
-    "claude-2.1": 200000,
-    "claude-2.0": 100000,
-    "claude-instant-1.2": 100000
+    "claude-3-haiku-20240307": 200_000,
+    "claude-3-sonnet-20240229": 200_000,
+    "claude-3-opus-20240229": 200_000,
+    "claude-3-5-sonnet-20240620": 200_000,
+    "claude-3-5-sonnet-20241022": 200_000,
+    "claude-3-5-haiku-20241022": 200_000,
+    "claude-sonnet-4-20250514": 200_000,
+    "claude-opus-4-20250514": 200_000,
 }
 
 

@@ -18,7 +18,7 @@ def chat(question: str):
     The peer agents in agentUniverse become a chatbot and can ask questions to get the answer.
     """
     instance: Agent = AgentManager().get_instance_obj('demo_react_agent')
-    instance.run(input=question)
+    print(instance.run(input=question).get_data('output'))
 
 
 if __name__ == '__main__':

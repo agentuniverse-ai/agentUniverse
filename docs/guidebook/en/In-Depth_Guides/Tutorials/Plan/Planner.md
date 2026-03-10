@@ -1,5 +1,28 @@
-# Planner
-Planners influence the collaboration and execution strategies of actual agents. As we mentioned earlier, agentUniverse can be viewed as a Pattern Factory, and Planners are the practical carriers of the collaboration and execution philosophies of these patterns. Planners can encompass various types, such as making the agent adhere to a fully human-orchestrated workflow, follow a specific Standard Operating Procedure (SOP), or use certain specific models of operation like PEER/Retrieval-Augmented Generation (RAG), or even allow the agent to work completely autonomously (Auto).
+# Planner - Deprecated
 
-# Conclusion
-At this point, you have a preliminary understanding of the role of planning. In the next section, we will specifically introduce the standard definitions of planning components, how to create custom plans, and how to use plans.
+> **Note:** Starting from the new version, the Planner component has been deprecated. It is recommended to use **Agent Templates** as a replacement for the original Planner functionality.
+
+## Background
+
+In earlier versions, Planners influenced the collaboration and execution strategies of actual agents. agentUniverse could be viewed as a Pattern Factory, and Planners were the practical carriers of the collaboration and execution philosophies of these patterns.
+
+## Migration Guide
+
+The original Planner functionality has now been replaced by Agent Templates. Agent Templates provide a more flexible and powerful way to define collaboration and execution strategies.
+
+Please refer to the following documentation for Agent Templates:
+- [Creating and Using Agent Templates](../../../Get_Start/5.Creating_and_Using_Agent_Templates.md)
+- [Agent Template](../Agent/AgentTemplate.md)
+
+### Mapping
+
+| Original Planner Type | Corresponding Agent Template |
+|---|---|
+| ReactPlanner | ReactAgentTemplate |
+| RAGPlanner | RAGAgentTemplate |
+| PEERPlanner | PeerAgentTemplate |
+| WorkflowPlanner | WorkflowAgentTemplate |
+| ExecutingPlanner | ExecutingAgentTemplate |
+| ExpressingPlanner | ExpressingAgentTemplate |
+| PlanningPlanner | PlanningAgentTemplate |
+| ReviewingPlanner | ReviewingAgentTemplate |

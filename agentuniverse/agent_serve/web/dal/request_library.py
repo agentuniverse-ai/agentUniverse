@@ -75,10 +75,10 @@ class RequestLibrary:
                                        self.sqldb_wrapper)
 
     def __init_request_table(self):
-        with self.sqldb_wrapper.sql_database._engine.connect() as conn:
+        with self.sqldb_wrapper.engine.connect() as conn:
             if not conn.dialect.has_table(conn, self.request_table_name):
                 Base.metadata.create_all(
-                    self.sqldb_wrapper.sql_database._engine)
+                    self.sqldb_wrapper.engine)
 
     def get_session(self):
         if not self.session:

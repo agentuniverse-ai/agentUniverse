@@ -1,18 +1,16 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-import asyncio
-from typing import Any, Optional, Literal, List
+from typing import Optional, Literal, List
 
 from mcp.types import CallToolResult
 
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool, ToolConfigError
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
 from agentuniverse.base.config.component_configer.configers.tool_configer import \
     ToolConfiger
 from agentuniverse.base.context.mcp_session_manager import MCPSessionManager, \
     MCPTempClient
-from agentuniverse.base.util.async_util import run_async_from_sync
 
 
 # @Time    : 2025/4/14 18:11
@@ -38,34 +36,34 @@ class MCPTool(Tool):
         return self.origin_tool_name if self.origin_tool_name else self.name
 
     def execute(self, **kwargs) -> CallToolResult:
-        session = MCPSessionManager().get_mcp_server_session_sync(
+        session = MCPSessionManager().get_mcp_server_session(
             server_name=self.server_name,
             **self.get_mcp_server_connect_args()
         )
-        result = MCPSessionManager().run_async(session.call_tool, self.tool_name, kwargs)
+        result = MCPSessionManager().managed_stack.run_async(
+            session.call_tool, self.tool_name, kwargs
+        )
         return result
 
     async def async_execute(self, **kwargs) -> CallToolResult:
-        session = await MCPSessionManager().get_mcp_server_session(
+        session = await MCPSessionManager().get_mcp_server_session_async(
             server_name=self.server_name,
             **self.get_mcp_server_connect_args()
         )
-        result = await session.call_tool(self.tool_name, kwargs)
-        return result
-
+        return await session.call_tool(self.tool_name, kwargs)
 
     def get_mcp_server_connect_args(self) -> dict:
-        if self.transport == "sse":
+        if self.transport == "stdio":
             connect_args = {
-                'transport': self.transport,
-                'url': self.url
-            }
-        elif self.transport == "stdio":
-            return {
                 'transport': self.transport,
                 "command": self.command,
                 "args": self.args,
                 'env': self.env
+            }
+        elif self.transport == "sse":
+            connect_args = {
+                'transport': self.transport,
+                'url': self.url
             }
         elif self.transport == "streamable_http":
             connect_args = {
@@ -90,28 +88,36 @@ class MCPTool(Tool):
         self._initialize_by_component_configer(component_configer)
         return self
 
-    async def get_tool_info(self):
-        async with MCPTempClient(
-            self.get_mcp_server_connect_args()
-        ) as client:
-            tools_list = await client.session.list_tools()
-        tools = tools_list.tools
-        tool_info = None
-        for _tool in tools:
-            if _tool.name == self.tool_name:
-                tool_info = _tool
-                break
-        if not tool_info:
-            raise Exception(f'No tool named {self.tool_name} in mcp server {self.server_name}')
-        self.input_keys = tool_info.inputSchema['required']
-        self.args_model_schema = tool_info.inputSchema
+    def get_tool_info(self):
+        if self.args_model_schema is not None:
+            return
+
+        with MCPTempClient(self.get_mcp_server_connect_args()) as client:
+            tools_list = client.list_tools()
+
+        tool_info = next(
+            (t for t in tools_list.tools if t.name == self.tool_name),
+            None,
+        )
+
+        if tool_info is None:
+            raise ToolConfigError(
+                f'No tool named "{self.tool_name}" in MCP server "{self.server_name}". '
+                f'Available: {[t.name for t in tools_list.tools]}'
+            )
+
+        input_schema = tool_info.inputSchema or {}
+        self.args_model_schema = input_schema
+        self.input_keys = input_schema.get("required", [])
+        if not self.name:
+            self.name = tool_info.name
+
         if not self.description:
-            self.description = f'{tool_info.description}\n{str(tool_info.inputSchema)}'
+            self.description = tool_info.description or ""
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'MCPTool':
         if not self.server_name:
             # use an unique name to manage session
             self.server_name = self.name
-        coro = self.get_tool_info()
-        run_async_from_sync(coro, timeout=10)
+        self.get_tool_info()
         return self

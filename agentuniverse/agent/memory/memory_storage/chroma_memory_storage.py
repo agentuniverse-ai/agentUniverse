@@ -29,6 +29,11 @@ class ChromaMemoryStorage(MemoryStorage):
         persist_path (str): The path to persist the collection.
         embedding_model (str): The name of the embedding model instance to use.
         _collection (Collection): The collection object.
+
+    Note:
+        This class uses the default async implementation from the parent class
+        (asyncio.to_thread) as ChromaDB does not provide official async support.
+        For truly async operations, consider using QdrantMemoryStorage instead.
     """
     collection_name: Optional[str] = 'memory'
     persist_path: Optional[str] = None
@@ -111,13 +116,13 @@ class ChromaMemoryStorage(MemoryStorage):
             if self.embedding_model:
                 embedding = EmbeddingManager().get_instance_obj(
                     self.embedding_model
-                ).get_embeddings([message.content])[0]
+                ).get_embeddings([message.content_text])[0]
             if message.source:
                 metadata['source'] = message.source
             metadata['type'] = message.type if message.type else ''
             self._collection.add(
                 ids=[message.id if message.id else str(uuid.uuid4())],
-                documents=[message.content],
+                documents=[message.content_text],
                 metadatas=[metadata],
                 embeddings=[embedding] if len(embedding) > 0 else None,
             )

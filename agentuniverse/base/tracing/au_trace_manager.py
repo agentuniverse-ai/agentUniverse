@@ -106,3 +106,7 @@ def add_current_token_usage_to_parent(token_usage=None, parent_span_id=None):
 
 def get_current_token_usage(span_id=None) -> TokenUsage:
     return AuTraceManager().trace_context.get_current_token_usage(span_id)
+
+
+def remove_token_usage(span_id=None):
+    return AuTraceManager().trace_context.remove_token_usage(span_id)

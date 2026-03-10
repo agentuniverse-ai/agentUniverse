@@ -1,6 +1,0 @@
-name: 'react_planner'
-description: 'react planner'
-metadata:
-  type: 'PLANNER'
-  module: 'agentuniverse.agent.plan.planner.react_planner.react_planner'
-  class: 'ReActPlanner'

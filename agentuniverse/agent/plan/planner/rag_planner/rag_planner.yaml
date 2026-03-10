@@ -1,6 +1,0 @@
-name: 'rag_planner'
-description: 'rag planner'
-metadata:
-  type: 'PLANNER'
-  module: 'agentuniverse.agent.plan.planner.rag_planner.rag_planner'
-  class: 'RagPlanner'

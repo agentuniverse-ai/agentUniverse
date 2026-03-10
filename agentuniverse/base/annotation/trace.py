@@ -435,7 +435,7 @@ def trace_knowledge(func):
     async def wrapper_async(*args, **kwargs):
         impl = globals().get('_knowledge_wrapper_async',
                              _default_knowledge_wrapper_async)
-        return impl(func, *args, **kwargs)
+        return await impl(func, *args, **kwargs)
 
     @functools.wraps(func)
     def wrapper_sync(*args, **kwargs):

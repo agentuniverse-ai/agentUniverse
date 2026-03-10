@@ -1,0 +1,11 @@
+name: 'Edit'
+description: |
+  Perform exact string replacements in files.
+  - old_string must be unique in the file (unless replace_all is true).
+  - Returns error if old_string is not found or is ambiguous.
+tool_type: 'api'
+input_keys: ['file_path', 'old_string', 'new_string']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.edit_tool'
+  class: 'EditTool'

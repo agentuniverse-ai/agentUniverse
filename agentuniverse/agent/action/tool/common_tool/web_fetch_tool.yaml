@@ -1,0 +1,11 @@
+name: 'WebFetch'
+description: |
+  Fetch content from a URL and extract readable text.
+  Converts HTML to plain text by stripping scripts, styles, and tags.
+  Supports content truncation for large pages.
+tool_type: 'api'
+input_keys: ['url']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.web_fetch_tool'
+  class: 'WebFetchTool'

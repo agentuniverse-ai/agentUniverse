@@ -8,6 +8,15 @@ class ReviewingOpenAIAgentTemplate(OpenAIProtocolTemplate, ReviewingAgentTemplat
     def parse_openai_protocol_output(self, output_object: OutputObject) -> OutputObject:
         return output_object
 
+    def input_keys(self) -> list[str]:
+        return ReviewingAgentTemplate.input_keys(self)
+
+    def output_keys(self) -> list[str]:
+        return ReviewingAgentTemplate.output_keys(self)
+
+    def parse_result(self, agent_result: dict) -> dict:
+        return ReviewingAgentTemplate.parse_result(self, agent_result)
+
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         self.add_output_stream(input_object.get_data('output_stream', None), '## Reviewing \n\n')
-        return super().parse_input(input_object, agent_input)
+        return ReviewingAgentTemplate.parse_input(self, input_object, agent_input)

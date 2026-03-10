@@ -1,6 +1,0 @@
-name: 'expressing_planner'
-description: 'expressing planner'
-metadata:
-  type: 'PLANNER'
-  module: 'agentuniverse.agent.plan.planner.expressing_planner.expressing_planner'
-  class: 'ExpressingPlanner'

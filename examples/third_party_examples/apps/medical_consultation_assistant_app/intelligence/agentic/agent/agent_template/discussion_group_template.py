@@ -8,8 +8,6 @@
 from collections import deque
 from typing import Optional
 
-from langchain_core.output_parsers import StrOutputParser
-
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
@@ -19,7 +17,6 @@ from agentuniverse.base.config.component_configer.configers.agent_configer impor
 from agentuniverse.base.util.agent_util import assemble_memory_output, assemble_memory_input
 from agentuniverse.base.util.common_util import stream_output
 from agentuniverse.base.util.logging.logging_util import LOGGER
-from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
 from agentuniverse.prompt.chat_prompt import ChatPrompt
 
@@ -143,12 +140,13 @@ class DiscussionGroupTemplate(AgentTemplate):
         llm: LLM = self.process_llm()
 
         prompt: ChatPrompt = self.process_prompt(agent_input)
-        process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
+        agent_context = self._create_agent_context(input_object, agent_input, memory)
 
         assemble_memory_input(memory, agent_input)
 
-        chain = prompt.as_langchain() | llm.as_langchain_runnable(self.agent_model.llm_params()) | StrOutputParser()
-        res = self.invoke_chain(chain, agent_input, input_object)
+        messages = prompt.render(**agent_input)
+        llm_output = self.invoke_llm(llm, messages, input_object, agent_context=agent_context)
+        res = llm_output.text
 
         content = (f"human: {agent_input.get('input')}, "
                    f"ai: after several rounds of discussions among the participants, "

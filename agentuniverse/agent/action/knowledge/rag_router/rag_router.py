@@ -6,6 +6,7 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: rag_router.py
 
+import asyncio
 from abc import abstractmethod
 from typing import List, Optional, Tuple
 
@@ -27,6 +28,15 @@ class RagRouter(ComponentBase):
         """Accept query a list of store instance name, and return a list of
          query-store pair."""
         return self._rag_route(query, store_list)
+
+    async def async_rag_route(self, query: Query, store_list: List[str]) \
+            -> List[Tuple[Query, str]]:
+        """Async version of :meth:`rag_route`.
+
+        Default implementation delegates to the synchronous method via
+        ``asyncio.to_thread``.  Subclasses may override for true async.
+        """
+        return await asyncio.to_thread(self.rag_route, query, store_list)
 
     def _rag_route(self, query: Query, store_list: List[str]) \
             -> List[Tuple[Query, str]]:

@@ -1,13 +1,9 @@
 name: 'list_sql_database_tool'
-description: ''
+description: 'List all table names in the database.'
 tool_type: 'api'
 input_keys: ['input']
-langchain:
-  module: langchain_community.tools
-  class_name: ListSQLDatabaseTool
-  init_params:
-    db_wrapper:
+db_wrapper_name:
 metadata:
   type: 'TOOL'
-  module: 'agentuniverse.agent.action.tool.common_tool.sql_langchain_tool'
-  class: 'SqlLangchainTool'
+  module: 'agentuniverse.agent.action.tool.common_tool.sql_database_tool'
+  class: 'ListSqlDbTool'

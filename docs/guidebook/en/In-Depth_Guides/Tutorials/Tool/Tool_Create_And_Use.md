@@ -52,13 +52,13 @@ def execute(self, tool_input: ToolInput):
 
 #### An actual example of a tool object definition.
 ```python
-from langchain_community.utilities.google_serper import GoogleSerperAPIWrapper
+import requests
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 
 class GoogleSearchTool(Tool):
     """The demo google search tool.
 
-    Implement the execute method of demo google search tool, using the `GoogleSerperAPIWrapper` to implement a simple Google search.
+    Implement the execute method of demo google search tool, using the Google Serper API to implement a simple Google search.
 
     Note:
         You need to sign up for a free account at https://serper.dev and get the serper api key (2500 free queries).
@@ -67,8 +67,14 @@ class GoogleSearchTool(Tool):
     def execute(self, tool_input: ToolInput):
         query = tool_input.get_data("input")
         # get top3 results from Google search.
-        search = GoogleSerperAPIWrapper(serper_api_key='', k=3, type="search")
-        return search.run(query=query)
+        url = "https://google.serper.dev/search"
+        headers = {
+            'X-API-KEY': self.serper_api_key,
+            'Content-Type': 'application/json'
+        }
+        payload = {"q": query, "num": 3}
+        response = requests.post(url, headers=headers, json=payload)
+        return response.json()
 ```
 In this example, we integrated Google's search tool, which retrieves and returns the three most relevant pieces of content related to the search query.
 

@@ -9,7 +9,8 @@
 import json
 from typing import Optional, Sequence, Any, Dict
 
-from langchain_community.utilities.sql_database import SQLDatabase
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
 from ..base.config.application_configer.application_config_manager import (
@@ -21,13 +22,14 @@ from ..base.component.component_enum import ComponentEnum
 
 
 class SQLDBWrapper(ComponentBase):
-    """A sql DB wrapper based on sqlalchemy and langchain sql database, """
+    """A sql DB wrapper based on sqlalchemy."""
 
     # Basic attributes of the service class.
     component_type: ComponentEnum = ComponentEnum.SQLDB_WRAPPER
     name: Optional[str] = None
     description: Optional[str] = None
-    __sql_database: Optional[SQLDatabase] = None
+    _engine: Optional[Engine] = None
+    _max_string_length: int = -1
     db_session: Optional[sessionmaker] = None
     db_wrapper_configer: Optional[SQLDBWrapperConfiger] = None
 
@@ -56,12 +58,21 @@ class SQLDBWrapper(ComponentBase):
         self.db_wrapper_configer = db_wrapper_configer
         return self
 
+    def _execute(self, command: str) -> Sequence[Dict[str, Any]]:
+        """Execute SQL command and return results as a list of dicts."""
+        with self.engine.begin() as conn:
+            cursor = conn.execute(text(command))
+            if cursor.returns_rows:
+                columns = list(cursor.keys())
+                rows = cursor.fetchall()
+                return [dict(zip(columns, row)) for row in rows]
+            return []
+
     def run(self, command: str) -> Sequence[Dict[str, Any]]:
         """
         Execute given sql command and return a result sequence.
         """
-        return self.sql_database._execute(command=command)
-
+        return self._execute(command=command)
 
     def run_with_str_return(self, command: str) -> str:
         """
@@ -69,31 +80,41 @@ class SQLDBWrapper(ComponentBase):
         as a part of llm input. If db wrapper's 'max_string_length' property is
         not negative, result str will be truncated.
         """
-        return self.sql_database.run(command, fetch="all")
+        result = self._execute(command=command)
+        if not result:
+            return ""
+        if self._max_string_length > 0:
+            result = [
+                {
+                    k: (v[:self._max_string_length]
+                        if isinstance(v, str) and len(v) > self._max_string_length
+                        else v)
+                    for k, v in row.items()
+                }
+                for row in result
+            ]
+        res = [tuple(row.values()) for row in result]
+        return str(res)
 
     @property
-    def sql_database(self):
+    def engine(self) -> Engine:
         """
         Lazy init, to ensure that database engine can be init correctly in
         separate processes like gunicorn.
         """
-        if not self.__sql_database:
+        if not self._engine:
             self.db_wrapper_configer.engine_args.setdefault(
                 "json_serializer", lambda x: json.dumps(x, ensure_ascii=False)
             )
-            self.db_wrapper_configer.sql_database_args.setdefault(
-                "sample_rows_in_table_info", 3
+            sql_db_args = dict(self.db_wrapper_configer.sql_database_args)
+            self._max_string_length = sql_db_args.pop("max_string_length", -1)
+            # Remove langchain-specific args that are not applicable to create_engine
+            sql_db_args.pop("sample_rows_in_table_info", None)
+            self._engine = create_engine(
+                self.db_wrapper_configer.db_uri,
+                **self.db_wrapper_configer.engine_args
             )
-            self.db_wrapper_configer.sql_database_args.setdefault(
-                "max_string_length", -1
-            )
-            self.__sql_database = SQLDatabase.from_uri(
-                engine_args=self.db_wrapper_configer.engine_args,
-                database_uri=self.db_wrapper_configer.db_uri,
-                **self.db_wrapper_configer.sql_database_args
-            )
-        return self.__sql_database
-
+        return self._engine
 
     def get_session(self):
         """
@@ -102,5 +123,5 @@ class SQLDBWrapper(ComponentBase):
         if self.db_session:
             return self.db_session
         # Create database engine
-        self.db_session = sessionmaker(bind=self.sql_database._engine)
+        self.db_session = sessionmaker(bind=self.engine)
         return self.db_session

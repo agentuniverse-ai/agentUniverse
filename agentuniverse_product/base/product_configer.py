@@ -10,7 +10,7 @@ from typing import Optional
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.base.config.configer import Configer
 
-PRODUCT_COMPONENT_TYPE = ['AGENT', 'KNOWLEDGE', 'TOOL', 'PLANNER', 'LLM', 'PLUGIN']
+PRODUCT_COMPONENT_TYPE = ['AGENT', 'KNOWLEDGE', 'TOOL', 'LLM', 'PLUGIN']
 
 
 class ProductConfiger(ComponentConfiger):

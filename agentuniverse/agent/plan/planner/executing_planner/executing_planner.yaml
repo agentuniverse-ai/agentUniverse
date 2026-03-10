@@ -1,6 +1,0 @@
-name: 'executing_planner'
-description: 'executing planner'
-metadata:
-  type: 'PLANNER'
-  module: 'agentuniverse.agent.plan.planner.executing_planner.executing_planner'
-  class: 'ExecutingPlanner'

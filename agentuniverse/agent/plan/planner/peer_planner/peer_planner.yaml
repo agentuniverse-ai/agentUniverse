@@ -1,6 +1,0 @@
-name: 'peer_planner'
-description: 'peer planner'
-metadata:
-  type: 'PLANNER'
-  module: 'agentuniverse.agent.plan.planner.peer_planner.peer_planner'
-  class: 'PeerPlanner'

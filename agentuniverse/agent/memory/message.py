@@ -5,14 +5,108 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: message.py
-from typing import Optional, List, Union, Dict
+from typing import Optional, List, Union, Dict, Any, Literal
 
-from langchain_core.messages import HumanMessage
-from langchain_core.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate
-from langchain_core.prompts.chat import BaseStringMessagePromptTemplate
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from agentuniverse.agent.memory.enum import ChatMessageEnum
+
+ContentT = Union[str, List[Union[str, Dict[str, Any]]]]
+
+# OpenAI 多模态 content part 中合法的 type 值
+_OPENAI_CONTENT_PART_TYPES = frozenset({
+    "text", "image_url", "input_audio", "file", "refusal",
+})
+
+
+def _is_openai_content_part(item: Any) -> bool:
+    """检查单个元素是否符合 OpenAI content part 格式。
+
+    合法的 content part:
+    - str（纯文本，openai_normalize_content 会自动包装为 {"type": "text", "text": ...}）
+    - dict 且包含 "type" 字段，且 type 值属于已知的 OpenAI content part 类型
+    """
+    if isinstance(item, str):
+        return True
+    if isinstance(item, dict):
+        return item.get("type") in _OPENAI_CONTENT_PART_TYPES
+    return False
+
+
+def normalize_tool_result(result: Any) -> ContentT:
+    """将工具返回值转换为 ContentT，尽量保留多模态内容。
+
+    - None → 空字符串
+    - str  → 直接返回
+    - list → 如果每个元素都符合 OpenAI 多模态 content part 格式则保留，否则退化为 str
+    - 其它 → str(result)
+    """
+    if result is None:
+        return ""
+    if isinstance(result, str):
+        return result
+    if isinstance(result, list) and len(result) > 0:
+        if all(_is_openai_content_part(item) for item in result):
+            return result
+        return str(result)
+    return str(result)
+
+
+def _extract_plain_text(content: Optional[ContentT]) -> str:
+    """从 ContentT 中提取纯文本。
+
+    - str  → 直接返回
+    - list → 遍历每个 part：
+        - str 直接拼接
+        - dict 取 "text" 字段（兼容 OpenAI multi-modal content parts 格式）
+    - None → 返回空字符串
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    parts: List[str] = []
+    for part in content:
+        if isinstance(part, str):
+            parts.append(part)
+        elif isinstance(part, dict):
+            # OpenAI 格式: {"type": "text", "text": "..."} 或直接 {"text": "..."}
+            text = part.get("text")
+            if text is not None:
+                parts.append(str(text))
+    return "".join(parts)
+
+
+class FunctionCall(BaseModel):
+    """函数调用详情"""
+    name: str
+    arguments: str  # JSON 字符串
+
+    def parse_arguments(self) -> Dict[str, Any]:
+        import json
+        if not self.arguments or not self.arguments.strip():
+            return {}
+        return json.loads(self.arguments)
+
+
+class ToolCall(BaseModel):
+    """工具调用，对标 OpenAI tool_calls 格式"""
+    id: str
+    type: Literal["function"] = "function"
+    function: FunctionCall
+
+    @classmethod
+    def create(cls, id: str, name: str,
+               arguments: Union[str, Dict, None] = None) -> "ToolCall":
+        import json
+        if arguments is None:
+            arguments = "{}"
+        elif isinstance(arguments, dict):
+            arguments = json.dumps(arguments, ensure_ascii=False)
+        elif not arguments.strip():
+            arguments = "{}"
+        return cls(id=id,
+                   function=FunctionCall(name=name, arguments=arguments))
 
 
 class Message(BaseModel):
@@ -25,57 +119,66 @@ class Message(BaseModel):
         source (Optional[str]): The source of the message.
         metadata (Optional[dict]): The metadata of the message.
     """
+    type: Optional[ChatMessageEnum] = None
+    content: Optional[ContentT] = None
+    reasoning_content: Optional[ContentT] = None
+    refusal: Optional[str] = None
+
+    # Tool call or function call
+    function_call: Optional[FunctionCall] = None  # deprecated，兼容旧代码
+    tool_calls: Optional[List[ToolCall]] = None
+    tool_call_id: Optional[str] = None
+
+    # Metadata
     id: Optional[str] = None
-    type: Optional[str] = None
-    content: Optional[Union[str, List[Union[str, Dict]]]] = None
+    name: Optional[str] = None
     source: Optional[str] = None
     metadata: Optional[dict] = None
 
-    def as_langchain(self):
-        """Convert the agentUniverse(aU) message class to the langchain message class."""
-        if self.type == ChatMessageEnum.SYSTEM.value:
-            return SystemMessagePromptTemplate.from_template(self.content)
-        elif self.type == ChatMessageEnum.HUMAN.value:
-            if isinstance(self.content, str):
-                return HumanMessagePromptTemplate.from_template(self.content)
-            elif isinstance(self.content, list):
-                return HumanMessage(content=self.content)
-        elif self.type == ChatMessageEnum.AI.value:
-            return AIMessagePromptTemplate.from_template(self.content)
-        else:
-            return BaseStringMessagePromptTemplate.from_template(self.content)
+    model_config = ConfigDict(
+        use_enum_values=True,
+        extra='allow'
+    )
 
-    @staticmethod
-    def as_langchain_list(message_list: List['Message']):
-        """Convert agentUniverse(aU) message list to langchain message list """
-        langchain_message_list = []
-        if message_list is None:
-            return langchain_message_list
-        for message in message_list:
-            langchain_message_list.append(message.as_langchain())
-        return langchain_message_list
+    # ---- 纯文本便捷属性 ----
 
-    def to_dict(self) -> dict:
-        """Convert the agentUniverse(aU) message class to the dict."""
-        return {"type": self.type, "content": self.content, "metadata": self.metadata, "source": self.source}
+    @property
+    def content_text(self) -> str:
+        """获取 content 的纯文本表示。
 
-    @staticmethod
-    def from_dict(message_dict: dict) -> 'Message':
-        """Convert the dict to agentUniverse(aU) message class.
-
-        Args:
-            message_dict (dict): The dict of the message.
-        Returns:
-            Message: The agentUniverse(aU) message class.
+        - content 为 str 时直接返回
+        - content 为 list 时提取所有文本部分并拼接
+        - content 为 None 时返回空字符串
         """
-        message = Message()
-        if not message_dict:
-            return message
-        attributes = ['id', 'content', 'type', 'source', 'metadata', 'role']
-        for attr in attributes:
-            if attr in message_dict:
-                if attr == 'role':
-                    setattr(message, 'type', message_dict[attr])
-                else:
-                    setattr(message, attr, message_dict[attr])
-        return message
+        return _extract_plain_text(self.content)
+
+    @property
+    def reasoning_text(self) -> str:
+        """获取 reasoning_content 的纯文本表示。
+
+        - reasoning_content 为 str 时直接返回
+        - reasoning_content 为 list 时提取所有文本部分并拼接
+        - reasoning_content 为 None 时返回空字符串
+        """
+        return _extract_plain_text(self.reasoning_content)
+
+        # ---- 序列化 / 反序列化 ----
+
+    def to_dict(self, *, include_none: bool = False) -> dict:
+        return self.model_dump(exclude_none=not include_none)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Message":
+        if "type" not in d and "role" in d:
+            d = {**d, "type": d.pop("role")}
+        return cls.model_validate(d)
+
+    def get_extra_fields(self) -> Dict[str, Any]:
+        defined_fields = set(self.model_fields.keys())
+        all_fields = set(self.__dict__.keys())
+        extra_field_names = all_fields - defined_fields
+        return {name: getattr(self, name) for name in extra_field_names}
+
+    def has_tool_calls(self) -> bool:
+        """是否包含工具调用"""
+        return bool(self.tool_calls) or bool(self.function_call)

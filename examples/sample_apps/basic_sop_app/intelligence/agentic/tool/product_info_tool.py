@@ -5,7 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: product_info_tool.py
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 from basic_sop_app.intelligence.utils.constant import product_b_info, product_c_info
 
 

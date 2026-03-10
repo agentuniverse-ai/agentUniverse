@@ -14,7 +14,7 @@ absolute_path = os.path.abspath(file_path)
 
 def chat(question: str):
     instance: Agent = AgentManager().get_instance_obj('demo_agent_with_mcp_toolkit')
-    instance.run(input=question)
+    print(instance.run(input=question).get_data('output'))
 
 
 if __name__ == '__main__':

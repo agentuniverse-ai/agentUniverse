@@ -1,13 +1,9 @@
 name: 'query_sql_database_tool'
-description: ''
+description: 'Execute a SQL query against the database and return the string result.'
 tool_type: 'api'
 input_keys: ['input']
-langchain:
-  module: langchain_community.tools
-  class_name: QuerySQLDataBaseTool
-  init_params:
-    db_wrapper:
+db_wrapper_name:
 metadata:
   type: 'TOOL'
-  module: 'agentuniverse.agent.action.tool.common_tool.sql_langchain_tool'
-  class: 'SqlLangchainTool'
+  module: 'agentuniverse.agent.action.tool.common_tool.sql_database_tool'
+  class: 'QuerySqlDbTool'

@@ -1,6 +1,0 @@
-name: 'reviewing_planner'
-description: 'reviewing planner'
-metadata:
-  type: 'PLANNER'
-  module: 'agentuniverse.agent.plan.planner.reviewing_planner.reviewing_planner'
-  class: 'ReviewingPlanner'

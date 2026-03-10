@@ -5,6 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: reader.py
+import asyncio
 from abc import abstractmethod
 from typing import List, Any, Optional
 
@@ -23,6 +24,15 @@ class Reader(ComponentBase):
     def load_data(self, *args: Any, **kwargs: Any) -> List[Document]:
         """Load data from the input params."""
         return self._load_data(*args, **kwargs)
+
+    async def async_load_data(self, *args: Any, **kwargs: Any) -> List[Document]:
+        """Async version of :meth:`load_data`.
+
+        Default implementation delegates to the synchronous method via
+        ``asyncio.to_thread``.  Subclasses with native async I/O should
+        override this method.
+        """
+        return await asyncio.to_thread(self._load_data, *args, **kwargs)
 
     @abstractmethod
     def _load_data(self, *args: Any, **kwargs: Any) -> List[Document]:
