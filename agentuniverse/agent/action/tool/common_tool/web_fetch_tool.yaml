@@ -1,8 +1,15 @@
 name: 'WebFetch'
 description: |
-  Fetch content from a URL and extract readable text.
-  Converts HTML to plain text by stripping scripts, styles, and tags.
-  Supports content truncation for large pages.
+  获取网页内容并提取可读文本的工具。工具接受以下参数：
+    - url: 要访问的网页地址（必填），必须是 http 或 https 协议
+    - extract_mode: 内容提取模式（选填），可选值为 markdown / text，默认为 markdown
+      - markdown: 将网页转换为 Markdown 格式，保留链接和标题结构
+      - text: 提取纯文本，去除所有格式
+    - max_chars: 最大返回字符数（选填），默认 60000
+  工具输入示例：
+    示例1: 获取一篇文章内容 → url: https://example.com/article
+    示例2: 获取纯文本 → url: https://example.com/page, extract_mode: text
+  注意：该工具直接发送 HTTP 请求获取网页，对于重度依赖 JavaScript 渲染的页面（如 Google 搜索结果），提取效果可能有限。
 tool_type: 'api'
 input_keys: ['url']
 metadata:
