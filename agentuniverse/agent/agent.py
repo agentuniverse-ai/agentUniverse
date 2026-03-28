@@ -465,7 +465,7 @@ class Agent(ComponentBase, ABC):
         if image_urls:
             chat_prompt.generate_image_prompt(image_urls)
 
-        audio_url: str = agent_input.pop('audio_url') or ''
+        audio_url: str = agent_input.pop('audio_url', '') or ''
         if audio_url:
             chat_prompt.generate_audio_prompt(audio_url)
         return chat_prompt
