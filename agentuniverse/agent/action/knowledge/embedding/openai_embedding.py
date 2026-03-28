@@ -95,8 +95,13 @@ class OpenAIEmbedding(Embedding):
 
     def as_langchain(self) -> OpenAIEmbeddings:
         """Convert the agentUniverse(aU) openai embedding class to the langchain openai embedding class."""
-        return OpenAIEmbeddings(openai_api_key=self.openai_api_key,
-                                client=self.client.embeddings, async_client=self.async_client.embeddings)
+        kwargs = {
+            "openai_api_key": self.openai_api_key,
+            "client": self.client.embeddings if self.client else None,
+        }
+        if self.async_client is not None:
+            kwargs["async_client"] = self.async_client.embeddings
+        return OpenAIEmbeddings(**kwargs)
 
     def _initialize_by_component_configer(self,
                                           embedding_configer: ComponentConfiger) \
