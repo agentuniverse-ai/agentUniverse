@@ -102,7 +102,14 @@ class AzureOpenAIEmbedding(Embedding):
         self._initialize_clients()
 
         from langchain_community.embeddings.azure_openai import AzureOpenAIEmbeddings
-        return AzureOpenAIEmbeddings(openai_api_key=self.azure_api_key, client=self.client.embeddings, async_client=self.async_client.embeddings, azure_endpoint=f"https://{self.resource_name}.openai.azure.com/")
+        kwargs = {
+            "openai_api_key": self.azure_api_key,
+            "client": self.client.embeddings if self.client else None,
+            "azure_endpoint": f"https://{self.resource_name}.openai.azure.com/"
+        }
+        if self.async_client is not None:
+            kwargs["async_client"] = self.async_client.embeddings
+        return AzureOpenAIEmbeddings(**kwargs)
 
 
     def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> 'Embedding':
