@@ -399,7 +399,7 @@ class Agent(ComponentBase, ABC):
             try:
                 tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
                 tool_results.append(str(tool.run(**tool_input)))
-            except:
+            except Exception:
                 LOGGER.warn(f'Tool {tool_name} call failed, maybe invalid or lack arguments')
         return "\n\n".join(tool_results)
 
@@ -465,7 +465,7 @@ class Agent(ComponentBase, ABC):
         if image_urls:
             chat_prompt.generate_image_prompt(image_urls)
 
-        audio_url: str = agent_input.pop('audio_url') or ''
+        audio_url: str = agent_input.pop('audio_url', '') or ''
         if audio_url:
             chat_prompt.generate_audio_prompt(audio_url)
         return chat_prompt
