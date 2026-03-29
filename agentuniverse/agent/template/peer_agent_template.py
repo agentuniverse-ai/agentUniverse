@@ -101,7 +101,11 @@ class PeerAgentTemplate(AgentTemplate):
         if not agent:
             return None
         if not isinstance(agent, expected_type):
-            raise ValueError(f"{agent_name} is not of the expected type {expected_type.__name__}")
+            raise ValueError(
+                f"Agent '{agent_name}' has incorrect type: expected {expected_type.__name__}, "
+                f"got {type(agent).__name__}. "
+                f"Please verify your agent configuration in the YAML file."
+            )
         return agent
 
     def add_peer_memory(self, peer_memory: Memory, agent_input: dict, work_pattern_result: dict):

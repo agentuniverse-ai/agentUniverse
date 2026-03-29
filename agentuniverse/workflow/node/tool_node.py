@@ -52,6 +52,10 @@ class ToolNode(Node):
             for output_param in output_params:
                 output_param.value = tool_output.get(output_param.name, None)
         else:
-            raise TypeError(f"The type of tool_output is not supported.")
+            raise TypeError(
+                f"Unsupported tool output type: expected str or dict, got {type(tool_output).__name__}. "
+                f"Tool '{self._data.tool}' returned: {repr(tool_output)[:100]}. "
+                f"Please ensure your tool returns either a string or a dictionary."
+            )
         workflow_output.workflow_parameters[self.id] = output_params
         return NodeOutput(node_id=self.id, status=NodeStatusEnum.SUCCEEDED, result=output_params)
