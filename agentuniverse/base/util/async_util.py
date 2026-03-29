@@ -59,7 +59,11 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
                        will be re-raised in the calling thread.
     """
     if not asyncio.iscoroutine(coro):
-        raise TypeError(f"Expected a coroutine, but got {type(coro).__name__}")
+        raise TypeError(
+            f"Expected a coroutine object, but got {type(coro).__name__}. "
+            f"Please ensure you are passing an async function call (e.g., 'await func()') "
+            f"rather than a regular function or the result of calling an async function."
+        )
 
     # Using a queue for thread-safe communication of the result/exception
     result_queue: Queue = Queue(maxsize=1)

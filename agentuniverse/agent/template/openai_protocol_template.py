@@ -41,7 +41,12 @@ class OpenAIProtocolTemplate(AgentTemplate):
     def parse_openai_agent_input(self, agent_input):
         for key in self.openai_protocol_input_keys():
             if key not in agent_input:
-                raise ValueError(f"{key} is not in agent input")
+                raise ValueError(
+                    f"Missing required input key '{key}' in agent input. "
+                    f"Expected keys: {self.openai_protocol_input_keys()}. "
+                    f"Received keys: {list(agent_input.keys())}. "
+                    f"Please ensure your input contains all required keys."
+                )
         messages = agent_input.get('messages')
         convert_messages, image_urls = self.convert_message(messages)
         content = messages[-1].get('content')
@@ -55,9 +60,16 @@ class OpenAIProtocolTemplate(AgentTemplate):
                 elif item.get('type') == 'image_url':
                     image_urls.append(item.get('image_url'))
                 else:
-                    raise ValueError(f"{item} is not support")
+                    raise ValueError(
+                        f"Unsupported content type in message: {item.get('type', 'unknown')}. "
+                        f"Supported types are: 'text', 'image_url'. "
+                        f"Received item: {item}"
+                    )
         else:
-            raise ValueError(f"{content} is not support")
+            raise ValueError(
+                f"Invalid content type in message: expected str or list, got {type(content).__name__}. "
+                f"Content value: {content}"
+            )
         if len(convert_messages) > 1:
             agent_input['chat_history'] = convert_messages[0:len(convert_messages) - 1]
         if len(image_urls) > 0:

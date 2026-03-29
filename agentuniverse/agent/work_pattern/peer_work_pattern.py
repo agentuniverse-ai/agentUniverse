@@ -166,13 +166,29 @@ class PeerWorkPattern(WorkPattern):
 
     def _validate_work_pattern_members(self):
         if self.planning and not isinstance(self.planning, PlanningAgentTemplate):
-            raise ValueError(f"{self.planning} is not of the expected type AgentTemplate.")
+            raise ValueError(
+                f"Invalid 'planning' agent: expected PlanningAgentTemplate, "
+                f"got {type(self.planning).__name__}. "
+                f"Please check your agent configuration."
+            )
         if self.executing and not isinstance(self.executing, ExecutingAgentTemplate):
-            raise ValueError(f"{self.executing} is not of the expected type AgentTemplate.")
+            raise ValueError(
+                f"Invalid 'executing' agent: expected ExecutingAgentTemplate, "
+                f"got {type(self.executing).__name__}. "
+                f"Please check your agent configuration."
+            )
         if self.expressing and not isinstance(self.expressing, ExpressingAgentTemplate):
-            raise ValueError(f"{self.expressing} is not of the expected type AgentTemplate.")
+            raise ValueError(
+                f"Invalid 'expressing' agent: expected ExpressingAgentTemplate, "
+                f"got {type(self.expressing).__name__}. "
+                f"Please check your agent configuration."
+            )
         if self.reviewing and not isinstance(self.reviewing, ReviewingAgentTemplate):
-            raise ValueError(f"{self.reviewing} is not not of the expected type ReviewingAgentTemplate.")
+            raise ValueError(
+                f"Invalid 'reviewing' agent: expected ReviewingAgentTemplate, "
+                f"got {type(self.reviewing).__name__}. "
+                f"Please check your agent configuration."
+            )
 
     def set_by_agent_model(self, **kwargs):
         peer_work_pattern_instance = self.__class__()
