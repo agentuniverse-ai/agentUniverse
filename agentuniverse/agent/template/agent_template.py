@@ -34,6 +34,12 @@ class AgentTemplate(Agent, ABC):
             self.agent_model.profile['prompt_version'] = self.prompt_version
         return super()._create_agent_context(input_object, agent_input, memory)
 
+    async def _async_create_agent_context(self, input_object: InputObject,
+                                          agent_input: dict, memory: Memory) -> 'AgentContext':
+        if self.prompt_version and not self.agent_model.profile.get('prompt_version'):
+            self.agent_model.profile['prompt_version'] = self.prompt_version
+        return await super()._async_create_agent_context(input_object, agent_input, memory)
+
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
         memory: Memory = self.process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
@@ -42,9 +48,9 @@ class AgentTemplate(Agent, ABC):
                                        agent_context=agent_context, **kwargs)
 
     async def async_execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
-        memory: Memory = self.process_memory(agent_input, **kwargs)
+        memory: Memory = await self.async_process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
-        agent_context = self._create_agent_context(input_object, agent_input, memory)
+        agent_context = await self._async_create_agent_context(input_object, agent_input, memory)
         return await self.customized_async_execute(input_object, agent_input, memory, llm,
                                                     agent_context=agent_context, **kwargs)
 
@@ -87,7 +93,7 @@ class AgentTemplate(Agent, ABC):
         res = llm_output.text
 
         # 3. Persist memory
-        self._save_memory(agent_context, llm_output, agent_input)
+        await self._async_save_memory(agent_context, llm_output, agent_input)
 
         # 4. Emit final output to stream
         self._emit_final_output(agent_context, res)
@@ -104,6 +110,14 @@ class AgentTemplate(Agent, ABC):
             return
         memory_messages = self._collect_memory_messages(context, llm_output)
         self.add_memory(context.memory, memory_messages, agent_input=agent_input)
+
+    async def _async_save_memory(self, context: AgentContext, llm_output: LLMOutput,
+                                 agent_input: dict) -> None:
+        """Async version of :meth:`_save_memory`."""
+        if not context.memory:
+            return
+        memory_messages = self._collect_memory_messages(context, llm_output)
+        await self.async_add_memory(context.memory, memory_messages, agent_input=agent_input)
 
     def _emit_final_output(self, context: AgentContext, output_text: str) -> None:
         """Push the final output to the output stream.
@@ -154,6 +168,11 @@ class AgentTemplate(Agent, ABC):
         return super().process_memory(agent_input=agent_input,
                                       memory_name=self.memory_name,
                                       llm_name=self.llm_name)
+
+    async def async_process_memory(self, agent_input: dict, **kwargs) -> Memory | None:
+        return await super().async_process_memory(agent_input=agent_input,
+                                                  memory_name=self.memory_name,
+                                                  llm_name=self.llm_name)
 
     def invoke_tools(self, input_object: InputObject, **kwargs) -> str:
         return super().invoke_tools(input_object=input_object, tool_names=self.tool_names)

@@ -171,6 +171,70 @@ class AgentContext(BaseModel):
             extra=extra or {},
         )
 
+    @classmethod
+    async def async_create(
+        cls,
+        *,
+        agent_model: AgentModel,
+        session_id: str = "",
+        input_dict: Optional[Dict[str, Any]] = None,
+        memory: Any = None,
+        output_stream: Any = None,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> "AgentContext":
+        """Async version of :meth:`create`.
+
+        Identical to ``create`` except it calls ``memory.async_get()``
+        instead of ``memory.get()`` for loading chat history.
+        """
+        input_dict = input_dict or {}
+        profile = _resolve_profile(agent_model.profile or {})
+        action = agent_model.action or {}
+        agent_id = (agent_model.info or {}).get('name', '')
+
+        system_message = _build_system_message(profile, input_dict)
+        few_shot_messages = _build_few_shot_messages(profile)
+
+        current_messages: List[Message] = []
+        user_msg = _build_user_message(profile, input_dict)
+        if user_msg is not None:
+            current_messages.append(user_msg)
+
+        _append_image_messages(current_messages, input_dict.get('image_urls') or [])
+        _append_audio_message(current_messages, input_dict.get('audio_url') or '')
+
+        # -- Chat history from memory (async) --
+        chat_history: List[Message] = []
+        if memory is not None:
+            memory_config = agent_model.memory or {}
+            chat_history = await memory.async_get(
+                session_id=session_id,
+                agent_id=agent_id,
+                prune=memory_config.get('prune', False),
+                top_k=memory_config.get('top_k', 20),
+            )
+
+        tool_name_list, tools_schema = _build_tools(action)
+        _inject_knowledge_tools(action, tool_name_list, tools_schema)
+        system_message = _inject_skills(
+            action, tool_name_list, tools_schema, system_message,
+        )
+
+        return cls(
+            agent_id=agent_id,
+            session_id=session_id,
+            agent_model=agent_model,
+            tool_names=tool_name_list,
+            tools_schema=tools_schema,
+            system_message=system_message,
+            few_shot_messages=few_shot_messages,
+            chat_history=chat_history,
+            current_messages=current_messages,
+            memory=memory,
+            output_stream=output_stream,
+            extra=extra or {},
+        )
+
     # ------------------------------------------------------------------
     # Message helpers
     # ------------------------------------------------------------------

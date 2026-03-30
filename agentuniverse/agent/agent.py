@@ -239,6 +239,28 @@ class Agent(ComponentBase, ABC):
         params['agent_llm_name'] = kwargs.get('llm_name') or self.agent_model.profile.get('llm_model', {}).get('name')
         return memory.set_by_agent_model(**params)
 
+    async def async_process_memory(self, agent_input: dict, **kwargs) -> Memory | None:
+        """Async version of :meth:`process_memory`."""
+        memory_name = kwargs.get('memory_name') or self.agent_model.memory.get('name')
+        memory: Memory = MemoryManager().get_instance_obj(memory_name)
+        conversation_memory_name = kwargs.get('conversation_memory') or self.agent_model.memory.get(
+            'conversation_memory')
+        conversation_memory: Memory = MemoryManager().get_instance_obj(
+            component_instance_name=conversation_memory_name)
+        if memory is None and conversation_memory is None:
+            return None
+        if memory is None:
+            memory = conversation_memory
+
+        chat_history: list = agent_input.get('chat_history')
+        temporary_messages: list[Message] = generate_messages(chat_history)
+        if temporary_messages:
+            await memory.async_add(temporary_messages, **agent_input)
+
+        params: dict = dict()
+        params['agent_llm_name'] = kwargs.get('llm_name') or self.agent_model.profile.get('llm_model', {}).get('name')
+        return memory.set_by_agent_model(**params)
+
     def invoke_llm(self, llm: LLM, messages: list,
                    input_object: InputObject,
                    tools_schema: list[dict] = None,
@@ -444,7 +466,7 @@ class Agent(ComponentBase, ABC):
 
         llm_output = None
         for i in range(max_iterations):
-            self.on_before_llm_round(context, round_index=i)
+            await self.async_on_before_llm_round(context, round_index=i)
             messages = context.build_messages()
             llm_output = await self.async_invoke_llm(
                 llm, messages, input_object,
@@ -452,7 +474,7 @@ class Agent(ComponentBase, ABC):
                 agent_context=context,
                 **kwargs,
             )
-            self.on_after_llm_round(context, llm_output, round_index=i)
+            await self.async_on_after_llm_round(context, llm_output, round_index=i)
 
             if not llm_output.has_tool_calls():
                 return llm_output
@@ -486,6 +508,15 @@ class Agent(ComponentBase, ABC):
         """
         pass
 
+    async def async_on_before_llm_round(self, context: AgentContext,
+                                        round_index: int) -> None:
+        """Async version of :meth:`on_before_llm_round`.
+
+        Default implementation delegates to the sync hook. Subclasses may
+        override to perform async operations (e.g. async memory / DB lookups).
+        """
+        self.on_before_llm_round(context, round_index=round_index)
+
     def on_after_llm_round(self, context: AgentContext, llm_output: LLMOutput,
                            round_index: int) -> None:
         """Post-processing hook invoked after each LLM call.
@@ -496,6 +527,16 @@ class Agent(ComponentBase, ABC):
         - Update context state
         """
         pass
+
+    async def async_on_after_llm_round(self, context: AgentContext,
+                                       llm_output: LLMOutput,
+                                       round_index: int) -> None:
+        """Async version of :meth:`on_after_llm_round`.
+
+        Default implementation delegates to the sync hook. Subclasses may
+        override to perform async operations (e.g. async logging / tracing).
+        """
+        self.on_after_llm_round(context, llm_output, round_index=round_index)
 
     def judge_stream(self, llm: LLM, **kwargs):
         if llm._channel_instance:
@@ -664,6 +705,19 @@ class Agent(ComponentBase, ABC):
         agent_input[memory.memory_key] = (base + memory_messages)
         return memory_messages
 
+    async def async_load_memory(self, memory, agent_input: dict) -> list[Message] | None:
+        """Async version of :meth:`load_memory`."""
+        if not memory:
+            return None
+        params = self.get_memory_params(agent_input)
+        LOGGER.info(f"Load memory with params: {params}")
+        memory_messages: list[Message] = await memory.async_get(**params)
+
+        input_memory = agent_input.get(memory.memory_key)
+        base = self._parse_input_mem_to_message(input_memory)
+        agent_input[memory.memory_key] = (base + memory_messages)
+        return memory_messages
+
     def _parse_input_mem_to_message(self, input_memory: Any) -> list:
         base = []
         if not input_memory:
@@ -701,6 +755,18 @@ class Agent(ComponentBase, ABC):
             session_id = FrameworkContextManager().get_context('session_id')
         agent_id = self.agent_model.info.get('name')
         memory.add(messages, session_id=session_id, agent_id=agent_id)
+
+    async def async_add_memory(self, memory: Memory, messages: list[Message],
+                               agent_input: dict[str, Any] = None):
+        """Async version of :meth:`add_memory`."""
+        if not memory or not messages:
+            return
+        agent_input = agent_input or {}
+        session_id = agent_input.get('session_id')
+        if not session_id:
+            session_id = FrameworkContextManager().get_context('session_id')
+        agent_id = self.agent_model.info.get('name')
+        await memory.async_add(messages, session_id=session_id, agent_id=agent_id)
 
     def summarize_memory(self, agent_input: dict[str, Any] = {}, memory: Memory = None):
         def do_summarize(params):
@@ -759,6 +825,17 @@ class Agent(ComponentBase, ABC):
         Subclasses may override to customise initialisation.
         """
         return AgentContext.create(
+            agent_model=self.agent_model,
+            session_id=agent_input.get('session_id', ''),
+            input_dict=agent_input,
+            memory=memory,
+            output_stream=input_object.get_data('output_stream'),
+        )
+
+    async def _async_create_agent_context(self, input_object: InputObject,
+                                          agent_input: dict, memory: Memory) -> AgentContext:
+        """Async version of :meth:`_create_agent_context`."""
+        return await AgentContext.async_create(
             agent_model=self.agent_model,
             session_id=agent_input.get('session_id', ''),
             input_dict=agent_input,
