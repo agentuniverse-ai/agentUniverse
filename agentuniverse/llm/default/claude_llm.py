@@ -116,6 +116,49 @@ def _convert_openai_tools_to_anthropic(
     return anthropic_tools
 
 
+# ── Content block conversion ──────────────────────────────────────────
+
+def _convert_image_block(block: dict) -> dict:
+    """Convert an OpenAI ``image_url`` content block to Anthropic ``image``."""
+    img_info = block.get("image_url") or {}
+    url = img_info.get("url", "")
+    if url.startswith("data:"):
+        # data:image/png;base64,<data>
+        meta, b64_data = url.split(",", 1)
+        media_type = meta.split(":")[1].split(";")[0]
+        return {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": media_type,
+                "data": b64_data,
+            },
+        }
+    return {
+        "type": "image",
+        "source": {"type": "url", "url": url},
+    }
+
+
+def _convert_content_blocks(content: Any) -> Any:
+    """Convert content (str or list) from OpenAI to Anthropic format.
+
+    Handles ``image_url`` → ``image`` conversion for content block lists.
+    Strings are returned unchanged.
+    """
+    if not isinstance(content, list):
+        return content
+    result = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "image_url":
+            result.append(_convert_image_block(block))
+        else:
+            result.append(block)
+    return result
+
+
+# ── Main message conversion ───────────────────────────────────────────
+
 def au_messages_to_anthropic(
     messages: List[Any],
 ) -> tuple[Optional[str], List[Dict[str, Any]]]:
@@ -125,6 +168,8 @@ def au_messages_to_anthropic(
       - system is a top-level parameter, NOT a message.
       - tool results are sent as user-role content blocks with type=tool_result.
       - tool calls (assistant) are content blocks with type=tool_use.
+      - image_url content blocks are converted to Anthropic image blocks.
+      - thinking blocks from previous assistant turns are preserved.
     """
     system_prompt: Optional[str] = None
     out: List[Dict[str, Any]] = []
@@ -148,12 +193,16 @@ def au_messages_to_anthropic(
                         {
                             "type": "tool_result",
                             "tool_use_id": m.get("tool_call_id", ""),
-                            "content": m.get("content", ""),
+                            "content": _convert_content_blocks(
+                                m.get("content", "")),
                         }
                     ],
                 })
                 continue
-            out.append(m)
+            # Other raw dict: convert image blocks in content
+            converted = dict(m)
+            converted["content"] = _convert_content_blocks(m.get("content", ""))
+            out.append(converted)
             continue
 
         # ── typed Message object ──
@@ -178,13 +227,14 @@ def au_messages_to_anthropic(
 
         # Tool-result message
         if raw_type in ("tool",) or getattr(m, "tool_call_id", None):
+            raw_content = getattr(m, "content", "") or ""
             out.append({
                 "role": "user",
                 "content": [
                     {
                         "type": "tool_result",
                         "tool_use_id": getattr(m, "tool_call_id", "") or "",
-                        "content": getattr(m, "content", "") or "",
+                        "content": _convert_content_blocks(raw_content),
                     }
                 ],
             })
@@ -192,6 +242,12 @@ def au_messages_to_anthropic(
 
         # ── Build content blocks ──
         content_blocks: List[Any] = []
+
+        # Prepend thinking blocks for assistant messages (multi-turn thinking)
+        thinking_blocks = getattr(m, "_thinking_blocks", None)
+        if thinking_blocks and role == "assistant":
+            content_blocks.extend(thinking_blocks)
+
         raw_content = getattr(m, "content", None)
 
         if raw_content is not None:
@@ -202,8 +258,10 @@ def au_messages_to_anthropic(
                     if isinstance(block, str):
                         content_blocks.append({"type": "text", "text": block})
                     elif isinstance(block, dict):
-                        # Pass through image / text blocks etc.
-                        content_blocks.append(block)
+                        if block.get("type") == "image_url":
+                            content_blocks.append(_convert_image_block(block))
+                        else:
+                            content_blocks.append(block)
                     else:
                         content_blocks.append(
                             {"type": "text", "text": str(block)}
@@ -322,6 +380,19 @@ class ClaudeLLM(LLM):
             return obj.dict()
         return dict(obj)
 
+    @staticmethod
+    def _extract_thinking_blocks(content_blocks: List[dict]) -> List[dict]:
+        """Extract raw thinking blocks (with signature) from content."""
+        blocks = []
+        for b in content_blocks:
+            if b.get("type") == "thinking" and b.get("signature"):
+                blocks.append({
+                    "type": "thinking",
+                    "thinking": b.get("thinking", ""),
+                    "signature": b["signature"],
+                })
+        return blocks
+
     def _build_llm_output(self, response: Any) -> LLMOutput:
         """Build LLMOutput from a non-streaming Anthropic response."""
         raw = self._to_dict(response)
@@ -337,8 +408,7 @@ class ClaudeLLM(LLM):
                 text_parts.append(block.get("text", ""))
 
             elif block_type == "thinking":
-                # Extended thinking (reasoning) — handled below via
-                # reasoning_text
+                # Extended thinking (reasoning) — handled below
                 pass
 
             elif block_type == "tool_use":
@@ -370,6 +440,9 @@ class ClaudeLLM(LLM):
         if thinking_parts:
             reasoning_text = "".join(thinking_parts)
 
+        # Preserve raw thinking blocks (with signatures) for multi-turn passthrough
+        thinking_blocks = self._extract_thinking_blocks(content_blocks)
+
         # Finish reason mapping
         stop_reason = raw.get("stop_reason", "stop")
         finish_reason = self._map_stop_reason(stop_reason)
@@ -383,6 +456,9 @@ class ClaudeLLM(LLM):
             reasoning_content=reasoning_text,
             tool_calls=tool_calls or None,
         )
+        # Store thinking blocks as extra field (Message allows extra='allow')
+        if thinking_blocks:
+            message._thinking_blocks = thinking_blocks
 
         return LLMOutput(
             raw=raw,
@@ -415,7 +491,7 @@ class ClaudeLLM(LLM):
         Anthropic stream event types:
           message_start        → contains input token usage
           content_block_start  → start of text / tool_use / thinking block
-          content_block_delta  → incremental content
+          content_block_delta  → incremental content (text, thinking, signature, input_json)
           content_block_stop   → block finished
           message_delta        → stop_reason, output token usage
           message_stop         → final signal
@@ -427,6 +503,8 @@ class ClaudeLLM(LLM):
         tool_use_meta: Dict[int, Dict[str, str]] = {}
         # For accumulating usage across message_start and message_delta
         usage_acc: Dict[str, int] = {}
+        # Accumulate thinking blocks (text + signature) for multi-turn passthrough
+        thinking_acc: Dict[int, Dict[str, str]] = {}
 
         try:
             with raw_stream as stream:
@@ -460,6 +538,8 @@ class ClaudeLLM(LLM):
                                     arguments_delta="",
                                 )
                             )
+                        elif btype == "thinking":
+                            thinking_acc[idx] = {"thinking": "", "signature": ""}
 
                     elif ev_type == "content_block_delta":
                         idx = ev.get("index", 0)
@@ -475,6 +555,13 @@ class ClaudeLLM(LLM):
                             thinking = delta.get("thinking", "")
                             if thinking:
                                 yield LLMStreamEvent.reasoning(thinking)
+                                if idx in thinking_acc:
+                                    thinking_acc[idx]["thinking"] += thinking
+
+                        elif delta_type == "signature_delta":
+                            sig = delta.get("signature", "")
+                            if sig and idx in thinking_acc:
+                                thinking_acc[idx]["signature"] = sig
 
                         elif delta_type == "input_json_delta":
                             # Tool use argument streaming
@@ -504,6 +591,7 @@ class ClaudeLLM(LLM):
                             finish_reason=self._map_stop_reason(stop_reason),
                             usage=usage_obj,
                             response_id=response_id,
+                            thinking_blocks=self._build_thinking_from_acc(thinking_acc),
                         )
 
                     # message_stop / content_block_stop — no action needed
@@ -519,6 +607,7 @@ class ClaudeLLM(LLM):
         block_types: Dict[int, str] = {}
         tool_use_meta: Dict[int, Dict[str, str]] = {}
         usage_acc: Dict[str, int] = {}
+        thinking_acc: Dict[int, Dict[str, str]] = {}
 
         try:
             async with raw_stream as stream:
@@ -551,6 +640,8 @@ class ClaudeLLM(LLM):
                                     arguments_delta="",
                                 )
                             )
+                        elif btype == "thinking":
+                            thinking_acc[idx] = {"thinking": "", "signature": ""}
 
                     elif ev_type == "content_block_delta":
                         idx = ev.get("index", 0)
@@ -566,6 +657,13 @@ class ClaudeLLM(LLM):
                             thinking = delta.get("thinking", "")
                             if thinking:
                                 yield LLMStreamEvent.reasoning(thinking)
+                                if idx in thinking_acc:
+                                    thinking_acc[idx]["thinking"] += thinking
+
+                        elif delta_type == "signature_delta":
+                            sig = delta.get("signature", "")
+                            if sig and idx in thinking_acc:
+                                thinking_acc[idx]["signature"] = sig
 
                         elif delta_type == "input_json_delta":
                             partial = delta.get("partial_json", "")
@@ -594,10 +692,27 @@ class ClaudeLLM(LLM):
                             finish_reason=self._map_stop_reason(stop_reason),
                             usage=usage_obj,
                             response_id=response_id,
+                            thinking_blocks=self._build_thinking_from_acc(thinking_acc),
                         )
 
         except Exception as e:
             yield LLMStreamEvent.err(str(e))
+
+    @staticmethod
+    def _build_thinking_from_acc(
+        thinking_acc: Dict[int, Dict[str, str]],
+    ) -> List[dict]:
+        """Build thinking block dicts from accumulated streaming data."""
+        blocks = []
+        for idx in sorted(thinking_acc):
+            acc = thinking_acc[idx]
+            if acc.get("signature"):
+                blocks.append({
+                    "type": "thinking",
+                    "thinking": acc["thinking"],
+                    "signature": acc["signature"],
+                })
+        return blocks
 
     # ── Core call ──────────────────────────────────────────────────────
 
