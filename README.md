@@ -10,6 +10,7 @@ Language version: [English](./README.md) | [中文](./README_zh.md) | [日本語
 ![](docs/guidebook/_picture/logo_bar.jpg)
 ****************************************
 
+- [guardian-agent-prompts](https://github.com/milkomida77/guardian-agent-prompts) - 49 production-tested multi-agent system prompts for Claude Code with task registry, quality gates, and orchestration patterns. MIT licensed.
 ## What is agentUniverse?
 
 **agentUniverse is a multi-agent framework based on large language models.** It provides flexible and easily extensible capabilities for building individual agents. The core of agentUniverse is a rich set of multi-agent collaborative pattern components (serving as a collaborative pattern factory), which allows agents to perform their respective duties and maximize their capabilities when solving problems in different fields; at the same time, agentUniverse focuses on the integration of domain experience, helping you smoothly integrate domain experience into the work of intelligent agents.🎉🎉🎉
