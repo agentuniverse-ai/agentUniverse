@@ -1,0 +1,47 @@
+# Logging Configuration / 日志配置
+# This file configures logging for the Simple Q&A Agent application
+# 此文件为简单问答智能体应用配置日志记录
+
+[LOG_CONFIG]
+[LOG_CONFIG.BASIC_CONFIG]
+# Loguru log level / Loguru日志级别
+log_level = "INFO"
+
+# Output path of the log file. If value is empty, agentuniverse will create a subdir under your workdir to save logs
+# 日志文件的输出路径。如果值为空，agentUniverse将在您的工作目录下创建子目录来保存日志
+log_path = "./logs"
+
+# Specifies the log rotation policy, controlling when a new log file is created
+# 指定日志轮转策略，控制何时创建新的日志文件
+# It can be a time period (e.g., "1 week"), a file size (e.g., "100 MB"), or a function
+# 可以是时间段（例如"1周"）、文件大小（例如"100MB"）或函数
+log_rotation = "100 MB"
+
+# Specifies the duration to keep old log files
+# 指定保留旧日志文件的持续时间
+# It can be a time span (e.g., "30 days") or a function to filter the files to be retained
+# 可以是时间跨度（例如"30天"）或用于过滤要保留文件的函数
+log_retention = "7 days"
+
+[LOG_CONFIG.EXTEND_MODULE]
+# Whether you use Aliyun Simple Log Service (SLS)
+# 是否使用阿里云简单日志服务（SLS）
+# If the value is "True", you should fill in the ALIYUN_SLS_CONFIG below
+# 如果值为"True"，您应该填写下面的ALIYUN_SLS_CONFIG
+sls_log = "False"
+
+[LOG_CONFIG.ALIYUN_SLS_CONFIG]
+# Aliyun sls endpoint / 阿里云sls端点
+sls_endpoint = ""
+# Your sls log project name / 您的sls日志项目名称
+sls_project = ""
+# Your sls log store name / 您的sls日志存储名称
+sls_log_store = ""
+# Aliyun sls access_key_id / 阿里云sls访问密钥ID
+access_key_id = ""
+# Aliyun sls access_key_secret / 阿里云sls访问密钥密码
+access_key_secret = ""
+# Log queue max size / 日志队列最大大小
+sls_log_queue_max_size = 1000
+# Interval of sending logs to aliyun sls / 向阿里云sls发送日志的间隔
+sls_log_send_interval = 3.0

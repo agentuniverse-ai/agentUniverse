@@ -1,0 +1,60 @@
+# Qwen LLM Configuration / 通义千问LLM配置
+# This file configures the Qwen (Alibaba DashScope) language model
+# 此文件配置通义千问（阿里云灵积）语言模型
+
+# LLM name identifier / LLM名称标识符
+name: 'qwen_llm'
+
+# Description of this LLM configuration / 此LLM配置的描述
+description: 'Qwen 2.5 LLM for Simple Q&A Agent / 用于简单问答智能体的通义千问2.5大语言模型'
+
+# Model name - specifies which Qwen model to use
+# 模型名称 - 指定要使用的通义千问模型
+# Options / 选项:
+#   - qwen2.5-72b-instruct (recommended, balanced performance and speed / 推荐，性能与速度均衡)
+#   - qwen-max (most capable but slower / 最强大但较慢)
+#   - qwen-plus (faster but less capable / 更快但能力稍弱)
+#   - qwen-turbo (fastest but basic / 最快但基础)
+model_name: 'qwen2.5-72b-instruct'
+
+# Maximum tokens in the response / 响应中的最大token数
+# Lower values = shorter responses, faster generation / 较低值 = 更短响应，更快生成
+# Higher values = more detailed responses, slower generation / 较高值 = 更详细响应，更慢生成
+max_tokens: 1000
+
+# Temperature controls randomness / Temperature控制随机性
+# 0.0 = deterministic, focused responses / 0.0 = 确定性，专注的响应
+# 1.0 = creative, varied responses / 1.0 = 创造性，多样化的响应
+# 0.7 = balanced (recommended for Q&A) / 0.7 = 均衡（推荐用于问答）
+temperature: 0.7
+
+# API key reference from custom_key.toml / 从custom_key.toml引用API密钥
+# The ${} syntax loads the key from environment or custom_key.toml
+# ${}语法从环境变量或custom_key.toml加载密钥
+api_key: '${DASHSCOPE_API_KEY}'
+
+# Metadata for agentUniverse framework / agentUniverse框架的元数据
+metadata:
+  # Component type / 组件类型
+  type: 'LLM'
+
+  # Python module path for the LLM implementation / LLM实现的Python模块路径
+  module: 'agentuniverse.llm.default.qwen_openai_style_llm'
+
+  # Python class name for the LLM implementation / LLM实现的Python类名
+  class: 'QWenOpenAIStyleLLM'
+
+# ===============================================================
+# Notes / 注意事项
+# ===============================================================
+# 1. Make sure to set your DASHSCOPE_API_KEY in config/custom_key.toml
+#    确保在 config/custom_key.toml 中设置您的 DASHSCOPE_API_KEY
+#
+# 2. Get your API key from: https://dashscope.console.aliyun.com/
+#    从此处获取API密钥: https://dashscope.console.aliyun.com/
+#
+# 3. To use a different LLM (OpenAI, Azure, etc.), modify the metadata section
+#    要使用不同的LLM（OpenAI、Azure等），请修改metadata部分
+#
+# 4. Adjust max_tokens and temperature based on your use case
+#    根据您的用例调整 max_tokens 和 temperature

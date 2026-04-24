@@ -1,0 +1,83 @@
+# Application Configuration / 应用配置
+# This file configures the agentUniverse framework for the Simple Q&A Agent application
+# 此文件为简单问答智能体应用配置 agentUniverse 框架
+
+[BASE_INFO]
+# The app name will be applied to all processes including agent service integration
+# 应用名称将应用于所有流程，包括智能体服务集成
+appname = 'simple_qa_agent_app'
+
+[CORE_PACKAGE]
+# Perform a full component scan and registration for all the paths under this list
+# 对此列表下的所有路径执行完整的组件扫描和注册
+default = ['simple_qa_agent_app.intelligence.agentic']
+
+# Scan and register agent components for all paths under this list, with priority over the default
+# 扫描并注册此列表下所有路径的智能体组件，优先于默认配置
+agent = ['simple_qa_agent_app.intelligence.agentic.agent']
+
+# Scan and register knowledge components for all paths under this list, with priority over the default
+# 扫描并注册此列表下所有路径的知识库组件，优先于默认配置
+knowledge = []
+
+# Scan and register llm components for all paths under this list, with priority over the default
+# 扫描并注册此列表下所有路径的LLM组件，优先于默认配置
+llm = ['simple_qa_agent_app.intelligence.agentic.llm']
+
+# Scan and register planner components for all paths under this list, with priority over the default
+# 扫描并注册此列表下所有路径的规划器组件，优先于默认配置
+planner = []
+
+# Scan and register tool components for all paths under this list, with priority over the default
+# 扫描并注册此列表下所有路径的工具组件,优先于默认配置
+tool = []
+
+# Scan and register memory components for all paths under this list, with priority over the default
+# 扫描并注册此列表下所有路径的记忆组件，优先于默认配置
+memory = []
+
+# Scan and register service components for all paths under this list, with priority over the default
+# 扫描并注册此列表下所有路径的服务组件，优先于默认配置
+service = []
+
+# Scan and register prompt components for all paths under this list, with priority over the default
+# 扫描并注册此列表下所有路径的提示词组件，优先于默认配置
+prompt = ['simple_qa_agent_app.intelligence.agentic.prompt']
+
+[SUB_CONFIG_PATH]
+# Log config file path, an absolute path or a relative path based on the dir where the current config file is located
+# 日志配置文件路径，绝对路径或基于当前配置文件所在目录的相对路径
+log_config_path = './log_config.toml'
+
+# Custom key file path, use to save your own secret key like open ai or sth else. REMEMBER TO ADD IT TO .gitignore
+# 自定义密钥文件路径，用于保存您自己的密钥，如OpenAI等。记得将其添加到.gitignore
+custom_key_path = './custom_key.toml'
+
+[DB]
+# A sqlalchemy db uri used for storing various info, for example, service request, generated during application running
+# 用于存储应用运行期间生成的各种信息（例如服务请求）的 sqlalchemy 数据库URI
+# If it's empty, agentUniverse will create a local sqlite db as default choice
+# 如果为空，agentUniverse 将创建本地sqlite数据库作为默认选择
+system_db_uri = ''
+
+[GUNICORN]
+# Use gunicorn as http server when activate is 'true', or only use flask
+# 当 activate 为 'true' 时使用 gunicorn 作为 http 服务器，否则仅使用 flask
+activate = 'false'
+
+# Gunicorn config file path, an absolute path or a relative path based on the dir where the current config file is located
+# Gunicorn 配置文件路径，绝对路径或基于当前配置文件所在目录的相对路径
+gunicorn_config_path = './gunicorn_config.toml'
+
+[GRPC]
+# Activate gRPC server
+# 激活 gRPC 服务器
+activate = 'false'
+max_workers = 10
+server_port = 50051
+
+[MONITOR]
+# Activate monitoring
+# 激活监控
+activate = false
+dir = './monitor'
