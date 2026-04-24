@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "agentUniverse"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "agentUniverse is a framework for developing applications powered by multi-agent base on large language model."
 
 authors = ["AntGroup <jerry.zzw@antgroup.com>"]
