@@ -1,0 +1,104 @@
+SERVICE AGREEMENT
+
+This Service Agreement ("Agreement") is entered into as of January 1, 2024.
+
+Article 1. Definitions
+
+1.1 "Agreement" means this Service Agreement and all attachments, exhibits, and amendments thereto.
+
+1.2 "Services" means the professional services to be provided by the Service Provider as described in Exhibit A.
+
+1.3 "Party" or "Parties" means each signatory to this Agreement, individually or collectively.
+
+Article 2. Scope of Services
+
+2.1 Service Provider Obligations
+
+The Service Provider agrees to provide the Services described in Exhibit A with professional skill and care.
+
+2.2 Client Obligations
+
+The Client agrees to:
+(a) Provide timely access to necessary information and resources
+(b) Make payments according to the schedule outlined in Article 3
+(c) Designate a primary point of contact for Service Provider communications
+
+Article 3. Payment Terms
+
+3.1 Fees
+
+The Client shall pay Service Provider the fees set forth in Exhibit B.
+
+3.2 Payment Schedule
+
+Payment is due within thirty (30) days from the date of invoice. As specified in Section 3.1, all fees are non-refundable except as provided in Article 5.
+
+3.3 Late Payment
+
+Late payments shall incur interest at a rate of 1.5% per month.
+
+Article 4. Term and Termination
+
+4.1 Term
+
+This Agreement shall commence on the Effective Date and continue for a period of twelve (12) months unless earlier terminated in accordance with Section 4.2.
+
+4.2 Termination
+
+Either Party may terminate this Agreement:
+(a) For cause, upon thirty (30) days written notice
+(b) Without cause, upon ninety (90) days written notice
+
+Article 5. Warranties and Representations
+
+5.1 Service Provider Warranties
+
+Service Provider warrants that Services will be performed in a professional manner consistent with industry standards.
+
+5.2 Client Warranties
+
+Client warrants that it has the authority to enter into this Agreement.
+
+Article 6. Limitation of Liability
+
+6.1 Liability Cap
+
+Except as provided in Section 6.2, Service Provider's total liability shall not exceed the fees paid under this Agreement.
+
+6.2 Exceptions
+
+The limitations in Section 6.1 do not apply to:
+(a) Gross negligence or willful misconduct
+(b) Breach of confidentiality obligations
+(c) Infringement of intellectual property rights
+
+Article 7. Confidentiality
+
+7.1 Confidential Information
+
+Each Party agrees to maintain the confidentiality of the other Party's Confidential Information.
+
+7.2 Exceptions
+
+The obligations under Section 7.1 do not apply to information that:
+(a) Is publicly available through no fault of the receiving Party
+(b) Was rightfully in possession prior to disclosure
+(c) Is required to be disclosed by law
+
+Article 8. General Provisions
+
+8.1 Governing Law
+
+This Agreement shall be governed by the laws of the State of California.
+
+8.2 Entire Agreement
+
+This Agreement constitutes the entire agreement between the Parties and supersedes all prior agreements relating to the subject matter hereof.
+
+8.3 Amendments
+
+This Agreement may only be amended by written instrument signed by both Parties.
+
+8.4 Severability
+
+If any provision is found invalid, the remaining provisions shall continue in full force.

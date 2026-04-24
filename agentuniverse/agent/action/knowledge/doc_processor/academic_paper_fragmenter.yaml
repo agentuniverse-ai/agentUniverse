@@ -1,0 +1,20 @@
+name: 'academic_paper_fragmenter'
+description: 'Fragment academic papers by arguments and evidence with section detection and citation extraction'
+detect_sections: true
+extract_citations: true
+link_evidence: true
+min_argument_length: 50
+skip_on_error: true
+section_patterns:
+  abstract: '^(Abstract|ABSTRACT|摘\s*要)'
+  introduction: '^(Introduction|INTRODUCTION|引\s*言|绪\s*论)'
+  related_work: '^(Related\s+Work|RELATED\s+WORK|Literature\s+Review|相关工作)'
+  methods: '^(Methods?|METHODS?|Methodology|METHODOLOGY|方\s*法)'
+  results: '^(Results?|RESULTS?|Experiments?|EXPERIMENTS?|实\s*验|结\s*果)'
+  discussion: '^(Discussion|DISCUSSION|Analysis|ANALYSIS|讨\s*论|分\s*析)'
+  conclusion: '^(Conclusions?|CONCLUSIONS?|结\s*论)'
+  references: '^(References|REFERENCES|Bibliography|参考文献)'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.academic_paper_fragmenter'
+  class: 'AcademicPaperFragmenter'

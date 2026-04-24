@@ -1,0 +1,28 @@
+name: 'supply_chain_entity_extractor'
+description: 'Extract supply chain entities and relationships to build knowledge graphs'
+use_llm: true
+llm_name: 'default_llm'
+confidence_threshold: 0.7
+extract_attributes: true
+skip_on_error: true
+entity_types:
+  - supplier
+  - manufacturer
+  - distributor
+  - retailer
+  - product
+  - warehouse
+  - logistics_provider
+  - customer
+relationship_types:
+  - supplies
+  - manufactures
+  - distributes
+  - ships_to
+  - stores
+  - depends_on
+  - partners_with
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.supply_chain_entity_extractor'
+  class: 'SupplyChainEntityExtractor'

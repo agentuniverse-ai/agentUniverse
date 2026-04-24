@@ -1,0 +1,34 @@
+name: 'financial_indicator_extractor'
+description: 'Extract financial indicators from reports including metrics, temporal context, and comparisons'
+extract_temporal: true
+extract_comparisons: true
+currency_normalization: true
+use_llm: false
+skip_on_error: true
+metrics:
+  - revenue
+  - sales
+  - income
+  - profit
+  - earnings
+  - ebitda
+  - margin
+  - gross_margin
+  - operating_margin
+  - net_margin
+  - eps
+  - earnings_per_share
+  - roi
+  - return_on_investment
+  - debt
+  - debt_ratio
+  - leverage
+  - cash_flow
+  - free_cash_flow
+  - assets
+  - liabilities
+  - equity
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.financial_indicator_extractor'
+  class: 'FinancialIndicatorExtractor'

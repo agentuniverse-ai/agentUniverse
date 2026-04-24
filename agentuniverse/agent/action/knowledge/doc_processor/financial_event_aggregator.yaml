@@ -1,0 +1,16 @@
+name: 'financial_event_aggregator'
+description: 'Aggregate related financial news articles into unified event reports with multi-document summarization'
+similarity_threshold: 0.85
+use_embeddings: true
+embedding_name: 'default_embedding'
+clustering_method: 'dbscan'  # Options: 'dbscan', 'hierarchical'
+summarization_mode: 'map_reduce'  # Options: 'extractive', 'map_reduce'
+use_llm: true
+llm_name: 'default_llm'
+max_sources_per_event: 20
+preserve_sources: true
+skip_on_error: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.financial_event_aggregator'
+  class: 'FinancialEventAggregator'
