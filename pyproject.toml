@@ -30,6 +30,7 @@ langchain = "0.1.20"
 langchain-core = "0.1.52"
 langchain-community = "0.0.38"
 openai = '1.55.3'
+litellm = {version = ">=1.55,<2.0", optional = true}
 tiktoken = '<1.0.0'
 loguru = '0.7.2'
 flask_cors = '4.0.0'
