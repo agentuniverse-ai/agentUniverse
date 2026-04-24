@@ -1,0 +1,11 @@
+name: 'vllm_llm'
+description: 'vLLM OpenAI-compatible LLM server'
+model_name: 'meta-llama/Llama-3.1-8B-Instruct'
+max_tokens: 2048
+temperature: 0.7
+streaming: true
+meta_class: 'agentuniverse.llm.default.vllm_openai_style_llm.VLLMOpenAIStyleLLM'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.vllm_openai_style_llm'
+  class: 'VLLMOpenAIStyleLLM'

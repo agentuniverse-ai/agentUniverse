@@ -1,0 +1,15 @@
+name: 'vllm-llama-3.1-70b'
+description: 'Llama 3.1 70B Instruct via vLLM server with beam search'
+model_name: 'meta-llama/Llama-3.1-70B-Instruct'
+api_base: '${VLLM_API_BASE}'
+api_key: 'EMPTY'
+temperature: 0.7
+max_tokens: 4096
+streaming: true
+max_context_length: 131072
+# vLLM-specific parameters for better quality
+use_beam_search: true
+best_of: 3
+length_penalty: 1.2
+early_stopping: true
+meta_class: 'agentuniverse.llm.default.vllm_openai_style_llm.VLLMOpenAIStyleLLM'
