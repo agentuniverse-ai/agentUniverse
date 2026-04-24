@@ -1,0 +1,20 @@
+name: 'aws_bedrock_embedding'
+description: 'AWS Bedrock embedding supporting Amazon Titan and Cohere models'
+embedding_model_name: 'amazon.titan-embed-text-v1'
+embedding_dims: 1536
+
+# AWS Configuration (read from environment variables by default)
+# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+aws_region: 'us-east-1'
+
+# Model-specific configuration
+model_id: 'amazon.titan-embed-text-v1'
+normalize: true
+
+# Optional: For Titan v2, specify dimensions (256, 384, or 1024)
+# dimensions: 1024
+
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.aws_bedrock_embedding'
+  class: 'AWSBedrockEmbedding'
