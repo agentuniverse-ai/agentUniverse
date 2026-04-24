@@ -1,0 +1,6 @@
+name: 'is_work_pattern'
+description: 'Implementation-Supervision work pattern for goal-aligned execution with continuous monitoring'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.is_work_pattern'
+  class: 'ISWorkPattern'

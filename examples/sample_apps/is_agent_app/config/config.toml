@@ -1,0 +1,41 @@
+[BASE_INFO]
+# The app name will be applied to all processes including agent service integration.
+appname = 'is_demo_app'
+
+[CORE_PACKAGE]
+# Scan and register IS agent components from local intelligence directory
+default = ['intelligence.agentic']
+# Scan and register agent components
+agent = ['intelligence.agentic.agent']
+# Scan and register LLM components
+llm = ['intelligence.agentic.llm']
+# Scan and register prompt components
+prompt = ['intelligence.agentic.prompt']
+# Scan and register memory components
+memory = ['intelligence.agentic.memory']
+
+[SUB_CONFIG_PATH]
+# Log config file path, an absolute path or a relative path based on the dir where the current config file is located.
+log_config_path = './log_config.toml'
+# Custom key file path, use to save your own secret key like open ai or sth else. REMEMBER TO ADD IT TO .gitignore.
+custom_key_path = './custom_key.toml'
+
+[DB]
+# A sqlalchemy db uri used for storing various info, for example, service request, generated during application running.
+# If it's empty, agentUniverse will create a local sqlite db as default choice.
+system_db_uri = ''
+
+[GUNICORN]
+# Use gunicorn as http server when activate is 'true', or only use flask.
+activate = 'false'
+# Gunicorn config file path, an absolute path or a relative path based on the dir where the current config file is located.
+gunicorn_config_path = './gunicorn_config.toml'
+
+[GRPC]
+activate = 'false'
+max_workers = 10
+server_port = 50051
+
+[MONITOR]
+activate = false
+dir = './monitor'

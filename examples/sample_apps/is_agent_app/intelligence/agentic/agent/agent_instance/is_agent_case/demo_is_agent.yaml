@@ -1,0 +1,31 @@
+info:
+  name: 'demo_is_agent'
+  description: 'Demo IS agent for supervised task execution'
+
+profile:
+  # Sub-agent configuration
+  implementation: 'demo_implementation_agent'
+  supervision: 'demo_supervision_agent'
+
+  # Checkpoint configuration
+  checkpoint_count: 3
+  max_corrections: 2
+
+  # Expert framework (optional)
+  expert_framework_enabled: false
+  expert_framework:
+    implementation: ''
+    supervision: ''
+
+  # LLM configuration - not used by IS coordinator directly
+  llm_model:
+    name: 'default_openai_llm'
+
+  # Memory configuration
+  memory:
+    name: 'demo_memory'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.is_agent_template'
+  class: 'ISAgentTemplate'

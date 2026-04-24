@@ -1,0 +1,9 @@
+name: 'qwen_llm'
+description: 'Qwen LLM配置用于IS模式演示'
+model_name: 'qwen-max'
+max_tokens: 2048
+temperature: 0.7
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.qwen_openai_style_llm'
+  class: 'QWenOpenAIStyleLLM'
