@@ -167,20 +167,12 @@ class GeneralLogger(Logger):
             context_prefix=get_context_prefix()
         ).warning(msg, *args, **kwargs)
 
-    async def awarn(self, msg, *args, **kwargs):
-        self.warn(msg, *args, **kwargs)
-        await self._logger.complete()
-
     def info(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
             context_prefix=get_context_prefix()
         ).info(msg, *args, **kwargs)
-
-    async def ainfo(self, msg, *args, **kwargs):
-        self.info(msg, *args, **kwargs)
-        await self._logger.complete()
 
     def error(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
@@ -189,20 +181,12 @@ class GeneralLogger(Logger):
             context_prefix=get_context_prefix()
         ).error(msg, *args, **kwargs)
 
-    async def aerror(self, msg, *args, **kwargs):
-        self.error(msg, *args, **kwargs)
-        await self._logger.complete()
-
     def critical(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
             context_prefix=get_context_prefix()
         ).critical(msg, *args, **kwargs)
-
-    async def acritical(self, msg, *args, **kwargs):
-        self.error(msg, *args, **kwargs)
-        await self._logger.complete()
 
     def trace(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
@@ -211,20 +195,12 @@ class GeneralLogger(Logger):
             context_prefix=get_context_prefix()
         ).trace(msg, *args, **kwargs)
 
-    async def atrace(self, msg, *args, **kwargs):
-        self.trace(msg, *args, **kwargs)
-        await self._logger.complete()
-
     def debug(self, msg, *args, **kwargs):
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
             context_prefix=get_context_prefix()
         ).debug(msg, *args, **kwargs)
-
-    async def adebug(self, msg, *args, **kwargs):
-        self.debug(msg, *args, **kwargs)
-        await self._logger.complete()
 
     def _add_handler(self, log_level: LOG_LEVEL = "INFO"):
         """Add a new loguru log handler, use instance module name to filter out

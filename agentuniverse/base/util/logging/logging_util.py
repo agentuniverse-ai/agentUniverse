@@ -133,11 +133,7 @@ def _add_sls_log_async_handler():
                            LoggingConfig.access_key_secret,
                            LoggingConfig.sls_log_queue_max_size,
                            LoggingConfig.sls_log_send_interval)
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    loop = asyncio.get_running_loop()
     loop.create_task(sls_sender.start())
 
     def _sls_filter(record):
@@ -227,8 +223,7 @@ def add_sink(sink, log_level: Optional[LOG_LEVEL] = None) -> bool:
 
 def is_in_coroutine_context():
     try:
-        asyncio.current_task()
-        return True
+        return asyncio.current_task() is not None
     except RuntimeError:
         return False
 

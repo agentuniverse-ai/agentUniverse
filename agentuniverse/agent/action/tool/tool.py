@@ -194,7 +194,7 @@ class Tool(ComponentBase):
         解析优先级：
             1. 使用 ``args_model_schema`` （dict）——用户手动/YAML 显式声明的 JSON Schema
             2. 使用 ``args_model`` （Pydantic Model 类）自动生成 JSON Schema
-            3. 反射子类 ``execute()`` 方法签名，将类型注解转为 JSON Schema
+            3. 反射子类 ``execute()`` （或 ``async_execute()``）方法签名，将类型注解转为 JSON Schema
             4. 兜底：用 ``input_keys`` 构造全 string 的 schema，或返回空 properties
 
         Returns:
@@ -246,7 +246,7 @@ class Tool(ComponentBase):
             except Exception:
                 pass  # 降级到下一策略
 
-        # -------- 优先级 2: 反射子类 execute() 签名 --------
+        # -------- 优先级 2: 反射子类 execute()/async_execute() 签名 --------
         sig_schema = self._schema_from_execute_signature()
         if sig_schema is not None:
             return sig_schema
@@ -254,15 +254,24 @@ class Tool(ComponentBase):
             # -------- 优先级 3: 兜底 --------
         return self._fallback_schema()
 
-        # -------------------- 策略 2: 从 execute 签名推导 -------------------- #
+        # -------------------- 策略 2: 从 execute/async_execute 签名推导 -------------------- #
 
     def _schema_from_execute_signature(self) -> Optional[dict]:
-        """反射 **子类** ``execute`` 方法的类型注解，生成 JSON Schema。
+        """反射 **子类** ``execute`` 或 ``async_execute`` 方法的类型注解，生成 JSON Schema。
 
-        仅当子类对 ``execute`` 定义了具名参数（除 ``self`` 和 ``**kwargs``）时才生效。
+        优先检查 ``execute()``；若无具名参数，再检查 ``async_execute()``。
+        仅当子类对方法定义了具名参数（除 ``self`` 和 ``**kwargs``）时才生效。
         """
-        # 取子类真正覆写的 execute 方法
-        method = getattr(type(self), "execute", None)
+        return (self._schema_from_method_signature("execute")
+                or self._schema_from_method_signature("async_execute"))
+
+    def _schema_from_method_signature(self, method_name: str) -> Optional[dict]:
+        """反射指定方法的类型注解，生成 JSON Schema。
+
+        仅当方法定义了具名参数（除 ``self``、``*args``、``**kwargs``）时才生效。
+        当 ``require_agent_context=True`` 时，``agent_context`` 参数也会被排除。
+        """
+        method = getattr(type(self), method_name, None)
         if method is None:
             return None
 

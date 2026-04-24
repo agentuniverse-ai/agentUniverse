@@ -6,6 +6,7 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: sls_sink.py
 
+import atexit
 import asyncio
 import queue
 import threading
@@ -48,19 +49,23 @@ class AsyncSlsSender:
 
         self._bg_task: Optional[asyncio.Task] = None
         self._shutdown = asyncio.Event()
+        self._atexit_registered = False
 
     # ---------- public API ----------
     async def start(self) -> None:
         """启动后台批量发送任务（幂等）"""
         if self._bg_task is None or self._bg_task.done():
             self._bg_task = self._loop.create_task(self._worker())
+            if not self._atexit_registered:
+                atexit.register(self._sync_shutdown)
+                self._atexit_registered = True
 
     def put(self, item: LogItem, /) -> None:
         def _safe_put():
             try:
                 self._queue.put_nowait(item)
             except asyncio.QueueFull:
-                pass
+                print("[AsyncSlsSender] log queue is full, discarding log item")
 
         try:
             running = asyncio.get_running_loop()
@@ -89,12 +94,34 @@ class AsyncSlsSender:
 
         self._executor.shutdown(wait=True)
 
+    def _sync_shutdown(self) -> None:
+        """atexit 回调：在同步上下文中尽力 flush 剩余日志"""
+        if self._bg_task is None or self._bg_task.done():
+            self._executor.shutdown(wait=False)
+            return
+        try:
+            if self._loop.is_closed():
+                return
+            if self._loop.is_running():
+                self._loop.call_soon_threadsafe(self._shutdown.set)
+            else:
+                self._loop.run_until_complete(self.aclose(timeout=3.0))
+        except Exception as e:
+            print(f"[AsyncSlsSender] error during shutdown: {e}")
+        finally:
+            self._executor.shutdown(wait=False)
+
     # ---------- internal ----------
     async def _worker(self) -> None:
         """后台循环：批量收集 → 发送"""
         try:
             while not self._shutdown.is_set():
-                await self._flush_once()
+                try:
+                    await self._flush_once()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    print(f"[AsyncSlsSender] unexpected error in flush: {e}")
                 try:
                     # 等待下一轮或被提前唤醒
                     await asyncio.wait_for(self._shutdown.wait(), timeout=self._send_interval)
@@ -126,12 +153,24 @@ class AsyncSlsSender:
             await self._flush_once()
 
     async def _upload(self, items: List[LogItem]) -> Optional[PutLogsResponse]:
-        """把同步 put_logs 扔进线程池"""
+        """把同步 put_logs 扔进线程池，失败重试 3 次"""
         def _blocking_upload() -> PutLogsResponse:
             req = PutLogsRequest(self.project, self.log_store, "", "", items)
             return self._client.put_logs(req)
 
-        return await self._loop.run_in_executor(self._executor, _blocking_upload)
+        last_exc = None
+        for attempt in range(3):
+            try:
+                return await self._loop.run_in_executor(self._executor, _blocking_upload)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                last_exc = e
+                if attempt < 2:
+                    print(f"[AsyncSlsSender] upload attempt {attempt + 1} failed: {e}, retrying...")
+                    await asyncio.sleep(1.0)
+        print(f"[AsyncSlsSender] upload failed after 3 attempts: {last_exc}")
+        return None
 
 
 
@@ -176,6 +215,7 @@ class SlsSender:
         self.send_thread_stop_event = threading.Event()
         self.send_thread = None
         self._logger = loguru.logger
+        self._atexit_registered = False
 
     def _send_put_logs_request(self,
                                log_item_list: List[LogItem],
@@ -195,14 +235,19 @@ class SlsSender:
             If logs sent successfully, returns a PutLogsResponse, else returns
             none and log the error in local log file.
         """
-        try:
-            put_request = PutLogsRequest(self.project, self.log_store, topic,
-                                         source, log_item_list)
-            put_response = self.client.put_logs(put_request)
-        except Exception as e:
-            print(f"send single log to sls failed: {str(e)}")
-            return None
-        return put_response
+        last_exc = None
+        for attempt in range(3):
+            try:
+                put_request = PutLogsRequest(self.project, self.log_store, topic,
+                                             source, log_item_list)
+                return self.client.put_logs(put_request)
+            except Exception as e:
+                last_exc = e
+                if attempt < 2:
+                    print(f"[SlsSender] send attempt {attempt + 1} failed: {e}, retrying...")
+                    time.sleep(1.0)
+        print(f"[SlsSender] send failed after 3 attempts: {last_exc}")
+        return None
 
     def send_single_log(self,
                         message: str,
@@ -284,6 +329,9 @@ class SlsSender:
                 target=self._schedule_send_log,
                 name="loop_send_log_thread", daemon=True)
             self.send_thread.start()
+            if not self._atexit_registered:
+                atexit.register(self._atexit_shutdown)
+                self._atexit_registered = True
 
     def stop_batch_send_thread(self):
         """Stop the log sending thread."""
@@ -292,10 +340,24 @@ class SlsSender:
             self.send_thread.join()
             self.send_thread = None
 
+    def _atexit_shutdown(self) -> None:
+        """atexit 回调：flush 剩余日志并停止发送线程"""
+        try:
+            self.batch_send()
+        except Exception as e:
+            print(f"[SlsSender] error during final flush: {e}")
+        try:
+            self.stop_batch_send_thread()
+        except Exception as e:
+            print(f"[SlsSender] error stopping send thread: {e}")
+
     def _schedule_send_log(self):
         """Create an infinite loop uploading logs in queue to aliyun sls."""
         while not self.send_thread_stop_event.is_set():
-            self.batch_send()
+            try:
+                self.batch_send()
+            except Exception as e:
+                print(f"[SlsSender] unexpected error in batch_send: {e}")
             time.sleep(self.send_interval)
 
 
