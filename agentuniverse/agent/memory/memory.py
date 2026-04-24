@@ -47,6 +47,7 @@ class Memory(ComponentBase):
     memory_storages: Optional[List[str]] = ['ram_memory_storage']
     memory_retrieval_storage: Optional[str] = None
     summarize_agent_id: Optional[str] = 'memory_summarize_agent'
+    context_manager_name: Optional[str] = None  # NEW: Link to ContextManager (Phase 2)
 
     class Config:
         extra = Extra.allow
@@ -118,6 +119,101 @@ class Memory(ComponentBase):
                     new_memories.insert(0, Message(content=compressed_memory))
         return new_memories
 
+    def get_with_context_budget(
+        self,
+        session_id: str,
+        agent_id: str,
+        allocated_tokens: int,
+        **kwargs
+    ) -> List[Message]:
+        """Retrieve memory within allocated token budget (Phase 2 integration).
+
+        This method integrates with ContextManager's budget allocation system,
+        replacing reactive max_tokens pruning with proactive budget management.
+
+        Args:
+            session_id: Session identifier
+            agent_id: Agent identifier
+            allocated_tokens: Token budget allocated by ContextManager
+            **kwargs: Additional retrieval parameters
+
+        Returns:
+            List[Message]: Messages within allocated budget (most recent first)
+
+        Example:
+            >>> # In Agent.run() with ContextManager
+            >>> window = context_manager.get_context_window(session_id)
+            >>> memory_budget = window.component_budgets.get('memory', 2000)
+            >>> messages = memory.get_with_context_budget(
+            ...     session_id, agent_id, memory_budget
+            ... )
+        """
+        # If linked to context manager, use budget-aware retrieval
+        if self.context_manager_name:
+            try:
+                from agentuniverse.agent.context.context_manager_manager import ContextManagerManager
+                from agentuniverse.agent.context.context_model import ContextType, ContextPriority
+
+                ctx_mgr = ContextManagerManager().get_instance_obj(self.context_manager_name)
+                if ctx_mgr:
+                    # Retrieve conversation context from ContextManager
+                    segments = ctx_mgr.get_context(
+                        session_id,
+                        context_type=ContextType.CONVERSATION,
+                        limit=1000,  # Get all conversation segments
+                        **kwargs
+                    )
+
+                    # Convert segments to Messages
+                    messages = []
+                    for seg in segments:
+                        # Parse role from metadata if available
+                        role = seg.metadata.extra_data.get('role', 'assistant') if hasattr(seg.metadata, 'extra_data') else 'assistant'
+                        messages.append(Message(
+                            content=seg.content,
+                            type=role
+                        ))
+
+                    # Select messages within budget (most recent first)
+                    selected_messages = []
+                    current_tokens = 0
+                    agent_llm_name = self.agent_llm_name if hasattr(self, 'agent_llm_name') else None
+
+                    for message in messages:
+                        message_tokens = get_memory_tokens([message], agent_llm_name)
+                        if current_tokens + message_tokens <= allocated_tokens:
+                            selected_messages.append(message)
+                            current_tokens += message_tokens
+                        else:
+                            break  # Budget exceeded
+
+                    return selected_messages
+
+            except Exception:
+                pass  # Fall back to traditional retrieval
+
+        # Fallback: Original pruning logic (backward compatible)
+        memories = self.get(session_id, agent_id, prune=False, **kwargs)
+
+        # Prune to allocated tokens
+        if not memories:
+            return []
+
+        selected_memories = []
+        current_tokens = 0
+        agent_llm_name = self.agent_llm_name if hasattr(self, 'agent_llm_name') else None
+
+        # Select most recent messages within budget
+        for memory in reversed(memories):
+            memory_tokens = get_memory_tokens([memory], agent_llm_name)
+            if current_tokens + memory_tokens <= allocated_tokens:
+                selected_memories.insert(0, memory)
+                current_tokens += memory_tokens
+            else:
+                break
+
+        return selected_memories
+
     def set_by_agent_model(self, **kwargs):
         """ Assign values of parameters to the Memory model in the agent configuration."""
         # note: default shallow copy
@@ -173,6 +269,9 @@ class Memory(ComponentBase):
             self.memory_retrieval_storage = self.memory_storages[0]
         if component_configer.memory_summarize_agent:
             self.summarize_agent_id = component_configer.memory_summarize_agent
+        # NEW: Phase 2 integration
+        if hasattr(component_configer, 'context_manager') and component_configer.context_manager:
+            self.context_manager_name = component_configer.context_manager
         return self
 
     def create_copy(self):

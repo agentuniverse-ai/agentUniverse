@@ -26,6 +26,7 @@ class MemoryConfiger(ComponentConfiger):
         self.__memory_storages: Optional[List[str]] = None
         self.__memory_retrieval_storage: Optional[str] = None
         self.__memory_summarize_agent: Optional[str] = None
+        self.__context_manager: Optional[str] = None  # NEW: Phase 2 integration
 
     @property
     def name(self) -> Optional[str]:
@@ -72,6 +73,11 @@ class MemoryConfiger(ComponentConfiger):
         """Return the summarize agent of the Memory."""
         return self.__memory_summarize_agent
 
+    @property
+    def context_manager(self) -> Optional[str]:
+        """Return the context manager name of the Memory (Phase 2)."""
+        return self.__context_manager
+
     def load(self) -> 'MemoryConfiger':
         """Load the configuration by the Configer object.
         Returns:
@@ -98,6 +104,7 @@ class MemoryConfiger(ComponentConfiger):
             self.__memory_storages = configer.value.get('memory_storages')
             self.__memory_retrieval_storage = configer.value.get('memory_retrieval_storage')
             self.__memory_summarize_agent = configer.value.get('memory_summarize_agent')
+            self.__context_manager = configer.value.get('context_manager')  # NEW: Phase 2
         except Exception as e:
             raise Exception(f"Failed to parse the Memory configuration: {e}")
         return self

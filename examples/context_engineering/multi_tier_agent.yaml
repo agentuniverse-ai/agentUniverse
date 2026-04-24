@@ -1,0 +1,58 @@
+# Example: Multi-tier context-aware agent
+# Demonstrates full context engineering capabilities with:
+# - Hot (RAM), Warm (Redis), Cold (Chroma) storage tiers
+# - Intelligent compression strategies
+# - Task-adaptive routing
+# - Proactive budget management
+
+name: 'multi_tier_agent'
+description: 'Agent with advanced context engineering capabilities'
+
+profile:
+  llm_model:
+    name: 'gpt-4'
+    temperature: 0.7
+    max_tokens: 2000
+
+  # Enable context manager with full multi-tier support
+  context_manager: 'default_context_manager'
+  task_type: 'code_generation'  # Options: code_generation, data_analysis, dialogue
+
+  system_prompt: |
+    You are an intelligent assistant with advanced context awareness.
+
+    You have access to:
+    - Hot storage (RAM): Fast access to recent context
+    - Warm storage (Redis): Persistent context with 24-hour TTL
+    - Cold storage (Chroma): Long-term semantic search across history
+
+    Use context efficiently through intelligent compression and routing.
+
+# Memory configuration with context manager integration
+memory:
+  name: 'demo_memory'
+  type: 'long_term'
+  memory_key: 'chat_history'
+  context_manager: 'default_context_manager'  # Link to context manager
+
+# Plan and action configuration
+plan:
+  planner:
+    name: 'default_planner'
+
+action:
+  # Knowledge base with context synchronization
+  knowledge:
+    - name: 'domain_knowledge'
+      description: 'Domain-specific knowledge base'
+      context_manager: 'default_context_manager'  # Auto-sync to context
+
+  # Tool configuration
+  tool:
+    - name: 'code_analyzer'
+    - name: 'file_reader'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.agent'
+  class: 'Agent'

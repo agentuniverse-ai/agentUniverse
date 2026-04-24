@@ -1,0 +1,22 @@
+name: 'chroma_context_store'
+description: 'Chroma-based cold tier context storage with vector search'
+
+# Storage tier classification
+storage_tier: 'cold'
+
+# Chroma configuration
+collection_name: 'agentuniverse_context'
+persist_directory: './chroma_db'
+embedding_model_name: null  # Optional: use specific embedding model
+
+# Search configuration
+similarity_threshold: 0.7  # Minimum similarity for search results
+
+# Storage limits
+max_segments: 100000
+ttl_hours: 2160  # 90 days
+
+metadata:
+  type: 'CONTEXT_STORE'
+  module: 'agentuniverse.agent.context.store.chroma_context_store'
+  class: 'ChromaContextStore'
