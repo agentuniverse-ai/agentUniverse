@@ -302,6 +302,9 @@ class LLMStreamEvent(BaseModel):
     response_id: Optional[str] = None
     error: Optional[str] = None
 
+    # Raw thinking blocks (with signatures) for multi-turn passthrough
+    thinking_blocks: Optional[List[Dict[str, Any]]] = None
+
     @classmethod
     def text(cls, delta: str) -> "LLMStreamEvent":
         return cls(type=StreamEventType.TEXT_DELTA, text_delta=delta)
@@ -317,12 +320,14 @@ class LLMStreamEvent(BaseModel):
     @classmethod
     def done(cls, *, finish_reason: FINISH_REASON_TYPE,
              usage: Optional[TokenUsage] = None,
-             response_id: Optional[str] = None) -> "LLMStreamEvent":
+             response_id: Optional[str] = None,
+             thinking_blocks: Optional[List[Dict[str, Any]]] = None) -> "LLMStreamEvent":
         return cls(
             type=StreamEventType.DONE,
             finish_reason=finish_reason,
             usage=usage,
-            response_id=response_id
+            response_id=response_id,
+            thinking_blocks=thinking_blocks or None,
         )
 
     @classmethod
@@ -342,6 +347,7 @@ class StreamReducer:
         self._finish_reason: Optional[FINISH_REASON_TYPE] = None
         self._response_id: Optional[str] = None
         self._error: Optional[str] = None
+        self._thinking_blocks: Optional[List[Dict[str, Any]]] = None
 
     def feed(self, event: LLMStreamEvent) -> None:
         """处理一个流式事件"""
@@ -367,6 +373,8 @@ class StreamReducer:
                 self._response_id = event.response_id
                 if event.usage:
                     self._usage = event.usage
+                if event.thinking_blocks:
+                    self._thinking_blocks = event.thinking_blocks
 
             case StreamEventType.ERROR:
                 self._error = event.error
@@ -411,6 +419,9 @@ class StreamReducer:
             reasoning_content=reasoning,
             tool_calls=tool_calls,
         )
+        # Store thinking blocks (with signatures) for multi-turn passthrough
+        if self._thinking_blocks:
+            message._thinking_blocks = self._thinking_blocks
 
         return LLMOutput(
             text=text,
