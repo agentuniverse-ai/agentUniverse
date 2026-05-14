@@ -179,6 +179,97 @@ https://private-user-images.githubusercontent.com/39180831/355437700-192f712d-1b
 
 ****************************************
 
+## FAQ
+
+### General Questions
+
+**Q: What is agentUniverse and how does it differ from other multi-agent frameworks?**
+
+A: agentUniverse is a **multi-agent framework based on large language models** that originates from real-world financial business practices at AntGroup. Key differentiators:
+- **Domain expertise integration**: Built-in pattern components (PEER, DOE) tested in production financial scenarios
+- **Collaborative pattern factory**: Rich set of multi-agent collaborative patterns, not just agent orchestration
+- **Enterprise-ready**: Designed for domain-expert-level intelligent agents working together
+- **Multi-language support**: English, Chinese, and Japanese documentation
+
+Compared to LangChain/CrewAI:
+- **LangChain**: Chain-based orchestration, more general-purpose
+- **CrewAI**: Role-playing autonomous agents, team-based collaboration
+- **agentUniverse**: Domain-specific patterns with proven business templates (PEER, DOE)
+
+**Q: What are the PEER and DOE pattern components?**
+
+A: 
+- **PEER pattern**: Four agents with different responsibilities — Plan, Execute, Express, and Review. Breaks down complex problems into manageable steps, executes sequentially, and iteratively improves based on feedback. Use cases: Event interpretation, industry analysis.
+- **DOE pattern**: Three agents — Data-fining, Opinion-inject, and Express. Improves data-intensive tasks requiring computational precision with expert opinions. Use cases: Financial report generation.
+
+**Q: Which LLM providers does agentUniverse support?**
+
+A: agentUniverse supports **12+ LLM providers** with simple configuration:
+
+| Provider | Models |
+|----------|--------|
+| **Qwen** | qwen3 series, qwen2.5-72b-instruct, qwq-32b-preview, qwen-max |
+| **Deepseek** | deepseek-r1, deepseek-v3, deepseek-r1-distill-qwen-32b |
+| **OpenAI** | GPT-4o, GPT-4o mini, OpenAI o1, OpenAI o3-mini |
+| **Claude** | claude 3.7 sonnet, Claude 3.5 Sonnet, Claude 3 Opus |
+| **Gemini** | Gemini 2.5 Pro, Gemini 2.0 Flash, Gemini 2.0 Flash Thinking |
+| **Llama** | llama3.3-70b-instruct, llama3.2-3b-instruct |
+| **KIMI** | moonshot-v1-128k, moonshot-v1-32k, moonshot-v1-8k |
+| **WenXin** | ERNIE 4.5 Turbo, ERNIE 4.5, ERNIE 4.0 Turbo |
+| **ChatGLM** | chatglm3-6b, chatglm-6b-v2 |
+| **BaiChuan** | baichuan2-turbo, baichuan2-13b-chat-v1 |
+| **Doubao** | Doubao-pro-128k, Doubao-pro-32k, Doubao-lite-128k |
+
+Configuration: Set API key in `custom_key.toml`, set llm_model name in agent config.
+
+**Q: How do I use MCP servers with agentUniverse?**
+
+A: agentUniverse supports MCP server integration. See [How to Use MCP Servers](https://github.com/agentuniverse-ai/agentUniverse/blob/master/docs/guidebook/en/How-to/Use%20and%20Publish%20MCP%20Server/How_to_Use_MCP_Servers.md) and [How to Publish MCP Servers](https://github.com/agentuniverse-ai/agentUniverse/blob/master/docs/guidebook/en/How-to/Use%20and%20Publish%20MCP%20Server/How_to_Publish_MCP_Servers.md).
+
+**Q: Does agentUniverse support observability?**
+
+A: Yes! agentUniverse provides **OpenTelemetry-based observability** for agents lifecycle tracking, LLM calls monitoring, tool execution tracing. See [Agent Application Observability](https://github.com/agentuniverse-ai/agentUniverse/blob/master/docs/guidebook/en/In-Depth_Guides/Tech_Capabilities/Observability/Observability_with_OTEL.md) for details.
+
+### Getting Started
+
+**Q: How do I install agentUniverse?**
+
+A: `pip install agentUniverse`. See [Run Your First Tutorial Example](https://github.com/agentuniverse-ai/agentUniverse/blob/master/docs/guidebook/en/Get_Start/2.Run_Your_First_Tutorial_Example.md) for quick start.
+
+**Q: How do I build a single agent?**
+
+A: Follow the [Quick Guide to Build Single Agent](https://github.com/agentuniverse-ai/agentUniverse/blob/master/docs/guidebook/en/Get_Start/3.Quick_Guide_to_Build_Single_Agent.md) for agent configuration, tool integration, knowledge base usage, RAG technologies.
+
+**Q: How do I build multi-agent applications?**
+
+A: See [Building Typical Multi-Agent App](https://github.com/agentuniverse-ai/agentUniverse/blob/master/docs/guidebook/en/Get_Start/4.Building_Typical_Multi-Agent_App.md) for breaking down intelligence into multiple agents, collaboration patterns.
+
+### Troubleshooting
+
+**Q: I'm getting API key errors. What should I check?**
+
+A: 
+1. Verify API key is set in `custom_key.toml`
+2. Check llm_model name matches provider prefix (e.g., `default_deepseek_llm`)
+3. Ensure API key has correct permissions and quota
+
+**Q: My agents aren't collaborating properly. What's wrong?**
+
+A: 
+1. Check pattern component configuration (PEER/DOE)
+2. Verify agent role definitions
+3. Review agent communication settings
+
+### Help Resources
+
+- **GitHub Issues**: [Submit questions](https://github.com/agentuniverse-ai/agentUniverse/issues) (response within 2 business days)
+- **Discord**: [Join our channel](https://discord.gg/DHFcdkWAhn)
+- **Email**: jihan.hanji@antgroup.com, jerry.zzw@antgroup.com, jinshi.zjs@antgroup.com
+- **Twitter**: [@agentuniverse_](https://x.com/agentuniverse_)
+- **Documentation**: [agentuniverse.readthedocs.io](https://agentuniverse.readthedocs.io/en/latest/)
+
+****************************************
+
 ## Support
 
 ### Submit Questions via GitHub Issues
