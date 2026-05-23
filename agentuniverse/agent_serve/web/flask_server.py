@@ -15,6 +15,9 @@ from .thread_with_result import ThreadPoolExecutorWithReturnValue
 from .web_util import request_param, service_run_queue, make_standard_response, \
     FlaskServerManager
 from agentuniverse_product.service.admin_service.admin_blueprint import admin_bp
+from agentuniverse_product.service.admin_service.guardrail_blueprint import admin_guardrail_bp
+from agentuniverse_product.service.admin_service.monitoring_blueprint import admin_monitoring_bp
+from agentuniverse_product.service.admin_service.trace_blueprint import admin_trace_bp
 from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
 from ...base.util.logging.logging_util import LOGGER
@@ -63,6 +66,9 @@ app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 app.json.ensure_ascii = False
 app.register_blueprint(admin_bp)
+app.register_blueprint(admin_trace_bp)
+app.register_blueprint(admin_monitoring_bp)
+app.register_blueprint(admin_guardrail_bp)
 
 
 @app.before_request

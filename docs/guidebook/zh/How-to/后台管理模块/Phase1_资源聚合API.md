@@ -40,7 +40,9 @@
     "total_tools": 5,
     "total_knowledge": 1,
     "total_workflows": 1,
-    "system_health": "OK"
+    "system_health": "OK",
+    "total_llm_calls_today": 12,
+    "total_tokens_today": 4800
   },
   "message": null,
   "request_id": null
@@ -73,7 +75,9 @@
 ## 联调建议
 
 - 开发环境可通过 Vite 代理将 `/api` 转发到本地 aU 网关。
-- `diagnostics` 字段当前预留，Phase 3 Guardrail 启用后可写入风险评分。
+- 完整 E2E 步骤见 [E2E联调指南](./E2E联调指南.md)。
+- `system_health` 规则：有 Agent 为 `OK`；无 Agent 但有其他资源为 `WARNING`；全空为 `DEGRADED`。
+- Trace/Guardrail 的 `diagnostics` 见 Phase 2/3 文档。
 
 ## 测试
 

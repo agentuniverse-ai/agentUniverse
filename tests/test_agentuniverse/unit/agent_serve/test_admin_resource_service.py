@@ -9,11 +9,28 @@ from agentuniverse_product.service.admin_service.resource_service import AdminRe
 
 def test_get_dashboard_summary():
     summary = AdminResourceService.get_dashboard_summary()
-    assert summary.system_health == "OK"
+    assert summary.system_health in {"OK", "WARNING", "DEGRADED"}
     assert isinstance(summary.total_agents, int)
     assert isinstance(summary.total_tools, int)
     assert isinstance(summary.total_knowledge, int)
     assert isinstance(summary.total_workflows, int)
+    assert isinstance(summary.total_llm_calls_today, int)
+    assert isinstance(summary.total_tokens_today, int)
+
+
+@pytest.mark.parametrize(
+    ("agents", "tools", "knowledge", "workflows", "expected"),
+    [
+        (2, 1, 0, 0, "OK"),
+        (0, 2, 1, 0, "WARNING"),
+        (0, 0, 0, 0, "DEGRADED"),
+    ],
+)
+def test_calculate_system_health(agents, tools, knowledge, workflows, expected):
+    assert (
+        AdminResourceService._calculate_system_health(agents, tools, knowledge, workflows)
+        == expected
+    )
 
 
 def test_get_resource_lists():

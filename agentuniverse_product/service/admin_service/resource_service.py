@@ -9,6 +9,7 @@ from agentuniverse_product.service.admin_service.dto import (
     ResourceItemDTO,
     ResourceListResponse,
 )
+from agentuniverse_product.service.admin_service.monitoring_service import AdminMonitoringService
 from agentuniverse_product.service.model.session_dto import SessionDTO
 from agentuniverse_product.service.session_service.session_service import SessionService
 
@@ -66,10 +67,37 @@ class AdminResourceService:
         return ResourceListResponse(total=len(data), data=data)
 
     @staticmethod
+    def _calculate_system_health(
+        total_agents: int,
+        total_tools: int,
+        total_knowledge: int,
+        total_workflows: int,
+    ) -> str:
+        total_resources = total_agents + total_tools + total_knowledge + total_workflows
+        if total_agents > 0:
+            return "OK"
+        if total_resources > 0:
+            return "WARNING"
+        return "DEGRADED"
+
+    @staticmethod
     def get_dashboard_summary() -> DashboardSummaryResponse:
+        calls_today, tokens_today = AdminMonitoringService.get_today_usage()
+        total_agents = AdminResourceService.get_all_agents().total
+        total_tools = AdminResourceService.get_all_tools().total
+        total_knowledge = AdminResourceService.get_all_knowledge().total
+        total_workflows = AdminResourceService.get_all_workflows().total
         return DashboardSummaryResponse(
-            total_agents=AdminResourceService.get_all_agents().total,
-            total_tools=AdminResourceService.get_all_tools().total,
-            total_knowledge=AdminResourceService.get_all_knowledge().total,
-            total_workflows=AdminResourceService.get_all_workflows().total,
+            total_agents=total_agents,
+            total_tools=total_tools,
+            total_knowledge=total_knowledge,
+            total_workflows=total_workflows,
+            total_llm_calls_today=calls_today,
+            total_tokens_today=tokens_today,
+            system_health=AdminResourceService._calculate_system_health(
+                total_agents,
+                total_tools,
+                total_knowledge,
+                total_workflows,
+            ),
         )
