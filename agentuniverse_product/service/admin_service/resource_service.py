@@ -49,6 +49,14 @@ class AdminResourceService:
         return AdminResourceService._list_by_product_type(ComponentEnum.WORKFLOW.value)
 
     @staticmethod
+    def get_all_llms() -> ResourceListResponse:
+        return AdminResourceService._list_by_product_type(ComponentEnum.LLM.value)
+
+    @staticmethod
+    def get_all_memories() -> ResourceListResponse:
+        return AdminResourceService._list_by_product_type(ComponentEnum.MEMORY.value)
+
+    @staticmethod
     def get_agent_sessions(agent_id: str) -> ResourceListResponse:
         try:
             sessions: list[SessionDTO] = SessionService.get_session_list(agent_id)
@@ -72,13 +80,17 @@ class AdminResourceService:
         total_tools: int,
         total_knowledge: int,
         total_workflows: int,
-    ) -> str:
-        total_resources = total_agents + total_tools + total_knowledge + total_workflows
+        total_llms: int = 0,
+        total_memories: int = 0,
+    ) -> float:
+        total_resources = (
+            total_agents + total_tools + total_knowledge + total_workflows + total_llms + total_memories
+        )
         if total_agents > 0:
-            return "OK"
+            return 100.0
         if total_resources > 0:
-            return "WARNING"
-        return "DEGRADED"
+            return 60.0
+        return 25.0
 
     @staticmethod
     def get_dashboard_summary() -> DashboardSummaryResponse:
@@ -87,11 +99,15 @@ class AdminResourceService:
         total_tools = AdminResourceService.get_all_tools().total
         total_knowledge = AdminResourceService.get_all_knowledge().total
         total_workflows = AdminResourceService.get_all_workflows().total
+        total_llms = AdminResourceService.get_all_llms().total
+        total_memories = AdminResourceService.get_all_memories().total
         return DashboardSummaryResponse(
             total_agents=total_agents,
             total_tools=total_tools,
             total_knowledge=total_knowledge,
             total_workflows=total_workflows,
+            total_llms=total_llms,
+            total_memories=total_memories,
             total_llm_calls_today=calls_today,
             total_tokens_today=tokens_today,
             system_health=AdminResourceService._calculate_system_health(
@@ -99,5 +115,7 @@ class AdminResourceService:
                 total_tools,
                 total_knowledge,
                 total_workflows,
+                total_llms,
+                total_memories,
             ),
         )

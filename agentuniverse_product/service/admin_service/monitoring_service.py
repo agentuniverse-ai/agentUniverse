@@ -9,8 +9,11 @@ from collections import defaultdict
 from agentuniverse_product.dal.message_library import MessageLibrary, MessageORM
 from agentuniverse_product.service.admin_service.dto import (
     AlertItemDTO,
+    CallerRankDTO,
     LlmMetricsResponseDTO,
     MetricPointDTO,
+    RecentCallDTO,
+    ResourceSnapshotDTO,
 )
 from agentuniverse_product.service.admin_service.otel_span_reader import AdminOtelSpanReader
 
@@ -143,6 +146,88 @@ class AdminMonitoringService:
         return alerts
 
     @staticmethod
+    def _percentile(values: list[float], ratio: float) -> float:
+        if not values:
+            return 0.0
+        ordered = sorted(values)
+        index = min(len(ordered) - 1, int(round((len(ordered) - 1) * ratio)))
+        return ordered[index]
+
+    @staticmethod
+    def _build_otel_insights(
+        start_dt: datetime.datetime,
+        end_dt: datetime.datetime,
+    ) -> tuple[float, list[CallerRankDTO], list[RecentCallDTO]]:
+        spans = AdminOtelSpanReader.load_spans(start_dt, end_dt, kinds=("llm",))
+        durations: list[float] = []
+        caller_counts: dict[str, int] = defaultdict(int)
+        recent: list[tuple[datetime.datetime, str, int]] = []
+
+        for span in spans:
+            start_nano = span.get("start_unix_nano")
+            end_nano = span.get("end_unix_nano")
+            if start_nano is not None and end_nano is not None:
+                durations.append(max((int(end_nano) - int(start_nano)) / 1e6, 0.0))
+
+            attributes = span.get("attributes") or {}
+            caller = str(attributes.get("au.llm.name") or span.get("name") or "unknown")
+            caller_counts[caller] += 1
+
+            timestamp = AdminOtelSpanReader.span_timestamp(span)
+            if timestamp is not None:
+                recent.append(
+                    (
+                        timestamp,
+                        caller,
+                        AdminOtelSpanReader.llm_tokens(span),
+                    )
+                )
+
+        p95 = AdminMonitoringService._percentile(durations, 0.95)
+        top_callers = [
+            CallerRankDTO(name=name, calls=calls)
+            for name, calls in sorted(caller_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+        ]
+        recent_calls = [
+            RecentCallDTO(
+                ts=item[0].strftime("%Y-%m-%d %H:%M:%S"),
+                label=item[1],
+                tokens=item[2],
+            )
+            for item in sorted(recent, key=lambda row: row[0], reverse=True)[:8]
+        ]
+        return p95, top_callers, recent_calls
+
+    @staticmethod
+    def _build_message_insights(
+        messages: list[tuple[datetime.datetime, str]],
+    ) -> tuple[float, list[CallerRankDTO], list[RecentCallDTO]]:
+        recent = sorted(messages, key=lambda item: item[0], reverse=True)[:8]
+        recent_calls = [
+            RecentCallDTO(
+                ts=created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                label="session-message",
+                tokens=AdminMonitoringService._estimate_tokens(content),
+            )
+            for created_at, content in recent
+        ]
+        return 0.0, [], recent_calls
+
+    @staticmethod
+    def _resource_snapshot() -> ResourceSnapshotDTO:
+        from agentuniverse_product.service.admin_service.resource_service import AdminResourceService
+
+        summary = AdminResourceService.get_dashboard_summary()
+        return ResourceSnapshotDTO(
+            agents=summary.total_agents,
+            tools=summary.total_tools,
+            knowledge=summary.total_knowledge,
+            workflows=summary.total_workflows,
+            llms=summary.total_llms,
+            memories=summary.total_memories,
+        )
+
+    @staticmethod
     def get_llm_metrics(start: str | None = None, end: str | None = None) -> LlmMetricsResponseDTO:
         now = datetime.datetime.now()
         default_start = now - datetime.timedelta(days=AdminMonitoringService.DEFAULT_RANGE_DAYS)
@@ -157,12 +242,24 @@ class AdminMonitoringService:
             for bucket in AdminMonitoringService._date_buckets(start_dt, end_dt)
         ]
 
+        if data_source == "otel":
+            p95_latency_ms, top_callers, recent_calls = AdminMonitoringService._build_otel_insights(
+                start_dt, end_dt
+            )
+        else:
+            messages = AdminMonitoringService._load_messages(start_dt, end_dt)
+            p95_latency_ms, top_callers, recent_calls = AdminMonitoringService._build_message_insights(messages)
+
         return LlmMetricsResponseDTO(
             series=series,
             total_calls=sum(point.calls for point in series),
             total_tokens=sum(point.tokens for point in series),
             alerts=AdminMonitoringService._detect_alerts(series),
             data_source=data_source,
+            p95_latency_ms=p95_latency_ms,
+            top_callers=top_callers,
+            recent_calls=recent_calls,
+            resource_snapshot=AdminMonitoringService._resource_snapshot(),
         )
 
     @staticmethod

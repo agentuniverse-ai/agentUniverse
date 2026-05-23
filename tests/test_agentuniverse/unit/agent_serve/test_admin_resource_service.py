@@ -9,26 +9,30 @@ from agentuniverse_product.service.admin_service.resource_service import AdminRe
 
 def test_get_dashboard_summary():
     summary = AdminResourceService.get_dashboard_summary()
-    assert summary.system_health in {"OK", "WARNING", "DEGRADED"}
+    assert 0.0 <= summary.system_health <= 100.0
     assert isinstance(summary.total_agents, int)
     assert isinstance(summary.total_tools, int)
     assert isinstance(summary.total_knowledge, int)
     assert isinstance(summary.total_workflows, int)
+    assert isinstance(summary.total_llms, int)
+    assert isinstance(summary.total_memories, int)
     assert isinstance(summary.total_llm_calls_today, int)
     assert isinstance(summary.total_tokens_today, int)
 
 
 @pytest.mark.parametrize(
-    ("agents", "tools", "knowledge", "workflows", "expected"),
+    ("agents", "tools", "knowledge", "workflows", "llms", "memories", "expected"),
     [
-        (2, 1, 0, 0, "OK"),
-        (0, 2, 1, 0, "WARNING"),
-        (0, 0, 0, 0, "DEGRADED"),
+        (2, 1, 0, 0, 0, 0, 100.0),
+        (0, 2, 1, 0, 0, 0, 60.0),
+        (0, 0, 0, 0, 0, 0, 25.0),
     ],
 )
-def test_calculate_system_health(agents, tools, knowledge, workflows, expected):
+def test_calculate_system_health(agents, tools, knowledge, workflows, llms, memories, expected):
     assert (
-        AdminResourceService._calculate_system_health(agents, tools, knowledge, workflows)
+        AdminResourceService._calculate_system_health(
+            agents, tools, knowledge, workflows, llms, memories
+        )
         == expected
     )
 
@@ -38,11 +42,15 @@ def test_get_resource_lists():
     tools = AdminResourceService.get_all_tools()
     knowledges = AdminResourceService.get_all_knowledge()
     workflows = AdminResourceService.get_all_workflows()
+    llms = AdminResourceService.get_all_llms()
+    memories = AdminResourceService.get_all_memories()
 
     assert isinstance(agents.total, int)
     assert isinstance(tools.total, int)
     assert isinstance(knowledges.total, int)
     assert isinstance(workflows.total, int)
+    assert isinstance(llms.total, int)
+    assert isinstance(memories.total, int)
     assert isinstance(agents.data, list)
     assert isinstance(tools.data, list)
     assert isinstance(knowledges.data, list)

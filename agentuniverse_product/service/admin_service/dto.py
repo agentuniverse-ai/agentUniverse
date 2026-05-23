@@ -37,9 +37,53 @@ class DashboardSummaryResponse(BaseModel):
     total_tools: int
     total_knowledge: int
     total_workflows: int
-    system_health: str = "OK"
+    total_llms: int = 0
+    total_memories: int = 0
+    system_health: float = Field(default=100.0, ge=0.0, le=100.0)
     total_llm_calls_today: int = 0
     total_tokens_today: int = 0
+
+
+class CallerRankDTO(BaseModel):
+    """Ranked caller for monitoring TopN."""
+
+    name: str
+    calls: int
+
+
+class RecentCallDTO(BaseModel):
+    """Recent LLM call entry for overview list."""
+
+    ts: str
+    label: str
+    tokens: int
+
+
+class ResourceSnapshotDTO(BaseModel):
+    """Resource counts snapshot for monitoring dashboard."""
+
+    agents: int = 0
+    tools: int = 0
+    knowledge: int = 0
+    workflows: int = 0
+    llms: int = 0
+    memories: int = 0
+
+
+class OptimizationSuggestionDTO(BaseModel):
+    """Rule-driven optimization suggestion."""
+
+    category: str
+    severity: str
+    message: str
+    action: str
+
+
+class OptimizationResponseDTO(BaseModel):
+    """Optimization analysis for a session trace."""
+
+    session_id: str
+    suggestions: list[OptimizationSuggestionDTO] = Field(default_factory=list)
 
 
 class MetricPointDTO(BaseModel):
@@ -57,6 +101,13 @@ class AlertItemDTO(BaseModel):
     message: str = Field(..., description="Human readable alert message.")
 
 
+class AlertsResponseDTO(BaseModel):
+    """Aggregated active alerts."""
+
+    alerts: list[AlertItemDTO] = Field(default_factory=list)
+    total: int = 0
+
+
 class LlmMetricsResponseDTO(BaseModel):
     """LLM monitoring metrics payload."""
 
@@ -68,6 +119,10 @@ class LlmMetricsResponseDTO(BaseModel):
         default="message_estimate",
         description="Metrics origin: otel or message_estimate.",
     )
+    p95_latency_ms: float = Field(default=0.0)
+    top_callers: list[CallerRankDTO] = Field(default_factory=list)
+    recent_calls: list[RecentCallDTO] = Field(default_factory=list)
+    resource_snapshot: ResourceSnapshotDTO | None = None
 
 
 class TraceNodeDTO(BaseModel):

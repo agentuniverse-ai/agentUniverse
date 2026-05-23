@@ -49,6 +49,22 @@ def get_workflows():
     )
 
 
+@admin_bp.route("/llms", methods=["GET"])
+def get_llms():
+    return make_standard_response(
+        success=True,
+        result=AdminResourceService.get_all_llms().model_dump(),
+    )
+
+
+@admin_bp.route("/memories", methods=["GET"])
+def get_memories():
+    return make_standard_response(
+        success=True,
+        result=AdminResourceService.get_all_memories().model_dump(),
+    )
+
+
 @admin_bp.route("/sessions/<string:agent_id>", methods=["GET"])
 def get_sessions(agent_id: str):
     return make_standard_response(
