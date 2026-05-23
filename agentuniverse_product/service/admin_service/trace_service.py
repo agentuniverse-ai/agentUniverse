@@ -9,6 +9,7 @@ from agentuniverse_product.service.admin_service.dto import (
     TraceResponseDTO,
 )
 from agentuniverse_product.service.admin_service.guardrail_service import AdminGuardrailService
+from agentuniverse_product.service.admin_service.otel_span_reader import AdminOtelSpanReader
 from agentuniverse_product.service.model.message_dto import MessageDTO
 from agentuniverse_product.service.model.session_dto import SessionDTO
 from agentuniverse_product.service.session_service.session_service import SessionService
@@ -46,6 +47,79 @@ class AdminTraceService:
     @staticmethod
     def _message_node_type(index: int) -> str:
         return "llm" if index % 2 else "message"
+
+    @staticmethod
+    def _nano_to_iso(nano: int | None) -> str:
+        if nano is None:
+            return ""
+        try:
+            return datetime.fromtimestamp(int(nano) / 1e9).strftime("%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError, OSError):
+            return ""
+
+    @staticmethod
+    def _span_duration_ms(span: dict) -> float:
+        try:
+            start = int(span.get("start_unix_nano") or 0)
+            end = int(span.get("end_unix_nano") or start)
+            return max((end - start) / 1e6, 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _span_display_name(span: dict) -> str:
+        attributes = span.get("attributes") or {}
+        kind = AdminOtelSpanReader.span_kind(span, "span")
+        for key in ("au.llm.name", "au.agent.name", "au.tool.name"):
+            if attributes.get(key):
+                return str(attributes[key])
+        name = span.get("name")
+        if name:
+            return str(name)
+        return f"{kind}-{span.get('span_id', 'unknown')}"
+
+    @staticmethod
+    def _span_status(span: dict) -> str:
+        attributes = span.get("attributes") or {}
+        for key in ("au.llm.status", "au.agent.status", "au.tool.status"):
+            status = attributes.get(key)
+            if status:
+                return "failed" if str(status).lower() == "error" else "success"
+        span_status = str(span.get("status", "OK")).upper()
+        return "failed" if span_status == "ERROR" else "success"
+
+    @staticmethod
+    def _build_from_otel_spans(session: SessionDTO, spans: list[dict]) -> TraceResponseDTO:
+        nodes = [
+            TraceNodeDTO(
+                id=str(span.get("span_id")),
+                name=AdminTraceService._span_display_name(span),
+                type=AdminOtelSpanReader.span_kind(span, "span"),
+                start_time=AdminTraceService._nano_to_iso(span.get("start_unix_nano")),
+                end_time=AdminTraceService._nano_to_iso(span.get("end_unix_nano")),
+                duration=AdminTraceService._span_duration_ms(span),
+                status=AdminTraceService._span_status(span),
+            )
+            for span in spans
+            if span.get("span_id")
+        ]
+        node_ids = {node.id for node in nodes}
+        edges: list[TraceEdgeDTO] = []
+        for span in spans:
+            span_id = span.get("span_id")
+            parent_id = span.get("parent_span_id")
+            if span_id and parent_id and parent_id in node_ids and span_id in node_ids:
+                edges.append(TraceEdgeDTO(source=str(parent_id), target=str(span_id), label="invoke"))
+
+        return TraceResponseDTO(
+            session_id=session.id,
+            agent_id=session.agent_id,
+            nodes=nodes,
+            edges=edges,
+            timeline=nodes,
+            data_source="otel",
+            diagnostics=AdminGuardrailService.analyze_session(session),
+        )
 
     @staticmethod
     def _build_from_session(session: SessionDTO) -> TraceResponseDTO:
@@ -86,6 +160,7 @@ class AdminTraceService:
             nodes=nodes,
             edges=edges,
             timeline=timeline,
+            data_source="message",
             diagnostics=AdminGuardrailService.analyze_session(session),
         )
 
@@ -107,5 +182,9 @@ class AdminTraceService:
                 edges=[],
                 timeline=[],
             )
+
+        otel_spans = AdminOtelSpanReader.load_session_spans(session_id)
+        if otel_spans:
+            return AdminTraceService._build_from_otel_spans(session, otel_spans)
 
         return AdminTraceService._build_from_session(session)

@@ -12,6 +12,7 @@ from agentuniverse_product.service.admin_service.dto import (
     LlmMetricsResponseDTO,
     MetricPointDTO,
 )
+from agentuniverse_product.service.admin_service.otel_span_reader import AdminOtelSpanReader
 
 
 class AdminMonitoringService:
@@ -70,6 +71,31 @@ class AdminMonitoringService:
         return buckets
 
     @staticmethod
+    def _build_series_from_otel(records: list[tuple[datetime.datetime, int]]) -> dict[str, MetricPointDTO]:
+        grouped: dict[str, dict[str, int]] = defaultdict(lambda: {"calls": 0, "tokens": 0})
+        for created_at, tokens in records:
+            bucket = created_at.strftime("%Y-%m-%d")
+            grouped[bucket]["calls"] += 1
+            grouped[bucket]["tokens"] += tokens
+
+        return {
+            bucket: MetricPointDTO(ts=bucket, calls=values["calls"], tokens=values["tokens"])
+            for bucket, values in grouped.items()
+        }
+
+    @staticmethod
+    def _resolve_series(
+        start_dt: datetime.datetime,
+        end_dt: datetime.datetime,
+    ) -> tuple[dict[str, MetricPointDTO], str]:
+        if AdminOtelSpanReader.is_enabled():
+            otel_records = AdminOtelSpanReader.load_llm_metrics(start_dt, end_dt)
+            return AdminMonitoringService._build_series_from_otel(otel_records), "otel"
+
+        messages = AdminMonitoringService._load_messages(start_dt, end_dt)
+        return AdminMonitoringService._build_series(messages), "message_estimate"
+
+    @staticmethod
     def _build_series(messages: list[tuple[datetime.datetime, str]]) -> dict[str, MetricPointDTO]:
         grouped: dict[str, dict[str, int]] = defaultdict(lambda: {"calls": 0, "tokens": 0})
         for created_at, content in messages:
@@ -125,8 +151,7 @@ class AdminMonitoringService:
         if start_dt > end_dt:
             start_dt, end_dt = end_dt, start_dt
 
-        messages = AdminMonitoringService._load_messages(start_dt, end_dt)
-        grouped = AdminMonitoringService._build_series(messages)
+        grouped, data_source = AdminMonitoringService._resolve_series(start_dt, end_dt)
         series = [
             grouped.get(bucket, MetricPointDTO(ts=bucket, calls=0, tokens=0))
             for bucket in AdminMonitoringService._date_buckets(start_dt, end_dt)
@@ -137,6 +162,7 @@ class AdminMonitoringService:
             total_calls=sum(point.calls for point in series),
             total_tokens=sum(point.tokens for point in series),
             alerts=AdminMonitoringService._detect_alerts(series),
+            data_source=data_source,
         )
 
     @staticmethod
@@ -144,6 +170,10 @@ class AdminMonitoringService:
         today = datetime.datetime.now().date()
         start = datetime.datetime.combine(today, datetime.time.min)
         end = datetime.datetime.combine(today, datetime.time.max)
+        if AdminOtelSpanReader.is_enabled():
+            records = AdminOtelSpanReader.load_llm_metrics(start, end)
+            return len(records), sum(tokens for _, tokens in records)
+
         messages = AdminMonitoringService._load_messages(start, end)
         calls = len(messages)
         tokens = sum(AdminMonitoringService._estimate_tokens(content) for _, content in messages)

@@ -47,7 +47,7 @@ class MetricPointDTO(BaseModel):
 
     ts: str = Field(..., description="Bucket timestamp, usually YYYY-MM-DD.")
     calls: int = Field(default=0, description="LLM call count in bucket.")
-    tokens: int = Field(default=0, description="Estimated token usage in bucket.")
+    tokens: int = Field(default=0, description="Token usage in bucket.")
 
 
 class AlertItemDTO(BaseModel):
@@ -64,6 +64,10 @@ class LlmMetricsResponseDTO(BaseModel):
     total_calls: int = Field(default=0)
     total_tokens: int = Field(default=0)
     alerts: list[AlertItemDTO] = Field(default_factory=list)
+    data_source: str = Field(
+        default="message_estimate",
+        description="Metrics origin: otel or message_estimate.",
+    )
 
 
 class TraceNodeDTO(BaseModel):
@@ -95,6 +99,10 @@ class TraceResponseDTO(BaseModel):
     nodes: list[TraceNodeDTO] = Field(default_factory=list, description="Graph nodes.")
     edges: list[TraceEdgeDTO] = Field(default_factory=list, description="Graph edges.")
     timeline: list[TraceNodeDTO] = Field(default_factory=list, description="Ordered execution steps.")
+    data_source: str = Field(
+        default="message",
+        description="Trace origin: otel or message.",
+    )
     diagnostics: "GuardrailDiagnosticsDTO | None" = Field(
         default=None,
         description="Session-level guardrail diagnostics for LPP radar rendering.",

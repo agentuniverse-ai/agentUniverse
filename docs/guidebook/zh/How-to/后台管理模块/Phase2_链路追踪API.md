@@ -1,6 +1,6 @@
 # Phase 2 链路追踪 API（后台管理模块）
 
-本文档描述 Trace MVP 接口，基于 Session 消息构建会话级拓扑图，供前端 G6 渲染。
+本文档描述 Trace 接口，优先从 OpenTelemetry Span 构建会话拓扑，无 Span 时回退 Session 消息序列。
 
 ## 接口前缀
 
@@ -44,7 +44,8 @@
       }
     ],
     "edges": [],
-    "timeline": []
+    "timeline": [],
+    "data_source": "otel"
   },
   "message": null,
   "request_id": null
@@ -53,9 +54,10 @@
 
 ## 数据来源
 
-- 会话详情：`SessionService.get_session_detail`
-- 节点构建：Agent 入口节点 + 消息序列节点（message/llm 交替类型）
-- 后续可替换为 OpenTelemetry Span 解析，无需变更前端 DTO
+1. **OTEL（优先）**：读取 `ADMIN_OTEL_SPAN_DIR` 下 span，按 `parent_span_id` 建边，`data_source: "otel"`
+2. **Message（回退）**：`SessionService.get_session_detail` + 消息序列节点，`data_source: "message"`
+
+Trace 响应附带 `diagnostics`（Guardrail LPP 雷达数据）。
 
 ## 测试
 

@@ -54,8 +54,31 @@ def test_get_today_usage():
         AdminMonitoringService,
         "_load_messages",
         return_value=[(datetime.now(), "abcd"), (datetime.now(), "efgh")],
+    ), patch(
+        "agentuniverse_product.service.admin_service.monitoring_service.AdminOtelSpanReader.is_enabled",
+        return_value=False,
     ):
         calls, tokens = AdminMonitoringService.get_today_usage()
 
     assert calls == 2
     assert tokens == 2
+
+
+def test_get_llm_metrics_uses_otel_when_available():
+    otel_records = [(datetime(2026, 4, 1, 10, 0, 0), 256)]
+
+    with patch(
+        "agentuniverse_product.service.admin_service.monitoring_service.AdminOtelSpanReader.is_enabled",
+        return_value=True,
+    ), patch(
+        "agentuniverse_product.service.admin_service.monitoring_service.AdminOtelSpanReader.load_llm_metrics",
+        return_value=otel_records,
+    ):
+        metrics = AdminMonitoringService.get_llm_metrics(
+            start="2026-04-01",
+            end="2026-04-01",
+        )
+
+    assert metrics.data_source == "otel"
+    assert metrics.total_calls == 1
+    assert metrics.total_tokens == 256
