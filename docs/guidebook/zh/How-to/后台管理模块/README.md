@@ -6,6 +6,7 @@
 
 - [E2E 联调指南](./E2E联调指南.md) — 本地启动与 5 分钟演示路径
 - [PR 提交指南](./PR提交指南.md) — 分批 PR 策略与 Checklist
+- [提交官方 PR](./提交官方PR.md) — upstream Compare 链接与描述模板
 
 ## 分阶段 API 文档
 
