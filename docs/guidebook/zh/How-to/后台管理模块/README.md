@@ -16,6 +16,7 @@
 | Phase 2 | [链路追踪 API](./Phase2_链路追踪API.md) | Session 拓扑图 |
 | Phase 3 | [监控指标 API](./Phase3_监控指标API.md) | LLM metrics + 告警 |
 | Phase 3 | [Guardrail 诊断 API](./Phase3_Guardrail诊断API.md) | LPP 雷达 diagnostics |
+| Phase 4 | [鉴权 RBAC](./Phase4_鉴权RBAC.md) | Bearer Token + 角色层级 |
 
 ## 前端仓库
 

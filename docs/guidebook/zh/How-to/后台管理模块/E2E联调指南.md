@@ -30,6 +30,7 @@ python bootstrap/intelligence/server_application.py
 - `/api/v1/admin/trace/*`
 - `/api/v1/admin/metrics/*`
 - `/api/v1/admin/guardrail/*`
+- `/api/v1/admin/auth/me`
 
 ### 快速探活
 

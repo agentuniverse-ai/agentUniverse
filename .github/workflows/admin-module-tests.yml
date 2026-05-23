@@ -36,4 +36,5 @@ jobs:
                  tests/test_agentuniverse/unit/agent_serve/test_admin_trace_service.py \
                  tests/test_agentuniverse/unit/agent_serve/test_admin_monitoring_service.py \
                  tests/test_agentuniverse/unit/agent_serve/test_admin_guardrail_service.py \
-                 tests/test_agentuniverse/unit/agent_serve/test_admin_otel_span_reader.py -q --tb=short
+                 tests/test_agentuniverse/unit/agent_serve/test_admin_otel_span_reader.py \
+                 tests/test_agentuniverse/unit/agent_serve/test_admin_auth_service.py -q --tb=short
