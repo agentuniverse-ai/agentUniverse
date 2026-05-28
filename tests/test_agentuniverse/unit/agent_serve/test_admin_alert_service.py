@@ -26,6 +26,8 @@ def test_get_active_alerts_merges_monitoring_and_health():
     ), patch(
         "agentuniverse_product.service.admin_service.alert_service.AdminResourceService.get_dashboard_summary",
         return_value=summary,
+    ), patch(
+        "agentuniverse_product.service.admin_service.alert_service.AdminNotificationService.notify_async"
     ):
         response = AdminAlertService.get_active_alerts()
 
@@ -59,6 +61,8 @@ def test_get_active_alerts_deduplicates_messages():
     ), patch(
         "agentuniverse_product.service.admin_service.alert_service.AdminResourceService.get_dashboard_summary",
         return_value=summary,
+    ), patch(
+        "agentuniverse_product.service.admin_service.alert_service.AdminNotificationService.notify_async"
     ):
         response = AdminAlertService.get_active_alerts()
 

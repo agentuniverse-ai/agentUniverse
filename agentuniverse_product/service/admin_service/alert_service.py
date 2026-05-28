@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 
 from agentuniverse_product.service.admin_service.dto import AlertItemDTO, AlertsResponseDTO
+from agentuniverse_product.service.admin_service.admin_notification_service import AdminNotificationService
 from agentuniverse_product.service.admin_service.monitoring_service import AdminMonitoringService
 from agentuniverse_product.service.admin_service.resource_service import AdminResourceService
 
@@ -49,4 +50,5 @@ class AdminAlertService:
             seen.add(key)
             deduped.append(alert)
 
+        AdminNotificationService.notify_async(deduped)
         return AlertsResponseDTO(alerts=deduped, total=len(deduped))
