@@ -14,6 +14,13 @@ from .request_task import RequestTask
 from .thread_with_result import ThreadPoolExecutorWithReturnValue
 from .web_util import request_param, service_run_queue, make_standard_response, \
     FlaskServerManager
+from agentuniverse_product.service.admin_service.admin_blueprint import admin_bp
+from agentuniverse_product.service.admin_service.admin_auth_blueprint import admin_auth_bp, init_admin_api_auth
+from agentuniverse_product.service.admin_service.alert_blueprint import admin_alert_bp
+from agentuniverse_product.service.admin_service.guardrail_blueprint import admin_guardrail_bp
+from agentuniverse_product.service.admin_service.monitoring_blueprint import admin_monitoring_bp
+from agentuniverse_product.service.admin_service.optimization_blueprint import admin_optimization_bp
+from agentuniverse_product.service.admin_service.trace_blueprint import admin_trace_bp
 from ..service_instance import ServiceInstance, ServiceNotFoundError
 from ...base.context.context_coordinator import ContextCoordinator
 from ...base.util.logging.logging_util import LOGGER
@@ -61,6 +68,25 @@ def timed_generator(generator, start_time, context_prefix):
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 app.json.ensure_ascii = False
+app.register_blueprint(admin_bp)
+app.register_blueprint(admin_trace_bp)
+app.register_blueprint(admin_monitoring_bp)
+app.register_blueprint(admin_guardrail_bp)
+app.register_blueprint(admin_auth_bp)
+app.register_blueprint(admin_alert_bp)
+app.register_blueprint(admin_optimization_bp)
+init_admin_api_auth(
+    app,
+    (
+        admin_bp,
+        admin_trace_bp,
+        admin_monitoring_bp,
+        admin_guardrail_bp,
+        admin_auth_bp,
+        admin_alert_bp,
+        admin_optimization_bp,
+    ),
+)
 
 
 @app.before_request
