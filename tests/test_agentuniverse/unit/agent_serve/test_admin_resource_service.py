@@ -4,6 +4,7 @@ import pytest
 
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse_product.base.product import Product
+from agentuniverse_product.service.admin_service.admin_blueprint import admin_bp
 from agentuniverse_product.service.admin_service.resource_service import AdminResourceService
 
 
@@ -93,3 +94,63 @@ def test_get_all_agents_mocked(mock_product_manager):
     assert len(resp.data) == 2
     assert {item.id for item in resp.data} == {"agent_001", "agent_002"}
     assert all(item.component_type == ComponentEnum.AGENT.value for item in resp.data)
+
+
+@patch("agentuniverse_product.service.admin_service.resource_service.ProductManager")
+def test_resource_list_paginates(mock_product_manager):
+    products = []
+    for index in range(3):
+        product = Product()
+        product.id = f"agent_{index}"
+        product.nickname = f"Agent {index}"
+        product.type = ComponentEnum.AGENT.value
+        products.append(product)
+
+    instance_mock = MagicMock()
+    instance_mock.get_instance_obj_list.return_value = products
+    mock_product_manager.return_value = instance_mock
+
+    resp = AdminResourceService.get_all_agents(page=2, page_size=2)
+    assert resp.total == 3
+    assert len(resp.data) == 1
+    assert resp.data[0].id == "agent_2"
+
+
+@pytest.fixture
+def admin_client():
+    from flask import Flask
+
+    app = Flask(__name__)
+    app.register_blueprint(admin_bp)
+    return app.test_client()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/admin/resources/agents",
+        "/api/v1/admin/resources/tools",
+        "/api/v1/admin/resources/knowledge",
+        "/api/v1/admin/resources/workflows",
+        "/api/v1/admin/resources/llms",
+        "/api/v1/admin/resources/memories",
+    ],
+)
+@pytest.mark.parametrize(
+    "query",
+    [
+        "?page=0",
+        "?page=-1",
+        "?page=abc",
+        "?page_size=0",
+        "?page_size=101",
+        "?page_size=abc",
+    ],
+)
+def test_resource_list_invalid_pagination_returns_400(admin_client, path, query):
+    response = admin_client.get(f"{path}{query}")
+    body = response.get_json()
+
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["message"]

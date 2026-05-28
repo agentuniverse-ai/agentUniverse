@@ -18,7 +18,13 @@ class AdminResourceService:
     """Admin resource aggregation service for dashboard APIs."""
 
     @staticmethod
-    def _list_by_product_type(product_type: str) -> ResourceListResponse:
+    def _paginate(data: list[ResourceItemDTO], page: int, page_size: int) -> ResourceListResponse:
+        start = (page - 1) * page_size
+        end = start + page_size
+        return ResourceListResponse(total=len(data), data=data[start:end])
+
+    @staticmethod
+    def _list_by_product_type(product_type: str, page: int = 1, page_size: int = 20) -> ResourceListResponse:
         products: list[Product] = ProductManager().get_instance_obj_list()
         filtered = [p for p in products if p.type == product_type]
         data = [
@@ -30,31 +36,31 @@ class AdminResourceService:
             )
             for product in filtered
         ]
-        return ResourceListResponse(total=len(data), data=data)
+        return AdminResourceService._paginate(data, page, page_size)
 
     @staticmethod
-    def get_all_agents() -> ResourceListResponse:
-        return AdminResourceService._list_by_product_type(ComponentEnum.AGENT.value)
+    def get_all_agents(page: int = 1, page_size: int = 20) -> ResourceListResponse:
+        return AdminResourceService._list_by_product_type(ComponentEnum.AGENT.value, page, page_size)
 
     @staticmethod
-    def get_all_tools() -> ResourceListResponse:
-        return AdminResourceService._list_by_product_type(ComponentEnum.TOOL.value)
+    def get_all_tools(page: int = 1, page_size: int = 20) -> ResourceListResponse:
+        return AdminResourceService._list_by_product_type(ComponentEnum.TOOL.value, page, page_size)
 
     @staticmethod
-    def get_all_knowledge() -> ResourceListResponse:
-        return AdminResourceService._list_by_product_type(ComponentEnum.KNOWLEDGE.value)
+    def get_all_knowledge(page: int = 1, page_size: int = 20) -> ResourceListResponse:
+        return AdminResourceService._list_by_product_type(ComponentEnum.KNOWLEDGE.value, page, page_size)
 
     @staticmethod
-    def get_all_workflows() -> ResourceListResponse:
-        return AdminResourceService._list_by_product_type(ComponentEnum.WORKFLOW.value)
+    def get_all_workflows(page: int = 1, page_size: int = 20) -> ResourceListResponse:
+        return AdminResourceService._list_by_product_type(ComponentEnum.WORKFLOW.value, page, page_size)
 
     @staticmethod
-    def get_all_llms() -> ResourceListResponse:
-        return AdminResourceService._list_by_product_type(ComponentEnum.LLM.value)
+    def get_all_llms(page: int = 1, page_size: int = 20) -> ResourceListResponse:
+        return AdminResourceService._list_by_product_type(ComponentEnum.LLM.value, page, page_size)
 
     @staticmethod
-    def get_all_memories() -> ResourceListResponse:
-        return AdminResourceService._list_by_product_type(ComponentEnum.MEMORY.value)
+    def get_all_memories(page: int = 1, page_size: int = 20) -> ResourceListResponse:
+        return AdminResourceService._list_by_product_type(ComponentEnum.MEMORY.value, page, page_size)
 
     @staticmethod
     def get_agent_sessions(agent_id: str) -> ResourceListResponse:
