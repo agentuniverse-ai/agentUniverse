@@ -223,3 +223,4 @@ Overview: This document introduces in detailed the mechanisms and principles und
 ### Acknowledgements
 
 This project is partially built upon excellent open-source projects such as Langchain, Pydantic, Gunicorn, Flask, SQLAlchemy, chromadb, etc. (The detailed dependency list can be found in pyproject.toml). We would like to express our heartfelt gratitude to the related projects and their contributors. 🙏🙏🙏
+- [AI Tools Hub](https://cloud1-d4g787x2022795b0b-1435432994.tcloudbaseapp.com/hub.html) - 21 free AI tools with crypto payment, no subscriptions.
