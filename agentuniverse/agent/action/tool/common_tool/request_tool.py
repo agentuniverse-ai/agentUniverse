@@ -7,7 +7,7 @@
 # @FileName: request_tool.py
 
 
-from typing import Optional
+from typing import Any, Optional
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
@@ -39,6 +39,18 @@ class RequestTool(Tool):
                 return str(e)
         else:
             return self.execute_by_method(input_params)
+
+    async def async_execute(self, input: str) -> Any:
+        """Execute an HTTP request without blocking the event loop."""
+        input_params: str = input
+        if self.json_parser:
+            try:
+                parse_data = parse_json_markdown(input_params)
+                return await self.async_execute_by_method(**parse_data)
+            except Exception as e:
+                LOGGER.error(f'execute request error input{input_params} error{e}')
+                return str(e)
+        return await self.async_execute_by_method(input_params)
 
     async def async_execute_by_method(self, url: str, data: dict = None, **kwargs):
         url = self._clean_url(url)
