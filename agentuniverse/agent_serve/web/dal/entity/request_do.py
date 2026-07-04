@@ -7,7 +7,7 @@
 # @FileName: request_do.py
 
 import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -18,7 +18,8 @@ class RequestDO(BaseModel):
     id: Optional[int] = Field(description="ID", default=None)
     request_id: str = Field(description="Unique request id.")
     session_id: str = Field(description="Session id of the request.")
-    query: str = Field(description="The query contents.")
+    query: str | list[Any] | dict[str, Any] = Field(
+        description="The query contents.")
     state: str = Field(description="State of the request.")
     result: dict = Field(description="Exec result.")
     steps: list = Field(description="Exec steps.")
