@@ -1,0 +1,14 @@
+info:
+  name: 'RewritingAgent'
+  description: 'rewriting agent for GRR pattern - improves content based on review feedback'
+profile:
+  llm_model:
+    name: 'default_qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+    temperature: 0.5
+memory:
+  name: ''
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.rewriting_agent_template'
+  class: 'RewritingAgentTemplate'
