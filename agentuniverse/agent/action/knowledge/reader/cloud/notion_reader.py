@@ -3,10 +3,19 @@
 
 # @Time    : 2025/9/29
 # @FileName: notion_reader.py
+import logging
+import os
 from typing import List, Optional, Dict
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.reader_errors import (
+    ReaderLoadError,
+    ReaderDependencyError,
+    ReaderConfigError,
+)
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+logger = logging.getLogger(__name__)
 
 
 class NotionReader(Reader):
@@ -19,23 +28,34 @@ class NotionReader(Reader):
     """
 
     def _load_data(self, page_or_db_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        print(f"debugging: NotionReader start load id={page_or_db_id}")
+        logger.info("NotionReader start load id=%s", page_or_db_id)
         if not page_or_db_id:
-            raise ValueError("NotionReader requires a Notion page or database id")
+            raise ReaderLoadError(
+                "NotionReader requires a Notion page or database id",
+                reader_name="NotionReader",
+            )
 
         token = None
         if ext_info:
             token = ext_info.get("NOTION_TOKEN") or ext_info.get("notion_token")
         if not token:
-            import os
             token = os.environ.get("NOTION_TOKEN")
         if not token:
-            raise EnvironmentError("NOTION_TOKEN is required for NotionReader")
+            raise ReaderConfigError(
+                "NOTION_TOKEN is required for NotionReader",
+                reader_name="NotionReader",
+                config_key="NOTION_TOKEN",
+            )
 
         try:
             from notion_client import Client  # type: ignore
         except Exception:
-            raise ImportError("Install notion-client: `pip install notion-client`")
+            raise ReaderDependencyError(
+                "notion-client is required for NotionReader",
+                reader_name="NotionReader",
+                dependency="notion-client",
+                install_hint="pip install agentuniverse[cloud]",
+            )
 
         client = Client(auth=token)
         text_blocks: List[str] = []
@@ -47,7 +67,7 @@ class NotionReader(Reader):
             metadata["type"] = "page"
             text_blocks.extend(self._export_page(client, page_or_db_id))
         except Exception as e_page:
-            print(f"debugging: NotionReader page retrieve failed: {e_page}")
+            logger.debug("NotionReader page retrieve failed, trying as database: %s", e_page)
             # Try as database
             try:
                 metadata["type"] = "database"
@@ -55,9 +75,14 @@ class NotionReader(Reader):
                     row_id = row.get("id")
                     text_blocks.extend(self._export_page(client, row_id))
             except Exception as e_db:
-                raise RuntimeError(f"Failed to read Notion id={page_or_db_id}: {e_db}")
+                raise ReaderLoadError(
+                    f"Failed to read Notion id={page_or_db_id}: {e_db}",
+                    reader_name="NotionReader",
+                    source=page_or_db_id,
+                )
 
         text = "\n\n".join([b for b in text_blocks if b and b.strip()])
+        logger.info("NotionReader extracted text length=%d from id=%s", len(text), page_or_db_id)
         if ext_info:
             metadata.update(ext_info)
         return [Document(text=text, metadata=metadata)]

@@ -5,6 +5,7 @@
 # @Author  : wangyapei
 # @FileName: website_bs4_reader.py
 
+import logging
 from typing import Dict, List, Optional
 from urllib.parse import urljoin, urlparse
 import random
@@ -16,6 +17,8 @@ import httpx
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from pydantic import Field
+
+logger = logging.getLogger(__name__)
 
 
 class WebsiteBs4Reader(Reader):
@@ -190,7 +193,7 @@ class WebsiteBs4Reader(Reader):
                             self._urls_to_crawl.append((full_url, current_depth + 1))
 
             except Exception as e:
-                print(f"error:{e}")
+                logger.warning("WebsiteBs4Reader link extraction error: %s", e)
                 continue
 
         return crawler_result

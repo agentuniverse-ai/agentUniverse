@@ -6,6 +6,8 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: reader_manager.py
 
+from urllib.parse import urlparse
+
 from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.component.component_manager_base import \
@@ -38,6 +40,15 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "webp": "default_image_ocr_reader",
     }
 
+    # URL pattern → Reader instance name for automatic cloud platform routing
+    URL_PATTERN_MAP: dict[str, str] = {
+        "feishu.cn": "default_feishu_reader",
+        "yuque.com": "default_yuque_reader",
+        "notion.so": "default_notion_reader",
+        "confluence": "default_confluence_reader",
+        "docs.google.com": "default_google_docs_reader",
+    }
+
     def __init__(self):
         super().__init__(ComponentEnum.READER)
 
@@ -48,3 +59,23 @@ class ReaderManager(ComponentManagerBase[Reader]):
             return self.get_instance_obj(self.DEFAULT_READER[file_type])
         else:
             return None
+
+    def get_url_default_reader(self, url: str, new_instance: bool = False) -> Reader | None:
+        """Get the default cloud Reader for a URL via domain pattern matching.
+
+        Args:
+            url: The full URL to match against registered URL patterns.
+            new_instance: If True, return a fresh copy of the Reader.
+
+        Returns:
+            Reader | None: The matched Reader instance, or None if no pattern matches.
+        """
+        try:
+            domain = urlparse(url).netloc.lower()
+        except Exception:
+            return None
+
+        for pattern, reader_name in self.URL_PATTERN_MAP.items():
+            if pattern in domain:
+                return self.get_instance_obj(reader_name, new_instance=new_instance)
+        return None

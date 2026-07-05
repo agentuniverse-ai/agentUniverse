@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from agentuniverse.agent.action.knowledge.reader.file.json_reader import JsonReader
+from agentuniverse.agent.action.knowledge.reader.reader_errors import ReaderLoadError, ReaderParseError
 
 
 class TestJsonReader(unittest.TestCase):
@@ -147,16 +148,19 @@ class TestJsonReader(unittest.TestCase):
         self.assertEqual(docs[0].metadata["priority"], "high")
         self.assertEqual(docs[0].metadata["file_name"], "test_object.json")
 
-    def test_load_invalid_json(self):
-        """Test loading invalid JSON raises error"""
-        with self.assertRaises(json.JSONDecodeError):
+    def test_load_invalid_json_raises_reader_parse_error(self):
+        """Test loading invalid JSON raises ReaderParseError"""
+        with self.assertRaises(ReaderParseError) as ctx:
             self.reader._load_data(self.invalid_file)
+        self.assertIn("JsonReader", str(ctx.exception))
 
-    def test_load_nonexistent_file(self):
-        """Test loading non-existent file raises error"""
+    def test_load_nonexistent_file_raises_reader_load_error(self):
+        """Test loading non-existent file raises ReaderLoadError"""
         nonexistent = os.path.join(self.temp_dir.name, "nonexistent.json")
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaises(ReaderLoadError) as ctx:
             self.reader._load_data(nonexistent)
+        self.assertEqual(ctx.exception.reader_name, "JsonReader")
+        self.assertEqual(ctx.exception.source, nonexistent)
 
     def test_str_path_input(self):
         """Test that string path input works"""

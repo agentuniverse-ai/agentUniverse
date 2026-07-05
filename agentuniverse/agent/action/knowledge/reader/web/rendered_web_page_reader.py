@@ -3,10 +3,17 @@
 
 # @Time    : 2025/9/29
 # @FileName: rendered_web_page_reader.py
+import logging
 from typing import List, Optional, Dict
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.reader_errors import (
+    ReaderLoadError,
+    ReaderDependencyError,
+)
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+logger = logging.getLogger(__name__)
 
 
 class RenderedWebPageReader(Reader):
@@ -18,12 +25,15 @@ class RenderedWebPageReader(Reader):
     """
 
     def _load_data(self, url: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        print(f"debugging: RenderedWebPageReader start load url={url}")
+        logger.info("RenderedWebPageReader start load url=%s", url)
         if not isinstance(url, str) or not url:
-            raise ValueError("RenderedWebPageReader._load_data requires a non-empty url string")
+            raise ReaderLoadError(
+                "RenderedWebPageReader._load_data requires a non-empty url string",
+                reader_name="RenderedWebPageReader",
+            )
 
         html = self._render_and_get_html(url)
-        print(f"debugging: RenderedWebPageReader rendered html length={len(html)}")
+        logger.debug("RenderedWebPageReader rendered html length=%d", len(html))
 
         # Reuse extraction logic from WebPageReader by importing on demand
         from .web_page_reader import WebPageReader
@@ -39,13 +49,15 @@ class RenderedWebPageReader(Reader):
     def _render_and_get_html(self, url: str) -> str:
         try:
             from playwright.sync_api import sync_playwright  # type: ignore
-        except Exception as e:
-            raise ImportError(
-                "playwright is required for RenderedWebPageReader. "
-                "Install with `pip install playwright` and run `playwright install`"
+        except Exception:
+            raise ReaderDependencyError(
+                "playwright is required for RenderedWebPageReader",
+                reader_name="RenderedWebPageReader",
+                dependency="playwright",
+                install_hint="pip install agentuniverse[web-render] && playwright install",
             )
 
-        print("debugging: RenderedWebPageReader using playwright")
+        logger.debug("RenderedWebPageReader launching playwright browser")
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             try:

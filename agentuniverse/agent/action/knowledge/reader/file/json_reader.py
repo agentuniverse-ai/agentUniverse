@@ -1,14 +1,21 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
+import json
+import logging
 from typing import Union
 from pathlib import Path
 from typing import List, Optional, Dict
-import json
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.reader_errors import (
+    ReaderLoadError,
+    ReaderParseError,
+)
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.reader.utils import detect_file_encoding
+
+logger = logging.getLogger(__name__)
 
 
 class JsonReader(Reader):
@@ -26,34 +33,33 @@ class JsonReader(Reader):
                            formatted as a readable string
 
         Raises:
-            ImportError: Never raised (json is a standard library)
-            json.JSONDecodeError: If the file contains invalid JSON
-            FileNotFoundError: If the file does not exist
+            ReaderLoadError: If the file does not exist
+            ReaderParseError: If the file contains invalid JSON
         """
         if isinstance(file, str):
             file = Path(file)
 
         if not file.exists():
-            raise FileNotFoundError(f"JSON file not found: {file}")
+            raise ReaderLoadError(
+                f"JSON file not found: {file}",
+                reader_name="JsonReader",
+                source=str(file),
+            )
 
-        # Detect file encoding for proper reading
+        logger.info("JsonReader start load file=%s", file)
         encoding = detect_file_encoding(file)
 
-        # Read and parse JSON file
         with open(file, 'r', encoding=encoding) as f:
             try:
                 data = json.load(f)
             except json.JSONDecodeError as e:
-                raise json.JSONDecodeError(
-                    f"Invalid JSON in file {file.name}: {str(e)}",
-                    e.doc,
-                    e.pos
-                )
+                raise ReaderParseError(
+                    f"Invalid JSON in file {file.name}: {e}",
+                    reader_name="JsonReader",
+                ) from e
 
-        # Convert JSON data to formatted string
         text = json.dumps(data, indent=2, ensure_ascii=False)
 
-        # Determine JSON type for metadata
         if isinstance(data, dict):
             json_type = "object"
         elif isinstance(data, list):
@@ -61,7 +67,6 @@ class JsonReader(Reader):
         else:
             json_type = "primitive"
 
-        # Build metadata
         metadata = {
             "file_name": file.name,
             "file_path": str(file),
@@ -70,4 +75,5 @@ class JsonReader(Reader):
         if ext_info is not None:
             metadata.update(ext_info)
 
+        logger.info("JsonReader extracted json_type=%s from %s", json_type, file.name)
         return [Document(text=text, metadata=metadata or {})]
