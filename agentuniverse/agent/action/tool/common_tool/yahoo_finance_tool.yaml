@@ -1,0 +1,49 @@
+name: yahoo_finance_tool
+description: Yahoo Finance stock market data tool (quotes, history, company info, financials)
+class_path: agentuniverse.agent.action.tool.common_tool.yahoo_finance_tool.YahooFinanceTool
+args_model:
+  symbol:
+    type: string
+    description: Stock ticker symbol (e.g. AAPL, GOOGL, MSFT)
+    required: true
+  mode:
+    type: string
+    description: Data mode - quote (current price), history (historical prices), info (company info), financials (financial statements)
+    required: true
+  period:
+    type: string
+    description: Time period for history mode (1d,5d,1mo,3mo,6mo,1y,2y,5y,max)
+    required: false
+    default: 1mo
+  interval:
+    type: string
+    description: Data interval for history mode (1m,5m,15m,30m,60m,1h,1d,5d,1wk,1mo,3mo)
+    required: false
+    default: 1d
+  statement:
+    type: string
+    description: Financial statement type for financials mode (income, balance, cashflow)
+    required: false
+    default: income
+args_model_schema:
+  type: object
+  properties:
+    symbol:
+      type: string
+      description: Stock ticker symbol
+    mode:
+      type: string
+      enum: ["quote", "history", "info", "financials"]
+      description: Data mode
+    period:
+      type: string
+      description: Time period for history mode
+    interval:
+      type: string
+      description: Data interval for history mode
+    statement:
+      type: string
+      enum: ["income", "balance", "cashflow"]
+      default: "income"
+      description: Financial statement type
+  required: ["symbol", "mode"]
