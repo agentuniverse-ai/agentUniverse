@@ -51,7 +51,7 @@ class RequestLibrary:
             __tablename__ = request_table_name
             id = Column(Integer, primary_key=True, autoincrement=True)
             request_id = Column(String(50), nullable=False)
-            query = Column(Text)
+            query = Column(JSON)
             session_id = Column(String(50))
             state = Column(String(20))
             result = Column(JSON)
@@ -167,6 +167,12 @@ class RequestLibrary:
             gmt_modified=datetime.datetime.now(),
         )
         for column in request_orm.__table__.columns:
-            setattr(request_obj, column.name,
-                    getattr(request_orm, column.name))
+            value = getattr(request_orm, column.name)
+            if column.name == 'query' and isinstance(value, str):
+                import json as _json
+                try:
+                    value = _json.loads(value)
+                except (ValueError, TypeError):
+                    pass
+            setattr(request_obj, column.name, value)
         return request_obj
