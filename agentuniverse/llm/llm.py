@@ -206,7 +206,7 @@ class LLM(ComponentBase):
                 return self._channel_instance._call(*args, **kwargs)
             return self._call(*args, **kwargs)
         except Exception as e:
-            LOGGER.error(f'Error in LLM call: {e}')
+            LOGGER.error(f'Error in LLM call [model={self.model_name}, llm={self.name}]: {e}')
             raise e
 
     @trace_llm
@@ -218,7 +218,7 @@ class LLM(ComponentBase):
                 return await self._channel_instance._acall(*args, **kwargs)
             return await self._acall(*args, **kwargs)
         except Exception as e:
-            LOGGER.error(f'Error in LLM acall: {e}')
+            LOGGER.error(f'Error in LLM acall [model={self.model_name}, llm={self.name}]: {e}')
             raise e
 
     def create_copy(self):
