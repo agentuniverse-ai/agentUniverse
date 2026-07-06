@@ -94,6 +94,7 @@ agentUniverse provides a standardized observability framework for agent applicat
 
 #### Common Tips and Advanced Techniques
 You can learn more advanced techniques in the agent application building process through other documents in the [Get_Start](./docs/guidebook/en/Get_Start), such as how to add a memory module into the intelligent agent process and how to effectively manage prompts within the project.
+- [ToolFK](https://www.toolfk.com) - Comprehensive online toolkit for developers and creators — code formatting, encryption, PDF tools, AI video, image ed...
 ****************************************
 
 ## Set up the visual agentic workflow platform
