@@ -94,7 +94,6 @@ agentUniverse provides a standardized observability framework for agent applicat
 
 #### Common Tips and Advanced Techniques
 You can learn more advanced techniques in the agent application building process through other documents in the [Get_Start](./docs/guidebook/en/Get_Start), such as how to add a memory module into the intelligent agent process and how to effectively manage prompts within the project.
-- [ToolFK](https://www.toolfk.com) - Comprehensive online toolkit for developers and creators — code formatting, encryption, PDF tools, AI video, image ed...
 ****************************************
 
 ## Set up the visual agentic workflow platform
@@ -113,6 +112,7 @@ Run [product_application.py](examples/sample_apps/workflow_agent_app/bootstrap/p
 For more details, refer to [Quick Start for Product Platform](docs/guidebook/en/How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Quick_Start.md) and the [Advanced Guide](docs/guidebook/en/How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Advancement_Guide.md).
 
 This feature is jointly developed by [difizen](https://github.com/difizen/magent) and agentUniverse.
+- [ImageFK](https://imagefk.com) - AI-powered online image editor with background removal, photo restoration, upscaling, and 2D-to-3D conversion. One-cl...
 
 ****************************************
 
