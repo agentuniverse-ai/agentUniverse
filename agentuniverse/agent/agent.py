@@ -435,7 +435,7 @@ class Agent(ComponentBase, ABC):
         return "\n\n".join(knowledge_results)
 
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
-        expert_framework = agent_input.pop('expert_framework', '') or ''
+        expert_framework = agent_input.get('expert_framework', '') or ''
 
         profile: dict = self.agent_model.profile
 
@@ -461,11 +461,11 @@ class Agent(ComponentBase, ABC):
             profile_prompt_model = profile_prompt_model + version_prompt_model
 
         chat_prompt = ChatPrompt().build_prompt(profile_prompt_model, ['introduction', 'target', 'instruction'])
-        image_urls: list = agent_input.pop('image_urls', []) or []
+        image_urls: list = agent_input.get('image_urls', []) or []
         if image_urls:
             chat_prompt.generate_image_prompt(image_urls)
 
-        audio_url: str = agent_input.pop('audio_url') or ''
+        audio_url: str = agent_input.get('audio_url', '') or ''
         if audio_url:
             chat_prompt.generate_audio_prompt(audio_url)
         return chat_prompt
