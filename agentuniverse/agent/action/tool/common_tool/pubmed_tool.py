@@ -295,6 +295,7 @@ class PubMedTool(Tool):
         pmid = cls._element_text(article.find(".//MedlineCitation/PMID"))
         title = cls._element_text(article.find(".//Article/ArticleTitle"))
         journal = cls._element_text(article.find(".//Article/Journal/Title"))
+        journal_issn = cls._element_text(article.find(".//Article/Journal/ISSN"))
 
         authors = []
         for author in article.findall(".//Article/AuthorList/Author"):
@@ -328,7 +329,12 @@ class PubMedTool(Tool):
             "authors": authors,
             "abstract": "\n".join(abstract_parts),
             "journal": journal,
+            "journal_issn": journal_issn,
             "published": cls._publication_date(article),
+            "publication_types": cls._publication_types(article),
+            "keywords": cls._keywords(article),
+            "mesh_terms": cls._mesh_terms(article),
+            "languages": cls._languages(article),
             "doi": doi,
             "entry_url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else "",
         }
@@ -347,6 +353,62 @@ class PubMedTool(Tool):
             cls._element_text(pub_date.find("Day")),
         ]
         return "-".join(part for part in parts if part)
+
+    @classmethod
+    def _publication_types(cls, article: ElementTree.Element) -> List[str]:
+        return [
+            publication_type
+            for publication_type in (
+                cls._element_text(element) for element in article.findall(".//Article/PublicationTypeList/PublicationType")
+            )
+            if publication_type
+        ]
+
+    @classmethod
+    def _keywords(cls, article: ElementTree.Element) -> List[str]:
+        return [
+            keyword
+            for keyword in (
+                cls._element_text(element) for element in article.findall(".//MedlineCitation/KeywordList/Keyword")
+            )
+            if keyword
+        ]
+
+    @classmethod
+    def _mesh_terms(cls, article: ElementTree.Element) -> List[Dict[str, Any]]:
+        terms = []
+        for heading in article.findall(".//MedlineCitation/MeshHeadingList/MeshHeading"):
+            descriptor = heading.find("DescriptorName")
+            descriptor_name = cls._element_text(descriptor)
+            if not descriptor_name:
+                continue
+            terms.append(
+                {
+                    "descriptor": descriptor_name,
+                    "descriptor_ui": descriptor.attrib.get("UI", "") if descriptor is not None else "",
+                    "major_topic": descriptor.attrib.get("MajorTopicYN") == "Y" if descriptor is not None else False,
+                    "qualifiers": [
+                        {
+                            "name": cls._element_text(qualifier),
+                            "ui": qualifier.attrib.get("UI", ""),
+                            "major_topic": qualifier.attrib.get("MajorTopicYN") == "Y",
+                        }
+                        for qualifier in heading.findall("QualifierName")
+                        if cls._element_text(qualifier)
+                    ],
+                }
+            )
+        return terms
+
+    @classmethod
+    def _languages(cls, article: ElementTree.Element) -> List[str]:
+        return [
+            language
+            for language in (
+                cls._element_text(element) for element in article.findall(".//Article/Language")
+            )
+            if language
+        ]
 
     @staticmethod
     def _element_text(element: Optional[ElementTree.Element]) -> str:
