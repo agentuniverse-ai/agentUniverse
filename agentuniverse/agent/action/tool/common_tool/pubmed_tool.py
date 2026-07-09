@@ -3,7 +3,7 @@
 
 """A lightweight PubMed search tool based on NCBI E-utilities."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 from xml.etree import ElementTree
 
 import requests
@@ -16,18 +16,34 @@ from agentuniverse.base.util.env_util import get_from_env
 class PubMedTool(Tool):
     """Search PubMed and return structured article metadata."""
 
+    SORT_OPTIONS: ClassVar[Dict[str, str]] = {
+        "relevance": "relevance",
+        "pub_date": "pub_date",
+        "publication_date": "pub_date",
+        "author": "Author",
+        "journal": "JournalName",
+    }
+
     base_url: str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
     timeout: float = Field(default=15.0, description="HTTP request timeout in seconds")
     email: Optional[str] = Field(default_factory=lambda: get_from_env("NCBI_EMAIL"))
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("NCBI_API_KEY"))
     ncbi_tool_name: str = "agentuniverse_pubmed_tool"
 
-    def execute(self, query: str, max_results: int = 5) -> Dict[str, Any]:
+    def execute(
+        self,
+        query: str,
+        max_results: int = 5,
+        page: int = 1,
+        sort: str = "relevance",
+    ) -> Dict[str, Any]:
         """Search PubMed for articles matching a query.
 
         Args:
             query: PubMed search expression or keywords.
             max_results: Maximum number of articles to return, from 1 to 20.
+            page: One-based page number for paginated results.
+            sort: Sort order. Supports relevance, pub_date, author, and journal.
 
         Returns:
             A dictionary containing the query, result counts, and article
@@ -35,7 +51,7 @@ class PubMedTool(Tool):
             a structured ``error`` field.
 
         Raises:
-            ValueError: If the query is empty or max_results is invalid.
+            ValueError: If the query, max_results, page, or sort is invalid.
         """
         query = query.strip() if isinstance(query, str) else ""
         if not query:
@@ -44,9 +60,16 @@ class PubMedTool(Tool):
             raise ValueError("max_results must be an integer between 1 and 20")
         if not 1 <= max_results <= 20:
             raise ValueError("max_results must be between 1 and 20")
+        if isinstance(page, bool) or not isinstance(page, int):
+            raise ValueError("page must be a positive integer")
+        if page < 1:
+            raise ValueError("page must be a positive integer")
+
+        normalized_sort = self._normalize_sort(sort)
+        retstart = (page - 1) * max_results
 
         try:
-            search_data = self._search(query, max_results)
+            search_data = self._search(query, max_results, retstart, normalized_sort)
             search_result = search_data.get("esearchresult", {})
             pmids = search_result.get("idlist", [])
             total_results = int(search_result.get("count", 0))
@@ -54,22 +77,58 @@ class PubMedTool(Tool):
             papers = self._fetch_articles(pmids) if pmids else []
             return {
                 "query": query,
+                "max_results": max_results,
+                "page": page,
+                "retstart": retstart,
+                "sort": normalized_sort,
                 "total_results": total_results,
                 "returned_results": len(papers),
                 "papers": papers,
             }
         except requests.Timeout:
-            return self._error_result(query, "request_timeout", "PubMed request timed out.")
+            return self._error_result(
+                query,
+                "request_timeout",
+                "PubMed request timed out.",
+                max_results,
+                page,
+                retstart,
+                normalized_sort,
+            )
         except requests.HTTPError as exc:
             status_code = exc.response.status_code if exc.response is not None else None
             message = f"PubMed returned HTTP status {status_code}." if status_code else "PubMed HTTP request failed."
-            return self._error_result(query, "http_error", message)
+            return self._error_result(
+                query,
+                "http_error",
+                message,
+                max_results,
+                page,
+                retstart,
+                normalized_sort,
+            )
         except requests.RequestException as exc:
-            return self._error_result(query, "request_error", f"PubMed request failed: {exc}")
+            return self._error_result(
+                query,
+                "request_error",
+                f"PubMed request failed: {exc}",
+                max_results,
+                page,
+                retstart,
+                normalized_sort,
+            )
         except (ElementTree.ParseError, KeyError, TypeError, ValueError) as exc:
-            return self._error_result(query, "invalid_response", f"Unable to parse PubMed response: {exc}")
+            return self._error_result(
+                query,
+                "invalid_response",
+                f"Unable to parse PubMed response: {exc}",
+                max_results,
+                page,
+                retstart,
+                normalized_sort,
+            )
 
-    def _search(self, query: str, max_results: int) -> Dict[str, Any]:
+    def _search(self, query: str, max_results: int, retstart: int, sort: str) -> Dict[str, Any]:
         response = requests.get(
             f"{self.base_url}/esearch.fcgi",
             params={
@@ -78,6 +137,8 @@ class PubMedTool(Tool):
                 "term": query,
                 "retmode": "json",
                 "retmax": max_results,
+                "retstart": retstart,
+                "sort": sort,
             },
             timeout=self.timeout,
         )
@@ -86,6 +147,15 @@ class PubMedTool(Tool):
         if not isinstance(data, dict) or not isinstance(data.get("esearchresult"), dict):
             raise ValueError("missing esearchresult")
         return data
+
+    @classmethod
+    def _normalize_sort(cls, sort: str) -> str:
+        sort_key = sort.strip().lower().replace("-", "_").replace(" ", "_") if isinstance(sort, str) else ""
+        normalized_sort = cls.SORT_OPTIONS.get(sort_key)
+        if normalized_sort is None:
+            valid_options = ", ".join(sorted(cls.SORT_OPTIONS))
+            raise ValueError(f"sort must be one of: {valid_options}")
+        return normalized_sort
 
     def _fetch_articles(self, pmids: List[str]) -> List[Dict[str, Any]]:
         response = requests.get(
@@ -175,9 +245,21 @@ class PubMedTool(Tool):
         return " ".join("".join(element.itertext()).split())
 
     @staticmethod
-    def _error_result(query: str, error_type: str, message: str) -> Dict[str, Any]:
+    def _error_result(
+        query: str,
+        error_type: str,
+        message: str,
+        max_results: int = 0,
+        page: int = 0,
+        retstart: int = 0,
+        sort: str = "",
+    ) -> Dict[str, Any]:
         return {
             "query": query,
+            "max_results": max_results,
+            "page": page,
+            "retstart": retstart,
+            "sort": sort,
             "total_results": 0,
             "returned_results": 0,
             "papers": [],
