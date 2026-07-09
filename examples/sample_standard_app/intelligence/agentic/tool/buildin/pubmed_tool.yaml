@@ -1,0 +1,22 @@
+name: 'pubmed_tool'
+description: |
+  Search PubMed for biomedical and life-sciences papers and return structured metadata.
+
+  Input parameters:
+    - query (required): PubMed keywords or a PubMed search expression.
+    - max_results (optional): Number of papers to return, from 1 to 20. Defaults to 5.
+
+  Example input:
+    {
+      "query": "large language models in medicine",
+      "max_results": 5
+    }
+
+  Each result may contain PMID, title, authors, abstract, journal, publication date,
+  DOI, and a PubMed entry URL. This tool does not download or summarize full text.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.pubmed_tool'
+  class: 'PubMedTool'
