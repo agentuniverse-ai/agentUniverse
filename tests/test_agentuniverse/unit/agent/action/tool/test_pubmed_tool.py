@@ -3,6 +3,7 @@
 
 import unittest
 from unittest.mock import Mock, patch
+from xml.etree import ElementTree
 
 import requests
 
@@ -25,10 +26,29 @@ SAMPLE_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
           <Author><CollectiveName>Example Research Group</CollectiveName></Author>
         </AuthorList>
         <Journal>
+          <ISSN>1234-5678</ISSN>
           <Title>Example Journal</Title>
           <JournalIssue><PubDate><Year>2026</Year><Month>May</Month><Day>12</Day></PubDate></JournalIssue>
         </Journal>
+        <Language>eng</Language>
+        <PublicationTypeList>
+          <PublicationType>Journal Article</PublicationType>
+          <PublicationType>Review</PublicationType>
+        </PublicationTypeList>
       </Article>
+      <MeshHeadingList>
+        <MeshHeading>
+          <DescriptorName UI="D000001" MajorTopicYN="Y">Artificial Intelligence</DescriptorName>
+          <QualifierName UI="Q000001" MajorTopicYN="N">methods</QualifierName>
+        </MeshHeading>
+        <MeshHeading>
+          <DescriptorName UI="D000002" MajorTopicYN="N">Medicine</DescriptorName>
+        </MeshHeading>
+      </MeshHeadingList>
+      <KeywordList>
+        <Keyword>large language models</Keyword>
+        <Keyword>medical education</Keyword>
+      </KeywordList>
     </MedlineCitation>
     <PubmedData>
       <ArticleIdList><ArticleId IdType="doi">10.1000/example</ArticleId></ArticleIdList>
@@ -69,6 +89,33 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(paper["published"], "2026-May-12")
         self.assertEqual(paper["doi"], "10.1000/example")
         self.assertEqual(paper["entry_url"], "https://pubmed.ncbi.nlm.nih.gov/12345678/")
+        self.assertEqual(paper["journal_issn"], "1234-5678")
+        self.assertEqual(paper["publication_types"], ["Journal Article", "Review"])
+        self.assertEqual(paper["keywords"], ["large language models", "medical education"])
+        self.assertEqual(paper["languages"], ["eng"])
+        self.assertEqual(
+            paper["mesh_terms"],
+            [
+                {
+                    "descriptor": "Artificial Intelligence",
+                    "descriptor_ui": "D000001",
+                    "major_topic": True,
+                    "qualifiers": [
+                        {
+                            "name": "methods",
+                            "ui": "Q000001",
+                            "major_topic": False,
+                        }
+                    ],
+                },
+                {
+                    "descriptor": "Medicine",
+                    "descriptor_ui": "D000002",
+                    "major_topic": False,
+                    "qualifiers": [],
+                },
+            ],
+        )
 
         search_call = mock_get.call_args_list[0]
         self.assertEqual(search_call.kwargs["params"]["retmax"], 5)
@@ -204,6 +251,24 @@ class PubMedToolTest(unittest.TestCase):
 
         self.assertEqual(result["error"]["type"], "request_timeout")
         self.assertEqual(result["papers"], [])
+
+    def test_missing_extended_metadata_returns_empty_values(self) -> None:
+        article = ElementTree.fromstring(
+            b"""<PubmedArticle>
+              <MedlineCitation>
+                <PMID>1</PMID>
+                <Article><ArticleTitle>Minimal article</ArticleTitle></Article>
+              </MedlineCitation>
+            </PubmedArticle>"""
+        )
+
+        paper = PubMedTool._parse_article(article)
+
+        self.assertEqual(paper["journal_issn"], "")
+        self.assertEqual(paper["publication_types"], [])
+        self.assertEqual(paper["keywords"], [])
+        self.assertEqual(paper["mesh_terms"], [])
+        self.assertEqual(paper["languages"], [])
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_invalid_xml_returns_structured_error(self, mock_get: Mock) -> None:
