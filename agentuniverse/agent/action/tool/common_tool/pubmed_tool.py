@@ -122,57 +122,57 @@ class PubMedTool(Tool):
             }
         except requests.Timeout:
             return self._error_result(
-                query,
-                "request_timeout",
-                "PubMed request timed out.",
-                max_results,
-                page,
-                retstart,
-                normalized_sort,
-                normalized_mindate,
-                normalized_maxdate,
-                normalized_datetype,
+                query=query,
+                error_type="request_timeout",
+                message="PubMed request timed out.",
+                max_results=max_results,
+                page=page,
+                retstart=retstart,
+                sort=normalized_sort,
+                mindate=normalized_mindate,
+                maxdate=normalized_maxdate,
+                datetype=normalized_datetype,
             )
         except requests.HTTPError as exc:
             status_code = exc.response.status_code if exc.response is not None else None
             message = f"PubMed returned HTTP status {status_code}." if status_code else "PubMed HTTP request failed."
             return self._error_result(
-                query,
-                "http_error",
-                message,
-                max_results,
-                page,
-                retstart,
-                normalized_sort,
-                normalized_mindate,
-                normalized_maxdate,
-                normalized_datetype,
+                query=query,
+                error_type="http_error",
+                message=message,
+                max_results=max_results,
+                page=page,
+                retstart=retstart,
+                sort=normalized_sort,
+                mindate=normalized_mindate,
+                maxdate=normalized_maxdate,
+                datetype=normalized_datetype,
             )
         except requests.RequestException as exc:
             return self._error_result(
-                query,
-                "request_error",
-                f"PubMed request failed: {exc}",
-                max_results,
-                page,
-                retstart,
-                normalized_sort,
-                normalized_mindate,
-                normalized_maxdate,
-                normalized_datetype,
+                query=query,
+                error_type="request_error",
+                message=f"PubMed request failed: {exc}",
+                max_results=max_results,
+                page=page,
+                retstart=retstart,
+                sort=normalized_sort,
+                mindate=normalized_mindate,
+                maxdate=normalized_maxdate,
+                datetype=normalized_datetype,
             )
         except (ElementTree.ParseError, KeyError, TypeError, ValueError) as exc:
             return self._error_result(
-                query,
-                "invalid_response",
-                f"Unable to parse PubMed response: {exc}",
-                max_results,
-                page,
-                retstart,
-                normalized_sort,
-                normalized_mindate,
-                normalized_maxdate,
-                normalized_datetype,
+                query=query,
+                error_type="invalid_response",
+                message=f"Unable to parse PubMed response: {exc}",
+                max_results=max_results,
+                page=page,
+                retstart=retstart,
+                sort=normalized_sort,
+                mindate=normalized_mindate,
+                maxdate=normalized_maxdate,
+                datetype=normalized_datetype,
             )
 
     def _search(
@@ -387,18 +387,26 @@ class PubMedTool(Tool):
                     "descriptor": descriptor_name,
                     "descriptor_ui": descriptor.attrib.get("UI", "") if descriptor is not None else "",
                     "major_topic": descriptor.attrib.get("MajorTopicYN") == "Y" if descriptor is not None else False,
-                    "qualifiers": [
-                        {
-                            "name": cls._element_text(qualifier),
-                            "ui": qualifier.attrib.get("UI", ""),
-                            "major_topic": qualifier.attrib.get("MajorTopicYN") == "Y",
-                        }
-                        for qualifier in heading.findall("QualifierName")
-                        if cls._element_text(qualifier)
-                    ],
+                    "qualifiers": cls._qualifiers(heading),
                 }
             )
         return terms
+
+    @classmethod
+    def _qualifiers(cls, heading: ElementTree.Element) -> List[Dict[str, Any]]:
+        qualifiers = []
+        for qualifier in heading.findall("QualifierName"):
+            name = cls._element_text(qualifier)
+            if not name:
+                continue
+            qualifiers.append(
+                {
+                    "name": name,
+                    "ui": qualifier.attrib.get("UI", ""),
+                    "major_topic": qualifier.attrib.get("MajorTopicYN") == "Y",
+                }
+            )
+        return qualifiers
 
     @classmethod
     def _languages(cls, article: ElementTree.Element) -> List[str]:
