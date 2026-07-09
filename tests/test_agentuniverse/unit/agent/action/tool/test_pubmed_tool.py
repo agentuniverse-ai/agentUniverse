@@ -112,6 +112,45 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(mock_get.call_args.kwargs["params"]["sort"], "pub_date")
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_search_supports_date_range_filters(self, mock_get: Mock) -> None:
+        mock_get.return_value = response_mock(
+            json_data={"esearchresult": {"count": "0", "idlist": []}}
+        )
+
+        result = self.tool.execute(
+            query="AI medicine",
+            mindate="2024-01-01",
+            maxdate="2024-12-31",
+            datetype="publication date",
+        )
+
+        self.assertEqual(result["mindate"], "2024/01/01")
+        self.assertEqual(result["maxdate"], "2024/12/31")
+        self.assertEqual(result["datetype"], "pdat")
+
+        params = mock_get.call_args.kwargs["params"]
+        self.assertEqual(params["mindate"], "2024/01/01")
+        self.assertEqual(params["maxdate"], "2024/12/31")
+        self.assertEqual(params["datetype"], "pdat")
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_search_supports_single_date_bound(self, mock_get: Mock) -> None:
+        mock_get.return_value = response_mock(
+            json_data={"esearchresult": {"count": "0", "idlist": []}}
+        )
+
+        result = self.tool.execute(query="AI medicine", mindate="2024", datetype="entrez date")
+
+        self.assertEqual(result["mindate"], "2024")
+        self.assertEqual(result["maxdate"], "")
+        self.assertEqual(result["datetype"], "edat")
+
+        params = mock_get.call_args.kwargs["params"]
+        self.assertEqual(params["mindate"], "2024")
+        self.assertNotIn("maxdate", params)
+        self.assertEqual(params["datetype"], "edat")
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_empty_search_does_not_fetch_articles(self, mock_get: Mock) -> None:
         mock_get.return_value = response_mock(
             json_data={"esearchresult": {"count": "0", "idlist": []}}
@@ -137,6 +176,25 @@ class PubMedToolTest(unittest.TestCase):
             self.tool.execute(query="cancer", page=True)
         with self.assertRaisesRegex(ValueError, "sort must be one of"):
             self.tool.execute(query="cancer", sort="newest")
+        with self.assertRaisesRegex(ValueError, "YYYY, YYYY-MM, or YYYY-MM-DD"):
+            self.tool.execute(query="cancer", mindate="01-01-2024")
+        with self.assertRaisesRegex(ValueError, "valid date"):
+            self.tool.execute(query="cancer", maxdate="2024-02-31")
+        with self.assertRaisesRegex(ValueError, "greater than or equal"):
+            self.tool.execute(query="cancer", mindate="2025", maxdate="2024")
+        with self.assertRaisesRegex(ValueError, "datetype must be one of"):
+            self.tool.execute(query="cancer", mindate="2024", datetype="published")
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_error_result_preserves_date_filters(self, mock_get: Mock) -> None:
+        mock_get.side_effect = requests.Timeout("timed out")
+
+        result = self.tool.execute(query="cancer", mindate="2024-01", maxdate="2024-12")
+
+        self.assertEqual(result["error"]["type"], "request_timeout")
+        self.assertEqual(result["mindate"], "2024/01")
+        self.assertEqual(result["maxdate"], "2024/12")
+        self.assertEqual(result["datetype"], "pdat")
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_timeout_returns_structured_error(self, mock_get: Mock) -> None:
