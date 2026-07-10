@@ -197,3 +197,36 @@ metadata:
 - hierarchical_index: 表示不同层级的拆分规则，`reg_exp`为正则表达式，`need_summary`为True的话则表示该层级会使用总结文本取代原始文本
 - summary_agent: `hierarchical_index`中设置`need_summary`为True的时候生成总结文本的Agent， 默认为`simple_summary_agent`
 - llm: 如指定的话，则会用指定的llm取代原本`summary_agent`中的llm。
+
+### [SummarizationProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/summarization_processor.yaml)
+
+该组件将召回的文档汇总压缩为一份摘要文档，减少多路召回后的冗余与噪声，对应 issue #248 中"摘要、总结"方向。
+
+支持两种工作模式：
+
+- **LLM 模式**：配置 `llm_name` 时，由指定的 agentUniverse LLM 组件生成抽象式摘要，质量最高，推荐生产环境使用。
+- **抽取式模式**：`llm_name` 为空时，使用无依赖的纯算法兜底——对拼接后的文档按词频对句子打分（开启 query_aware 时还会用查询词加权），保留得分最高的若干句并保持原顺序。该模式确定性、可离线运行。
+
+该组件定义文件如下：
+```yaml
+name: 'summarization_processor'
+description: 'summarize recalled documents'
+llm_name: ''              # 填入 LLM 组件名即启用 LLM 模式
+max_input_docs: 10
+max_sentences: 5
+query_aware: true
+summary_instruction: 'Summarize the following retrieved documents into a concise, coherent summary.'
+language: ''              # 可选输出语言提示，如 'Chinese'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.summarization_processor'
+  class: 'SummarizationProcessor'
+```
+- llm_name: 用于抽象式摘要的 LLM 组件名。为空时使用确定性抽取式兜底。
+- max_input_docs: 参与摘要的召回文档最大数量。
+- max_sentences: 抽取式摘要保留的句子数量（LLM 模式下忽略）。
+- query_aware: 是否让摘要向查询倾斜。抽取式模式下会提升含查询词句子的得分，LLM 模式下会让模型聚焦于查询。
+- summary_instruction: 追加到 LLM 提示前的自定义指令（抽取式模式下忽略）。
+- language: LLM 摘要的可选输出语言提示，如 `Chinese`（抽取式模式下忽略）。
+
+该组件始终返回单个 Document，其 `text` 为摘要内容。其 `metadata` 记录工作模式（`summarization_mode`：`llm` 或 `extractive`）、参与摘要的源文档数（`source_doc_count`）以及使用的 `llm_name`。
