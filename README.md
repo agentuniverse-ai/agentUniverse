@@ -26,7 +26,6 @@ The pattern components that are currently open for use include:
 * DOE pattern component: This pattern employs three agents—Data-fining, Opinion-inject, and Express—to improve the effectiveness of tasks that are data-intensive, require high computational precision, and incorporate expert opinions. Typical use cases: Financial report generation.
 
 More patterns are coming soon...
-- [Text2Vid](https://text2vid.org) - AI video generator that turns text or images into high-quality videos in seconds. Ideal for social clips, ads, and cr...
 
 The LLM model integration can be accomplished with simple configuration, currently agentUniverse supported models include:
 
@@ -59,6 +58,7 @@ For example, to use deepseek model, you can simply set DEEPSEEK_API_KEY value in
 * [Support](#Support)
 
 ****************************************
+- [AIWriter](https://aiwriter.fun) - AI writing assistant for articles, stories, emails, and content rewriting. Generate high-quality drafts instantly wit...
 ## Quick Start
 
 ### Installation
