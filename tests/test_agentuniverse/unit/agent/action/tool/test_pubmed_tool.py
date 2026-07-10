@@ -2,10 +2,12 @@
 # -*- coding:utf-8 -*-
 
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 from xml.etree import ElementTree
 
 import requests
+import yaml
 
 from agentuniverse.agent.action.tool.common_tool.pubmed_tool import PubMedTool
 
@@ -269,6 +271,52 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(paper["keywords"], [])
         self.assertEqual(paper["mesh_terms"], [])
         self.assertEqual(paper["languages"], [])
+
+    def test_shipped_config_exposes_supported_parameters_and_metadata(self) -> None:
+        config_path = (
+            Path(__file__).resolve().parents[6]
+            / "examples"
+            / "sample_standard_app"
+            / "intelligence"
+            / "agentic"
+            / "tool"
+            / "buildin"
+            / "pubmed_tool.yaml"
+        )
+        with config_path.open(encoding="utf-8") as config_file:
+            config = yaml.safe_load(config_file)
+
+        self.assertEqual(config["input_keys"], ["query"])
+        description = config["description"]
+        for parameter in (
+            "max_results",
+            "page",
+            "sort",
+            "mindate",
+            "maxdate",
+            "datetype",
+        ):
+            self.assertIn(parameter, description)
+        for sort_option in ("relevance", "pub_date", "author", "journal"):
+            self.assertIn(sort_option, description)
+        for date_type in ("pdat", "edat", "mdat", "crdt"):
+            self.assertIn(date_type, description)
+        for metadata_field in (
+            "journal ISSN",
+            "publication types",
+            "keywords",
+            "MeSH terms",
+            "languages",
+        ):
+            self.assertIn(metadata_field, description)
+        for example_entry in (
+            '"page": 2',
+            '"sort": "pub_date"',
+            '"mindate": "2024-01-01"',
+            '"maxdate": "2024-12-31"',
+            '"datetype": "pdat"',
+        ):
+            self.assertIn(example_entry, description)
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_invalid_xml_returns_structured_error(self, mock_get: Mock) -> None:
