@@ -26,6 +26,7 @@ The pattern components that are currently open for use include:
 * DOE pattern component: This pattern employs three agents—Data-fining, Opinion-inject, and Express—to improve the effectiveness of tasks that are data-intensive, require high computational precision, and incorporate expert opinions. Typical use cases: Financial report generation.
 
 More patterns are coming soon...
+- [Text2Vid](https://text2vid.org) - AI video generator that turns text or images into high-quality videos in seconds. Ideal for social clips, ads, and cr...
 
 The LLM model integration can be accomplished with simple configuration, currently agentUniverse supported models include:
 
@@ -223,5 +224,3 @@ Overview: This document introduces in detailed the mechanisms and principles und
 ### Acknowledgements
 
 This project is partially built upon excellent open-source projects such as Langchain, Pydantic, Gunicorn, Flask, SQLAlchemy, chromadb, etc. (The detailed dependency list can be found in pyproject.toml). We would like to express our heartfelt gratitude to the related projects and their contributors. 🙏🙏🙏
-
-- [ImageFK](https://imagefk.com) - AI-powered online image editor with background removal, photo restoration, upscaling, and 2D-to-3D conversion. One-cl...
