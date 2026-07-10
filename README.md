@@ -58,7 +58,6 @@ For example, to use deepseek model, you can simply set DEEPSEEK_API_KEY value in
 * [Support](#Support)
 
 ****************************************
-- [AIWriter](https://aiwriter.fun) - AI writing assistant for articles, stories, emails, and content rewriting. Generate high-quality drafts instantly wit...
 ## Quick Start
 
 ### Installation
@@ -99,6 +98,7 @@ You can learn more advanced techniques in the agent application building process
 
 ## Set up the visual agentic workflow platform
 
+- [FreeImageAI](https://freeimageai.org) - Free AI image generator from text — no signup. Multiple models and art styles for social graphics, concept art, and m...
 agentUniverse provides a visual canvas platform for creating agentic workflow. Follow these steps for a quick start:
 
 **Using pip**
