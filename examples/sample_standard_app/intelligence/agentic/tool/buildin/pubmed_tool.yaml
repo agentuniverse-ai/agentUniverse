@@ -5,15 +5,29 @@ description: |
   Input parameters:
     - query (required): PubMed keywords or a PubMed search expression.
     - max_results (optional): Number of papers to return, from 1 to 20. Defaults to 5.
+    - page (optional): One-based result page. Defaults to 1.
+    - sort (optional): Result order. One of relevance, pub_date, author, or journal.
+      Defaults to relevance.
+    - mindate (optional): Earliest date in YYYY, YYYY-MM, or YYYY-MM-DD format.
+    - maxdate (optional): Latest date in YYYY, YYYY-MM, or YYYY-MM-DD format.
+    - datetype (optional): Date field used with mindate or maxdate. One of pdat
+      (publication), edat (Entrez), mdat (modification), or crdt (creation).
+      Defaults to pdat.
 
   Example input:
     {
       "query": "large language models in medicine",
-      "max_results": 5
+      "max_results": 5,
+      "page": 2,
+      "sort": "pub_date",
+      "mindate": "2024-01-01",
+      "maxdate": "2024-12-31",
+      "datetype": "pdat"
     }
 
   Each result may contain PMID, title, authors, abstract, journal, publication date,
-  DOI, and a PubMed entry URL. This tool does not download or summarize full text.
+  journal ISSN, publication types, keywords, MeSH terms, languages, DOI, and a
+  PubMed entry URL. This tool does not download or summarize full text.
 tool_type: 'api'
 input_keys: ['query']
 metadata:

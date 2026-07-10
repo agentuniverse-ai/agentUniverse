@@ -3,7 +3,9 @@
 
 """A lightweight PubMed search tool based on NCBI E-utilities."""
 
-from typing import Any, Dict, List, Optional
+from datetime import date
+import re
+from typing import Any, ClassVar, Dict, List, Optional
 from xml.etree import ElementTree
 
 import requests
@@ -16,18 +18,51 @@ from agentuniverse.base.util.env_util import get_from_env
 class PubMedTool(Tool):
     """Search PubMed and return structured article metadata."""
 
+    SORT_OPTIONS: ClassVar[Dict[str, str]] = {
+        "relevance": "relevance",
+        "pub_date": "pub_date",
+        "publication_date": "pub_date",
+        "author": "Author",
+        "journal": "JournalName",
+    }
+    DATE_TYPE_OPTIONS: ClassVar[Dict[str, str]] = {
+        "pdat": "pdat",
+        "pub_date": "pdat",
+        "publication_date": "pdat",
+        "edat": "edat",
+        "entrez_date": "edat",
+        "mdat": "mdat",
+        "modification_date": "mdat",
+        "crdt": "crdt",
+        "create_date": "crdt",
+    }
+
     base_url: str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
     timeout: float = Field(default=15.0, description="HTTP request timeout in seconds")
     email: Optional[str] = Field(default_factory=lambda: get_from_env("NCBI_EMAIL"))
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("NCBI_API_KEY"))
     ncbi_tool_name: str = "agentuniverse_pubmed_tool"
 
-    def execute(self, query: str, max_results: int = 5) -> Dict[str, Any]:
+    def execute(
+        self,
+        query: str,
+        max_results: int = 5,
+        page: int = 1,
+        sort: str = "relevance",
+        mindate: Optional[str] = None,
+        maxdate: Optional[str] = None,
+        datetype: str = "pdat",
+    ) -> Dict[str, Any]:
         """Search PubMed for articles matching a query.
 
         Args:
             query: PubMed search expression or keywords.
             max_results: Maximum number of articles to return, from 1 to 20.
+            page: One-based page number for paginated results.
+            sort: Sort order. Supports relevance, pub_date, author, and journal.
+            mindate: Optional lower date bound in YYYY, YYYY-MM, or YYYY-MM-DD format.
+            maxdate: Optional upper date bound in YYYY, YYYY-MM, or YYYY-MM-DD format.
+            datetype: Date field used by PubMed when mindate or maxdate is set.
 
         Returns:
             A dictionary containing the query, result counts, and article
@@ -35,7 +70,7 @@ class PubMedTool(Tool):
             a structured ``error`` field.
 
         Raises:
-            ValueError: If the query is empty or max_results is invalid.
+            ValueError: If the query, max_results, page, or sort is invalid.
         """
         query = query.strip() if isinstance(query, str) else ""
         if not query:
@@ -44,9 +79,29 @@ class PubMedTool(Tool):
             raise ValueError("max_results must be an integer between 1 and 20")
         if not 1 <= max_results <= 20:
             raise ValueError("max_results must be between 1 and 20")
+        if isinstance(page, bool) or not isinstance(page, int):
+            raise ValueError("page must be a positive integer")
+        if page < 1:
+            raise ValueError("page must be a positive integer")
+
+        normalized_sort = self._normalize_sort(sort)
+        normalized_datetype = self._normalize_datetype(datetype)
+        normalized_mindate = self._normalize_date(mindate, "mindate")
+        normalized_maxdate = self._normalize_date(maxdate, "maxdate")
+        if self._date_sort_value(normalized_maxdate, upper_bound=True) < self._date_sort_value(normalized_mindate):
+            raise ValueError("maxdate must be greater than or equal to mindate")
+        retstart = (page - 1) * max_results
 
         try:
-            search_data = self._search(query, max_results)
+            search_data = self._search(
+                query,
+                max_results,
+                retstart,
+                normalized_sort,
+                normalized_mindate,
+                normalized_maxdate,
+                normalized_datetype,
+            )
             search_result = search_data.get("esearchresult", {})
             pmids = search_result.get("idlist", [])
             total_results = int(search_result.get("count", 0))
@@ -54,31 +109,101 @@ class PubMedTool(Tool):
             papers = self._fetch_articles(pmids) if pmids else []
             return {
                 "query": query,
+                "max_results": max_results,
+                "page": page,
+                "retstart": retstart,
+                "sort": normalized_sort,
+                "mindate": normalized_mindate,
+                "maxdate": normalized_maxdate,
+                "datetype": normalized_datetype if normalized_mindate or normalized_maxdate else "",
                 "total_results": total_results,
                 "returned_results": len(papers),
                 "papers": papers,
             }
         except requests.Timeout:
-            return self._error_result(query, "request_timeout", "PubMed request timed out.")
+            return self._error_result(
+                query=query,
+                error_type="request_timeout",
+                message="PubMed request timed out.",
+                max_results=max_results,
+                page=page,
+                retstart=retstart,
+                sort=normalized_sort,
+                mindate=normalized_mindate,
+                maxdate=normalized_maxdate,
+                datetype=normalized_datetype,
+            )
         except requests.HTTPError as exc:
             status_code = exc.response.status_code if exc.response is not None else None
             message = f"PubMed returned HTTP status {status_code}." if status_code else "PubMed HTTP request failed."
-            return self._error_result(query, "http_error", message)
+            return self._error_result(
+                query=query,
+                error_type="http_error",
+                message=message,
+                max_results=max_results,
+                page=page,
+                retstart=retstart,
+                sort=normalized_sort,
+                mindate=normalized_mindate,
+                maxdate=normalized_maxdate,
+                datetype=normalized_datetype,
+            )
         except requests.RequestException as exc:
-            return self._error_result(query, "request_error", f"PubMed request failed: {exc}")
+            return self._error_result(
+                query=query,
+                error_type="request_error",
+                message=f"PubMed request failed: {exc}",
+                max_results=max_results,
+                page=page,
+                retstart=retstart,
+                sort=normalized_sort,
+                mindate=normalized_mindate,
+                maxdate=normalized_maxdate,
+                datetype=normalized_datetype,
+            )
         except (ElementTree.ParseError, KeyError, TypeError, ValueError) as exc:
-            return self._error_result(query, "invalid_response", f"Unable to parse PubMed response: {exc}")
+            return self._error_result(
+                query=query,
+                error_type="invalid_response",
+                message=f"Unable to parse PubMed response: {exc}",
+                max_results=max_results,
+                page=page,
+                retstart=retstart,
+                sort=normalized_sort,
+                mindate=normalized_mindate,
+                maxdate=normalized_maxdate,
+                datetype=normalized_datetype,
+            )
 
-    def _search(self, query: str, max_results: int) -> Dict[str, Any]:
+    def _search(
+        self,
+        query: str,
+        max_results: int,
+        retstart: int,
+        sort: str,
+        mindate: str = "",
+        maxdate: str = "",
+        datetype: str = "pdat",
+    ) -> Dict[str, Any]:
+        params = {
+            **self._common_params(),
+            "db": "pubmed",
+            "term": query,
+            "retmode": "json",
+            "retmax": max_results,
+            "retstart": retstart,
+            "sort": sort,
+        }
+        if mindate or maxdate:
+            params["datetype"] = datetype
+            if mindate:
+                params["mindate"] = mindate
+            if maxdate:
+                params["maxdate"] = maxdate
+
         response = requests.get(
             f"{self.base_url}/esearch.fcgi",
-            params={
-                **self._common_params(),
-                "db": "pubmed",
-                "term": query,
-                "retmode": "json",
-                "retmax": max_results,
-            },
+            params=params,
             timeout=self.timeout,
         )
         response.raise_for_status()
@@ -86,6 +211,61 @@ class PubMedTool(Tool):
         if not isinstance(data, dict) or not isinstance(data.get("esearchresult"), dict):
             raise ValueError("missing esearchresult")
         return data
+
+    @classmethod
+    def _normalize_sort(cls, sort: str) -> str:
+        sort_key = sort.strip().lower().replace("-", "_").replace(" ", "_") if isinstance(sort, str) else ""
+        normalized_sort = cls.SORT_OPTIONS.get(sort_key)
+        if normalized_sort is None:
+            valid_options = ", ".join(sorted(cls.SORT_OPTIONS))
+            raise ValueError(f"sort must be one of: {valid_options}")
+        return normalized_sort
+
+    @classmethod
+    def _normalize_datetype(cls, datetype: str) -> str:
+        datetype_key = datetype.strip().lower().replace("-", "_").replace(" ", "_") if isinstance(datetype, str) else ""
+        normalized_datetype = cls.DATE_TYPE_OPTIONS.get(datetype_key)
+        if normalized_datetype is None:
+            valid_options = ", ".join(sorted(cls.DATE_TYPE_OPTIONS))
+            raise ValueError(f"datetype must be one of: {valid_options}")
+        return normalized_datetype
+
+    @staticmethod
+    def _normalize_date(value: Optional[str], field_name: str) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field_name} must be a date string")
+
+        normalized = value.strip().replace("-", "/")
+        if not re.fullmatch(r"\d{4}(/\d{2}){0,2}", normalized):
+            raise ValueError(f"{field_name} must use YYYY, YYYY-MM, or YYYY-MM-DD format")
+
+        parts = [int(part) for part in normalized.split("/")]
+        year = parts[0]
+        month = parts[1] if len(parts) > 1 else 1
+        day = parts[2] if len(parts) > 2 else 1
+        try:
+            date(year, month, day)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be a valid date") from exc
+        return normalized
+
+    @staticmethod
+    def _date_sort_value(value: str, upper_bound: bool = False) -> date:
+        if not value:
+            return date.max if upper_bound else date.min
+        parts = [int(part) for part in value.split("/")]
+        year = parts[0]
+        month = parts[1] if len(parts) > 1 else (12 if upper_bound else 1)
+        if len(parts) > 2:
+            day = parts[2]
+        elif upper_bound:
+            next_month = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+            day = (next_month.toordinal() - date(year, month, 1).toordinal())
+        else:
+            day = 1
+        return date(year, month, day)
 
     def _fetch_articles(self, pmids: List[str]) -> List[Dict[str, Any]]:
         response = requests.get(
@@ -115,6 +295,7 @@ class PubMedTool(Tool):
         pmid = cls._element_text(article.find(".//MedlineCitation/PMID"))
         title = cls._element_text(article.find(".//Article/ArticleTitle"))
         journal = cls._element_text(article.find(".//Article/Journal/Title"))
+        journal_issn = cls._element_text(article.find(".//Article/Journal/ISSN"))
 
         authors = []
         for author in article.findall(".//Article/AuthorList/Author"):
@@ -148,7 +329,12 @@ class PubMedTool(Tool):
             "authors": authors,
             "abstract": "\n".join(abstract_parts),
             "journal": journal,
+            "journal_issn": journal_issn,
             "published": cls._publication_date(article),
+            "publication_types": cls._publication_types(article),
+            "keywords": cls._keywords(article),
+            "mesh_terms": cls._mesh_terms(article),
+            "languages": cls._languages(article),
             "doi": doi,
             "entry_url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else "",
         }
@@ -168,6 +354,70 @@ class PubMedTool(Tool):
         ]
         return "-".join(part for part in parts if part)
 
+    @classmethod
+    def _publication_types(cls, article: ElementTree.Element) -> List[str]:
+        return [
+            publication_type
+            for publication_type in (
+                cls._element_text(element) for element in article.findall(".//Article/PublicationTypeList/PublicationType")
+            )
+            if publication_type
+        ]
+
+    @classmethod
+    def _keywords(cls, article: ElementTree.Element) -> List[str]:
+        return [
+            keyword
+            for keyword in (
+                cls._element_text(element) for element in article.findall(".//MedlineCitation/KeywordList/Keyword")
+            )
+            if keyword
+        ]
+
+    @classmethod
+    def _mesh_terms(cls, article: ElementTree.Element) -> List[Dict[str, Any]]:
+        terms = []
+        for heading in article.findall(".//MedlineCitation/MeshHeadingList/MeshHeading"):
+            descriptor = heading.find("DescriptorName")
+            descriptor_name = cls._element_text(descriptor)
+            if not descriptor_name:
+                continue
+            terms.append(
+                {
+                    "descriptor": descriptor_name,
+                    "descriptor_ui": descriptor.attrib.get("UI", "") if descriptor is not None else "",
+                    "major_topic": descriptor.attrib.get("MajorTopicYN") == "Y" if descriptor is not None else False,
+                    "qualifiers": cls._qualifiers(heading),
+                }
+            )
+        return terms
+
+    @classmethod
+    def _qualifiers(cls, heading: ElementTree.Element) -> List[Dict[str, Any]]:
+        qualifiers = []
+        for qualifier in heading.findall("QualifierName"):
+            name = cls._element_text(qualifier)
+            if not name:
+                continue
+            qualifiers.append(
+                {
+                    "name": name,
+                    "ui": qualifier.attrib.get("UI", ""),
+                    "major_topic": qualifier.attrib.get("MajorTopicYN") == "Y",
+                }
+            )
+        return qualifiers
+
+    @classmethod
+    def _languages(cls, article: ElementTree.Element) -> List[str]:
+        return [
+            language
+            for language in (
+                cls._element_text(element) for element in article.findall(".//Article/Language")
+            )
+            if language
+        ]
+
     @staticmethod
     def _element_text(element: Optional[ElementTree.Element]) -> str:
         if element is None:
@@ -175,9 +425,27 @@ class PubMedTool(Tool):
         return " ".join("".join(element.itertext()).split())
 
     @staticmethod
-    def _error_result(query: str, error_type: str, message: str) -> Dict[str, Any]:
+    def _error_result(
+        query: str,
+        error_type: str,
+        message: str,
+        max_results: int = 0,
+        page: int = 0,
+        retstart: int = 0,
+        sort: str = "",
+        mindate: str = "",
+        maxdate: str = "",
+        datetype: str = "",
+    ) -> Dict[str, Any]:
         return {
             "query": query,
+            "max_results": max_results,
+            "page": page,
+            "retstart": retstart,
+            "sort": sort,
+            "mindate": mindate,
+            "maxdate": maxdate,
+            "datetype": datetype if mindate or maxdate else "",
             "total_results": 0,
             "returned_results": 0,
             "papers": [],
