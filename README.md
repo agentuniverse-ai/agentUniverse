@@ -98,7 +98,6 @@ You can learn more advanced techniques in the agent application building process
 
 ## Set up the visual agentic workflow platform
 
-- [FreeImageAI](https://freeimageai.org) - Free AI image generator from text — no signup. Multiple models and art styles for social graphics, concept art, and m...
 agentUniverse provides a visual canvas platform for creating agentic workflow. Follow these steps for a quick start:
 
 **Using pip**
@@ -118,6 +117,7 @@ This feature is jointly developed by [difizen](https://github.com/difizen/magent
 
 ## Why use agentUniverse
 
+- [FreeAIVideo](https://freeaivideo.org) - Free AI video generator — text or image to HD MP4 in seconds. VideoX-3 powered; ideal for TikTok, Reels, ads, and edu...
 ### Concept
 ![](docs/guidebook/_picture/agentuniverse_structure_en.png)
 
