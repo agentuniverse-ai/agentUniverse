@@ -1,8 +1,16 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
-"""Unit tests for WebPageReader with mocked HTTP and extraction."""
+"""Unit tests for WebPageReader with mocked HTTP and extraction.
 
+After the refactor, WebPageReader uses lazy imports (import inside method bodies)
+instead of module-level imports.  Therefore tests cannot patch module-level
+attributes like ``web_page_reader.httpx`` — they no longer exist.  Instead we
+patch ``sys.modules`` so that ``import httpx`` / ``import requests`` / etc.
+resolve to our mocks (or to ``None`` to simulate a missing package).
+"""
+
+import sys
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -55,8 +63,7 @@ class TestWebPageReader(unittest.TestCase):
         self.assertEqual(docs[0].metadata["custom_key"], "custom_val")
         self.assertEqual(docs[0].metadata["source"], "web")
 
-    @patch('agentuniverse.agent.action.knowledge.reader.web.web_page_reader.httpx')
-    def test_fetch_html_httpx_success(self, mock_httpx_module):
+    def test_fetch_html_httpx_success(self):
         """_fetch_html should use httpx when available."""
         mock_response = MagicMock()
         mock_response.text = "<html>content</html>"
@@ -67,48 +74,56 @@ class TestWebPageReader(unittest.TestCase):
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
 
-        mock_httpx_module.Client.return_value = mock_client
+        mock_httpx = MagicMock()
+        mock_httpx.Client.return_value = mock_client
 
-        html = self.reader._fetch_html("https://example.com")
+        # Patch sys.modules so that ``import httpx`` resolves to our mock.
+        with patch.dict(sys.modules, {'httpx': mock_httpx}):
+            html = self.reader._fetch_html("https://example.com")
         self.assertEqual(html, "<html>content</html>")
 
-    @patch('agentuniverse.agent.action.knowledge.reader.web.web_page_reader.httpx', side_effect=ImportError)
-    @patch('agentuniverse.agent.action.knowledge.reader.web.web_page_reader.requests')
-    def test_fetch_html_requests_fallback(self, mock_requests_module, mock_httpx):
-        """_fetch_html should fall back to requests when httpx fails."""
+    def test_fetch_html_requests_fallback(self):
+        """_fetch_html should fall back to requests when httpx is unavailable."""
         mock_response = MagicMock()
         mock_response.text = "<html>fallback</html>"
         mock_response.raise_for_status = MagicMock()
 
-        mock_requests_module.get.return_value = mock_response
+        mock_requests = MagicMock()
+        mock_requests.get.return_value = mock_response
 
-        html = self.reader._fetch_html("https://example.com")
+        # httpx=None in sys.modules makes ``import httpx`` raise ImportError,
+        # triggering the requests fallback path.
+        with patch.dict(sys.modules, {'httpx': None, 'requests': mock_requests}):
+            html = self.reader._fetch_html("https://example.com")
         self.assertEqual(html, "<html>fallback</html>")
 
     def test_fetch_html_both_fail_raises_load_error(self):
-        """_fetch_html should raise ReaderLoadError when both httpx and requests fail."""
-        with patch('agentuniverse.agent.action.knowledge.reader.web.web_page_reader.httpx', side_effect=ImportError):
-            with patch('agentuniverse.agent.action.knowledge.reader.web.web_page_reader.requests', side_effect=ImportError):
-                with self.assertRaises(ReaderLoadError) as ctx:
-                    self.reader._fetch_html("https://example.com")
-                self.assertEqual(ctx.exception.reader_name, "WebPageReader")
-                self.assertEqual(ctx.exception.source, "https://example.com")
+        """_fetch_html should raise ReaderLoadError when both httpx and requests are unavailable."""
+        # Both set to None ⇒ both imports fail ⇒ ReaderLoadError
+        with patch.dict(sys.modules, {'httpx': None, 'requests': None}):
+            with self.assertRaises(ReaderLoadError) as ctx:
+                self.reader._fetch_html("https://example.com")
+            self.assertEqual(ctx.exception.reader_name, "WebPageReader")
+            self.assertEqual(ctx.exception.source, "https://example.com")
 
-    @patch('agentuniverse.agent.action.knowledge.reader.web.web_page_reader.trafilatura')
-    def test_extract_main_text_trafilatura(self, mock_trafilatura):
+    def test_extract_main_text_trafilatura(self):
         """_extract_main_text should prefer trafilatura."""
+        mock_trafilatura = MagicMock()
         mock_trafilatura.extract.return_value = "  Extracted article text  "
 
-        text, meta = self.reader._extract_main_text("<html>...</html>", "https://example.com")
+        with patch.dict(sys.modules, {'trafilatura': mock_trafilatura}):
+            text, meta = self.reader._extract_main_text("<html>...</html>", "https://example.com")
         self.assertEqual(text, "Extracted article text")
         self.assertEqual(meta["extractor"], "trafilatura")
 
-    @patch('agentuniverse.agent.action.knowledge.reader.web.web_page_reader.trafilatura', side_effect=ImportError)
-    @patch('agentuniverse.agent.action.knowledge.reader.web.web_page_reader.BeautifulSoup', side_effect=ImportError)
-    def test_extract_main_text_no_library_raises_dependency_error(self, mock_bs, mock_traf):
+    def test_extract_main_text_no_library_raises_dependency_error(self):
         """_extract_main_text should raise ReaderDependencyError when no extraction library is available."""
-        # Also need to mock readability to fail
-        with patch('agentuniverse.agent.action.knowledge.reader.web.web_page_reader.ReadabilityDocument', side_effect=ImportError):
+        # Setting modules to None in sys.modules makes their imports raise ImportError.
+        with patch.dict(sys.modules, {
+            'trafilatura': None,
+            'readability': None,
+            'bs4': None,
+        }):
             with self.assertRaises(ReaderDependencyError) as ctx:
                 self.reader._extract_main_text("<html>...</html>", "https://example.com")
             self.assertEqual(ctx.exception.reader_name, "WebPageReader")
@@ -117,6 +132,9 @@ class TestWebPageReader(unittest.TestCase):
 
 class TestWebPageReaderInheritance(unittest.TestCase):
     """Test that WebPageReader properly inherits from Reader."""
+
+    def setUp(self):
+        self.reader = WebPageReader()
 
     def test_inherits_reader(self):
         """WebPageReader should be a Reader subclass."""
@@ -127,7 +145,7 @@ class TestWebPageReaderInheritance(unittest.TestCase):
         """WebPageReader should have load_data from Reader base."""
         self.assertTrue(hasattr(WebPageReader, 'load_data'))
 
-    def test_has_load_data_method(self):
+    def test_has_load_data_implementation(self):
         """WebPageReader should have _load_data implemented."""
         self.assertTrue(hasattr(WebPageReader, '_load_data'))
 
