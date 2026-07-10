@@ -161,6 +161,19 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(mock_get.call_args.kwargs["params"]["sort"], "pub_date")
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_search_keeps_canonical_sort_values_in_result(self, mock_get: Mock) -> None:
+        mock_get.return_value = response_mock(
+            json_data={"esearchresult": {"count": "0", "idlist": []}}
+        )
+
+        for sort, api_value in (("author", "Author"), ("journal", "JournalName")):
+            with self.subTest(sort=sort):
+                result = self.tool.execute(query="AI medicine", sort=sort)
+
+                self.assertEqual(result["sort"], sort)
+                self.assertEqual(mock_get.call_args.kwargs["params"]["sort"], api_value)
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_search_supports_date_range_filters(self, mock_get: Mock) -> None:
         mock_get.return_value = response_mock(
             json_data={"esearchresult": {"count": "0", "idlist": []}}
@@ -182,22 +195,25 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(params["maxdate"], "2024/12/31")
         self.assertEqual(params["datetype"], "pdat")
 
+    def test_search_rejects_incomplete_date_range(self) -> None:
+        for date_filter in ({"mindate": "2024"}, {"maxdate": "2024"}):
+            with self.subTest(date_filter=date_filter):
+                with self.assertRaisesRegex(ValueError, "must be provided together"):
+                    self.tool.execute(query="AI medicine", **date_filter)
+
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
-    def test_search_supports_single_date_bound(self, mock_get: Mock) -> None:
+    def test_search_enforces_pubmed_paging_limit(self, mock_get: Mock) -> None:
         mock_get.return_value = response_mock(
-            json_data={"esearchresult": {"count": "0", "idlist": []}}
+            json_data={"esearchresult": {"count": "100000", "idlist": []}}
         )
 
-        result = self.tool.execute(query="AI medicine", mindate="2024", datetype="entrez date")
+        result = self.tool.execute(query="AI medicine", max_results=1, page=9999)
 
-        self.assertEqual(result["mindate"], "2024")
-        self.assertEqual(result["maxdate"], "")
-        self.assertEqual(result["datetype"], "edat")
-
-        params = mock_get.call_args.kwargs["params"]
-        self.assertEqual(params["mindate"], "2024")
-        self.assertNotIn("maxdate", params)
-        self.assertEqual(params["datetype"], "edat")
+        self.assertEqual(result["retstart"], 9998)
+        self.assertEqual(mock_get.call_args.kwargs["params"]["retstart"], 9998)
+        with self.assertRaisesRegex(ValueError, "first 9,999 results"):
+            self.tool.execute(query="AI medicine", max_results=1, page=10000)
+        mock_get.assert_called_once()
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_empty_search_does_not_fetch_articles(self, mock_get: Mock) -> None:
@@ -253,6 +269,66 @@ class PubMedToolTest(unittest.TestCase):
 
         self.assertEqual(result["error"]["type"], "request_timeout")
         self.assertEqual(result["papers"], [])
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_http_error_returns_structured_error(self, mock_get: Mock) -> None:
+        response = Mock(status_code=429)
+        mock_get.side_effect = requests.HTTPError(response=response)
+
+        result = self.tool.execute(query="cancer")
+
+        self.assertEqual(result["error"]["type"], "http_error")
+        self.assertIn("429", result["error"]["message"])
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_connection_error_returns_structured_error(self, mock_get: Mock) -> None:
+        mock_get.side_effect = requests.ConnectionError("connection failed")
+
+        result = self.tool.execute(query="cancer")
+
+        self.assertEqual(result["error"]["type"], "request_error")
+        self.assertIn("connection failed", result["error"]["message"])
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_esearch_api_errors_return_structured_error(self, mock_get: Mock) -> None:
+        responses = (
+            ({"error": "API rate limit exceeded", "count": "11"}, "API rate limit exceeded"),
+            ({"esearchresult": {"ERROR": "Search backend failed"}}, "Search backend failed"),
+        )
+
+        for response_data, expected_message in responses:
+            with self.subTest(response_data=response_data):
+                mock_get.reset_mock()
+                mock_get.return_value = response_mock(json_data=response_data)
+
+                result = self.tool.execute(query="cancer")
+
+                self.assertEqual(result["error"]["type"], "api_error")
+                self.assertIn(expected_message, result["error"]["message"])
+                mock_get.assert_called_once()
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_efetch_api_error_returns_structured_error(self, mock_get: Mock) -> None:
+        mock_get.side_effect = [
+            response_mock(json_data={"esearchresult": {"count": "1", "idlist": ["1"]}}),
+            response_mock(content=b"<eFetchResult><ERROR>Unable to obtain query</ERROR></eFetchResult>"),
+        ]
+
+        result = self.tool.execute(query="cancer")
+
+        self.assertEqual(result["error"]["type"], "api_error")
+        self.assertIn("Unable to obtain query", result["error"]["message"])
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_invalid_esearch_json_returns_structured_error(self, mock_get: Mock) -> None:
+        response = response_mock()
+        response.json.side_effect = requests.JSONDecodeError("invalid JSON", "", 0)
+        mock_get.return_value = response
+
+        result = self.tool.execute(query="cancer")
+
+        self.assertEqual(result["error"]["type"], "invalid_response")
+        self.assertIn("invalid ESearch JSON response", result["error"]["message"])
 
     def test_missing_extended_metadata_returns_empty_values(self) -> None:
         article = ElementTree.fromstring(
@@ -317,6 +393,13 @@ class PubMedToolTest(unittest.TestCase):
             '"datetype": "pdat"',
         ):
             self.assertIn(example_entry, description)
+        for boundary_contract in (
+            "first 9,999 results",
+            "Must be provided together with maxdate",
+            "Must be provided together with mindate",
+            "api_error",
+        ):
+            self.assertIn(boundary_contract, description)
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_invalid_xml_returns_structured_error(self, mock_get: Mock) -> None:
