@@ -252,7 +252,7 @@ class Agent(ComponentBase, ABC):
 
     def as_langchain_tool(self):
         """Convert to LangChain tool."""
-        from langchain.tools import Tool as LangchainTool
+        from langchain.agents.tools import Tool
         format_dict = {}
         for key in self.input_keys():
             format_dict.setdefault(key, "input val")
@@ -263,7 +263,7 @@ class Agent(ComponentBase, ABC):
         and the value of the key must be a json string,the format of the json string is as follows:
         ```{format_str}```
         """
-        return LangchainTool(
+        return Tool(
             name=self.agent_model.info.get("name"),
             func=self.langchain_run,
             description=self.agent_model.info.get("description") + args_description
@@ -271,7 +271,7 @@ class Agent(ComponentBase, ABC):
 
     async def async_as_langchain_tool(self):
         """Convert to LangChain tool."""
-        from langchain.tools import Tool as LangchainTool
+        from langchain.agents.tools import Tool
         format_dict = {}
         for key in self.input_keys():
             format_dict.setdefault(key, "input val")
@@ -282,7 +282,7 @@ class Agent(ComponentBase, ABC):
         and the value of the key must be a json string,the format of the json string is as follows:
         ```{format_str}```
         """
-        return LangchainTool(
+        return Tool(
             name=self.agent_model.info.get("name"),
             func=self.async_langchain_run,
             description=self.agent_model.info.get("description") + args_description
