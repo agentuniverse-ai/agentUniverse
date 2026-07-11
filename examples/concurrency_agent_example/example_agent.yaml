@@ -1,0 +1,22 @@
+# Agent Concurrency Control Configuration Example
+# This file demonstrates how to configure agent concurrency limits
+
+# Example agent YAML configuration with concurrency settings
+
+info:
+  name: example_concurrent_agent
+  description: Example agent with concurrency control
+
+profile:
+  llm_model:
+    name: your_llm_name
+
+  # Concurrency control settings
+  # These will be read by the Agent and set up concurrency limits
+  max_concurrent: 5  # Maximum parallel executions for this agent
+  concurrency_timeout: 30.0  # Timeout in seconds for acquiring permit
+
+plan:
+  planner:
+    name: react_planner
+    max_iterations: 15
