@@ -252,7 +252,10 @@ class Agent(ComponentBase, ABC):
 
     def as_langchain_tool(self):
         """Convert to LangChain tool."""
-        from langchain.tools import Tool as LangchainTool
+        try:
+            from langchain.tools import Tool as LangchainTool
+        except ImportError:
+            from langchain_core.tools import Tool as LangchainTool
         format_dict = {}
         for key in self.input_keys():
             format_dict.setdefault(key, "input val")
@@ -271,7 +274,10 @@ class Agent(ComponentBase, ABC):
 
     async def async_as_langchain_tool(self):
         """Convert to LangChain tool."""
-        from langchain.tools import Tool as LangchainTool
+        try:
+            from langchain.tools import Tool as LangchainTool
+        except ImportError:
+            from langchain_core.tools import Tool as LangchainTool
         format_dict = {}
         for key in self.input_keys():
             format_dict.setdefault(key, "input val")

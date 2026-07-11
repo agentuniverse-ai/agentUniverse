@@ -5,7 +5,10 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: nl2api_planner.py
 """Expressing planner module."""
-from langchain.tools import Tool as LangchainTool
+try:
+    from langchain.tools import Tool as LangchainTool
+except ImportError:
+    from langchain_core.tools import Tool as LangchainTool
 from langchain_core.output_parsers import StrOutputParser
 
 from agentuniverse.agent.action.tool.tool import Tool

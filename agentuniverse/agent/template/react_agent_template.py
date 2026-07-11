@@ -10,7 +10,10 @@ from typing import Sequence, Optional, Union, List
 from langchain.agents.format_scratchpad import format_log_to_str
 from langchain.agents.output_parsers import ReActSingleInputOutputParser
 from langchain.agents import AgentExecutor, AgentOutputParser
-from langchain.tools import Tool as LangchainTool
+try:
+    from langchain.tools import Tool as LangchainTool
+except ImportError:
+    from langchain_core.tools import Tool as LangchainTool
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.prompts import BasePromptTemplate
 from langchain_core.runnables import RunnableConfig, RunnablePassthrough, Runnable

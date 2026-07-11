@@ -15,6 +15,7 @@ import httpx
 
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.base.util.logging.logging_util import LOGGER
 from pydantic import Field
 
 
@@ -190,7 +191,7 @@ class WebsiteBs4Reader(Reader):
                             self._urls_to_crawl.append((full_url, current_depth + 1))
 
             except Exception as e:
-                print(f"error:{e}")
+                LOGGER.warning(f"WebsiteBS4Reader crawl error: {e}")
                 continue
 
         return crawler_result

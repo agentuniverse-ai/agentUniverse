@@ -1,0 +1,6 @@
+name: 'default_cloud_doc_reader'
+description: 'default unified cloud document reader with automatic domain routing'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.cloud.cloud_doc_reader'
+  class: 'CloudDocReader'
