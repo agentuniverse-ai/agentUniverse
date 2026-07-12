@@ -11,9 +11,13 @@ from pydantic import Field
 from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.annotation.retry import retry
 from agentuniverse.base.util.env_util import get_from_env
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 import re
+
+try:
+    from googleapiclient.errors import HttpError
+except ImportError:
+    class HttpError(Exception):
+        """Fallback used when google-api-python-client is not installed."""
 
 service_name = "youtube"
 api_version = "v3"
@@ -33,6 +37,13 @@ class YouTubeTool(Tool):
         if not self.api_key:
             raise ValueError("YouTube API key not provided, please set the YOUTUBE_API_KEY environment variable.")
         if self.service is None:
+            try:
+                from googleapiclient.discovery import build
+            except ImportError as e:
+                raise ImportError(
+                    "google-api-python-client is required. "
+                    "Install with: pip install google-api-python-client"
+                ) from e
             self.service = build(service_name, api_version, developerKey=self.api_key)
         return self.service
 
