@@ -6,6 +6,8 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: request_library.py
 import datetime
+import json
+from typing import Any
 
 from sqlalchemy import JSON, Integer, String, DateTime, Text, Column
 from sqlalchemy import select
@@ -21,6 +23,7 @@ from agentuniverse.database.sqldb_wrapper import SQLDBWrapper
 from agentuniverse.database.sqldb_wrapper_manager import SQLDBWrapperManager
 
 REQUEST_TABLE_NAME = 'request_task'
+STRUCTURED_QUERY_PREFIX = "__agentuniverse_structured_query__:"
 Base = declarative_base()
 
 
@@ -117,7 +120,8 @@ class RequestLibrary:
         """
         session = self.get_session()
         try:
-            request_orm = self.request_orm(**request_do.model_dump())
+            request_orm = self.request_orm(
+                **self.__request_do_to_orm_data(request_do))
             session.add(request_orm)
             session.commit()
             return request_orm.id
@@ -132,7 +136,8 @@ class RequestLibrary:
             db_request_do = session.query(self.request_orm).filter(
                 self.request_orm.request_id == request_do.request_id).first()
             if db_request_do:
-                update_data = request_do.model_dump(exclude_unset=True)
+                update_data = self.__request_do_to_orm_data(
+                    request_do, exclude_unset=True)
                 for key, value in update_data.items():
                     setattr(db_request_do, key, value)
                 session.commit()
@@ -168,5 +173,34 @@ class RequestLibrary:
         )
         for column in request_orm.__table__.columns:
             setattr(request_obj, column.name,
-                    getattr(request_orm, column.name))
+                    self.__deserialize_query(getattr(request_orm, column.name))
+                    if column.name == "query"
+                    else getattr(request_orm, column.name))
         return request_obj
+
+    def __request_do_to_orm_data(self, request_do: RequestDO, **kwargs) -> dict:
+        """Convert RequestDO data into ORM-safe values."""
+        request_data = request_do.model_dump(**kwargs)
+        if "query" in request_data:
+            request_data["query"] = self.__serialize_query(request_data["query"])
+        return request_data
+
+    @staticmethod
+    def __serialize_query(query: Any) -> Any:
+        """Serialize structured query values for the Text-backed ORM column."""
+        if isinstance(query, (list, dict)):
+            return STRUCTURED_QUERY_PREFIX + json.dumps(
+                query, ensure_ascii=False)
+        return query
+
+    @staticmethod
+    def __deserialize_query(query: Any) -> Any:
+        """Restore structured query values saved by __serialize_query."""
+        if not isinstance(query, str):
+            return query
+        if not query.startswith(STRUCTURED_QUERY_PREFIX):
+            return query
+        try:
+            return json.loads(query[len(STRUCTURED_QUERY_PREFIX):])
+        except json.JSONDecodeError:
+            return query
