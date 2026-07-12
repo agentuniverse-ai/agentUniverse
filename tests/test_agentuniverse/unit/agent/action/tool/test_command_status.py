@@ -8,6 +8,7 @@
 
 import os
 import json
+import sys
 import time
 import unittest
 
@@ -47,7 +48,7 @@ class CommandStatusToolTest(unittest.TestCase):
 
     def test_running_command_status(self):
         tool_input = ToolInput({
-            'command': 'sleep 2 && echo "Long running command finished"',
+            'command': f'"{sys.executable}" -c "import time; time.sleep(2); print(\'Long running command finished\')"',
             'cwd': os.getcwd(),
             'blocking': False
         })
