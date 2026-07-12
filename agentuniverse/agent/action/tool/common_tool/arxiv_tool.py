@@ -34,7 +34,15 @@ class ArxivTool(Tool):
     sch_engine: Optional[Any] = None
     MAX_QUERY_LENGTH: int = Field(default=300, description="查询字符串最大长度")
 
-    def execute(self, input: str, mode: str):
+    def execute(self, input: str | ToolInput, mode: str = None):
+        if isinstance(input, ToolInput):
+            params = input.to_dict()
+            mode = params.get("mode", mode)
+            input = params.get("input")
+
+        if mode not in [m.value for m in SearchMode]:
+            raise ValueError(f"Invalid mode: {mode}. Must be one of {[m.value for m in SearchMode]}")
+
         try:
             import arxiv
         except ImportError:
@@ -42,9 +50,6 @@ class ArxivTool(Tool):
 
         if self.sch_engine is None:
             self.sch_engine = arxiv.Client()
-
-        if mode not in [m.value for m in SearchMode]:
-            raise ValueError(f"Invalid mode: {mode}. Must be one of {[m.value for m in SearchMode]}")
 
         query = input
         return (self.find_papers_by_str(query) if mode == SearchMode.SEARCH.value
