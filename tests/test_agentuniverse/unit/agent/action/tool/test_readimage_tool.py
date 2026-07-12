@@ -6,20 +6,44 @@
 # @Email   : zhangdongxu0852@163.com
 # @FileName: test_readimage_tool.py
 import os
-import cv2
-import numpy as np
+import importlib.util
 import unittest
-from readimage_tool import (enhance_image, detect_text_regions, ocr_on_regions,
-                            clean_extracted_text, save_text_to_file, extract_text_from_image)
+
+HAS_CV_DEPS = (
+    importlib.util.find_spec("cv2") is not None
+    and importlib.util.find_spec("numpy") is not None
+)
+HAS_OCR_DEPS = (
+    HAS_CV_DEPS
+    and importlib.util.find_spec("PIL") is not None
+    and importlib.util.find_spec("pytesseract") is not None
+)
+
+if HAS_CV_DEPS:
+    import cv2
+    import numpy as np
+else:
+    cv2 = None
+    np = None
+
+from agentuniverse.agent.action.tool.common_tool.readimage_tool import (
+    clean_extracted_text,
+    detect_text_regions,
+    enhance_image,
+    extract_text_from_image,
+    save_text_to_file,
+)
 
 class TestReadImageTool(unittest.TestCase):
     def setUp(self):
-        # Create a simple color test image (100x100 pixels, random content)
-        self.test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
-        # Create an image with black text on a white background for OCR testing
-        self.test_ocr_image = np.full((100, 300, 3), 255, dtype=np.uint8)
-        cv2.putText(self.test_ocr_image, 'Test', (5, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
+        if HAS_CV_DEPS:
+            # Create a simple color test image (100x100 pixels, random content)
+            self.test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+            # Create an image with black text on a white background for OCR testing
+            self.test_ocr_image = np.full((100, 300, 3), 255, dtype=np.uint8)
+            cv2.putText(self.test_ocr_image, 'Test', (5, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
 
+    @unittest.skipUnless(HAS_CV_DEPS, "opencv-python and numpy are required")
     def test_enhance_image(self):
         enhanced = enhance_image(self.test_image)
         # The enhanced image is a grayscale image, and the shape should be two-dimensional
@@ -45,7 +69,7 @@ class TestReadImageTool(unittest.TestCase):
             if os.path.exists(test_filename): 
                 os.remove(test_filename)
 
-
+    @unittest.skipUnless(HAS_OCR_DEPS, "OCR dependencies are required")
     def test_extract_text_from_image_without_east(self):
         # Save the test OCR image as a temporary file
         temp_image = "temp_test_ocr.png"
@@ -59,6 +83,7 @@ class TestReadImageTool(unittest.TestCase):
             if os.path.exists(temp_image):
                 os.remove(temp_image)
 
+    @unittest.skipUnless(HAS_CV_DEPS, "opencv-python and numpy are required")
     def test_detect_text_regions_no_text(self):
         # Text areas are usually not detected using random images
         regions = detect_text_regions(self.test_image)
