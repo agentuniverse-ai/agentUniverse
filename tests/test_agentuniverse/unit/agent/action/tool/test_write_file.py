@@ -37,7 +37,7 @@ class WriteFileToolTest(unittest.TestCase):
         result = json.loads(result_json)
         
         self.assertEqual(result['status'], 'success')
-        self.assertEqual(result['file_path'], file_path)
+        self.assertEqual(result['file_path'], os.path.realpath(file_path))
         self.assertTrue(os.path.exists(file_path))
         
         with open(file_path, 'r') as f:
@@ -95,7 +95,7 @@ class WriteFileToolTest(unittest.TestCase):
 
         expected_path = os.path.join(self.temp_dir, 'relative', 'test.txt')
         self.assertEqual(result['status'], 'success')
-        self.assertEqual(result['file_path'], expected_path)
+        self.assertEqual(result['file_path'], os.path.realpath(expected_path))
         self.assertTrue(os.path.exists(expected_path))
 
     def test_reject_path_traversal(self):

@@ -38,7 +38,7 @@ class ViewFileToolTest(unittest.TestCase):
         result = json.loads(result_json)
 
         self.assertEqual(result['status'], 'success')
-        self.assertEqual(result['file_path'], self.temp_file_path)
+        self.assertEqual(result['file_path'], os.path.realpath(self.temp_file_path))
         self.assertEqual(result['content'],
                          "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n")
         self.assertEqual(result['total_lines'], 5)
