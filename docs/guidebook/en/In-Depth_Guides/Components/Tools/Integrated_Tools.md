@@ -108,7 +108,7 @@ SEARCHAPI_API_KEY="xxxxxx"
 ## 2. Code Tool
 
 ### 2.1 PythonRepl
-[Tool Path](../../../../../../examples/sample_standard_app/intelligence/agentic/tool/python_repl_tool.yaml)  
+[Tool Path](../../../../../../examples/sample_standard_app/intelligence/agentic/tool/buildin/python_repl_tool.yaml)  
 This tool can execute a piece of Python code, the configuration information of the tool:  
 ```yaml
 name: 'python_runner'
@@ -126,13 +126,27 @@ description: 'The tool can execute Python code, which can be directly run in PyC
         ```'
 tool_type: 'api'
 input_keys: ['input']
+# SECURITY: see the note below.
+allow_code_execution: true
 metadata:
   type: 'TOOL'
-  module: 'sample_standard_app.intelligence.agentic.tool.python_repl'
+  module: 'agentuniverse.agent.action.tool.common_tool.python_repl'
   class: 'PythonREPLTool'
 ```
 
-This tool can be used directly without any key, but for system security, please do not use this tool in production environments.
+> **Security warning – opt-in code execution**  
+> `PythonREPLTool` runs the code an agent produces **directly on the host** through
+> Python's `exec`. There is **no** sandboxing, subprocess isolation, or resource
+> limiting, so a prompt injection that reaches this tool escalates to arbitrary
+> code execution. The tool is therefore **disabled by default**: until you set
+> `allow_code_execution: true`, `execute()` refuses to run code and returns an
+> instructive error instead.
+>
+> Only opt in (`allow_code_execution: true`) in a fully trusted, isolated
+> environment, and never equip an agent that ingests untrusted input (documents,
+> web pages, chat messages) with this tool. Do not enable it in production.
+
+This tool can be used directly without any key.
 
 
 ## 3.HTTP Tool

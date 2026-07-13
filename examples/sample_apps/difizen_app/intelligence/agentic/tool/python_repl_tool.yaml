@@ -13,4 +13,10 @@ description: '使用该工具可以执行python代码，可以在pycharm中直�
         ```'
 tool_type: 'api'
 input_keys: ['input']
+# SECURITY: PythonREPLTool runs arbitrary code on the host via exec() with no
+# sandboxing. It is disabled by default and refuses to run until you explicitly
+# opt in by setting allow_code_execution to true. This example app is intended
+# to demonstrate code execution, so it opts in; do NOT enable this in a trusted
+# or production environment that processes untrusted input.
+allow_code_execution: true
 meta_class: 'agentuniverse.agent.action.tool.common_tool.python_repl.PythonREPLTool'
