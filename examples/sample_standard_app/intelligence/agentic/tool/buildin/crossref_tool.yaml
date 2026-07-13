@@ -8,12 +8,33 @@ description: |
       exact DOI lookup. Defaults to search.
     - max_results (optional): Number of works to return in search mode, from 1 to 20.
       Defaults to 5. DOI mode always returns at most one work.
+    - page (optional): One-based search result page. Defaults to 1. The calculated
+      Crossref offset must remain below 10000.
+    - cursor (optional): Crossref cursor for deep pagination. Use * for the first cursor
+      request, then pass the returned next_cursor value to the next call. Cursor requests
+      require page to remain 1 and Crossref cursors expire after 5 minutes.
+    - sort (optional): Sort field. Supports created, deposited, indexed,
+      is-referenced-by-count, issued, published, published-online, published-print,
+      references-count, relevance, score, or updated. Underscores may replace hyphens;
+      citation_count, publication_date, and reference_count are also accepted aliases.
+      Defaults to relevance.
+    - order (optional): Sort direction, either asc or desc. Defaults to desc.
+    - from_pub_date (optional): Inclusive publication date lower bound.
+    - until_pub_date (optional): Inclusive publication date upper bound.
+      Publication dates use YYYY, YYYY-MM, or YYYY-MM-DD format. Either date bound may
+      be used independently; when both are set, from_pub_date must not be later than
+      until_pub_date.
 
   Search example:
     {
       "query": "large language models in medicine",
       "mode": "search",
-      "max_results": 5
+      "max_results": 5,
+      "page": 2,
+      "sort": "citation_count",
+      "order": "desc",
+      "from_pub_date": "2020-01-01",
+      "until_pub_date": "2025-12-31"
     }
 
   DOI lookup example:
@@ -22,11 +43,14 @@ description: |
       "mode": "doi"
     }
 
-  Each work may contain DOI, title, authors, abstract, container title, publication date,
-  publisher, work type, and URL. Missing metadata is returned as an empty string or list.
-  Network and Crossref API failures are returned in a structured error field. Set the
-  optional CROSSREF_EMAIL environment variable to use the Crossref polite pool. This tool
-  returns metadata only and does not download or summarize full text.
+  Each work may contain DOI, title, subtitle, authors, abstract, container title,
+  publication date, publisher, work type, URL, ISSN, ISBN, subjects, language, volume,
+  issue, pages, citation count, reference count, funders, and licenses. Missing metadata
+  is returned as an empty string, empty list, or zero count. Search context including
+  page, offset, sorting, and date filters is included in successful and structured error
+  responses. Cursor searches also return next_cursor for the next request. Set the
+  optional CROSSREF_EMAIL environment variable to use the Crossref polite pool. This
+  tool returns metadata only and does not download or summarize full text.
 tool_type: 'api'
 input_keys: ['query']
 metadata:
