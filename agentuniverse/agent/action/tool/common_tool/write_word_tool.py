@@ -7,6 +7,11 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 class WriteWordDocumentTool(Tool):
     def execute(self, file_path: str, content: str = "", append: bool = False) -> str:
+        if not file_path.lower().endswith(".docx"):
+            return json.dumps(
+                {"error": "The target file must have a .docx extension.", "file_path": file_path, "status": "error"}
+            )
+
         directory = os.path.dirname(file_path)
         if directory and not os.path.exists(directory):
             try:
@@ -25,11 +30,6 @@ class WriteWordDocumentTool(Tool):
                     "file_path": file_path,
                     "status": "error",
                 }
-            )
-
-        if not file_path.lower().endswith(".docx"):
-            return json.dumps(
-                {"error": "The target file must have a .docx extension.", "file_path": file_path, "status": "error"}
             )
 
         document = None
