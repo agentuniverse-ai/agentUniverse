@@ -1,0 +1,46 @@
+name: 'semantic_scholar_tool'
+description: |
+  Search Semantic Scholar for scholarly papers or retrieve one paper by identifier.
+
+  Input parameters:
+    - query (required): Search keywords in search mode, or a paper identifier in paper
+      mode. Paper mode supports DOI, PMID, PMCID, ArXiv, CorpusId, and Semantic Scholar
+      paper ID values, including DOI and ArXiv URLs.
+    - mode (optional): Operation mode. Use search for keyword search or paper for an
+      exact paper lookup. Defaults to search.
+    - max_results (optional): Number of papers to return in search mode, from 1 to 20.
+      Defaults to 5. Paper mode always returns at most one paper.
+
+  Search example:
+    {
+      "query": "large language models in medicine",
+      "mode": "search",
+      "max_results": 5
+    }
+
+  Paper lookup examples:
+    {
+      "query": "DOI:10.18653/v1/2020.acl-main.447",
+      "mode": "paper"
+    }
+    {
+      "query": "PMID:19872477",
+      "mode": "paper"
+    }
+
+  Each paper may contain its Semantic Scholar paper ID, CorpusId, external identifiers,
+  title, authors, abstract, venue, publication date and year, publication types, fields
+  of study, citation count, reference count, open access status, open access PDF, and
+  Semantic Scholar URL. Missing metadata is returned as an empty string, list, object,
+  zero, or false value. Network and Semantic Scholar API failures are returned in a
+  structured error field. Most endpoints support anonymous access, but anonymous users
+  share a rate limit and may receive HTTP 429 during busy periods. If Semantic Scholar
+  has issued an API key to you, set the optional S2_API_KEY environment variable to send
+  it with requests. An API key is not required for basic use. This tool returns metadata
+  only and does not download or summarize full text.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool'
+  class: 'SemanticScholarTool'
