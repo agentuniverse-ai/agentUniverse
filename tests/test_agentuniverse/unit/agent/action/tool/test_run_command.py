@@ -10,6 +10,7 @@ import unittest
 import time
 import json
 import os
+import sys
 from agentuniverse.agent.action.tool.common_tool.run_command_tool import (
     RunCommandTool,
     CommandStatus,
@@ -50,7 +51,7 @@ class RunCommandToolTest(unittest.TestCase):
     def test_nonblocking_command_execution(self) -> None:
         """Test asynchronous command execution"""
         tool_input = ToolInput({
-            'command': 'sleep 1 && echo "Async Test"',
+            'command': f'"{sys.executable}" -c "import time; time.sleep(1); print(\'Async Test\')"',
             'cwd': os.getcwd(),
             'blocking': False
         })
@@ -91,7 +92,7 @@ class RunCommandToolTest(unittest.TestCase):
     def test_command_output_escaping(self) -> None:
         """Test that special characters in command output are properly escaped"""
         tool_input = ToolInput({
-            'command': 'echo "Line 1\nLine 2\tTabbed\r\nWindows\\"Quote\\""',
+            'command': f'"{sys.executable}" -c "import sys; sys.stdout.write(\'Line 1\\\\nLine 2\\\\tTabbed\\\\r\\\\nWindows\' + chr(34) + \'Quote\' + chr(34))"',
             'cwd': os.getcwd(),
             'blocking': True
         })

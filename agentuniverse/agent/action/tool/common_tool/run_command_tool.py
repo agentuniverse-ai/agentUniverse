@@ -75,7 +75,13 @@ class RunCommandTool(Tool):
     Tool for executing shell commands either synchronously or asynchronously.
     """
 
-    def execute(self, command: str, cwd: str, blocking: bool = True) -> str:
+    def execute(self, command: str | ToolInput, cwd: str = None, blocking: bool = True) -> str:
+        if isinstance(command, ToolInput):
+            params = command.to_dict()
+            cwd = params.get("cwd", cwd)
+            blocking = params.get("blocking", blocking)
+            command = params.get("command")
+        cwd = cwd or os.getcwd()
         return self._run_command(command, cwd, blocking)
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:
@@ -87,7 +93,12 @@ class RunCommandTool(Tool):
             start_time=time.time(),
         )
 
+        thread_started = threading.Event()
+
         def __run() -> None:
+            result.thread_id = threading.get_ident()
+            _command_results[result.thread_id] = result
+            thread_started.set()
             try:
                 process = subprocess.Popen(
                     command,
@@ -119,8 +130,7 @@ class RunCommandTool(Tool):
         else:
             thread = threading.Thread(target=__run)
             thread.start()
-            result.thread_id = thread.ident
-            _command_results[result.thread_id] = result
+            thread_started.wait()
 
         return result.message
 

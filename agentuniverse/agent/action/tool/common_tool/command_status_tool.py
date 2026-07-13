@@ -12,7 +12,9 @@ from agentuniverse.agent.action.tool.common_tool.run_command_tool import get_com
 
 
 class CommandStatusTool(Tool):
-    def execute(self, thread_id: int) -> str:
+    def execute(self, thread_id: int | ToolInput) -> str:
+        if isinstance(thread_id, ToolInput):
+            thread_id = thread_id.get_data("thread_id")
         if isinstance(thread_id, str) and thread_id.isdigit():
             thread_id = int(thread_id)
 
