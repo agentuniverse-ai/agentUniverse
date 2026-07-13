@@ -5,12 +5,15 @@ description: |
   Input parameters:
     - query (required): PubMed keywords or a PubMed search expression.
     - max_results (optional): Number of papers to return, from 1 to 20. Defaults to 5.
-    - page (optional): One-based result page. Defaults to 1.
+    - page (optional): One-based result page. Defaults to 1. The page and
+      max_results combination can only address PubMed's first 9,999 results.
     - sort (optional): Result order. One of relevance, pub_date, author, or journal.
       Defaults to relevance.
     - mindate (optional): Earliest date in YYYY, YYYY-MM, or YYYY-MM-DD format.
+      Must be provided together with maxdate.
     - maxdate (optional): Latest date in YYYY, YYYY-MM, or YYYY-MM-DD format.
-    - datetype (optional): Date field used with mindate or maxdate. One of pdat
+      Must be provided together with mindate.
+    - datetype (optional): Date field used with the date range. One of pdat
       (publication), edat (Entrez), mdat (modification), or crdt (creation).
       Defaults to pdat.
 
@@ -27,7 +30,9 @@ description: |
 
   Each result may contain PMID, title, authors, abstract, journal, publication date,
   journal ISSN, publication types, keywords, MeSH terms, languages, DOI, and a
-  PubMed entry URL. This tool does not download or summarize full text.
+  PubMed entry URL. NCBI API failures are returned in a structured error field;
+  errors reported by ESearch or EFetch use the api_error type. This tool does not
+  download or summarize full text.
 tool_type: 'api'
 input_keys: ['query']
 metadata:

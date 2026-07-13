@@ -3,8 +3,9 @@
 
 """A lightweight PubMed search tool based on NCBI E-utilities."""
 
-from datetime import date
 import re
+from calendar import monthrange
+from datetime import date
 from typing import Any, ClassVar, Dict, List, Optional
 from xml.etree import ElementTree
 
@@ -15,6 +16,10 @@ from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.util.env_util import get_from_env
 
 
+class _PubMedAPIError(Exception):
+    """Raised when NCBI returns an E-utilities error response."""
+
+
 class PubMedTool(Tool):
     """Search PubMed and return structured article metadata."""
 
@@ -22,6 +27,12 @@ class PubMedTool(Tool):
         "relevance": "relevance",
         "pub_date": "pub_date",
         "publication_date": "pub_date",
+        "author": "author",
+        "journal": "journal",
+    }
+    SORT_API_VALUES: ClassVar[Dict[str, str]] = {
+        "relevance": "relevance",
+        "pub_date": "pub_date",
         "author": "Author",
         "journal": "JournalName",
     }
@@ -36,6 +47,7 @@ class PubMedTool(Tool):
         "crdt": "crdt",
         "create_date": "crdt",
     }
+    MAX_RETSTART: ClassVar[int] = 9998
 
     base_url: str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
     timeout: float = Field(default=15.0, description="HTTP request timeout in seconds")
@@ -70,7 +82,7 @@ class PubMedTool(Tool):
             a structured ``error`` field.
 
         Raises:
-            ValueError: If the query, max_results, page, or sort is invalid.
+            ValueError: If any input parameter is invalid.
         """
         query = query.strip() if isinstance(query, str) else ""
         if not query:
@@ -88,9 +100,13 @@ class PubMedTool(Tool):
         normalized_datetype = self._normalize_datetype(datetype)
         normalized_mindate = self._normalize_date(mindate, "mindate")
         normalized_maxdate = self._normalize_date(maxdate, "maxdate")
+        if bool(normalized_mindate) != bool(normalized_maxdate):
+            raise ValueError("mindate and maxdate must be provided together")
         if self._date_sort_value(normalized_maxdate, upper_bound=True) < self._date_sort_value(normalized_mindate):
             raise ValueError("maxdate must be greater than or equal to mindate")
         retstart = (page - 1) * max_results
+        if retstart > self.MAX_RETSTART:
+            raise ValueError("page and max_results cannot address records beyond PubMed's first 9,999 results")
 
         try:
             search_data = self._search(
@@ -120,6 +136,19 @@ class PubMedTool(Tool):
                 "returned_results": len(papers),
                 "papers": papers,
             }
+        except _PubMedAPIError as exc:
+            return self._error_result(
+                query=query,
+                error_type="api_error",
+                message=str(exc),
+                max_results=max_results,
+                page=page,
+                retstart=retstart,
+                sort=normalized_sort,
+                mindate=normalized_mindate,
+                maxdate=normalized_maxdate,
+                datetype=normalized_datetype,
+            )
         except requests.Timeout:
             return self._error_result(
                 query=query,
@@ -192,7 +221,7 @@ class PubMedTool(Tool):
             "retmode": "json",
             "retmax": max_results,
             "retstart": retstart,
-            "sort": sort,
+            "sort": self.SORT_API_VALUES[sort],
         }
         if mindate or maxdate:
             params["datetype"] = datetype
@@ -207,9 +236,19 @@ class PubMedTool(Tool):
             timeout=self.timeout,
         )
         response.raise_for_status()
-        data = response.json()
-        if not isinstance(data, dict) or not isinstance(data.get("esearchresult"), dict):
+        try:
+            data = response.json(strict=False)
+        except requests.JSONDecodeError as exc:
+            raise ValueError("invalid ESearch JSON response") from exc
+        if not isinstance(data, dict):
+            raise ValueError("invalid ESearch response")
+        if data.get("error"):
+            raise _PubMedAPIError(f"PubMed ESearch error: {data['error']}")
+        search_result = data.get("esearchresult")
+        if not isinstance(search_result, dict):
             raise ValueError("missing esearchresult")
+        if search_result.get("ERROR"):
+            raise _PubMedAPIError(f"PubMed ESearch error: {search_result['ERROR']}")
         return data
 
     @classmethod
@@ -261,8 +300,7 @@ class PubMedTool(Tool):
         if len(parts) > 2:
             day = parts[2]
         elif upper_bound:
-            next_month = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
-            day = (next_month.toordinal() - date(year, month, 1).toordinal())
+            day = monthrange(year, month)[1]
         else:
             day = 1
         return date(year, month, day)
@@ -280,6 +318,10 @@ class PubMedTool(Tool):
         )
         response.raise_for_status()
         root = ElementTree.fromstring(response.content)
+        error = root if root.tag == "ERROR" else root.find(".//ERROR")
+        error_message = self._element_text(error)
+        if error_message:
+            raise _PubMedAPIError(f"PubMed EFetch error: {error_message}")
         return [self._parse_article(article) for article in root.findall(".//PubmedArticle")]
 
     def _common_params(self) -> Dict[str, str]:
