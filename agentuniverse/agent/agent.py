@@ -5,6 +5,7 @@
 # @Author  : heji
 # @Email   : lc299034@antgroup.com
 # @FileName: agent.py
+import asyncio
 import json
 import uuid
 from abc import abstractmethod, ABC
@@ -13,6 +14,7 @@ from threading import Thread
 from typing import Optional, Any, List
 
 from langchain_core.runnables import RunnableSerializable, RunnableConfig
+
 from langchain_core.utils.json import parse_json_markdown
 
 from agentuniverse.agent.action.knowledge.knowledge import Knowledge
@@ -46,6 +48,7 @@ from agentuniverse.base.util.common_util import stream_output
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.base.util.memory_util import generate_messages, get_memory_string
 from agentuniverse.base.util.system_util import process_dict_with_funcs, is_system_builtin
+from agentuniverse.base.util.rate_limiter.rate_limiter import ThreadRateLimiter, AsyncRateLimiter
 from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
@@ -68,14 +71,15 @@ class Agent(ComponentBase, ABC):
     """The parent class of all agent models, containing only attributes."""
 
     agent_model: Optional[AgentModel] = None
-    _concurrency_enabled: bool = False
-    _max_concurrent: int = 10
-    _concurrency_timeout: Optional[float] = 30.0
-    _execution_contexts: dict = {}
 
     def __init__(self):
         """Initialize the AgentModel with the given keyword arguments."""
         super().__init__(component_type=ComponentEnum.AGENT)
+        self._concurrency_enabled: bool = False
+        self._max_concurrent: int = 10
+        self._concurrency_timeout: Optional[float] = 30.0
+        self._thread_limiter: Optional[ThreadRateLimiter] = None
+        self._async_limiter: Optional[AsyncRateLimiter] = None
 
     @abstractmethod
     def input_keys(self) -> list[str]:
@@ -134,10 +138,9 @@ class Agent(ComponentBase, ABC):
 
         self.update_trace_context(input_object)
 
-        execution_id = str(uuid.uuid4())
-
         if self._concurrency_enabled:
-            if not self._acquire_concurrency_permit(execution_id):
+            acquired = self._acquire_concurrency_permit()
+            if not acquired:
                 raise ConcurrencyLimitExceededException(
                     self._get_agent_name(),
                     f"Agent '{self._get_agent_name()}' is at maximum concurrency "
@@ -156,7 +159,7 @@ class Agent(ComponentBase, ABC):
             return output_object
         finally:
             if self._concurrency_enabled:
-                self._release_concurrency_permit(execution_id)
+                self._release_concurrency_permit()
 
     @trace_agent
     async def async_run(self, **kwargs) -> OutputObject:
@@ -172,10 +175,9 @@ class Agent(ComponentBase, ABC):
         input_object = InputObject(kwargs)
         self.update_trace_context(input_object)
 
-        execution_id = str(uuid.uuid4())
-
         if self._concurrency_enabled:
-            if not self._acquire_concurrency_permit(execution_id):
+            acquired = await self._acquire_concurrency_permit_async()
+            if not acquired:
                 raise ConcurrencyLimitExceededException(
                     self._get_agent_name(),
                     f"Agent '{self._get_agent_name()}' is at maximum concurrency "
@@ -194,7 +196,7 @@ class Agent(ComponentBase, ABC):
             return output_object
         finally:
             if self._concurrency_enabled:
-                self._release_concurrency_permit(execution_id)
+                self._release_concurrency_permit()
 
     def execute(self, input_object: InputObject, agent_input: dict) -> dict:
         """Execute agent instance.
@@ -275,7 +277,6 @@ class Agent(ComponentBase, ABC):
                                                        plan=plan, memory=memory, action=action)
         self.agent_model = agent_model
 
-        # Load concurrency configuration from profile
         self._load_concurrency_config(profile)
 
         return self
@@ -289,12 +290,10 @@ class Agent(ComponentBase, ABC):
         if not profile:
             return
 
-        # Check for concurrency settings in profile
         max_concurrent = profile.get('max_concurrent')
         concurrency_timeout = profile.get('concurrency_timeout')
         concurrency_enabled = profile.get('concurrency_enabled')
 
-        # Only enable concurrency control if explicitly set
         if concurrency_enabled is not None:
             self._concurrency_enabled = bool(concurrency_enabled)
 
@@ -327,6 +326,8 @@ class Agent(ComponentBase, ABC):
                     f"Invalid concurrency_timeout value '{concurrency_timeout}' for agent "
                     f"'{self._get_agent_name()}', expected float. Ignoring."
                 )
+
+        self._reset_concurrency_primitives()
 
         if self._concurrency_enabled:
             LOGGER.info(
@@ -364,40 +365,46 @@ class Agent(ComponentBase, ABC):
 
     def as_langchain_tool(self):
         """Convert to LangChain tool."""
-        from langchain.agents.tools import Tool
+        from langchain_core.tools import StructuredTool
         format_dict = {}
         for key in self.input_keys():
             format_dict.setdefault(key, "input val")
         format_str = json.dumps(format_dict)
+
+        def _run(_input: Optional[str] = None, callbacks=None, **kwargs):
+            return self.langchain_run(_input or "", callbacks=callbacks, **kwargs)
 
         args_description = f"""
         to use this tool,your input must be a json string,must contain all keys of {self.input_keys()},
         and the value of the key must be a json string,the format of the json string is as follows:
         ```{format_str}```
         """
-        return Tool(
+        return StructuredTool.from_function(
             name=self.agent_model.info.get("name"),
-            func=self.langchain_run,
-            description=self.agent_model.info.get("description") + args_description
+            func=_run,
+            description=self.agent_model.info.get("description") + args_description,
         )
 
     async def async_as_langchain_tool(self):
         """Convert to LangChain tool."""
-        from langchain.agents.tools import Tool
+        from langchain_core.tools import StructuredTool
         format_dict = {}
         for key in self.input_keys():
             format_dict.setdefault(key, "input val")
         format_str = json.dumps(format_dict)
+
+        async def _arun(_input: Optional[str] = None, callbacks=None, **kwargs):
+            return await self.async_langchain_run(_input or "", callbacks=callbacks, **kwargs)
 
         args_description = f"""
         to use this tool,your input must be a json string,must contain all keys of {self.input_keys()},
         and the value of the key must be a json string,the format of the json string is as follows:
         ```{format_str}```
         """
-        return Tool(
+        return StructuredTool.from_function(
             name=self.agent_model.info.get("name"),
-            func=self.async_langchain_run,
-            description=self.agent_model.info.get("description") + args_description
+            coroutine=_arun,
+            description=self.agent_model.info.get("description") + args_description,
         )
 
     def process_llm(self, **kwargs) -> LLM:
@@ -421,7 +428,6 @@ class Agent(ComponentBase, ABC):
             memory = conversation_memory
 
         chat_history: list = agent_input.get('chat_history')
-        # generate a list of temporary messages from the given chat history and add them to the memory instance.
         temporary_messages: list[Message] = generate_messages(chat_history)
         if temporary_messages:
             memory.add(temporary_messages, **agent_input)
@@ -547,7 +553,7 @@ class Agent(ComponentBase, ABC):
         return "\n\n".join(knowledge_results)
 
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
-        expert_framework = agent_input.pop('expert_framework', '') or ''
+        expert_framework = agent_input.pop('expert_framework', None) or ''
 
         profile: dict = self.agent_model.profile
 
@@ -558,7 +564,6 @@ class Agent(ComponentBase, ABC):
                                                                   target=profile.get('target'),
                                                                   instruction=profile_instruction)
 
-        # get the prompt by the prompt version
         prompt_version = kwargs.get('prompt_version') or self.agent_model.profile.get('prompt_version')
         version_prompt: Prompt = PromptManager().get_instance_obj(prompt_version)
 
@@ -573,11 +578,11 @@ class Agent(ComponentBase, ABC):
             profile_prompt_model = profile_prompt_model + version_prompt_model
 
         chat_prompt = ChatPrompt().build_prompt(profile_prompt_model, ['introduction', 'target', 'instruction'])
-        image_urls: list = agent_input.pop('image_urls', []) or []
+        image_urls: list = agent_input.pop('image_urls', None) or []
         if image_urls:
             chat_prompt.generate_image_prompt(image_urls)
 
-        audio_url: str = agent_input.pop('audio_url') or ''
+        audio_url: str = agent_input.pop('audio_url', None) or ''
         if audio_url:
             chat_prompt.generate_audio_prompt(audio_url)
         return chat_prompt
@@ -661,17 +666,17 @@ class Agent(ComponentBase, ABC):
             memory.add([
                 Message(
                     id=str(uuid.uuid4().hex),
-                    source=self.agent_model.info.get('name'),
+                    source=agent_id,
                     content=content,
                     type='summarize'
                 )
-            ], session_id=params['session_id'], agent_id=params['agent_id'])
+            ], session_id=params['session_id'], agent_id=agent_id)
 
         if memory:
             params = self.get_memory_params(agent_input)
             Thread(target=do_summarize, args=(params,)).start()
 
-    def load_summarize_memory(self, memory: Memory, agent_input: dict[str, Any] = {}) -> str:
+    def load_summarize_memory(self, agent_input: dict[str, Any] = {}, memory: Memory = None) -> str:
         if memory:
             params = self.get_memory_params(agent_input)
             params['type'] = 'summarize'
@@ -690,9 +695,9 @@ class Agent(ComponentBase, ABC):
                 description_list.append(f'tool name:{tool_ins.name}\ntool description:{tool_ins.description}\n')
 
         if self.agent_model.action.get('toolkit', []):
-            for toolkit in self.agent_model.action.get('toolkit', []):
-                description_list.extend(ToolkitManager().get_instance_obj(toolkit).tool_descriptions)
-
+            for toolkit_name in self.agent_model.action.get('toolkit', []):
+                toolkit = ToolkitManager().get_instance_obj(toolkit_name)
+                description_list.extend(toolkit.tool_descriptions)
         return description_list
 
     def get_func_call_list(self) -> List[str]:
@@ -725,6 +730,7 @@ class Agent(ComponentBase, ABC):
         if value <= 0:
             raise ValueError("max_concurrent must be positive")
         self._max_concurrent = value
+        self._reset_concurrency_primitives()
 
     @property
     def concurrency_timeout(self) -> Optional[float]:
@@ -735,11 +741,14 @@ class Agent(ComponentBase, ABC):
     def concurrency_timeout(self, value: Optional[float]) -> None:
         """Set the timeout for acquiring concurrency permit."""
         self._concurrency_timeout = value
+        self._reset_concurrency_primitives()
 
     @property
     def current_concurrent(self) -> int:
         """Return the current number of concurrent executions."""
-        return len(self._execution_contexts)
+        if self._thread_limiter is None:
+            return 0
+        return self._thread_limiter.current_concurrent
 
     def set_concurrency_config(
         self,
@@ -757,9 +766,20 @@ class Agent(ComponentBase, ABC):
         self._concurrency_enabled = enabled
         self._max_concurrent = max_concurrent
         self._concurrency_timeout = timeout
+        self._reset_concurrency_primitives()
         LOGGER.info(
-            f"Agent '{self.agent_model.info.get('name', 'unknown')}' concurrency config: "
+            f"Agent '{self._get_agent_name()}' concurrency config: "
             f"enabled={enabled}, max_concurrent={max_concurrent}, timeout={timeout}"
+        )
+
+    def _reset_concurrency_primitives(self) -> None:
+        self._thread_limiter = ThreadRateLimiter(
+            max_concurrent=self._max_concurrent,
+            timeout=self._concurrency_timeout
+        )
+        self._async_limiter = AsyncRateLimiter(
+            max_concurrent=self._max_concurrent,
+            timeout=self._concurrency_timeout
         )
 
     def _get_agent_name(self) -> str:
@@ -768,71 +788,28 @@ class Agent(ComponentBase, ABC):
             return self.agent_model.info.get('name', 'unknown_agent')
         return 'unknown_agent'
 
-    def _acquire_concurrency_permit(self, execution_id: str) -> bool:
+    def _acquire_concurrency_permit(self) -> bool:
         """Acquire a concurrency permit for this agent.
-
-        Args:
-            execution_id: Unique identifier for this execution.
 
         Returns:
             True if permit acquired, False otherwise.
         """
         if not self._concurrency_enabled:
             return True
+        return self._thread_limiter.acquire()
 
-        if len(self._execution_contexts) >= self._max_concurrent:
-            LOGGER.warn(
-                f"Agent '{self._get_agent_name()}' concurrency limit reached: "
-                f"{len(self._execution_contexts)}/{self._max_concurrent}"
-            )
-            return False
-
-        self._execution_contexts[execution_id] = datetime.now()
-        LOGGER.debug(
-            f"Acquired concurrency permit for agent '{self._get_agent_name()}' "
-            f"(execution_id={execution_id}, current={len(self._execution_contexts)})"
-        )
-        return True
-
-    def _release_concurrency_permit(self, execution_id: str) -> None:
-        """Release a concurrency permit for this agent.
-
-        Args:
-            execution_id: Unique identifier for this execution.
-        """
-        if execution_id in self._execution_contexts:
-            start_time = self._execution_contexts.pop(execution_id)
-            duration = (datetime.now() - start_time).total_seconds()
-            LOGGER.debug(
-                f"Released concurrency permit for agent '{self._get_agent_name()}' "
-                f"(execution_id={execution_id}, duration={duration:.2f}s, "
-                f"remaining={len(self._execution_contexts)})"
-            )
-
-    def _run_with_concurrency_control(self, func, *args, **kwargs):
-        """Execute a function with concurrency control.
-
-        Args:
-            func: The function to execute.
-            *args: Positional arguments for the function.
-            **kwargs: Keyword arguments for the function.
+    async def _acquire_concurrency_permit_async(self) -> bool:
+        """Async acquire a concurrency permit for this agent.
 
         Returns:
-            The result of the function.
-
-        Raises:
-            ConcurrencyLimitExceededException: If concurrency limit is exceeded.
+            True if permit acquired, False otherwise.
         """
-        execution_id = str(uuid.uuid4())
-        agent_name = self._get_agent_name()
+        if not self._concurrency_enabled:
+            return True
+        return await self._async_limiter.acquire_async()
 
-        if not self._acquire_concurrency_permit(execution_id):
-            raise ConcurrencyLimitExceededException(
-                agent_name,
-                f"Agent '{agent_name}' is at maximum concurrency ({self._max_concurrent} parallel executions)"
-            )
-
-        try:
-            return func(*args, **kwargs)
-        finally:
-            self._release_concurrency_permit(execution_id)
+    def _release_concurrency_permit(self) -> None:
+        """Release a concurrency permit for this agent."""
+        if not self._concurrency_enabled:
+            return
+        self._thread_limiter.release()

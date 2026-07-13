@@ -9,7 +9,9 @@ Rate limiting module for agentUniverse.
 
 Provides semaphore-based rate limiting and concurrency control for agents.
 """
-from asyncio import Semaphore, Lock
+import asyncio
+import threading
+from asyncio import Semaphore as AsyncSemaphore, Lock as AsyncLock
 from threading import Semaphore as ThreadSemaphore, Lock as ThreadLock
 from typing import Optional, Callable, Any, TypeVar, Awaitable
 from functools import wraps
@@ -188,9 +190,9 @@ class AsyncRateLimiter(RateLimiter):
 
     def __init__(self, max_concurrent: int = 10, timeout: Optional[float] = None):
         super().__init__(max_concurrent, timeout)
-        self._semaphore = Semaphore(max_concurrent)
-        self._lock = Lock()
-        self._count_lock = Lock()
+        self._semaphore = AsyncSemaphore(max_concurrent)
+        self._lock = AsyncLock()
+        self._count_lock = AsyncLock()
 
     def acquire(self) -> bool:
         """Synchronous acquire (blocking)."""
@@ -248,18 +250,13 @@ def rate_limited(max_concurrent: int = 10, timeout: Optional[float] = 30.0):
 
     Args:
         max_concurrent: Maximum concurrent executions.
-        timeout: Timeout for acquiring permit.
-
-    Usage:
-        @rate_limited(max_concurrent=5)
-        def my_function():
-            pass
+        timeout: Timeout for acquiring permit in seconds.
     """
     limiter = ThreadRateLimiter(max_concurrent=max_concurrent, timeout=timeout)
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> T:
+        def wrapper(*args, **kwargs):
             with limiter.limit():
                 return func(*args, **kwargs)
         return wrapper
@@ -267,23 +264,27 @@ def rate_limited(max_concurrent: int = 10, timeout: Optional[float] = 30.0):
 
 
 def rate_limited_async(max_concurrent: int = 10, timeout: Optional[float] = 30.0):
-    """Decorator for adding rate limiting to async functions.
+    """Decorator for adding rate limiting to asynchronous functions.
 
     Args:
         max_concurrent: Maximum concurrent executions.
-        timeout: Timeout for acquiring permit.
-
-    Usage:
-        @rate_limited_async(max_concurrent=5)
-        async def my_async_function():
-            pass
+        timeout: Timeout for acquiring permit in seconds.
     """
     limiter = AsyncRateLimiter(max_concurrent=max_concurrent, timeout=timeout)
 
     def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> T:
+        async def wrapper(*args, **kwargs):
             async with limiter.limit_async():
                 return await func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+__all__ = [
+    'RateLimiter',
+    'ThreadRateLimiter',
+    'AsyncRateLimiter',
+    'rate_limited',
+    'rate_limited_async',
+]
