@@ -7,16 +7,111 @@
 # @FileName: test_youtube_tool.py
 
 import unittest
-import os
 from agentuniverse.agent.action.tool.common_tool.youtube_tool import YouTubeTool, Mode
 from agentuniverse.agent.action.tool.tool import ToolInput
+
+
+class FakeRequest:
+    def __init__(self, response):
+        self.response = response
+
+    def execute(self):
+        return self.response
+
+
+class FakeSearchResource:
+    def list(self, **kwargs):
+        return FakeRequest({
+            "items": [{"id": {"videoId": "video-1"}}]
+        })
+
+
+class FakeVideosResource:
+    def list(self, **kwargs):
+        if kwargs.get("chart") == "mostPopular":
+            return FakeRequest({
+                "items": [{
+                    "id": "trending-1",
+                    "snippet": {
+                        "title": "Trending video",
+                        "channelTitle": "Test channel",
+                        "publishedAt": "2026-07-12T00:00:00Z",
+                    },
+                    "statistics": {
+                        "viewCount": "100",
+                        "likeCount": "10",
+                        "commentCount": "1",
+                    },
+                    "contentDetails": {"duration": "PT1M30S"},
+                }]
+            })
+        return FakeRequest({
+            "items": [{
+                "id": "video-1",
+                "snippet": {"title": "Machine learning video"},
+                "statistics": {
+                    "viewCount": "100",
+                    "likeCount": "10",
+                    "commentCount": "1",
+                },
+                "contentDetails": {"duration": "PT2M"},
+            }]
+        })
+
+
+class FakeChannelsResource:
+    def list(self, **kwargs):
+        return FakeRequest({
+            "items": [{
+                "snippet": {
+                    "title": "Google Developers",
+                    "description": "Developer videos",
+                },
+                "statistics": {
+                    "subscriberCount": "1000",
+                    "viewCount": "2000",
+                    "videoCount": "3",
+                },
+                "contentDetails": {
+                    "relatedPlaylists": {"uploads": "uploads-playlist"}
+                },
+            }]
+        })
+
+
+class FakePlaylistItemsResource:
+    def list(self, **kwargs):
+        return FakeRequest({
+            "items": [{
+                "contentDetails": {"videoId": "upload-1"},
+                "snippet": {
+                    "title": "Latest upload",
+                    "publishedAt": "2026-07-12T00:00:00Z",
+                },
+            }]
+        })
+
+
+class FakeYouTubeService:
+    def search(self):
+        return FakeSearchResource()
+
+    def videos(self):
+        return FakeVideosResource()
+
+    def channels(self):
+        return FakeChannelsResource()
+
+    def playlistItems(self):
+        return FakePlaylistItemsResource()
+
 
 class YouTubeToolTest(unittest.TestCase):
     """
     Test cases for YouTubeTool class
     """
     def setUp(self) -> None:
-        self.tool = YouTubeTool()
+        self.tool = YouTubeTool(service=FakeYouTubeService(), api_key="test-key")
     
     def test_search_videos(self) -> None:
         tool_input = ToolInput({
