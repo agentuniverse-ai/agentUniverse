@@ -4,6 +4,8 @@
 """A lightweight scholarly metadata tool based on the Crossref REST API."""
 
 import re
+from calendar import monthrange
+from datetime import date
 from html.parser import HTMLParser
 from typing import Any, ClassVar, Dict, List, Optional
 from urllib.parse import quote
@@ -37,6 +39,27 @@ class CrossrefTool(Tool):
     """Search Crossref works or retrieve one work by DOI."""
 
     MODES: ClassVar[set[str]] = {"search", "doi"}
+    SORT_FIELDS: ClassVar[set[str]] = {
+        "created",
+        "deposited",
+        "indexed",
+        "is-referenced-by-count",
+        "issued",
+        "published",
+        "published-online",
+        "published-print",
+        "references-count",
+        "relevance",
+        "score",
+        "updated",
+    }
+    SORT_ALIASES: ClassVar[Dict[str, str]] = {
+        "citation-count": "is-referenced-by-count",
+        "publication-date": "published",
+        "reference-count": "references-count",
+    }
+    ORDERS: ClassVar[set[str]] = {"asc", "desc"}
+    MAX_OFFSET: ClassVar[int] = 9999
 
     base_url: str = "https://api.crossref.org/v1"
     timeout: float = Field(default=15.0, description="HTTP request timeout in seconds")
@@ -48,6 +71,12 @@ class CrossrefTool(Tool):
         query: str,
         mode: str = "search",
         max_results: int = 5,
+        page: int = 1,
+        cursor: Optional[str] = None,
+        sort: str = "relevance",
+        order: str = "desc",
+        from_pub_date: Optional[str] = None,
+        until_pub_date: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Search scholarly works or retrieve metadata for a Crossref DOI.
 
@@ -55,6 +84,12 @@ class CrossrefTool(Tool):
             query: Search keywords in search mode, or a DOI/DOI URL in doi mode.
             mode: Operation mode. Supports search and doi.
             max_results: Maximum search results to return, from 1 to 20.
+            page: One-based search result page.
+            cursor: Crossref cursor for deep pagination. Use * for the first cursor page.
+            sort: Crossref field used to sort search results.
+            order: Search sort order, either asc or desc.
+            from_pub_date: Inclusive publication date lower bound.
+            until_pub_date: Inclusive publication date upper bound.
 
         Returns:
             A dictionary containing operation context, result counts, and a
@@ -71,40 +106,76 @@ class CrossrefTool(Tool):
 
         if normalized_mode == "search":
             self._validate_max_results(max_results)
+            self._validate_page(page, max_results)
+            normalized_cursor = self._normalize_cursor(cursor)
+            if normalized_cursor and page != 1:
+                raise ValueError("page must be 1 when cursor is provided")
             effective_max_results = max_results
+            effective_page = page
+            offset = 0 if normalized_cursor else (page - 1) * max_results
+            normalized_sort = self._normalize_sort(sort)
+            normalized_order = self._normalize_order(order)
+            normalized_from_date = self._normalize_date(from_pub_date, "from_pub_date")
+            normalized_until_date = self._normalize_date(until_pub_date, "until_pub_date")
+            self._validate_date_range(normalized_from_date, normalized_until_date)
         else:
             normalized_query = self._normalize_doi(normalized_query)
             effective_max_results = 1
+            effective_page = 1
+            offset = 0
+            normalized_cursor = ""
+            normalized_sort = ""
+            normalized_order = ""
+            normalized_from_date = ""
+            normalized_until_date = ""
+
+        context = {
+            "mode": normalized_mode,
+            "query": normalized_query,
+            "max_results": effective_max_results,
+            "page": effective_page,
+            "offset": offset,
+            "cursor": normalized_cursor,
+            "sort": normalized_sort,
+            "order": normalized_order,
+            "from_pub_date": normalized_from_date,
+            "until_pub_date": normalized_until_date,
+        }
 
         try:
             if normalized_mode == "search":
-                total_results, raw_works = self._search(normalized_query, effective_max_results)
+                total_results, raw_works, next_cursor = self._search(
+                    query=normalized_query,
+                    max_results=effective_max_results,
+                    offset=offset,
+                    cursor=normalized_cursor,
+                    sort=normalized_sort,
+                    order=normalized_order,
+                    from_pub_date=normalized_from_date,
+                    until_pub_date=normalized_until_date,
+                )
             else:
                 raw_works = [self._lookup_doi(normalized_query)]
                 total_results = 1
+                next_cursor = ""
 
             works = [self._parse_work(work) for work in raw_works]
             return {
-                "mode": normalized_mode,
-                "query": normalized_query,
-                "max_results": effective_max_results,
+                **context,
                 "total_results": total_results,
                 "returned_results": len(works),
+                "next_cursor": next_cursor,
                 "works": works,
             }
         except _CrossrefAPIError as exc:
             return self._error_result(
-                mode=normalized_mode,
-                query=normalized_query,
-                max_results=effective_max_results,
+                **context,
                 error_type="api_error",
                 message=str(exc),
             )
         except requests.Timeout:
             return self._error_result(
-                mode=normalized_mode,
-                query=normalized_query,
-                max_results=effective_max_results,
+                **context,
                 error_type="request_timeout",
                 message="Crossref request timed out.",
             )
@@ -114,34 +185,53 @@ class CrossrefTool(Tool):
                 f"Crossref returned HTTP status {status_code}." if status_code else "Crossref HTTP request failed."
             )
             return self._error_result(
-                mode=normalized_mode,
-                query=normalized_query,
-                max_results=effective_max_results,
+                **context,
                 error_type="http_error",
                 message=message,
             )
         except requests.RequestException as exc:
             return self._error_result(
-                mode=normalized_mode,
-                query=normalized_query,
-                max_results=effective_max_results,
+                **context,
                 error_type="request_error",
                 message=f"Crossref request failed: {exc}",
             )
         except (KeyError, TypeError, ValueError) as exc:
             return self._error_result(
-                mode=normalized_mode,
-                query=normalized_query,
-                max_results=effective_max_results,
+                **context,
                 error_type="invalid_response",
                 message=f"Unable to parse Crossref response: {exc}",
             )
 
-    def _search(self, query: str, max_results: int) -> tuple[int, List[Dict[str, Any]]]:
-        data = self._request(
-            "/works",
-            params={"query.bibliographic": query, "rows": max_results},
-        )
+    def _search(
+        self,
+        query: str,
+        max_results: int,
+        offset: int,
+        cursor: str,
+        sort: str,
+        order: str,
+        from_pub_date: str,
+        until_pub_date: str,
+    ) -> tuple[int, List[Dict[str, Any]], str]:
+        params: Dict[str, Any] = {
+            "query.bibliographic": query,
+            "rows": max_results,
+            "sort": sort,
+            "order": order,
+        }
+        if cursor:
+            params["cursor"] = cursor
+        else:
+            params["offset"] = offset
+        filters = []
+        if from_pub_date:
+            filters.append(f"from-pub-date:{from_pub_date}")
+        if until_pub_date:
+            filters.append(f"until-pub-date:{until_pub_date}")
+        if filters:
+            params["filter"] = ",".join(filters)
+
+        data = self._request("/works", params=params)
         if data.get("message-type") != "work-list":
             raise ValueError("unexpected message-type for Crossref search")
 
@@ -151,7 +241,8 @@ class CrossrefTool(Tool):
         items = message.get("items")
         if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
             raise ValueError("invalid search items")
-        return int(message.get("total-results", 0)), items
+        next_cursor = self._string_value(message.get("next-cursor")) if cursor else ""
+        return int(message.get("total-results", 0)), items, next_cursor
 
     def _lookup_doi(self, doi: str) -> Dict[str, Any]:
         data = self._request(f"/works/{quote(doi, safe='')}")
@@ -206,6 +297,68 @@ class CrossrefTool(Tool):
         if not 1 <= max_results <= 20:
             raise ValueError("max_results must be between 1 and 20")
 
+    @classmethod
+    def _validate_page(cls, page: int, max_results: int) -> None:
+        if isinstance(page, bool) or not isinstance(page, int):
+            raise ValueError("page must be a positive integer")
+        if page < 1:
+            raise ValueError("page must be a positive integer")
+        if (page - 1) * max_results > cls.MAX_OFFSET:
+            raise ValueError("page and max_results must produce an offset below 10000")
+
+    @classmethod
+    def _normalize_sort(cls, sort: str) -> str:
+        normalized_sort = sort.strip().lower().replace("_", "-") if isinstance(sort, str) else ""
+        normalized_sort = cls.SORT_ALIASES.get(normalized_sort, normalized_sort)
+        if normalized_sort not in cls.SORT_FIELDS:
+            raise ValueError(f"sort must be one of: {', '.join(sorted(cls.SORT_FIELDS))}")
+        return normalized_sort
+
+    @classmethod
+    def _normalize_order(cls, order: str) -> str:
+        normalized_order = order.strip().lower() if isinstance(order, str) else ""
+        if normalized_order not in cls.ORDERS:
+            raise ValueError("order must be one of: asc, desc")
+        return normalized_order
+
+    @staticmethod
+    def _normalize_cursor(cursor: Optional[str]) -> str:
+        if cursor is None or cursor == "":
+            return ""
+        normalized_cursor = cursor.strip() if isinstance(cursor, str) else ""
+        if not normalized_cursor:
+            raise ValueError("cursor must be a non-empty string")
+        return normalized_cursor
+
+    @staticmethod
+    def _normalize_date(value: Optional[str], parameter_name: str) -> str:
+        if value is None or value == "":
+            return ""
+        normalized_value = value.strip() if isinstance(value, str) else ""
+        if not re.fullmatch(r"\d{4}(?:-\d{2}(?:-\d{2})?)?", normalized_value):
+            raise ValueError(f"{parameter_name} must use YYYY, YYYY-MM, or YYYY-MM-DD format")
+        try:
+            parts = [int(part) for part in normalized_value.split("-")]
+            date(parts[0], parts[1] if len(parts) > 1 else 1, parts[2] if len(parts) > 2 else 1)
+        except ValueError as exc:
+            raise ValueError(f"{parameter_name} must be a valid date") from exc
+        return normalized_value
+
+    @classmethod
+    def _validate_date_range(cls, from_pub_date: str, until_pub_date: str) -> None:
+        if not from_pub_date or not until_pub_date:
+            return
+        if cls._date_bound(from_pub_date, upper=False) > cls._date_bound(until_pub_date, upper=True):
+            raise ValueError("from_pub_date must not be later than until_pub_date")
+
+    @staticmethod
+    def _date_bound(value: str, upper: bool) -> date:
+        parts = [int(part) for part in value.split("-")]
+        year = parts[0]
+        month = parts[1] if len(parts) > 1 else (12 if upper else 1)
+        day = parts[2] if len(parts) > 2 else (monthrange(year, month)[1] if upper else 1)
+        return date(year, month, day)
+
     @staticmethod
     def _normalize_doi(value: str) -> str:
         doi = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", value, flags=re.IGNORECASE).strip()
@@ -223,6 +376,7 @@ class CrossrefTool(Tool):
         return {
             "doi": doi,
             "title": cls._first_text(work.get("title")),
+            "subtitle": cls._first_text(work.get("subtitle")),
             "authors": cls._authors(work.get("author")),
             "abstract": cls._markup_text(work.get("abstract")),
             "container_title": cls._first_text(work.get("container-title")),
@@ -230,6 +384,17 @@ class CrossrefTool(Tool):
             "publisher": cls._string_value(work.get("publisher")),
             "type": cls._string_value(work.get("type")),
             "url": url,
+            "issn": cls._string_list(work.get("ISSN")),
+            "isbn": cls._string_list(work.get("ISBN")),
+            "subjects": cls._string_list(work.get("subject")),
+            "language": cls._string_value(work.get("language")),
+            "volume": cls._string_value(work.get("volume")),
+            "issue": cls._string_value(work.get("issue")),
+            "pages": cls._string_value(work.get("page")),
+            "citation_count": cls._integer_value(work.get("is-referenced-by-count")),
+            "reference_count": cls._integer_value(work.get("references-count")),
+            "funders": cls._funders(work.get("funder")),
+            "licenses": cls._licenses(work.get("license")),
         }
 
     @classmethod
@@ -249,6 +414,42 @@ class CrossrefTool(Tool):
             if full_name:
                 authors.append(full_name)
         return authors
+
+    @classmethod
+    def _funders(cls, value: Any) -> List[Dict[str, Any]]:
+        if not isinstance(value, list):
+            return []
+        funders = []
+        for funder in value:
+            if not isinstance(funder, dict):
+                continue
+            name = cls._string_value(funder.get("name"))
+            doi = cls._string_value(funder.get("DOI"))
+            awards = cls._string_list(funder.get("award"))
+            if name or doi or awards:
+                funders.append({"name": name, "doi": doi, "awards": awards})
+        return funders
+
+    @classmethod
+    def _licenses(cls, value: Any) -> List[Dict[str, Any]]:
+        if not isinstance(value, list):
+            return []
+        licenses = []
+        for license_item in value:
+            if not isinstance(license_item, dict):
+                continue
+            url = cls._string_value(license_item.get("URL"))
+            if not url:
+                continue
+            licenses.append(
+                {
+                    "url": url,
+                    "start_date": cls._published_date(license_item.get("start")),
+                    "content_version": cls._string_value(license_item.get("content-version")),
+                    "delay_in_days": cls._integer_value(license_item.get("delay-in-days")),
+                }
+            )
+        return licenses
 
     @staticmethod
     def _markup_text(value: Any) -> str:
@@ -287,6 +488,21 @@ class CrossrefTool(Tool):
     def _string_value(value: Any) -> str:
         return value.strip() if isinstance(value, str) else ""
 
+    @classmethod
+    def _string_list(cls, value: Any) -> List[str]:
+        if not isinstance(value, list):
+            return []
+        values = []
+        for item in value:
+            normalized_item = cls._string_value(item)
+            if normalized_item and normalized_item not in values:
+                values.append(normalized_item)
+        return values
+
+    @staticmethod
+    def _integer_value(value: Any) -> int:
+        return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
     @staticmethod
     def _api_error_message(value: Any) -> str:
         if isinstance(value, str) and value.strip():
@@ -307,6 +523,13 @@ class CrossrefTool(Tool):
         mode: str,
         query: str,
         max_results: int,
+        page: int,
+        offset: int,
+        cursor: str,
+        sort: str,
+        order: str,
+        from_pub_date: str,
+        until_pub_date: str,
         error_type: str,
         message: str,
     ) -> Dict[str, Any]:
@@ -314,8 +537,16 @@ class CrossrefTool(Tool):
             "mode": mode,
             "query": query,
             "max_results": max_results,
+            "page": page,
+            "offset": offset,
+            "cursor": cursor,
+            "sort": sort,
+            "order": order,
+            "from_pub_date": from_pub_date,
+            "until_pub_date": until_pub_date,
             "total_results": 0,
             "returned_results": 0,
+            "next_cursor": "",
             "works": [],
             "error": {"type": error_type, "message": message},
         }
