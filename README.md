@@ -117,6 +117,7 @@ This feature is jointly developed by [difizen](https://github.com/difizen/magent
 
 ## Why use agentUniverse
 
+- [FreeAIVideo](https://freeaivideo.org) - Free AI video generator — text or image to HD MP4 in seconds. VideoX-3 powered; ideal for TikTok, Reels, ads, and edu...
 ### Concept
 ![](docs/guidebook/_picture/agentuniverse_structure_en.png)
 
