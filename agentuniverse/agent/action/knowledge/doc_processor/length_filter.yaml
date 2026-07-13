@@ -1,0 +1,22 @@
+name: 'length_filter'
+description: 'Pre-insert document filter that drops chunks whose text length (chars or tokens) falls outside a configured range. Useful after a splitter to remove empty / tiny fragments.'
+
+# Minimum inclusive length; documents shorter than this are dropped.
+# Default 1 removes empty / whitespace-only documents.
+min_length: 1
+
+# Maximum inclusive length; documents longer than this are dropped.
+# null disables the upper bound.
+max_length: null
+
+# 'char' counts characters, 'token' counts whitespace-separated tokens.
+length_unit: 'char'
+
+# When true, leading/trailing whitespace is stripped before measuring so a
+# whitespace-only document counts as length 0.
+trim: true
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.length_filter'
+  class: 'LengthFilter'
