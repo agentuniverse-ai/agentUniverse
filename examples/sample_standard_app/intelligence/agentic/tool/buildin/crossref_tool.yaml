@@ -1,0 +1,35 @@
+name: 'crossref_tool'
+description: |
+  Search Crossref for scholarly works or retrieve one work by DOI.
+
+  Input parameters:
+    - query (required): Search keywords in search mode, or a DOI/DOI URL in doi mode.
+    - mode (optional): Operation mode. Use search for keyword search or doi for an
+      exact DOI lookup. Defaults to search.
+    - max_results (optional): Number of works to return in search mode, from 1 to 20.
+      Defaults to 5. DOI mode always returns at most one work.
+
+  Search example:
+    {
+      "query": "large language models in medicine",
+      "mode": "search",
+      "max_results": 5
+    }
+
+  DOI lookup example:
+    {
+      "query": "https://doi.org/10.1128/mbio.01735-25",
+      "mode": "doi"
+    }
+
+  Each work may contain DOI, title, authors, abstract, container title, publication date,
+  publisher, work type, and URL. Missing metadata is returned as an empty string or list.
+  Network and Crossref API failures are returned in a structured error field. Set the
+  optional CROSSREF_EMAIL environment variable to use the Crossref polite pool. This tool
+  returns metadata only and does not download or summarize full text.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.crossref_tool'
+  class: 'CrossrefTool'
