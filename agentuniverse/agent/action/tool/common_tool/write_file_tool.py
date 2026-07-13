@@ -10,13 +10,32 @@ import os
 import json
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_safe_path
 
 
 class WriteFileTool(Tool):
+    base_dir: str = "."
+
     def execute(self,
-                file_path: str,
+                file_path: str | ToolInput,
                 content: str = '',
                 append: bool = False) -> str:
+        if isinstance(file_path, ToolInput):
+            params = file_path.to_dict()
+            content = params.get('content', content)
+            append = params.get('append', append)
+            file_path = params.get('file_path')
+
+        try:
+            safe_file_path = resolve_safe_path(file_path, self.base_dir)
+        except ValueError as e:
+            return json.dumps({
+                "error": str(e),
+                "file_path": file_path,
+                "status": "error"
+            })
+
+        file_path = safe_file_path
         directory = os.path.dirname(file_path)
         if directory and not os.path.exists(directory):
             try:

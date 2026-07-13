@@ -10,14 +10,33 @@ import os
 import json
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_safe_path
 
 
 class ViewFileTool(Tool):
+    base_dir: str = "."
+
     def execute(self,
-                file_path: str,
+                file_path: str | ToolInput,
                 start_line: int = 0,
                 end_line: int = None
                 ) -> str:
+        if isinstance(file_path, ToolInput):
+            params = file_path.to_dict()
+            start_line = params.get('start_line', start_line)
+            end_line = params.get('end_line', end_line)
+            file_path = params.get('file_path')
+
+        try:
+            safe_file_path = resolve_safe_path(file_path, self.base_dir)
+        except ValueError as e:
+            return json.dumps({
+                "error": str(e),
+                "file_path": file_path,
+                "status": "error"
+            })
+
+        file_path = safe_file_path
         if not file_path or not os.path.isfile(file_path):
             return json.dumps({
                 "error": f"File not found: {file_path}",
