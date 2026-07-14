@@ -112,14 +112,19 @@ class YouTubeTool(Tool):
             video_list = []
             next_page_token = None
             for _ in range(self.max_results):
+                remaining = self.max_results - len(video_list)
+                if remaining <= 0:
+                    break
                 playlist_items = self.service.playlistItems().list(
                     playlistId=playlist_id,
                     part='snippet,contentDetails',
-                    maxResults=self.max_results,
+                    maxResults=remaining,
                     pageToken=next_page_token
                 ).execute()
 
                 for item in playlist_items.get('items', []):
+                    if len(video_list) >= self.max_results:
+                        break
                     video_list.append({
                         'id': item['contentDetails']['videoId'],
                         'title': item['snippet']['title'],
