@@ -68,6 +68,25 @@ class WriteFileToolTest(unittest.TestCase):
         
         with open(file_path, 'r') as f:
             self.assertEqual(f.read(), initial_content + append_content)
+
+    def test_string_false_append_value_overwrites_file(self):
+        file_path = os.path.join(self.temp_dir, 'test_append_string_false.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+
+        tool_input = ToolInput({
+            'file_path': file_path,
+            'content': 'new content',
+            'append': 'false'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['append_mode'], False)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'new content')
     
     def test_create_directory_structure(self):
         file_path = os.path.join(self.temp_dir, 'nested/dir/structure/test.txt')

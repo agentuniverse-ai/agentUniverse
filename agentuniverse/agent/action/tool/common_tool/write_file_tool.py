@@ -16,6 +16,20 @@ from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_
 class WriteFileTool(Tool):
     base_dir: str = "."
 
+    @staticmethod
+    def _normalize_bool(value, default: bool = False) -> bool:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "n", "off"}:
+                return False
+        return bool(value)
+
     def execute(self,
                 file_path: str | ToolInput,
                 content: str = '',
@@ -25,6 +39,7 @@ class WriteFileTool(Tool):
             content = params.get('content', content)
             append = params.get('append', append)
             file_path = params.get('file_path')
+        append = self._normalize_bool(append)
 
         try:
             safe_file_path = resolve_safe_path(file_path, self.base_dir)
