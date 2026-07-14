@@ -16,6 +16,17 @@ from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_
 class ViewFileTool(Tool):
     base_dir: str = "."
 
+    @staticmethod
+    def _normalize_line_number(value, field_name: str, allow_none: bool = False):
+        if value is None and allow_none:
+            return None
+        if isinstance(value, bool):
+            raise ValueError(f"{field_name} must be an integer")
+        try:
+            return int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{field_name} must be an integer") from exc
+
     def execute(self,
                 file_path: str | ToolInput,
                 start_line: int = 0,
@@ -26,6 +37,16 @@ class ViewFileTool(Tool):
             start_line = params.get('start_line', start_line)
             end_line = params.get('end_line', end_line)
             file_path = params.get('file_path')
+
+        try:
+            start_line = self._normalize_line_number(start_line, "start_line")
+            end_line = self._normalize_line_number(end_line, "end_line", allow_none=True)
+        except ValueError as e:
+            return json.dumps({
+                "error": str(e),
+                "file_path": file_path,
+                "status": "error"
+            })
 
         try:
             safe_file_path = resolve_safe_path(file_path, self.base_dir)
