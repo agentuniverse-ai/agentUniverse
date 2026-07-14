@@ -1,8 +1,29 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 from agentuniverse.agent.action.tool.common_tool.request_tool import RequestTool
+
+
+class RequestToolTest(unittest.TestCase):
+    """Test cases for RequestTool synchronous execution."""
+
+    def test_execute_accepts_lowercase_method(self) -> None:
+        requests_wrapper = SimpleNamespace(
+            get=Mock(return_value='response body')
+        )
+        tool = RequestTool(
+            method='get',
+            json_parser=False
+        )
+        tool.requests_wrapper = requests_wrapper
+
+        result = tool.execute('"https://example.com/resource"')
+
+        self.assertEqual(result, 'response body')
+        requests_wrapper.get.assert_called_once_with(
+            'https://example.com/resource'
+        )
 
 
 class RequestToolAsyncTest(unittest.IsolatedAsyncioTestCase):
@@ -55,6 +76,27 @@ class RequestToolAsyncTest(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(ValueError, 'Unsupported method: PATCH'):
             await tool.async_execute('https://example.com/resource')
+
+    async def test_async_execute_accepts_lowercase_method(self) -> None:
+        requests_wrapper = SimpleNamespace(
+            apost=AsyncMock(return_value={'created': True})
+        )
+        tool = RequestTool(
+            method='post',
+            json_parser=True
+        )
+        tool.requests_wrapper = requests_wrapper
+
+        result = await tool.async_execute(
+            '{"url": "https://example.com/items", '
+            '"data": {"name": "agentUniverse"}}'
+        )
+
+        self.assertEqual(result, {'created': True})
+        requests_wrapper.apost.assert_awaited_once_with(
+            'https://example.com/items',
+            data={'name': 'agentUniverse'}
+        )
 
 
 if __name__ == '__main__':
