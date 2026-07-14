@@ -74,6 +74,21 @@ class RunCommandToolTest(unittest.TestCase):
         self.assertIn('Async Test', cmd_result.stdout)
         self.assertEqual(cmd_result.exit_code, 0)
 
+    def test_string_false_blocking_value_runs_nonblocking(self) -> None:
+        tool_input = ToolInput({
+            'command': f'"{sys.executable}" -c "import time; time.sleep(0.5); print(\'String False\')"',
+            'cwd': os.getcwd(),
+            'blocking': 'false'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.RUNNING.value)
+        cmd_result = get_command_result(result['thread_id'])
+        self.assertIsNotNone(cmd_result)
+        self.assertEqual(cmd_result.status, CommandStatus.RUNNING)
+
     def test_command_error(self) -> None:
         """Test handling of commands that result in errors"""
         tool_input = ToolInput({
