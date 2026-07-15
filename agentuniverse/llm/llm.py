@@ -125,17 +125,17 @@ class LLM(ComponentBase):
             self.description = component_configer.description
         if component_configer.model_name:
             self.model_name = component_configer.model_name
-        if component_configer.temperature:
+        if component_configer.temperature is not None:
             self.temperature = component_configer.temperature
         if component_configer.request_timeout:
             self.request_timeout = component_configer.request_timeout
         if component_configer.max_tokens:
             self.max_tokens = component_configer.max_tokens
-        if component_configer.max_retries:
+        if component_configer.max_retries is not None:
             self.max_retries = component_configer.max_retries
-        if component_configer.streaming:
+        if component_configer.streaming is not None:
             self.streaming = component_configer.streaming
-        if component_configer.ext_info:
+        if component_configer.ext_info is not None:
             self.ext_info = component_configer.ext_info
         self.tracing = component_configer.tracing
         if 'max_context_length' in component_configer.configer.value:
@@ -150,15 +150,15 @@ class LLM(ComponentBase):
         copied_obj = self.model_copy()
         if 'model_name' in kwargs and kwargs['model_name']:
             copied_obj.model_name = kwargs['model_name']
-        if 'temperature' in kwargs and kwargs['temperature']:
+        if 'temperature' in kwargs and kwargs['temperature'] is not None:
             copied_obj.temperature = kwargs['temperature']
         if 'request_timeout' in kwargs and kwargs['request_timeout']:
             copied_obj.request_timeout = kwargs['request_timeout']
         if 'max_tokens' in kwargs and kwargs['max_tokens']:
             copied_obj.max_tokens = kwargs['max_tokens']
-        if 'max_retries' in kwargs and kwargs['max_retries']:
+        if 'max_retries' in kwargs and kwargs['max_retries'] is not None:
             copied_obj.max_retries = kwargs['max_retries']
-        if 'streaming' in kwargs and kwargs['streaming']:
+        if 'streaming' in kwargs and kwargs['streaming'] is not None:
             copied_obj.streaming = kwargs['streaming']
         if 'max_context_length' in kwargs and kwargs['max_context_length']:
             copied_obj._max_context_length = kwargs['max_context_length']
