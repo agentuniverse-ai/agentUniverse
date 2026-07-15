@@ -3,11 +3,18 @@
 
 # @Time    : 2025/9/29
 # @FileName: image_ocr_reader.py
+import logging
 from typing import List, Optional, Dict, Union
 from pathlib import Path
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.reader_errors import (
+    ReaderLoadError,
+    ReaderDependencyError,
+)
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+logger = logging.getLogger(__name__)
 
 
 class ImageOCRReader(Reader):
@@ -21,14 +28,18 @@ class ImageOCRReader(Reader):
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
-        print(f"debugging: ImageOCRReader start load file={file}")
+        logger.info("ImageOCRReader start load file=%s", file)
         if isinstance(file, str):
             file = Path(file)
         if not isinstance(file, Path) or not file.exists():
-            raise FileNotFoundError(f"ImageOCRReader file not found: {file}")
+            raise ReaderLoadError(
+                f"ImageOCRReader file not found: {file}",
+                reader_name="ImageOCRReader",
+                source=str(file),
+            )
 
         text, engine = self._ocr(file)
-        print(f"debugging: ImageOCRReader extracted by {engine}, length={len(text)}")
+        logger.info("ImageOCRReader extracted by %s, length=%d", engine, len(text))
 
         metadata: Dict = {"source": "image", "file_name": file.name, "engine": engine}
         if ext_info:
@@ -39,7 +50,7 @@ class ImageOCRReader(Reader):
         # Try PaddleOCR
         try:
             from paddleocr import PaddleOCR  # type: ignore
-            print("debugging: ImageOCRReader using PaddleOCR")
+            logger.info("ImageOCRReader using PaddleOCR")
             ocr = PaddleOCR(use_angle_cls=True, lang='ch')
             result = ocr.ocr(str(file), cls=True)
             lines: List[str] = []
@@ -50,30 +61,31 @@ class ImageOCRReader(Reader):
                         lines.append(txt)
             return "\n".join(lines), "paddleocr"
         except Exception as e_paddle:
-            print(f"debugging: ImageOCRReader PaddleOCR failed: {e_paddle}")
+            logger.debug("ImageOCRReader PaddleOCR failed: %s", e_paddle)
 
         # Fallback to pytesseract
         try:
             from PIL import Image  # type: ignore
             import pytesseract  # type: ignore
-            print("debugging: ImageOCRReader using pytesseract")
+            logger.info("ImageOCRReader using pytesseract")
             img = Image.open(file)
             text = pytesseract.image_to_string(img, lang='chi_sim+eng')
             return text, "pytesseract"
         except Exception as e_tess:
-            print(f"debugging: ImageOCRReader pytesseract failed: {e_tess}")
+            logger.debug("ImageOCRReader pytesseract failed: %s", e_tess)
 
         # Fallback to easyocr
         try:
             import easyocr  # type: ignore
-            print("debugging: ImageOCRReader using easyocr")
+            logger.info("ImageOCRReader using easyocr")
             reader = easyocr.Reader(['ch_sim', 'en'])
             result = reader.readtext(str(file), detail=0)
             return "\n".join(result), "easyocr"
         except Exception as e_easy:
-            raise ImportError(
+            raise ReaderDependencyError(
                 "No OCR engine available. Install one of: "
-                "`pip install paddleocr paddlepaddle` or "
-                "`pip install pytesseract pillow` or "
-                "`pip install easyocr`"
+                "paddleocr paddlepaddle, pytesseract pillow, or easyocr",
+                reader_name="ImageOCRReader",
+                dependency="paddleocr|pytesseract|easyocr",
+                install_hint="pip install paddleocr paddlepaddle OR pip install pytesseract pillow OR pip install easyocr",
             )
