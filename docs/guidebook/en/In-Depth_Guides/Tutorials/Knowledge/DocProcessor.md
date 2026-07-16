@@ -229,3 +229,29 @@ metadata:
 - language: An optional output-language hint for the LLM summary, e.g. `Chinese` (ignored in extractive mode).
 
 The processor always returns a single Document whose `text` is the summary. Its `metadata` records the operating mode (`summarization_mode`: `llm` or `extractive`), the number of source documents (`source_doc_count`), and the `llm_name` used.
+
+### [ContextBudgetCompressor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/context_budget_compressor.yaml)
+
+This component fits the recalled documents into a fixed cumulative size budget (typically the LLM context window). It walks the recalled list — already ranked by the store or an earlier reranker / fusion processor — keeping documents in order while their total size stays within `budget`; the boundary document that would overflow is optionally truncated so the budget is used as fully as possible without exceeding it. It addresses the *context-window management* direction of issue #248.
+
+It operates on a different axis from `ThresholdFilter`: `ThresholdFilter` applies per-document predicates (a score / length range) or a fixed top-k, while this manages the **cumulative** size of the kept set and can split the last document to fit.
+
+Size is measured by `counter`: `estimate` (default, `max(1, len(text)//4)` — a dependency-free token approximation), `tiktoken` (real BPE tokens via tiktoken), `char`, or `word`. The budget is always interpreted in the counter's unit, so the contract is never "tokens" while silently counting words.
+
+The component definition file is as follows:
+```yaml
+name: 'context_budget_compressor'
+description: 'fit recalled documents into a cumulative size budget'
+budget: 4096                 # max cumulative size, in the counter's unit
+counter: 'estimate'          # estimate | tiktoken | char | word
+truncate: true               # shorten the boundary document to fit
+tiktoken_encoding: 'cl100k_base'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.context_budget_compressor'
+  class: 'ContextBudgetCompressor'
+```
+- budget: Maximum cumulative size of the kept documents, measured in the unit of `counter`.
+- counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
+- truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
+- tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
