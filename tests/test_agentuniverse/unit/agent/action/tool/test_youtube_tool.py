@@ -92,7 +92,35 @@ class FakePlaylistItemsResource:
         })
 
 
+class FakePagedPlaylistItemsResource:
+    def __init__(self):
+        self.calls = 0
+        self.max_results_values = []
+
+    def list(self, **kwargs):
+        self.calls += 1
+        self.max_results_values.append(kwargs.get("maxResults"))
+        start = (self.calls - 1) * 2
+        items = [
+            {
+                "contentDetails": {"videoId": f"upload-{start + index}"},
+                "snippet": {
+                    "title": f"Upload {start + index}",
+                    "publishedAt": "2026-07-12T00:00:00Z",
+                },
+            }
+            for index in range(1, 3)
+        ]
+        response = {"items": items}
+        if self.calls == 1:
+            response["nextPageToken"] = "next-page"
+        return FakeRequest(response)
+
+
 class FakeYouTubeService:
+    def __init__(self, playlist_items_resource=None):
+        self.playlist_items_resource = playlist_items_resource or FakePlaylistItemsResource()
+
     def search(self):
         return FakeSearchResource()
 
@@ -103,7 +131,7 @@ class FakeYouTubeService:
         return FakeChannelsResource()
 
     def playlistItems(self):
-        return FakePlaylistItemsResource()
+        return self.playlist_items_resource
 
 
 class YouTubeToolTest(unittest.TestCase):
@@ -128,6 +156,19 @@ class YouTubeToolTest(unittest.TestCase):
         })
         result = self.tool.execute(tool_input.mode, tool_input.input)
         self.assertTrue(result != {})
+
+    def test_channel_info_limits_latest_videos_to_max_results(self) -> None:
+        playlist_items_resource = FakePagedPlaylistItemsResource()
+        tool = YouTubeTool(
+            service=FakeYouTubeService(playlist_items_resource),
+            api_key="test-key",
+            max_results=3
+        )
+
+        result = tool.execute(Mode.CHANNEL_INFO.value, 'UC_x5XG1OV2P6uZZ5FSM9Ttw')
+
+        self.assertEqual(len(result['latest_video_list']), 3)
+        self.assertEqual(playlist_items_resource.max_results_values, [3, 1])
 
     def test_get_trending_videos_with_region(self) -> None:
         tool_input = ToolInput({
