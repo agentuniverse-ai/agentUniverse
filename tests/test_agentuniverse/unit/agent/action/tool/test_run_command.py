@@ -89,6 +89,32 @@ class RunCommandToolTest(unittest.TestCase):
         self.assertIsNotNone(cmd_result)
         self.assertEqual(cmd_result.status, CommandStatus.RUNNING)
 
+    def test_typo_blocking_value_returns_input_error(self) -> None:
+        tool_input = ToolInput({
+            'command': 'echo "should not run"',
+            'cwd': os.getcwd(),
+            'blocking': 'flase'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.ERROR.value)
+        self.assertIn('blocking must be a boolean value', result['error'])
+
+    def test_non_binary_numeric_blocking_value_returns_input_error(self) -> None:
+        tool_input = ToolInput({
+            'command': 'echo "should not run"',
+            'cwd': os.getcwd(),
+            'blocking': 2
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.ERROR.value)
+        self.assertIn('blocking numeric value must be 0 or 1', result['error'])
+
     def test_command_error(self) -> None:
         """Test handling of commands that result in errors"""
         tool_input = ToolInput({

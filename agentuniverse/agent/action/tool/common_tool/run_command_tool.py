@@ -16,6 +16,7 @@ from typing import Dict, Optional
 from dataclasses import dataclass
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.common_tool.tool_input_utils import parse_strict_bool
 
 
 class CommandStatus(Enum):
@@ -75,20 +76,6 @@ class RunCommandTool(Tool):
     Tool for executing shell commands either synchronously or asynchronously.
     """
 
-    @staticmethod
-    def _normalize_bool(value, default: bool = True) -> bool:
-        if value is None:
-            return default
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized in {"true", "1", "yes", "y", "on"}:
-                return True
-            if normalized in {"false", "0", "no", "n", "off"}:
-                return False
-        return bool(value)
-
     def execute(self, command: str | ToolInput, cwd: str = None, blocking: bool = True) -> str:
         if isinstance(command, ToolInput):
             params = command.to_dict()
@@ -96,7 +83,13 @@ class RunCommandTool(Tool):
             blocking = params.get("blocking", blocking)
             command = params.get("command")
         cwd = cwd or os.getcwd()
-        blocking = self._normalize_bool(blocking)
+        try:
+            blocking = parse_strict_bool(blocking, "blocking", default=True)
+        except ValueError as e:
+            return json.dumps({
+                "error": str(e),
+                "status": CommandStatus.ERROR.value
+            })
         return self._run_command(command, cwd, blocking)
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:
