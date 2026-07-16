@@ -49,6 +49,25 @@ tqdm = "^4.66.3"
 sphinx-rtd-theme = "^2.0.0"
 aliyun-log-python-sdk = { version = "0.8.8", optional = true}
 pymilvus = { version = "^2.4.3", optional = true}
+# Reader optional dependencies
+pypdf = { version = ">=4.0.0", optional = true}
+docx2txt = { version = ">=0.36", optional = true}
+python-pptx = { version = ">=0.6.21", optional = true}
+trafilatura = { version = ">=1.6.0", optional = true}
+readability-lxml = { version = ">=0.4", optional = true}
+lxml = { version = ">=4.9.0", optional = true}
+paddleocr = { version = ">=2.7.0", optional = true}
+paddlepaddle = { version = ">=2.5.0", optional = true}
+pytesseract = { version = ">=0.3.10", optional = true}
+easyocr = { version = ">=1.7.0", optional = true}
+selenium = { version = ">=4.10.0", optional = true}
+playwright = { version = ">=1.40.0", optional = true}
+pdf2image = { version = ">=1.16.3", optional = true}
+atlassian-python-api = { version = ">=3.41.0", optional = true}
+notion-client = { version = ">=2.0.0", optional = true}
+google-api-python-client = { version = ">=2.100.0", optional = true}
+google-auth = { version = ">=2.23.0", optional = true}
+google-auth-oauthlib = { version = ">=1.1.0", optional = true}
 googleapis-common-protos = "^1.63.0"
 myst-parser = "^2.0.0"
 qianfan = "^0.3.12"
@@ -78,6 +97,20 @@ beautifulsoup4 = "^4.12.0"
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
 store_ext = ["pymilvus"]
+# Reader dependency groups
+pdf = ["pypdf"]
+docx = ["docx2txt"]
+pptx = ["python-pptx"]
+web-extract = ["trafilatura", "readability-lxml", "lxml"]
+web-render = ["playwright"]
+ocr-paddle = ["paddleocr", "paddlepaddle"]
+ocr-tesseract = ["pytesseract"]
+ocr-easy = ["easyocr"]
+ocr = ["paddleocr", "paddlepaddle", "pytesseract", "easyocr", "pillow"]
+pdf-ocr = ["pdf2image", "pypdf"]
+selenium-reader = ["selenium"]
+cloud = ["atlassian-python-api", "notion-client", "google-api-python-client", "google-auth", "google-auth-oauthlib", "selenium", "beautifulsoup4", "lxml"]
+reader-all = ["pypdf", "docx2txt", "python-pptx", "trafilatura", "readability-lxml", "lxml", "paddleocr", "paddlepaddle", "pytesseract", "easyocr", "pillow", "pdf2image", "playwright", "atlassian-python-api", "notion-client", "google-api-python-client", "google-auth", "google-auth-oauthlib", "selenium", "beautifulsoup4"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
