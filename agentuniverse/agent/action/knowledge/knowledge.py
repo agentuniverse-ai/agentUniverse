@@ -32,6 +32,12 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.agent_serve.web.thread_with_result import ThreadPoolExecutorWithReturnValue
 
+# Metadata key under which :meth:`Knowledge.query_knowledge` stamps the store
+# code that recalled each document. Fusion post-processors (e.g. the
+# ReciprocalRankFusionProcessor) read this field via their ``channel_key``
+# config to tell retrieval channels apart.
+RECALL_CHANNEL_KEY = "recall_channel"
+
 
 class Knowledge(ComponentBase):
     """
@@ -139,6 +145,26 @@ class Knowledge(ComponentBase):
             origin_docs = doc_processor.process_docs(origin_docs, query=query)
         return origin_docs
 
+    def _channel_fusion_enabled(self) -> bool:
+        """Return whether a configured post-processor opts into per-channel recall.
+
+        A fusion processor (e.g. ``ReciprocalRankFusionProcessor``) declares a
+        ``channel_key`` — the metadata field it reads to tell retrieval channels
+        apart. Only when such a processor is present does :meth:`query_knowledge`
+        keep per-channel copies of a document; otherwise it preserves the default
+        retrieval contract and collapses cross-store duplicates to a single
+        document, so an optional fusion processor can never change the output of
+        pipelines that do not use it.
+        """
+        for _processor_code in self.post_processors:
+            try:
+                _processor = DocProcessorManager().get_instance_obj(_processor_code)
+            except Exception:  # noqa: BLE001 - an unresolved processor is not channel-aware
+                continue
+            if getattr(_processor, "channel_key", None):
+                return True
+        return False
+
     def _paraphrase_query(self, origin_query: Query) -> Query:
         for _paraphraser_code in self.query_paraphrasers:
             query_paraphraser: QueryParaphraser = QueryParaphraserManager().get_instance_obj(
@@ -213,18 +239,42 @@ class Knowledge(ComponentBase):
 
         futures = []
         for query_task in query_tasks:
-            futures.append(
+            futures.append((
                 self.query_executor.submit(
                     StoreManager().get_instance_obj(query_task[1]).query,
-                    query_task[0]))
-        wait(futures, return_when=ALL_COMPLETED)
+                    query_task[0]),
+                query_task[1],
+            ))
+        wait([future for future, _ in futures], return_when=ALL_COMPLETED)
+        # Channel-aware recall is opt-in: only when a configured post-processor
+        # declares a channel_key (i.e. it is a fusion processor that needs to
+        # tell retrieval channels apart) do we keep per-channel copies of a
+        # document. Without such a processor the merge keeps the default
+        # retrieval contract — a document recalled by several stores is
+        # returned exactly once — so adding an optional fusion processor never
+        # changes the output of pipelines that do not use it.
+        preserve_channels = self._channel_fusion_enabled()
         retrieved_docs = {}
-        for future in futures:
+        for future, store_code in futures:
             try:
                 task_result = future.result()
                 for _doc in task_result:
-                    if _doc.id not in retrieved_docs:
-                        retrieved_docs[_doc.id] = _doc
+                    if preserve_channels:
+                        # Stamp the store code that recalled this document and
+                        # de-duplicate per channel (id + channel): a document
+                        # recalled by several stores is kept once per store,
+                        # while a duplicate within the same store is dropped.
+                        metadata = dict(_doc.metadata or {})
+                        metadata[RECALL_CHANNEL_KEY] = store_code
+                        _doc.metadata = metadata
+                        dedup_identity = (_doc.id, store_code)
+                    else:
+                        # Default contract: collapse cross-store duplicates to
+                        # a single document (first recall wins) and stamp no
+                        # extra metadata, so the output matches master.
+                        dedup_identity = _doc.id
+                    if dedup_identity not in retrieved_docs:
+                        retrieved_docs[dedup_identity] = _doc
             except Exception as e:
                 traceback.print_exc()
                 LOGGER.error(f"Exception occurred in knowledge query: {e}")
