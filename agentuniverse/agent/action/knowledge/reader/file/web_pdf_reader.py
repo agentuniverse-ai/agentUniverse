@@ -37,3 +37,4 @@ class WebPdfReader(Reader):
                 extract_text_to_fp(pdf_memory_file, output_string, output_type='text', codec='utf-8')
                 text = output_string.getvalue().decode('utf-8')
                 return [Document(text=text, metadata={"source": web_pdf_url})]
+        return []
