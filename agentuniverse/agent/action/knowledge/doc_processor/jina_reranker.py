@@ -22,10 +22,19 @@ class JinaReranker(DocProcessor):
 
     This processor reranks documents based on their relevance to a query
     using Jina AI's reranking models.
+
+    Attributes:
+        api_key: Jina AI API key. Falls back to the ``JINA_API_KEY`` env var.
+        model_name: Reranker model id.
+        top_n: Maximum number of documents returned after reranking.
+        request_timeout: Timeout in seconds for the rerank HTTP call. ``requests``
+            defaults to no timeout, so without this a stalled Jina API hangs the
+            whole rerank step indefinitely.
     """
     api_key: Optional[str] = None
     model_name: str = "jina-reranker-v2-base-multilingual"
     top_n: int = 10
+    request_timeout: int = 30
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> List[Document]:
         """Rerank documents based on their relevance to the query.
@@ -61,11 +70,17 @@ class JinaReranker(DocProcessor):
         }
 
         try:
-            response = requests.post(api_base, headers=headers, json=payload)
+            response = requests.post(api_base, headers=headers, json=payload,
+                                     timeout=self.request_timeout)
             response.raise_for_status()
             results = response.json().get("results", [])
         except requests.exceptions.RequestException as e:
             raise Exception(f"Jina AI rerank API call error: {e}")
+        except ValueError as e:
+            # A non-JSON body (e.g. an HTML error page returned by an upstream
+            # gateway) makes response.json() raise ValueError; surface a clear
+            # message instead of letting the raw parse error escape.
+            raise Exception(f"Jina AI rerank API returned a non-JSON response: {e}")
 
         rerank_docs = []
         for result in results:
@@ -103,5 +118,7 @@ class JinaReranker(DocProcessor):
             self.model_name = doc_processor_configer.model_name
         if hasattr(doc_processor_configer, "top_n"):
             self.top_n = doc_processor_configer.top_n
+        if hasattr(doc_processor_configer, "request_timeout"):
+            self.request_timeout = doc_processor_configer.request_timeout
 
         return self

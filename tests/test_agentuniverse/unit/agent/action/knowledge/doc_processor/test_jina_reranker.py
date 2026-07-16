@@ -7,6 +7,7 @@
 # @FileName: test_jina_reranker.py
 
 import unittest
+import requests
 from unittest.mock import patch, MagicMock
 
 from agentuniverse.agent.action.knowledge.doc_processor.jina_reranker import JinaReranker
@@ -80,7 +81,8 @@ class TestJinaReranker(unittest.TestCase):
                 'query': 'test query',
                 'documents': [doc.text for doc in self.test_docs],
                 'top_n': 10
-            }
+            },
+            timeout=30
         )
 
         self.assertEqual(len(result_docs), 5)
@@ -116,7 +118,8 @@ class TestJinaReranker(unittest.TestCase):
                 'query': 'test query',
                 'documents': [doc.text for doc in self.test_docs],
                 'top_n': 2
-            }
+            },
+            timeout=30
         )
 
         self.assertEqual(len(result_docs), 2)
@@ -131,6 +134,45 @@ class TestJinaReranker(unittest.TestCase):
         self.reranker.api_key = 'test_api_key'
         result_docs = self.reranker._process_docs([], self.test_query)
         self.assertEqual(len(result_docs), 0)
+
+    @patch('requests.post')
+    def test_process_docs_passes_default_timeout(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {'results': []}
+        mock_post.return_value = mock_response
+        self.reranker.api_key = 'test_api_key'
+        self.reranker._process_docs(self.test_docs, self.test_query)
+        _, kwargs = mock_post.call_args
+        self.assertEqual(kwargs.get('timeout'), 30)
+
+    @patch('requests.post')
+    def test_process_docs_passes_custom_request_timeout(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {'results': []}
+        mock_post.return_value = mock_response
+        self.reranker.api_key = 'test_api_key'
+        self.reranker.request_timeout = 5
+        self.reranker._process_docs(self.test_docs, self.test_query)
+        _, kwargs = mock_post.call_args
+        self.assertEqual(kwargs.get('timeout'), 5)
+
+    @patch('requests.post')
+    def test_process_docs_timeout_error_is_surfaced(self, mock_post):
+        mock_post.side_effect = requests.exceptions.Timeout('timed out')
+        self.reranker.api_key = 'test_api_key'
+        with self.assertRaises(Exception) as context:
+            self.reranker._process_docs(self.test_docs, self.test_query)
+        self.assertIn('Jina AI rerank API call error', str(context.exception))
+
+    @patch('requests.post')
+    def test_process_docs_non_json_response_is_surfaced(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.side_effect = ValueError('not json')
+        mock_post.return_value = mock_response
+        self.reranker.api_key = 'test_api_key'
+        with self.assertRaises(Exception) as context:
+            self.reranker._process_docs(self.test_docs, self.test_query)
+        self.assertIn('non-JSON', str(context.exception))
 
 if __name__ == '__main__':
     unittest.main()
