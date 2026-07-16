@@ -22,10 +22,17 @@ class ViewFileTool(Tool):
             return None
         if isinstance(value, bool):
             raise ValueError(f"{field_name} must be an integer")
-        try:
-            return int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{field_name} must be an integer") from exc
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed_value = int(value)
+            except ValueError as exc:
+                raise ValueError(f"{field_name} must be an integer") from exc
+            if str(parsed_value) != value:
+                raise ValueError(f"{field_name} must be a canonical integer string")
+            return parsed_value
+        raise ValueError(f"{field_name} must be an integer")
 
     def execute(self,
                 file_path: str | ToolInput,
