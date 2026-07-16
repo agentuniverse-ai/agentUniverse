@@ -1,43 +1,78 @@
 name: 'semantic_scholar_tool'
 description: |
-  Search Semantic Scholar for scholarly papers or retrieve one paper by identifier.
+  Search Semantic Scholar, retrieve paper metadata, explore citation relationships,
+  or look up multiple papers in one request.
 
   Input parameters:
-    - query (required): Search keywords in search mode, or a paper identifier in paper
-      mode. Paper mode supports DOI, PMID, PMCID, ArXiv, CorpusId, and Semantic Scholar
-      paper ID values, including DOI and ArXiv URLs.
-    - mode (optional): Operation mode. Use search for keyword search or paper for an
-      exact paper lookup. Defaults to search.
-    - max_results (optional): Number of papers to return in search mode, from 1 to 20.
-      Defaults to 5. Paper mode always returns at most one paper.
+    - query (required): Search text in search mode; one paper identifier in paper,
+      citations, or references mode; or a JSON list of identifiers in batch mode.
+      Identifiers may be DOI, PMID, PMCID, ArXiv, CorpusId, MAG, ACL, URL, or Semantic
+      Scholar paper ID values. DOI URLs, ArXiv URLs, and Semantic Scholar paper URLs
+      are accepted.
+    - mode (optional): One of search, paper, citations, references, or batch. Defaults
+      to search. Citations returns papers that cite query; references returns papers
+      cited by query. Batch accepts between 1 and 500 unique identifiers. Semantic
+      Scholar also applies a 10 MB response limit, so large batches may need splitting.
+    - max_results (optional): Results per page for search, citations, and references,
+      from 1 to 20. Defaults to 5. Paper returns one result; batch uses the list size.
+    - page (optional): One-based page for search, citations, and references. Defaults
+      to 1. Relevance search exposes only the first 1,000 results.
+    - year (optional, search only): YYYY, YYYY-YYYY, YYYY-, or -YYYY year filter.
+    - publication_date_or_year (optional, search and citations): YYYY, YYYY-MM,
+      YYYY-MM-DD, or an inclusive colon-delimited range such as 2020-01:2024-06-30.
+      Do not combine it with year in search mode. It filters citing papers in citations
+      mode; the references endpoint does not support this filter.
+    - publication_types (optional, search only): A publication type or list. Supported
+      values include Review, JournalArticle, CaseReport, ClinicalTrial, Conference,
+      Dataset, Editorial, LettersAndComments, MetaAnalysis, News, Study, Book, and
+      BookSection.
+    - fields_of_study (optional, search only): A Semantic Scholar field or list, such
+      as Computer Science, Medicine, Biology, Physics, or Mathematics.
+    - venue (optional, search only): A venue name or list of venue names.
+    - min_citation_count (optional, search only): Non-negative minimum citation count.
+    - open_access_only (optional, search only): Set true to require a public PDF.
 
-  Search example:
+  Filtered search example:
     {
       "query": "large language models in medicine",
       "mode": "search",
-      "max_results": 5
+      "max_results": 5,
+      "page": 1,
+      "year": "2020-",
+      "fields_of_study": ["Medicine", "Computer Science"],
+      "min_citation_count": 10,
+      "open_access_only": true
     }
 
-  Paper lookup examples:
+  Citation example:
     {
       "query": "DOI:10.18653/v1/2020.acl-main.447",
-      "mode": "paper"
-    }
-    {
-      "query": "PMID:19872477",
-      "mode": "paper"
+      "mode": "citations",
+      "max_results": 5,
+      "page": 1,
+      "publication_date_or_year": "2020:"
     }
 
-  Each paper may contain its Semantic Scholar paper ID, CorpusId, external identifiers,
-  title, authors, abstract, venue, publication date and year, publication types, fields
-  of study, citation count, reference count, open access status, open access PDF, and
-  Semantic Scholar URL. Missing metadata is returned as an empty string, list, object,
-  zero, or false value. Network and Semantic Scholar API failures are returned in a
-  structured error field. Most endpoints support anonymous access, but anonymous users
-  share a rate limit and may receive HTTP 429 during busy periods. If Semantic Scholar
-  has issued an API key to you, set the optional S2_API_KEY environment variable to send
-  it with requests. An API key is not required for basic use. This tool returns metadata
-  only and does not download or summarize full text.
+  Batch example:
+    {
+      "query": ["DOI:10.18653/v1/2020.acl-main.447", "PMID:19872477"],
+      "mode": "batch"
+    }
+
+  Every response uses a normalized papers list. Citation and reference papers also
+  contain contexts, intents, and is_influential relationship metadata. Search and
+  relationship modes return page, offset, and next_offset; relation total_results is
+  null because those endpoints do not provide a total. Batch returns requested_results
+  and not_found_ids. Paper metadata may include Semantic Scholar paper ID, CorpusId,
+  external identifiers, title, authors, abstract, venue, publication date and year,
+  publication types, fields of study, citation and reference counts, open access status,
+  open access PDF, and URL. Missing metadata uses empty values.
+
+  Network and Semantic Scholar API failures use a structured error field and preserve
+  operation context. Most endpoints allow anonymous access, but anonymous users share a
+  rate limit and may receive HTTP 429. Retry later when limited. If Semantic Scholar has
+  issued an API key to you, set S2_API_KEY to send it with requests. This tool returns
+  metadata only and does not download or summarize full text.
 tool_type: 'api'
 input_keys: ['query']
 metadata:
