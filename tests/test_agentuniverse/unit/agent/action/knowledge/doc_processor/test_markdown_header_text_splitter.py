@@ -114,6 +114,53 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
         self.assertEqual(out[0].metadata, {})
 
 
+class TestMarkdownHeaderSplitCodeFences(unittest.TestCase):
+    """Fenced code blocks must not be mistaken for header structure."""
+
+    def setUp(self) -> None:
+        self.splitter = MarkdownHeaderTextSplitter()
+
+    def _run(self, text: str):
+        return self.splitter.process_docs([Document(text=text)])
+
+    def test_backtick_fence_hides_hash_line(self) -> None:
+        out = self._run("# Real\nintro\n```python\n# Not a header\nprint(1)\n```\n")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].metadata["header_path"], "Real")
+        self.assertIn("# Not a header", out[0].text)
+
+    def test_tilde_fence_hides_hash_line(self) -> None:
+        out = self._run("# Real\nintro\n~~~\n# Not a header\nprint(1)\n~~~\n")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].metadata["header_path"], "Real")
+        self.assertIn("# Not a header", out[0].text)
+
+    def test_header_recognized_after_closed_fence(self) -> None:
+        out = self._run("```python\n# code comment\n```\n# After\nbody\n")
+        self.assertEqual([(d.metadata["header_path"], d.text) for d in out], [
+            ("", "```python\n# code comment\n```"),
+            ("After", "body"),
+        ])
+
+    def test_tilde_does_not_close_backtick_fence(self) -> None:
+        out = self._run("# Real\n```\n# x\n~~~\n# y\n```\n")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].metadata["header_path"], "Real")
+        self.assertIn("# y", out[0].text)
+
+    def test_shorter_fence_run_does_not_close(self) -> None:
+        # A four-backtick fence is closed only by four or more backticks.
+        out = self._run("# Real\n````\n# a\n```\n# b\n````\n")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].metadata["header_path"], "Real")
+        self.assertIn("# b", out[0].text)
+
+    def test_unclosed_fence_suppresses_headers_to_end(self) -> None:
+        out = self._run("# Real\n```python\n# still code\n# more code\n")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].metadata["header_path"], "Real")
+
+
 class TestMarkdownHeaderSplitterRegistration(unittest.TestCase):
     """The shipped yaml resolves through the real framework loader."""
 

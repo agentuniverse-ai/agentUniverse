@@ -22,6 +22,10 @@ fully unit-testable without a network connection or optional install.
 It only separates on headers; a section that is still larger than desired
 should be chained with a character / token splitter afterwards (splitter
 processors compose — the output list is a valid input to the next one).
+
+Fenced code blocks (backtick or tilde fences) are respected: a '#'-prefixed
+line inside one is treated as code rather than a header, so code samples in a
+README are not mistaken for section titles.
 """
 
 import re
@@ -38,6 +42,16 @@ from agentuniverse.base.config.component_configer.component_configer import \
 # trailing run of '#' (closed ATX syntax) and surrounding whitespace are
 # stripped. A line such as "#no-space" or "####### seven" is not a header.
 _HEADER_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
+
+# Fenced code blocks (CommonMark). An opening fence is up to three leading
+# spaces followed by three or more backticks or tildes; a backtick fence may
+# not carry a backtick in its info string. A closing fence is up to three
+# leading spaces, the same fence character repeated at least as many times as
+# the opening fence, then only trailing whitespace. While inside a fence, ATX
+# header detection is suppressed so a '# Example' line inside a ```python
+# block is treated as code instead of a header.
+_FENCE_OPEN_RE = re.compile(r"^( {0,3})(`{3,}|~{3,})(.*)$")
+_FENCE_CLOSE_RE = re.compile(r"^( {0,3})(`{3,}|~{3,})[ \t]*$")
 
 
 class MarkdownHeaderTextSplitter(DocProcessor):
@@ -108,7 +122,28 @@ class MarkdownHeaderTextSplitter(DocProcessor):
                 return
             sections.append((body, self._header_path(headers)))
 
+        fence_char: Optional[str] = None  # current fence char, or None if outside
+        fence_len: int = 0                # length of the opening fence run
+
         for raw_line in text.splitlines():
+            if fence_char is not None:
+                # Inside a fenced code block: every line is content, but watch
+                # for the matching closing fence.
+                buffer.append(raw_line)
+                close = self._match_fence(raw_line, closing=True)
+                if close is not None and close[0] == fence_char \
+                        and close[1] >= fence_len:
+                    fence_char = None
+                    fence_len = 0
+                continue
+            open_fence = self._match_fence(raw_line, closing=False)
+            if open_fence is not None:
+                # Entering a fenced code block: the fence line is content, and
+                # header detection stays off until the block closes.
+                buffer.append(raw_line)
+                fence_char = open_fence[0]
+                fence_len = open_fence[1]
+                continue
             header = self._match_header(raw_line)
             if header is not None:
                 # Lines accumulated so far belong to the *previous* context.
@@ -129,6 +164,24 @@ class MarkdownHeaderTextSplitter(DocProcessor):
         if level > self.max_header_level:
             return None
         return level, match.group(2).strip()
+
+    @staticmethod
+    def _match_fence(line: str, closing: bool) -> Optional[Tuple[str, int]]:
+        """Return ``(fence_char, run_length)`` if ``line`` is a code fence.
+
+        ``closing`` selects the closing-fence rule, which forbids any trailing
+        content. The caller verifies that the character matches the opening
+        fence and that the run is at least as long. A backtick fence whose
+        info string itself contains a backtick is not an opening fence.
+        """
+        match = (_FENCE_CLOSE_RE if closing else _FENCE_OPEN_RE).match(line)
+        if not match:
+            return None
+        fence = match.group(2)
+        char = fence[0]
+        if not closing and char == '`' and '`' in match.group(3):
+            return None
+        return char, len(fence)
 
     @staticmethod
     def _push_header(headers: Dict[int, str], level: int, title: str) -> None:
