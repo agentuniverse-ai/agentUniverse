@@ -229,3 +229,29 @@ metadata:
 - language: An optional output-language hint for the LLM summary, e.g. `Chinese` (ignored in extractive mode).
 
 The processor always returns a single Document whose `text` is the summary. Its `metadata` records the operating mode (`summarization_mode`: `llm` or `extractive`), the number of source documents (`source_doc_count`), and the `llm_name` used.
+
+### [MMRProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/mmr_processor.yaml)
+
+This component re-ranks the recalled documents with Maximal Marginal Relevance (MMR), balancing query relevance against inter-document redundancy so a result set is both on-topic and non-repetitive. It addresses the *re-ranking / diversity* direction of issue #248.
+
+At each step MMR selects the document maximising `lambda * sim(d, query) - (1 - lambda) * max_{selected} sim(d, selected)`. Set `lambda_coef` to `1.0` for pure relevance ranking, `0.0` to maximise diversity, or `0.5` (the default) to balance the two. It is distinct from `SemanticDeduplicator` (which removes near-duplicates above a hard threshold) and `ReciprocalRankFusionProcessor` (which fuses ranked lists from several stores): MMR performs diversity-aware selection over a single recalled set.
+
+Query and document embeddings are read from `Query.embeddings` and `Document.embedding`; set `embedding_name` to compute any missing embeddings on demand. If embeddings cannot be obtained, the documents are returned in their input order.
+
+The component definition file is as follows:
+```yaml
+name: 'mmr_processor'
+description: 'Maximal Marginal Relevance re-ranking for recalled documents'
+lambda_coef: 0.5          # 1.0 = relevance only, 0.0 = max diversity
+top_n: null               # number of documents to keep after re-ranking
+embedding_name: ''        # registered embedding component for on-demand embedding
+score_key: ''             # metadata key for the stamped cosine relevance, '' to skip
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.mmr_processor'
+  class: 'MMRProcessor'
+```
+- lambda_coef: Relevance/diversity trade-off in [0.0, 1.0].
+- top_n: Number of documents to keep after re-ranking; `null` keeps all documents and only re-orders them.
+- embedding_name: Registered embedding component used to embed documents / the query on demand when they lack an embedding. When empty, only embeddings already carried by the query/documents are used.
+- score_key: Metadata key under which each kept document's cosine relevance is stamped; empty stamps nothing (so earlier scores such as RRF's are preserved).

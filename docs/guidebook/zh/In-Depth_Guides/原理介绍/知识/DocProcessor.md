@@ -230,3 +230,29 @@ metadata:
 - language: LLM 摘要的可选输出语言提示，如 `Chinese`（抽取式模式下忽略）。
 
 该组件始终返回单个 Document，其 `text` 为摘要内容。其 `metadata` 记录工作模式（`summarization_mode`：`llm` 或 `extractive`）、参与摘要的源文档数（`source_doc_count`）以及使用的 `llm_name`。
+
+### [MMRProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/mmr_processor.yaml)
+
+该组件使用最大边际相关性（Maximal Marginal Relevance，MMR）对召回文档重排，在"与查询相关"和"彼此不重复"之间取得平衡，使结果既切题又无冗余。对应 issue #248 的*重排 / 多样性*方向。
+
+MMR 每一步选择使 `lambda * sim(d, query) - (1 - lambda) * max_{已选} sim(d, 已选)` 最大的文档。`lambda_coef` 设为 `1.0` 即纯相关性排序、`0.0` 即最大化多样性、`0.5`（默认）为二者折中。它与 `SemanticDeduplicator`（按硬阈值删除近似重复）和 `ReciprocalRankFusionProcessor`（融合多路召回的排序列表）不同：MMR 是对单个召回集做"兼顾多样性的选择 / 重排"。
+
+查询与文档向量优先取自 `Query.embeddings` 和 `Document.embedding`；设置 `embedding_name` 可按需补算缺失向量。若无法获得向量，则按输入顺序原样返回。
+
+组件定义文件如下：
+```yaml
+name: 'mmr_processor'
+description: '对召回文档做最大边际相关性重排'
+lambda_coef: 0.5          # 1.0 = 仅相关性，0.0 = 最大化多样性
+top_n: null               # 重排后保留的文档数量
+embedding_name: ''        # 用于按需计算向量的注册 embedding 组件
+score_key: ''             # 写入余弦相关性的 metadata 键，'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.mmr_processor'
+  class: 'MMRProcessor'
+```
+- lambda_coef: 相关性/多样性权衡，取值 [0.0, 1.0]。
+- top_n: 重排后保留的文档数量；`null` 表示保留全部，仅重排顺序。
+- embedding_name: 当文档/查询缺少向量时，用于按需计算向量的注册 embedding 组件。为空时只使用查询/文档已携带的向量。
+- score_key: 写入每个保留文档与查询余弦相关性的 metadata 键；为空则不写入（从而保留前置处理器如 RRF 写入的分数）。
