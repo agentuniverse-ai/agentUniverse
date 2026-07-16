@@ -230,3 +230,29 @@ metadata:
 - language: LLM 摘要的可选输出语言提示，如 `Chinese`（抽取式模式下忽略）。
 
 该组件始终返回单个 Document，其 `text` 为摘要内容。其 `metadata` 记录工作模式（`summarization_mode`：`llm` 或 `extractive`）、参与摘要的源文档数（`source_doc_count`）以及使用的 `llm_name`。
+
+### [SensitiveDataRedactor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sensitive_data_redactor.yaml)
+
+该组件在召回文档**送入 LLM 之前**，对其中的常见个人敏感信息（PII）/敏感标识符进行脱敏，避免个人数据与密钥泄漏进模型上下文。对应 issue #248 的*隐私 / 合规*方向，且与其它文档处理器都不同（没有任何组件会出于隐私目的改写文本）。
+
+检测基于 regex，确定性、无依赖。内置实体刻意走高精度路线（结构化格式，而非宽泛猜测）：`email`、`credit_card`（13–16 位连续数字）、`id_card`（中国身份证）、`ssn`（美国）、`ip_address`（IPv4）、`api_key`（`sk-`/`AKIA`/`ghp_`/`glpat-` 等已知前缀）。`phone` 可用但默认不开启（手机号匹配更模糊）。领域专属标识符可通过 `custom_patterns` 补充。
+
+每个匹配被替换为 `replacement`（默认 `[REDACTED]`）；每篇文档的 `redaction_summary` 会记录各类实体被脱敏的数量。
+
+组件定义文件如下：
+```yaml
+name: 'sensitive_data_redactor'
+description: '对召回文档做 PII 脱敏'
+entities: [email, credit_card, id_card, ssn, ip_address, api_key]
+replacement: '[REDACTED]'
+custom_patterns: []      # 如 [{name: employee_id, pattern: '\bEMP-\d{6}\b'}]
+log_key: 'redaction_summary'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_data_redactor'
+  class: 'SensitiveDataRedactor'
+```
+- entities: 要脱敏的内置实体类型。加入 `phone` 可开启手机号脱敏。
+- replacement: 替换每个匹配的文本。
+- custom_patterns: 额外的 `{"name","pattern"}` 正则项，用于领域专属标识符；非法正则会被跳过并告警，不会中断流水线。
+- log_key: 记录每篇文档 `{实体: 数量}` 汇总的 metadata 键；设为 null 则不写入。
