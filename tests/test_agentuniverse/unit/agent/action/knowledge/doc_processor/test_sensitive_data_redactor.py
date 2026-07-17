@@ -90,6 +90,46 @@ class TestSensitiveDataEntities(unittest.TestCase):
         self.assertEqual(doc.metadata["redaction_summary"], {})
 
 
+class TestSensitiveDataSemanticValidation(unittest.TestCase):
+    """Shape matches that fail a semantic check are left untouched.
+
+    Guards false positives: a structurally plausible but invalid value must not
+    be redacted, so e.g. a random 16-digit run is not treated as a credit card.
+    """
+
+    def test_credit_card_requires_luhn_checksum(self) -> None:
+        valid = _run("card 4111111111111111 end")
+        self.assertNotIn("4111111111111111", valid.text)
+        self.assertEqual(valid.metadata["redaction_summary"], {"credit_card": 1})
+        invalid = _run("card 1234567890123456 end")  # fails Luhn
+        self.assertIn("1234567890123456", invalid.text)
+        self.assertEqual(invalid.metadata["redaction_summary"], {})
+
+    def test_ip_address_requires_valid_octets(self) -> None:
+        valid = _run("ip 10.0.0.1 ok")
+        self.assertNotIn("10.0.0.1", valid.text)
+        for bad in ("999.999.999.999", "1.2.3.256"):
+            doc = _run(f"ip {bad} ok")
+            self.assertIn(bad, doc.text, bad)
+            self.assertEqual(doc.metadata["redaction_summary"], {}, bad)
+
+    def test_china_id_card_requires_valid_checksum(self) -> None:
+        valid = _run("id 110101199003073917 end")
+        self.assertNotIn("110101199003073917", valid.text)
+        invalid = _run("id 110101199003073999 end")  # bad check digit
+        self.assertIn("110101199003073999", invalid.text)
+        self.assertEqual(invalid.metadata["redaction_summary"], {})
+
+    def test_ssn_rejects_invalid_area_group_serial(self) -> None:
+        valid = _run("ssn 123-45-6789 here")
+        self.assertNotIn("123-45-6789", valid.text)
+        for bad in ("000-12-3456", "666-12-3456", "900-12-3456",
+                    "123-00-6789", "123-45-0000"):
+            doc = _run(f"ssn {bad} here")
+            self.assertIn(bad, doc.text, bad)
+            self.assertEqual(doc.metadata["redaction_summary"], {}, bad)
+
+
 class TestSensitiveDataConfig(unittest.TestCase):
     """Replacement, custom patterns, summary, and graceful degradation."""
 
@@ -105,22 +145,33 @@ class TestSensitiveDataConfig(unittest.TestCase):
         self.assertEqual(doc.metadata["redaction_summary"],
                          {"employee_id": 1})
 
-    def test_invalid_custom_regex_is_skipped(self) -> None:
-        # An invalid regex must not crash processing; valid ones still apply.
-        doc = _run("mail alice@example.com", custom_patterns=[
-            {"name": "bad", "pattern": "("}])
-        self.assertNotIn("alice@example.com", doc.text)
-        self.assertEqual(doc.metadata["redaction_summary"], {"email": 1})
+    def test_invalid_custom_regex_raises(self) -> None:
+        # A privacy component must not silently skip a bad regex; it fails loud.
+        with self.assertRaises(ValueError):
+            _run("mail alice@example.com", custom_patterns=[
+                {"name": "bad", "pattern": "("}])
 
-    def test_custom_pattern_missing_fields_is_skipped(self) -> None:
-        doc = _run("mail alice@example.com", custom_patterns=[
-            {"name": "no_pattern"}])
-        self.assertNotIn("alice@example.com", doc.text)
+    def test_custom_pattern_missing_fields_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            _run("mail alice@example.com", custom_patterns=[
+                {"name": "no_pattern"}])
 
-    def test_unknown_entity_is_skipped(self) -> None:
-        doc = _run("mail alice@example.com", entities=["email", "mystery"])
-        self.assertNotIn("alice@example.com", doc.text)
-        self.assertEqual(doc.metadata["redaction_summary"], {"email": 1})
+    def test_unknown_entity_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            _run("mail alice@example.com", entities=["email", "mystery"])
+
+    def test_bad_config_raises_at_load_time(self) -> None:
+        # Eager validation: a misconfiguration fails when the component is
+        # initialized from config, not silently at processing time.
+        for bad in (
+            SimpleNamespace(name="sdr", description="d", entities=["mystery"]),
+            SimpleNamespace(name="sdr", description="d",
+                            custom_patterns=[{"name": "x"}]),
+            SimpleNamespace(name="sdr", description="d",
+                            custom_patterns=[{"name": "x", "pattern": "("}]),
+        ):
+            with self.assertRaises(ValueError):
+                SensitiveDataRedactor()._initialize_by_component_configer(bad)
 
     def test_log_key_none_omits_summary(self) -> None:
         doc = _run("mail alice@example.com", log_key=None)
