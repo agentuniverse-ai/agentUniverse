@@ -3,10 +3,13 @@
 
 # @Time    : 2025/9/29
 # @FileName: web_page_reader.py
+import logging
 from typing import List, Optional, Dict
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+logger = logging.getLogger(__name__)
 
 
 class WebPageReader(Reader):
@@ -48,6 +51,8 @@ class WebPageReader(Reader):
                 resp.raise_for_status()
                 return resp.text
         except Exception as e_httpx:
+            logger.debug("httpx fetch failed for %s, falling back to requests: %s",
+                         url, e_httpx, exc_info=True)
             try:
                 import requests  # type: ignore
                 resp = requests.get(url, timeout=20, headers={
@@ -66,8 +71,10 @@ class WebPageReader(Reader):
             extracted = trafilatura.extract(html, include_links=False, include_images=False)
             if extracted and extracted.strip():
                 return extracted.strip(), {"extractor": "trafilatura"}
-        except Exception:
-            pass
+            logger.debug("trafilatura returned no content for %s; trying next extractor", url)
+        except Exception as e:
+            logger.debug("trafilatura extraction failed for %s, trying next extractor: %s",
+                         url, e, exc_info=True)
 
         # Fallback to readability
         try:
@@ -79,8 +86,10 @@ class WebPageReader(Reader):
             text = "\n".join([line.strip() for line in text.splitlines() if line.strip()])
             if text:
                 return text, {"extractor": "readability"}
-        except Exception:
-            pass
+            logger.debug("readability returned no content for %s; trying next extractor", url)
+        except Exception as e:
+            logger.debug("readability extraction failed for %s, trying next extractor: %s",
+                         url, e, exc_info=True)
 
         # Last resort: BeautifulSoup plain text
         try:
@@ -91,8 +100,8 @@ class WebPageReader(Reader):
             text = soup.get_text("\n")
             text = "\n".join([line.strip() for line in text.splitlines() if line.strip()])
             return text, {"extractor": "bs4"}
-        except Exception:
+        except Exception as e:
             raise RuntimeError(
                 "Install one of the extractors: `pip install trafilatura` or "
                 "`pip install readability-lxml beautifulsoup4 lxml`"
-            )
+            ) from e
