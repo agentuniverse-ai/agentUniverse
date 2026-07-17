@@ -10,6 +10,7 @@ import re
 import time
 import random
 import json
+import logging
 import urllib.parse
 import requests
 from pydantic import ConfigDict
@@ -19,6 +20,8 @@ from typing import List, Any, Optional
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+logger = logging.getLogger(__name__)
 
 
 class YuqueReader(Reader):
@@ -64,12 +67,30 @@ class YuqueReader(Reader):
         url = f'https://www.yuque.com/api/docs/{slug}?book_id={book_id}&merge_dynamic_data=false&mode=markdown'
         resp = self.session.get(url, headers=headers, timeout=20)
         if resp.status_code != 200:
-            print("The document download failed. The page may have been deleted.", book_id, slug)
+            logger.warning(
+                "Yuque document download failed (HTTP %s) for book_id=%s "
+                "slug=%s; the page may have been deleted.",
+                resp.status_code, book_id, slug)
             return ''
         try:
-            data = resp.json().get('data', {})
+            payload = resp.json()
         except ValueError:
-            print("The document download failed. The response was not valid JSON.", book_id, slug)
+            logger.warning(
+                "Yuque document download failed: response was not valid JSON "
+                "for book_id=%s slug=%s.", book_id, slug)
+            return ''
+        # A valid JSON list/string (e.g. from an error gateway) has no .get();
+        # only a JSON object carries the 'data' field we need.
+        if not isinstance(payload, dict):
+            logger.warning(
+                "Yuque document response for book_id=%s slug=%s was JSON %s, "
+                "expected an object.", book_id, slug, type(payload).__name__)
+            return ''
+        data = payload.get('data')
+        if not isinstance(data, dict):
+            logger.warning(
+                "Yuque document response for book_id=%s slug=%s has no 'data' "
+                "object.", book_id, slug)
             return ''
         md = data.get('sourcecode', '')
         # Process image references inline
@@ -86,29 +107,54 @@ class YuqueReader(Reader):
             resp.raise_for_status()
             encoded = re.findall(r'decodeURIComponent\("(.+)"\)\);', resp.text)[0]
             docs = json.loads(urllib.parse.unquote(encoded))
-        except Exception as e:
-            print(f"Request failed: {e}")
-            return []
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(
+                f"YuqueReader: failed to fetch book page {url}: {e}") from e
+        except (IndexError, ValueError) as e:
+            raise RuntimeError(
+                f"YuqueReader: could not parse book metadata from {url}: {e}") from e
+
+        # Validate the full decoded shape so a deleted / private / auth-failed
+        # book surfaces a clear error instead of a silent, successful-looking
+        # empty ingestion.
+        if not isinstance(docs, dict):
+            raise RuntimeError(
+                f"YuqueReader: decoded payload from {url} is "
+                f"{type(docs).__name__}, expected an object (the book may be "
+                f"private, deleted, or require authentication).")
+        book = docs.get('book')
+        if not isinstance(book, dict):
+            raise RuntimeError(
+                f"YuqueReader: payload from {url} has no 'book' object (the "
+                f"book may be private, deleted, or require authentication).")
+        book_id = book.get('id')
+        if not book_id:
+            raise RuntimeError(
+                f"YuqueReader: book parsed from {url} has no id; cannot fetch "
+                f"its pages.")
+        toc = book.get('toc')
+        if not isinstance(toc, list):
+            logger.warning(
+                "YuqueReader: book %s from %s has no 'toc' list; no pages to "
+                "read.", book_id, url)
+            toc = []
 
         book_title = self._fetch_url_title(url)
         # sanitize titles for metadata keys if needed
         chars = '/:*?"<>|\n\r'
         trans = str.maketrans({c: '_' for c in chars})
 
-        # Guard against unexpected response shapes: the decoded payload may
-        # miss the 'book' key (deleted/private book) or carry a non-dict value,
-        # which would otherwise raise KeyError deep inside the loop.
-        book = docs.get('book') if isinstance(docs, dict) else None
-        if not isinstance(book, dict):
-            return []
-        book_id = book.get('id')
-        toc = book.get('toc') or []
-
         documents: List[Document] = []
         for item in toc:
             if not isinstance(item, dict) or item.get('title') != book_title:
                 continue
-            md = self._fetch_page_markdown(str(book_id), item.get('url'))
+            item_url = item.get('url')
+            if not item_url:
+                logger.warning(
+                    "YuqueReader: toc entry in book %s is missing 'url'; "
+                    "skipping: %r", book_id, item)
+                continue
+            md = self._fetch_page_markdown(str(book_id), item_url)
             if not md:
                 continue
             metadata = {
