@@ -153,6 +153,64 @@ class TestMMREmbeddingResolution(unittest.TestCase):
         self.assertEqual([d.text for d in out], ["a"])
 
 
+class TestMMREmbeddingHomogeneity(unittest.TestCase):
+    """A meaningful ranking requires one embedding space.
+
+    Guards the regression where ``_cosine`` zipped vectors of different lengths
+    (silently truncating) and where a configured ``embedding_name`` still reused
+    precomputed vectors, so multi-store retrieval could rank on garbage.
+    """
+
+    def test_cosine_rejects_mismatched_dimensions(self) -> None:
+        with self.assertRaises(ValueError):
+            MMRProcessor._cosine([1.0, 0.0], [1.0, 0.0, 0.0])
+
+    def test_mixed_document_dimensions_degrade_to_input_order(self) -> None:
+        # Documents carry vectors of different dimensions (e.g. from stores
+        # backed by different models). Without a model to homogenise them, MMR
+        # must not silently truncate and rank; it degrades to input order.
+        docs = [_doc("d1", [1.0, 0.0, 0.0]), _doc("d2", [1.0, 1.0])]
+        query = Query(query_str="q", embeddings=[[1.0, 0.0, 0.0]])
+        out = MMRProcessor(lambda_coef=1.0).process_docs(docs, query)
+        self.assertEqual([d.text for d in out], ["d1", "d2"])
+
+    def test_query_document_dimension_mismatch_degrades_to_input_order(self) -> None:
+        # Even with equal document dimensions, a query vector of a different
+        # dimension cannot be compared meaningfully.
+        docs = [_doc("d1", _D1), _doc("d2", _D2)]            # dim 2
+        query = Query(query_str="q", embeddings=[[1.0, 0.0, 0.0]])  # dim 3
+        out = MMRProcessor(lambda_coef=1.0).process_docs(docs, query)
+        self.assertEqual([d.text for d in out], ["d1", "d2"])
+
+    def test_embedding_name_recomputes_all_ignoring_precomputed(self) -> None:
+        # Docs carry precomputed vectors from DIFFERENT models/dimensions. With
+        # embedding_name set, every embedding is recomputed with that one model,
+        # the heterogeneous precomputed vectors are ignored, and MMR produces a
+        # meaningful ranking in a homogeneous space.
+        docs = [
+            Document(text="d1", embedding=[9.0, 9.0, 9.0]),   # bogus precomputed
+            Document(text="d2", embedding=[1.0]),              # different dim
+            Document(text="d3", embedding=[0.0, 0.0]),         # different dim
+        ]
+        model = MagicMock()
+        model.get_embeddings.side_effect = [
+            [_D1, _D2, _D3],   # recomputed documents (homogeneous, dim 2)
+            [_Q],              # recomputed query
+        ]
+        with patch.object(mmr_module, "EmbeddingManager") as emb_mgr:
+            emb_mgr.return_value.get_instance_obj.return_value = model
+            out = MMRProcessor(embedding_name="fake_emb", lambda_coef=1.0)\
+                .process_docs(docs, Query(query_str="q"))
+
+        # d1's bogus precomputed vector is gone; ranking follows the recomputed
+        # homogeneous vectors -> relevance order d1 > d2 > d3.
+        self.assertEqual([d.text for d in out], ["d1", "d2", "d3"])
+        # The documents now carry the recomputed (homogeneous) embeddings.
+        self.assertEqual(list(docs[0].embedding), _D1)
+        self.assertEqual(list(docs[1].embedding), _D2)
+        self.assertEqual(list(docs[2].embedding), _D3)
+
+
 class TestMMRConfig(unittest.TestCase):
     """Initialization and configuration."""
 

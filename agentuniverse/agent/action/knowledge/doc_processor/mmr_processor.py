@@ -102,6 +102,20 @@ class MMRProcessor(DocProcessor):
                 "returning documents in input order.")
             return origin_docs[:self.top_n] if self.top_n else list(origin_docs)
 
+        # Guarantee a homogeneous embedding space before ranking. Documents
+        # recalled from multiple stores can carry vectors from different models
+        # or dimensions; comparing them with cosine would silently truncate to
+        # the shortest vector and produce a plausible but meaningless ranking.
+        # Require one shared dimension, else degrade to input order.
+        dims = {len(e) for e in doc_embeddings} | {len(query_embedding)}
+        if len(dims) > 1:
+            logger.warning(
+                f"MMR: embeddings have inconsistent dimensions {sorted(dims)}; "
+                "cannot compute meaningful similarities. Returning documents in "
+                "input order. Set embedding_name to recompute all embeddings "
+                "with a single model.")
+            return origin_docs[:self.top_n] if self.top_n else list(origin_docs)
+
         order = self._select(doc_embeddings, query_embedding)
         if self.score_key:
             for i in order:
@@ -117,47 +131,58 @@ class MMRProcessor(DocProcessor):
     def _resolve_embeddings(
             self, docs: List[Document], query: Query
     ) -> Tuple[List[Optional[List[float]]], Optional[List[float]]]:
-        """Return per-document and query embeddings, computing missing ones.
+        """Return per-document and query embeddings.
 
         Returns ``(doc_embeddings, query_embedding)`` where ``doc_embeddings``
         aligns positionally with ``docs``. Entries that cannot be obtained stay
         ``None``; the caller treats any ``None`` as "MMR not runnable" and
         degrades to input order.
+
+        When ``embedding_name`` is configured, *every* embedding (all documents
+        and the query) is recomputed with that single model. This is the only
+        way to guarantee a homogeneous embedding space for documents recalled
+        from multiple stores that may carry precomputed vectors from different
+        models or dimensions; reusing those precomputed vectors would mix
+        incompatible spaces and yield meaningless similarities.
         """
-        doc_embeddings: List[Optional[List[float]]] = []
-        missing_texts: List[str] = []
-        missing_indices: List[int] = []
-        for idx, doc in enumerate(docs):
-            if doc.embedding:
-                doc_embeddings.append(doc.embedding)
-            else:
-                doc_embeddings.append(None)
-                missing_texts.append(doc.text or "")
-                missing_indices.append(idx)
+        if self.embedding_name:
+            return self._resolve_embeddings_via_model(docs, query)
 
+        # No model configured: rely on embeddings already carried by the
+        # documents and query. Any heterogeneity here is caught by the
+        # dimension check in ``_process_docs`` and degrades explicitly.
+        doc_embeddings: List[Optional[List[float]]] = [
+            doc.embedding if doc.embedding else None for doc in docs]
         query_embedding: Optional[List[float]] = None
-        query_text: Optional[str] = None
-        if query is not None:
-            if query.embeddings:
-                query_embedding = query.embeddings[0]
-            elif query.query_str:
-                query_text = query.query_str
+        if query is not None and query.embeddings:
+            query_embedding = query.embeddings[0]
+        return doc_embeddings, query_embedding
 
-        needs_model = bool(missing_texts) or query_text is not None
-        if not needs_model:
-            return doc_embeddings, query_embedding
-        if not self.embedding_name:
-            # No model configured to compute the missing embeddings.
-            return doc_embeddings, query_embedding
+    def _resolve_embeddings_via_model(
+            self, docs: List[Document], query: Optional[Query]
+    ) -> Tuple[List[Optional[List[float]]], Optional[List[float]]]:
+        """Recompute all embeddings with the configured model.
+
+        Precomputed ``Document.embedding`` / ``Query.embeddings`` are ignored on
+        purpose so the whole set lives in one embedding space. A query with a
+        ``query_str`` is embedded in that same space; a query that only carries
+        precomputed embeddings falls back to them and is left for the dimension
+        check to accept or reject.
+        """
+        doc_embeddings: List[Optional[List[float]]] = [None] * len(docs)
+        query_embedding: Optional[List[float]] = None
         try:
             model = EmbeddingManager().get_instance_obj(self.embedding_name)
-            if missing_texts:
-                computed = model.get_embeddings(missing_texts)
-                for idx, emb in zip(missing_indices, computed):
+            if docs:
+                computed = model.get_embeddings([doc.text or "" for doc in docs])
+                for idx, emb in enumerate(computed):
                     doc_embeddings[idx] = emb
                     docs[idx].embedding = emb
-            if query_text is not None:
-                query_embedding = model.get_embeddings([query_text])[0]
+            if query is not None:
+                if query.query_str:
+                    query_embedding = model.get_embeddings([query.query_str])[0]
+                elif query.embeddings:
+                    query_embedding = query.embeddings[0]
         except Exception as exc:  # noqa: BLE001 - degrade, never crash retrieval
             logger.error(f"MMR: embedding lookup failed: {exc}")
         return doc_embeddings, query_embedding
@@ -203,7 +228,18 @@ class MMRProcessor(DocProcessor):
 
     @staticmethod
     def _cosine(a: List[float], b: List[float]) -> float:
-        """Cosine similarity; zero when either vector has zero magnitude."""
+        """Cosine similarity; zero when either vector has zero magnitude.
+
+        Raises ``ValueError`` for vectors of different dimensions rather than
+        silently truncating via ``zip`` (which would rank on meaningless
+        similarities). The dimension check in ``_process_docs`` keeps this from
+        firing in normal operation; the guard is an explicit invariant.
+        """
+        if len(a) != len(b):
+            raise ValueError(
+                f"Cannot compute cosine similarity between vectors of different "
+                f"dimensions ({len(a)} vs {len(b)}); ensure all embeddings come "
+                f"from a single model, or set embedding_name to recompute them.")
         dot = 0.0
         for x, y in zip(a, b):
             dot += x * y
