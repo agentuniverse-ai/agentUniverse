@@ -1,0 +1,26 @@
+# !/usr/bin/env python3
+# -*- coding:utf-8 -*-
+
+# @Time    : 2025/7/15
+# @FileName: __init__.py
+"""Cloud document readers package.
+
+Provides readers for Atlassian Confluence, Notion, Google Docs,
+Feishu, and Yuque, plus a unified CloudDocReader entry point.
+"""
+
+from agentuniverse.agent.action.knowledge.reader.cloud.confluence_reader import ConfluenceReader
+from agentuniverse.agent.action.knowledge.reader.cloud.notion_reader import NotionReader
+from agentuniverse.agent.action.knowledge.reader.cloud.google_docs_reader import GoogleDocsReader
+from agentuniverse.agent.action.knowledge.reader.cloud.feishu_reader import FeishuReader
+from agentuniverse.agent.action.knowledge.reader.cloud.yuque_reader import YuqueReader
+from agentuniverse.agent.action.knowledge.reader.cloud.cloud_doc_reader import CloudDocReader
+
+__all__ = [
+    "ConfluenceReader",
+    "NotionReader",
+    "GoogleDocsReader",
+    "FeishuReader",
+    "YuqueReader",
+    "CloudDocReader",
+]
