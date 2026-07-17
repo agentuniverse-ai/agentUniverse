@@ -198,7 +198,9 @@ class PGVectorStore(Store):
             params.append(json.dumps(filters))
         operator = self._DISTANCES[self.distance][0]
         params.append(top_k)
-        sql = f"SELECT id, text, metadata, embedding, embedding {operator} %s AS distance FROM {self.table_name}{where} ORDER BY distance LIMIT %s"
+        # psycopg adapts a Python list as float8[], so cast the query parameter to
+        # vector explicitly before applying pgvector's distance operators.
+        sql = f"SELECT id, text, metadata, embedding, embedding {operator} %s::vector AS distance FROM {self.table_name}{where} ORDER BY distance LIMIT %s"
         rows = self._ensure_client().execute(sql, params).fetchall()
         return self._rows_to_documents(rows)
 
@@ -215,7 +217,7 @@ class PGVectorStore(Store):
         operator = self._DISTANCES[self.distance][0]
         params.append(top_k)
         cursor = await (await self._ensure_async_client()).execute(
-            f"SELECT id, text, metadata, embedding, embedding {operator} %s AS distance FROM {self.table_name}{where} ORDER BY distance LIMIT %s",
+            f"SELECT id, text, metadata, embedding, embedding {operator} %s::vector AS distance FROM {self.table_name}{where} ORDER BY distance LIMIT %s",
             params,
         )
         return self._rows_to_documents(await cursor.fetchall())
@@ -275,6 +277,20 @@ class PGVectorStore(Store):
     @staticmethod
     def _rows_to_documents(rows: Any) -> list[Document]:
         return [
-            Document(id=str(row[0]), text=row[1], metadata=row[2] or {}, embedding=list(row[3] or []))
+            Document(
+                id=str(row[0]),
+                text=row[1],
+                metadata=row[2] or {},
+                embedding=PGVectorStore._embedding_list(row[3]),
+            )
             for row in (rows or [])
         ]
+
+    @staticmethod
+    def _embedding_list(value: Any) -> list[float]:
+        if value is None:
+            return []
+        # Registered pgvector adapters return pgvector.Vector, which exposes
+        # to_list() but deliberately does not implement Python iteration.
+        to_list = getattr(value, "to_list", None)
+        return to_list() if callable(to_list) else list(value)

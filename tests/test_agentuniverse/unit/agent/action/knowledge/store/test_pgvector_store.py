@@ -90,6 +90,7 @@ class PGVectorStoreTest(unittest.TestCase):
         self.assertEqual(result[0].id, "one")
         select = next(call for call in connection.calls if call[0].startswith("SELECT"))
         self.assertIn("metadata @>", select[0])
+        self.assertIn("%s::vector", select[0])
         self.assertEqual(json.loads(select[1][1]), {"team": "a"})
         self.assertEqual(select[1][-1], 3)
 
@@ -136,6 +137,13 @@ class PGVectorStoreTest(unittest.TestCase):
         docs = PGVectorStore._rows_to_documents([("1", "hello", None, (0.1, 0.2), 0.3)])
         self.assertEqual(docs[0].metadata, {})
         self.assertEqual(docs[0].embedding, [0.1, 0.2])
+
+    def test_rows_to_documents_supports_pgvector_value(self):
+        vector = Mock()
+        vector.to_list.return_value = [0.1, 0.2]
+        docs = PGVectorStore._rows_to_documents([("1", "hello", {}, vector, 0.3)])
+        self.assertEqual(docs[0].embedding, [0.1, 0.2])
+        vector.to_list.assert_called_once_with()
 
     def test_missing_dependency_hint(self):
         with patch.dict("sys.modules", {"psycopg": None}), self.assertRaisesRegex(ImportError, "psycopg"):
