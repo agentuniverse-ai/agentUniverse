@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 from agentuniverse.agent.action.tool.common_tool import word_document_tool as word_module
@@ -112,6 +113,28 @@ class WordDocumentToolTest(unittest.TestCase):
         self.tool.max_text_chars = 4
         result = self.tool.execute(mode="read", file_path="report.docx")
         self.assertTrue(result["truncated"])
+
+    def test_rejects_invalid_docx_archive(self):
+        with open(os.path.join(self.directory.name, "bad.docx"), "wb") as output:
+            output.write(b"not-a-zip")
+        result = self.tool.execute(mode="info", file_path="bad.docx")
+        self.assertIn("not a valid DOCX archive", result["error"])
+
+    def test_rejects_archive_expansion_over_limit(self):
+        path = os.path.join(self.directory.name, "large.docx")
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("word/document.xml", "x" * 100)
+        self.tool.max_uncompressed_bytes = 32
+        result = self.tool.execute(mode="info", file_path="large.docx")
+        self.assertIn("max_uncompressed_bytes", result["error"])
+
+    def test_generated_document_uses_write_not_read_limit(self):
+        self.tool.max_read_bytes = 1
+        self.tool.max_write_bytes = 1024 * 1024
+        result = self.tool.execute(
+            mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "works"}]
+        )
+        self.assertEqual(result["status"], "success")
 
     def test_missing_dependency_hint(self):
         with patch.object(self.tool, "_document_class", side_effect=ImportError("missing")):

@@ -101,12 +101,13 @@ class WordDocumentTool(Tool):
             raise ValueError(f"{field} must have a .docx extension")
         return cast(str, resolve_safe_path(value, self.base_dir))
 
-    def _check_archive(self, path: str, field: str = "file_path") -> None:
+    def _check_archive(self, path: str, field: str = "file_path", max_bytes: int | None = None) -> None:
         if not os.path.isfile(path):
             raise ValueError(f"{field} does not exist: {path}")
         size = os.path.getsize(path)
-        if size > self.max_read_bytes:
-            raise ValueError(f"{field} exceeds max_read_bytes ({self.max_read_bytes})")
+        byte_limit = self.max_read_bytes if max_bytes is None else max_bytes
+        if size > byte_limit:
+            raise ValueError(f"{field} exceeds its byte limit ({byte_limit})")
         try:
             with zipfile.ZipFile(path) as archive:
                 entries = archive.infolist()
@@ -313,7 +314,7 @@ class WordDocumentTool(Tool):
             document.save(temporary)
             if os.path.getsize(temporary) > self.max_write_bytes:
                 raise ValueError("generated document exceeds max_write_bytes")
-            self._check_archive(temporary, "generated document")
+            self._check_archive(temporary, "generated document", self.max_write_bytes)
             os.replace(temporary, path)
             temporary = None
         finally:
