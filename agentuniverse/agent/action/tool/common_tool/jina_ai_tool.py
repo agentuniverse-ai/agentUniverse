@@ -106,9 +106,11 @@ class JinaAITool(Tool):
                 return content
                 
             except requests.HTTPError as e:
-                error_msg = (f"Access forbidden. Please check your API key and permissions. Error: {str(e)}" 
-                           if e.response.status_code == 403 
-                           else f"HTTP Error: {str(e)}")
+                response = e.response
+                status_code = response.status_code if response is not None else None
+                error_msg = (f"Access forbidden. Please check your API key and permissions. Error: {str(e)}"
+                             if status_code == 403
+                             else f"HTTP Error: {str(e)}")
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt)
                     continue
