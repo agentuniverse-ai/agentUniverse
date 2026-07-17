@@ -91,6 +91,8 @@ class PGVectorStore(Store):
     def _new_client(self) -> Any:
         psycopg, register_vector, _ = self._dependencies()
         self.client = psycopg.connect(self._url(), autocommit=True)
+        # pgvector adapters query the vector type, so the extension must exist first.
+        self.client.execute("CREATE EXTENSION IF NOT EXISTS vector")
         register_vector(self.client)
         if self.create_table and self.dimensions:
             self._ensure_table(self.dimensions)
@@ -99,6 +101,8 @@ class PGVectorStore(Store):
     async def _new_async_client(self) -> Any:
         psycopg, _, register_vector_async = self._dependencies()
         self.async_client = await psycopg.AsyncConnection.connect(self._url(), autocommit=True)
+        # Async registration has the same ordering requirement as sync registration.
+        await self.async_client.execute("CREATE EXTENSION IF NOT EXISTS vector")
         await register_vector_async(self.async_client)
         if self.create_table and self.dimensions:
             await self._async_ensure_table(self.dimensions)
@@ -175,12 +179,16 @@ class PGVectorStore(Store):
                 f"embedding dimension {len(vector)} does not match configured dimensions {self.dimensions}"
             )
 
-    def query(self, query: Query, **kwargs: Any) -> list[Document]:
-        vector = self._embedding_for_query(query)
-        self._ensure_table(len(vector))
+    def _top_k(self, query: Query) -> int:
         top_k = query.similarity_top_k or self.similarity_top_k
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
             raise ValueError("similarity_top_k must be a positive integer")
+        return top_k
+
+    def query(self, query: Query, **kwargs: Any) -> list[Document]:
+        vector = self._embedding_for_query(query)
+        top_k = self._top_k(query)
+        self._ensure_table(len(vector))
         filters = kwargs.get("metadata_filter")
         where, params = "", [vector]
         if filters is not None:
@@ -196,8 +204,8 @@ class PGVectorStore(Store):
 
     async def async_query(self, query: Query, **kwargs: Any) -> list[Document]:
         vector = self._embedding_for_query(query)
+        top_k = self._top_k(query)
         await self._async_ensure_table(len(vector))
-        top_k = query.similarity_top_k or self.similarity_top_k
         filters = kwargs.get("metadata_filter")
         where, params = "", [vector]
         if filters is not None:

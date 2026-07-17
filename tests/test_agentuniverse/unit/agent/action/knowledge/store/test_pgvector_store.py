@@ -42,6 +42,26 @@ class FakeConnection:
 
 
 class PGVectorStoreTest(unittest.TestCase):
+    def test_new_client_creates_extension_before_registering(self):
+        connection = FakeConnection()
+        psycopg = Mock()
+        psycopg.connect.return_value = connection
+
+        def register(conn):
+            self.assertIs(conn, connection)
+            self.assertEqual(connection.calls[0][0], "CREATE EXTENSION IF NOT EXISTS vector")
+
+        store = PGVectorStore(connection_url="postgresql://test", create_table=False)
+        with patch.object(store, "_dependencies", return_value=(psycopg, register, Mock())):
+            self.assertIs(store._new_client(), connection)
+
+    def test_invalid_top_k_fails_before_database_access(self):
+        connection = FakeConnection()
+        store = PGVectorStore(client=connection, dimensions=2)
+        with self.assertRaisesRegex(ValueError, "similarity_top_k"):
+            store.query(Query(embeddings=[[1.0, 0.0]], similarity_top_k=-1))
+        self.assertEqual(connection.calls, [])
+
     def test_table_sql_cosine(self):
         store = PGVectorStore(dimensions=3, table_name="docs")
         statements = store._table_sql(3)
