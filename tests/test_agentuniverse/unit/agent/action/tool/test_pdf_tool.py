@@ -53,6 +53,18 @@ class PDFToolTest(unittest.TestCase):
         self.assertEqual(result["page_count"], 1)
         self.assertTrue(result["output_paths"][0].endswith("two-page-2.pdf"))
 
+    def test_split_preflights_all_destinations(self):
+        parts = os.path.join(self.directory.name, "parts")
+        os.makedirs(parts)
+        existing = os.path.join(parts, "two-page-2.pdf")
+        with open(existing, "wb") as output:
+            output.write(b"existing")
+        result = self.tool.execute(mode="split", file_path="two.pdf", output_dir="parts", pages=[1, 2])
+        self.assertIn("overwrite=true", result["error"])
+        self.assertFalse(os.path.exists(os.path.join(parts, "two-page-1.pdf")))
+        with open(existing, "rb") as unchanged:
+            self.assertEqual(unchanged.read(), b"existing")
+
     def test_rotate(self):
         result = self.tool.execute(
             mode="rotate", file_path="two.pdf", output_path="rotated.pdf", pages=[1], rotation=90

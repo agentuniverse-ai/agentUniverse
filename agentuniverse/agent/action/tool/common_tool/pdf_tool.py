@@ -183,14 +183,15 @@ class PDFTool(Tool):
         _, Writer = self._classes()
         os.makedirs(directory, exist_ok=True)
         stem = os.path.splitext(os.path.basename(source))[0]
-        outputs = []
-        for index in indexes:
-            destination = os.path.join(directory, f"{stem}-page-{index + 1}.pdf")
+        # Preflight every destination before writing any page. This prevents a
+        # late overwrite conflict from leaving a partially split document set.
+        outputs = [os.path.join(directory, f"{stem}-page-{index + 1}.pdf") for index in indexes]
+        for destination in outputs:
             self._check_overwrite(destination, overwrite)
+        for index, destination in zip(indexes, outputs, strict=True):
             writer = Writer()
             writer.add_page(reader.pages[index])
             self._save(writer, destination)
-            outputs.append(destination)
         return {
             "status": "success",
             "mode": "split",
