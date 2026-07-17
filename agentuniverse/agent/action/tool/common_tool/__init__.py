@@ -7,9 +7,11 @@
 # @FileName: __init__.py
 
 from .github_tool import GitHubTool
+from .word_document_tool import WordDocumentTool
 from .yahoo_finance_tool import YahooFinanceTool
 
 __all__ = [
     'GitHubTool',
+    'WordDocumentTool',
     'YahooFinanceTool',
 ]
