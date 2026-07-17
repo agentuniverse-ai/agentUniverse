@@ -4,6 +4,7 @@
 """A scholarly paper discovery tool based on the Semantic Scholar Graph API."""
 
 import calendar
+import json
 import re
 from datetime import date
 from typing import Any, ClassVar, Dict, List, Optional
@@ -24,6 +25,11 @@ class SemanticScholarTool(Tool):
     """Search papers, retrieve metadata, and explore citation relationships."""
 
     MODES: ClassVar[set[str]] = {"search", "paper", "citations", "references", "batch"}
+    MAX_BATCH_RESULTS: ClassVar[int] = 20
+    MAX_BATCH_OUTPUT_BYTES: ClassVar[int] = 32 * 1024
+    MAX_PAPER_IDENTIFIER_LENGTH: ClassVar[int] = 256
+    MAX_BATCH_TITLE_LENGTH: ClassVar[int] = 500
+    MAX_BATCH_VENUE_LENGTH: ClassVar[int] = 200
     PUBLICATION_TYPES: ClassVar[tuple[str, ...]] = (
         "Review",
         "JournalArticle",
@@ -82,6 +88,16 @@ class SemanticScholarTool(Tool):
             "isOpenAccess",
             "openAccessPdf",
             "fieldsOfStudy",
+        )
+    )
+    BATCH_FIELDS: ClassVar[str] = ",".join(
+        (
+            "paperId",
+            "title",
+            "venue",
+            "year",
+            "citationCount",
+            "isOpenAccess",
         )
     )
     RELATION_FIELDS: ClassVar[str] = ",".join(("contexts", "intents", "isInfluential", PAPER_FIELDS))
@@ -220,8 +236,8 @@ class SemanticScholarTool(Tool):
                 }
 
             result = self._batch_lookup(normalized_query)
-            papers = [self._parse_paper(paper) for paper in result["papers"]]
-            return {
+            papers = [self._parse_batch_paper(paper) for paper in result["papers"]]
+            batch_result = {
                 **context,
                 "requested_results": len(normalized_query),
                 "total_results": len(papers),
@@ -229,6 +245,13 @@ class SemanticScholarTool(Tool):
                 "not_found_ids": result["not_found_ids"],
                 "papers": papers,
             }
+            if self._serialized_size(batch_result) > self.MAX_BATCH_OUTPUT_BYTES:
+                return self._error_result(
+                    context=context,
+                    error_type="output_limit_exceeded",
+                    message="Semantic Scholar batch result exceeded the agent output limit.",
+                )
+            return batch_result
         except _SemanticScholarAPIError as exc:
             return self._error_result(
                 context=context,
@@ -320,7 +343,7 @@ class SemanticScholarTool(Tool):
     def _batch_lookup(self, paper_ids: List[str]) -> Dict[str, Any]:
         data = self._request(
             "/paper/batch",
-            params={"fields": self.PAPER_FIELDS},
+            params={"fields": self.BATCH_FIELDS},
             json_body={"ids": paper_ids},
         )
         if not isinstance(data, list) or len(data) != len(paper_ids):
@@ -391,8 +414,8 @@ class SemanticScholarTool(Tool):
     def _normalize_batch_ids(cls, value: Any) -> List[str]:
         if not isinstance(value, list):
             raise ValueError("query must be a list of paper identifiers in batch mode")
-        if not 1 <= len(value) <= 500:
-            raise ValueError("batch query must contain between 1 and 500 paper identifiers")
+        if not 1 <= len(value) <= cls.MAX_BATCH_RESULTS:
+            raise ValueError(f"batch query must contain between 1 and {cls.MAX_BATCH_RESULTS} paper identifiers")
         paper_ids = [cls._normalize_paper_id(item) if isinstance(item, str) else "" for item in value]
         if any(not paper_id for paper_id in paper_ids):
             raise ValueError("batch query must contain only string paper identifiers")
@@ -615,16 +638,25 @@ class SemanticScholarTool(Tool):
                 raise ValueError("query must contain a valid DOI")
             if prefix == "URL" and not re.match(r"^https?://", identifier, flags=re.I):
                 raise ValueError("query must contain a valid URL")
-            return f"{prefix}:{identifier}"
+            normalized = f"{prefix}:{identifier}"
+            cls._validate_identifier_length(normalized)
+            return normalized
 
         if cls._is_doi(paper_id):
-            return f"DOI:{paper_id}"
+            normalized = f"DOI:{paper_id}"
+            cls._validate_identifier_length(normalized)
+            return normalized
         if re.fullmatch(r"[0-9a-fA-F]{40}", paper_id):
             return paper_id.lower()
         raise ValueError(
             "query must contain a valid paper identifier: DOI, PMID, PMCID, ArXiv ID, "
             "CorpusId, MAG, ACL, URL, or Semantic Scholar paper ID"
         )
+
+    @classmethod
+    def _validate_identifier_length(cls, paper_id: str) -> None:
+        if len(paper_id) > cls.MAX_PAPER_IDENTIFIER_LENGTH:
+            raise ValueError(f"paper identifier must not exceed {cls.MAX_PAPER_IDENTIFIER_LENGTH} characters")
 
     @staticmethod
     def _is_doi(value: str) -> bool:
@@ -649,6 +681,17 @@ class SemanticScholarTool(Tool):
             "is_open_access": paper.get("isOpenAccess") is True,
             "open_access_pdf": cls._open_access_pdf(paper.get("openAccessPdf")),
             "url": cls._string_value(paper.get("url")),
+        }
+
+    @classmethod
+    def _parse_batch_paper(cls, paper: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "paper_id": cls._bounded_string(paper.get("paperId"), 64),
+            "title": cls._bounded_string(paper.get("title"), cls.MAX_BATCH_TITLE_LENGTH),
+            "venue": cls._bounded_string(paper.get("venue"), cls.MAX_BATCH_VENUE_LENGTH),
+            "year": cls._integer_value(paper.get("year")),
+            "citation_count": cls._integer_value(paper.get("citationCount")),
+            "is_open_access": paper.get("isOpenAccess") is True,
         }
 
     @classmethod
@@ -696,6 +739,14 @@ class SemanticScholarTool(Tool):
     @staticmethod
     def _string_value(value: Any) -> str:
         return value.strip() if isinstance(value, str) else ""
+
+    @classmethod
+    def _bounded_string(cls, value: Any, max_length: int) -> str:
+        return cls._string_value(value)[:max_length]
+
+    @staticmethod
+    def _serialized_size(value: Dict[str, Any]) -> int:
+        return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
 
     @staticmethod
     def _scalar_string(value: Any) -> str:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -308,7 +309,54 @@ class SemanticScholarToolTest(unittest.TestCase):
             "https://api.semanticscholar.org/graph/v1/paper/batch",
         )
         self.assertEqual(mock_post.call_args.kwargs["json"], {"ids": expected_ids})
-        self.assertIn("fields", mock_post.call_args.kwargs["params"])
+        self.assertEqual(mock_post.call_args.kwargs["params"]["fields"], self.tool.BATCH_FIELDS)
+        self.assertEqual(
+            set(result["papers"][0]),
+            {"paper_id", "title", "venue", "year", "citation_count", "is_open_access"},
+        )
+
+    @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.post")
+    def test_maximum_batch_output_is_compact_and_bounded(self, mock_post: Mock) -> None:
+        paper_ids = [f"CorpusId:{index}" for index in range(1, self.tool.MAX_BATCH_RESULTS + 1)]
+        oversized_paper = {
+            **SAMPLE_PAPER,
+            "title": "T" * 10_000,
+            "venue": "V" * 10_000,
+            "abstract": "A" * 100_000,
+            "authors": [{"name": "An Author"}] * 1_000,
+        }
+        mock_post.return_value = response_mock(json_data=[dict(oversized_paper) for _ in paper_ids])
+
+        result = self.tool.execute(query=paper_ids, mode="batch")
+
+        self.assertEqual(result["returned_results"], self.tool.MAX_BATCH_RESULTS)
+        self.assertTrue(all(len(paper["title"]) <= self.tool.MAX_BATCH_TITLE_LENGTH for paper in result["papers"]))
+        self.assertTrue(all(len(paper["venue"]) <= self.tool.MAX_BATCH_VENUE_LENGTH for paper in result["papers"]))
+        self.assertNotIn("abstract", result["papers"][0])
+        self.assertNotIn("authors", result["papers"][0])
+        serialized = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        self.assertLessEqual(len(serialized), self.tool.MAX_BATCH_OUTPUT_BYTES)
+
+    @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.post")
+    def test_oversized_utf8_batch_returns_bounded_error(self, mock_post: Mock) -> None:
+        paper_ids = [f"CorpusId:{index}" for index in range(1, self.tool.MAX_BATCH_RESULTS + 1)]
+        mock_post.return_value = response_mock(
+            json_data=[
+                {
+                    **SAMPLE_PAPER,
+                    "title": "\U0001f4da" * self.tool.MAX_BATCH_TITLE_LENGTH,
+                    "venue": "\U0001f4da" * self.tool.MAX_BATCH_VENUE_LENGTH,
+                }
+                for _ in paper_ids
+            ]
+        )
+
+        result = self.tool.execute(query=paper_ids, mode="batch")
+
+        self.assertEqual(result["error"]["type"], "output_limit_exceeded")
+        self.assertEqual(result["papers"], [])
+        serialized = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        self.assertLessEqual(len(serialized), self.tool.MAX_BATCH_OUTPUT_BYTES)
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.post")
     def test_invalid_batch_shape_returns_structured_error(self, mock_post: Mock) -> None:
@@ -373,10 +421,17 @@ class SemanticScholarToolTest(unittest.TestCase):
             self.tool.execute(query="AI", min_citation_count=-1)
         with self.assertRaisesRegex(ValueError, "must be a list"):
             self.tool.execute(query="PMID:19872477", mode="batch")
-        with self.assertRaisesRegex(ValueError, "between 1 and 500"):
+        with self.assertRaisesRegex(ValueError, "between 1 and 20"):
             self.tool.execute(query=[], mode="batch")
+        with self.assertRaisesRegex(ValueError, "between 1 and 20"):
+            self.tool.execute(
+                query=[f"CorpusId:{index}" for index in range(21)],
+                mode="batch",
+            )
         with self.assertRaisesRegex(ValueError, "duplicate"):
             self.tool.execute(query=["PMID:19872477", "pmid:19872477"], mode="batch")
+        with self.assertRaisesRegex(ValueError, "must not exceed 256"):
+            self.tool.execute(query=[f"URL:https://example.com/{'x' * 300}"], mode="batch")
 
     def test_missing_metadata_returns_empty_values(self) -> None:
         paper = SemanticScholarTool._parse_paper({"paperId": "abc"})
@@ -528,8 +583,9 @@ class SemanticScholarToolTest(unittest.TestCase):
         self.assertIn("S2_API_KEY", description)
         self.assertIn("rate", description.lower())
         self.assertIn("1,000", description)
-        self.assertIn("500", description)
-        self.assertIn("10 MB", description)
+        self.assertIn("1 and 20", description)
+        self.assertIn("32 KiB", description)
+        self.assertIn("compact", description)
         for relationship_field in ("contexts", "intents", "is_influential"):
             self.assertIn(relationship_field, description)
         for batch_field in ("requested_results", "not_found_ids"):
