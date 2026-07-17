@@ -66,7 +66,11 @@ class YuqueReader(Reader):
         if resp.status_code != 200:
             print("The document download failed. The page may have been deleted.", book_id, slug)
             return ''
-        data = resp.json().get('data', {})
+        try:
+            data = resp.json().get('data', {})
+        except ValueError:
+            print("The document download failed. The response was not valid JSON.", book_id, slug)
+            return ''
         md = data.get('sourcecode', '')
         # Process image references inline
         def repl(m):
@@ -91,17 +95,26 @@ class YuqueReader(Reader):
         chars = '/:*?"<>|\n\r'
         trans = str.maketrans({c: '_' for c in chars})
 
+        # Guard against unexpected response shapes: the decoded payload may
+        # miss the 'book' key (deleted/private book) or carry a non-dict value,
+        # which would otherwise raise KeyError deep inside the loop.
+        book = docs.get('book') if isinstance(docs, dict) else None
+        if not isinstance(book, dict):
+            return []
+        book_id = book.get('id')
+        toc = book.get('toc') or []
+
         documents: List[Document] = []
-        for item in docs['book']['toc']:
-            if item['title'] != book_title:
+        for item in toc:
+            if not isinstance(item, dict) or item.get('title') != book_title:
                 continue
-            md = self._fetch_page_markdown(str(docs['book']['id']), item['url'])
+            md = self._fetch_page_markdown(str(book_id), item.get('url'))
             if not md:
                 continue
             metadata = {
                 'source': url,
-                'doc_title': item['title'],
-                'sanitized_title': item['title'].translate(trans)
+                'doc_title': item.get('title'),
+                'sanitized_title': item.get('title', '').translate(trans)
             }
             documents.append(Document(text=md, metadata=metadata))
             # Respectful delay
@@ -112,7 +125,7 @@ class YuqueReader(Reader):
         """Close HTTP session"""
         try:
             self.session.close()
-        except:
+        except Exception:
             pass
 
 # if __name__ == '__main__':
