@@ -37,6 +37,7 @@ _READER_DIR = os.path.join(
     _PROJECT_ROOT, "agentuniverse", "agent", "action", "knowledge", "reader"
 )
 _CLOUD_DIR = os.path.join(_READER_DIR, "cloud")
+_CFR_DIR = os.path.join(_READER_DIR, "cloud_file_reader")
 
 # ---------------------------------------------------------------------------
 # Stub infrastructure
@@ -188,6 +189,41 @@ def _setup_stubs():
     requests_mod.adapters.Retry = type("Retry", (), {})
     sys.modules["requests"] = requests_mod
     sys.modules["requests.adapters"] = requests_mod.adapters
+
+    # requests.exceptions (needed by old yuque_reader)
+    requests_exc_mod = types.ModuleType("requests.exceptions")
+    class StubRequestException(Exception):
+        pass
+    requests_exc_mod.RequestException = StubRequestException
+    requests_mod.exceptions = requests_exc_mod
+    sys.modules["requests.exceptions"] = requests_exc_mod
+
+    # selenium stubs (needed by old feishu_reader)
+    selenium_mod = types.ModuleType("selenium")
+    selenium_webdriver_mod = types.ModuleType("selenium.webdriver")
+    selenium_chrome_mod = types.ModuleType("selenium.webdriver.chrome")
+    selenium_chrome_options_mod = types.ModuleType("selenium.webdriver.chrome.options")
+    class StubOptions:
+        def add_argument(self, *a): pass
+    selenium_chrome_options_mod.Options = StubOptions
+    class StubWebDriver:
+        def __init__(self, *a, **kw): pass
+    selenium_webdriver_mod.Chrome = StubWebDriver
+    selenium_mod.webdriver = selenium_webdriver_mod
+    for m, mod_obj in [
+        ("selenium", selenium_mod),
+        ("selenium.webdriver", selenium_webdriver_mod),
+        ("selenium.webdriver.chrome", selenium_chrome_mod),
+        ("selenium.webdriver.chrome.options", selenium_chrome_options_mod),
+    ]:
+        sys.modules[m] = mod_obj
+
+    # bs4 stub (needed by old feishu_reader and yuque_reader)
+    bs4_mod = types.ModuleType("bs4")
+    class StubBeautifulSoup:
+        def __init__(self, *a, **kw): pass
+    bs4_mod.BeautifulSoup = StubBeautifulSoup
+    sys.modules["bs4"] = bs4_mod
 
     # atlassian
     atlassian_mod = types.ModuleType("atlassian")
@@ -632,16 +668,55 @@ class TestYAMLRegistration(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# cloud_file_reader removal tests
+# cloud_file_reader backward-compatibility tests
 # ---------------------------------------------------------------------------
 
-class TestCloudFileReaderRemoval(unittest.TestCase):
-    """Verify cloud_file_reader directory has been removed."""
+class TestCloudFileReaderBackwardCompat(unittest.TestCase):
+    """Verify cloud_file_reader/ provides backward-compatible old
+    implementations (restored verbatim from master)."""
 
-    def test_cloud_file_reader_dir_does_not_exist(self):
-        cfr_path = os.path.join(_READER_DIR, "cloud_file_reader")
-        self.assertFalse(os.path.isdir(cfr_path),
-                         f"cloud_file_reader/ should not exist, found at {cfr_path}")
+    def test_cloud_file_reader_dir_exists(self):
+        self.assertTrue(os.path.isdir(_CFR_DIR),
+                        f"cloud_file_reader/ should exist for backward compat, "
+                        f"not found at {_CFR_DIR}")
+
+    def test_cloud_file_reader_has_old_modules(self):
+        for fname in ["__init__.py", "feishu_reader.py", "yuque_reader.py"]:
+            fpath = os.path.join(_CFR_DIR, fname)
+            self.assertTrue(os.path.isfile(fpath),
+                            f"Expected {fname} in cloud_file_reader/, "
+                            f"not found at {fpath}")
+
+    def test_old_feishu_reader_has_original_class(self):
+        """The restored PublicFeishuReader is the ORIGINAL standalone
+        class (not an alias to cloud.FeishuReader)."""
+        cfr_feishu = os.path.join(_CFR_DIR, "feishu_reader.py")
+        # Load the old module directly
+        old_mod = _load_module_from_file("cfr_feishu_reader", cfr_feishu)
+        OldClass = old_mod.PublicFeishuReader
+        # It must NOT be the same class as cloud.FeishuReader
+        self.assertIsNot(OldClass, FeishuReader,
+                         "Old PublicFeishuReader must be a distinct class, "
+                         "not an alias to cloud.FeishuReader")
+        # It must have the original public load_data method
+        self.assertTrue(hasattr(OldClass, "load_data"))
+        # It must NOT inherit from Reader
+        StubReader = sys.modules[
+            "agentuniverse.agent.action.knowledge.reader.reader"
+        ].Reader
+        self.assertFalse(issubclass(OldClass, StubReader),
+                         "Old PublicFeishuReader should NOT be a Reader subclass")
+
+    def test_old_yuque_reader_has_original_class(self):
+        """The restored YuqueReader is the ORIGINAL implementation
+        (not the new cloud.YuqueReader)."""
+        cfr_yuque = os.path.join(_CFR_DIR, "yuque_reader.py")
+        old_mod = _load_module_from_file("cfr_yuque_reader", cfr_yuque)
+        OldClass = old_mod.YuqueReader
+        # It must NOT be the same class as cloud.YuqueReader
+        self.assertIsNot(OldClass, YuqueReader,
+                         "Old YuqueReader must be a distinct class, "
+                         "not the new cloud.YuqueReader")
 
     def test_cloud_dir_exists(self):
         self.assertTrue(os.path.isdir(_CLOUD_DIR))

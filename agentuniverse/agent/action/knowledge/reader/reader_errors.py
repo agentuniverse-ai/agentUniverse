@@ -20,11 +20,14 @@ class ReaderError(Exception):
         super().__init__(f"{prefix}{message}")
 
 
-class ReaderLoadError(ReaderError):
+class ReaderLoadError(ReaderError, OSError):
     """Raised when a Reader fails to load data from the source.
 
     Typical causes: network errors, file not found, HTTP 4xx/5xx,
     invalid URL, or permission denied.
+
+    Also inherits from OSError so that existing code catching
+    FileNotFoundError or OSError remains compatible.
     """
 
     def __init__(self, message: str = "", *, reader_name: str = "",
@@ -39,11 +42,14 @@ class ReaderLoadError(ReaderError):
         super().__init__(detail, reader_name=reader_name)
 
 
-class ReaderDependencyError(ReaderError):
+class ReaderDependencyError(ReaderError, ImportError):
     """Raised when an optional dependency required by a Reader is not installed.
 
     Provides the package name and a pip install hint so users can
     resolve the issue quickly.
+
+    Also inherits from ImportError so that existing code catching
+    ImportError remains compatible.
     """
 
     def __init__(self, message: str = "", *, reader_name: str = "",
@@ -58,11 +64,14 @@ class ReaderDependencyError(ReaderError):
         super().__init__(detail, reader_name=reader_name)
 
 
-class ReaderParseError(ReaderError):
+class ReaderParseError(ReaderError, ValueError):
     """Raised when a Reader fails to parse the loaded content.
 
     Typical causes: unexpected HTML structure, unsupported format,
     or corrupted file content.
+
+    Also inherits from ValueError so that existing code catching
+    ValueError or json.JSONDecodeError remains compatible.
     """
 
     def __init__(self, message: str = "", *, reader_name: str = "",
@@ -74,11 +83,14 @@ class ReaderParseError(ReaderError):
         super().__init__(detail, reader_name=reader_name)
 
 
-class ReaderConfigError(ReaderError):
+class ReaderConfigError(ReaderError, ValueError, TypeError):
     """Raised when a Reader is misconfigured or missing required configuration.
 
     Typical causes: missing authentication credentials, invalid
     configuration parameters, or missing environment variables.
+
+    Also inherits from ValueError and TypeError so that existing
+    code catching either of those remains compatible.
     """
 
     def __init__(self, message: str = "", *, reader_name: str = "",
