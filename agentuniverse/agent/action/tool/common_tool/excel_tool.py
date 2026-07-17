@@ -9,6 +9,7 @@
 import os
 import json
 import asyncio
+from pathlib import PureWindowsPath
 from typing import Optional, List, Dict, Any, Union
 from enum import Enum
 from dataclasses import dataclass
@@ -63,6 +64,19 @@ class ExcelTool(Tool):
     max_write_size: int = Field(10 * 1024 * 1024, description="Maximum file size for writing (10MB)")
     allowed_extensions: List[str] = Field(default_factory=lambda: ['.xlsx', '.xls'], description="Allowed file extensions")
 
+    @staticmethod
+    def _is_windows_forbidden_path(file_path: str) -> bool:
+        windows_path = PureWindowsPath(file_path)
+        normalized_path = str(windows_path).lower()
+        forbidden_prefixes = ("c:\\windows", "c:\\system32")
+        return bool(windows_path.drive) and normalized_path.startswith(forbidden_prefixes)
+
+    @staticmethod
+    def _has_path_traversal(file_path: str) -> bool:
+        native_parts = os.path.normpath(file_path).split(os.sep)
+        windows_parts = PureWindowsPath(file_path).parts
+        return ".." in native_parts or ".." in windows_parts
+
     def _validate_path(self, file_path: str) -> Dict[str, Any]:
         """
         Validate file path for security.
@@ -79,16 +93,21 @@ class ExcelTool(Tool):
 
         abs_path = os.path.abspath(file_path)
 
+        normalized_abs_path = os.path.normcase(abs_path)
         for forbidden in forbidden_dirs:
-            if abs_path.startswith(forbidden):
+            if normalized_abs_path.startswith(os.path.normcase(forbidden)):
                 return {
                     "valid": False,
                     "error": f"Access denied: Cannot access system directory {forbidden}"
                 }
+        if self._is_windows_forbidden_path(file_path):
+            return {
+                "valid": False,
+                "error": "Access denied: Cannot access system directory C:\\Windows"
+            }
 
         # 2. Prevent path traversal
-        normalized = os.path.normpath(file_path)
-        if '..' in normalized.split(os.sep):
+        if self._has_path_traversal(file_path):
             return {
                 "valid": False,
                 "error": "Access denied: Path traversal detected"
