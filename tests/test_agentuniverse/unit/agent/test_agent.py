@@ -68,3 +68,9 @@ def test_tool_names_does_not_mutate_agent_action(monkeypatch):
     assert agent.tool_names == ["direct_tool", "toolkit_tool"]
     assert agent.tool_names == ["direct_tool", "toolkit_tool"]
     assert agent.agent_model.action["tool"] == ["direct_tool"]
+
+
+def test_generate_result_returns_empty_text_for_empty_stream():
+    agent = _StubAgent()
+
+    assert agent.generate_result([]) == ""
