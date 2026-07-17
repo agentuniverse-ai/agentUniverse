@@ -17,8 +17,19 @@ from agentuniverse.base.util.logging.logging_util import LOGGER
 
 try:
     from tavily import TavilyClient
-except ImportError:
-    raise ImportError("`tavily-python` not installed. Please install using `pip install tavily-python`")
+except ImportError as import_error:
+    TavilyClient = None
+    _TAVILY_IMPORT_ERROR = import_error
+else:
+    _TAVILY_IMPORT_ERROR = None
+
+
+def _get_tavily_client_class():
+    if TavilyClient is None:
+        raise ImportError(
+            "`tavily-python` not installed. Please install using `pip install tavily-python`"
+        ) from _TAVILY_IMPORT_ERROR
+    return TavilyClient
 
 
 class TavilyTool(Tool):
@@ -83,7 +94,7 @@ class TavilyTool(Tool):
 
         try:
             # 初始化Tavily客户端
-            client = TavilyClient(api_key=self.api_key)
+            client = _get_tavily_client_class()(api_key=self.api_key)
             
             # 根据操作模式执行不同的操作
             if self.mode == "extract":
@@ -144,6 +155,9 @@ class TavilyTool(Tool):
                 # 直接返回API响应
                 return result
                 
+        except ImportError as e:
+            LOGGER.error(f"Tavily依赖缺失: {e}")
+            return {"error": str(e)}
         except Exception as e:
             LOGGER.error(f"Tavily操作出错: {e}")
             return {"error": f"操作过程中出错: {str(e)}"}
