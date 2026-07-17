@@ -36,7 +36,7 @@ never "tokens" while silently counting words.
 """
 
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import \
     DocProcessor
@@ -49,9 +49,11 @@ logger = logging.getLogger(__name__)
 
 _VALID_COUNTERS = {"estimate", "tiktoken", "char", "word"}
 
-# Module-level tiktoken cache so repeated processing does not reload it.
-_TIKTOKEN_ENCODER = None
-_TIKTOKEN_TRIED = False
+# Cache of tiktoken encoders keyed by encoding name. Keying by name (rather
+# than a single module-global slot) means multiple compressor instances can use
+# different encodings, and a failed lookup for one encoding never poisons
+# another. A value of None means "tiktoken not installed" for that name.
+_TIKTOKEN_ENCODERS: Dict[str, Optional[object]] = {}
 
 
 class ContextBudgetCompressor(DocProcessor):
@@ -167,14 +169,35 @@ class ContextBudgetCompressor(DocProcessor):
 
 
 def _tiktoken_encoder(encoding: str):
-    """Return a cached tiktoken encoder for ``encoding``, or None if unavailable."""
-    global _TIKTOKEN_ENCODER, _TIKTOKEN_TRIED
-    if not _TIKTOKEN_TRIED:
-        _TIKTOKEN_TRIED = True
-        try:
-            import tiktoken
-            _TIKTOKEN_ENCODER = tiktoken.get_encoding(encoding)
-        except Exception as exc:  # noqa: BLE001 - optional dependency
-            logger.debug(f"tiktoken unavailable: {exc}")
-            _TIKTOKEN_ENCODER = None
-    return _TIKTOKEN_ENCODER
+    """Return a cached tiktoken encoder for ``encoding``.
+
+    Two distinct failure modes are handled differently:
+
+    * tiktoken is not installed (an optional dependency) -> return None so the
+      caller degrades to the estimate counter with a warning. This is a
+      legitimate graceful fallback for a missing dependency.
+    * tiktoken is installed but ``encoding`` is not a known encoding name ->
+      raise ValueError. A bad configuration must fail loudly rather than
+      silently switching the counting unit from tokens to the chars/4 estimate.
+
+    Results are cached per encoding name, so one instance's encoder is never
+    handed to another instance that configured a different encoding, and an
+    invalid name does not poison subsequent lookups.
+    """
+    if encoding in _TIKTOKEN_ENCODERS:
+        return _TIKTOKEN_ENCODERS[encoding]
+
+    try:
+        import tiktoken
+    except ImportError as exc:
+        logger.debug("tiktoken is not installed; degrading to the estimate counter: %s", exc)
+        _TIKTOKEN_ENCODERS[encoding] = None
+        return None
+
+    try:
+        encoder = tiktoken.get_encoding(encoding)
+    except Exception as exc:
+        raise ValueError(f"Invalid tiktoken encoding {encoding!r}: {exc}") from exc
+
+    _TIKTOKEN_ENCODERS[encoding] = encoder
+    return encoder

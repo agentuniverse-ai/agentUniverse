@@ -120,6 +120,80 @@ class TestContextBudgetCounters(unittest.TestCase):
         self.assertEqual(out[0].text, enc.decode(enc.encode("hello world")[:1]))
 
 
+class TestContextBudgetTiktokenCache(unittest.TestCase):
+    """Encoders are cached per encoding name; bad encodings raise.
+
+    Guards the regression where a single module-global cache slot meant the
+    first compressor instance fixed the encoder for every later instance, and
+    an invalid first encoding silently forced every later instance onto the
+    estimate counter.
+    """
+
+    # cl100k_base and p50k_base disagree on this string (6 vs 7 tokens), so a
+    # later instance reusing the first instance's encoder would miscount.
+    _PROBE = "def __init__(self):"
+
+    def setUp(self) -> None:
+        cbc_module._TIKTOKEN_ENCODERS.clear()
+
+    def tearDown(self) -> None:
+        cbc_module._TIKTOKEN_ENCODERS.clear()
+
+    def test_each_instance_uses_its_configured_encoding(self) -> None:
+        import tiktoken
+        cl100k = ContextBudgetCompressor(counter="tiktoken",
+                                         tiktoken_encoding="cl100k_base")
+        p50k = ContextBudgetCompressor(counter="tiktoken",
+                                       tiktoken_encoding="p50k_base")
+        self.assertEqual(
+            cl100k._count(self._PROBE),
+            len(tiktoken.get_encoding("cl100k_base").encode(self._PROBE)))
+        self.assertEqual(
+            p50k._count(self._PROBE),
+            len(tiktoken.get_encoding("p50k_base").encode(self._PROBE)))
+        # The two encoders must be cached as distinct objects keyed by name.
+        self.assertIn("cl100k_base", cbc_module._TIKTOKEN_ENCODERS)
+        self.assertIn("p50k_base", cbc_module._TIKTOKEN_ENCODERS)
+        self.assertIsNot(
+            cbc_module._TIKTOKEN_ENCODERS["cl100k_base"],
+            cbc_module._TIKTOKEN_ENCODERS["p50k_base"])
+
+    def test_invalid_encoding_raises_configuration_error(self) -> None:
+        proc = ContextBudgetCompressor(
+            counter="tiktoken", tiktoken_encoding="not_a_real_encoding")
+        with self.assertRaises(ValueError) as ctx:
+            proc._count(self._PROBE)
+        self.assertIn("not_a_real_encoding", str(ctx.exception))
+
+    def test_invalid_encoding_before_valid_does_not_poison(self) -> None:
+        # The core regression: an invalid encoding on one instance must not
+        # silently push a later valid instance onto the estimate counter.
+        bad = ContextBudgetCompressor(
+            counter="tiktoken", tiktoken_encoding="not_a_real_encoding")
+        with self.assertRaises(ValueError):
+            bad._count(self._PROBE)
+        # Invalid lookups are not cached, so the cache stays clean.
+        self.assertNotIn("not_a_real_encoding", cbc_module._TIKTOKEN_ENCODERS)
+
+        good = ContextBudgetCompressor(
+            counter="tiktoken", tiktoken_encoding="cl100k_base")
+        import tiktoken
+        self.assertEqual(
+            good._count(self._PROBE),
+            len(tiktoken.get_encoding("cl100k_base").encode(self._PROBE)))
+
+    def test_missing_dependency_degrades_instead_of_raising(self) -> None:
+        # A missing optional dependency must degrade to the estimate counter,
+        # in contrast with an invalid encoding (which raises). Setting a
+        # sys.modules key to None makes `import tiktoken` raise ImportError.
+        import sys
+        proc = ContextBudgetCompressor(
+            counter="tiktoken", tiktoken_encoding="cl100k_base")
+        with patch.dict(sys.modules, {"tiktoken": None}):
+            estimate = proc._count(self._PROBE)
+        self.assertEqual(estimate, max(1, len(self._PROBE) // 4))
+
+
 class TestContextBudgetConfig(unittest.TestCase):
     """Initialization and configuration."""
 
