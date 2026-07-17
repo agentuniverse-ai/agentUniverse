@@ -63,6 +63,7 @@ class ContextRecord:
     actor_id: str | None = None
     expires_at: datetime | None = None
     status: ContextStatus = ContextStatus.ACTIVE
+    status_changed_at: datetime | None = None
     supersedes: tuple[str, ...] = ()
     parent_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -70,9 +71,12 @@ class ContextRecord:
     def is_active(self, at: datetime | None = None) -> bool:
         point = at or datetime.now(timezone.utc)
         return (
-            self.status == ContextStatus.ACTIVE
-            and self.observed_at <= point
+            self.observed_at <= point
             and (self.expires_at is None or self.expires_at > point)
+            and (
+                self.status == ContextStatus.ACTIVE
+                or (self.status_changed_at is not None and self.status_changed_at > point)
+            )
         )
 
     @property
@@ -131,7 +135,11 @@ class ContextProvenanceManager:
                     and existing.authority <= normalized_authority
                 ):
                     superseded_ids.append(existing.id)
-                    records[index] = replace(existing, status=ContextStatus.SUPERSEDED)
+                    records[index] = replace(
+                        existing,
+                        status=ContextStatus.SUPERSEDED,
+                        status_changed_at=observed,
+                    )
         record = ContextRecord(
             id=str(uuid.uuid4()),
             key=normalized_key,
@@ -233,7 +241,10 @@ class ContextProvenanceManager:
         record = self.get(record_id)
         if record.status != ContextStatus.ACTIVE and normalized != record.status:
             raise ValueError("terminal context records cannot change status")
-        updated = replace(record, status=normalized)
+        changed_at = record.status_changed_at
+        if record.status == ContextStatus.ACTIVE and normalized != ContextStatus.ACTIVE:
+            changed_at = datetime.now(timezone.utc)
+        updated = replace(record, status=normalized, status_changed_at=changed_at)
         self._replace(updated)
         return updated
 
@@ -270,6 +281,7 @@ class ContextProvenanceManager:
                 status=record.status.value,
                 observed_at=record.observed_at.isoformat(),
                 expires_at=record.expires_at.isoformat() if record.expires_at else None,
+                status_changed_at=record.status_changed_at.isoformat() if record.status_changed_at else None,
             )
             result.append(item)
         return result

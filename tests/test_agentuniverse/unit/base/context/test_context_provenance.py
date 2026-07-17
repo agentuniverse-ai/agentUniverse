@@ -39,8 +39,17 @@ class ContextProvenanceManagerTest(unittest.TestCase):
         low = self.manager.add("region", "guessed", "agent", authority=AuthorityLevel.AGENT)
         high = self.manager.add("region", "confirmed", "user", authority=AuthorityLevel.USER)
         self.assertEqual(self.manager.get(low.id).status, ContextStatus.SUPERSEDED)
+        self.assertIsNotNone(self.manager.get(low.id).status_changed_at)
         self.assertIn(low.id, high.supersedes)
         self.assertEqual(self.manager.resolve("region"), "confirmed")
+
+    def test_historical_resolution_survives_supersession(self):
+        first_at = datetime.now(timezone.utc) - timedelta(minutes=2)
+        second_at = first_at + timedelta(minutes=1)
+        self.manager.add("region", "old", "agent", observed_at=first_at)
+        self.manager.add("region", "new", "user", observed_at=second_at)
+        self.assertEqual(self.manager.resolve("region", at=first_at), "old")
+        self.assertEqual(self.manager.resolve("region", at=second_at), "new")
 
     def test_lower_authority_cannot_supersede_higher(self):
         system = self.manager.add("policy", "required", "system", authority=AuthorityLevel.SYSTEM)
@@ -74,9 +83,10 @@ class ContextProvenanceManagerTest(unittest.TestCase):
     def test_future_observation_is_not_active_early(self):
         now = datetime.now(timezone.utc)
         observed = now + timedelta(minutes=1)
+        self.manager.add("forecast", "current", "tool", observed_at=now)
         record = self.manager.add("forecast", "ready", "tool", observed_at=observed)
         self.assertFalse(record.is_active(now))
-        self.assertIsNone(self.manager.resolve("forecast", at=now))
+        self.assertEqual(self.manager.resolve("forecast", at=now), "current")
         self.assertEqual(self.manager.resolve("forecast", at=observed), "ready")
 
     def test_rejects_expiry_before_observation(self):
