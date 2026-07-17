@@ -108,10 +108,12 @@ class FrameworkContextManager:
                     context_values[var_name] = self.get_context(var_name)
         return context_values
 
-    def set_all_contexts(self, context_values: Dict[str, Any]):
-        """Set all context variables using the provided dictionary."""
+    def set_all_contexts(self, context_values: Dict[str, Any]) -> Dict[str, Token]:
+        """Set all context variables and return tokens for restoring them."""
+        context_tokens = {}
         for var_name, var_value in context_values.items():
-            self.set_context(var_name, var_value)
+            context_tokens[var_name] = self.set_context(var_name, var_value)
+        return context_tokens
 
     def clear_all_contexts(self):
         self.__context_dict.set({})
