@@ -5,8 +5,10 @@
 # @Email   : saswatsusmoy9@gmail.com
 # @FileName: test_faiss_store.py
 
+import json
 import logging
 import os
+import pickle
 import shutil
 import tempfile
 import unittest
@@ -557,6 +559,100 @@ class TestFAISSStore(unittest.TestCase):
                 query = Query(embeddings=[doc.embedding])
                 results = store.query(query)
                 self.assertGreater(len(results), 0, f"Document {doc_id} should be queryable")
+
+
+class _RCEPickleBomb:
+    """A pickle payload that creates a marker file when unpickled.
+
+    Defined at module scope so it is genuinely unpicklable. Used to prove the
+    FAISS metadata loader never calls ``pickle.load``: if it did, unpickling an
+    instance would create the marker file.
+    """
+
+    def __init__(self, marker_path: str):
+        self._marker = marker_path
+
+    def __reduce__(self):
+        return (open, (self._marker, "w"))
+
+
+class TestFAISSStoreMetadataSerialization(unittest.TestCase):
+    """Metadata persistence is JSON (not pickle) and round-trips without FAISS.
+
+    These tests exercise the metadata read/write helpers directly, so they run
+    even when the optional FAISS dependency is absent. They lock in the security
+    fix: persisted metadata is JSON, so loading it cannot execute code.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.metadata_path = os.path.join(self.temp_dir, "metadata.json")
+        from agentuniverse.agent.action.knowledge.store.faiss_store import FAISSStore
+        self.FAISSStore = FAISSStore
+
+    def tearDown(self):
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def _store(self, metadata_path=None) -> "FAISSStore":
+        return self.FAISSStore(
+            index_path=None,
+            metadata_path=self.metadata_path if metadata_path is None else metadata_path,
+            embedding_model=None,
+        )
+
+    def test_metadata_round_trips_as_json(self):
+        store = self._store()
+        store.document_store = {
+            "doc1": Document(
+                id="doc1",
+                text="hello world",
+                metadata={"category": "demo", "score": 0.5},
+                embedding=[0.1, 0.2, 0.3],
+                keywords={"ai", "rag"},
+            ),
+        }
+        store.id_to_index = {"doc1": 0}
+        store.index_to_id = {0: "doc1"}
+        store._next_index = 1
+
+        store._write_metadata_file()
+
+        # The file on disk is genuine JSON, not a pickle bytestream.
+        with open(self.metadata_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        self.assertEqual(raw["format"], "faiss-store-metadata-v1")
+
+        loaded = self._store()
+        self.assertTrue(loaded._read_metadata_file())
+
+        doc = loaded.document_store["doc1"]
+        self.assertEqual(doc.text, "hello world")
+        self.assertEqual(doc.metadata["category"], "demo")
+        self.assertEqual(doc.embedding, [0.1, 0.2, 0.3])
+        self.assertEqual(doc.keywords, {"ai", "rag"})
+        self.assertEqual(loaded.id_to_index, {"doc1": 0})
+        # Integer FAISS positions survive the JSON string-key round-trip.
+        self.assertEqual(loaded.index_to_id, {0: "doc1"})
+        self.assertIsInstance(next(iter(loaded.index_to_id)), int)
+        self.assertEqual(loaded._next_index, 1)
+
+    def test_missing_metadata_file_returns_false(self):
+        store = self._store(metadata_path=os.path.join(self.temp_dir, "absent.json"))
+        self.assertFalse(store._read_metadata_file())
+
+    def test_legacy_pickle_payload_is_not_executed(self):
+        marker = os.path.join(self.temp_dir, "pwned_marker")
+        with open(self.metadata_path, "wb") as f:
+            pickle.dump(_RCEPickleBomb(marker), f)
+
+        store = self._store()
+        # The loader must treat the pickle file as invalid JSON and reset,
+        # without ever unpickling (executing) it.
+        self.assertFalse(store._read_metadata_file())
+        self.assertFalse(os.path.exists(marker),
+                         "pickle payload was executed during metadata load — RCE!")
+        self.assertEqual(store.get_document_count(), 0)
 
 
 if __name__ == "__main__":

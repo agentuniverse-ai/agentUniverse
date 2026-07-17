@@ -5,9 +5,9 @@
 # @Email   : saswatsusmoy9@gmail.com
 # @FileName: faiss_store.py
 
+import json
 import logging
 import os
-import pickle
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -28,8 +28,25 @@ DEFAULT_INDEX_CONFIG = {
     "nprobe": 10,  # For IVF search
 }
 
+# On-disk metadata format tag, so future format changes can be detected/migrated.
+METADATA_FORMAT_VERSION = "faiss-store-metadata-v1"
+
 # Set up logger
 logger = logging.getLogger(__name__)
+
+
+def _json_default(obj):
+    """Fallback JSON serializer normalizing numpy values that may reach metadata."""
+    try:
+        import numpy as np
+    except ImportError:
+        np = None
+    if np is not None:
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.generic):
+            return obj.item()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 class FAISSStore(Store):
@@ -129,19 +146,7 @@ class FAISSStore(Store):
                 logger.warning(f"Failed to load FAISS index: {e}")
                 self.faiss_index = None
 
-        if self.metadata_path and os.path.exists(self.metadata_path):
-            try:
-                with open(self.metadata_path, "rb") as f:
-                    metadata = pickle.load(f)  # noqa: S301
-                    self.document_store = metadata.get("document_store", {})
-                    self.id_to_index = metadata.get("id_to_index", {})
-                    self.index_to_id = metadata.get("index_to_id", {})
-                    self._next_index = metadata.get("next_index", 0)
-                logger.info(f"Loaded metadata from {self.metadata_path}")
-            except Exception as e:
-                logger.warning(f"Failed to load metadata: {e}")
-                self._reset_metadata()
-        else:
+        if not self._read_metadata_file():
             self._reset_metadata()
 
         # If no index was loaded and we have metadata, create empty index
@@ -152,6 +157,40 @@ class FAISSStore(Store):
                     dimension = len(doc.embedding)
                     self.faiss_index = self._create_faiss_index(dimension)
                     break
+
+    def _read_metadata_file(self) -> bool:
+        """Load document metadata from ``metadata_path`` as JSON.
+
+        Returns True on success, False if the path is unset/missing or the file
+        could not be parsed. Metadata is persisted as JSON (not pickle) so that
+        loading it cannot execute arbitrary code: pickle deserialization of a
+        writable metadata file is an RCE vector. A legacy pickle-format file is
+        therefore unreadable and the caller resets to an empty store.
+        """
+        if not (self.metadata_path and os.path.exists(self.metadata_path)):
+            return False
+        try:
+            with open(self.metadata_path, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+        except (OSError, ValueError) as exc:
+            logger.warning(
+                f"Failed to read metadata from {self.metadata_path}: {exc}. "
+                "If this is a legacy pickle-format file from an older agentUniverse "
+                "version, it is no longer supported (pickle deserialization is an RCE "
+                "vector); re-index to regenerate it as JSON.")
+            return False
+        self.document_store = {
+            doc_id: Document(**doc_data)
+            for doc_id, doc_data in metadata.get("document_store", {}).items()
+        }
+        self.id_to_index = dict(metadata.get("id_to_index", {}))
+        # JSON object keys are strings; restore the integer FAISS positions.
+        self.index_to_id = {
+            int(k): v for k, v in metadata.get("index_to_id", {}).items()
+        }
+        self._next_index = metadata.get("next_index", 0)
+        logger.info(f"Loaded metadata from {self.metadata_path}")
+        return True
 
     def _reset_metadata(self):
         """Reset metadata to empty state."""
@@ -171,21 +210,31 @@ class FAISSStore(Store):
             except Exception:
                 logger.exception("Failed to save FAISS index")
 
-        if self.metadata_path:
-            try:
-                # Ensure directory exists
-                Path(self.metadata_path).parent.mkdir(parents=True, exist_ok=True)
-                metadata = {
-                    "document_store": self.document_store,
-                    "id_to_index": self.id_to_index,
-                    "index_to_id": self.index_to_id,
-                    "next_index": self._next_index,
-                }
-                with open(self.metadata_path, "wb") as f:
-                    pickle.dump(metadata, f)
-                logger.info(f"Saved metadata to {self.metadata_path}")
-            except Exception:
-                logger.exception("Failed to save metadata")
+        self._write_metadata_file()
+
+    def _write_metadata_file(self) -> None:
+        """Write document metadata to ``metadata_path`` as JSON."""
+        if not self.metadata_path:
+            return
+        try:
+            # Ensure directory exists
+            Path(self.metadata_path).parent.mkdir(parents=True, exist_ok=True)
+            metadata = {
+                "format": METADATA_FORMAT_VERSION,
+                "document_store": {
+                    doc_id: doc.model_dump(mode="json")
+                    for doc_id, doc in self.document_store.items()
+                },
+                "id_to_index": self.id_to_index,
+                # FAISS positions are ints; store them as strings for JSON.
+                "index_to_id": {str(k): v for k, v in self.index_to_id.items()},
+                "next_index": self._next_index,
+            }
+            with open(self.metadata_path, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, ensure_ascii=False, default=_json_default)
+            logger.info(f"Saved metadata to {self.metadata_path}")
+        except Exception:
+            logger.exception("Failed to save metadata")
 
     def _get_embedding(self, text: str, text_type: str = "document") -> List[float]:
         """Get embedding for a text using the configured embedding model.
