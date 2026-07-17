@@ -71,6 +71,14 @@ class ContextProvenanceManagerTest(unittest.TestCase):
         self.assertEqual(self.manager.resolve("token", at=now + timedelta(seconds=2)), None)
         self.assertTrue(record.is_active(now))
 
+    def test_future_observation_is_not_active_early(self):
+        now = datetime.now(timezone.utc)
+        observed = now + timedelta(minutes=1)
+        record = self.manager.add("forecast", "ready", "tool", observed_at=observed)
+        self.assertFalse(record.is_active(now))
+        self.assertIsNone(self.manager.resolve("forecast", at=now))
+        self.assertEqual(self.manager.resolve("forecast", at=observed), "ready")
+
     def test_rejects_expiry_before_observation(self):
         now = datetime.now(timezone.utc)
         with self.assertRaisesRegex(ValueError, "later"):
@@ -97,11 +105,24 @@ class ContextProvenanceManagerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "wider"):
             self.manager.promote(source.id, ContextScope.TURN)
 
+    def test_rejected_record_cannot_be_promoted(self):
+        source = self.manager.add("decision", "x", "agent")
+        self.manager.set_status(source.id, ContextStatus.REJECTED)
+        with self.assertRaisesRegex(ValueError, "only active"):
+            self.manager.promote(source.id, ContextScope.SESSION)
+
     def test_status_transition(self):
         record = self.manager.add("claim", "x", "agent")
         updated = self.manager.set_status(record.id, ContextStatus.REJECTED)
         self.assertEqual(updated.status, ContextStatus.REJECTED)
         self.assertEqual(self.manager.resolve("claim"), None)
+
+    def test_terminal_status_cannot_be_reactivated(self):
+        record = self.manager.add("claim", "x", "agent")
+        self.manager.set_status(record.id, ContextStatus.REJECTED)
+        with self.assertRaisesRegex(ValueError, "terminal"):
+            self.manager.set_status(record.id, ContextStatus.ACTIVE)
+        self.assertEqual(self.manager.get(record.id).status, ContextStatus.REJECTED)
 
     def test_snapshot_restore_and_reset(self):
         self.manager.add("one", 1, "user")

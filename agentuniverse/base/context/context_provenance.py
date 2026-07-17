@@ -69,7 +69,11 @@ class ContextRecord:
 
     def is_active(self, at: datetime | None = None) -> bool:
         point = at or datetime.now(timezone.utc)
-        return self.status == ContextStatus.ACTIVE and (self.expires_at is None or self.expires_at > point)
+        return (
+            self.status == ContextStatus.ACTIVE
+            and self.observed_at <= point
+            and (self.expires_at is None or self.expires_at > point)
+        )
 
     @property
     def value_hash(self) -> str:
@@ -196,6 +200,8 @@ class ContextProvenanceManager:
     ) -> ContextRecord:
         """Copy a record into a wider scope without escalating authority."""
         source_record = self.get(record_id)
+        if not source_record.is_active():
+            raise ValueError("only active records can be promoted")
         target = self._enum(ContextScope, target_scope, "target_scope")
         if target <= source_record.scope:
             raise ValueError("target_scope must be wider than the source scope")
@@ -224,7 +230,10 @@ class ContextProvenanceManager:
 
     def set_status(self, record_id: str, status: ContextStatus | str) -> ContextRecord:
         normalized = self._enum(ContextStatus, status, "status")
-        updated = replace(self.get(record_id), status=normalized)
+        record = self.get(record_id)
+        if record.status != ContextStatus.ACTIVE and normalized != record.status:
+            raise ValueError("terminal context records cannot change status")
+        updated = replace(record, status=normalized)
         self._replace(updated)
         return updated
 
