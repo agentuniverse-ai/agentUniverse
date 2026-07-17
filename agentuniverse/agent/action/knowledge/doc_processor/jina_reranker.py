@@ -73,13 +73,18 @@ class JinaReranker(DocProcessor):
             response = requests.post(api_base, headers=headers, json=payload,
                                      timeout=self.request_timeout)
             response.raise_for_status()
-            results = response.json().get("results", [])
         except requests.exceptions.RequestException as e:
             raise Exception(f"Jina AI rerank API call error: {e}")
+
+        # Decode the body separately from the HTTP call. ``Response.json()``
+        # raises ``requests.exceptions.JSONDecodeError`` on a non-JSON body
+        # (e.g. an HTML error page from an upstream gateway). That exception
+        # inherits from both ``RequestException`` and ``ValueError``, so a
+        # single combined try block would misreport it as an API-call error;
+        # isolating JSON decoding here surfaces it as a non-JSON response.
+        try:
+            results = response.json().get("results", [])
         except ValueError as e:
-            # A non-JSON body (e.g. an HTML error page returned by an upstream
-            # gateway) makes response.json() raise ValueError; surface a clear
-            # message instead of letting the raw parse error escape.
             raise Exception(f"Jina AI rerank API returned a non-JSON response: {e}")
 
         rerank_docs = []
@@ -119,6 +124,23 @@ class JinaReranker(DocProcessor):
         if hasattr(doc_processor_configer, "top_n"):
             self.top_n = doc_processor_configer.top_n
         if hasattr(doc_processor_configer, "request_timeout"):
-            self.request_timeout = doc_processor_configer.request_timeout
+            self.request_timeout = self._validate_request_timeout(
+                doc_processor_configer.request_timeout)
 
         return self
+
+    @staticmethod
+    def _validate_request_timeout(value) -> int:
+        """Validate a configured request timeout.
+
+        ``requests`` treats ``None`` as "no timeout" and accepts ``0``/negative
+        values without complaint, so a bad config must fail loudly here instead
+        of hanging the rerank step or silently disabling the timeout.
+        """
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise Exception(
+                f"Jina AI reranker request_timeout must be a positive number, got {value!r}.")
+        if value <= 0:
+            raise Exception(
+                f"Jina AI reranker request_timeout must be a positive number, got {value!r}.")
+        return value
