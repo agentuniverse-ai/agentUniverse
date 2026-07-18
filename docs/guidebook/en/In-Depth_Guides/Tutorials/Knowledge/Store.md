@@ -80,3 +80,15 @@ store = ['sample_standard_app.intelligence.agentic.knowledge.store']
 - [Chroma](../../../In-Depth_Guides/Tech_Capabilities/Storage/ChromaDB.md)
 - [Milvus](../../../In-Depth_Guides/Tech_Capabilities/Storage/Milvus.md)
 - [Sqlite](../../../In-Depth_Guides/Tech_Capabilities/Storage/Sqlite.md)
+### RedisVectorStore
+
+`RedisVectorStore` uses Redis Stack/RediSearch HNSW indexes for synchronous and asynchronous vector CRUD and search. Install the optional dependency with `pip install 'agentUniverse[store_ext]'` and run Redis Stack (classic Redis without the Search module is insufficient).
+
+Copy `redis_vector_store.yaml.example` and configure the vector dimension, distance metric, key prefix, and any metadata fields that must be indexed as exact-match TAG fields. Credentials may be supplied through `REDIS_VECTOR_URL` instead of YAML.
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"tenant": "acme"}, embedding=[0.1, 0.2])])
+results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metadata_filter={"tenant": "acme"})
+```
+
+Supported metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are accepted only for fields declared in `filter_tag_fields`; identifiers and filter values are validated and escaped before constructing RediSearch queries.

@@ -73,11 +73,12 @@ opentracing = ">=2.4.0,<3.0.0"
 jsonlines = "^4.0.0"
 EbookLib = "^0.18"
 beautifulsoup4 = "^4.12.0"
+redis = { version = "^5.0.0", optional = true }
 # qdrant-client = "^1.15.1" unsupportable version due to numpy version limit
 
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
-store_ext = ["pymilvus"]
+store_ext = ["pymilvus", "redis"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
