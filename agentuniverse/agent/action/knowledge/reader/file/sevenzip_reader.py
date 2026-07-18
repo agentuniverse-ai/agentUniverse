@@ -1,7 +1,7 @@
 import os
 import tempfile
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import List, Union, Optional, Dict, Type
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
@@ -105,8 +105,6 @@ class SevenZipReader(Reader):
         documents = []  # 存储提取的文档
         total_extracted = 0  # 已提取文件总大小
         file_count = 0  # 已处理文件计数
-        with py7zr.SevenZipFile(str(sevenzip_path), 'r') as archive:
-            archive.extractall(path=temp_dir)
 
         try:
             # 以只读模式打开7Z文件
@@ -135,8 +133,8 @@ class SevenZipReader(Reader):
                     if entry_name=='.':
                         continue
 
-                    # 安全检查：跳过包含".."或绝对路径的文件名
-                    if '..' in entry_name or entry_name.startswith('/'):
+                    # 安全检查：跳过路径穿越和绝对路径
+                    if self._is_unsafe_entry_name(entry_name):
                         continue
 
                     # 获取文件信息
@@ -171,8 +169,7 @@ class SevenZipReader(Reader):
 
                     try:
                         # 解压当前条目
-                        #archive.extract(path=extract_dir, targets=[entry_name])
-                        #archive.extract(entry_name,extract_dir)
+                        archive.extract(path=extract_dir, targets=[entry_name])
                         
                         # 构建提取后的完整路径
                         extracted_path = Path(extract_dir) / entry_name
@@ -220,6 +217,20 @@ class SevenZipReader(Reader):
             raise ValueError(f"Error processing 7Z file: {str(e)}")
 
         return documents
+
+    @staticmethod
+    def _is_unsafe_entry_name(entry_name: str) -> bool:
+        """Return whether an archive entry can escape the extraction root."""
+        if not entry_name or entry_name == ".":
+            return True
+
+        posix_path = PurePosixPath(entry_name)
+        windows_path = PureWindowsPath(entry_name)
+        if posix_path.is_absolute() or windows_path.is_absolute():
+            return True
+        if ".." in posix_path.parts or ".." in windows_path.parts:
+            return True
+        return False
 
     def _process_file(
         self,

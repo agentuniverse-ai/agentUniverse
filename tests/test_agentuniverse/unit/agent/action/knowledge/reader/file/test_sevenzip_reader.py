@@ -447,6 +447,22 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
     def tearDown(self):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
+
+    def test_rejects_unsafe_archive_entry_names(self):
+        unsafe_names = [
+            "../escape.txt",
+            "safe/../../escape.txt",
+            "/tmp/escape.txt",
+            r"..\escape.txt",
+            r"safe\..\escape.txt",
+            r"C:\Windows\escape.txt",
+        ]
+        for entry_name in unsafe_names:
+            with self.subTest(entry_name=entry_name):
+                self.assertTrue(self.reader._is_unsafe_entry_name(entry_name))
+
+        self.assertFalse(self.reader._is_unsafe_entry_name("docs/readme.txt"))
+
     def test_empty_7z_archive(self):
         try:
             import py7zr
