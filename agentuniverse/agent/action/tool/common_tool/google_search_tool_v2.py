@@ -6,14 +6,22 @@
 # @FileName: google_search_tool.py
 
 import json
-import requests
-from typing import Optional, Dict, Any, List
-from urllib.parse import quote_plus
+from typing import Optional
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.util.env_util import get_from_env
-from langchain_community.utilities.google_serper import GoogleSerperAPIWrapper
 from pydantic import Field
+
+
+def _get_google_serper_api_wrapper():
+    try:
+        from langchain_community.utilities.google_serper import GoogleSerperAPIWrapper
+    except ImportError as exc:
+        raise ImportError(
+            "langchain-community is required to use Google Serper search. "
+            "Install it with `pip install langchain-community`."
+        ) from exc
+    return GoogleSerperAPIWrapper
 
 
 class GoogleSearchTool(Tool):
@@ -60,6 +68,7 @@ class GoogleSearchTool(Tool):
         hl = hl or self.default_hl
         
         try:
+            GoogleSerperAPIWrapper = _get_google_serper_api_wrapper()
             search = GoogleSerperAPIWrapper(
                 serper_api_key=self.serper_api_key, 
                 k=k, 
@@ -83,6 +92,7 @@ class GoogleSearchTool(Tool):
         hl = hl or self.default_hl
         
         try:
+            GoogleSerperAPIWrapper = _get_google_serper_api_wrapper()
             search = GoogleSerperAPIWrapper(
                 serper_api_key=self.serper_api_key, 
                 k=k, 
@@ -182,6 +192,7 @@ class GoogleScholarSearchTool(Tool):
         scholar_query = self._build_scholar_query(query, year, author, journal)
         
         try:
+            GoogleSerperAPIWrapper = _get_google_serper_api_wrapper()
             search = GoogleSerperAPIWrapper(
                 serper_api_key=self.serper_api_key, 
                 k=k, 
@@ -204,6 +215,7 @@ class GoogleScholarSearchTool(Tool):
         scholar_query = self._build_scholar_query(query, year, author, journal)
         
         try:
+            GoogleSerperAPIWrapper = _get_google_serper_api_wrapper()
             search = GoogleSerperAPIWrapper(
                 serper_api_key=self.serper_api_key, 
                 k=k, 
