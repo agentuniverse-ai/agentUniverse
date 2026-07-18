@@ -52,5 +52,29 @@ async def test_context_thread_and_async_isolation():
     assert queue4.get() == 11
 
 
+def test_set_all_contexts_returns_tokens_for_restoration():
+    context_manager.clear_all_contexts()
+    original_token = context_manager.set_context("request_id", "worker-value")
+
+    tokens = context_manager.set_all_contexts(
+        {
+            "request_id": "parent-value",
+            "temporary_key": "temporary-value",
+        }
+    )
+
+    assert context_manager.get_context("request_id") == "parent-value"
+    assert context_manager.get_context("temporary_key") == "temporary-value"
+
+    for var_name, token in tokens.items():
+        context_manager.reset_context(var_name, token)
+
+    assert context_manager.get_context("request_id") == "worker-value"
+    assert context_manager.get_context("temporary_key") is None
+
+    context_manager.reset_context("request_id", original_token)
+    context_manager.clear_all_contexts()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-s"])

@@ -8,6 +8,8 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import MagicMock, patch
 
+import requests
+
 import agentuniverse.agent.action.tool.common_tool.jina_ai_tool as jina_module
 from agentuniverse.agent.action.tool.common_tool.jina_ai_tool import JinaAITool
 
@@ -53,6 +55,22 @@ class JinaAIToolTLSTest(unittest.TestCase):
         self.assertIsNone(result)
         # The failure is reported through the logger, never printed to stdout.
         self.assertEqual(out.getvalue(), "")
+
+    def test_make_api_request_handles_http_error_without_response(self) -> None:
+        tool = JinaAITool()
+        with patch.object(
+            jina_module.requests,
+            "get",
+            side_effect=requests.HTTPError("connection failed"),
+        ), patch.object(jina_module.time, "sleep"):
+            result = tool._make_api_request(
+                "https://r.jina.ai/https://example.com",
+                timeout=1,
+                error_prefix="Error reading URL",
+            )
+
+        self.assertIn("HTTP Error", result)
+        self.assertIn("connection failed", result)
 
 
 if __name__ == "__main__":

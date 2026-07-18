@@ -83,8 +83,7 @@ class ExecutingAgentTemplate(AgentTemplate):
                 'output_stream': input_object.get_data('output_stream', None)}
 
     def _execute_subtask(self, subtask, input_object, agent_input, index, memory, llm, prompt, **kwargs) -> dict:
-        context_tokens = {}
-        FrameworkContextManager().set_all_contexts(kwargs.get('context_values', {}))
+        context_tokens = FrameworkContextManager().set_all_contexts(kwargs.get('context_values', {}))
         try:
             pair_id = uuid.uuid4().hex
             ConversationMemoryModule().add_agent_input_info(
