@@ -7,11 +7,22 @@
 # @FileName: python_repl.py
 
 import re
+from typing import Any
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
-from langchain_community.utilities import PythonREPL
 from loguru import logger
 from pydantic import Field
+
+
+def _get_python_repl():
+    try:
+        from langchain_community.utilities import PythonREPL
+    except ImportError as exc:
+        raise ImportError(
+            "langchain-community is required to use PythonREPLTool. "
+            "Install it with `pip install langchain-community`."
+        ) from exc
+    return PythonREPL()
 
 
 class PythonREPLTool(Tool):
@@ -35,8 +46,13 @@ class PythonREPLTool(Tool):
             the risk above.
     """
 
-    client: PythonREPL = Field(default_factory=lambda: PythonREPL())
+    client: Any = Field(default=None)
     allow_code_execution: bool = False
+
+    def _get_client(self):
+        if self.client is None:
+            self.client = _get_python_repl()
+        return self.client
 
     def execute(self, input: str):
         """Execute the Python code extracted from ``input``.
@@ -59,9 +75,10 @@ class PythonREPLTool(Tool):
         if len(matches) == 0:
             pattern = re.compile(r"```py(.*?)``", re.DOTALL)
             matches = pattern.findall(input)
+        client = self._get_client()
         if len(matches) == 0:
-            return self.client.run(input)
-        res = self.client.run(matches[0])
+            return client.run(input)
+        res = client.run(matches[0])
         if res == "" or res is None:
             return "ERROR: 你的python代码中没有使用print输出任何内容，请参考工具示例"
         else:
