@@ -1,4 +1,6 @@
+import unittest
 from copy import deepcopy
+from unittest.mock import patch
 
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_model import AgentModel
@@ -41,3 +43,33 @@ def test_process_prompt_preserves_agent_input_for_repeated_calls():
 
     assert agent_input == original_input
     assert first_prompt.messages == second_prompt.messages
+
+
+class TestInvokeToolsErrorIsolation(unittest.TestCase):
+    """A failing tool must not abort the whole tool invocation loop."""
+
+    def test_failing_tool_is_skipped_and_others_still_run(self):
+        from agentuniverse.agent.action.tool.tool import Tool
+
+        class _BoomTool(Tool):
+            def execute(self, *args, **kwargs):
+                raise RuntimeError("boom")
+
+            def run(self, **kwargs):
+                raise RuntimeError("boom")
+
+        class _OkTool(Tool):
+            def execute(self, *args, **kwargs):
+                return "ok"
+
+            def run(self, **kwargs):
+                return "ok"
+
+        tools = {"boom": _BoomTool(input_keys=[]), "ok": _OkTool(input_keys=[])}
+        with patch("agentuniverse.agent.agent.ToolManager") as mgr:
+            mgr.return_value.get_instance_obj.side_effect = lambda name: tools.get(name)
+            agent = _StubAgent()
+            result = agent.invoke_tools(InputObject({}), tool_names=["ok", "boom", "ok"])
+
+        # The failing tool was skipped; both good invocations are joined.
+        self.assertEqual(result, "ok\n\nok")
