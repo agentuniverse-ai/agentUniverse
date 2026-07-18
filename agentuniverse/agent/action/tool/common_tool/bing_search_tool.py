@@ -8,12 +8,21 @@
 from typing import Optional
 
 from pydantic import Field
-from langchain_community.utilities import BingSearchAPIWrapper
 
 from agentuniverse.agent.action.tool.common_tool.mock_search_tool import MockSearchTool
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.util.env_util import get_from_env
 
+
+def _get_bing_search_api_wrapper():
+    try:
+        from langchain_community.utilities import BingSearchAPIWrapper
+    except ImportError as exc:
+        raise ImportError(
+            "langchain-community is required to use BingSearchTool with "
+            "BING_SUBSCRIPTION_KEY. Install it with `pip install langchain-community`."
+        ) from exc
+    return BingSearchAPIWrapper
 
 
 class BingSearchTool(Tool):
@@ -30,6 +39,7 @@ class BingSearchTool(Tool):
             return MockSearchTool().execute(input)
         query = input
         # get top5 results from Bing search.
+        BingSearchAPIWrapper = _get_bing_search_api_wrapper()
         search = BingSearchAPIWrapper(bing_subscription_key=self.bing_subscription_key, k=5,
                                       bing_search_url=self.bing_search_url)
         return search.run(query=query)
