@@ -100,6 +100,32 @@ class TestPowerPointValidation(unittest.TestCase):
         result = self.tool.execute(mode="info", file_path="many-entries.pptx")
         self.assertIn("max_archive_entries", result["error"])
 
+    def test_rejects_file_size_over_read_limit_before_parsing(self) -> None:
+        presentation_path = os.path.join(self.base_dir, "oversized.pptx")
+        with open(presentation_path, "wb") as output:
+            output.write(b"PK" + b"x" * 30)
+        self.tool.max_read_bytes = 16
+
+        result = self.tool.execute(mode="read", file_path="oversized.pptx")
+
+        self.assertEqual(result["error_type"], "validation_error")
+        self.assertIn("max_read_bytes", result["error"])
+
+    def test_rejects_invalid_template_archive(self) -> None:
+        with open(os.path.join(self.base_dir, "template.pptx"), "wb") as output:
+            output.write(b"not-a-template")
+
+        result = self.tool.execute(
+            mode="create",
+            file_path="deck.pptx",
+            template_path="template.pptx",
+            slides=[{"title": "Generated"}],
+        )
+
+        self.assertEqual(result["error_type"], "validation_error")
+        self.assertIn("template_path is not a valid PPTX ZIP archive", result["error"])
+        self.assertFalse(os.path.exists(os.path.join(self.base_dir, "deck.pptx")))
+
     def test_create_requires_non_empty_slides(self) -> None:
         result = self.tool.execute(
             mode="create",
@@ -176,6 +202,26 @@ class TestPowerPointValidation(unittest.TestCase):
         self.tool.max_write_bytes = 16
         with self.assertRaisesRegex(ValueError, "max_write_bytes"):
             self.tool._atomic_save(OversizedPresentation(), destination)
+        with open(destination, "rb") as existing:
+            self.assertEqual(existing.read(), original)
+        leftovers = [name for name in os.listdir(self.base_dir) if name.startswith(".powerpoint-")]
+        self.assertEqual(leftovers, [])
+
+    def test_atomic_save_preserves_destination_when_expansion_limit_fails(self) -> None:
+        destination = os.path.join(self.base_dir, "deck.pptx")
+        original = b"existing-presentation"
+        with open(destination, "wb") as output:
+            output.write(original)
+
+        class ExpandingPresentation:
+            @staticmethod
+            def save(path):
+                with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+                    archive.writestr("ppt/slides/slide1.xml", "x" * 64)
+
+        self.tool.max_uncompressed_bytes = 32
+        with self.assertRaisesRegex(ValueError, "max_uncompressed_bytes"):
+            self.tool._atomic_save(ExpandingPresentation(), destination)
         with open(destination, "rb") as existing:
             self.assertEqual(existing.read(), original)
         leftovers = [name for name in os.listdir(self.base_dir) if name.startswith(".powerpoint-")]
@@ -328,6 +374,79 @@ class TestPowerPointOperations(unittest.TestCase):
             slides=[{"title": "One too many"}],
         )
         self.assertIn("exceeding max_slides", result["error"])
+
+    def test_unicode_ragged_table_and_explicit_layout_round_trip(self) -> None:
+        created = self.tool.execute(
+            mode="create",
+            file_path="unicode.pptx",
+            slides=[
+                {
+                    "layout": "title_only",
+                    "title": "全球发布 🚀",
+                    "bullets": ["Español", {"text": "日本語", "level": 1}],
+                    "table": [["地区", "ARR", "Owner"], ["亚太", 42]],
+                    "notes": "演讲人备注 ✓",
+                }
+            ],
+        )
+
+        self.assertEqual(created["status"], "success")
+        read = self.tool.execute(mode="read", file_path="unicode.pptx")
+        self.assertEqual(read["slides"][0]["title"], "全球发布 🚀")
+        self.assertIn("Español", read["slides"][0]["texts"][0])
+        self.assertIn("日本語", read["slides"][0]["texts"][0])
+        self.assertEqual(read["slides"][0]["tables"][0][1], ["亚太", "42", ""])
+        self.assertEqual(read["slides"][0]["notes"], "演讲人备注 ✓")
+
+    def test_create_uses_write_limit_not_read_limit(self) -> None:
+        self.tool.max_read_bytes = 1
+        self.tool.max_write_bytes = 2 * 1024 * 1024
+
+        created = self.tool.execute(
+            mode="create",
+            file_path="deck.pptx",
+            slides=[{"title": "Generated independently of the read limit"}],
+        )
+
+        self.assertEqual(created["status"], "success")
+        self.assertGreater(created["file_size"], self.tool.max_read_bytes)
+
+    def test_append_write_failure_preserves_original_presentation(self) -> None:
+        self._create_deck()
+        deck_path = os.path.join(self.base_dir, "deck.pptx")
+        with open(deck_path, "rb") as original_file:
+            original = original_file.read()
+        self.tool.max_write_bytes = 1
+
+        result = self.tool.execute(
+            mode="append",
+            file_path="deck.pptx",
+            slides=[{"title": "Must not be partially written"}],
+        )
+
+        self.assertEqual(result["error_type"], "validation_error")
+        self.assertIn("max_write_bytes", result["error"])
+        with open(deck_path, "rb") as unchanged_file:
+            self.assertEqual(unchanged_file.read(), original)
+
+    def test_template_slide_count_is_checked_before_destination_write(self) -> None:
+        self.tool.execute(
+            mode="create",
+            file_path="template.pptx",
+            slides=[{"title": "Template one"}, {"title": "Template two"}],
+        )
+        self.tool.max_slides = 2
+
+        result = self.tool.execute(
+            mode="create",
+            file_path="from-template.pptx",
+            template_path="template.pptx",
+            slides=[{"title": "Would exceed the limit"}],
+        )
+
+        self.assertEqual(result["error_type"], "validation_error")
+        self.assertIn("template slides plus requested slides", result["error"])
+        self.assertFalse(os.path.exists(os.path.join(self.base_dir, "from-template.pptx")))
 
 
 class TestPowerPointRegistration(unittest.TestCase):
