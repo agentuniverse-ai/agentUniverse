@@ -8,8 +8,10 @@
 
 from .github_tool import GitHubTool
 from .yahoo_finance_tool import YahooFinanceTool
+from .email_document_tool import EmailDocumentTool
 
 __all__ = [
     'GitHubTool',
     'YahooFinanceTool',
+    'EmailDocumentTool',
 ]

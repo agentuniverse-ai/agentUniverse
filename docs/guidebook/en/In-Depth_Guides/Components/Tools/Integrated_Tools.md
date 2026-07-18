@@ -202,3 +202,22 @@ Parameter Description:
     response_content_type: the output format for the HTTP request result. If set to 'json', the result will be returned in JSON format; if set to 'text', it will be returned as plain text.
 This tool can be used directly without  requiring any keys.
 
+
+## EmailDocumentTool
+
+`EmailDocumentTool` provides offline RFC 5322 `.eml` workflows with `create`, `read`, `info`, and `extract` modes. It can build multipart text/HTML messages, attach files, inspect headers and bodies, and extract selected attachments.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.email_document_tool import EmailDocumentTool
+
+tool = EmailDocumentTool(base_dir="/srv/agent-files")
+tool.execute(
+    mode="create",
+    file_path="report.eml",
+    headers={"from": "agent@example.com", "to": "user@example.com", "subject": "Report"},
+    text_body="The report is attached.",
+    attachments=["report.pdf"],
+)
+```
+
+The tool performs no network or mailbox access. It confines paths to `base_dir`, rejects header injection and unsafe/duplicate attachment names, bounds headers, bodies, attachment counts and bytes, preflights extraction destinations, and uses atomic writes.
