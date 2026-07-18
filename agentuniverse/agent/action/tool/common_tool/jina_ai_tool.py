@@ -34,6 +34,7 @@ class JinaAITool(Tool):
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("JINA_API_KEY"))
     max_read_content_length: int = Field(10000, description="Maximum content length in characters")
     remove_image: bool = Field(True, description="Remove image from content")
+    verify_ssl: bool = Field(True, description="Verify SSL certificates for Jina API requests")
     headers: Dict[str, str] = None
     def execute(self,
                 input: str = None,
@@ -42,6 +43,7 @@ class JinaAITool(Tool):
                 api_key: str = None,
                 max_read_content_length: int = None,
                 remove_image: bool = None,
+                verify_ssl: bool = None,
                 headers: Dict[str, str] = None
                 ):
         if not input:
@@ -58,6 +60,8 @@ class JinaAITool(Tool):
             self.max_read_content_length = max_read_content_length
         if remove_image is not None:
             self.remove_image = remove_image
+        if verify_ssl is not None:
+            self.verify_ssl = verify_ssl
         if headers:
             self.headers = headers
 
@@ -93,7 +97,7 @@ class JinaAITool(Tool):
                 response = requests.get(
                     url, 
                     headers=self._get_headers(), 
-                    verify=False, 
+                    verify=self.verify_ssl,
                     timeout=timeout
                 )
                 response.raise_for_status()
