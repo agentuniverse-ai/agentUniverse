@@ -191,5 +191,11 @@ class YouTubeToolTest(unittest.TestCase):
     def test_parse_duration_rejects_partial_trailing_text(self) -> None:
         self.assertEqual(self.tool.parse_duration('PT1Mbad'), 0)
 
+    def test_parse_stat_count_handles_missing_or_malformed_values(self) -> None:
+        self.assertEqual(self.tool._parse_stat_count("123"), 123)
+        self.assertEqual(self.tool._parse_stat_count(None), 0)
+        self.assertEqual(self.tool._parse_stat_count(""), 0)
+        self.assertEqual(self.tool._parse_stat_count("hidden"), 0)
+
 if __name__ == '__main__':
     unittest.main()
