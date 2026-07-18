@@ -62,6 +62,7 @@ class PowerPointTool(Tool):
         "comments",
         "category",
     }
+    _FALLBACK_TITLE_SHAPE_NAME: ClassVar[str] = "agentUniverse Title"
 
     def execute(
         self,
@@ -281,7 +282,7 @@ class PowerPointTool(Tool):
         truncated = False
         slide_results = []
         for slide_number, slide in enumerate(presentation.slides, start=1):
-            title_shape = slide.shapes.title
+            title_shape = self._get_title_shape(slide)
             title, remaining, was_truncated = self._bounded_text(
                 title_shape.text if title_shape is not None else "", remaining
             )
@@ -345,7 +346,7 @@ class PowerPointTool(Tool):
 
         slide_info = []
         for slide_number, slide in enumerate(presentation.slides, start=1):
-            title_shape = slide.shapes.title
+            title_shape = self._get_title_shape(slide)
             title = title_shape.text.strip() if title_shape is not None else ""
             slide_info.append(
                 {
@@ -525,6 +526,7 @@ class PowerPointTool(Tool):
                 title_shape.text = spec["title"]
             else:
                 title_shape = slide.shapes.add_textbox(Inches(0.7), Inches(0.35), Inches(8.6), Inches(0.8))
+                title_shape.name = self._FALLBACK_TITLE_SHAPE_NAME
                 title_shape.text_frame.text = spec["title"]
 
         if spec["subtitle"]:
@@ -575,6 +577,16 @@ class PowerPointTool(Tool):
                 continue
             return shape
         return None
+
+    def _get_title_shape(self, slide: Any) -> Any | None:
+        """Return a native title placeholder or a title textbox created by this tool."""
+        native_title = slide.shapes.title
+        if native_title is not None:
+            return native_title
+        return next(
+            (shape for shape in slide.shapes if shape.name == self._FALLBACK_TITLE_SHAPE_NAME),
+            None,
+        )
 
     @staticmethod
     def _set_bullets(text_frame: Any, bullets: list[dict[str, Any]]) -> None:

@@ -398,6 +398,20 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertEqual(read["slides"][0]["tables"][0][1], ["亚太", "42", ""])
         self.assertEqual(read["slides"][0]["notes"], "演讲人备注 ✓")
 
+    def test_blank_layout_fallback_title_round_trip(self) -> None:
+        created = self.tool.execute(
+            mode="create",
+            file_path="blank-layout.pptx",
+            slides=[{"layout": "blank", "title": "Semantic fallback title"}],
+        )
+
+        self.assertEqual(created["status"], "success")
+        read = self.tool.execute(mode="read", file_path="blank-layout.pptx")
+        info = self.tool.execute(mode="info", file_path="blank-layout.pptx")
+        self.assertEqual(read["slides"][0]["title"], "Semantic fallback title")
+        self.assertNotIn("Semantic fallback title", read["slides"][0]["texts"])
+        self.assertEqual(info["slides"][0]["title"], "Semantic fallback title")
+
     def test_create_uses_write_limit_not_read_limit(self) -> None:
         self.tool.max_read_bytes = 1
         self.tool.max_write_bytes = 2 * 1024 * 1024
