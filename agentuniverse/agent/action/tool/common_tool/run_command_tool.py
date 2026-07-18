@@ -16,6 +16,7 @@ from typing import Dict, Optional
 from dataclasses import dataclass
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.common_tool.tool_input_utils import parse_strict_bool
 from loguru import logger
 
 
@@ -118,8 +119,16 @@ class RunCommandTool(Tool):
                 start_time=time.time(),
             )
             disabled.end_time = disabled.start_time
+            _command_results[disabled.thread_id] = disabled
             return disabled.message
         cwd = cwd or os.getcwd()
+        try:
+            blocking = parse_strict_bool(blocking, "blocking", default=True)
+        except ValueError as e:
+            return json.dumps({
+                "error": str(e),
+                "status": CommandStatus.ERROR.value
+            })
         return self._run_command(command, cwd, blocking)
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:

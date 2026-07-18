@@ -85,6 +85,47 @@ class RunCommandToolTest(unittest.TestCase):
         self.assertIn('Async Test', cmd_result.stdout)
         self.assertEqual(cmd_result.exit_code, 0)
 
+    def test_string_false_blocking_value_runs_nonblocking(self) -> None:
+        tool_input = ToolInput({
+            'command': f'"{sys.executable}" -c "import time; time.sleep(0.5); print(\'String False\')"',
+            'cwd': os.getcwd(),
+            'blocking': 'false'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.RUNNING.value)
+        cmd_result = get_command_result(result['thread_id'])
+        self.assertIsNotNone(cmd_result)
+        self.assertEqual(cmd_result.status, CommandStatus.RUNNING)
+
+    def test_typo_blocking_value_returns_input_error(self) -> None:
+        tool_input = ToolInput({
+            'command': 'echo "should not run"',
+            'cwd': os.getcwd(),
+            'blocking': 'flase'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.ERROR.value)
+        self.assertIn('blocking must be a boolean value', result['error'])
+
+    def test_non_binary_numeric_blocking_value_returns_input_error(self) -> None:
+        tool_input = ToolInput({
+            'command': 'echo "should not run"',
+            'cwd': os.getcwd(),
+            'blocking': 2
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.ERROR.value)
+        self.assertIn('blocking numeric value must be 0 or 1', result['error'])
+
     def test_command_error(self) -> None:
         """Test handling of commands that result in errors"""
         tool_input = ToolInput({
