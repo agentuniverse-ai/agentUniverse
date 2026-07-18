@@ -80,15 +80,21 @@ class APITool(Tool):
                 if property['type'] == 'integer' or property['type'] == 'int':
                     return int(value)
                 elif property['type'] == 'number':
-                    # check if it is a float
-                    if '.' in value:
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        return value
+                    if '.' in str(value):
                         return float(value)
                     else:
                         return int(value)
                 elif property['type'] == 'string':
                     return str(value)
                 elif property['type'] == 'boolean':
-                    return bool(value)
+                    normalized_value = str(value).lower()
+                    if normalized_value in ['true', '1']:
+                        return True
+                    if normalized_value in ['false', '0']:
+                        return False
+                    raise ValueError(f"Invalid boolean value {value}")
                 elif property['type'] == 'null':
                     if value is None:
                         return None
@@ -107,7 +113,7 @@ class APITool(Tool):
                         f"Invalid type {property['type']} for property {property}")
             elif 'anyOf' in property and isinstance(property['anyOf'], list):
                 return self.convert_body_property_any_of(property, value, property['anyOf'])
-        except ValueError as e:
+        except ValueError:
             return value
 
     def do_http_request(self, url: str, method: str, headers: dict[str, Any],
