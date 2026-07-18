@@ -1,5 +1,4 @@
 # !/usr/bin/env python3
-# -*- coding:utf-8 -*-
 
 """Tests for JinaAITool TLS verification behaviour."""
 
@@ -50,19 +49,21 @@ class JinaAIToolTLSTest(unittest.TestCase):
             mock_get.return_value = resp
             out = io.StringIO()
             with redirect_stdout(out):
-                result = tool._make_api_request(
-                    "https://r.jina.ai/https://x", 10, "err")
+                result = tool._make_api_request("https://r.jina.ai/https://x", 10, "err")
         self.assertIsNone(result)
         # The failure is reported through the logger, never printed to stdout.
         self.assertEqual(out.getvalue(), "")
 
     def test_make_api_request_handles_http_error_without_response(self) -> None:
         tool = JinaAITool()
-        with patch.object(
-            jina_module.requests,
-            "get",
-            side_effect=requests.HTTPError("connection failed"),
-        ), patch.object(jina_module.time, "sleep"):
+        with (
+            patch.object(
+                jina_module.requests,
+                "get",
+                side_effect=requests.HTTPError("connection failed"),
+            ),
+            patch.object(jina_module.time, "sleep"),
+        ):
             result = tool._make_api_request(
                 "https://r.jina.ai/https://example.com",
                 timeout=1,
