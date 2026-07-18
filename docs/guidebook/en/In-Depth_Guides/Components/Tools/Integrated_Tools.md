@@ -202,3 +202,17 @@ Parameter Description:
     response_content_type: the output format for the HTTP request result. If set to 'json', the result will be returned in JSON format; if set to 'text', it will be returned as plain text.
 This tool can be used directly without  requiring any keys.
 
+
+## SecureArchiveTool
+
+`SecureArchiveTool` provides bounded archive operations for agent workflows without external dependencies. It supports ZIP, TAR, TAR.GZ, and TGZ files with four modes: `create`, `list`, `extract`, and `info`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.secure_archive_tool import SecureArchiveTool
+
+tool = SecureArchiveTool(base_dir="/srv/agent-files")
+tool.execute(mode="create", file_path="reports.zip", input_paths=["reports"])
+tool.execute(mode="extract", file_path="reports.zip", output_dir="restored", members=["reports/q2.txt"])
+```
+
+All paths are confined to `base_dir`. Extraction rejects absolute/traversal paths, links, special TAR files, encrypted ZIPs, duplicate members, excessive compression ratios, and configured size/count limits. Destinations are preflighted before extraction and files are written through same-directory temporary files.

@@ -8,8 +8,10 @@
 
 from .github_tool import GitHubTool
 from .yahoo_finance_tool import YahooFinanceTool
+from .secure_archive_tool import SecureArchiveTool
 
 __all__ = [
     'GitHubTool',
     'YahooFinanceTool',
+    'SecureArchiveTool',
 ]
