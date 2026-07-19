@@ -239,3 +239,23 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+## TabularDataTool
+
+`TabularDataTool` provides bounded, deterministic workflows for CSV, TSV, and JSONL datasets. It can create or read datasets, calculate per-column profiles, and transform rows with structured filters, projection, numeric-aware sorting, deduplication, limits, and format conversion.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.tabular_data_tool import TabularDataTool
+
+tool = TabularDataTool(base_dir="/srv/agent-files")
+tool.execute(
+    mode="transform",
+    file_path="sales.csv",
+    output_path="large-orders.jsonl",
+    filters=[{"column": "amount", "operator": "gte", "value": 1000}],
+    select_columns=["customer", "amount"],
+    sort_by="amount",
+    descending=True,
+)
+```
+
+The tool does not evaluate code or expressions. Paths, file size, generated size, rows, columns, cells, output context, and profiling cardinality are bounded, and writes are atomic.
