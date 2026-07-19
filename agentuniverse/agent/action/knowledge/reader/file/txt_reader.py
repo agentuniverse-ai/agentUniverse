@@ -18,7 +18,7 @@ class LineTxtReader(Reader):
                 metadata.update(ext_info)
 
             for line in file:
-                dlist.append(Document(text=line, metadata=metadata or {}))
+                dlist.append(Document(text=line, metadata=metadata.copy()))
 
         return dlist
 
