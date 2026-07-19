@@ -216,7 +216,9 @@ class ResilientTool(Tool):
             return await operation
         try:
             return await asyncio.wait_for(operation, timeout=self.timeout_seconds)
-        except TimeoutError as exc:
+        # ``asyncio.TimeoutError`` was distinct from the built-in exception
+        # before Python 3.11, so catch the asyncio name for 3.10 compatibility.
+        except asyncio.TimeoutError as exc:
             raise ToolTimeoutError(
                 f"tool {self.target_tool} exceeded timeout_seconds ({self.timeout_seconds})"
             ) from exc
