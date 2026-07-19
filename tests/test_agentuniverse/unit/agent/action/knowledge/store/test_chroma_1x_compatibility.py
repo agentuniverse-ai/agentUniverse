@@ -5,7 +5,13 @@ import importlib.util
 import sys
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
+
+try:
+    import tomllib
+except ImportError:  # Python 3.10
+    import tomli as tomllib
 
 if importlib.util.find_spec("chromadb") is None:
     chromadb_stub = types.ModuleType("chromadb")
@@ -137,6 +143,19 @@ class TestChromaAdapters(unittest.TestCase):
                 returned = storage._init_collection()
             factory.assert_called_once_with("https://chroma.example")
             self.assertIs(returned, client)
+
+
+class TestCompatibilityMetadata(unittest.TestCase):
+    def test_python312_numpy2_and_chroma1_constraints(self):
+        project_file = next(
+            parent / "pyproject.toml" for parent in Path(__file__).parents if (parent / "pyproject.toml").is_file()
+        )
+        with project_file.open("rb") as stream:
+            project = tomllib.load(stream)["tool"]["poetry"]
+        self.assertIn("Programming Language :: Python :: 3.12", project["classifiers"])
+        dependencies = project["dependencies"]
+        self.assertEqual(dependencies["numpy"], ">=1.26.0,<3.0.0")
+        self.assertEqual(dependencies["chromadb"], "^1.5.9")
 
 
 if __name__ == "__main__":
