@@ -95,6 +95,16 @@ class TestTabularValidation(TabularTestCase):
         )
         self.assertIn("existing column", result["error"])
 
+    def test_is_null_filter_requires_boolean_value(self):
+        self.create()
+        result = self.tool.execute(
+            mode="transform",
+            file_path="data.csv",
+            output_path="out.csv",
+            filters=[{"column": "name", "operator": "is_null", "value": "yes"}],
+        )
+        self.assertIn("must be a boolean", result["error"])
+
     def test_write_limit_preserves_destination(self):
         destination = os.path.join(self.base_dir, "out.csv")
         with open(destination, "wb") as stream:

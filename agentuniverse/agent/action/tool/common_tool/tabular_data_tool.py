@@ -377,6 +377,8 @@ class TabularDataTool(Tool):
                 raise ValueError(f"filters[{index}].operator is invalid")
             if operator == "in" and not isinstance(item.get("value"), list):
                 raise ValueError(f"filters[{index}].value must be a list for the in operator")
+            if operator == "is_null" and not isinstance(item.get("value"), bool):
+                raise ValueError(f"filters[{index}].value must be a boolean for the is_null operator")
             output.append(item)
         return output
 
