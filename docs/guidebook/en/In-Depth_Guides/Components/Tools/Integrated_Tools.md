@@ -239,3 +239,26 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+## ICalendarTool
+
+`ICalendarTool` creates, reads, inspects, and merges RFC 5545 `.ics` calendars from structured event data. Events support date or date-time ranges, IANA timezones, attendees, categories, recurrence rules, and display alarms.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.icalendar_tool import ICalendarTool
+
+tool = ICalendarTool(base_dir="/srv/agent-files")
+tool.execute(
+    mode="create",
+    file_path="planning.ics",
+    default_timezone="Asia/Shanghai",
+    events=[{
+        "summary": "Release planning",
+        "start": "2026-07-20T10:00:00",
+        "end": "2026-07-20T11:00:00",
+        "attendees": ["mailto:team@example.com"],
+        "alarms": [{"minutes_before": 15}],
+    }],
+)
+```
+
+Paths are confined to `base_dir`; event count, text, attendees, alarms, input size, and generated size are bounded. Writes use a same-directory temporary file and explicit overwrite.

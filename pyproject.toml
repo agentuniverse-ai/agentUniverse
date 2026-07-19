@@ -65,6 +65,7 @@ duckduckgo-search = "^6.3.5"
 primp = "^0.6.5"
 wikipedia= "^1.4.0"
 openpyxl = "^3.1.5"
+icalendar = { version = "^7.2.0", optional = true }
 pillow = "^10.4.0"
 pypdf = { version = "^5.0.0", optional = true }
 jieba = "^0.42.1"
@@ -83,6 +84,7 @@ redis = { version = "^5.0.0", optional = true }
 log_ext = ["aliyun-log-python-sdk"]
 store_ext = ["pymilvus", "psycopg", "pgvector", "redis"]
 pdf_ext = ["pypdf"]
+calendar_ext = ["icalendar"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
