@@ -26,6 +26,7 @@ class JinaReranker(DocProcessor):
     api_key: Optional[str] = None
     model_name: str = "jina-reranker-v2-base-multilingual"
     top_n: int = 10
+    timeout: int = 30
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> List[Document]:
         """Rerank documents based on their relevance to the query.
@@ -61,7 +62,9 @@ class JinaReranker(DocProcessor):
         }
 
         try:
-            response = requests.post(api_base, headers=headers, json=payload)
+            response = requests.post(
+                api_base, headers=headers, json=payload, timeout=self.timeout
+            )
             response.raise_for_status()
             results = response.json().get("results", [])
         except requests.exceptions.RequestException as e:
@@ -103,5 +106,7 @@ class JinaReranker(DocProcessor):
             self.model_name = doc_processor_configer.model_name
         if hasattr(doc_processor_configer, "top_n"):
             self.top_n = doc_processor_configer.top_n
+        if hasattr(doc_processor_configer, "timeout"):
+            self.timeout = doc_processor_configer.timeout
 
         return self

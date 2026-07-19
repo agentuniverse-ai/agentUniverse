@@ -25,7 +25,8 @@ class TestJinaReranker(unittest.TestCase):
             'description': 'reranker use jina api',
             'api_key': 'test_api_key',
             'model_name': 'test_model',
-            'top_n': 5
+            'top_n': 5,
+            'timeout': 12
         }
         self.configer = ComponentConfiger()
         self.configer.load_by_configer(cfg)
@@ -50,6 +51,7 @@ class TestJinaReranker(unittest.TestCase):
             self.assertEqual(self.reranker.api_key, 'test_api_key')
             self.assertEqual(self.reranker.model_name, 'test_model')
             self.assertEqual(self.reranker.top_n, 5)
+            self.assertEqual(self.reranker.timeout, 12)
 
     @patch('requests.post')
     def test_process_docs(self, mock_post):
@@ -80,7 +82,8 @@ class TestJinaReranker(unittest.TestCase):
                 'query': 'test query',
                 'documents': [doc.text for doc in self.test_docs],
                 'top_n': 10
-            }
+            },
+            timeout=30
         )
 
         self.assertEqual(len(result_docs), 5)
@@ -116,7 +119,8 @@ class TestJinaReranker(unittest.TestCase):
                 'query': 'test query',
                 'documents': [doc.text for doc in self.test_docs],
                 'top_n': 2
-            }
+            },
+            timeout=30
         )
 
         self.assertEqual(len(result_docs), 2)
