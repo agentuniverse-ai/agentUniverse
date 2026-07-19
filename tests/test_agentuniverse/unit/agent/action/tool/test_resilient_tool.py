@@ -258,6 +258,12 @@ class TestCircuitBreaker(ResilientTestCase):
         self.assertEqual(state["circuit"], "closed")
         self.assertIsNone(state["last_error"])
 
+    def test_tool_copies_share_circuit_state(self):
+        wrapper, _target, _context = self.wrapper(SequenceTool([]))
+        copied = wrapper.create_copy()
+        self.assertIs(copied._state, wrapper._state)
+        self.assertIs(copied._state_lock, wrapper._state_lock)
+
 
 class TestResilientValidation(ResilientTestCase):
     def test_target_is_required(self):
