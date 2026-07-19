@@ -310,9 +310,13 @@ class OpenSearchVectorStore(Store):
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
             raise ValueError("similarity_top_k must be a positive integer")
         filters = self._metadata_filters(metadata_filter)
-        knn = {"knn": {"embedding": {"vector": vector, "k": top_k}}}
-        query_body: dict[str, Any] = knn if not filters else {"bool": {"must": [knn], "filter": filters}}
-        return vector, top_k, {"size": top_k, "query": query_body}
+        vector_query: dict[str, Any] = {"vector": vector, "k": top_k}
+        if filters:
+            # Filtering inside the Lucene k-NN clause selects ``k`` nearest
+            # matching documents. A surrounding bool filter is applied after
+            # candidate selection and can therefore return fewer than ``k``.
+            vector_query["filter"] = {"bool": {"filter": filters}}
+        return vector, top_k, {"size": top_k, "query": {"knn": {"embedding": vector_query}}}
 
     def _metadata_filters(self, value: Any) -> list[dict[str, Any]]:
         if value is None:

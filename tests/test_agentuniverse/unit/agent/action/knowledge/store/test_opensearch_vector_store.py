@@ -145,7 +145,10 @@ class TestOpenSearchVectorStore(unittest.TestCase):
         documents = store.query(Query(embeddings=[[1.0, 0.0]], similarity_top_k=3), metadata_filter={"tenant": "acme"})
         body = client.search_calls[0]["body"]
         self.assertEqual(body["size"], 3)
-        self.assertEqual(body["query"]["bool"]["filter"], [{"term": {"metadata.tenant": "acme"}}])
+        self.assertEqual(
+            body["query"]["knn"]["embedding"]["filter"],
+            {"bool": {"filter": [{"term": {"metadata.tenant": "acme"}}]}},
+        )
         self.assertEqual(documents[0].id, "1")
         self.assertEqual(documents[0].metadata["_opensearch_score"], 0.9)
 
