@@ -1,5 +1,21 @@
 # Store
 
+## OpenSearch 向量存储
+
+`OpenSearchVectorStore` 将 agentUniverse `Document` 向量持久化到 OpenSearch k-NN HNSW 索引，并实现同步和异步的新增、更新、删除与查询。将 `opensearch_vector_store.yaml.example` 复制到应用组件目录，配置向量维度、距离、索引、连接参数和用于精确过滤的元数据字段。
+
+```python
+store.upsert_document([
+    Document(id="1", text="hello", metadata={"tenant": "acme"}, embedding=[0.1, 0.2])
+])
+results = store.query(
+    Query(embeddings=[[0.1, 0.2]], similarity_top_k=5),
+    metadata_filter={"tenant": "acme"},
+)
+```
+
+支持 `cosine`、`l2` 和 `inner_product`。元数据过滤仅允许使用 `filter_fields` 声明的字段。当 `connection_args.hosts` 未设置时，可通过 `OPENSEARCH_VECTOR_URL` 注入连接地址。
+
 `Store`负责对`Document`进行存储，并在知识的检索阶段提供查询能力。`Store`的具体形式可以是多样的，包括关系型数据库、向量数据库、图数据库等形式。因此同一份`Document`也能在不同的`Store`中以不同的形式存储，而具体的检索方式也和`Store`的能力相绑定。
 
 Store定义如下：
