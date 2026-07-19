@@ -1,5 +1,25 @@
 # Reader
 
+## BatchKnowledgeReader
+
+`BatchKnowledgeReader` 将有数量限制的本地文件分发给已注册 Reader，并发处理彼此独立的输入，保持输入顺序，隔离单个来源错误，可选文档去重，并在每个返回文档中记录来源信息。
+
+```python
+reader = BatchKnowledgeReader(base_dir="/srv/knowledge", max_workers=4)
+documents = reader.load_data(
+    inputs=[
+        "handbook.md",
+        {"source": "policy.pdf", "ext_info": {"tenant": "acme"}},
+        {"source": "records.csv", "reader_kwargs": {"delimiter": ";"}},
+    ],
+    continue_on_error=True,
+    deduplicate=True,
+)
+print(reader.last_report)
+```
+
+本地路径限制在 `base_dir` 内，同时限制输入数量、并发数、来源文件大小、文档数量和总文本量。URL 默认关闭，也可以通过 `allowed_reader_names` 限制可调用的 Reader。
+
 Reader负责从各式各样的信息源中将信息抽取成agentUniverse中的Document形式。这些信息源可以是各种本地文件，也可以是网页或者一个IO接口，
 
 Reader的定义如下:

@@ -1,5 +1,25 @@
 # Reader
 
+## BatchKnowledgeReader
+
+`BatchKnowledgeReader` dispatches a bounded list of local files to registered readers, runs independent inputs concurrently, preserves input order, isolates per-source failures, optionally deduplicates documents, and records source provenance in every returned document.
+
+```python
+reader = BatchKnowledgeReader(base_dir="/srv/knowledge", max_workers=4)
+documents = reader.load_data(
+    inputs=[
+        "handbook.md",
+        {"source": "policy.pdf", "ext_info": {"tenant": "acme"}},
+        {"source": "records.csv", "reader_kwargs": {"delimiter": ";"}},
+    ],
+    continue_on_error=True,
+    deduplicate=True,
+)
+print(reader.last_report)
+```
+
+Local paths are confined to `base_dir`. Input count, workers, source size, resulting document count, and aggregate text are bounded. URL loading is disabled by default and custom readers can be restricted with `allowed_reader_names`.
+
 The Reader is responsible for extracting information from various sources into the Document format used within agentUniverse. These sources can range from local files to web pages or even an I/O interface.
 
 The Reader is defined as follows:

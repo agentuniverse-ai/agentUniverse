@@ -1,0 +1,16 @@
+name: batch_knowledge_reader
+description: Bounded concurrent orchestration across registered knowledge readers.
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.batch_reader
+  class: BatchKnowledgeReader
+base_dir: .
+max_inputs: 100
+max_workers: 4
+max_documents: 10000
+max_total_chars: 10000000
+max_source_bytes: 104857600
+allow_urls: false
+default_continue_on_error: true
+default_deduplicate: true
+allowed_reader_names: []
