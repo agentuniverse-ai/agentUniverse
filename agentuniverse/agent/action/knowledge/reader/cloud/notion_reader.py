@@ -3,7 +3,7 @@
 
 # @Time    : 2025/9/29
 # @FileName: notion_reader.py
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, ClassVar
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -18,8 +18,11 @@ class NotionReader(Reader):
         NOTION_TOKEN must be provided (or pass via ext_info)
     """
 
+    # Upper bound on the number of database pages fetched per load, so a
+    # misconfigured or hostile database cannot exhaust memory / API quota.
+    MAX_DATABASE_PAGES: ClassVar[int] = 500
+
     def _load_data(self, page_or_db_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        print(f"debugging: NotionReader start load id={page_or_db_id}")
         if not page_or_db_id:
             raise ValueError("NotionReader requires a Notion page or database id")
 
@@ -43,24 +46,54 @@ class NotionReader(Reader):
 
         # Try as page
         try:
-            page = client.pages.retrieve(page_id=page_or_db_id)
+            client.pages.retrieve(page_id=page_or_db_id)
             metadata["type"] = "page"
             text_blocks.extend(self._export_page(client, page_or_db_id))
         except Exception as e_page:
-            print(f"debugging: NotionReader page retrieve failed: {e_page}")
             # Try as database
             try:
                 metadata["type"] = "database"
-                for row in client.databases.query(database_id=page_or_db_id).get("results", []):
-                    row_id = row.get("id")
-                    text_blocks.extend(self._export_page(client, row_id))
+                text_blocks.extend(self._export_database(client, page_or_db_id))
             except Exception as e_db:
-                raise RuntimeError(f"Failed to read Notion id={page_or_db_id}: {e_db}")
+                raise RuntimeError(
+                    f"Failed to read Notion id={page_or_db_id}: "
+                    f"page_error={e_page}, database_error={e_db}") from e_db
 
         text = "\n\n".join([b for b in text_blocks if b and b.strip()])
         if ext_info:
             metadata.update(self._public_metadata(ext_info))
         return [Document(text=text, metadata=metadata)]
+
+    def _export_database(self, client, database_id: str) -> List[str]:
+        """Export every row of a Notion database, following pagination.
+
+        The Notion ``databases.query`` API returns at most 100 rows per call;
+        the previous code only consumed the first page, silently dropping
+        every row beyond that. We now loop on ``has_more`` / ``next_cursor``
+        up to MAX_DATABASE_PAGES so the full database is read, with a cap to
+        bound runtime against a misconfigured/hostile source.
+        """
+        blocks: List[str] = []
+        cursor = None
+        pages_fetched = 0
+        while True:
+            response = client.databases.query(
+                database_id=database_id, start_cursor=cursor)
+            for row in response.get("results", []):
+                row_id = row.get("id")
+                # A row without an id cannot be exported; skip it rather than
+                # passing None to _export_page (which would 400 and abort the
+                # whole database read).
+                if not row_id:
+                    continue
+                blocks.extend(self._export_page(client, row_id))
+            pages_fetched += 1
+            if not response.get("has_more"):
+                break
+            cursor = response.get("next_cursor")
+            if pages_fetched >= self.MAX_DATABASE_PAGES:
+                break
+        return blocks
 
     @staticmethod
     def _public_metadata(ext_info: Dict) -> Dict:
