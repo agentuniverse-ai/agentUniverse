@@ -205,7 +205,93 @@ This tool can be used directly without  requiring any keys.
 
 ## 4. Office Tools
 
-### 4.1 WordDocumentTool
+### 4.1 PowerPoint
+
+`PowerPointTool` creates, appends to, reads, and inspects `.pptx` files from
+structured data. Install the optional Office dependency before using it:
+
+```bash
+pip install "agentUniverse[office_ext]"
+# source checkout alternative: pip install python-pptx
+```
+
+The built-in component configuration is
+[`powerpoint_tool.yaml`](../../../../../../agentuniverse/agent/action/tool/common_tool/powerpoint_tool.yaml):
+
+```yaml
+name: powerpoint_tool
+description: Create, append to, read, or inspect PowerPoint PPTX presentations from structured slide data.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.powerpoint_tool
+  class: PowerPointTool
+input_keys: [mode, file_path]
+base_dir: .
+max_read_bytes: 20971520
+max_write_bytes: 20971520
+max_uncompressed_bytes: 104857600
+max_archive_entries: 5000
+max_slides: 100
+max_text_chars: 50000
+```
+
+Create a presentation:
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj("powerpoint_tool")
+result = tool.run(
+    mode="create",
+    file_path="reports/q2-review.pptx",
+    overwrite=False,
+    metadata={"title": "Q2 Review", "author": "Finance Agent"},
+    slides=[
+        {
+            "title": "Q2 Review",
+            "subtitle": "Revenue and regional performance",
+            "notes": "Open with the consolidated revenue result.",
+        },
+        {
+            "title": "Highlights",
+            "bullets": [
+                "Revenue grew 20% year over year",
+                {"text": "APAC led growth", "level": 1},
+            ],
+            "table": [
+                ["Metric", "Q2", "YoY"],
+                ["Revenue", "$123M", "+20%"],
+            ],
+        },
+    ],
+)
+```
+
+Use `mode="append"` with another `slides` list to add slides to an existing
+deck. `mode="read"` returns bounded slide text, tables, and speaker notes;
+`mode="info"` returns file metadata and per-slide shape/table information.
+Create mode can also receive a `template_path` underneath `base_dir`; existing
+template slides are retained and the generated slides are appended.
+
+Supported slide fields are:
+
+- `title`, `subtitle`, and `notes`: strings.
+- `bullets`: strings or `{ "text": "...", "level": 0 }` objects. Levels are
+  restricted to 0–8.
+- `table`: a two-dimensional array of scalar cell values.
+- `layout`: `auto`, `title`, `title_content`, `section`, `title_only`, or
+  `blank`.
+
+The tool confines `file_path` and `template_path` to `base_dir`, including
+resolved symlinks. It rejects oversized files, slide/table/text limits, unknown
+input fields, and implicit overwrites. Writes are atomic: the new presentation
+is saved and size-checked in the destination directory before it replaces the
+target, so a failed write does not corrupt an existing deck. The `read` result
+is capped by the configured slide, shape, table-row, table-column, and shared
+text budgets, and reports `truncated: true` when traversal stops early.
+
+### 4.2 WordDocumentTool
 
 `WordDocumentTool` creates, appends to, reads, and inspects DOCX files with structured `heading`, `paragraph`, `bullet`, `table`, and `page_break` blocks. Install `agentUniverse[office_ext]` or `python-docx`, then resolve the built-in `word_document_tool` component. Paths and templates are confined to `base_dir`; archive expansion, file, block, table, and text limits are enforced, and writes are atomic. The existing `WriteWordDocumentTool` remains available for backward compatibility.
 
