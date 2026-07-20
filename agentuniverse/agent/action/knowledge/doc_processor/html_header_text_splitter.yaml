@@ -1,0 +1,8 @@
+name: 'html_header_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.html_header_text_splitter'
+  class: 'HtmlHeaderTextSplitter'
+description: 'Splits HTML documents by header hierarchy (h1–h6) for knowledge pre-processing.'
+header_path_key: 'header_path'
+include_unsectioned: true
