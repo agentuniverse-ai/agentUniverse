@@ -399,8 +399,14 @@ class Agent(ComponentBase, ABC):
             try:
                 tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
                 tool_results.append(str(tool.run(**tool_input)))
-            except:
-                LOGGER.warn(f'Tool {tool_name} call failed, maybe invalid or lack arguments')
+            except Exception as e:
+                # A failed tool is logged with the full exception for operators,
+                # but the downstream agent only sees a stable, non-sensitive
+                # marker so a partial execution cannot look like a complete
+                # success. The marker is per-tool so ordering of mixed
+                # success/failure results is preserved.
+                LOGGER.warn(f'Tool {tool_name} call failed: {e}')
+                tool_results.append(f'[tool {tool_name} failed]')
         return "\n\n".join(tool_results)
 
     async def async_invoke_tools(self, input_object: InputObject, **kwargs) -> str:
@@ -412,8 +418,15 @@ class Agent(ComponentBase, ABC):
             tool: Tool = ToolManager().get_instance_obj(tool_name)
             if tool is None:
                 continue
-            tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
-            tool_results.append(await tool.async_run(**tool_input))
+            try:
+                tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
+                tool_results.append(str(await tool.async_run(**tool_input)))
+            except Exception as e:
+                # See invoke_tools: log the full exception, surface only a stable
+                # per-tool marker to the downstream agent so partial execution
+                # cannot be mistaken for a complete success.
+                LOGGER.warn(f'Tool {tool_name} call failed: {e}')
+                tool_results.append(f'[tool {tool_name} failed]')
         return "\n\n".join(tool_results)
 
     def invoke_knowledge(self, query_str: str, input_object: InputObject, **kwargs) -> str:
