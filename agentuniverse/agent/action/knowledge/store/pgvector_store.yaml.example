@@ -1,0 +1,14 @@
+name: pgvector_store
+description: PostgreSQL pgvector knowledge store
+connection_url: postgresql://postgres:postgres@localhost:5432/agentuniverse
+table_name: agentuniverse_documents
+embedding_model: openai_embedding
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+create_table: true
+create_hnsw_index: true
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.pgvector_store
+  class: PGVectorStore

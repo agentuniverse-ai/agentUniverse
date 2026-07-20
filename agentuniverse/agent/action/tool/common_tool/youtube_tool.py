@@ -49,13 +49,24 @@ class YouTubeTool(Tool):
 
     def parse_duration(self, duration_str):
         """Converts ISO 8601 duration format to seconds"""
-        match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
+        match = re.fullmatch(r'P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?', duration_str)
         if not match:
             return 0
-        hours = int(match.group(1)) if match.group(1) else 0
-        minutes = int(match.group(2)) if match.group(2) else 0
-        seconds = int(match.group(3)) if match.group(3) else 0
-        return hours * 3600 + minutes * 60 + seconds
+        days = int(match.group(1)) if match.group(1) else 0
+        hours = int(match.group(2)) if match.group(2) else 0
+        minutes = int(match.group(3)) if match.group(3) else 0
+        seconds = int(match.group(4)) if match.group(4) else 0
+        return days * 86400 + hours * 3600 + minutes * 60 + seconds
+
+    @staticmethod
+    def _parse_stat_count(value) -> int:
+        """Parse a YouTube statistics field into an integer count."""
+        if value in (None, ""):
+            return 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     @retry(3, 1.0)
     def _search_videos(self, query: str) -> List[Dict]:
@@ -81,9 +92,9 @@ class YouTubeTool(Tool):
                 results.append({
                     'id': item['id'],
                     'title': item['snippet']['title'],
-                    'view_count': int(item['statistics'].get('viewCount', 0)),
-                    'like_count': int(item['statistics'].get('likeCount', 0)),
-                    'comment_count': int(item['statistics'].get('commentCount', 0)),
+                    'view_count': self._parse_stat_count(item['statistics'].get('viewCount')),
+                    'like_count': self._parse_stat_count(item['statistics'].get('likeCount')),
+                    'comment_count': self._parse_stat_count(item['statistics'].get('commentCount')),
                     'duration_seconds': self.parse_duration(item['contentDetails']['duration']),
                     'url': f"https://www.youtube.com/watch?v={item['id']}"
                 })
@@ -138,9 +149,9 @@ class YouTubeTool(Tool):
             return {
                 'name': channel_info['snippet']['title'],
                 'description': channel_info['snippet'].get('description', ''),
-                'subscriber_count': int(channel_info['statistics'].get('subscriberCount', 0)),
-                'total_view_count': int(channel_info['statistics'].get('viewCount', 0)),
-                'total_video_count': int(channel_info['statistics'].get('videoCount', 0)),
+                'subscriber_count': self._parse_stat_count(channel_info['statistics'].get('subscriberCount')),
+                'total_view_count': self._parse_stat_count(channel_info['statistics'].get('viewCount')),
+                'total_video_count': self._parse_stat_count(channel_info['statistics'].get('videoCount')),
                 'latest_video_list': video_list
             }
 
@@ -165,15 +176,15 @@ class YouTubeTool(Tool):
 
             results = []
             for item in response.get('items', []):
-                view_count = int(item['statistics'].get('viewCount', 0))
+                view_count = self._parse_stat_count(item['statistics'].get('viewCount'))
                 results.append({
                     'id': item['id'],
                     'title': item['snippet']['title'],
                     'channel_title': item['snippet']['channelTitle'],
                     'published_at': item['snippet']['publishedAt'],
                     'view_count': view_count,
-                    'like_count': int(item['statistics'].get('likeCount', 0)),
-                    'comment_count': int(item['statistics'].get('commentCount', 0)),
+                    'like_count': self._parse_stat_count(item['statistics'].get('likeCount')),
+                    'comment_count': self._parse_stat_count(item['statistics'].get('commentCount')),
                     'duration_seconds': self.parse_duration(item['contentDetails']['duration']),
                     'url': f"https://www.youtube.com/watch?v={item['id']}"
                 })

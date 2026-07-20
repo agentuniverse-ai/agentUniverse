@@ -236,7 +236,7 @@ This component re-ranks the recalled documents with Maximal Marginal Relevance (
 
 At each step MMR selects the document maximising `lambda * sim(d, query) - (1 - lambda) * max_{selected} sim(d, selected)`. Set `lambda_coef` to `1.0` for pure relevance ranking, `0.0` to maximise diversity, or `0.5` (the default) to balance the two. It is distinct from `SemanticDeduplicator` (which removes near-duplicates above a hard threshold) and `ReciprocalRankFusionProcessor` (which fuses ranked lists from several stores): MMR performs diversity-aware selection over a single recalled set.
 
-Query and document embeddings are read from `Query.embeddings` and `Document.embedding`; set `embedding_name` to compute any missing embeddings on demand. If embeddings cannot be obtained, the documents are returned in their input order.
+Without `embedding_name`, query and document embeddings are read from `Query.embeddings` and `Document.embedding` and must have one shared dimension. When `embedding_name` is set, all document embeddings and the query embedding are recomputed with that model; the query must provide `query_str` because a precomputed query vector has no verifiable model provenance. If a homogeneous embedding space cannot be established, the documents are returned in their input order.
 
 The component definition file is as follows:
 ```yaml
@@ -253,5 +253,59 @@ metadata:
 ```
 - lambda_coef: Relevance/diversity trade-off in [0.0, 1.0].
 - top_n: Number of documents to keep after re-ranking; `null` keeps all documents and only re-orders them.
-- embedding_name: Registered embedding component used to embed documents / the query on demand when they lack an embedding. When empty, only embeddings already carried by the query/documents are used.
+- embedding_name: Registered embedding component used to recompute every document and query embedding in one embedding space. When empty, only embeddings already carried by the query/documents are used.
 - score_key: Metadata key under which each kept document's cosine relevance is stamped; empty stamps nothing (so earlier scores such as RRF's are preserved).
+
+### [SensitiveDataRedactor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sensitive_data_redactor.yaml)
+
+This component redacts common personally identifiable information (PII) / sensitive identifiers from recalled documents *before* they reach the LLM, so personal data and secrets do not leak into model context. It addresses the *privacy / compliance* direction of issue #248 and is distinct from every other doc processor, none of which alter text for privacy.
+
+Detection is deterministic and dependency-free. Built-in entities use structured patterns, with semantic validation where shape alone is insufficient: credit cards must pass Luhn, IPv4 octets must be in range, China resident IDs must pass their checksum, and US SSNs must pass area/group/serial rules. `email` and well-known API-key prefixes are shape-checked; `phone` is available but opt-in because phone matching is fuzzier. Domain-specific identifiers can be added via `custom_patterns`.
+
+Configuration is validated eagerly. Unknown entities, malformed custom entries, and invalid regular expressions raise during component initialization rather than silently disabling redaction.
+
+Each match is replaced with `replacement` (default `[REDACTED]`); a per-document `redaction_summary` records how many of each entity were removed.
+
+The component definition file is as follows:
+```yaml
+name: 'sensitive_data_redactor'
+description: 'redact PII from recalled documents'
+entities: [email, credit_card, id_card, ssn, ip_address, api_key]
+replacement: '[REDACTED]'
+custom_patterns: []      # e.g. [{name: employee_id, pattern: '\bEMP-\d{6}\b'}]
+log_key: 'redaction_summary'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_data_redactor'
+  class: 'SensitiveDataRedactor'
+```
+- entities: Built-in entity types to redact. Add `phone` to enable phone redaction.
+- replacement: Text substituted for every match.
+- custom_patterns: Extra `{"name", "pattern"}` regex entries for domain-specific identifiers. Invalid entries fail component initialization.
+- log_key: Metadata key recording a `{entity: count}` summary per document; set to null to omit.
+
+### [ContextBudgetCompressor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/context_budget_compressor.yaml)
+
+This component fits the recalled documents into a fixed cumulative size budget (typically the LLM context window). It walks the recalled list — already ranked by the store or an earlier reranker / fusion processor — keeping documents in order while their total size stays within `budget`; the boundary document that would overflow is optionally truncated so the budget is used as fully as possible without exceeding it. It addresses the *context-window management* direction of issue #248.
+
+It operates on a different axis from `ThresholdFilter`: `ThresholdFilter` applies per-document predicates (a score / length range) or a fixed top-k, while this manages the **cumulative** size of the kept set and can split the last document to fit.
+
+Size is measured by `counter`: `estimate` (default, `max(1, len(text)//4)` — a dependency-free token approximation), `tiktoken` (real BPE tokens via tiktoken), `char`, or `word`. The budget is always interpreted in the counter's unit, so the contract is never "tokens" while silently counting words.
+
+The component definition file is as follows:
+```yaml
+name: 'context_budget_compressor'
+description: 'fit recalled documents into a cumulative size budget'
+budget: 4096                 # max cumulative size, in the counter's unit
+counter: 'estimate'          # estimate | tiktoken | char | word
+truncate: true               # shorten the boundary document to fit
+tiktoken_encoding: 'cl100k_base'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.context_budget_compressor'
+  class: 'ContextBudgetCompressor'
+```
+- budget: Maximum cumulative size of the kept documents, measured in the unit of `counter`.
+- counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
+- truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
+- tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.

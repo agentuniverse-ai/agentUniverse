@@ -82,6 +82,8 @@ class Tool(ComponentBase):
     async def async_run(self, **kwargs):
         """The callable method that runs the tool."""
         self.input_check(kwargs)
+        if self.check_execute_signature_deprecated():
+            return await asyncio.to_thread(self.execute, ToolInput(kwargs))
         return await self.async_execute(**kwargs)
 
     def input_check(self, kwargs: dict) -> None:
@@ -111,6 +113,12 @@ class Tool(ComponentBase):
 
     @trace_tool
     async def async_langchain_run(self, *args, callbacks=None, **kwargs):
+        if self.check_execute_signature_deprecated():
+            tool_input = ToolInput(kwargs)
+            parse_result = self.parse_react_input(args[0])
+            for key in self.input_keys:
+                tool_input.add_data(key, parse_result[key])
+            return await asyncio.to_thread(self.execute, tool_input)
         try:
             parse_result = parse_and_check_json_markdown(args[0], self.input_keys)
         except Exception as e:
