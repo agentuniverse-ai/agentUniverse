@@ -1,0 +1,10 @@
+name: 'semantic_chunker'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.semantic_chunker'
+  class: 'SemanticChunker'
+description: 'Semantic similarity-based chunker that splits documents at topic boundaries.'
+embedding_name: null
+breakpoint_threshold: 75
+max_chunk_size: 2000
+min_chunk_size: 100
