@@ -5,11 +5,14 @@
 
 # @Time    : 2025/9/29
 # @FileName: web_page_reader.py
+import logging
 from urllib.parse import urljoin
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.tool.utils.url_safety import validate_public_http_url
+
+logger = logging.getLogger(__name__)
 
 
 class WebPageReader(Reader):
@@ -27,15 +30,11 @@ class WebPageReader(Reader):
     """
 
     def _load_data(self, url: str, ext_info: dict | None = None) -> list[Document]:
-        print(f"debugging: WebPageReader start load url={url}")
         if not isinstance(url, str) or not url:
             raise ValueError("WebPageReader._load_data requires a non-empty url string")
 
         html = self._fetch_html(url)
-        print(f"debugging: WebPageReader fetched html length={len(html)}")
-
         text, metadata_extra = self._extract_main_text(html, url)
-        print(f"debugging: WebPageReader extracted text length={len(text)}")
 
         metadata: dict = {"source": "web", "url": url}
         metadata.update(metadata_extra)
@@ -48,7 +47,6 @@ class WebPageReader(Reader):
         validate_public_http_url(url)
         try:
             import httpx  # type: ignore
-            print("debugging: WebPageReader using httpx")
             with httpx.Client(timeout=20.0, headers={
                 "User-Agent": "agentUniverse/1.0 (+https://github.com/)",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -69,10 +67,14 @@ class WebPageReader(Reader):
         except ValueError:
             raise
         except Exception as e_httpx:
-            print(f"debugging: WebPageReader httpx failed: {e_httpx}")
+            logger.debug(
+                "httpx fetch failed for %s, falling back to requests: %s",
+                url,
+                e_httpx,
+                exc_info=True,
+            )
             try:
                 import requests  # type: ignore
-                print("debugging: WebPageReader using requests fallback")
                 current_url = url
                 for _ in range(11):
                     validate_public_http_url(current_url)
@@ -96,39 +98,48 @@ class WebPageReader(Reader):
         # Try trafilatura
         try:
             import trafilatura  # type: ignore
-            print("debugging: WebPageReader using trafilatura")
             extracted = trafilatura.extract(html, include_links=False, include_images=False)
             if extracted and extracted.strip():
                 return extracted.strip(), {"extractor": "trafilatura"}
-        except Exception as e_traf:
-            print(f"debugging: WebPageReader trafilatura failed: {e_traf}")
+            logger.debug("trafilatura returned no content for %s; trying next extractor", url)
+        except Exception as exc:
+            logger.debug(
+                "trafilatura extraction failed for %s, trying next extractor: %s",
+                url,
+                exc,
+                exc_info=True,
+            )
 
         # Fallback to readability
         try:
             from bs4 import BeautifulSoup  # type: ignore
             from readability import Document as ReadabilityDocument  # type: ignore
-            print("debugging: WebPageReader using readability-lxml")
             article_html = ReadabilityDocument(html).summary(html_partial=True)
             soup = BeautifulSoup(article_html, "lxml")
             text = soup.get_text("\n")
             text = "\n".join([line.strip() for line in text.splitlines() if line.strip()])
             if text:
                 return text, {"extractor": "readability"}
-        except Exception as e_read:
-            print(f"debugging: WebPageReader readability failed: {e_read}")
+            logger.debug("readability returned no content for %s; trying next extractor", url)
+        except Exception as exc:
+            logger.debug(
+                "readability extraction failed for %s, trying next extractor: %s",
+                url,
+                exc,
+                exc_info=True,
+            )
 
         # Last resort: BeautifulSoup plain text
         try:
             from bs4 import BeautifulSoup  # type: ignore
-            print("debugging: WebPageReader using BeautifulSoup fallback")
             soup = BeautifulSoup(html, "lxml")
             for tag in soup(["script", "style", "noscript"]):
                 tag.extract()
             text = soup.get_text("\n")
             text = "\n".join([line.strip() for line in text.splitlines() if line.strip()])
             return text, {"extractor": "bs4"}
-        except Exception:
+        except Exception as exc:
             raise RuntimeError(
                 "Install one of the extractors: `pip install trafilatura` or "
                 "`pip install readability-lxml beautifulsoup4 lxml`"
-            )
+            ) from exc
