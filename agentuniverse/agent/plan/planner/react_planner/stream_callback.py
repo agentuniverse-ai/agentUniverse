@@ -11,13 +11,24 @@ import datetime
 import json
 from queue import Queue
 from typing import Optional, Dict, Any, Union, List
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import GenerationChunk, ChatGenerationChunk, LLMResult
 
 from agentuniverse.agent.memory.conversation_memory.conversation_memory_module import ConversationMemoryModule
+
+
+def _pair_id(prefix: str, run_id: Any) -> str:
+    """Build a stable pair_id, falling back to a fresh uuid when run_id is absent.
+
+    LangChain does not guarantee ``run_id`` is present in every callback kwarg;
+    the previous code did ``kwargs.get('run_id').hex`` which raised
+    AttributeError when it was missing, killing the whole callback chain.
+    """
+    rid = run_id if isinstance(run_id, UUID) else None
+    return f"{prefix}_{rid.hex if rid else uuid4().hex}"
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 
 
@@ -85,11 +96,12 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
             parent_run_id: Optional[UUID] = None,
             **kwargs: Any,
     ) -> Any:
-        # add token chunk to the queue.
+        # add token chunk to the queue. ``chunk`` is Optional; some LLM
+        # adapters call on_llm_new_token without it, so guard before .text.
         self.queueStream.put_nowait({
             "type": "token",
             "data": {
-                "chunk": chunk.text,
+                "chunk": chunk.text if chunk is not None else token,
                 "agent_info": self.agent_info
             }
         })
@@ -128,7 +140,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
             params={
                 "output": output
             },
-            pair_id=f"tool_{kwargs.get('run_id').hex}"
+            pair_id=_pair_id("tool", kwargs.get('run_id'))
         )
 
     def on_text(
@@ -253,7 +265,7 @@ class OpenAIProtocolStreamOutPutCallbackHandler(BaseCallbackHandler):
             params={
                 "output": output
             },
-            pair_id=f"tool_{kwargs.get('run_id').hex}"
+            pair_id=_pair_id("tool", kwargs.get('run_id'))
         )
 
     def on_text(
@@ -314,8 +326,18 @@ class InvokeCallbackHandler(BaseCallbackHandler):
             "source": self.source,
             "type": "agent",
         }
+        # response.generations may be empty or nested-empty when the LLM
+        # errored / was cancelled (ollama error, network drop). The previous
+        # code indexed [0][0].text unconditionally and raised IndexError,
+        # breaking the whole callback chain.
+        output_text = ""
+        try:
+            if response.generations and response.generations[0]:
+                output_text = response.generations[0][0].text or ""
+        except (IndexError, AttributeError):
+            output_text = ""
         ConversationMemoryModule().add_llm_output_info(
             start_info, self.llm_name,
-            response.generations[0][0].text,
+            output_text,
             f"llm_{run_id.hex}"
         )
