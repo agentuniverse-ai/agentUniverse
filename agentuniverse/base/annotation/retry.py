@@ -7,8 +7,11 @@
 # @FileName: retry.py
 
 import functools
+import logging
 import time
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 
 def retry(max_retries: int = 3, delay: float = 1.0) -> Callable:
@@ -24,7 +27,13 @@ def retry(max_retries: int = 3, delay: float = 1.0) -> Callable:
                     last_exception = e
                     retries += 1
                     if retries < max_retries:
+                        logger.debug("retry %s attempt %d/%d failed: %s",
+                                     func.__name__, retries, max_retries, e)
                         time.sleep(delay)
-            raise Exception(f"Failed after {max_retries} retries. Last error: {str(last_exception)}")
+            # Preserve the original exception type and traceback instead of
+            # wrapping it in a bare Exception. Callers that catch specific
+            # types (HttpError, TimeoutError, ...) will now work, and the
+            # full stack trace is retained for diagnosis.
+            raise last_exception
         return wrapper
     return decorator

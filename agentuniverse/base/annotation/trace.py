@@ -209,7 +209,8 @@ async def _default_agent_wrapper_async(func, *args, **kwargs):
                                                          result,
                                                          start_info,
                                                          pair_id)
-        Monitor.pop_invocation_chain()
+        # InvocationChainContext.__exit__ already calls Monitor.pop_invocation_chain();
+        # the explicit pop here was a duplicate that over-popped the caller's node.
         return result
 
 

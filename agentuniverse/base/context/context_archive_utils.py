@@ -29,7 +29,11 @@ def get_current_context_archive():
         'context_archive', None)
     if not context_archive:
         context_archive = {}
-        FrameworkContextManager().set_context('context_archive', {})
+        # Set the SAME dict object we return, so that subsequent
+        # update_context_archive mutations on the returned reference are
+        # visible to later get_current_context_archive calls. The previous
+        # code set a throwaway {} and returned a different local dict.
+        FrameworkContextManager().set_context('context_archive', context_archive)
 
     return context_archive
 
