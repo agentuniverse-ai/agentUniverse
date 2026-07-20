@@ -41,3 +41,30 @@ def test_process_prompt_preserves_agent_input_for_repeated_calls():
 
     assert agent_input == original_input
     assert first_prompt.messages == second_prompt.messages
+
+
+def test_tool_names_does_not_mutate_agent_action(monkeypatch):
+    class _StubToolkit:
+        def __init__(self):
+            self.tool_names = ["toolkit_tool"]
+
+    class _StubToolkitManager:
+        def get_instance_obj(self, toolkit_name):
+            assert toolkit_name == "test_toolkit"
+            return _StubToolkit()
+
+    monkeypatch.setattr(
+        "agentuniverse.agent.agent.ToolkitManager",
+        _StubToolkitManager,
+    )
+    agent = _StubAgent()
+    agent.agent_model = AgentModel(
+        action={
+            "tool": ["direct_tool"],
+            "toolkit": ["test_toolkit"],
+        }
+    )
+
+    assert agent.tool_names == ["direct_tool", "toolkit_tool"]
+    assert agent.tool_names == ["direct_tool", "toolkit_tool"]
+    assert agent.agent_model.action["tool"] == ["direct_tool"]
