@@ -230,6 +230,32 @@ metadata:
 
 The processor always returns a single Document whose `text` is the summary. Its `metadata` records the operating mode (`summarization_mode`: `llm` or `extractive`), the number of source documents (`source_doc_count`), and the `llm_name` used.
 
+### [MMRProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/mmr_processor.yaml)
+
+This component re-ranks the recalled documents with Maximal Marginal Relevance (MMR), balancing query relevance against inter-document redundancy so a result set is both on-topic and non-repetitive. It addresses the *re-ranking / diversity* direction of issue #248.
+
+At each step MMR selects the document maximising `lambda * sim(d, query) - (1 - lambda) * max_{selected} sim(d, selected)`. Set `lambda_coef` to `1.0` for pure relevance ranking, `0.0` to maximise diversity, or `0.5` (the default) to balance the two. It is distinct from `SemanticDeduplicator` (which removes near-duplicates above a hard threshold) and `ReciprocalRankFusionProcessor` (which fuses ranked lists from several stores): MMR performs diversity-aware selection over a single recalled set.
+
+Without `embedding_name`, query and document embeddings are read from `Query.embeddings` and `Document.embedding` and must have one shared dimension. When `embedding_name` is set, all document embeddings and the query embedding are recomputed with that model; the query must provide `query_str` because a precomputed query vector has no verifiable model provenance. If a homogeneous embedding space cannot be established, the documents are returned in their input order.
+
+The component definition file is as follows:
+```yaml
+name: 'mmr_processor'
+description: 'Maximal Marginal Relevance re-ranking for recalled documents'
+lambda_coef: 0.5          # 1.0 = relevance only, 0.0 = max diversity
+top_n: null               # number of documents to keep after re-ranking
+embedding_name: ''        # registered embedding component for on-demand embedding
+score_key: ''             # metadata key for the stamped cosine relevance, '' to skip
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.mmr_processor'
+  class: 'MMRProcessor'
+```
+- lambda_coef: Relevance/diversity trade-off in [0.0, 1.0].
+- top_n: Number of documents to keep after re-ranking; `null` keeps all documents and only re-orders them.
+- embedding_name: Registered embedding component used to recompute every document and query embedding in one embedding space. When empty, only embeddings already carried by the query/documents are used.
+- score_key: Metadata key under which each kept document's cosine relevance is stamped; empty stamps nothing (so earlier scores such as RRF's are preserved).
+
 ### [SensitiveDataRedactor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sensitive_data_redactor.yaml)
 
 This component redacts common personally identifiable information (PII) / sensitive identifiers from recalled documents *before* they reach the LLM, so personal data and secrets do not leak into model context. It addresses the *privacy / compliance* direction of issue #248 and is distinct from every other doc processor, none of which alter text for privacy.
