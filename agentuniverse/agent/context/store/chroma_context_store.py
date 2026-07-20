@@ -26,6 +26,7 @@ from agentuniverse.agent.context.context_model import (
     ContextType,
     ContextPriority,
 )
+from agentuniverse.agent.action.knowledge.store.chroma_client_factory import create_chroma_client
 
 
 class ChromaContextStore(ContextStore):
@@ -62,14 +63,10 @@ class ChromaContextStore(ContextStore):
 
         # Initialize Chroma client
         try:
-            import chromadb
-            from chromadb.config import Settings
-
-            # Create persistent client
-            self._chroma_client = chromadb.Client(Settings(
-                persist_directory=self.persist_directory,
-                anonymized_telemetry=False
-            ))
+            self._chroma_client = create_chroma_client(
+                self.persist_directory,
+                anonymized_telemetry=False,
+            )
 
             # Get or create collection with embedding function
             self._setup_embedding_function()
