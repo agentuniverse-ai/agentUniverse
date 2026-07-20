@@ -1,0 +1,40 @@
+name: secure_archive_tool
+description: Create, list, inspect, and safely extract bounded ZIP and TAR archives.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.secure_archive_tool
+  class: SecureArchiveTool
+input_keys:
+  - mode
+  - file_path
+base_dir: .
+max_read_bytes: 104857600
+max_write_bytes: 104857600
+max_entries: 5000
+max_member_bytes: 104857600
+max_uncompressed_bytes: 524288000
+max_compression_ratio: 200
+max_input_files: 1000
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [create, list, extract, info]
+    file_path:
+      type: string
+    input_paths:
+      type: array
+      items: {type: string}
+    output_dir: {type: string}
+    members:
+      type: array
+      items: {type: string}
+    overwrite: {type: boolean, default: false}
+    compression:
+      type: string
+      enum: [deflated, stored]
+      default: deflated
+  required: [mode, file_path]
+  additionalProperties: false

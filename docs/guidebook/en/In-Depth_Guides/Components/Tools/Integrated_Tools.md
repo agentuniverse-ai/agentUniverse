@@ -208,3 +208,40 @@ This tool can be used directly without  requiring any keys.
 ### 4.1 WordDocumentTool
 
 `WordDocumentTool` creates, appends to, reads, and inspects DOCX files with structured `heading`, `paragraph`, `bullet`, `table`, and `page_break` blocks. Install `agentUniverse[office_ext]` or `python-docx`, then resolve the built-in `word_document_tool` component. Paths and templates are confined to `base_dir`; archive expansion, file, block, table, and text limits are enforced, and writes are atomic. The existing `WriteWordDocumentTool` remains available for backward compatibility.
+
+## EmailDocumentTool
+
+`EmailDocumentTool` provides offline RFC 5322 `.eml` workflows with `create`, `read`, `info`, and `extract` modes. It can build multipart text/HTML messages, attach files, inspect headers and bodies, and extract selected attachments.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.email_document_tool import EmailDocumentTool
+
+tool = EmailDocumentTool(base_dir="/srv/agent-files")
+tool.execute(
+    mode="create",
+    file_path="report.eml",
+    headers={"from": "agent@example.com", "to": "user@example.com", "subject": "Report"},
+    text_body="The report is attached.",
+    attachments=["report.pdf"],
+)
+```
+
+The tool performs no network or mailbox access. It confines paths to `base_dir`, rejects header injection and unsafe/duplicate attachment names, bounds headers, bodies, attachment counts and bytes, preflights extraction destinations, and uses atomic writes.
+
+## SecureArchiveTool
+
+`SecureArchiveTool` provides bounded archive operations for agent workflows without external dependencies. It supports ZIP, TAR, TAR.GZ, and TGZ files with four modes: `create`, `list`, `extract`, and `info`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.secure_archive_tool import SecureArchiveTool
+
+tool = SecureArchiveTool(base_dir="/srv/agent-files")
+tool.execute(mode="create", file_path="reports.zip", input_paths=["reports"])
+tool.execute(mode="extract", file_path="reports.zip", output_dir="restored", members=["reports/q2.txt"])
+```
+
+All paths are confined to `base_dir`. Extraction rejects absolute/traversal paths, links, special TAR files, encrypted ZIPs, duplicate members, excessive compression ratios, and configured size/count limits. Destinations are preflighted before extraction and files are written through same-directory temporary files.
+
+## 4. PDF Tool
+
+The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.

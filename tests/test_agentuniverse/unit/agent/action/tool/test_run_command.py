@@ -25,7 +25,18 @@ class RunCommandToolTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.tool = RunCommandTool()
+        # Opt in explicitly: RunCommandTool is disabled by default because it
+        # runs arbitrary shell commands (see allow_command_execution).
+        self.tool = RunCommandTool(allow_command_execution=True)
+
+    def test_disabled_by_default_refuses(self) -> None:
+        """A default RunCommandTool must refuse to execute anything."""
+        tool = RunCommandTool()
+        result = json.loads(tool.execute(ToolInput({
+            'command': 'echo should_not_run', 'blocking': True})))
+        self.assertEqual(result['status'], CommandStatus.ERROR.value)
+        self.assertNotIn('should_not_run', result.get('stdout', ''))
+        self.assertIn('allow_command_execution', result['stderr'])
 
     def test_blocking_command_execution(self) -> None:
         """Test synchronous command execution"""
