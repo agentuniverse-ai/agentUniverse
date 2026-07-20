@@ -1,0 +1,9 @@
+name: 'minimax-vl-01'
+description: 'minimax-vl-01'
+model_name: 'MiniMax-VL-01'
+max_tokens: 2000
+temperature: 0.5
+streaming: True
+max_context_length: 1000192
+channel: minimax-vl-01-official
+meta_class: 'agentuniverse.llm.default.minimax_openai_style_llm.MiniMaxOpenAIStyleLLM'
