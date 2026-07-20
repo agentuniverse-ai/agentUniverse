@@ -22,7 +22,7 @@ from agentuniverse.agent.action.tool.common_tool.command_status_tool import Comm
 
 class CommandStatusToolTest(unittest.TestCase):
     def setUp(self):
-        self.run_tool = RunCommandTool()
+        self.run_tool = RunCommandTool(allow_command_execution=True)
         self.status_tool = CommandStatusTool()
 
     def test_command_status_check(self):

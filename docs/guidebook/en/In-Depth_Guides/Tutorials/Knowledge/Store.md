@@ -92,3 +92,7 @@ results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metada
 ```
 
 Supported metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are accepted only for fields declared in `filter_tag_fields`; identifiers and filter values are validated and escaped before constructing RediSearch queries.
+
+## PGVectorStore
+
+`PGVectorStore` adds PostgreSQL/pgvector persistence with synchronous and asynchronous CRUD, cosine/L2/inner-product search, JSONB containment filters, optional managed embeddings, dimension validation, automatic table/extension creation, and an optional HNSW index. Install the `store_ext` extra and copy `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` into the application configuration directory. Set `connection_url` in that copy or use `PGVECTOR_CONNECTION_URL`; never commit credentials.
