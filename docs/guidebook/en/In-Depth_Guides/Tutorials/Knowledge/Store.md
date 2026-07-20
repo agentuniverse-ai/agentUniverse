@@ -80,3 +80,6 @@ store = ['sample_standard_app.intelligence.agentic.knowledge.store']
 - [Chroma](../../../In-Depth_Guides/Tech_Capabilities/Storage/ChromaDB.md)
 - [Milvus](../../../In-Depth_Guides/Tech_Capabilities/Storage/Milvus.md)
 - [Sqlite](../../../In-Depth_Guides/Tech_Capabilities/Storage/Sqlite.md)
+## PGVectorStore
+
+`PGVectorStore` adds PostgreSQL/pgvector persistence with synchronous and asynchronous CRUD, cosine/L2/inner-product search, JSONB containment filters, optional managed embeddings, dimension validation, automatic table/extension creation, and an optional HNSW index. Install the `store_ext` extra and copy `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` into the application configuration directory. Set `connection_url` in that copy or use `PGVECTOR_CONNECTION_URL`; never commit credentials.

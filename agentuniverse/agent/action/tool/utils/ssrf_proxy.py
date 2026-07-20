@@ -19,12 +19,12 @@ proxies = {
 
 
 def make_request(method, url, **kwargs):
+    kwargs.setdefault("timeout", 20)
     if SSRF_PROXY_ALL_URL:
-        return httpx.request(method=method, url=url, proxy=SSRF_PROXY_ALL_URL, timeout=20, **kwargs)
+        kwargs["proxy"] = SSRF_PROXY_ALL_URL
     elif proxies:
-        return httpx.request(method=method, url=url, proxies=proxies, timeout=20, **kwargs)
-    else:
-        return httpx.request(method=method, url=url, timeout=20, **kwargs)
+        kwargs["proxies"] = proxies
+    return httpx.request(method=method, url=url, **kwargs)
 
 
 def get(url, **kwargs):
