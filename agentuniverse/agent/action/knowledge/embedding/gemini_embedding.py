@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
+import logging
 from typing import List, Any
 
 from langchain_core.embeddings import Embeddings as LCEmbeddings
@@ -15,6 +16,9 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 # @Author : wozhapen
 # @mail : wozhapen@gmail.com
 # @FileName :gemini_embedding.py
+
+LOGGER = logging.getLogger(__name__)
+
 
 class GeminiEmbedding(Embedding):
     """Gemini Embedding class that inherits from the base Embedding class."""
@@ -46,9 +50,9 @@ class GeminiEmbedding(Embedding):
             )
             return [embedding.values for embedding in response.embeddings]
         except Exception as e:
-            print(f"Error generating embedding for text: {texts}. Error: {e}")
+            LOGGER.exception("Error generating Gemini embeddings")
             # Handle the error appropriately, e.g., return a zero vector or raise an exception
-            raise ValueError(e)
+            raise ValueError(e) from e
 
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Asynchronously get embeddings for a list of texts using the Gemini API."""
