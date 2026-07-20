@@ -66,8 +66,12 @@ class JiebaKeywordExtractor(DocProcessor):
         Returns:
             The original documents with keywords added to their metadata.
         """
+        if not origin_docs:
+            return []
         for _doc in origin_docs:
-            words = jieba.lcut(_doc.text)
+            # Document.text is Optional[str]; jieba.lcut(None) raises TypeError.
+            text = _doc.text or ''
+            words = jieba.lcut(text)
             filtered_words = [word for word in words if word not in
                               chinese_stopwords and word.lower() not in stop_words]
             keywords = jieba.analyse.extract_tags(" ".join(filtered_words),
