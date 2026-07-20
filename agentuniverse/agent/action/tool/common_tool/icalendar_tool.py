@@ -4,6 +4,7 @@
 # Public execute() converts validation failures into structured tool errors.
 # ruff: noqa: C901, TRY003, TRY004
 
+import json
 import os
 import tempfile
 import uuid
@@ -23,8 +24,14 @@ class ICalendarTool(Tool):
     max_write_bytes: int = 10 * 1024 * 1024
     max_events: int = 1_000
     max_text_chars: int = 200_000
+    max_output_chars: int = 500_000
+    max_field_chars: int = 20_000
     max_attendees_per_event: int = 100
+    max_categories_per_event: int = 100
     max_alarms_per_event: int = 10
+    max_properties_per_event: int = 50
+    max_input_files: int = 100
+    max_merge_bytes: int = 50 * 1024 * 1024
 
     _EVENT_FIELDS: ClassVar[set[str]] = {
         "uid",
@@ -103,8 +110,14 @@ class ICalendarTool(Tool):
             "max_write_bytes",
             "max_events",
             "max_text_chars",
+            "max_output_chars",
+            "max_field_chars",
             "max_attendees_per_event",
+            "max_categories_per_event",
             "max_alarms_per_event",
+            "max_properties_per_event",
+            "max_input_files",
+            "max_merge_bytes",
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -152,6 +165,35 @@ class ICalendarTool(Tool):
         events = list(calendar.walk("VEVENT"))
         if len(events) > self.max_events:
             raise ValueError(f"calendar exceeds max_events ({self.max_events})")
+        for event_index, event in enumerate(events):
+            properties = event.property_items()
+            if len(properties) > self.max_properties_per_event:
+                raise ValueError(
+                    f"event {event_index} exceeds max_properties_per_event ({self.max_properties_per_event})"
+                )
+            for name, value in properties:
+                if len(str(value)) > self.max_field_chars:
+                    raise ValueError(f"event {event_index}.{name} exceeds max_field_chars ({self.max_field_chars})")
+            if len(self._multi_property(event, "attendee")) > self.max_attendees_per_event:
+                raise ValueError(
+                    f"event {event_index} exceeds max_attendees_per_event ({self.max_attendees_per_event})"
+                )
+            if len(self._categories(event)) > self.max_categories_per_event:
+                raise ValueError(
+                    f"event {event_index} exceeds max_categories_per_event ({self.max_categories_per_event})"
+                )
+            alarms = [component for component in event.subcomponents if component.name == "VALARM"]
+            if len(alarms) != len(event.subcomponents):
+                raise ValueError(f"event {event_index} contains an unsupported nested component")
+            if len(alarms) > self.max_alarms_per_event:
+                raise ValueError(f"event {event_index} exceeds max_alarms_per_event ({self.max_alarms_per_event})")
+            for alarm_index, alarm in enumerate(alarms):
+                for name, value in alarm.property_items():
+                    if len(str(value)) > self.max_field_chars:
+                        raise ValueError(
+                            f"event {event_index}.alarm {alarm_index}.{name} exceeds max_field_chars "
+                            f"({self.max_field_chars})"
+                        )
 
     def _create(
         self,
@@ -188,30 +230,35 @@ class ICalendarTool(Tool):
         self._check_overwrite(path, overwrite)
         if not isinstance(input_paths, list) or not input_paths:
             raise ValueError("input_paths must be a non-empty list")
-        if len(input_paths) > self.max_events:
-            raise ValueError(f"input_paths exceeds max_events ({self.max_events})")
-        calendars = []
+        if len(input_paths) > self.max_input_files:
+            raise ValueError(f"input_paths exceeds max_input_files ({self.max_input_files})")
         safe_inputs = []
+        calendar = self._new_calendar(name, description)
+        seen = set()
+        event_count = 0
+        total_bytes = 0
         for index, raw_path in enumerate(input_paths):
             safe_path = self._ics_path(raw_path, f"input_paths[{index}]")
             if safe_path == path:
                 raise ValueError("file_path must not also appear in input_paths")
-            calendars.append(self._load(safe_path))
+            if not os.path.isfile(safe_path):
+                raise ValueError(f"input_paths[{index}] does not exist: {safe_path}")
+            total_bytes += os.path.getsize(safe_path)
+            if total_bytes > self.max_merge_bytes:
+                raise ValueError(f"input_paths exceed max_merge_bytes ({self.max_merge_bytes})")
+            source = self._load(safe_path)
+            for event in source.walk("VEVENT"):
+                event_count += 1
+                if event_count > self.max_events:
+                    raise ValueError(f"merged calendar exceeds max_events ({self.max_events})")
+                uid = str(event.get("uid", "")).strip()
+                if not uid:
+                    raise ValueError("every merged event must have a UID")
+                if uid in seen:
+                    raise ValueError(f"duplicate event UID during merge: {uid}")
+                seen.add(uid)
+                calendar.add_component(event)
             safe_inputs.append(safe_path)
-        components = [event for calendar in calendars for event in calendar.walk("VEVENT")]
-        if len(components) > self.max_events:
-            raise ValueError(f"merged calendar exceeds max_events ({self.max_events})")
-        seen = set()
-        for event in components:
-            uid = str(event.get("uid", "")).strip()
-            if not uid:
-                raise ValueError("every merged event must have a UID")
-            if uid in seen:
-                raise ValueError(f"duplicate event UID during merge: {uid}")
-            seen.add(uid)
-        calendar = self._new_calendar(name, description)
-        for event in components:
-            calendar.add_component(event)
         self._validate_loaded_calendar(calendar)
         self._atomic_write(calendar.to_ical(), path)
         return {
@@ -219,7 +266,7 @@ class ICalendarTool(Tool):
             "mode": "merge",
             "file_path": path,
             "input_paths": safe_inputs,
-            "event_count": len(components),
+            "event_count": event_count,
             "file_size": os.path.getsize(path),
             "overwritten": overwrite,
         }
@@ -286,7 +333,11 @@ class ICalendarTool(Tool):
             spec["attendees"] = self._string_list(
                 raw.get("attendees", []), f"events[{index}].attendees", self.max_attendees_per_event
             )
-            spec["categories"] = self._string_list(raw.get("categories", []), f"events[{index}].categories", 100)
+            spec["categories"] = self._string_list(
+                raw.get("categories", []),
+                f"events[{index}].categories",
+                self.max_categories_per_event,
+            )
             alarms = raw.get("alarms", [])
             if not isinstance(alarms, list) or len(alarms) > self.max_alarms_per_event:
                 raise ValueError(f"events[{index}].alarms must be a list limited to {self.max_alarms_per_event}")
@@ -341,24 +392,22 @@ class ICalendarTool(Tool):
             parsed = parsed.replace(tzinfo=timezone)
         return parsed
 
-    @staticmethod
-    def _text(value: Any, field: str, required: bool = False) -> str | None:
+    def _text(self, value: Any, field: str, required: bool = False) -> str | None:
         if value is None and not required:
             return None
         if not isinstance(value, str) or (required and not value.strip()):
             raise ValueError(f"{field} must be a non-empty string")
         value = value.strip()
-        if len(value) > 20_000 or "\x00" in value:
+        if len(value) > self.max_field_chars or "\x00" in value:
             raise ValueError(f"{field} is invalid or too long")
         return value
 
-    @staticmethod
-    def _string_list(value: Any, field: str, limit: int) -> list[str]:
+    def _string_list(self, value: Any, field: str, limit: int) -> list[str]:
         if not isinstance(value, list) or len(value) > limit:
             raise ValueError(f"{field} must be a list limited to {limit} items")
         output = []
         for index, item in enumerate(value):
-            normalized = ICalendarTool._text(item, f"{field}[{index}]", True)
+            normalized = self._text(item, f"{field}[{index}]", True)
             output.append(cast(str, normalized))
         return output
 
@@ -388,51 +437,64 @@ class ICalendarTool(Tool):
         remaining = self.max_text_chars
         results = []
         truncated = False
+
+        def consume(value: Any) -> str:
+            nonlocal remaining, truncated
+            output, remaining, cut = self._bounded(value, remaining)
+            truncated = truncated or cut
+            return output
+
         for component in calendar.walk("VEVENT"):
             event = {
-                "uid": self._property(component, "uid"),
-                "summary": self._property(component, "summary"),
-                "start": self._decoded_temporal(component, "dtstart"),
-                "end": self._decoded_temporal(component, "dtend"),
-                "description": self._property(component, "description"),
-                "location": self._property(component, "location"),
-                "status": self._property(component, "status"),
-                "organizer": self._property(component, "organizer"),
-                "url": self._property(component, "url"),
-                "rrule": self._property(component, "rrule"),
-                "attendees": self._multi_property(component, "attendee"),
-                "categories": self._categories(component),
+                "uid": consume(self._property(component, "uid")),
+                "summary": consume(self._property(component, "summary")),
+                "start": consume(self._decoded_temporal(component, "dtstart")),
+                "end": consume(self._decoded_temporal(component, "dtend")),
+                "description": consume(self._property(component, "description")),
+                "location": consume(self._property(component, "location")),
+                "status": consume(self._property(component, "status")),
+                "organizer": consume(self._property(component, "organizer")),
+                "url": consume(self._property(component, "url")),
+                "rrule": consume(self._property(component, "rrule")),
+                "attendees": [consume(value) for value in self._multi_property(component, "attendee")],
+                "categories": [consume(value) for value in self._categories(component)],
                 "alarms": [
                     {
-                        "action": self._property(alarm, "action"),
-                        "description": self._property(alarm, "description"),
-                        "trigger": self._property(alarm, "trigger"),
+                        "action": consume(self._property(alarm, "action")),
+                        "description": consume(self._property(alarm, "description")),
+                        "trigger": consume(self._property(alarm, "trigger")),
                     }
                     for alarm in component.subcomponents
                     if alarm.name == "VALARM"
                 ],
             }
-            for field in ("summary", "description", "location"):
-                value, remaining, cut = self._bounded(event[field], remaining)
-                event[field] = value
-                truncated = truncated or cut
             results.append(event)
-        return {
+        result = {
             "status": "success",
             "mode": "read",
             "file_path": path,
-            "calendar_name": self._property(calendar, "X-WR-CALNAME"),
-            "calendar_description": self._property(calendar, "X-WR-CALDESC"),
+            "calendar_name": consume(self._property(calendar, "X-WR-CALNAME")),
+            "calendar_description": consume(self._property(calendar, "X-WR-CALDESC")),
             "event_count": len(results),
+            "returned_event_count": len(results),
             "events": results,
             "truncated": truncated,
         }
+        while result["events"] and self._json_size(result) > self.max_output_chars:
+            result["events"].pop()
+            result["returned_event_count"] = len(result["events"])
+            result["truncated"] = True
+        if self._json_size(result) > self.max_output_chars:
+            result["calendar_name"] = ""
+            result["calendar_description"] = ""
+            result["truncated"] = True
+        return result
 
     def _info(self, path: str, calendar: Any) -> dict[str, Any]:
         events = list(calendar.walk("VEVENT"))
         starts = [self._decoded_temporal(event, "dtstart") for event in events if event.get("dtstart")]
         ends = [self._decoded_temporal(event, "dtend") for event in events if event.get("dtend")]
-        return {
+        result = {
             "status": "success",
             "mode": "info",
             "file_path": path,
@@ -444,6 +506,13 @@ class ICalendarTool(Tool):
             "range_end": max(ends) if ends else None,
             "summaries": [self._property(event, "summary")[:500] for event in events],
         }
+        while result["summaries"] and self._json_size(result) > self.max_output_chars:
+            result["summaries"].pop()
+        return result
+
+    @staticmethod
+    def _json_size(value: Any) -> int:
+        return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
 
     @staticmethod
     def _property(component: Any, name: str) -> str:

@@ -261,4 +261,4 @@ tool.execute(
 )
 ```
 
-Paths are confined to `base_dir`; event count, text, attendees, alarms, input size, and generated size are bounded. Writes use a same-directory temporary file and explicit overwrite.
+Paths are confined to `base_dir`; event count, every externally loaded property, property count, attendees, categories, alarms, input size, and generated size are bounded. The complete serialized read response is constrained by `max_output_chars`. Merge admits at most `max_input_files`, checks the aggregate `max_merge_bytes` budget as each file is loaded, and adds validated events incrementally instead of retaining every source calendar. Writes use a same-directory temporary file and explicit overwrite.

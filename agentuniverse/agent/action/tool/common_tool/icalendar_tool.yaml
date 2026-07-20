@@ -13,8 +13,14 @@ max_read_bytes: 10485760
 max_write_bytes: 10485760
 max_events: 1000
 max_text_chars: 200000
+max_output_chars: 500000
+max_field_chars: 20000
 max_attendees_per_event: 100
+max_categories_per_event: 100
 max_alarms_per_event: 10
+max_properties_per_event: 50
+max_input_files: 100
+max_merge_bytes: 52428800
 args_model:
   mode:
     type: string

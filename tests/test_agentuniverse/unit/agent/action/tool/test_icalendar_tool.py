@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the built-in ICalendarTool."""
 
+import json
 import os
 import tempfile
 import unittest
@@ -98,6 +99,30 @@ class TestICalendarValidation(CalendarTestCase):
         result = self.tool.execute(mode="create", file_path="calendar.ics", events=[event])
         self.assertIn("limited to 1", result["error"])
 
+    def test_loaded_calendar_rejects_oversized_external_fields_and_lists(self):
+        path = os.path.join(self.base_dir, "external.ics")
+        self.tool.max_field_chars = 10
+        with open(path, "w", encoding="utf-8") as stream:
+            stream.write(
+                "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:external\n"
+                "DTSTART:20260720T100000Z\nDTEND:20260720T110000Z\n"
+                "SUMMARY:xxxxxxxxxxx\nEND:VEVENT\nEND:VCALENDAR\n"
+            )
+        result = self.tool.execute(mode="read", file_path="external.ics")
+        self.assertIn("max_field_chars", result["error"])
+
+        self.tool.max_field_chars = 20_000
+        self.tool.max_attendees_per_event = 1
+        with open(path, "w", encoding="utf-8") as stream:
+            stream.write(
+                "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:external\n"
+                "DTSTART:20260720T100000Z\nDTEND:20260720T110000Z\nSUMMARY:test\n"
+                "ATTENDEE:mailto:a@example.com\nATTENDEE:mailto:b@example.com\n"
+                "END:VEVENT\nEND:VCALENDAR\n"
+            )
+        result = self.tool.execute(mode="read", file_path="external.ics")
+        self.assertIn("max_attendees_per_event", result["error"])
+
     def test_missing_dependency_has_install_hint(self):
         with patch.object(ICalendarTool, "_dependency", side_effect=ImportError("missing")):
             result = self.tool.execute(mode="create", file_path="calendar.ics", events=[self.event()])
@@ -187,6 +212,22 @@ class TestICalendarOperations(CalendarTestCase):
         self.assertIn("duplicate event UID", result["error"])
         self.assertFalse(os.path.exists(os.path.join(self.base_dir, "merged.ics")))
 
+    def test_merge_enforces_file_count_and_aggregate_byte_budgets(self):
+        self.tool.execute(mode="create", file_path="one.ics", events=[self.event("one")])
+        self.tool.execute(mode="create", file_path="two.ics", events=[self.event("two")])
+        self.tool.max_input_files = 1
+        result = self.tool.execute(
+            mode="merge", file_path="merged.ics", input_paths=["one.ics", "two.ics"]
+        )
+        self.assertIn("max_input_files", result["error"])
+
+        self.tool.max_input_files = 2
+        self.tool.max_merge_bytes = os.path.getsize(os.path.join(self.base_dir, "one.ics"))
+        result = self.tool.execute(
+            mode="merge", file_path="merged.ics", input_paths=["one.ics", "two.ics"]
+        )
+        self.assertIn("max_merge_bytes", result["error"])
+
     def test_create_refuses_and_allows_explicit_overwrite(self):
         self.tool.execute(mode="create", file_path="calendar.ics", events=[self.event()])
         refused = self.tool.execute(mode="create", file_path="calendar.ics", events=[self.event("new")])
@@ -206,6 +247,27 @@ class TestICalendarOperations(CalendarTestCase):
         read = self.tool.execute(mode="read", file_path="calendar.ics")
         self.assertTrue(read["truncated"])
         self.assertLessEqual(len(read["events"][0]["summary"]) + len(read["events"][0]["description"]), 10)
+
+    def test_read_bounds_the_entire_serialized_response(self):
+        event = self.event()
+        event.update(
+            description="description" * 20,
+            organizer="mailto:organizer@example.com",
+            url="https://example.com/" + "x" * 100,
+            rrule="FREQ=DAILY;COUNT=100",
+            attendees=[f"mailto:user-{index}@example.com" for index in range(10)],
+            categories=[f"category-{index}" for index in range(10)],
+            alarms=[{"minutes_before": index, "description": "alarm" * 10} for index in range(5)],
+        )
+        self.tool.execute(mode="create", file_path="calendar.ics", events=[event])
+        self.tool.max_output_chars = 300
+        result = self.tool.execute(mode="read", file_path="calendar.ics")
+        self.assertLessEqual(
+            len(json.dumps(result, ensure_ascii=False, separators=(",", ":"))),
+            self.tool.max_output_chars,
+        )
+        self.assertTrue(result["truncated"])
+        self.assertEqual(result["returned_event_count"], 0)
 
 
 class TestICalendarRegistration(unittest.TestCase):
