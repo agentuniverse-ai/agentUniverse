@@ -72,8 +72,11 @@ class SlaveRagAgentTemplate(AgentTemplate):
         version_prompt: Prompt = PromptManager().get_instance_obj(agent_input['prompt_name'])
 
         if version_prompt is None and not profile_prompt_model:
-            raise Exception("Either the `prompt_version` or `introduction & target & instruction`"
-                            " in agent profile configuration should be provided.")
+            agent_name = (self.agent_model.info or {}).get("name") or "<unnamed>"
+            raise ValueError(
+                f"[{agent_name}] Either the `prompt_version` or "
+                "`introduction & target & instruction` in agent profile "
+                "configuration should be provided.")
         if version_prompt:
             version_prompt_model: AgentPromptModel = AgentPromptModel(
                 introduction=getattr(version_prompt, 'introduction', ''),
