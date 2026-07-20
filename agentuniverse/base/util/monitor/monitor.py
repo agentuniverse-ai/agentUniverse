@@ -291,7 +291,7 @@ class Monitor(BaseModel):
 
             if llm_obj is None or llm_input is None:
                 return {}
-            messages = llm_input.get('kwargs', {}).pop('messages', None)
+            messages = llm_input.get('kwargs', {}).get('messages')
 
             input_str = ''
             if messages is not None and isinstance(messages, list):
