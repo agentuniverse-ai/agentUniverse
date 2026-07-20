@@ -1,0 +1,11 @@
+name: financial_evidence_tool
+description: Tenant-isolated financial evidence ingestion and cited retrieval.
+database_path: financial-research.db
+max_citations: 5
+input_keys:
+  - mode
+  - tenant_id
+metadata:
+  type: TOOL
+  module: examples.sample_apps.financial_research_app.components
+  class: FinancialEvidenceTool
