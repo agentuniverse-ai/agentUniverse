@@ -229,8 +229,9 @@ class Agent(ComponentBase, ABC):
         try:
             parse_result = parse_json_markdown(input)
         except Exception as e:
-            LOGGER.error(f"langchain run parse_json_markdown error,input(parse_result) error({str(e)})")
-            return "Error , Your Action Input is not a valid JSON string"
+            truncated_input = input[:200] if input else ""
+            LOGGER.error(f"langchain_run: failed to parse JSON input. Error: {e}. Input (truncated): {truncated_input}")
+            return f"Error: Your Action Input is not a valid JSON string. Parse error: {e}"
         output_object = self.run(**parse_result, callbacks=callbacks, **kwargs)
         result_dict = {}
         for key in self.output_keys():
@@ -242,8 +243,9 @@ class Agent(ComponentBase, ABC):
         try:
             parse_result = parse_json_markdown(input)
         except Exception as e:
-            LOGGER.error(f"langchain run parse_json_markdown error,input(parse_result) error({str(e)})")
-            return "Error , Your Action Input is not a valid JSON string"
+            truncated_input = input[:200] if input else ""
+            LOGGER.error(f"async_langchain_run: failed to parse JSON input. Error: {e}. Input (truncated): {truncated_input}")
+            return f"Error: Your Action Input is not a valid JSON string. Parse error: {e}"
         output_object = await self.async_run(**parse_result, callbacks=callbacks, **kwargs)
         result_dict = {}
         for key in self.output_keys():
@@ -399,8 +401,8 @@ class Agent(ComponentBase, ABC):
             try:
                 tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
                 tool_results.append(str(tool.run(**tool_input)))
-            except:
-                LOGGER.warn(f'Tool {tool_name} call failed, maybe invalid or lack arguments')
+            except Exception as e:
+                LOGGER.warning(f'Tool {tool_name} call failed: {e}')
         return "\n\n".join(tool_results)
 
     async def async_invoke_tools(self, input_object: InputObject, **kwargs) -> str:

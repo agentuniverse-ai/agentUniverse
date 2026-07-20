@@ -156,6 +156,6 @@ class MCPServerManager:
             for _mcp_server in mcp_server_list:
                 app.mount(f"/{_mcp_server['server_name']}", _mcp_server['server'].streamable_http_app())
         else:
-            raise Exception('Unsupported mcp server type')
+            raise Exception(f"Unsupported mcp server transport: '{transport}'. Supported types: 'sse', 'streamable_http'")
 
         uvicorn.run(app, host=host, port=port)

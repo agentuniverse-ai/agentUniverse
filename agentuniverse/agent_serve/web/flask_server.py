@@ -226,6 +226,7 @@ def handle_exception(e):
         return make_standard_response(success=False,
                                       message=str(e),
                                       status_code=404)
+    LOGGER.error(f"Unhandled exception [{type(e).__name__}]: {e}")
     return make_standard_response(success=False,
                                   message="Internal Server Error",
                                   status_code=500)
