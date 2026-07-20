@@ -135,7 +135,15 @@ class Planner(ComponentBase):
                                             for key in agent.output_keys()
                                             if output_object.get_data(key) is not None]))
 
-        planner_input['background'] = planner_input['background'] or '' + "\n".join(action_result)
+        # NOTE: ``+`` binds tighter than ``or`` in Python, so the previous
+        # form ``planner_input['background'] or '' + "\n".join(...)`` parsed
+        # as ``background or ('' + join)`` — when background was already
+        # non-empty the entire action_result was silently dropped. The
+        # intended behaviour is to *append* the new action results to any
+        # existing background; parenthesise to make that explicit and use
+        # ``.get`` so a missing key does not KeyError.
+        existing_background = planner_input.get('background') or ''
+        planner_input['background'] = existing_background + "\n".join(action_result)
 
     def handle_prompt(self, agent_model: AgentModel, planner_input: dict):
         """Prompt module processing.
@@ -156,7 +164,7 @@ class Planner(ComponentBase):
         Returns:
             LLM: The language model.
         """
-        llm_name = agent_model.profile.get('llm_model').get('name')
+        llm_name = agent_model.profile.get('llm_model', {}).get('name')
         llm: LLM = LLMManager().get_instance_obj(component_instance_name=llm_name)
         return llm
 
