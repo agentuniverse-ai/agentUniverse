@@ -18,7 +18,7 @@ documents = reader.load_data(
 print(reader.last_report)
 ```
 
-本地路径限制在 `base_dir` 内，同时限制输入数量、并发数、来源文件大小、文档数量和总文本量。URL 默认关闭，也可以通过 `allowed_reader_names` 限制可调用的 Reader。
+本地路径限制在 `base_dir` 内，同时限制输入数量、并发数、来源文件大小、单来源文档/文本量以及批次总文档/文本量，并在 Future 完成时立即检查。`continue_on_error=false` 会停止接收新工作、取消已排队 Future，并在首个已完成失败出现时立即返回；已运行的 Python 线程无法被强制终止。URL 默认关闭。开启后只接受内置网页 Reader，初始地址和每次重定向都会解析 DNS；如果任一地址属于回环、私有、链路本地、保留或其他非公网范围，请求将被拒绝。
 
 Reader负责从各式各样的信息源中将信息抽取成agentUniverse中的Document形式。这些信息源可以是各种本地文件，也可以是网页或者一个IO接口，
 

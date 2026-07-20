@@ -5,10 +5,11 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from agentuniverse.agent.action.knowledge.reader.batch_reader import BatchKnowledgeReader
 from agentuniverse.agent.action.knowledge.reader.reader_manager import ReaderManager
+from agentuniverse.agent.action.knowledge.reader.web.web_page_reader import WebPageReader
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
@@ -127,6 +128,18 @@ class TestBatchReaderOperations(BatchReaderTestCase):
         ):
             self.reader.load_data(["bad.txt"], continue_on_error=False)
 
+    def test_fail_fast_does_not_wait_for_unrelated_slow_work(self):
+        self.file("slow.txt")
+        self.file("bad.md")
+        readers = {
+            "default_txt_reader": FakeReader([Document(text="slow")], delay=0.25),
+            "default_markdown_reader": FakeReader(error=RuntimeError("boom")),
+        }
+        started = time.monotonic()
+        with self.manager(readers), self.assertRaisesRegex(RuntimeError, "boom"):
+            self.reader.load_data(["slow.txt", "bad.md"], continue_on_error=False, max_workers=2)
+        self.assertLess(time.monotonic() - started, 0.15)
+
     def test_deduplicate_by_id(self):
         self.file("one.txt")
         self.file("two.txt")
@@ -162,9 +175,21 @@ class TestBatchReaderOperations(BatchReaderTestCase):
     def test_url_dispatch_when_enabled(self):
         self.reader.allow_urls = True
         readers = {"default_web_page_reader": FakeReader([Document(text="web")])}
-        with self.manager(readers):
+        with (
+            self.manager(readers),
+            patch(
+                "agentuniverse.agent.action.knowledge.reader.batch_reader.validate_public_http_url",
+                side_effect=lambda value: value,
+            ),
+        ):
             documents = self.reader.load_data(["https://example.com/article"])
         self.assertEqual(documents[0].metadata["batch_source"], "https://example.com/article")
+
+    def test_url_rejects_private_and_link_local_destinations(self):
+        self.reader.allow_urls = True
+        for url in ("http://127.0.0.1/", "http://169.254.169.254/latest/meta-data/", "http://[::1]/"):
+            with self.subTest(url=url), self.assertRaisesRegex(ValueError, "non-public"):
+                self.reader.load_data([url])
 
 
 class TestBatchReaderValidation(BatchReaderTestCase):
@@ -214,6 +239,15 @@ class TestBatchReaderValidation(BatchReaderTestCase):
         with self.manager({"default_txt_reader": fake}), self.assertRaisesRegex(ValueError, "max_total_chars"):
             self.reader.load_data(["data.txt"], deduplicate=False)
 
+    def test_per_source_limits_are_enforced_at_completion(self):
+        self.file("data.txt")
+        fake = FakeReader([Document(text="one"), Document(text="two")])
+        self.reader.max_documents_per_source = 1
+        with self.manager({"default_txt_reader": fake}), self.assertRaisesRegex(
+            ValueError, "max_documents_per_source"
+        ):
+            self.reader.load_data(["data.txt"], continue_on_error=False)
+
     def test_non_document_reader_result_is_rejected(self):
         self.file("data.txt")
 
@@ -237,6 +271,35 @@ class TestBatchReaderRegistration(unittest.TestCase):
         self.assertEqual(component.get_component_config_type(), ComponentEnum.READER.value)
         self.assertEqual(component.metadata_class, "BatchKnowledgeReader")
         self.assertEqual(component.max_workers, 4)
+
+
+class TestSafeWebRedirects(unittest.TestCase):
+    def test_redirect_destination_is_revalidated(self):
+        class RedirectResponse:
+            def __init__(self):
+                self.is_redirect = True
+                self.headers = {"location": "http://127.0.0.1/admin"}
+
+        client = MagicMock()
+        client.__enter__.return_value.get.return_value = RedirectResponse()
+        checked = []
+
+        def validate(url):
+            checked.append(url)
+            if "127.0.0.1" in url:
+                raise ValueError("non-public")
+            return url
+
+        with (
+            patch("httpx.Client", return_value=client),
+            patch(
+                "agentuniverse.agent.action.knowledge.reader.web.web_page_reader.validate_public_http_url",
+                side_effect=validate,
+            ),
+            self.assertRaisesRegex(ValueError, "non-public"),
+        ):
+            WebPageReader()._fetch_html("https://example.com/start")
+        self.assertEqual(checked[-1], "http://127.0.0.1/admin")
 
 
 if __name__ == "__main__":
