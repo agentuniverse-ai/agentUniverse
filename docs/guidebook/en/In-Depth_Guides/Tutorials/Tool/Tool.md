@@ -26,7 +26,9 @@ circuit_failure_threshold: 5
 circuit_recovery_seconds: 30
 ```
 
-As with Python thread-based timeouts generally, a synchronous timeout stops waiting but cannot forcibly terminate code already running inside the wrapped tool. Use the asynchronous path for cancellable I/O and avoid retrying side-effecting operations without an idempotency guarantee.
+`timeout_seconds` is a response deadline. With Python thread-backed execution it stops waiting but cannot forcibly terminate code already running inside the wrapped tool. A deadline failure is therefore never retried automatically, even for an idempotent target: starting another attempt could overlap the still-running worker and duplicate side effects. Native asynchronous targets can propagate cancellation to cancellable I/O. Cancellation of a half-open probe safely reopens the circuit so a later probe is not permanently blocked.
+
+Each accepted wrapper invocation asks `ToolManager` for a fresh target copy. This preserves the framework's copy-per-call isolation when multiple wrapper calls execute concurrently; only the wrapper's circuit and metric state are intentionally shared.
 
 # Conclusion
 By now, you should have a basic understanding of the design principles behind tool components. In the next section, we will introduce you to the standard definitions of tool components, how to customize and create your own tools, and how to utilize these tools.

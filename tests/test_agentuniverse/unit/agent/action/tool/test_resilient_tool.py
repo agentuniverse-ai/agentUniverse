@@ -2,6 +2,7 @@
 """Tests for the resilient tool wrapper."""
 
 import asyncio
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -47,6 +48,23 @@ class FakeManager:
     def get_instance_obj(self, name, new_instance=False):
         self.new_instance = new_instance
         return self.tools.get(name)
+
+
+class CopyingFakeManager:
+    """Return an independent target for every accepted wrapper invocation."""
+
+    def __init__(self):
+        self.instances = []
+        self.new_instance_values = []
+
+    def __call__(self):
+        return self
+
+    def get_instance_obj(self, _name, new_instance=False):
+        self.new_instance_values.append(new_instance)
+        target = SequenceTool()
+        self.instances.append(target)
+        return target
 
 
 class ResilientTestCase(unittest.TestCase):
@@ -165,6 +183,40 @@ class TestTimeoutAndFallback(ResilientTestCase):
             asyncio.run(run())
         self.assertEqual(wrapper.resilience_state()["timeouts"], 1)
 
+    def test_sync_deadline_never_starts_overlapping_retry(self):
+        class SlowSideEffectTool(SequenceTool):
+            def __init__(self):
+                super().__init__()
+                self.active = 0
+                self.max_active = 0
+                self.lock = threading.Lock()
+
+            def run(self, **kwargs):
+                with self.lock:
+                    self.calls.append(kwargs)
+                    self.active += 1
+                    self.max_active = max(self.max_active, self.active)
+                try:
+                    time.sleep(0.03)
+                    return "done"
+                finally:
+                    with self.lock:
+                        self.active -= 1
+
+        target = SlowSideEffectTool()
+        wrapper, _target, context = self.wrapper(
+            target,
+            timeout_seconds=0.005,
+            max_attempts=2,
+            idempotent=True,
+        )
+        with context, self.assertRaises(ToolTimeoutError):
+            wrapper.execute()
+        time.sleep(0.04)
+        self.assertEqual(len(target.calls), 1)
+        self.assertEqual(target.max_active, 1)
+        self.assertEqual(wrapper.resilience_state()["retries"], 0)
+
     def test_async_retry(self):
         wrapper, target, context = self.wrapper(
             SequenceTool([ConnectionError("temporary"), "async ok"]),
@@ -263,6 +315,51 @@ class TestCircuitBreaker(ResilientTestCase):
         copied = wrapper.create_copy()
         self.assertIs(copied._state, wrapper._state)
         self.assertIs(copied._state_lock, wrapper._state_lock)
+
+    def test_cancelled_half_open_probe_releases_probe_slot(self):
+        started = asyncio.Event()
+
+        class BlockingTool(SequenceTool):
+            async def async_run(self, **kwargs):
+                self.calls.append(kwargs)
+                started.set()
+                await asyncio.Event().wait()
+
+        wrapper, _target, context = self.wrapper(
+            BlockingTool(),
+            circuit_failure_threshold=1,
+            circuit_recovery_seconds=1,
+        )
+        wrapper._state.update(
+            circuit="open",
+            opened_at=time.monotonic() - 2,
+            consecutive_failures=1,
+        )
+
+        async def run():
+            with context:
+                task = asyncio.create_task(wrapper.async_execute())
+                await started.wait()
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+
+        asyncio.run(run())
+        state = wrapper.resilience_state()
+        self.assertEqual(state["circuit"], "open")
+        self.assertFalse(wrapper._state["half_open_in_flight"])
+
+
+class TestTargetIsolation(ResilientTestCase):
+    def test_each_invocation_requests_a_fresh_target_instance(self):
+        wrapper, _target, _context = self.wrapper()
+        manager = CopyingFakeManager()
+        with patch("agentuniverse.agent.action.tool.resilient_tool.ToolManager", new=manager):
+            self.assertEqual(wrapper.execute(request=1), "ok")
+            self.assertEqual(wrapper.execute(request=2), "ok")
+        self.assertEqual(manager.new_instance_values, [True, True])
+        self.assertEqual(len(manager.instances), 2)
+        self.assertIsNot(manager.instances[0], manager.instances[1])
 
 
 class TestResilientValidation(ResilientTestCase):

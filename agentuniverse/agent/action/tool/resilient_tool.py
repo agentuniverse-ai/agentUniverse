@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configurable retry, timeout, fallback, and circuit-breaker tool wrapper."""
+"""Configurable retry, deadline, fallback, and circuit-breaker tool wrapper."""
 
 # Policy validation intentionally uses concise built-in exceptions.
 # ruff: noqa: C901, S311, TRY003, TRY300, TRY301
@@ -78,10 +78,10 @@ class ResilientTool(Tool):
     def execute(self, **kwargs: Any) -> Any:
         """Synchronously invoke the target tool with resilience policies."""
         self._validate_policy()
-        target = self._target()
         allowed = self._begin_call()
         if not allowed:
             return self._reject_open_circuit()
+        target = self._target()
         attempts = self._attempt_count()
         last_error: Exception | None = None
         for attempt in range(1, attempts + 1):
@@ -109,37 +109,41 @@ class ResilientTool(Tool):
         raise last_error or RuntimeError("resilient tool failed without an error")
 
     async def async_execute(self, **kwargs: Any) -> Any:
-        """Asynchronously invoke the target tool with cancellable timeouts."""
+        """Asynchronously invoke the target tool with a response deadline."""
         self._validate_policy()
-        target = self._target()
         allowed = self._begin_call()
         if not allowed:
             return self._reject_open_circuit()
-        attempts = self._attempt_count()
-        last_error: Exception | None = None
-        for attempt in range(1, attempts + 1):
-            try:
-                result = await self._async_attempt(target, kwargs)
-                if self.retry_on_error_result and self._is_error_result(result):
-                    raise _ToolResultError(result)
-                self._record_success()
-                return result
-            except Exception as exc:
-                last_error = exc
-                if isinstance(exc, ToolTimeoutError):
-                    self._increment("timeouts")
-                if attempt < attempts and self._retryable(exc):
-                    self._increment("retries")
-                    await asyncio.sleep(self._delay(attempt))
-                    continue
-                self._record_failure(exc)
-                if self.fallback_enabled:
-                    self._increment("fallbacks")
-                    return self.fallback_value
-                if isinstance(exc, _ToolResultError):
-                    return exc.result
-                raise
-        raise last_error or RuntimeError("resilient tool failed without an error")
+        target = self._target()
+        try:
+            attempts = self._attempt_count()
+            last_error: Exception | None = None
+            for attempt in range(1, attempts + 1):
+                try:
+                    result = await self._async_attempt(target, kwargs)
+                    if self.retry_on_error_result and self._is_error_result(result):
+                        raise _ToolResultError(result)
+                    self._record_success()
+                    return result
+                except Exception as exc:
+                    last_error = exc
+                    if isinstance(exc, ToolTimeoutError):
+                        self._increment("timeouts")
+                    if attempt < attempts and self._retryable(exc):
+                        self._increment("retries")
+                        await asyncio.sleep(self._delay(attempt))
+                        continue
+                    self._record_failure(exc)
+                    if self.fallback_enabled:
+                        self._increment("fallbacks")
+                        return self.fallback_value
+                    if isinstance(exc, _ToolResultError):
+                        return exc.result
+                    raise
+            raise last_error or RuntimeError("resilient tool failed without an error")
+        except asyncio.CancelledError:
+            self._record_cancellation()
+            raise
 
     def _validate_policy(self) -> None:
         if not isinstance(self.target_tool, str) or not self.target_tool.strip():
@@ -185,7 +189,7 @@ class ResilientTool(Tool):
             raise ValueError("retry_exception_names must contain simple exception class names")
 
     def _target(self) -> Tool:
-        target = ToolManager().get_instance_obj(self.target_tool, new_instance=False)
+        target = ToolManager().get_instance_obj(self.target_tool, new_instance=True)
         if target is None:
             raise ValueError(f"target tool is not registered: {self.target_tool}")
         if target is self or (isinstance(target, ResilientTool) and target.target_tool == self.name):
@@ -268,7 +272,21 @@ class ResilientTool(Tool):
                 self._state["opened_at"] = time.monotonic()
             self._state["half_open_in_flight"] = False
 
+    def _record_cancellation(self) -> None:
+        """Release a cancelled half-open probe without closing its circuit."""
+        with self._state_lock:
+            if self._state["circuit"] == "half_open":
+                self._state["circuit"] = "open"
+                self._state["opened_at"] = time.monotonic()
+            self._state["half_open_in_flight"] = False
+            self._state["last_error"] = "CancelledError"
+
     def _retryable(self, error: Exception) -> bool:
+        # A thread-backed timeout is only a response deadline: Python cannot
+        # terminate the target thread. Retrying here could overlap attempts and
+        # duplicate external side effects, so timeout failures never retry.
+        if isinstance(error, ToolTimeoutError):
+            return False
         if not self.retry_exception_names:
             return True
         names = {cls.__name__ for cls in type(error).mro()}
