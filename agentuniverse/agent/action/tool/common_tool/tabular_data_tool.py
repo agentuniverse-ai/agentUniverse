@@ -9,7 +9,6 @@ import json
 import math
 import os
 import tempfile
-from collections import Counter
 from typing import Any, ClassVar, cast
 
 from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_safe_path
@@ -27,6 +26,7 @@ class TabularDataTool(Tool):
     max_cell_chars: int = 100_000
     max_output_chars: int = 500_000
     max_distinct_values: int = 10_000
+    max_filter_values: int = 1_000
 
     _EXTENSIONS: ClassVar[set[str]] = {".csv", ".tsv", ".jsonl"}
     _OPERATORS: ClassVar[set[str]] = {
@@ -98,6 +98,7 @@ class TabularDataTool(Tool):
             "max_cell_chars",
             "max_output_chars",
             "max_distinct_values",
+            "max_filter_values",
         ):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -271,20 +272,45 @@ class TabularDataTool(Tool):
         }
 
     def _profile(self, path: str, rows: list[dict[str, Any]], columns: list[str]) -> dict[str, Any]:
-        profiles = []
+        result = {
+            "status": "success",
+            "mode": "profile",
+            "file_path": path,
+            "file_size": os.path.getsize(path),
+            "row_count": len(rows),
+            "column_count": len(columns),
+            "returned_column_count": 0,
+            "columns": [],
+            "truncated": False,
+        }
         for column in columns:
             values = [row.get(column) for row in rows]
             non_null = [value for value in values if value not in (None, "")]
             numeric = [self._number(value) for value in non_null]
             numeric_values = [value for value in numeric if value is not None]
-            counter = Counter(str(value) for value in non_null[: self.max_distinct_values])
+            frequencies: dict[str, int] = {}
+            distinct_overflow = False
+            for value in non_null:
+                key = str(value)
+                if key in frequencies:
+                    frequencies[key] += 1
+                elif len(frequencies) < self.max_distinct_values:
+                    frequencies[key] = 1
+                else:
+                    # Do not retain unbounded attacker-controlled cardinality.
+                    # Counts for retained values remain exact, but the complete
+                    # distinct count and global top-N are no longer knowable.
+                    distinct_overflow = True
+            top_values = sorted(frequencies.items(), key=lambda item: (-item[1], item[0]))[:5]
             profile = {
                 "name": column,
                 "null_count": len(values) - len(non_null),
                 "non_null_count": len(non_null),
-                "distinct_count": len({str(value) for value in non_null[: self.max_distinct_values]}),
-                "distinct_count_truncated": len(non_null) > self.max_distinct_values,
-                "top_values": [{"value": value, "count": count} for value, count in counter.most_common(5)],
+                "distinct_count": None if distinct_overflow else len(frequencies),
+                "distinct_count_lower_bound": len(frequencies) + int(distinct_overflow),
+                "distinct_count_truncated": distinct_overflow,
+                "top_values": [{"value": value, "count": count} for value, count in top_values],
+                "top_values_approximate": distinct_overflow,
                 "numeric_count": len(numeric_values),
             }
             if numeric_values:
@@ -293,16 +319,25 @@ class TabularDataTool(Tool):
                     "max": max(numeric_values),
                     "mean": sum(numeric_values) / len(numeric_values),
                 }
-            profiles.append(profile)
-        return {
-            "status": "success",
-            "mode": "profile",
-            "file_path": path,
-            "file_size": os.path.getsize(path),
-            "row_count": len(rows),
-            "column_count": len(columns),
-            "columns": profiles,
-        }
+            result["columns"].append(profile)
+            result["returned_column_count"] = len(result["columns"])
+            if self._json_size(result) <= self.max_output_chars:
+                continue
+            while profile["top_values"] and self._json_size(result) > self.max_output_chars:
+                profile["top_values"].pop()
+                profile["top_values_approximate"] = True
+            if self._json_size(result) <= self.max_output_chars:
+                result["truncated"] = True
+                continue
+            result["columns"].pop()
+            result["returned_column_count"] = len(result["columns"])
+            result["truncated"] = True
+            break
+        return result
+
+    @staticmethod
+    def _json_size(value: Any) -> int:
+        return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
 
     def _transform(
         self,
@@ -375,12 +410,26 @@ class TabularDataTool(Tool):
                 raise ValueError(f"filters[{index}].column must name an existing column")
             if not isinstance(operator, str) or operator not in self._OPERATORS:
                 raise ValueError(f"filters[{index}].operator is invalid")
-            if operator == "in" and not isinstance(item.get("value"), list):
-                raise ValueError(f"filters[{index}].value must be a list for the in operator")
+            if operator == "in":
+                item = self._prepare_in_filter(item, index)
             if operator == "is_null" and not isinstance(item.get("value"), bool):
                 raise ValueError(f"filters[{index}].value must be a boolean for the is_null operator")
             output.append(item)
         return output
+
+    def _prepare_in_filter(self, item: dict[str, Any], index: int) -> dict[str, Any]:
+        expected = item.get("value")
+        if not isinstance(expected, list):
+            raise ValueError(f"filters[{index}].value must be a list for the in operator")
+        if len(expected) > self.max_filter_values:
+            raise ValueError(f"filters[{index}].value exceeds max_filter_values ({self.max_filter_values})")
+        if any(value is not None and not isinstance(value, (str, int, float, bool)) for value in expected):
+            raise ValueError(f"filters[{index}].value must contain scalar values")
+        return {
+            **item,
+            "_exact_values": set(expected),
+            "_string_values": {str(candidate) for candidate in expected},
+        }
 
     @staticmethod
     def _matches(row: dict[str, Any], predicate: dict[str, Any]) -> bool:
@@ -390,7 +439,7 @@ class TabularDataTool(Tool):
         if operator == "contains":
             return str(expected) in str(actual or "")
         if operator == "in":
-            return actual in expected or str(actual) in {str(item) for item in expected}
+            return actual in predicate["_exact_values"] or str(actual) in predicate["_string_values"]
         if operator in {"eq", "ne"}:
             equal = actual == expected or str(actual) == str(expected)
             return equal if operator == "eq" else not equal

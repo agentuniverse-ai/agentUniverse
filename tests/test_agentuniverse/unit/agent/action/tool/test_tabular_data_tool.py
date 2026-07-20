@@ -105,6 +105,19 @@ class TestTabularValidation(TabularTestCase):
         )
         self.assertIn("must be a boolean", result["error"])
 
+    def test_in_filter_rejects_unbounded_or_nested_values(self):
+        self.create()
+        self.tool.max_filter_values = 2
+        for values, message in (([1, 2, 3], "max_filter_values"), ([{"nested": True}], "scalar")):
+            with self.subTest(values=values):
+                result = self.tool.execute(
+                    mode="transform",
+                    file_path="data.csv",
+                    output_path="out.csv",
+                    filters=[{"column": "id", "operator": "in", "value": values}],
+                )
+                self.assertIn(message, result["error"])
+
     def test_write_limit_preserves_destination(self):
         destination = os.path.join(self.base_dir, "out.csv")
         with open(destination, "wb") as stream:
@@ -143,6 +156,33 @@ class TestTabularOperations(TabularTestCase):
         by_name = {column["name"]: column for column in profile["columns"]}
         self.assertEqual(by_name["amount"]["numeric"]["max"], 2100)
         self.assertEqual(by_name["region"]["top_values"][0], {"value": "APAC", "count": 3})
+
+    def test_profile_counts_all_occurrences_with_bounded_cardinality(self):
+        rows = [{"value": "repeat"}] + [{"value": f"other-{index}"} for index in range(5)] + [
+            {"value": "repeat"} for _ in range(9)
+        ]
+        self.tool.max_distinct_values = 3
+        self.tool.execute(mode="create", file_path="profile.jsonl", rows=rows)
+        column = self.tool.execute(mode="profile", file_path="profile.jsonl")["columns"][0]
+        self.assertIn({"value": "repeat", "count": 10}, column["top_values"])
+        self.assertIsNone(column["distinct_count"])
+        self.assertEqual(column["distinct_count_lower_bound"], 4)
+        self.assertTrue(column["distinct_count_truncated"])
+        self.assertTrue(column["top_values_approximate"])
+
+    def test_profile_response_obeys_serialized_output_budget(self):
+        self.tool.execute(
+            mode="create",
+            file_path="profile.jsonl",
+            rows=[{f"column-{index}": f"value-{index}" for index in range(20)}],
+        )
+        self.tool.max_output_chars = 350
+        result = self.tool.execute(mode="profile", file_path="profile.jsonl")
+        self.assertLessEqual(
+            len(json.dumps(result, ensure_ascii=False, separators=(",", ":"))),
+            self.tool.max_output_chars,
+        )
+        self.assertTrue(result["truncated"])
 
     def test_transform_filter_sort_project_convert(self):
         self.create()

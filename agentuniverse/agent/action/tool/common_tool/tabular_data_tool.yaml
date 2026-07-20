@@ -14,6 +14,7 @@ max_columns: 200
 max_cell_chars: 100000
 max_output_chars: 500000
 max_distinct_values: 10000
+max_filter_values: 1000
 args_model:
   mode: {type: string, required: true}
   file_path: {type: string, required: true}

@@ -258,4 +258,4 @@ tool.execute(
 )
 ```
 
-The tool does not evaluate code or expressions. Paths, file size, generated size, rows, columns, cells, output context, and profiling cardinality are bounded, and writes are atomic.
+The tool does not evaluate code or expressions. Paths, file size, generated size, rows, columns, cells, output context, profiling cardinality, and `in`-filter values are bounded, and writes are atomic. Profiles count every occurrence of retained values; when distinct cardinality exceeds the configured map, `distinct_count` becomes `null`, a truthful lower bound is returned, and top values are marked approximate. The entire serialized profile is constrained by `max_output_chars`.
