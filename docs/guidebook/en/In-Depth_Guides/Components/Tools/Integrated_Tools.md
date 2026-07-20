@@ -203,6 +203,12 @@ Parameter Description:
 This tool can be used directly without  requiring any keys.
 
 
+## 4. Office Tools
+
+### 4.1 WordDocumentTool
+
+`WordDocumentTool` creates, appends to, reads, and inspects DOCX files with structured `heading`, `paragraph`, `bullet`, `table`, and `page_break` blocks. Install `agentUniverse[office_ext]` or `python-docx`, then resolve the built-in `word_document_tool` component. Paths and templates are confined to `base_dir`; archive expansion, file, block, table, and text limits are enforced, and writes are atomic. The existing `WriteWordDocumentTool` remains available for backward compatibility.
+
 ## EmailDocumentTool
 
 `EmailDocumentTool` provides offline RFC 5322 `.eml` workflows with `create`, `read`, `info`, and `extract` modes. It can build multipart text/HTML messages, attach files, inspect headers and bodies, and extract selected attachments.
