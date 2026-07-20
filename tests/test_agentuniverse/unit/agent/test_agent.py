@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from copy import deepcopy
 from unittest.mock import patch
@@ -46,17 +47,30 @@ def test_process_prompt_preserves_agent_input_for_repeated_calls():
 
 
 class TestInvokeToolsErrorIsolation(unittest.TestCase):
-    """A failing tool must not abort the whole tool invocation loop."""
+    """A failing tool must not abort the whole tool invocation loop.
 
-    def test_failing_tool_is_skipped_and_others_still_run(self):
+    The failure is preserved as an explicit, per-tool marker in the returned
+    string so a partial execution cannot look like a complete success to the
+    downstream agent; the raw exception (which may carry sensitive detail)
+    stays in the operator-facing log.
+    """
+
+    @staticmethod
+    def _make_tools():
         from agentuniverse.agent.action.tool.tool import Tool
 
-        class _BoomTool(Tool):
+        # The tool's NAME is "failing_tool"; the exception MESSAGE is the
+        # sensitive token "secret_token_value" so the leak test can tell them
+        # apart and assert only the name (not the exception) reaches the agent.
+        class _FailingTool(Tool):
             def execute(self, *args, **kwargs):
-                raise RuntimeError("boom")
+                raise RuntimeError("secret_token_value leaked")
 
             def run(self, **kwargs):
-                raise RuntimeError("boom")
+                raise RuntimeError("secret_token_value leaked")
+
+            async def async_run(self, **kwargs):
+                raise RuntimeError("secret_token_value leaked")
 
         class _OkTool(Tool):
             def execute(self, *args, **kwargs):
@@ -65,11 +79,80 @@ class TestInvokeToolsErrorIsolation(unittest.TestCase):
             def run(self, **kwargs):
                 return "ok"
 
-        tools = {"boom": _BoomTool(input_keys=[]), "ok": _OkTool(input_keys=[])}
+            async def async_run(self, **kwargs):
+                return "ok"
+
+        return {
+            "failing_tool": _FailingTool(input_keys=[]),
+            "ok": _OkTool(input_keys=[]),
+        }
+
+    def test_failing_tool_leaves_marker_and_others_still_run(self):
+        tools = self._make_tools()
         with patch("agentuniverse.agent.agent.ToolManager") as mgr:
             mgr.return_value.get_instance_obj.side_effect = lambda name: tools.get(name)
             agent = _StubAgent()
-            result = agent.invoke_tools(InputObject({}), tool_names=["ok", "boom", "ok"])
+            result = agent.invoke_tools(
+                InputObject({}), tool_names=["ok", "failing_tool", "ok"]
+            )
 
-        # The failing tool was skipped; both good invocations are joined.
-        self.assertEqual(result, "ok\n\nok")
+        # The failing tool is replaced by a stable per-tool marker, in order, so
+        # the downstream agent can tell this was a partial execution rather than
+        # a clean "ok\n\nok".
+        self.assertEqual(result, "ok\n\n[tool failing_tool failed]\n\nok")
+
+    def test_failed_tool_marker_does_not_leak_exception_detail(self):
+        tools = self._make_tools()
+        with patch("agentuniverse.agent.agent.ToolManager") as mgr:
+            mgr.return_value.get_instance_obj.side_effect = lambda name: tools.get(name)
+            agent = _StubAgent()
+            result = agent.invoke_tools(InputObject({}), tool_names=["failing_tool"])
+
+        # The exception message and type must not reach the downstream agent;
+        # only the stable, tool-named marker is visible.
+        self.assertEqual(result, "[tool failing_tool failed]")
+        self.assertNotIn("secret_token_value", result)
+        self.assertNotIn("RuntimeError", result)
+
+    def test_mixed_success_failure_ordering_is_preserved(self):
+        tools = self._make_tools()
+        with patch("agentuniverse.agent.agent.ToolManager") as mgr:
+            mgr.return_value.get_instance_obj.side_effect = lambda name: tools.get(name)
+            agent = _StubAgent()
+            # failing first, then ok, then failing again — output order must match.
+            result = agent.invoke_tools(
+                InputObject({}), tool_names=["failing_tool", "ok", "failing_tool"]
+            )
+        self.assertEqual(
+            result, "[tool failing_tool failed]\n\nok\n\n[tool failing_tool failed]"
+        )
+
+    def test_async_failing_tool_leaves_marker_and_others_still_run(self):
+        tools = self._make_tools()
+        with patch("agentuniverse.agent.agent.ToolManager") as mgr:
+            mgr.return_value.get_instance_obj.side_effect = lambda name: tools.get(name)
+            agent = _StubAgent()
+            result = asyncio.new_event_loop().run_until_complete(
+                agent.async_invoke_tools(
+                    InputObject({}), tool_names=["ok", "failing_tool", "ok"]
+                )
+            )
+
+        # Same contract as the sync path: failing tool is a stable marker, in
+        # order, without leaking the exception detail.
+        self.assertEqual(result, "ok\n\n[tool failing_tool failed]\n\nok")
+        self.assertNotIn("secret_token_value", result)
+
+    def test_async_mixed_success_failure_ordering_is_preserved(self):
+        tools = self._make_tools()
+        with patch("agentuniverse.agent.agent.ToolManager") as mgr:
+            mgr.return_value.get_instance_obj.side_effect = lambda name: tools.get(name)
+            agent = _StubAgent()
+            result = asyncio.new_event_loop().run_until_complete(
+                agent.async_invoke_tools(
+                    InputObject({}), tool_names=["failing_tool", "ok", "failing_tool"]
+                )
+            )
+        self.assertEqual(
+            result, "[tool failing_tool failed]\n\nok\n\n[tool failing_tool failed]"
+        )
