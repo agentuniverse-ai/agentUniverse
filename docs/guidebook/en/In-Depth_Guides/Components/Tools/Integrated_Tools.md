@@ -221,3 +221,21 @@ tool.execute(
 ```
 
 The tool performs no network or mailbox access. It confines paths to `base_dir`, rejects header injection and unsafe/duplicate attachment names, bounds headers, bodies, attachment counts and bytes, preflights extraction destinations, and uses atomic writes.
+
+## SecureArchiveTool
+
+`SecureArchiveTool` provides bounded archive operations for agent workflows without external dependencies. It supports ZIP, TAR, TAR.GZ, and TGZ files with four modes: `create`, `list`, `extract`, and `info`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.secure_archive_tool import SecureArchiveTool
+
+tool = SecureArchiveTool(base_dir="/srv/agent-files")
+tool.execute(mode="create", file_path="reports.zip", input_paths=["reports"])
+tool.execute(mode="extract", file_path="reports.zip", output_dir="restored", members=["reports/q2.txt"])
+```
+
+All paths are confined to `base_dir`. Extraction rejects absolute/traversal paths, links, special TAR files, encrypted ZIPs, duplicate members, excessive compression ratios, and configured size/count limits. Destinations are preflighted before extraction and files are written through same-directory temporary files.
+
+## 4. PDF Tool
+
+The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.

@@ -1,0 +1,35 @@
+name: pdf_tool
+description: Merge, split, rotate, extract text from, or inspect PDF files. Requires pypdf.
+tool_type: api
+metadata: {type: TOOL, module: agentuniverse.agent.action.tool.common_tool.pdf_tool, class: PDFTool}
+input_keys: [mode, file_path]
+base_dir: .
+max_read_bytes: 52428800
+max_write_bytes: 52428800
+max_pages: 1000
+max_text_chars: 100000
+max_input_files: 100
+args_model:
+  mode: {type: string, required: true}
+  file_path: {type: string, required: true}
+  input_paths: {type: array, required: false}
+  output_path: {type: string, required: false}
+  output_dir: {type: string, required: false}
+  pages: {type: array, required: false}
+  rotation: {type: integer, required: false, default: 90}
+  overwrite: {type: boolean, required: false, default: false}
+  metadata: {type: object, required: false}
+args_model_schema:
+  type: object
+  properties:
+    mode: {type: string, enum: [merge, split, rotate, extract, info]}
+    file_path: {type: string}
+    input_paths: {type: array, items: {type: string}}
+    output_path: {type: string}
+    output_dir: {type: string}
+    pages: {type: array, items: {type: integer, minimum: 1}}
+    rotation: {type: integer, enum: [90, 180, 270], default: 90}
+    overwrite: {type: boolean, default: false}
+    metadata: {type: object}
+  required: [mode, file_path]
+  additionalProperties: false
