@@ -35,6 +35,7 @@ class PowerPointTool(Tool):
     max_uncompressed_bytes: int = 100 * 1024 * 1024
     max_archive_entries: int = 5_000
     max_slides: int = 100
+    max_shapes_per_slide: int = 200
     max_text_chars: int = 50_000
     max_table_rows: int = 50
     max_table_columns: int = 20
@@ -144,6 +145,7 @@ class PowerPointTool(Tool):
             "max_uncompressed_bytes": self.max_uncompressed_bytes,
             "max_archive_entries": self.max_archive_entries,
             "max_slides": self.max_slides,
+            "max_shapes_per_slide": self.max_shapes_per_slide,
             "max_text_chars": self.max_text_chars,
             "max_table_rows": self.max_table_rows,
             "max_table_columns": self.max_table_columns,
@@ -272,51 +274,48 @@ class PowerPointTool(Tool):
             "file_size": os.path.getsize(file_path),
         }
 
-    def _read(self, file_path: str) -> dict[str, Any]:
+    def _read(self, file_path: str) -> dict[str, Any]:  # noqa: C901
         self._ensure_readable(file_path)
         Presentation, _ = self._load_pptx()
         presentation = Presentation(file_path)
         self._validate_presentation_slide_count(presentation)
 
-        remaining = self.max_text_chars
-        truncated = False
-        slide_results = []
+        # Read-side budgets mirror create/append: a compact XML presentation
+        # can still expand into a huge Python structure if every shape/table/
+        # row/cell is walked, so traversal stops the moment any budget is
+        # exhausted instead of padding the result with empty strings.
+        budget = _ReadBudget(self)
+        slide_results: list[dict[str, Any]] = []
         for slide_number, slide in enumerate(presentation.slides, start=1):
             title_shape = self._get_title_shape(slide)
-            title, remaining, was_truncated = self._bounded_text(
-                title_shape.text if title_shape is not None else "", remaining
-            )
-            truncated = truncated or was_truncated
-            texts = []
-            tables = []
+            title = budget.consume_text(title_shape.text if title_shape is not None else "")[0]
+            texts: list[str] = []
+            tables: list[list[list[str]]] = []
+            shape_count = 0
             for shape in slide.shapes:
+                if shape_count >= self.max_shapes_per_slide:
+                    budget.mark_truncated()
+                    break
                 if getattr(shape, "has_table", False):
-                    rows = []
-                    for row in shape.table.rows:
-                        output_row = []
-                        for cell in row.cells:
-                            value, remaining, cut = self._bounded_text(cell.text, remaining)
-                            truncated = truncated or cut
-                            output_row.append(value)
-                        rows.append(output_row)
-                    tables.append(rows)
+                    shape_count += 1
+                    tables.append(self._read_table(shape.table, budget))
                     continue
                 if not getattr(shape, "has_text_frame", False):
                     continue
                 if title_shape is not None and shape.shape_id == title_shape.shape_id:
                     continue
-                value, remaining, cut = self._bounded_text(shape.text, remaining)
-                truncated = truncated or cut
+                shape_count += 1
+                value = budget.consume_text(shape.text)[0]
                 if value:
                     texts.append(value)
+                if budget.chars_exhausted():
+                    budget.mark_truncated()
+                    break
 
             notes = ""
             if getattr(slide, "has_notes_slide", False):
                 notes_frame = slide.notes_slide.notes_text_frame
-                notes, remaining, cut = self._bounded_text(
-                    notes_frame.text if notes_frame is not None else "", remaining
-                )
-                truncated = truncated or cut
+                notes = budget.consume_text(notes_frame.text if notes_frame is not None else "")[0]
 
             slide_results.append(
                 {
@@ -327,6 +326,8 @@ class PowerPointTool(Tool):
                     "notes": notes,
                 }
             )
+            if budget.chars_exhausted():
+                break
 
         return {
             "status": "success",
@@ -334,9 +335,31 @@ class PowerPointTool(Tool):
             "file_path": file_path,
             "slide_count": len(presentation.slides),
             "slides": slide_results,
-            "truncated": truncated,
+            "truncated": budget.truncated,
             "max_text_chars": self.max_text_chars,
+            "max_slides": self.max_slides,
+            "max_shapes_per_slide": self.max_shapes_per_slide,
+            "max_table_rows": self.max_table_rows,
+            "max_table_columns": self.max_table_columns,
         }
+
+    def _read_table(self, table: Any, budget: "_ReadBudget") -> list[list[str]]:
+        rows: list[list[str]] = []
+        for row_index, row in enumerate(table.rows):
+            if row_index >= self.max_table_rows:
+                budget.mark_truncated()
+                break
+            values: list[str] = []
+            for column_index, cell in enumerate(row.cells):
+                if column_index >= self.max_table_columns:
+                    budget.mark_truncated()
+                    break
+                values.append(budget.consume_text(cell.text)[0])
+            rows.append(values)
+            if budget.chars_exhausted():
+                budget.mark_truncated()
+                break
+        return rows
 
     def _info(self, file_path: str) -> dict[str, Any]:
         self._ensure_readable(file_path)
@@ -631,3 +654,45 @@ class PowerPointTool(Tool):
         if remaining == 1:
             return "…", 0, True
         return normalized[: remaining - 1] + "…", 0, True
+
+
+class _ReadBudget:
+    """Tracks the char budget consumed across a presentation read.
+
+    A crafted PPTX can pack in many slides, shapes, tables, rows, and cells.
+    This accumulator centralises the text-char budget so the read stops the
+    moment it is exhausted, instead of continuing to walk every shape and
+    padding the result with empty strings. Slide/table/row/column caps are
+    enforced inline against the tool's configured limits; this budget owns the
+    shared text budget that spans all of them. Mirrors the WordDocumentTool
+    read contract.
+    """
+
+    __slots__ = ("remaining_chars", "truncated")
+
+    def __init__(self, tool: "PowerPointTool") -> None:
+        self.remaining_chars = tool.max_text_chars
+        self.truncated = False
+
+    def chars_exhausted(self) -> bool:
+        return self.remaining_chars <= 0
+
+    def mark_truncated(self) -> None:
+        self.truncated = True
+
+    def consume_text(self, value: Any) -> tuple[str, bool]:
+        """Return (bounded_text, was_cut). Empty results do not consume budget."""
+        normalized = str(value or "").strip()
+        if not normalized:
+            return "", False
+        if len(normalized) <= self.remaining_chars:
+            self.remaining_chars -= len(normalized)
+            return normalized, False
+        if self.remaining_chars <= 0:
+            return "", True
+        if self.remaining_chars == 1:
+            self.remaining_chars = 0
+            return "…", True
+        kept = self.remaining_chars
+        self.remaining_chars = 0
+        return normalized[: max(0, kept - 1)] + "…", True

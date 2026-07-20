@@ -462,6 +462,84 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertIn("template slides plus requested slides", result["error"])
         self.assertFalse(os.path.exists(os.path.join(self.base_dir, "from-template.pptx")))
 
+    # -- read-side structural bounds (regression for crafted PPTX expansion) --
+
+    def test_read_caps_slide_count(self) -> None:
+        # More slides than max_slides; read still succeeds but the archive
+        # guard rejects the file before parsing.
+        many_slides = [{"title": f"slide {i}"} for i in range(5)]
+        self.tool.execute(mode="create", file_path="many.pptx", slides=many_slides)
+        self.tool.max_slides = 2
+        result = self.tool.execute(mode="read", file_path="many.pptx")
+        self.assertEqual(result["error_type"], "validation_error")
+        self.assertIn("exceeding max_slides", result["error"])
+
+    def test_read_caps_shapes_per_slide(self) -> None:
+        # A slide with a body plus a table carries multiple shapes; the read
+        # must stop at max_shapes_per_slide instead of walking every shape and
+        # expanding every table cell into the result.
+        self.tool.execute(
+            mode="create",
+            file_path="shapes.pptx",
+            slides=[{"title": "t", "bullets": ["b1", "b2"], "table": [["a", "b"], ["c", "d"]]}],
+        )
+        # Lower the cap so the table shape is never reached; the read reports
+        # truncated and emits no table rows.
+        self.tool.max_shapes_per_slide = 1
+        result = self.tool.execute(mode="read", file_path="shapes.pptx")
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(result["truncated"])
+        self.assertEqual(result["slides"][0]["tables"], [])
+
+    def test_read_caps_table_rows(self) -> None:
+        # A table with more rows than max_table_rows; read must stop early.
+        big_rows = [[f"r{i}c0", f"r{i}c1"] for i in range(40)]
+        self.tool.execute(
+            mode="create",
+            file_path="rows.pptx",
+            slides=[{"title": "t", "table": big_rows}],
+        )
+        self.tool.max_table_rows = 5
+        result = self.tool.execute(mode="read", file_path="rows.pptx")
+        self.assertEqual(result["status"], "success")
+        for table in result["slides"][0]["tables"]:
+            self.assertLessEqual(len(table), self.tool.max_table_rows)
+        self.assertTrue(result["truncated"])
+
+    def test_read_caps_table_columns(self) -> None:
+        # A wide table; read must stop at max_table_columns per row.
+        wide_row = [str(i) for i in range(15)]
+        self.tool.execute(
+            mode="create",
+            file_path="wide.pptx",
+            slides=[{"title": "t", "table": [wide_row, wide_row]}],
+        )
+        self.tool.max_table_columns = 4
+        result = self.tool.execute(mode="read", file_path="wide.pptx")
+        self.assertEqual(result["status"], "success")
+        for table in result["slides"][0]["tables"]:
+            for row in table:
+                self.assertLessEqual(len(row), self.tool.max_table_columns)
+        self.assertTrue(result["truncated"])
+
+    def test_read_stops_when_text_budget_exhausted(self) -> None:
+        # Once max_text_chars is consumed, the read must stop traversing rather
+        # than continuing to walk every remaining slide/shape and padding the
+        # result with empty strings.
+        slides = [{"title": f"title-{i}", "bullets": [f"body text line {i}"]} for i in range(15)]
+        self.tool.execute(mode="create", file_path="mixed.pptx", slides=slides)
+        self.tool.max_text_chars = 30
+        result = self.tool.execute(mode="read", file_path="mixed.pptx")
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(result["truncated"])
+        # No empty-string padding from continued traversal after budget hit.
+        emitted = sum(
+            len(slide["title"]) + sum(len(text) for text in slide["texts"]) + len(slide["notes"])
+            for slide in result["slides"]
+        )
+        # Allow a small overshoot for the truncation ellipsis on the last field.
+        self.assertLessEqual(emitted, self.tool.max_text_chars + len(result["slides"]))
+
 
 class TestPowerPointRegistration(unittest.TestCase):
     """Load the shipped YAML through the real component pipeline."""
