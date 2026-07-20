@@ -1,0 +1,3 @@
+Example Corp reported 2025 revenue of 120 million dollars, up 20 percent year over year.
+Operating margin improved from 12 percent to 15 percent. Management identified customer
+concentration and foreign-exchange volatility as principal risks. This is synthetic demo data.

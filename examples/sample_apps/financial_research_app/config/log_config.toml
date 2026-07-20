@@ -1,0 +1,10 @@
+[LOG_CONFIG]
+
+[LOG_CONFIG.BASIC_CONFIG]
+log_level = "INFO"
+log_path = "./.financial_research_logs"
+log_rotation = "100 MB"
+log_retention = "7 days"
+
+[LOG_CONFIG.EXTEND_MODULE]
+sls_log = "False"
