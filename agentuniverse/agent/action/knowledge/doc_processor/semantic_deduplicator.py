@@ -199,7 +199,10 @@ class SemanticDeduplicator(DocProcessor):
         Returns:
             Hex string of hash.
         """
-        return hashlib.sha256(text.encode('utf-8')).hexdigest()
+        # Document.text is Optional[str]; None would crash .encode(). Treat
+        # None and empty as the same hash so empty docs dedupe together
+        # instead of raising AttributeError mid-pipeline.
+        return hashlib.sha256((text or '').encode('utf-8')).hexdigest()
 
     def _compute_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
         """Compute cosine similarity between two embeddings.
@@ -211,6 +214,16 @@ class SemanticDeduplicator(DocProcessor):
         Returns:
             Cosine similarity score (0.0-1.0).
         """
+        # Vectors from different embedding models / stores may have different
+        # dimensions. zip() silently truncates to the shorter one and returns
+        # a plausible-looking but meaningless score (the same hole the
+        # MMRProcessor was hardened against). Require equal length; if a
+        # caller hands mismatched vectors, treat them as non-similar rather
+        # than silently ranking on garbage.
+        if not embedding1 or not embedding2:
+            return 0.0
+        if len(embedding1) != len(embedding2):
+            return 0.0
         # Compute dot product
         dot_product = sum(a * b for a, b in zip(embedding1, embedding2))
 
