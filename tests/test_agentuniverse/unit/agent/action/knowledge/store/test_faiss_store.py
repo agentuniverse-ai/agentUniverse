@@ -5,12 +5,14 @@
 # @Email   : saswatsusmoy9@gmail.com
 # @FileName: test_faiss_store.py
 
+import json
 import logging
 import os
+import pickle
 import shutil
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 try:
     import faiss  # noqa: F401
@@ -557,6 +559,400 @@ class TestFAISSStore(unittest.TestCase):
                 query = Query(embeddings=[doc.embedding])
                 results = store.query(query)
                 self.assertGreater(len(results), 0, f"Document {doc_id} should be queryable")
+
+
+class _RCEPickleBomb:
+    """A pickle payload that creates a marker file when unpickled.
+
+    Defined at module scope so it is genuinely unpicklable. Used to prove the
+    FAISS metadata loader never calls ``pickle.load``: if it did, unpickling an
+    instance would create the marker file.
+    """
+
+    def __init__(self, marker_path: str):
+        self._marker = marker_path
+
+    def __reduce__(self):
+        return (open, (self._marker, "w"))
+
+
+class TestFAISSStoreMetadataSerialization(unittest.TestCase):
+    """Metadata persistence is JSON (not pickle) and round-trips without FAISS.
+
+    These tests exercise the metadata read/write helpers directly, so they run
+    even when the optional FAISS dependency is absent. They lock in the security
+    fix: persisted metadata is JSON, so loading it cannot execute code.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.metadata_path = os.path.join(self.temp_dir, "metadata.json")
+        from agentuniverse.agent.action.knowledge.store.faiss_store import FAISSStore
+
+        self.FAISSStore = FAISSStore
+
+    def tearDown(self):
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def _store(self, metadata_path=None) -> "FAISSStore":
+        return self.FAISSStore(
+            index_path=None,
+            metadata_path=self.metadata_path if metadata_path is None else metadata_path,
+            embedding_model=None,
+        )
+
+    def test_metadata_round_trips_as_json(self):
+        store = self._store()
+        store.document_store = {
+            "doc1": Document(
+                id="doc1",
+                text="hello world",
+                metadata={"category": "demo", "score": 0.5},
+                embedding=[0.1, 0.2, 0.3],
+                keywords={"ai", "rag"},
+            ),
+        }
+        store.id_to_index = {"doc1": 0}
+        store.index_to_id = {0: "doc1"}
+        store._next_index = 1
+
+        store._write_metadata_file()
+
+        # The file on disk is genuine JSON, not a pickle bytestream.
+        with open(self.metadata_path, encoding="utf-8") as f:
+            raw = json.load(f)
+        self.assertEqual(raw["format"], "faiss-store-metadata-v1")
+
+        loaded = self._store()
+        self.assertTrue(loaded._read_metadata_file())
+
+        doc = loaded.document_store["doc1"]
+        self.assertEqual(doc.text, "hello world")
+        self.assertEqual(doc.metadata["category"], "demo")
+        self.assertEqual(doc.embedding, [0.1, 0.2, 0.3])
+        self.assertEqual(doc.keywords, {"ai", "rag"})
+        self.assertEqual(loaded.id_to_index, {"doc1": 0})
+        # Integer FAISS positions survive the JSON string-key round-trip.
+        self.assertEqual(loaded.index_to_id, {0: "doc1"})
+        self.assertIsInstance(next(iter(loaded.index_to_id)), int)
+        self.assertEqual(loaded._next_index, 1)
+
+    def test_missing_metadata_file_returns_false(self):
+        store = self._store(metadata_path=os.path.join(self.temp_dir, "absent.json"))
+        self.assertFalse(store._read_metadata_file())
+
+    def test_legacy_pickle_payload_is_not_executed(self):
+        marker = os.path.join(self.temp_dir, "pwned_marker")
+        with open(self.metadata_path, "wb") as f:
+            pickle.dump(_RCEPickleBomb(marker), f)
+
+        store = self._store()
+        # The loader must treat the pickle file as invalid JSON and reset,
+        # without ever unpickling (executing) it.
+        self.assertFalse(store._read_metadata_file())
+        self.assertFalse(os.path.exists(marker), "pickle payload was executed during metadata load — RCE!")
+        self.assertEqual(store.get_document_count(), 0)
+
+    # -- reviewer regressions: schema validation + atomic write --
+
+    def _seed_valid_store(self):
+        store = self._store()
+        store.document_store = {
+            "doc1": Document(id="doc1", text="hello", embedding=[0.1, 0.2]),
+        }
+        store.id_to_index = {"doc1": 0}
+        store.index_to_id = {0: "doc1"}
+        store._next_index = 1
+        store._write_metadata_file()
+        return store
+
+    def test_wrong_format_marker_resets_store(self):
+        self._seed_valid_store()
+        # Tamper with the format marker only; everything else is valid JSON.
+        with open(self.metadata_path, encoding="utf-8") as f:
+            data = json.load(f)
+        data["format"] = "some-other-format-v2"
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        store = self._store()
+        self.assertFalse(store._read_metadata_file())
+        # The store is fully reset, not half-populated.
+        self.assertEqual(store.get_document_count(), 0)
+        self.assertEqual(store.id_to_index, {})
+        self.assertEqual(store.index_to_id, {})
+
+    def test_top_level_non_object_resets_store(self):
+        # Syntactically valid JSON, but the top level is a list, not an object.
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump([{"format": "faiss-store-metadata-v1"}], f)
+        store = self._store()
+        self.assertFalse(store._read_metadata_file())
+        self.assertEqual(store.get_document_count(), 0)
+
+    def test_invalid_document_payload_resets_store(self):
+        self._seed_valid_store()
+        with open(self.metadata_path, encoding="utf-8") as f:
+            data = json.load(f)
+        # document_store entry is not a dict -> Document(**doc_data) would fail.
+        data["document_store"]["doc1"] = "not-an-object"
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        store = self._store()
+        self.assertFalse(store._read_metadata_file())
+        # Whole set discarded; no partial population.
+        self.assertEqual(store.get_document_count(), 0)
+
+    def test_non_integer_index_to_id_key_resets_store(self):
+        self._seed_valid_store()
+        with open(self.metadata_path, encoding="utf-8") as f:
+            data = json.load(f)
+        # A non-integer position key cannot be restored to an int FAISS slot.
+        data["index_to_id"] = {"not-a-number": "doc1"}
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        store = self._store()
+        self.assertFalse(store._read_metadata_file())
+        self.assertEqual(store.index_to_id, {})
+
+    def test_metadata_write_is_atomic(self):
+        # An interrupted write must not corrupt the last good file: write a
+        # valid file, then force a failure during the atomic replace step, and
+        # verify the previous version is intact and no temp file leaked.
+        store = self._seed_valid_store()
+        with open(self.metadata_path, encoding="utf-8") as f:
+            first_snapshot = f.read()
+
+        # Patch os.replace to raise; the write must swallow the error and clean
+        # up its temp file rather than leaving a half-written metadata.json.
+        with patch(
+            "agentuniverse.agent.action.knowledge.store.faiss_store.os.replace",
+            side_effect=OSError("simulated crash"),
+        ):
+            store._write_metadata_file()
+
+        # The previously-written good file is untouched.
+        with open(self.metadata_path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), first_snapshot)
+        # No stale temp files leaked in the directory.
+        leftovers = [n for n in os.listdir(self.temp_dir) if n.startswith(".faiss-metadata-")]
+        self.assertEqual(leftovers, [], f"stale temp files left behind: {leftovers}")
+
+        # And a subsequent clean write still round-trips.
+        store.document_store["doc2"] = Document(id="doc2", text="two", embedding=[0.3, 0.4])
+        store.id_to_index["doc2"] = 1
+        store.index_to_id[1] = "doc2"
+        store._next_index = 2
+        store._write_metadata_file()
+        reloaded = self._store()
+        self.assertTrue(reloaded._read_metadata_file())
+        self.assertEqual(reloaded.get_document_count(), 2)
+
+
+class TestFAISSStoreMetadataRelationalInvariants(unittest.TestCase):
+    """The payload must satisfy cross-field invariants, not just field types.
+
+    The index file and the metadata file are persisted separately, so a crash
+    (or a hand-edit) can leave them internally inconsistent. These tests pin
+    each invariant the loader enforces.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.metadata_path = os.path.join(self.temp_dir, "metadata.json")
+        from agentuniverse.agent.action.knowledge.store.faiss_store import FAISSStore
+        self.FAISSStore = FAISSStore
+
+    def tearDown(self):
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def _store(self):
+        return self.FAISSStore(
+            index_path=None,
+            metadata_path=self.metadata_path,
+            embedding_model=None,
+        )
+
+    def _valid_payload(self) -> dict:
+        return {
+            "format": "faiss-store-metadata-v1",
+            "document_store": {
+                "doc1": {"id": "doc1", "text": "one", "embedding": [0.1, 0.2]},
+                "doc2": {"id": "doc2", "text": "two", "embedding": [0.3, 0.4]},
+            },
+            "id_to_index": {"doc1": 0, "doc2": 1},
+            "index_to_id": {"0": "doc1", "1": "doc2"},
+            "next_index": 2,
+        }
+
+    def _write_payload(self, payload: dict) -> None:
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+
+    def test_document_id_mismatch_with_key_is_rejected(self) -> None:
+        payload = self._valid_payload()
+        # Key says doc1, but the persisted Document.id disagrees.
+        payload["document_store"]["doc1"] = {"id": "docX", "text": "one", "embedding": [0.1, 0.2]}
+        self._write_payload(payload)
+        self.assertFalse(self._store()._read_metadata_file())
+
+    def test_non_inverse_mappings_are_rejected(self) -> None:
+        payload = self._valid_payload()
+        # id_to_index maps doc1 -> 0, but index_to_id maps 0 -> doc2.
+        payload["index_to_id"] = {"0": "doc2", "1": "doc1"}
+        self._write_payload(payload)
+        self.assertFalse(self._store()._read_metadata_file())
+
+    def test_mapping_references_missing_document_is_rejected(self) -> None:
+        payload = self._valid_payload()
+        # id_to_index references doc3 which is not in document_store.
+        payload["id_to_index"]["doc3"] = 2
+        payload["index_to_id"]["2"] = "doc3"
+        payload["next_index"] = 3
+        self._write_payload(payload)
+        self.assertFalse(self._store()._read_metadata_file())
+
+    def test_next_index_not_past_highest_position_is_rejected(self) -> None:
+        payload = self._valid_payload()
+        # Highest used position is 1, but next_index says 1 — the next insert
+        # would collide with position 1.
+        payload["next_index"] = 1
+        self._write_payload(payload)
+        self.assertFalse(self._store()._read_metadata_file())
+
+    def test_negative_position_is_rejected(self) -> None:
+        payload = self._valid_payload()
+        payload["id_to_index"] = {"doc1": -1, "doc2": 1}
+        payload["index_to_id"] = {"-1": "doc1", "1": "doc2"}
+        self._write_payload(payload)
+        self.assertFalse(self._store()._read_metadata_file())
+
+    def test_ntotal_mismatch_against_loaded_index_is_rejected(self) -> None:
+        # The metadata maps 2 vectors, but we tell validation the loaded FAISS
+        # index holds 5 — a generation mismatch between the two files.
+        store = self._store()
+        self._write_payload(self._valid_payload())
+        self.assertFalse(store._read_metadata_file(faiss_ntotal=5))
+
+    def test_ntotal_match_is_accepted(self) -> None:
+        store = self._store()
+        self._write_payload(self._valid_payload())
+        self.assertTrue(store._read_metadata_file(faiss_ntotal=2))
+
+
+@unittest.skipUnless(FAISS_AVAILABLE, "FAISS not available")
+class TestFAISSStoreIndexMetadataCoherence(unittest.TestCase):
+    """End-to-end: a corrupt-metadata reload must discard the FAISS index too.
+
+    Reproduces the exact regression the reviewer reported: one persisted
+    document, a corrupted metadata file, reload, and a new insert. Before the
+    fix the loaded index stayed in memory with stale ntotal while metadata was
+    empty, so the next insert produced an index with two vectors but a
+    metadata map of {0: "new"} — and querying the old vector returned the new
+    document. The store must now fail closed as one unit.
+    """
+
+    def setUp(self):
+        import faiss
+        import numpy as np
+        self.faiss = faiss
+        self.np = np
+        self.temp_dir = tempfile.mkdtemp()
+        self.index_path = os.path.join(self.temp_dir, "index.faiss")
+        self.metadata_path = os.path.join(self.temp_dir, "metadata.json")
+        from agentuniverse.agent.action.knowledge.store.faiss_store import FAISSStore
+        self.FAISSStore = FAISSStore
+
+    def tearDown(self):
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
+    def _new_store(self) -> "FAISSStore":
+        store = self.FAISSStore(
+            index_path=self.index_path,
+            metadata_path=self.metadata_path,
+            embedding_model=None,
+        )
+        store._new_client()
+        return store
+
+    def _persist_one_document(self) -> None:
+        store = self._new_store()
+        store.insert_document([
+            Document(id="old_doc", text="old text", embedding=[1.0, 0.0, 0.0]),
+        ])
+        self.assertEqual(store.faiss_index.ntotal, 1)
+
+    def _corrupt_metadata_format_marker(self) -> None:
+        with open(self.metadata_path, encoding="utf-8") as f:
+            payload = json.load(f)
+        payload["format"] = "some-other-format"
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+
+    def test_corrupt_metadata_discards_loaded_index(self) -> None:
+        # Persist one document, corrupt the metadata format marker, reload.
+        self._persist_one_document()
+        # Sanity: the index file exists and holds one vector.
+        self.assertEqual(self.faiss.read_index(self.index_path).ntotal, 1)
+        self._corrupt_metadata_format_marker()
+
+        store = self._new_store()
+        # The loaded index must have been discarded — the store starts empty
+        # and coherent, not index-only.
+        self.assertIsNone(store.faiss_index)
+        self.assertEqual(store.get_document_count(), 0)
+        self.assertEqual(store.id_to_index, {})
+        self.assertEqual(store.index_to_id, {})
+        self.assertEqual(store._next_index, 0)
+
+    def test_insert_after_corrupt_reload_does_not_orphan_vectors(self) -> None:
+        # The end-to-end regression: corrupt reload + new insert must not
+        # leave the index with a vector that maps to the wrong document.
+        self._persist_one_document()
+        self._corrupt_metadata_format_marker()
+
+        store = self._new_store()
+        store.insert_document([
+            Document(id="new_doc", text="new text", embedding=[0.0, 1.0, 0.0]),
+        ])
+
+        # Exactly one vector now (the new one), and it maps to new_doc only.
+        self.assertIsNotNone(store.faiss_index)
+        self.assertEqual(store.faiss_index.ntotal, 1)
+        self.assertEqual(set(store.index_to_id.values()), {"new_doc"})
+        self.assertEqual(store.get_document_count(), 1)
+
+        # Querying must never return a stale mapping: the only retrievable
+        # document is new_doc.
+        from agentuniverse.agent.action.knowledge.store.query import Query
+        results = store.query(Query(embeddings=[[0.0, 1.0, 0.0]]))
+        result_ids = [r.id for r in results]
+        self.assertEqual(result_ids, ["new_doc"])
+        self.assertNotIn("old_doc", result_ids)
+
+    def test_generation_mismatch_between_index_and_metadata_discards_both(self) -> None:
+        # Persist one document, then hand-write a metadata file that maps zero
+        # vectors while the index still holds one — a generation mismatch.
+        self._persist_one_document()
+        # Overwrite metadata with an empty-but-valid payload (0 vectors).
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "format": "faiss-store-metadata-v1",
+                "document_store": {},
+                "id_to_index": {},
+                "index_to_id": {},
+                "next_index": 0,
+            }, f)
+
+        store = self._new_store()
+        # The mismatch (index ntotal=1 vs metadata 0 vectors) must fail closed.
+        self.assertIsNone(store.faiss_index)
+        self.assertEqual(store.get_document_count(), 0)
 
 
 if __name__ == "__main__":
