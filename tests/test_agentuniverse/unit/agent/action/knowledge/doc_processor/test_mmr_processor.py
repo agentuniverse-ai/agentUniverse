@@ -210,6 +210,34 @@ class TestMMREmbeddingHomogeneity(unittest.TestCase):
         self.assertEqual(list(docs[1].embedding), _D2)
         self.assertEqual(list(docs[2].embedding), _D3)
 
+    def test_embedding_name_rejects_precomputed_query_without_query_str(self) -> None:
+        # Regression: when embedding_name is configured but the query carries
+        # only a precomputed vector (no query_str), the query's provenance is
+        # unverifiable. Even if the precomputed vector has the SAME dimension as
+        # the configured model (so the dimension check cannot catch it), it may
+        # come from a different model and must not be ranked against. MMR must
+        # degrade to input order rather than silently rank on a foreign vector.
+        docs = [Document(text="d1"), Document(text="d2"), Document(text="d3")]
+        # Foreign precomputed query vector with the SAME dimension (2) as the
+        # configured model would emit — exactly the hole the dimension check
+        # cannot detect.
+        foreign_query = Query(embeddings=[[0.7, 0.7]])
+        model = MagicMock()
+        # The model is only called for the documents; it must NOT be asked to
+        # embed a query string (there is none), and the foreign vector must not
+        # reach _cosine.
+        model.get_embeddings.return_value = [_D1, _D2, _D3]
+        with patch.object(mmr_module, "EmbeddingManager") as emb_mgr:
+            emb_mgr.return_value.get_instance_obj.return_value = model
+            out = MMRProcessor(embedding_name="fake_emb", lambda_coef=1.0)\
+                .process_docs(docs, foreign_query)
+
+        # Degrades to input order; the foreign precomputed query is NOT used.
+        self.assertEqual([d.text for d in out], ["d1", "d2", "d3"])
+        # The query-embedding call never happened: only one get_embeddings call
+        # (the documents), not the two-call pattern of a recomputed query.
+        self.assertEqual(model.get_embeddings.call_count, 1)
+
 
 class TestMMRConfig(unittest.TestCase):
     """Initialization and configuration."""

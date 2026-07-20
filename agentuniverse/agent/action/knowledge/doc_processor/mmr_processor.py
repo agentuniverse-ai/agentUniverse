@@ -30,8 +30,13 @@ recalled set.
 
 Embeddings: query and document embeddings are taken from ``Query.embeddings``
 and ``Document.embedding`` when present (the store populates them during
-retrieval). When an ``embedding_name`` is configured, any missing embeddings are
-computed on demand via ``EmbeddingManager``. If embeddings cannot be obtained,
+retrieval). When an ``embedding_name`` is configured, *every* embedding is
+recomputed with that single model so the whole set lives in one space — this
+is the only way to obtain a meaningful ranking for documents recalled from
+multiple stores that may carry precomputed vectors from different models. A
+query is embedded from its ``query_str``; a query that only carries a
+precomputed vector is unverifiable (equal dimension does not imply same model)
+and the processor degrades to input order. If embeddings cannot be obtained,
 the processor degrades gracefully and returns the documents in their input
 order rather than crashing retrieval.
 """
@@ -165,9 +170,11 @@ class MMRProcessor(DocProcessor):
 
         Precomputed ``Document.embedding`` / ``Query.embeddings`` are ignored on
         purpose so the whole set lives in one embedding space. A query with a
-        ``query_str`` is embedded in that same space; a query that only carries
-        precomputed embeddings falls back to them and is left for the dimension
-        check to accept or reject.
+        ``query_str`` is embedded in that same space. A query that only carries
+        a precomputed vector has unverifiable provenance — even when its
+        dimension matches the configured model, it may come from a different
+        model and the dimension check cannot tell. The processor therefore
+        degrades to input order rather than rank on a possibly-foreign vector.
         """
         doc_embeddings: List[Optional[List[float]]] = [None] * len(docs)
         query_embedding: Optional[List[float]] = None
@@ -178,11 +185,19 @@ class MMRProcessor(DocProcessor):
                 for idx, emb in enumerate(computed):
                     doc_embeddings[idx] = emb
                     docs[idx].embedding = emb
-            if query is not None:
-                if query.query_str:
-                    query_embedding = model.get_embeddings([query.query_str])[0]
-                elif query.embeddings:
-                    query_embedding = query.embeddings[0]
+            if query is not None and query.query_str:
+                # Only a freshly computed embedding shares the configured model's
+                # space; a precomputed Query.embeddings value has no verifiable
+                # provenance (equal dimension does NOT imply same model).
+                query_embedding = model.get_embeddings([query.query_str])[0]
+            elif query is not None and not query.query_str and query.embeddings:
+                logger.warning(
+                    "MMR: embedding_name is configured but the query carries no "
+                    "query_str, only a precomputed vector. Its provenance cannot "
+                    "be verified against the configured model (equal dimensions "
+                    "do not imply the same embedding space); returning documents "
+                    "in input order. Pass query_str to embed the query with the "
+                    "configured model.")
         except Exception as exc:  # noqa: BLE001 - degrade, never crash retrieval
             logger.error(f"MMR: embedding lookup failed: {exc}")
         return doc_embeddings, query_embedding
