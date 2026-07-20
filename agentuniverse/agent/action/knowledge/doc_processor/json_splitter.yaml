@@ -1,0 +1,10 @@
+name: 'json_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.json_splitter'
+  class: 'JsonSplitter'
+description: 'Splits JSON documents into one chunk per leaf value, recording the JSON path as metadata.'
+path_key: 'json_path'
+max_depth: null
+max_value_length: 10000
+drop_empty: true
