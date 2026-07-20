@@ -7,6 +7,7 @@
 
 from typing import Dict, List, Optional
 from urllib.parse import urljoin, urlparse
+import logging
 import random
 import time
 
@@ -15,7 +16,14 @@ import httpx
 
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.reader_errors import (
+    ReaderLoadError,
+    ReaderConfigError,
+    ReaderParseError,
+)
 from pydantic import Field
+
+logger = logging.getLogger(__name__)
 
 
 class WebsiteBs4Reader(Reader):
@@ -61,7 +69,7 @@ class WebsiteBs4Reader(Reader):
             return []
             
         if not url.startswith(('http://', 'https://')):
-            raise ValueError("Invalid URL format")
+            raise ReaderConfigError("Invalid URL format", reader_name="WebsiteBs4Reader")
 
         self._visited = set()
         self._urls_to_crawl = []
@@ -86,9 +94,17 @@ class WebsiteBs4Reader(Reader):
             return documents
             
         except httpx.RequestError as e:
-            raise ConnectionError(f"Network connection failed: {str(e)}")
+            raise ReaderLoadError(
+                f"Network connection failed: {e}",
+                reader_name="WebsiteBs4Reader",
+                source=url,
+            )
         except Exception as e:
-            raise RuntimeError(f"Content parsing failed: {str(e)}")
+            raise ReaderParseError(
+                f"Content parsing failed: {e}",
+                reader_name="WebsiteBs4Reader",
+                source=url,
+            )
 
     def _get_primary_domain(self, url: str) -> str:
         """Extract primary domain from URL
@@ -193,7 +209,7 @@ class WebsiteBs4Reader(Reader):
                             self._urls_to_crawl.append((full_url, current_depth + 1))
 
             except Exception as e:
-                print(f"error:{e}")
+                logger.warning("Error crawling %s: %s", current_url, e)
                 continue
 
         return crawler_result

@@ -4,11 +4,19 @@
 # @Time    : 2024/12/19 10:00
 # @Author  : Assistant
 # @FileName: xlsx_reader.py
+import logging
 from pathlib import Path
 from typing import Union, List, Optional, Dict
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.reader_errors import (
+    ReaderLoadError,
+    ReaderDependencyError,
+    ReaderParseError,
+)
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+logger = logging.getLogger(__name__)
 
 
 class XlsxReader(Reader):
@@ -33,57 +41,76 @@ class XlsxReader(Reader):
         try:
             import openpyxl
         except ImportError:
-            raise ImportError(
-                "openpyxl is required to read Excel files: "
-                "`pip install openpyxl`"
+            raise ReaderDependencyError(
+                "openpyxl is required to read Excel files",
+                reader_name="XlsxReader",
+                dependency="openpyxl",
+                install_hint="pip install openpyxl",
             )
 
         if isinstance(file, str):
             file = Path(file)
+        if not file.exists():
+            raise ReaderLoadError(
+                f"XLSX file not found: {file}",
+                reader_name="XlsxReader",
+                source=str(file),
+            )
 
-        # Load the workbook
-        workbook = openpyxl.load_workbook(file, data_only=True)
-        document_list = []
+        logger.info("XlsxReader start load file=%s", file)
+        try:
+            # Load the workbook
+            workbook = openpyxl.load_workbook(file, data_only=True)
+            document_list = []
 
-        # Process each worksheet
-        for sheet_name in workbook.sheetnames:
-            worksheet = workbook[sheet_name]
-            
-            # Extract data from the worksheet
-            sheet_data = []
-            max_row = worksheet.max_row
-            max_col = worksheet.max_column
-            
-            # Read all data from the worksheet
-            for row in range(1, max_row + 1):
-                row_data = []
-                for col in range(1, max_col + 1):
-                    cell = worksheet.cell(row=row, column=col)
-                    if cell.value is not None:
-                        # Convert cell value to string, handling different data types
-                        if isinstance(cell.value, (int, float)):
-                            row_data.append(str(cell.value))
+            # Process each worksheet
+            for sheet_name in workbook.sheetnames:
+                worksheet = workbook[sheet_name]
+                
+                # Extract data from the worksheet
+                sheet_data = []
+                max_row = worksheet.max_row
+                max_col = worksheet.max_column
+                
+                # Read all data from the worksheet
+                for row in range(1, max_row + 1):
+                    row_data = []
+                    for col in range(1, max_col + 1):
+                        cell = worksheet.cell(row=row, column=col)
+                        if cell.value is not None:
+                            # Convert cell value to string, handling different data types
+                            if isinstance(cell.value, (int, float)):
+                                row_data.append(str(cell.value))
+                            else:
+                                row_data.append(str(cell.value))
                         else:
-                            row_data.append(str(cell.value))
-                    else:
-                        row_data.append("")
-                
-                # Only add non-empty rows
-                if any(cell.strip() for cell in row_data):
-                    sheet_data.append(" | ".join(row_data))
+                            row_data.append("")
+                    
+                    # Only add non-empty rows
+                    if any(cell.strip() for cell in row_data):
+                        sheet_data.append(" | ".join(row_data))
 
-            # Create document for this sheet
-            if sheet_data:
-                sheet_content = "\n".join(sheet_data)
-                metadata = {
-                    "file_name": file.name,
-                    "sheet_name": sheet_name,
-                    "max_row": max_row,
-                    "max_col": max_col
-                }
-                if ext_info is not None:
-                    metadata.update(ext_info)
-                
-                document_list.append(Document(text=sheet_content, metadata=metadata))
+                # Create document for this sheet
+                if sheet_data:
+                    sheet_content = "\n".join(sheet_data)
+                    metadata = {
+                        "file_name": file.name,
+                        "sheet_name": sheet_name,
+                        "max_row": max_row,
+                        "max_col": max_col
+                    }
+                    if ext_info is not None:
+                        metadata.update(ext_info)
+                    
+                    document_list.append(Document(text=sheet_content, metadata=metadata))
 
-        return document_list
+            logger.info("XlsxReader extracted %d sheets from %s", len(document_list), file.name)
+            return document_list
+        except (ReaderLoadError, ReaderDependencyError):
+            raise
+        except Exception as e:
+            raise ReaderParseError(
+                f"Failed to read XLSX file: {e}",
+                reader_name="XlsxReader",
+                source=str(file),
+            ) from e
