@@ -24,12 +24,21 @@ class GoogleSearchTool(Tool):
 
     serper_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("SERPER_API_KEY"))
 
+    def _ensure_api_key(self):
+        if not self.serper_api_key:
+            raise ValueError(
+                "SERPER_API_KEY is not set. Configure it via the "
+                "SERPER_API_KEY environment variable or the serper_api_key "
+                "field on the GoogleSearchTool component.")
+
     def execute(self, input: str):
         # get top10 results from Google search.
+        self._ensure_api_key()
         search = GoogleSerperAPIWrapper(serper_api_key=self.serper_api_key, k=10, gl="us", hl="en", type="search")
         return search.run(query=input)
 
     async def async_execute(self, input: str):
         # get top10 results from Google search.
+        self._ensure_api_key()
         search = GoogleSerperAPIWrapper(serper_api_key=self.serper_api_key, k=10, gl="us", hl="en", type="search")
         return await search.arun(query=input)

@@ -30,9 +30,12 @@ class PaperSummary:
 
 
 class ArxivTool(Tool):
-    
+
     sch_engine: Optional[Any] = None
     MAX_QUERY_LENGTH: int = Field(default=300, description="查询字符串最大长度")
+    max_pdf_size_bytes: int = Field(
+        default=50 * 1024 * 1024,
+        description="Maximum PDF size in bytes for retrieve_full_paper_text")
 
     def execute(self, input: str | ToolInput, mode: str = None):
         if isinstance(input, ToolInput):
@@ -106,19 +109,46 @@ class ArxivTool(Tool):
             raise ImportError("arxiv is required. Install with: pip install arxiv")
         search = arxiv.Search(id_list=[paper_id])
         paper = next(self.sch_engine.results(search))
-        paper.download_pdf(filename="downloaded-paper.pdf") 
-        
+
+        import tempfile
+        # Use a unique temp file per call instead of a fixed CWD filename,
+        # so concurrent calls do not overwrite each other and the temp file
+        # is cleaned up even when pypdf raises on a corrupt/encrypted PDF.
+        tmp_path = None
         try:
-            import pypdf
-        except ImportError:
-            raise ImportError(
-                "pypdf is required to read PDF files: `pip install pypdf`"
-            )
-        reader = pypdf.PdfReader('downloaded-paper.pdf')
-        text_content = [page.extract_text() for page in reader.pages]
-        if os.path.exists("downloaded-paper.pdf"):
-            os.remove("downloaded-paper.pdf")
-        return "\n\n".join(text_content)
+            with tempfile.NamedTemporaryFile(
+                suffix=".pdf", delete=False
+            ) as tmp:
+                tmp_path = tmp.name
+            paper.download_pdf(filename=tmp_path)
+
+            # Reject unreasonably large PDFs before loading them.
+            if os.path.getsize(tmp_path) > self.max_pdf_size_bytes:
+                raise ValueError(
+                    f"Downloaded PDF for {paper_id} is "
+                    f"{os.path.getsize(tmp_path)} bytes, exceeding "
+                    f"max_pdf_size_bytes ({self.max_pdf_size_bytes}).")
+
+            try:
+                import pypdf
+            except ImportError:
+                raise ImportError(
+                    "pypdf is required to read PDF files: `pip install pypdf`"
+                )
+            reader = pypdf.PdfReader(tmp_path)
+            text_content = []
+            for page in reader.pages:
+                try:
+                    text_content.append(page.extract_text() or "")
+                except Exception:
+                    text_content.append("")
+            return "\n\n".join(text_content)
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
 
     def _format_paper_results(self, papers: List[PaperSummary]) -> str:
         if not papers:
