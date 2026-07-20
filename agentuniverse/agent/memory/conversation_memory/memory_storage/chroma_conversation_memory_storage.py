@@ -191,7 +191,6 @@ class ChromaConversationMemoryStorage(MemoryStorage):
 
         if len(filters["$and"]) < 2:
             filters = filters["$and"][0] if len(filters["$and"]) == 1 else {}
-        input = None
         if input:
             embedding = []
             if self.embedding_model:
