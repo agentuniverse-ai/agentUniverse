@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
+import io
 import unittest
+from contextlib import redirect_stdout
 
 from agentuniverse.agent.action.knowledge.reader.cloud.google_docs_reader import GoogleDocsReader
 
@@ -41,6 +43,16 @@ class TestGoogleDocsReader(unittest.TestCase):
         })
 
         self.assertEqual(metadata, {"source_name": "docs"})
+
+    def test_load_data_does_not_print_debug_output(self):
+        reader = FakeGoogleDocsReader()
+        stdout = io.StringIO()
+
+        with redirect_stdout(stdout):
+            docs = reader._load_data("doc-1", ext_info={"project": "demo"})
+
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(docs[0].text, "Hello")
 
 
 if __name__ == "__main__":
