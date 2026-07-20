@@ -14,7 +14,7 @@ results = store.query(
 )
 ```
 
-支持 `cosine`、`l2` 和 `inner_product`。元数据过滤仅允许使用 `filter_fields` 声明的字段。当 `connection_args.hosts` 未设置时，可通过 `OPENSEARCH_VECTOR_URL` 注入连接地址。
+支持 `cosine`、`l2` 和 `inner_product`。元数据过滤仅允许使用 `filter_fields` 声明的字段。当 `connection_args.hosts` 未设置时，可通过 `OPENSEARCH_VECTOR_URL` 注入连接地址。可选的 `store_ext` extra 安装可正常解析的 OpenSearch Python 2.8.x 客户端；该客户端可与当前 OpenSearch 服务器互操作，也不会抬高核心项目已锁定的 gRPC 版本要求。
 
 `Store`负责对`Document`进行存储，并在知识的检索阶段提供查询能力。`Store`的具体形式可以是多样的，包括关系型数据库、向量数据库、图数据库等形式。因此同一份`Document`也能在不同的`Store`中以不同的形式存储，而具体的检索方式也和`Store`的能力相绑定。
 

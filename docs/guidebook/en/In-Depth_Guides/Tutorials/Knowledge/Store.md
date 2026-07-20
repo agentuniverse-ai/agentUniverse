@@ -14,7 +14,7 @@ results = store.query(
 )
 ```
 
-Supported distance metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are accepted only for fields declared in `filter_fields`. Set `OPENSEARCH_VECTOR_URL` to inject a connection URL when `connection_args.hosts` is omitted.
+Supported distance metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are accepted only for fields declared in `filter_fields`. Set `OPENSEARCH_VECTOR_URL` to inject a connection URL when `connection_args.hosts` is omitted. The optional `store_ext` extra installs the resolver-compatible OpenSearch Python client 2.8.x; this client interoperates with current OpenSearch servers without raising the core project's pinned gRPC requirement.
 
 `Store` is responsible for storing `Document` objects and providing query capabilities during the knowledge retrieval phase. The specific form of a `Store` can vary, including relational databases, vector databases, graph databases, and more. Therefore, the same `Document` can be stored in different Stores in various formats, and the retrieval methods are tied to the capabilities of the specific `Store`.
 

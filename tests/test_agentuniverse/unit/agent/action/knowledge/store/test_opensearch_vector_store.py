@@ -3,7 +3,13 @@
 
 import asyncio
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
+
+try:
+    import tomllib
+except ImportError:  # Python 3.10
+    import tomli as tomllib
 
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.opensearch_vector_store import OpenSearchVectorStore
@@ -72,6 +78,15 @@ class FakeAsyncClient(FakeClient):
 
 
 class TestOpenSearchVectorStore(unittest.TestCase):
+    def test_optional_dependency_is_resolver_compatible(self):
+        project_file = next(
+            parent / "pyproject.toml" for parent in Path(__file__).parents if (parent / "pyproject.toml").is_file()
+        )
+        with project_file.open("rb") as stream:
+            poetry = tomllib.load(stream)["tool"]["poetry"]
+        self.assertEqual(poetry["dependencies"]["opensearch-py"], {"version": "^2.8.0", "optional": True})
+        self.assertIn("opensearch-py", poetry["extras"]["store_ext"])
+
     def test_mapping_contains_hnsw_and_keyword_filters(self):
         store = OpenSearchVectorStore(dimensions=3, filter_fields=["tenant"], distance="cosine")
         mapping = store._mapping(3)
