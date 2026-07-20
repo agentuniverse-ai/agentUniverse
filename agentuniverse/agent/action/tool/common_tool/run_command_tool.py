@@ -16,6 +16,7 @@ from typing import Dict, Optional
 from dataclasses import dataclass
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.common_tool.tool_input_utils import parse_strict_bool
 
 
 class CommandStatus(Enum):
@@ -82,6 +83,13 @@ class RunCommandTool(Tool):
             blocking = params.get("blocking", blocking)
             command = params.get("command")
         cwd = cwd or os.getcwd()
+        try:
+            blocking = parse_strict_bool(blocking, "blocking", default=True)
+        except ValueError as e:
+            return json.dumps({
+                "error": str(e),
+                "status": CommandStatus.ERROR.value
+            })
         return self._run_command(command, cwd, blocking)
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:

@@ -80,6 +80,36 @@ class CommandStatusToolTest(unittest.TestCase):
         self.assertIn('error', status_result)
         self.assertEqual(status_result['status'], 'not_found')
 
+    def test_string_thread_id_is_parsed(self):
+        status_input = ToolInput({
+            'thread_id': '12345678'
+        })
+        status_json = self.status_tool.execute(status_input)
+        status_result = json.loads(status_json)
+
+        self.assertIn('error', status_result)
+        self.assertEqual(status_result['status'], 'not_found')
+
+    def test_malformed_thread_id_returns_input_error(self):
+        status_input = ToolInput({
+            'thread_id': 'abc'
+        })
+        status_json = self.status_tool.execute(status_input)
+        status_result = json.loads(status_json)
+
+        self.assertEqual(status_result['status'], 'error')
+        self.assertIn('thread_id must be an integer', status_result['error'])
+
+    def test_boolean_thread_id_returns_input_error(self):
+        status_input = ToolInput({
+            'thread_id': True
+        })
+        status_json = self.status_tool.execute(status_input)
+        status_result = json.loads(status_json)
+
+        self.assertEqual(status_result['status'], 'error')
+        self.assertIn('thread_id must be an integer', status_result['error'])
+
 
 if __name__ == '__main__':
     unittest.main()

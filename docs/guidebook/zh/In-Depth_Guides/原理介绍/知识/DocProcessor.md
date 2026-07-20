@@ -235,7 +235,9 @@ metadata:
 
 该组件在召回文档**送入 LLM 之前**，对其中的常见个人敏感信息（PII）/敏感标识符进行脱敏，避免个人数据与密钥泄漏进模型上下文。对应 issue #248 的*隐私 / 合规*方向，且与其它文档处理器都不同（没有任何组件会出于隐私目的改写文本）。
 
-检测基于 regex，确定性、无依赖。内置实体刻意走高精度路线（结构化格式，而非宽泛猜测）：`email`、`credit_card`（13–16 位连续数字）、`id_card`（中国身份证）、`ssn`（美国）、`ip_address`（IPv4）、`api_key`（`sk-`/`AKIA`/`ghp_`/`glpat-` 等已知前缀）。`phone` 可用但默认不开启（手机号匹配更模糊）。领域专属标识符可通过 `custom_patterns` 补充。
+检测过程确定、无额外依赖。内置实体先匹配结构化格式，并在仅靠格式不足时执行语义校验：信用卡号必须通过 Luhn 校验，IPv4 各段必须在合法范围内，中国居民身份证必须通过校验码，美国 SSN 必须满足 area/group/serial 规则。`email` 和常见 API Key 前缀采用格式校验；`phone` 可用但默认不开启（手机号匹配更模糊）。领域专属标识符可通过 `custom_patterns` 补充。
+
+配置会在加载时严格校验。未知实体、格式错误的自定义项或非法正则会直接导致组件初始化失败，不会静默跳过而使脱敏失效。
 
 每个匹配被替换为 `replacement`（默认 `[REDACTED]`）；每篇文档的 `redaction_summary` 会记录各类实体被脱敏的数量。
 
@@ -254,5 +256,31 @@ metadata:
 ```
 - entities: 要脱敏的内置实体类型。加入 `phone` 可开启手机号脱敏。
 - replacement: 替换每个匹配的文本。
-- custom_patterns: 额外的 `{"name","pattern"}` 正则项，用于领域专属标识符；非法正则会被跳过并告警，不会中断流水线。
+- custom_patterns: 额外的 `{"name","pattern"}` 正则项，用于领域专属标识符；非法配置会导致组件初始化失败。
 - log_key: 记录每篇文档 `{实体: 数量}` 汇总的 metadata 键；设为 null 则不写入。
+
+### [ContextBudgetCompressor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/context_budget_compressor.yaml)
+
+该组件把召回文档装进一个固定的累积大小预算（通常是 LLM 上下文窗口）。它沿召回列表——已由 store 或前置 reranker / 融合处理器排好序——按顺序保留文档，只要累计大小不超过 `budget`；对那个会超出预算的边界文档，可选择截断，使结果在不超预算的前提下尽可能用满预算。对应 issue #248 的*上下文窗口管理*方向。
+
+它与 `ThresholdFilter` 关注的维度不同：`ThresholdFilter` 做的是 per-document 谓词（分数/长度范围）或固定 top-k，而本组件管理的是保留集合的**累计**大小，并能把最后一个文档切分开来以恰好装下。
+
+大小由 `counter` 计量：`estimate`（默认，`max(1, len(text)//4)`，无依赖的 token 近似）、`tiktoken`（经 tiktoken 的真实 BPE token）、`char` 或 `word`。预算始终以所选 counter 的单位解释，不会出现"名义上是 token、实际按词数算"的误导。
+
+组件定义文件如下：
+```yaml
+name: 'context_budget_compressor'
+description: '把召回文档装进累计大小预算'
+budget: 4096                 # 最大累计大小，单位同 counter
+counter: 'estimate'          # estimate | tiktoken | char | word
+truncate: true               # 截断边界文档以装满预算
+tiktoken_encoding: 'cl100k_base'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.context_budget_compressor'
+  class: 'ContextBudgetCompressor'
+```
+- budget: 保留文档的最大累计大小，单位同 `counter`。
+- counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
+- truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
+ - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。

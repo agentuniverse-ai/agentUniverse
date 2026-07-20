@@ -234,7 +234,9 @@ The processor always returns a single Document whose `text` is the summary. Its 
 
 This component redacts common personally identifiable information (PII) / sensitive identifiers from recalled documents *before* they reach the LLM, so personal data and secrets do not leak into model context. It addresses the *privacy / compliance* direction of issue #248 and is distinct from every other doc processor, none of which alter text for privacy.
 
-Detection is regex-based, deterministic, and dependency-free. The built-in entities are deliberately high-precision (structured formats rather than loose guesses): `email`, `credit_card` (13–16 digit runs), `id_card` (China resident ID), `ssn` (US), `ip_address` (IPv4), and `api_key` (well-known prefixes such as `sk-`, `AKIA`, `ghp_`, `glpat-`). `phone` is available but opt-in, since phone matching is fuzzier. Domain-specific identifiers can be added via `custom_patterns`.
+Detection is deterministic and dependency-free. Built-in entities use structured patterns, with semantic validation where shape alone is insufficient: credit cards must pass Luhn, IPv4 octets must be in range, China resident IDs must pass their checksum, and US SSNs must pass area/group/serial rules. `email` and well-known API-key prefixes are shape-checked; `phone` is available but opt-in because phone matching is fuzzier. Domain-specific identifiers can be added via `custom_patterns`.
+
+Configuration is validated eagerly. Unknown entities, malformed custom entries, and invalid regular expressions raise during component initialization rather than silently disabling redaction.
 
 Each match is replaced with `replacement` (default `[REDACTED]`); a per-document `redaction_summary` records how many of each entity were removed.
 
@@ -253,5 +255,31 @@ metadata:
 ```
 - entities: Built-in entity types to redact. Add `phone` to enable phone redaction.
 - replacement: Text substituted for every match.
-- custom_patterns: Extra `{"name", "pattern"}` regex entries for domain-specific identifiers; invalid regexes are skipped with a warning rather than crashing the pipeline.
+- custom_patterns: Extra `{"name", "pattern"}` regex entries for domain-specific identifiers. Invalid entries fail component initialization.
 - log_key: Metadata key recording a `{entity: count}` summary per document; set to null to omit.
+
+### [ContextBudgetCompressor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/context_budget_compressor.yaml)
+
+This component fits the recalled documents into a fixed cumulative size budget (typically the LLM context window). It walks the recalled list — already ranked by the store or an earlier reranker / fusion processor — keeping documents in order while their total size stays within `budget`; the boundary document that would overflow is optionally truncated so the budget is used as fully as possible without exceeding it. It addresses the *context-window management* direction of issue #248.
+
+It operates on a different axis from `ThresholdFilter`: `ThresholdFilter` applies per-document predicates (a score / length range) or a fixed top-k, while this manages the **cumulative** size of the kept set and can split the last document to fit.
+
+Size is measured by `counter`: `estimate` (default, `max(1, len(text)//4)` — a dependency-free token approximation), `tiktoken` (real BPE tokens via tiktoken), `char`, or `word`. The budget is always interpreted in the counter's unit, so the contract is never "tokens" while silently counting words.
+
+The component definition file is as follows:
+```yaml
+name: 'context_budget_compressor'
+description: 'fit recalled documents into a cumulative size budget'
+budget: 4096                 # max cumulative size, in the counter's unit
+counter: 'estimate'          # estimate | tiktoken | char | word
+truncate: true               # shorten the boundary document to fit
+tiktoken_encoding: 'cl100k_base'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.context_budget_compressor'
+  class: 'ContextBudgetCompressor'
+```
+- budget: Maximum cumulative size of the kept documents, measured in the unit of `counter`.
+- counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
+- truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
+- tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.

@@ -9,12 +9,12 @@ import json
 
 class InputObject(object):
     def __init__(self, params: dict):
-        self.__params = params
-        for k, v in params.items():
+        self.__params = params.copy()
+        for k, v in self.__params.items():
             self.__dict__[k] = v
 
     def to_dict(self):
-        return self.__params
+        return self.__params.copy()
 
     def to_json_str(self):
         return json.dumps(self.__params)

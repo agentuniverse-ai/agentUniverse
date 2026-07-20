@@ -1,0 +1,22 @@
+name: 'markdown_header_text_splitter'
+description: 'Split markdown documents into one chunk per ATX header (# to ######), preserving each section header hierarchy as metadata. Pure-Python, no external dependency.'
+
+# Deepest ATX header level to split on (1-6). Headers deeper than this are kept
+# as ordinary content; e.g. max_header_level=2 splits only on '#' and '##'.
+max_header_level: 6
+
+# Metadata key under which the joined header hierarchy of a section is recorded
+# (e.g. "Installation > macOS"). Set to null to omit the field.
+header_path_key: 'header_path'
+
+# When true, content before the first header is emitted as its own section
+# (with an empty header path); when false it is dropped.
+keep_preamble: true
+
+# Joiner used to compose the header path.
+path_separator: ' > '
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.markdown_header_text_splitter'
+  class: 'MarkdownHeaderTextSplitter'
