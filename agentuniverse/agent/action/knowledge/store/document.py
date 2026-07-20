@@ -48,7 +48,12 @@ class Document(BaseModel):
         if document_list is None:
             return langchain_document_list
         for document in document_list:
-            langchain_document_list.append(LCDocument(page_content=document.text, metadata=document.metadata))
+            langchain_document_list.append(
+                LCDocument(
+                    page_content=document.text,
+                    metadata=document.metadata or {}
+                )
+            )
         return langchain_document_list
 
     @staticmethod
