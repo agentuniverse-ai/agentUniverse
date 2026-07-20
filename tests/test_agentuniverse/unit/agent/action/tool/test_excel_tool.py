@@ -16,6 +16,55 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agentuniverse.agent.action.tool.common_tool.excel_tool import ExcelTool
 
 
+def test_excel_path_validator_allows_similarly_prefixed_windows_directory():
+    tool = ExcelTool()
+
+    result = tool._validate_path(r"C:\WindowsBackup\data.xlsx")
+
+    assert result["valid"] is True
+
+
+def test_excel_path_validator_blocks_windows_system_roots_on_any_drive():
+    tool = ExcelTool()
+
+    blocked_paths = [
+        r"C:\Windows\System32\data.xlsx",
+        r"D:\Windows\System32\data.xlsx",
+        r"C:/Windows/System32/data.xlsx",
+        r"C:\System32\data.xlsx",
+    ]
+
+    for file_path in blocked_paths:
+        result = tool._validate_path(file_path)
+        assert result["valid"] is False, file_path
+        assert "Access denied" in result["error"]
+
+
+def test_excel_path_validator_blocks_unc_and_device_paths():
+    tool = ExcelTool()
+
+    blocked_paths = [
+        r"\\server\share\data.xlsx",
+        r"//server/share/data.xlsx",
+        r"\\?\C:\Users\test\data.xlsx",
+        r"\\.\C:\Users\test\data.xlsx",
+    ]
+
+    for file_path in blocked_paths:
+        result = tool._validate_path(file_path)
+        assert result["valid"] is False, file_path
+        assert "Access denied" in result["error"]
+
+
+def test_excel_path_validator_blocks_mixed_separator_traversal():
+    tool = ExcelTool()
+
+    result = tool._validate_path(r"C:/Users/test/../Windows/data.xlsx")
+
+    assert result["valid"] is False
+    assert "Path traversal" in result["error"]
+
+
 def print_result(title: str, result: str):
     """Pretty print test results"""
     print(f"\n{'='*60}")
