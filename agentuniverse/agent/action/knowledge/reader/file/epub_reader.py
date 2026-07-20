@@ -6,6 +6,7 @@
 # @FileName: epub_reader.py
 from pathlib import Path
 from typing import Union, List, Optional, Dict
+import html
 import re
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
@@ -122,14 +123,14 @@ class EpubReader(Reader):
         Returns:
             str: Extracted plain text
         """
-        text = re.sub(r'<[^>]+>', '', html_content)
-    
-        text = text.replace('&amp;', '&')
-        text = text.replace('&lt;', '<')
-        text = text.replace('&gt;', '>')
-        text = text.replace('&quot;', '"')
-        text = text.replace('&#39;', "'")
-        text = text.replace('&nbsp;', ' ')
+        text = re.sub(
+            r'<(script|style)\b[^>]*>.*?</\1>',
+            '',
+            html_content,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        text = re.sub(r'<[^>]+>', '', text)
+        text = html.unescape(text)
     
         text = re.sub(r'\s+', ' ', text)
         text = text.strip()
