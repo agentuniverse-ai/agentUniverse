@@ -122,7 +122,12 @@ class AuTraceContext:
         span = trace.get_current_span()
         if not span.is_recording():
             return None
-        return span.context.span_id
+        # OpenTelemetry Span exposes get_span_context(), not a .context
+        # attribute (SpanContext has .span_id). The previous code used
+        # span.context.span_id which raised AttributeError when the span
+        # was recording. Every other call site in this file already uses
+        # get_span_context().
+        return span.get_span_context().span_id
 
     def init_new_token_usage(self, span_id=None):
         span_id = span_id or trace.get_current_span().get_span_context().span_id
