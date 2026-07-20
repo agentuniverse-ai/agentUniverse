@@ -5,6 +5,24 @@
 # @Author  : KiteSoar
 # @Email   : hushihao2020x@163.com
 # @FileName: yuque_reader.py
+"""Original ``YuqueReader`` implementation restored for backward
+compatibility.
+
+This is the **verbatim** code that lived in
+``cloud_file_reader/yuque_reader.py`` before the directory was removed
+in PR #634.  It is intentionally kept separate from the new
+``cloud/yuque_reader.py`` because the two classes have different
+interfaces:
+
+* Old ``YuqueReader`` — ``_load_data(self, url: str)`` (no *ext_info*),
+  top-level ``import requests``, ``print()`` errors.
+* New ``YuqueReader`` — ``_load_data(self, url, ext_info=None)``,
+  lazy ``import requests``, semantic exceptions, logging.
+
+Existing user code that imports ``YuqueReader`` from this module will
+continue to work unchanged.  New code should use
+``cloud.yuque_reader.YuqueReader``.
+"""
 
 import re
 import time
@@ -37,12 +55,13 @@ class YuqueReader(Reader):
 
     cookies: Optional[str] = None
     session: Optional[requests.Session] = None
+
     def __init__(self, cookies: str = None, **data: Any):
         """Initialize HTTP session with retry support and optional cookies"""
         super().__init__(**data)
         self.cookies = cookies
         self.session = requests.Session()
-        retries = Retry(total=5, backoff_factor=0.5, status_forcelist=[500,502,503,504])
+        retries = Retry(total=5, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
         self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
     def _fetch_url_title(self, url: str) -> str:
@@ -94,9 +113,11 @@ class YuqueReader(Reader):
             return ''
         md = data.get('sourcecode', '')
         # Process image references inline
+
         def repl(m):
             src = m.group(1)
             return f'![]({src})'
+
         return re.sub(r'!\[.*?\]\((.*?)\)', repl, md)
 
     def _load_data(self, url: str) -> List[Document]:
@@ -173,12 +194,3 @@ class YuqueReader(Reader):
             self.session.close()
         except Exception:
             pass
-
-# if __name__ == '__main__':
-#     # Example usage
-#     reader = YuqueReader(cookies=None)
-#     test_url = "Fill in the publicly accessible Yuque document link"
-#     docs = reader.load_data(test_url)
-#     for doc in docs:
-#         print(f"Title: {doc.metadata['doc_title']}")
-#         print(doc.text)

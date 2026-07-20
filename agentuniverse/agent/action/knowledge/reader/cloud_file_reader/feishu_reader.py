@@ -5,13 +5,32 @@
 # @Author  : zhaoyifei
 # @Email   : 2179709293@qq.com
 # @FileName: feishu_reader.py
+"""Original ``PublicFeishuReader`` implementation restored for backward
+compatibility.
+
+This is the **verbatim** code that lived in
+``cloud_file_reader/feishu_reader.py`` before the directory was removed
+in PR #634.  It is intentionally kept separate from the new
+``cloud/feishu_reader.py`` because the two classes have completely
+different interfaces:
+
+* Old ``PublicFeishuReader`` — standalone class, eager WebDriver in
+  ``__init__``, public ``load_data(url)`` method, ``print()`` errors.
+* New ``FeishuReader`` — ``Reader`` subclass, lazy WebDriver,
+  ``_load_data(url, ext_info)`` method, semantic exceptions, logging.
+
+Existing user code that imports ``PublicFeishuReader`` from this module
+will continue to work unchanged.  New code should use
+``cloud.feishu_reader.FeishuReader``.
+"""
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import time
-from typing import Dict,List
+from typing import Dict, List
 from agentuniverse.agent.action.knowledge.store.document import Document
+
 
 class PublicFeishuReader:
     """Feishu public document reader using Selenium
@@ -134,13 +153,3 @@ class PublicFeishuReader:
         """Cleanup resources by closing browser instance"""
         if hasattr(self, 'driver'):
             self.driver.quit()
-
-"""
-if __name__ == "__main__":
-    # Example usage
-    test_url = "https://www.feishu.cn/docx/SV2JdR5P4odO8AxIhpBcVo1Xncg"
-    reader = PublicFeishuReader()
-    data = reader.load_data(test_url)
-    print(data)
-    print("Document Summary:", data[0].text)
-"""

@@ -5,11 +5,19 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: pptx_reader.py
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.reader_errors import (
+    ReaderLoadError,
+    ReaderDependencyError,
+    ReaderParseError,
+)
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+logger = logging.getLogger(__name__)
 
 
 class PptxReader(Reader):
@@ -24,19 +32,40 @@ class PptxReader(Reader):
         try:
             from pptx import Presentation
         except ImportError:
-            raise ImportError(
-                "python-pptx is required to read pptx files: `pip install python-pptx`"
+            raise ReaderDependencyError(
+                "python-pptx is required to read pptx files",
+                reader_name="PptxReader",
+                dependency="python-pptx",
+                install_hint="pip install python-pptx",
             )
         if isinstance(file, str):
             file = Path(file)
-        presentation = Presentation(file)
-        document_list = []
-        for slide_number, slide in enumerate(presentation.slides, start=1):
-            for shape in slide.shapes:
-                if hasattr(shape, "text"):
-                    metadata = {"slide_number": slide_number, "file_name": file.name}
-                    if ext_info is not None:
-                        metadata.update(ext_info)
-                    # Extract the text from the shape
-                    document_list.append(Document(text=shape.text, metadata=metadata))
-        return document_list
+        if not file.exists():
+            raise ReaderLoadError(
+                f"PPTX file not found: {file}",
+                reader_name="PptxReader",
+                source=str(file),
+            )
+
+        logger.info("PptxReader start load file=%s", file)
+        try:
+            presentation = Presentation(file)
+            document_list = []
+            for slide_number, slide in enumerate(presentation.slides, start=1):
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        metadata = {"slide_number": slide_number, "file_name": file.name}
+                        if ext_info is not None:
+                            metadata.update(ext_info)
+                        # Extract the text from the shape
+                        document_list.append(Document(text=shape.text, metadata=metadata))
+            logger.info("PptxReader extracted %d shapes from %s", len(document_list), file.name)
+            return document_list
+        except (ReaderLoadError, ReaderDependencyError):
+            raise
+        except Exception as e:
+            raise ReaderParseError(
+                f"Failed to read PPTX file: {e}",
+                reader_name="PptxReader",
+                source=str(file),
+            ) from e
