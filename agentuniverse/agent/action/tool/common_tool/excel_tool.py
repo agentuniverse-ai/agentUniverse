@@ -65,11 +65,36 @@ class ExcelTool(Tool):
     allowed_extensions: List[str] = Field(default_factory=lambda: ['.xlsx', '.xls'], description="Allowed file extensions")
 
     @staticmethod
-    def _is_windows_forbidden_path(file_path: str) -> bool:
+    def _is_path_under(path: str, root: str) -> bool:
+        try:
+            return os.path.commonpath([path, root]) == root
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _is_windows_unc_or_device_path(file_path: str) -> bool:
+        normalized_path = file_path.replace("/", "\\")
+        lowered_path = normalized_path.lower()
+        if lowered_path.startswith("\\\\?\\") or lowered_path.startswith("\\\\.\\"):
+            return True
+        return PureWindowsPath(file_path).drive.startswith("\\\\")
+
+    @staticmethod
+    def _windows_path_components(file_path: str) -> List[str]:
         windows_path = PureWindowsPath(file_path)
-        normalized_path = str(windows_path).lower()
-        forbidden_prefixes = ("c:\\windows", "c:\\system32")
-        return bool(windows_path.drive) and normalized_path.startswith(forbidden_prefixes)
+        return [
+            part.lower()
+            for part in windows_path.parts
+            if part not in {windows_path.anchor, windows_path.drive, windows_path.root}
+        ]
+
+    @classmethod
+    def _is_windows_forbidden_path(cls, file_path: str) -> bool:
+        windows_path = PureWindowsPath(file_path)
+        if not windows_path.drive and not windows_path.root:
+            return False
+        components = cls._windows_path_components(file_path)
+        return bool(components) and components[0] in {"windows", "system32"}
 
     @staticmethod
     def _has_path_traversal(file_path: str) -> bool:
@@ -89,13 +114,19 @@ class ExcelTool(Tool):
         """
         # 1. Check for system sensitive directories
         forbidden_dirs = ['/etc', '/sys', '/proc', '/dev', '/boot', '/root',
-                         'C:\\Windows', 'C:\\System32', '/System', '/Library']
+                         '/System', '/Library']
 
-        abs_path = os.path.abspath(file_path)
+        if self._is_windows_unc_or_device_path(file_path):
+            return {
+                "valid": False,
+                "error": "Access denied: UNC and device paths are not allowed"
+            }
 
+        abs_path = os.path.realpath(os.path.abspath(file_path))
         normalized_abs_path = os.path.normcase(abs_path)
         for forbidden in forbidden_dirs:
-            if normalized_abs_path.startswith(os.path.normcase(forbidden)):
+            normalized_forbidden = os.path.normcase(os.path.realpath(forbidden))
+            if self._is_path_under(normalized_abs_path, normalized_forbidden):
                 return {
                     "valid": False,
                     "error": f"Access denied: Cannot access system directory {forbidden}"
