@@ -1,0 +1,37 @@
+name: word_document_tool
+description: Create, append to, read, or inspect DOCX files using structured headings, paragraphs, lists, tables, and page breaks. Requires python-docx.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.word_document_tool
+  class: WordDocumentTool
+input_keys: [mode, file_path]
+base_dir: .
+max_read_bytes: 20971520
+max_write_bytes: 20971520
+max_uncompressed_bytes: 104857600
+max_archive_entries: 5000
+max_blocks: 1000
+max_text_chars: 100000
+max_table_rows: 1000
+max_table_columns: 50
+args_model:
+  mode: {type: string, required: true, description: create, append, read, or info}
+  file_path: {type: string, required: true, description: DOCX path under base_dir}
+  blocks: {type: array, required: false, description: Structured document blocks for create/append}
+  overwrite: {type: boolean, required: false, default: false}
+  template_path: {type: string, required: false}
+  metadata: {type: object, required: false}
+args_model_schema:
+  type: object
+  properties:
+    mode: {type: string, enum: [create, append, read, info]}
+    file_path: {type: string}
+    blocks:
+      type: array
+      items: {type: object}
+    overwrite: {type: boolean, default: false}
+    template_path: {type: string}
+    metadata: {type: object}
+  required: [mode, file_path]
+  additionalProperties: false

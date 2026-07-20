@@ -58,6 +58,71 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertEqual(result['start_line'], 1)
         self.assertEqual(result['end_line'], 2)
 
+    def test_view_specific_lines_with_string_numbers(self):
+        tool_input = ToolInput({
+            'file_path': self.temp_file_path,
+            'start_line': '1',
+            'end_line': '3'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['content'], "Line 2\nLine 3\n")
+        self.assertEqual(result['start_line'], 1)
+        self.assertEqual(result['end_line'], 2)
+
+    def test_invalid_line_number_returns_error(self):
+        result_json = self.tool.execute(
+            file_path=self.temp_file_path,
+            start_line='first'
+        )
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('start_line must be an integer', result['error'])
+
+    def test_fractional_line_number_returns_error(self):
+        result_json = self.tool.execute(
+            file_path=self.temp_file_path,
+            start_line=1.9
+        )
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('start_line must be an integer', result['error'])
+
+    def test_fractional_line_number_string_returns_error(self):
+        result_json = self.tool.execute(
+            file_path=self.temp_file_path,
+            start_line='1.9'
+        )
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('start_line must be an integer', result['error'])
+
+    def test_boolean_line_number_returns_error(self):
+        result_json = self.tool.execute(
+            file_path=self.temp_file_path,
+            start_line=True
+        )
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('start_line must be an integer', result['error'])
+
+    def test_non_canonical_integer_string_returns_error(self):
+        result_json = self.tool.execute(
+            file_path=self.temp_file_path,
+            start_line='01'
+        )
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('start_line must be a canonical integer string', result['error'])
+
     def test_invalid_file_path(self):
         tool_input = ToolInput({
             'file_path': 'nonexistent/file.txt'

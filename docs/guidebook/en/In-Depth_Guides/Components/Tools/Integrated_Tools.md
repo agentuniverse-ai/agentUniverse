@@ -202,3 +202,132 @@ Parameter Description:
     response_content_type: the output format for the HTTP request result. If set to 'json', the result will be returned in JSON format; if set to 'text', it will be returned as plain text.
 This tool can be used directly without  requiring any keys.
 
+
+## 4. Office Tools
+
+### 4.1 PowerPoint
+
+`PowerPointTool` creates, appends to, reads, and inspects `.pptx` files from
+structured data. Install the optional Office dependency before using it:
+
+```bash
+pip install "agentUniverse[office_ext]"
+# source checkout alternative: pip install python-pptx
+```
+
+The built-in component configuration is
+[`powerpoint_tool.yaml`](../../../../../../agentuniverse/agent/action/tool/common_tool/powerpoint_tool.yaml):
+
+```yaml
+name: powerpoint_tool
+description: Create, append to, read, or inspect PowerPoint PPTX presentations from structured slide data.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.powerpoint_tool
+  class: PowerPointTool
+input_keys: [mode, file_path]
+base_dir: .
+max_read_bytes: 20971520
+max_write_bytes: 20971520
+max_uncompressed_bytes: 104857600
+max_archive_entries: 5000
+max_slides: 100
+max_text_chars: 50000
+```
+
+Create a presentation:
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj("powerpoint_tool")
+result = tool.run(
+    mode="create",
+    file_path="reports/q2-review.pptx",
+    overwrite=False,
+    metadata={"title": "Q2 Review", "author": "Finance Agent"},
+    slides=[
+        {
+            "title": "Q2 Review",
+            "subtitle": "Revenue and regional performance",
+            "notes": "Open with the consolidated revenue result.",
+        },
+        {
+            "title": "Highlights",
+            "bullets": [
+                "Revenue grew 20% year over year",
+                {"text": "APAC led growth", "level": 1},
+            ],
+            "table": [
+                ["Metric", "Q2", "YoY"],
+                ["Revenue", "$123M", "+20%"],
+            ],
+        },
+    ],
+)
+```
+
+Use `mode="append"` with another `slides` list to add slides to an existing
+deck. `mode="read"` returns bounded slide text, tables, and speaker notes;
+`mode="info"` returns file metadata and per-slide shape/table information.
+Create mode can also receive a `template_path` underneath `base_dir`; existing
+template slides are retained and the generated slides are appended.
+
+Supported slide fields are:
+
+- `title`, `subtitle`, and `notes`: strings.
+- `bullets`: strings or `{ "text": "...", "level": 0 }` objects. Levels are
+  restricted to 0–8.
+- `table`: a two-dimensional array of scalar cell values.
+- `layout`: `auto`, `title`, `title_content`, `section`, `title_only`, or
+  `blank`.
+
+The tool confines `file_path` and `template_path` to `base_dir`, including
+resolved symlinks. It rejects oversized files, slide/table/text limits, unknown
+input fields, and implicit overwrites. Writes are atomic: the new presentation
+is saved and size-checked in the destination directory before it replaces the
+target, so a failed write does not corrupt an existing deck. The `read` result
+is capped by the configured slide, shape, table-row, table-column, and shared
+text budgets, and reports `truncated: true` when traversal stops early.
+
+### 4.2 WordDocumentTool
+
+`WordDocumentTool` creates, appends to, reads, and inspects DOCX files with structured `heading`, `paragraph`, `bullet`, `table`, and `page_break` blocks. Install `agentUniverse[office_ext]` or `python-docx`, then resolve the built-in `word_document_tool` component. Paths and templates are confined to `base_dir`; archive expansion, file, block, table, and text limits are enforced, and writes are atomic. The existing `WriteWordDocumentTool` remains available for backward compatibility.
+
+## EmailDocumentTool
+
+`EmailDocumentTool` provides offline RFC 5322 `.eml` workflows with `create`, `read`, `info`, and `extract` modes. It can build multipart text/HTML messages, attach files, inspect headers and bodies, and extract selected attachments.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.email_document_tool import EmailDocumentTool
+
+tool = EmailDocumentTool(base_dir="/srv/agent-files")
+tool.execute(
+    mode="create",
+    file_path="report.eml",
+    headers={"from": "agent@example.com", "to": "user@example.com", "subject": "Report"},
+    text_body="The report is attached.",
+    attachments=["report.pdf"],
+)
+```
+
+The tool performs no network or mailbox access. It confines paths to `base_dir`, rejects header injection and unsafe/duplicate attachment names, bounds headers, bodies, attachment counts and bytes, preflights extraction destinations, and uses atomic writes.
+
+## SecureArchiveTool
+
+`SecureArchiveTool` provides bounded archive operations for agent workflows without external dependencies. It supports ZIP, TAR, TAR.GZ, and TGZ files with four modes: `create`, `list`, `extract`, and `info`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.secure_archive_tool import SecureArchiveTool
+
+tool = SecureArchiveTool(base_dir="/srv/agent-files")
+tool.execute(mode="create", file_path="reports.zip", input_paths=["reports"])
+tool.execute(mode="extract", file_path="reports.zip", output_dir="restored", members=["reports/q2.txt"])
+```
+
+All paths are confined to `base_dir`. Extraction rejects absolute/traversal paths, links, special TAR files, encrypted ZIPs, duplicate members, excessive compression ratios, and configured size/count limits. Destinations are preflighted before extraction and files are written through same-directory temporary files.
+
+## 4. PDF Tool
+
+The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.

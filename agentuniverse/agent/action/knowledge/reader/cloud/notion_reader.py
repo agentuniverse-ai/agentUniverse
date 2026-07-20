@@ -59,8 +59,19 @@ class NotionReader(Reader):
 
         text = "\n\n".join([b for b in text_blocks if b and b.strip()])
         if ext_info:
-            metadata.update(ext_info)
+            metadata.update(self._public_metadata(ext_info))
         return [Document(text=text, metadata=metadata)]
+
+    @staticmethod
+    def _public_metadata(ext_info: Dict) -> Dict:
+        sensitive_keys = {
+            "NOTION_TOKEN",
+            "notion_token",
+            "token",
+            "auth",
+            "authorization",
+        }
+        return {key: value for key, value in ext_info.items() if key not in sensitive_keys}
 
     def _export_page(self, client, page_id: str) -> List[str]:
         blocks: List[str] = []

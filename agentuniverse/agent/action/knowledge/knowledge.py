@@ -187,7 +187,7 @@ class Knowledge(ComponentBase):
         for _store_code in stores:
             futures.append(
                 self.insert_executor.submit(
-                    StoreManager().get_instance_obj(_store_code).insert_document,
+                    StoreManager().get_instance_obj(_store_code, strict=True).insert_document,
                     document_list))
         wait(futures, return_when=ALL_COMPLETED)
         for future in futures:
@@ -213,7 +213,7 @@ class Knowledge(ComponentBase):
         for _store_code in stores:
             futures.append(
                 self.insert_executor.submit(
-                    StoreManager().get_instance_obj(_store_code).update_document,
+                    StoreManager().get_instance_obj(_store_code, strict=True).update_document,
                     document_list))
         wait(futures, return_when=ALL_COMPLETED)
         for future in futures:
@@ -225,7 +225,7 @@ class Knowledge(ComponentBase):
         LOGGER.info("Knowledge update complete.")
 
     def _route_rag(self, query: Query):
-        return RagRouterManager().get_instance_obj(self.rag_router).rag_route(query, self.stores)
+        return RagRouterManager().get_instance_obj(self.rag_router, strict=True).rag_route(query, self.stores)
 
     @trace_knowledge
     def query_knowledge(self, **kwargs) -> List[Document]:
@@ -241,7 +241,7 @@ class Knowledge(ComponentBase):
         for query_task in query_tasks:
             futures.append((
                 self.query_executor.submit(
-                    StoreManager().get_instance_obj(query_task[1]).query,
+                    StoreManager().get_instance_obj(query_task[1], strict=True).query,
                     query_task[0]),
                 query_task[1],
             ))
