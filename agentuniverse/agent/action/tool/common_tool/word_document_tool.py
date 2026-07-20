@@ -259,34 +259,74 @@ class WordDocumentTool(Tool):
     def _read(self, path: str) -> dict[str, Any]:
         self._check_archive(path)
         document = self._document_class()(path)
-        remaining, truncated, blocks = self.max_text_chars, False, []
-        for paragraph in document.paragraphs:
-            text, remaining, cut = self._bounded(paragraph.text, remaining)
-            truncated |= cut
-            if text:
-                blocks.append(
-                    {"type": "paragraph", "text": text, "style": paragraph.style.name if paragraph.style else ""}
-                )
-        tables = []
-        for table in document.tables:
-            output = []
-            for row in table.rows:
-                values = []
-                for cell in row.cells:
-                    value, remaining, cut = self._bounded(cell.text, remaining)
-                    truncated |= cut
-                    values.append(value)
-                output.append(values)
-            tables.append(output)
+        # The same structural budgets that bound create/append also bound the
+        # read path, so a crafted DOCX cannot exhaust memory by packing in a
+        # huge number of paragraphs, tables, rows, or cells. Budgets are
+        # consumed together: once any of them is exhausted, traversal stops
+        # short instead of continuing to walk and emit empty strings. The walk
+        # is split into paragraph/table helpers so each stays under the ruff
+        # complexity ceiling.
+        budget = _ReadBudget(self)
+        paragraphs = self._read_paragraphs(document, budget)
+        tables = self._read_tables(document, budget)
         return {
             "status": "success",
             "mode": "read",
             "file_path": path,
-            "paragraphs": blocks,
+            "paragraphs": paragraphs,
             "tables": tables,
-            "truncated": truncated,
+            "truncated": budget.truncated,
             "max_text_chars": self.max_text_chars,
+            "max_blocks": self.max_blocks,
+            "max_table_rows": self.max_table_rows,
+            "max_table_columns": self.max_table_columns,
         }
+
+    def _read_paragraphs(self, document: Any, budget: "_ReadBudget") -> list[dict[str, Any]]:
+        paragraphs: list[dict[str, Any]] = []
+        last_index = len(document.paragraphs) - 1
+        for index, paragraph in enumerate(document.paragraphs):
+            if not budget.allow_block():
+                break
+            text, cut = budget.consume_text(paragraph.text)
+            if text:
+                paragraphs.append(
+                    {"type": "paragraph", "text": text, "style": paragraph.style.name if paragraph.style else ""}
+                )
+                budget.used_block()
+            if budget.chars_exhausted():
+                if cut or index < last_index:
+                    budget.mark_truncated()
+                break
+        return paragraphs
+
+    def _read_tables(self, document: Any, budget: "_ReadBudget") -> list[list[list[str]]]:
+        tables: list[list[list[str]]] = []
+        for table in document.tables:
+            if not budget.allow_block():
+                budget.mark_truncated()
+                break
+            table_rows: list[list[str]] = []
+            for row_index, row in enumerate(table.rows):
+                if row_index >= self.max_table_rows:
+                    budget.mark_truncated()
+                    break
+                values: list[str] = []
+                for column_index, cell in enumerate(row.cells):
+                    if column_index >= self.max_table_columns:
+                        budget.mark_truncated()
+                        break
+                    value, _cut = budget.consume_text(cell.text)
+                    values.append(value)
+                table_rows.append(values)
+                if budget.chars_exhausted():
+                    budget.mark_truncated()
+                    break
+            tables.append(table_rows)
+            budget.used_block()
+            if budget.chars_exhausted():
+                break
+        return tables
 
     def _info(self, path: str) -> dict[str, Any]:
         self._check_archive(path)
@@ -301,6 +341,19 @@ class WordDocumentTool(Tool):
             "table_count": len(document.tables),
             "section_count": len(document.sections),
             "metadata": {key: getattr(props, key, "") or "" for key in sorted(self._METADATA_FIELDS)},
+        }
+
+    @staticmethod
+    def _success(mode: str, path: str, count: int, document: Any, **extra: Any) -> dict[str, Any]:
+        return {
+            "status": "success",
+            "mode": mode,
+            "file_path": path,
+            "blocks_added": count,
+            "paragraph_count": len(document.paragraphs),
+            "table_count": len(document.tables),
+            "file_size": os.path.getsize(path),
+            **extra,
         }
 
     def _save(self, document: Any, path: str) -> None:
@@ -321,24 +374,53 @@ class WordDocumentTool(Tool):
             if temporary and os.path.exists(temporary):
                 os.unlink(temporary)
 
-    @staticmethod
-    def _bounded(value: Any, remaining: int) -> tuple[str, int, bool]:
-        text = str(value or "").strip()
-        if len(text) <= remaining:
-            return text, remaining - len(text), False
-        if remaining <= 0:
-            return "", 0, True
-        return text[: max(0, remaining - 1)] + "…", 0, True
 
-    @staticmethod
-    def _success(mode: str, path: str, count: int, document: Any, **extra: Any) -> dict[str, Any]:
-        return {
-            "status": "success",
-            "mode": mode,
-            "file_path": path,
-            "blocks_added": count,
-            "paragraph_count": len(document.paragraphs),
-            "table_count": len(document.tables),
-            "file_size": os.path.getsize(path),
-            **extra,
-        }
+class _ReadBudget:
+    """Tracks the shared char/block budgets consumed across the read walk.
+
+    A crafted DOCX can pack in many paragraphs, tables, rows, or cells. This
+    accumulator centralises the four budgets (text chars, total blocks/tables,
+    rows per table, columns per row) so the read stops the moment any of them
+    is exhausted, instead of continuing to traverse and padding the result
+    with empty strings.
+    """
+
+    __slots__ = ("max_blocks", "max_text_chars", "remaining_blocks", "remaining_chars", "truncated")
+
+    def __init__(self, tool: "WordDocumentTool") -> None:
+        self.max_text_chars = tool.max_text_chars
+        self.max_blocks = tool.max_blocks
+        self.remaining_chars = tool.max_text_chars
+        self.remaining_blocks = tool.max_blocks
+        self.truncated = False
+
+    def allow_block(self) -> bool:
+        if self.remaining_blocks <= 0:
+            self.truncated = True
+            return False
+        return True
+
+    def used_block(self) -> None:
+        if self.remaining_blocks > 0:
+            self.remaining_blocks -= 1
+
+    def chars_exhausted(self) -> bool:
+        return self.remaining_chars <= 0
+
+    def mark_truncated(self) -> None:
+        self.truncated = True
+
+    def consume_text(self, value: Any) -> tuple[str, bool]:
+        """Return (bounded_text, was_cut). Empty results do not consume budget."""
+        text = str(value or "").strip()
+        if not text:
+            return "", False
+        if len(text) <= self.remaining_chars:
+            self.remaining_chars -= len(text)
+            return text, False
+        if self.remaining_chars <= 0:
+            return "", True
+        kept = self.remaining_chars
+        self.remaining_chars = 0
+        # Reserve one char for an ellipsis when truncating mid-field.
+        return text[: max(0, kept - 1)] + "…", True
