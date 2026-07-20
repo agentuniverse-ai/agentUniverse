@@ -88,6 +88,7 @@ def _require_int(value: Any) -> int:
 
 def _validate_metadata_payload(
     metadata: Any,
+    faiss_ntotal: int | None = None,
 ) -> tuple[dict[str, "Document"], dict[str, int], dict[int, str], int]:
     """Validate the loaded metadata envelope and reconstruct typed fields.
 
@@ -96,6 +97,18 @@ def _validate_metadata_payload(
     store as one coherent unit instead of half-populating it: wrong ``format``
     marker, non-object top level, malformed ``Document`` payloads, or
     ``index_to_id`` keys that are not integer FAISS positions.
+
+    Beyond per-field types, the payload must satisfy the relational invariants
+    that keep the in-memory metadata consistent with the FAISS index — these
+    two are persisted as separate files and a crash can leave them out of sync:
+
+    - ``id_to_index`` and ``index_to_id`` are exact inverses;
+    - every ID referenced by the mappings exists in ``document_store`` and
+      matches the persisted ``Document.id``;
+    - positions and ``next_index`` are non-negative, and ``next_index`` is at
+      least one past the highest used position;
+    - when ``faiss_ntotal`` is supplied, the number of mapped positions agrees
+      with the number of vectors the FAISS index actually holds.
     """
     if not isinstance(metadata, dict):
         raise TypeError("invalid metadata envelope")
@@ -111,12 +124,24 @@ def _validate_metadata_payload(
     for doc_id, doc_data in document_store_raw.items():
         _require_str(doc_id)
         _require_dict(doc_data)
-        document_store[doc_id] = Document(**doc_data)
+        document = Document(**doc_data)
+        # The persisted Document.id must agree with the key it was stored under;
+        # otherwise the mappings below could not be trusted to point at it.
+        if document.id != doc_id:
+            raise ValueError(
+                f"document_store key {doc_id!r} does not match Document.id "
+                f"{document.id!r}")
+        document_store[doc_id] = document
 
     id_to_index: dict[str, int] = {}
     for doc_id, position in id_to_index_raw.items():
         _require_str(doc_id)
-        id_to_index[doc_id] = _require_int(position)
+        position = _require_int(position)
+        if position < 0:
+            raise ValueError(
+                f"id_to_index[{doc_id!r}] position must be non-negative, "
+                f"got {position}")
+        id_to_index[doc_id] = position
 
     # JSON object keys are strings; restore the integer FAISS positions.
     # Non-integer keys mean the file is corrupt — raise, do not guess.
@@ -127,9 +152,71 @@ def _validate_metadata_payload(
         except (TypeError, ValueError) as exc:
             raise ValueError("index_to_id key is not an integer position") from exc
         _require_str(doc_id)
+        if position < 0:
+            raise ValueError(
+                f"index_to_id key {position} must be non-negative")
         index_to_id[position] = doc_id
 
+    if next_index < 0:
+        raise ValueError(f"next_index must be non-negative, got {next_index}")
+
+    # Relational invariants — see docstring.
+    _check_mapping_invariants(
+        document_store=document_store,
+        id_to_index=id_to_index,
+        index_to_id=index_to_id,
+        next_index=next_index,
+        faiss_ntotal=faiss_ntotal,
+    )
+
     return document_store, id_to_index, index_to_id, next_index
+
+
+def _check_mapping_invariants(
+    document_store: dict,
+    id_to_index: dict,
+    index_to_id: dict,
+    next_index: int,
+    faiss_ntotal: int | None,
+) -> None:
+    """Assert the cross-field invariants that keep metadata + index coherent."""
+    # id_to_index and index_to_id must be exact inverses.
+    for doc_id, position in id_to_index.items():
+        if index_to_id.get(position) != doc_id:
+            raise ValueError(
+                f"id_to_index and index_to_id are not inverses at "
+                f"position {position} (id {doc_id!r})")
+    for position, doc_id in index_to_id.items():
+        if id_to_index.get(doc_id) != position:
+            raise ValueError(
+                f"id_to_index and index_to_id are not inverses at "
+                f"id {doc_id!r} (position {position})")
+
+    # Every mapped id must exist in document_store.
+    for doc_id in id_to_index:
+        if doc_id not in document_store:
+            raise ValueError(
+                f"id_to_index references id {doc_id!r} that is not in "
+                f"document_store")
+
+    # next_index must be strictly greater than every used position so the next
+    # insert cannot collide with an existing vector slot.
+    if index_to_id:
+        max_position = max(index_to_id)
+        if next_index <= max_position:
+            raise ValueError(
+                f"next_index ({next_index}) must be greater than the highest "
+                f"used position ({max_position})")
+
+    # When we know how many vectors the FAISS index actually holds, the number
+    # of mapped positions must agree — a mismatch means the index and metadata
+    # files are from different generations (the index/metadata incoherence the
+    # previous review asked us to prevent).
+    if faiss_ntotal is not None and len(index_to_id) != faiss_ntotal:
+        raise ValueError(
+            f"metadata maps {len(index_to_id)} vectors but the loaded FAISS "
+            f"index holds {faiss_ntotal}; the index and metadata files are "
+            f"out of sync — re-index to regenerate them as one coherent unit")
 
 
 class FAISSStore(Store):
@@ -222,17 +309,41 @@ class FAISSStore(Store):
             raise ValueError(unsupported_index_msg)
 
     def _load_index_and_metadata(self):
-        """Load existing FAISS index and metadata from disk."""
+        """Load existing FAISS index and metadata from disk.
+
+        Fail closed as one store: when either half cannot be loaded and
+        validated, both are discarded. The FAISS index file and the JSON
+        metadata file are persisted separately, so a crash (or a hand-edited
+        file) can leave them generations out of sync — keeping a loaded index
+        around when its metadata is gone/corrupt would let a later insert or
+        query address a vector whose document is missing or wrong (the
+        index/metadata incoherence a previous review asked us to prevent).
+        """
+        loaded_index = None
         if self.index_path and os.path.exists(self.index_path):
             try:
-                self.faiss_index = faiss.read_index(self.index_path)
+                loaded_index = faiss.read_index(self.index_path)
                 logger.info(f"Loaded FAISS index from {self.index_path}")
             except Exception as e:
                 logger.warning(f"Failed to load FAISS index: {e}")
-                self.faiss_index = None
 
-        if not self._read_metadata_file():
+        # Pass the loaded index's ntotal into metadata validation so a
+        # generation mismatch (right shape, wrong vector count) is caught
+        # here rather than silently accepted.
+        faiss_ntotal = loaded_index.ntotal if loaded_index is not None else None
+        if not self._read_metadata_file(faiss_ntotal=faiss_ntotal):
+            # Metadata could not be loaded/validated — discard BOTH halves so
+            # the store starts empty and coherent, never index-only.
+            logger.warning(
+                "Metadata could not be loaded; discarding the in-memory FAISS "
+                "index as well to keep the store coherent. Re-index to "
+                "regenerate the index and metadata together.")
+            self.faiss_index = None
             self._reset_metadata()
+            return
+
+        # Metadata is valid and consistent with the loaded index (if any).
+        self.faiss_index = loaded_index
 
         # If no index was loaded and we have metadata, create empty index
         if self.faiss_index is None and self.document_store:
@@ -243,7 +354,7 @@ class FAISSStore(Store):
                     self.faiss_index = self._create_faiss_index(dimension)
                     break
 
-    def _read_metadata_file(self) -> bool:
+    def _read_metadata_file(self, faiss_ntotal: int | None = None) -> bool:
         """Load document metadata from ``metadata_path`` as JSON.
 
         Returns True on success, False if the path is unset/missing or the file
@@ -254,9 +365,11 @@ class FAISSStore(Store):
 
         On any structural problem — wrong ``format`` marker, top-level shape
         that is not an object, individual ``Document`` payloads that do not
-        reconstruct, or non-integer ``index_to_id`` keys — the whole metadata
-        set is discarded and the caller resets to an empty store, so the loaded
-        FAISS index and metadata can never end up in an incoherent state.
+        reconstruct, non-integer ``index_to_id`` keys, a broken inverse-mapping
+        invariant, or a mismatch against ``faiss_ntotal`` — the whole metadata
+        set is discarded and the caller resets to an empty store (and, in
+        ``_load_index_and_metadata``, discards the loaded FAISS index too), so
+        the loaded index and metadata can never end up in an incoherent state.
         """
         if not (self.metadata_path and os.path.exists(self.metadata_path)):
             return False
@@ -273,7 +386,8 @@ class FAISSStore(Store):
             return False
 
         try:
-            document_store, id_to_index, index_to_id, next_index = _validate_metadata_payload(metadata)
+            document_store, id_to_index, index_to_id, next_index = _validate_metadata_payload(
+                metadata, faiss_ntotal=faiss_ntotal)
         except (ValueError, TypeError) as exc:
             logger.warning(
                 f"Metadata at {self.metadata_path} failed schema validation: {exc}; "
