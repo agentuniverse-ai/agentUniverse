@@ -1,0 +1,8 @@
+name: 'default_litellm'
+description: 'LiteLLM AI gateway — routes to 100+ LLM providers via a unified interface'
+model_name: 'openai/gpt-4o-mini'
+max_tokens: 1000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.litellm'
+  class: 'LiteLLM'
