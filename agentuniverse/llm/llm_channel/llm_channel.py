@@ -85,9 +85,6 @@ class LLMChannel(ComponentBase):
             }
         return self
 
-    def create_copy(self):
-        return self
-
     @property
     def channel_model_config(self):
         return self._channel_model_config
