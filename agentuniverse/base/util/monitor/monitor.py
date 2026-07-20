@@ -243,9 +243,12 @@ class Monitor(BaseModel):
                 for key, value in cur_token_usage.items():
                     try:
                         result_usage[key] = old_token_usage[key] + value if key in old_token_usage else value
-                    except:
-                        # not addable value
-                        pass
+                    except TypeError:
+                        # Non-addable value (e.g. mixed types from a custom
+                        # TokenUsage subclass); log so the field doesn't
+                        # silently disappear from totals.
+                        logger.debug(f"Token usage field {key!r} is not addable "
+                                     f"({type(value).__name__}); skipping.")
                 FrameworkContextManager().set_context(trace_id + '_token_usage', result_usage)
 
     @staticmethod
@@ -291,7 +294,10 @@ class Monitor(BaseModel):
 
             if llm_obj is None or llm_input is None:
                 return {}
-            messages = llm_input.get('kwargs', {}).pop('messages', None)
+            # NOTE: use .get, not .pop — .pop mutates the caller's input dict,
+            # silently removing `messages` so any later use (retry loops,
+            # logging of the full input) finds it missing.
+            messages = llm_input.get('kwargs', {}).get('messages', None)
 
             input_str = ''
             if messages is not None and isinstance(messages, list):
