@@ -230,6 +230,34 @@ metadata:
 
 The processor always returns a single Document whose `text` is the summary. Its `metadata` records the operating mode (`summarization_mode`: `llm` or `extractive`), the number of source documents (`source_doc_count`), and the `llm_name` used.
 
+### [SensitiveDataRedactor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sensitive_data_redactor.yaml)
+
+This component redacts common personally identifiable information (PII) / sensitive identifiers from recalled documents *before* they reach the LLM, so personal data and secrets do not leak into model context. It addresses the *privacy / compliance* direction of issue #248 and is distinct from every other doc processor, none of which alter text for privacy.
+
+Detection is deterministic and dependency-free. Built-in entities use structured patterns, with semantic validation where shape alone is insufficient: credit cards must pass Luhn, IPv4 octets must be in range, China resident IDs must pass their checksum, and US SSNs must pass area/group/serial rules. `email` and well-known API-key prefixes are shape-checked; `phone` is available but opt-in because phone matching is fuzzier. Domain-specific identifiers can be added via `custom_patterns`.
+
+Configuration is validated eagerly. Unknown entities, malformed custom entries, and invalid regular expressions raise during component initialization rather than silently disabling redaction.
+
+Each match is replaced with `replacement` (default `[REDACTED]`); a per-document `redaction_summary` records how many of each entity were removed.
+
+The component definition file is as follows:
+```yaml
+name: 'sensitive_data_redactor'
+description: 'redact PII from recalled documents'
+entities: [email, credit_card, id_card, ssn, ip_address, api_key]
+replacement: '[REDACTED]'
+custom_patterns: []      # e.g. [{name: employee_id, pattern: '\bEMP-\d{6}\b'}]
+log_key: 'redaction_summary'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_data_redactor'
+  class: 'SensitiveDataRedactor'
+```
+- entities: Built-in entity types to redact. Add `phone` to enable phone redaction.
+- replacement: Text substituted for every match.
+- custom_patterns: Extra `{"name", "pattern"}` regex entries for domain-specific identifiers. Invalid entries fail component initialization.
+- log_key: Metadata key recording a `{entity: count}` summary per document; set to null to omit.
+
 ### [ContextBudgetCompressor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/context_budget_compressor.yaml)
 
 This component fits the recalled documents into a fixed cumulative size budget (typically the LLM context window). It walks the recalled list — already ranked by the store or an earlier reranker / fusion processor — keeping documents in order while their total size stays within `budget`; the boundary document that would overflow is optionally truncated so the budget is used as fully as possible without exceeding it. It addresses the *context-window management* direction of issue #248.
