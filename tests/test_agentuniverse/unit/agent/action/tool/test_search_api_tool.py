@@ -20,24 +20,38 @@ class FakeSearchAPIWrapper:
 
 
 class SearchAPIToolTest(unittest.TestCase):
-    def test_async_execute_accepts_keyword_input(self):
+    def test_async_run_accepts_keyword_input(self):
         tool = SearchAPITool(
             search_api_key="test-key",
-            search_api_wrapper=FakeSearchAPIWrapper(),
             search_params={"num": 10},
         )
+        tool.search_api_wrapper = FakeSearchAPIWrapper()
 
-        result = asyncio.run(tool.async_execute(input="agentUniverse", num=3))
+        result = asyncio.run(tool.async_run(input="agentUniverse", num=3))
 
         self.assertEqual(result["query"], "agentUniverse")
         self.assertEqual(result["params"]["num"], 3)
 
+    def test_async_run_accepts_json_result_type(self):
+        tool = SearchAPITool(
+            search_api_key="test-key",
+            search_params={"num": 10},
+            search_type="json",
+        )
+        tool.search_api_wrapper = FakeSearchAPIWrapper()
+
+        result = asyncio.run(tool.async_run(input="agentUniverse", num=5))
+
+        self.assertEqual(result["query"], "agentUniverse")
+        self.assertEqual(result["params"]["num"], 5)
+        self.assertTrue(result["json"])
+
     def test_execute_accepts_tool_input(self):
         tool = SearchAPITool(
             search_api_key="test-key",
-            search_api_wrapper=FakeSearchAPIWrapper(),
             search_params={"num": 10},
         )
+        tool.search_api_wrapper = FakeSearchAPIWrapper()
 
         result = tool.execute(ToolInput({"input": "agentUniverse", "num": 5}))
 
