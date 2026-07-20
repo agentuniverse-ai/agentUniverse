@@ -77,6 +77,18 @@ class TestChromaClientFactory(unittest.TestCase):
         _result, call = self.call_with_fake(None)
         self.assertEqual(call[1]["path"], "./chroma")
 
+    def test_windows_drive_path_uses_persistent_client(self):
+        path = r"C:\agentuniverse\chroma"
+        result, call = self.call_with_fake(path)
+        self.assertEqual(result, "persistent-client")
+        self.assertEqual(call[1]["path"], path)
+
+    def test_windows_unc_path_uses_persistent_client(self):
+        path = r"\\server\share\chroma"
+        result, call = self.call_with_fake(path)
+        self.assertEqual(result, "persistent-client")
+        self.assertEqual(call[1]["path"], path)
+
     def test_http_client_default_port(self):
         result, call = self.call_with_fake("http://chroma.internal")
         self.assertEqual(result, "http-client")
@@ -146,7 +158,7 @@ class TestChromaAdapters(unittest.TestCase):
 
 
 class TestCompatibilityMetadata(unittest.TestCase):
-    def test_python312_numpy2_and_chroma1_constraints(self):
+    def test_python312_and_chroma1_constraints(self):
         project_file = next(
             parent / "pyproject.toml" for parent in Path(__file__).parents if (parent / "pyproject.toml").is_file()
         )
@@ -154,7 +166,9 @@ class TestCompatibilityMetadata(unittest.TestCase):
             project = tomllib.load(stream)["tool"]["poetry"]
         self.assertIn("Programming Language :: Python :: 3.12", project["classifiers"])
         dependencies = project["dependencies"]
-        self.assertEqual(dependencies["numpy"], ">=1.26.0,<3.0.0")
+        # NumPy 2 requires a coordinated LangChain upgrade and is intentionally
+        # outside this compatibility change.
+        self.assertEqual(dependencies["numpy"], "^1.26.0")
         self.assertEqual(dependencies["chromadb"], "^1.5.9")
 
 

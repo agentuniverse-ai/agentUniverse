@@ -4,6 +4,7 @@
 # Public helpers intentionally use concise built-in validation exceptions.
 # ruff: noqa: TRY003
 
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -22,6 +23,11 @@ def create_chroma_client(persist_path: str | None, *, anonymized_telemetry: bool
 
     settings = Settings(anonymized_telemetry=anonymized_telemetry)
     value = persist_path or "./chroma"
+    # ``urlparse`` treats the drive prefix in ``C:\\data`` as a URI scheme.
+    # Recognize Windows drive and UNC paths before URL parsing so the same
+    # configuration remains portable across supported operating systems.
+    if re.match(r"^[A-Za-z]:[\\/]", value) or value.startswith("\\\\"):
+        return chromadb.PersistentClient(path=value, settings=settings)
     parsed = urlparse(value)
     if parsed.scheme.lower() in {"http", "https"}:
         if not parsed.hostname:
