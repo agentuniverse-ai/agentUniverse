@@ -47,3 +47,30 @@ def test_generate_result_returns_empty_text_for_empty_stream():
     agent = _StubAgent()
 
     assert agent.generate_result([]) == ""
+
+
+def test_tool_names_does_not_mutate_agent_action(monkeypatch):
+    class _StubToolkit:
+        def __init__(self):
+            self.tool_names = ["toolkit_tool"]
+
+    class _StubToolkitManager:
+        def get_instance_obj(self, toolkit_name):
+            assert toolkit_name == "test_toolkit"
+            return _StubToolkit()
+
+    monkeypatch.setattr(
+        "agentuniverse.agent.agent.ToolkitManager",
+        _StubToolkitManager,
+    )
+    agent = _StubAgent()
+    agent.agent_model = AgentModel(
+        action={
+            "tool": ["direct_tool"],
+            "toolkit": ["test_toolkit"],
+        }
+    )
+
+    assert agent.tool_names == ["direct_tool", "toolkit_tool"]
+    assert agent.tool_names == ["direct_tool", "toolkit_tool"]
+    assert agent.agent_model.action["tool"] == ["direct_tool"]

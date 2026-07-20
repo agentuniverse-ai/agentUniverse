@@ -224,6 +224,8 @@ class ZipReader(Reader):
         if not member:
             return None
         normalized = PurePosixPath(member)
+        if normalized.is_absolute() or ".." in normalized.parts:
+            return None
         parts = [part for part in normalized.parts if part not in {"", ".", ".."}]
         if not parts:
             return None
