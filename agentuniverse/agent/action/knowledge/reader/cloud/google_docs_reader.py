@@ -29,8 +29,18 @@ class GoogleDocsReader(Reader):
 
         metadata: Dict = {"source": "google_docs", "doc_id": doc_id}
         if ext_info:
-            metadata.update(ext_info)
+            metadata.update(self._public_metadata(ext_info))
         return [Document(text=text, metadata=metadata)]
+
+    @staticmethod
+    def _public_metadata(ext_info: Dict) -> Dict:
+        sensitive_keys = {
+            "GOOGLE_SERVICE_ACCOUNT_JSON",
+            "google_service_account_json",
+            "service_account_json",
+            "credentials",
+        }
+        return {key: value for key, value in ext_info.items() if key not in sensitive_keys}
 
     def _build_drive_service(self, ext_info: Optional[Dict]):
         try:
