@@ -145,14 +145,20 @@ class AuTraceContext:
     def add_current_token_usage_to_parent(self, token_usage=None, parent_span_id=None):
         if not token_usage:
             token_usage = self.get_current_token_usage()
+        # The shared _token_count_dict is mutated by concurrent LLM sub-calls
+        # reporting to the same parent (e.g. an agent span fanning out to
+        # parallel LLM calls in a thread pool). Protect both branches with
+        # the instance lock, matching add_current_token_usage's sync path.
         if parent_span_id and parent_span_id in self._token_count_dict:
-            self._token_count_dict[parent_span_id] += token_usage
+            with self._token_count_lock:
+                self._token_count_dict[parent_span_id] += token_usage
             return
 
         span = trace.get_current_span()
         parent_ctx = span.parent  # Only SpanContext, which may be None.
         if parent_ctx is not None and parent_ctx.span_id and parent_ctx.span_id in self._token_count_dict:
-            self._token_count_dict[parent_ctx.span_id] += token_usage
+            with self._token_count_lock:
+                self._token_count_dict[parent_ctx.span_id] += token_usage
 
     def get_current_token_usage(self, span_id=None):
         span_id = span_id or trace.get_current_span().get_span_context().span_id
