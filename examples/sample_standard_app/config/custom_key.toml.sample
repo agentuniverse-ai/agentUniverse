@@ -61,6 +61,12 @@ GOOGLE_API_KEY=''
 GOOGLE_API_BASE='https://generativelanguage.googleapis.com/v1beta/openai/'
 GOOGLE_PROXY=''
 
+#minimax default name: default_minimax_llm
+MINIMAX_API_KEY=''
+MINIMAX_API_BASE='https://api.minimaxi.com/v1'
+MINIMAX_PROXY = ''
+MINIMAX_ORGANIZATION = ''
+
 #  ========================================================================
 #  The following section is used for key configuration of search tools.
 #  ========================================================================
