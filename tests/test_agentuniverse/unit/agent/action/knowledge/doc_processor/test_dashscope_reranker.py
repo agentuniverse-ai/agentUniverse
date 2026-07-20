@@ -34,15 +34,20 @@ class TestDashscopeReranker(unittest.TestCase):
             status_code=self.module.HTTPStatus.OK,
             output=MagicMock(results=[
                 MagicMock(index=5, relevance_score=0.9),
+                MagicMock(index=0, relevance_score=0.85),
                 MagicMock(index=1, relevance_score=0.8),
                 MagicMock(index=-1, relevance_score=0.7),
                 MagicMock(index=None, relevance_score=0.6),
+                MagicMock(index=True, relevance_score=0.5),
+                MagicMock(index=False, relevance_score=0.4),
             ])
         )
 
         reranker = self.module.DashscopeReranker()
         reranked = reranker._process_docs(docs, Query(query_str="query"))
 
-        self.assertEqual(len(reranked), 1)
-        self.assertEqual(reranked[0].text, "second")
-        self.assertEqual(reranked[0].metadata["relevance_score"], 0.8)
+        self.assertEqual(len(reranked), 2)
+        self.assertEqual(reranked[0].text, "first")
+        self.assertEqual(reranked[0].metadata["relevance_score"], 0.85)
+        self.assertEqual(reranked[1].text, "second")
+        self.assertEqual(reranked[1].metadata["relevance_score"], 0.8)

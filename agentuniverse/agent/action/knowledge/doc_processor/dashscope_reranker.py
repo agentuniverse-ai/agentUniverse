@@ -70,7 +70,7 @@ class DashscopeReranker(DocProcessor):
         rerank_docs = []
         for _result in results:
             index = _result.index
-            if not isinstance(index, int) or index < 0 or index >= len(origin_docs):
+            if type(index) is not int or index < 0 or index >= len(origin_docs):
                 continue
             if origin_docs[index].metadata:
                 origin_docs[index].metadata["relevance_score"] = _result.relevance_score
