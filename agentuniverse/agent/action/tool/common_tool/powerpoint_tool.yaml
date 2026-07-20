@@ -1,0 +1,115 @@
+name: powerpoint_tool
+description: Create, append to, read, or inspect PowerPoint PPTX presentations from structured slide data. Requires the optional python-pptx package.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.powerpoint_tool
+  class: PowerPointTool
+input_keys:
+  - mode
+  - file_path
+base_dir: .
+max_read_bytes: 20971520
+max_write_bytes: 20971520
+max_uncompressed_bytes: 104857600
+max_archive_entries: 5000
+max_slides: 100
+max_text_chars: 50000
+max_table_rows: 50
+max_table_columns: 20
+args_model:
+  mode:
+    type: string
+    description: Operation mode — create, append, read, or info.
+    required: true
+  file_path:
+    type: string
+    description: PPTX path underneath the configured base_dir.
+    required: true
+  slides:
+    type: array
+    description: Structured slide objects used by create and append modes.
+    required: false
+  overwrite:
+    type: boolean
+    description: Allow create mode to replace an existing presentation.
+    required: false
+    default: false
+  template_path:
+    type: string
+    description: Optional PPTX template underneath base_dir for create mode.
+    required: false
+  metadata:
+    type: object
+    description: Optional core properties (title, subject, author, keywords, comments, category).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["create", "append", "read", "info"]
+      description: PowerPoint operation mode.
+    file_path:
+      type: string
+      description: PPTX path underneath the configured base_dir.
+    slides:
+      type: array
+      description: Slides for create/append. Each supports title, subtitle, bullets, table, notes, and layout.
+      items:
+        type: object
+        properties:
+          title:
+            type: string
+          subtitle:
+            type: string
+          bullets:
+            type: array
+            items:
+              anyOf:
+                - type: string
+                - type: object
+                  properties:
+                    text:
+                      type: string
+                    level:
+                      type: integer
+                      minimum: 0
+                      maximum: 8
+                  required: ["text"]
+                  additionalProperties: false
+          table:
+            type: array
+            items:
+              type: array
+              items:
+                type: ["string", "number", "boolean", "null"]
+          notes:
+            type: string
+          layout:
+            type: string
+            enum: ["auto", "title", "title_content", "section", "title_only", "blank"]
+        additionalProperties: false
+    overwrite:
+      type: boolean
+      default: false
+    template_path:
+      type: string
+    metadata:
+      type: object
+      properties:
+        title:
+          type: string
+        subject:
+          type: string
+        author:
+          type: string
+        keywords:
+          type: string
+        comments:
+          type: string
+        category:
+          type: string
+      additionalProperties: false
+  required: ["mode", "file_path"]
+  additionalProperties: false
