@@ -43,6 +43,12 @@ def test_process_prompt_preserves_agent_input_for_repeated_calls():
     assert first_prompt.messages == second_prompt.messages
 
 
+def test_generate_result_returns_empty_text_for_empty_stream():
+    agent = _StubAgent()
+
+    assert agent.generate_result([]) == ""
+
+
 def test_tool_names_does_not_mutate_agent_action(monkeypatch):
     class _StubToolkit:
         def __init__(self):

@@ -363,6 +363,8 @@ class Agent(ComponentBase, ABC):
         return streaming
 
     def generate_result(self, data: list[dict | str]):
+        if not data:
+            return ""
         if isinstance(data[0], str):
             return "".join(data)
         text = [val.get('text') for val in data]
