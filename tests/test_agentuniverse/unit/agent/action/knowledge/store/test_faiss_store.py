@@ -12,7 +12,7 @@ import pickle
 import shutil
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 try:
     import faiss  # noqa: F401
@@ -588,6 +588,7 @@ class TestFAISSStoreMetadataSerialization(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.metadata_path = os.path.join(self.temp_dir, "metadata.json")
         from agentuniverse.agent.action.knowledge.store.faiss_store import FAISSStore
+
         self.FAISSStore = FAISSStore
 
     def tearDown(self):
@@ -619,7 +620,7 @@ class TestFAISSStoreMetadataSerialization(unittest.TestCase):
         store._write_metadata_file()
 
         # The file on disk is genuine JSON, not a pickle bytestream.
-        with open(self.metadata_path, "r", encoding="utf-8") as f:
+        with open(self.metadata_path, encoding="utf-8") as f:
             raw = json.load(f)
         self.assertEqual(raw["format"], "faiss-store-metadata-v1")
 
@@ -650,9 +651,105 @@ class TestFAISSStoreMetadataSerialization(unittest.TestCase):
         # The loader must treat the pickle file as invalid JSON and reset,
         # without ever unpickling (executing) it.
         self.assertFalse(store._read_metadata_file())
-        self.assertFalse(os.path.exists(marker),
-                         "pickle payload was executed during metadata load — RCE!")
+        self.assertFalse(os.path.exists(marker), "pickle payload was executed during metadata load — RCE!")
         self.assertEqual(store.get_document_count(), 0)
+
+    # -- reviewer regressions: schema validation + atomic write --
+
+    def _seed_valid_store(self):
+        store = self._store()
+        store.document_store = {
+            "doc1": Document(id="doc1", text="hello", embedding=[0.1, 0.2]),
+        }
+        store.id_to_index = {"doc1": 0}
+        store.index_to_id = {0: "doc1"}
+        store._next_index = 1
+        store._write_metadata_file()
+        return store
+
+    def test_wrong_format_marker_resets_store(self):
+        self._seed_valid_store()
+        # Tamper with the format marker only; everything else is valid JSON.
+        with open(self.metadata_path, encoding="utf-8") as f:
+            data = json.load(f)
+        data["format"] = "some-other-format-v2"
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        store = self._store()
+        self.assertFalse(store._read_metadata_file())
+        # The store is fully reset, not half-populated.
+        self.assertEqual(store.get_document_count(), 0)
+        self.assertEqual(store.id_to_index, {})
+        self.assertEqual(store.index_to_id, {})
+
+    def test_top_level_non_object_resets_store(self):
+        # Syntactically valid JSON, but the top level is a list, not an object.
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump([{"format": "faiss-store-metadata-v1"}], f)
+        store = self._store()
+        self.assertFalse(store._read_metadata_file())
+        self.assertEqual(store.get_document_count(), 0)
+
+    def test_invalid_document_payload_resets_store(self):
+        self._seed_valid_store()
+        with open(self.metadata_path, encoding="utf-8") as f:
+            data = json.load(f)
+        # document_store entry is not a dict -> Document(**doc_data) would fail.
+        data["document_store"]["doc1"] = "not-an-object"
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        store = self._store()
+        self.assertFalse(store._read_metadata_file())
+        # Whole set discarded; no partial population.
+        self.assertEqual(store.get_document_count(), 0)
+
+    def test_non_integer_index_to_id_key_resets_store(self):
+        self._seed_valid_store()
+        with open(self.metadata_path, encoding="utf-8") as f:
+            data = json.load(f)
+        # A non-integer position key cannot be restored to an int FAISS slot.
+        data["index_to_id"] = {"not-a-number": "doc1"}
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+        store = self._store()
+        self.assertFalse(store._read_metadata_file())
+        self.assertEqual(store.index_to_id, {})
+
+    def test_metadata_write_is_atomic(self):
+        # An interrupted write must not corrupt the last good file: write a
+        # valid file, then force a failure during the atomic replace step, and
+        # verify the previous version is intact and no temp file leaked.
+        store = self._seed_valid_store()
+        with open(self.metadata_path, encoding="utf-8") as f:
+            first_snapshot = f.read()
+
+        # Patch os.replace to raise; the write must swallow the error and clean
+        # up its temp file rather than leaving a half-written metadata.json.
+        with patch(
+            "agentuniverse.agent.action.knowledge.store.faiss_store.os.replace",
+            side_effect=OSError("simulated crash"),
+        ):
+            store._write_metadata_file()
+
+        # The previously-written good file is untouched.
+        with open(self.metadata_path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), first_snapshot)
+        # No stale temp files leaked in the directory.
+        leftovers = [n for n in os.listdir(self.temp_dir) if n.startswith(".faiss-metadata-")]
+        self.assertEqual(leftovers, [], f"stale temp files left behind: {leftovers}")
+
+        # And a subsequent clean write still round-trips.
+        store.document_store["doc2"] = Document(id="doc2", text="two", embedding=[0.3, 0.4])
+        store.id_to_index["doc2"] = 1
+        store.index_to_id[1] = "doc2"
+        store._next_index = 2
+        store._write_metadata_file()
+        reloaded = self._store()
+        self.assertTrue(reloaded._read_metadata_file())
+        self.assertEqual(reloaded.get_document_count(), 2)
 
 
 if __name__ == "__main__":

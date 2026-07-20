@@ -8,14 +8,30 @@
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.store.store import Store
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+
+# faiss and numpy are imported at module scope so every method (query / insert /
+# _create_faiss_index / ...) sees the same names. They are optional dependencies:
+# a hard module-level import would break environments without faiss installed,
+# so each is wrapped and ``_new_client`` surfaces a clear ImportError when the
+# store is actually used.
+try:
+    import faiss  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - exercised via the skip guard in tests
+    faiss = None  # type: ignore[assignment]
+
+try:
+    import numpy as np  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - numpy ships with faiss-cpu
+    np = None  # type: ignore[assignment]
 
 # Default configuration for FAISS index types
 DEFAULT_INDEX_CONFIG = {
@@ -37,16 +53,83 @@ logger = logging.getLogger(__name__)
 
 def _json_default(obj):
     """Fallback JSON serializer normalizing numpy values that may reach metadata."""
-    try:
-        import numpy as np
-    except ImportError:
-        np = None
     if np is not None:
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         if isinstance(obj, np.generic):
             return obj.item()
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
+def _require_dict(value: Any) -> dict:
+    """Return ``value`` if it is a dict, else raise TypeError."""
+    if not isinstance(value, dict):
+        raise TypeError("value must be an object")
+    return value
+
+
+def _require_str(value: Any) -> str:
+    """Return ``value`` if it is a str, else raise TypeError."""
+    if not isinstance(value, str):
+        raise TypeError("value must be a string")
+    return value
+
+
+def _require_int(value: Any) -> int:
+    """Return ``value`` if it is a real integer, else raise TypeError.
+
+    Booleans are rejected explicitly: ``isinstance(True, int)`` is True in
+    Python, so a bare isinstance check would silently accept them.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError("value must be an integer")
+    return value
+
+
+def _validate_metadata_payload(
+    metadata: Any,
+) -> tuple[dict[str, "Document"], dict[str, int], dict[int, str], int]:
+    """Validate the loaded metadata envelope and reconstruct typed fields.
+
+    Raises ``ValueError`` (structural/schema) or ``TypeError`` (individual
+    fields with the wrong type) on any problem so the caller can reset the
+    store as one coherent unit instead of half-populating it: wrong ``format``
+    marker, non-object top level, malformed ``Document`` payloads, or
+    ``index_to_id`` keys that are not integer FAISS positions.
+    """
+    if not isinstance(metadata, dict):
+        raise TypeError("invalid metadata envelope")
+    if metadata.get("format") != METADATA_FORMAT_VERSION:
+        raise ValueError("unsupported metadata format marker")
+
+    document_store_raw = _require_dict(metadata.get("document_store", {}))
+    id_to_index_raw = _require_dict(metadata.get("id_to_index", {}))
+    index_to_id_raw = _require_dict(metadata.get("index_to_id", {}))
+    next_index = _require_int(metadata.get("next_index", 0))
+
+    document_store: dict[str, Document] = {}
+    for doc_id, doc_data in document_store_raw.items():
+        _require_str(doc_id)
+        _require_dict(doc_data)
+        document_store[doc_id] = Document(**doc_data)
+
+    id_to_index: dict[str, int] = {}
+    for doc_id, position in id_to_index_raw.items():
+        _require_str(doc_id)
+        id_to_index[doc_id] = _require_int(position)
+
+    # JSON object keys are strings; restore the integer FAISS positions.
+    # Non-integer keys mean the file is corrupt — raise, do not guess.
+    index_to_id: dict[int, str] = {}
+    for key, doc_id in index_to_id_raw.items():
+        try:
+            position = int(key)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("index_to_id key is not an integer position") from exc
+        _require_str(doc_id)
+        index_to_id[position] = doc_id
+
+    return document_store, id_to_index, index_to_id, next_index
 
 
 class FAISSStore(Store):
@@ -67,15 +150,15 @@ class FAISSStore(Store):
         index_to_id (Dict[int, str]): Mapping from FAISS index position to document ID.
     """
 
-    index_path: Optional[str] = None
-    metadata_path: Optional[str] = None
-    index_config: Dict = None
-    embedding_model: Optional[str] = None
-    similarity_top_k: Optional[int] = 10
+    index_path: str | None = None
+    metadata_path: str | None = None
+    index_config: dict = None
+    embedding_model: str | None = None
+    similarity_top_k: int | None = 10
     faiss_index: Any = None
-    document_store: Dict[str, Document] = None
-    id_to_index: Dict[str, int] = None
-    index_to_id: Dict[int, str] = None
+    document_store: dict[str, Document] = None
+    id_to_index: dict[str, int] = None
+    index_to_id: dict[int, str] = None
     _next_index: int = 0
 
     def __init__(self, **kwargs):
@@ -89,15 +172,12 @@ class FAISSStore(Store):
 
     def _new_client(self) -> Any:
         """Initialize the FAISS index and load existing data if available."""
-        try:
-            import faiss
-            import numpy as np
-        except ImportError as e:
-            FAISS_NOT_INSTALLED_MSG = (
+        if faiss is None:
+            faiss_not_installed_msg = (
                 "FAISS is not installed. Please install it with 'pip install faiss-cpu' "
                 "for CPU version or 'pip install faiss-gpu' for GPU version."
             )
-            raise ImportError(FAISS_NOT_INSTALLED_MSG) from e
+            raise ImportError(faiss_not_installed_msg)
         self._load_index_and_metadata()
         return self.faiss_index
 
@@ -110,6 +190,11 @@ class FAISSStore(Store):
         Returns:
             faiss.Index: The created FAISS index.
         """
+        if faiss is None:
+            raise ImportError(
+                "FAISS is not installed. Please install it with 'pip install faiss-cpu' "
+                "for CPU version or 'pip install faiss-gpu' for GPU version."
+            )
         index_type = self.index_config.get("index_type", "IndexFlatL2")
 
         if index_type == "IndexFlatL2":
@@ -133,8 +218,8 @@ class FAISSStore(Store):
             index.hnsw.efSearch = self.index_config.get("efSearch", 50)
             return index
         else:
-            UNSUPPORTED_INDEX_MSG = f"Unsupported index type: {index_type}"
-            raise ValueError(UNSUPPORTED_INDEX_MSG)
+            unsupported_index_msg = f"Unsupported index type: {index_type}"
+            raise ValueError(unsupported_index_msg)
 
     def _load_index_and_metadata(self):
         """Load existing FAISS index and metadata from disk."""
@@ -166,29 +251,40 @@ class FAISSStore(Store):
         loading it cannot execute arbitrary code: pickle deserialization of a
         writable metadata file is an RCE vector. A legacy pickle-format file is
         therefore unreadable and the caller resets to an empty store.
+
+        On any structural problem — wrong ``format`` marker, top-level shape
+        that is not an object, individual ``Document`` payloads that do not
+        reconstruct, or non-integer ``index_to_id`` keys — the whole metadata
+        set is discarded and the caller resets to an empty store, so the loaded
+        FAISS index and metadata can never end up in an incoherent state.
         """
         if not (self.metadata_path and os.path.exists(self.metadata_path)):
             return False
         try:
-            with open(self.metadata_path, "r", encoding="utf-8") as f:
+            with open(self.metadata_path, encoding="utf-8") as f:
                 metadata = json.load(f)
         except (OSError, ValueError) as exc:
             logger.warning(
                 f"Failed to read metadata from {self.metadata_path}: {exc}. "
                 "If this is a legacy pickle-format file from an older agentUniverse "
                 "version, it is no longer supported (pickle deserialization is an RCE "
-                "vector); re-index to regenerate it as JSON.")
+                "vector); re-index to regenerate it as JSON."
+            )
             return False
-        self.document_store = {
-            doc_id: Document(**doc_data)
-            for doc_id, doc_data in metadata.get("document_store", {}).items()
-        }
-        self.id_to_index = dict(metadata.get("id_to_index", {}))
-        # JSON object keys are strings; restore the integer FAISS positions.
-        self.index_to_id = {
-            int(k): v for k, v in metadata.get("index_to_id", {}).items()
-        }
-        self._next_index = metadata.get("next_index", 0)
+
+        try:
+            document_store, id_to_index, index_to_id, next_index = _validate_metadata_payload(metadata)
+        except (ValueError, TypeError) as exc:
+            logger.warning(
+                f"Metadata at {self.metadata_path} failed schema validation: {exc}; "
+                "resetting to an empty store to keep the FAISS index coherent."
+            )
+            return False
+
+        self.document_store = document_store
+        self.id_to_index = id_to_index
+        self.index_to_id = index_to_id
+        self._next_index = next_index
         logger.info(f"Loaded metadata from {self.metadata_path}")
         return True
 
@@ -213,30 +309,53 @@ class FAISSStore(Store):
         self._write_metadata_file()
 
     def _write_metadata_file(self) -> None:
-        """Write document metadata to ``metadata_path`` as JSON."""
+        """Write document metadata to ``metadata_path`` as JSON.
+
+        Writes through a temporary file in the same directory and atomically
+        replaces the target, so an interrupted write cannot destroy the last
+        usable metadata file: readers either see the previous version or the
+        fully-written new one, never a half-flushed JSON document.
+        """
         if not self.metadata_path:
             return
+        directory = Path(self.metadata_path).parent
+        temporary = None
         try:
-            # Ensure directory exists
-            Path(self.metadata_path).parent.mkdir(parents=True, exist_ok=True)
+            directory.mkdir(parents=True, exist_ok=True)
             metadata = {
                 "format": METADATA_FORMAT_VERSION,
-                "document_store": {
-                    doc_id: doc.model_dump(mode="json")
-                    for doc_id, doc in self.document_store.items()
-                },
+                "document_store": {doc_id: doc.model_dump(mode="json") for doc_id, doc in self.document_store.items()},
                 "id_to_index": self.id_to_index,
                 # FAISS positions are ints; store them as strings for JSON.
                 "index_to_id": {str(k): v for k, v in self.index_to_id.items()},
                 "next_index": self._next_index,
             }
-            with open(self.metadata_path, "w", encoding="utf-8") as f:
-                json.dump(metadata, f, ensure_ascii=False, default=_json_default)
+            # Write to a sibling temp file first, fsync, then atomic rename.
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                prefix=".faiss-metadata-",
+                suffix=".tmp",
+                dir=str(directory),
+                delete=False,
+            ) as tmp:
+                temporary = tmp.name
+                json.dump(metadata, tmp, ensure_ascii=False, default=_json_default)
+                tmp.flush()
+                os.fsync(tmp.fileno())
+            os.replace(temporary, self.metadata_path)
+            temporary = None
             logger.info(f"Saved metadata to {self.metadata_path}")
         except Exception:
             logger.exception("Failed to save metadata")
+        finally:
+            if temporary and os.path.exists(temporary):
+                try:
+                    os.unlink(temporary)
+                except OSError:
+                    logger.debug("Could not remove stale metadata temp file %s", temporary, exc_info=True)
 
-    def _get_embedding(self, text: str, text_type: str = "document") -> List[float]:
+    def _get_embedding(self, text: str, text_type: str = "document") -> list[float]:
         """Get embedding for a text using the configured embedding model.
 
         Args:
@@ -247,8 +366,8 @@ class FAISSStore(Store):
             List[float]: The embedding vector.
         """
         if not self.embedding_model:
-            NO_EMBEDDING_MSG = "No embedding model configured. Please specify an embedding_model."
-            raise ValueError(NO_EMBEDDING_MSG)
+            no_embedding_msg = "No embedding model configured. Please specify an embedding_model."
+            raise ValueError(no_embedding_msg)
 
         try:
             embedding_instance = EmbeddingManager().get_instance_obj(self.embedding_model)
@@ -259,7 +378,7 @@ class FAISSStore(Store):
             logger.warning(f"Failed to get embeddings: {e}")
             return []
 
-    def query(self, query: Query, **kwargs) -> List[Document]:  # noqa: C901
+    def query(self, query: Query, **kwargs) -> list[Document]:  # noqa: C901
         """Query the FAISS index with the given query and return the top k results.
 
         Args:
@@ -322,7 +441,7 @@ class FAISSStore(Store):
             logger.exception("Error during FAISS search")
             return []
 
-    def insert_document(self, documents: List[Document], **kwargs):  # noqa: C901
+    def insert_document(self, documents: list[Document], **kwargs):  # noqa: C901
         """Insert documents into the FAISS index.
 
         Args:
@@ -396,7 +515,7 @@ class FAISSStore(Store):
         # Save to disk
         self._save_index_and_metadata()
 
-    def upsert_document(self, documents: List[Document], **kwargs):
+    def upsert_document(self, documents: list[Document], **kwargs):
         """Upsert documents into the FAISS index."""
         # For FAISS, we need to delete and re-insert for updates
         docs_to_insert = []
@@ -416,7 +535,7 @@ class FAISSStore(Store):
         all_docs = docs_to_update + docs_to_insert
         self.insert_document(all_docs, **kwargs)
 
-    def update_document(self, documents: List[Document], **kwargs):
+    def update_document(self, documents: list[Document], **kwargs):
         """Update documents in the FAISS index."""
         # For FAISS, update is the same as upsert
         self.upsert_document(documents, **kwargs)
@@ -459,11 +578,11 @@ class FAISSStore(Store):
         """Get the total number of documents in the store."""
         return len(self.document_store)
 
-    def get_document_by_id(self, document_id: str) -> Optional[Document]:
+    def get_document_by_id(self, document_id: str) -> Document | None:
         """Get a document by its ID."""
         return self.document_store.get(document_id)
 
-    def list_document_ids(self) -> List[str]:
+    def list_document_ids(self) -> list[str]:
         """List all document IDs in the store."""
         return list(self.document_store.keys())
 
