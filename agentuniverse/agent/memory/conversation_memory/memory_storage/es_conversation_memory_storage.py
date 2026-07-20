@@ -57,7 +57,10 @@ class ElasticsearchMemoryStorage(MemoryStorage):
         if getattr(memory_storage_config, 'es_timeout', None):
             self.timeout = memory_storage_config.es_timeout
         if self.es_url is None:
-            raise Exception('`es_url` is not set')
+            raise ValueError(
+                "`es_url` is not set; configure the Elasticsearch server URL "
+                "on the ElasticsearchMemoryStorage component (yaml field "
+                "`es_url`) or via the component configer.")
         # initialize the memory converter if not set
         if self.memory_converter is None:
             self.memory_converter = DefaultMemoryConverter(self.index_name)
@@ -98,7 +101,9 @@ class ElasticsearchMemoryStorage(MemoryStorage):
                 json=settings
             )
             if response.status_code != 200:
-                raise Exception(f"Failed to create index: {response.text}")
+                raise RuntimeError(
+                    f"Failed to create Elasticsearch index {self.index_name!r}: "
+                    f"status {response.status_code}, body: {response.text}")
 
     def delete(self, session_id: str = None, agent_id: str = None, trace_id: str = None, **kwargs) -> None:
         """Delete the memory from Elasticsearch.
@@ -131,7 +136,10 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             query['query']['bool']['must'].append({"term": {"trace_id": trace_id}})
         response = self.client.post(url, json=query)
         if response.status_code != 200:
-            raise Exception(f"Failed to delete documents: {response.text}")
+            raise RuntimeError(
+                f"Failed to delete documents from Elasticsearch index "
+                f"{self.index_name!r} at {url}: status {response.status_code}, "
+                f"body: {response.text}")
 
     def add(self, message_list: List[ConversationMessage], session_id: str = None, agent_id: str = None,
             **kwargs) -> None:
@@ -155,7 +163,10 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             headers={'Content-Type': 'application/x-ndjson'}
         )
         if response.status_code != 200:
-            raise Exception(f"Failed to add documents: {response.text}")
+            raise RuntimeError(
+                f"Failed to add documents to Elasticsearch index "
+                f"{self.index_name!r} (bulk): status {response.status_code}, "
+                f"body: {response.text}")
 
     def get(self, session_id: str = None, agent_id: str = None, top_k=50, trace_id: str = None, **kwargs) -> List[
         ConversationMessage]:
@@ -221,7 +232,10 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             json=query
         )
         if response.status_code != 200:
-            raise Exception(f"Failed to retrieve documents: {response.text}")
+            raise RuntimeError(
+                f"Failed to retrieve documents from Elasticsearch index "
+                f"{self.index_name!r} (_search): status {response.status_code}, "
+                f"body: {response.text}")
 
         hits = response.json()['hits']['hits']
         messages = []
