@@ -21,6 +21,7 @@ from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.memory_configer import MemoryConfiger
+from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.base.util.memory_util import get_memory_tokens, get_memory_string
 
 
@@ -189,7 +190,15 @@ class Memory(ComponentBase):
 
                     return selected_messages
 
-            except Exception:
+            except Exception as e:
+                # Log the failure so operators can tell why the context-aware
+                # retrieval fell back to traditional pruning (segment-to-message
+                # conversion failure, missing metadata, ...). Previously this
+                # was a bare ``except: pass`` that silently hid the error and
+                # made the memory look empty.
+                LOGGER.warning(
+                    f"Context-budget retrieval failed, falling back to "
+                    f"traditional retrieval: {e}")
                 pass  # Fall back to traditional retrieval
 
         # Fallback: Original pruning logic (backward compatible)
