@@ -54,6 +54,28 @@ class JinaAIToolTLSTest(unittest.TestCase):
         # The failure is reported through the logger, never printed to stdout.
         self.assertEqual(out.getvalue(), "")
 
+    def test_non_200_warning_does_not_include_full_url(self) -> None:
+        tool = JinaAITool()
+        with (
+            patch.object(jina_module.requests, "get") as mock_get,
+            patch.object(jina_module.logger, "warning") as warning,
+        ):
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            resp.json.return_value = {"code": 429}
+            mock_get.return_value = resp
+
+            result = tool._make_api_request(
+                "https://r.jina.ai/https://example.com/private?token=secret",
+                timeout=1,
+                error_prefix="err",
+            )
+
+        self.assertIsNone(result)
+        logged_text = " ".join(str(arg) for arg in warning.call_args.args)
+        self.assertNotIn("secret", logged_text)
+        self.assertNotIn("https://example.com/private", logged_text)
+
     def test_make_api_request_handles_http_error_without_response(self) -> None:
         tool = JinaAITool()
         with (

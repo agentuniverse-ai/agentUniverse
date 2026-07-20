@@ -103,7 +103,10 @@ class JinaAITool(Tool):
                 content = response.json()
 
                 if content.get("code") != 200:
-                    logger.warning(f"Jina AI request to {url} failed with code {content.get('code')}")
+                    logger.warning(
+                        "Jina AI request failed with code {}",
+                        content.get("code")
+                    )
                     return None
                     
                 return content
