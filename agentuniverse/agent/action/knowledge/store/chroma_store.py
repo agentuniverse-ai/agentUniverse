@@ -41,14 +41,26 @@ class ChromaStore(Store):
 
     def _new_client(self) -> Any:
         """Initialize the chroma client."""
+        # persist_path defaults to None; a bare .startswith on None raises
+        # AttributeError before the user ever sees a helpful message. Require
+        # it explicitly so the failure is actionable.
+        if not self.persist_path:
+            raise ValueError(
+                "ChromaStore.persist_path is not set; configure a local "
+                "directory or an http(s) Chroma server URL.")
         if self.persist_path.startswith('http') or \
                 self.persist_path.startswith('https'):
             # Remote database URL
             parsed_url = urlparse(self.persist_path)
+            # urlparse returns port=None when the URL omits it; str(None) =
+            # "None" would then be passed to chromadb as the HTTP port and
+            # fail later with an opaque connection error. Fall back to the
+            # Chroma default port (8000).
+            port = parsed_url.port if parsed_url.port is not None else 8000
             settings = Settings(
                 chroma_api_impl="chromadb.api.fastapi.FastAPI",
                 chroma_server_host=parsed_url.hostname,
-                chroma_server_http_port=str(parsed_url.port)
+                chroma_server_http_port=str(port)
             )
         else:
             settings = Settings(
