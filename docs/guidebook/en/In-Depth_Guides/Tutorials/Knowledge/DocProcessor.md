@@ -309,3 +309,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [KeywordExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/keyword_extractor.yaml)
+
+`KeywordExtractor` extracts keywords from recalled documents using a dependency-free YAKE-like algorithm: it scores candidate terms by frequency, position, capitalisation, and term length, then stamps the top-N keywords into each document's metadata. It is distinct from the existing `JiebaKeywordExtractor`, which requires the `jieba` package and targets Chinese text only. It addresses issue #248.
+
+Pure Python with zero third-party dependency; copy `keyword_extractor.yaml` into your application configuration directory and resolve the built-in `keyword_extractor` component to use it. The keyword list is written to each document's metadata under `keywords_key`; the document text itself is unchanged.
+
+The component definition file is as follows:
+```yaml
+name: 'keyword_extractor'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.keyword_extractor'
+  class: 'KeywordExtractor'
+description: 'Extracts top-N keywords from documents using a dependency-free YAKE-like algorithm.'
+top_k: 10
+ngram_size: 3
+keywords_key: 'keywords'
+min_term_freq: 1
+```
+- top_k: Number of keywords to extract per document (default 10).
+- ngram_size: Maximum n-gram length for candidate terms (default 3).
+- keywords_key: Metadata key under which the keyword list is stored.
+- min_term_freq: Minimum frequency for a term to be considered (default 1).
