@@ -131,6 +131,8 @@ class RunCommandTool(Tool):
             })
         return self._run_command(command, cwd, blocking)
 
+    _THREAD_STARTED_TIMEOUT = 10.0
+
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:
         result = CommandResult(
             thread_id=threading.get_ident(),
@@ -141,12 +143,13 @@ class RunCommandTool(Tool):
         )
 
         thread_started = threading.Event()
+        thread_error: list = []
 
         def __run() -> None:
-            result.thread_id = threading.get_ident()
-            _command_results[result.thread_id] = result
-            thread_started.set()
             try:
+                result.thread_id = threading.get_ident()
+                _command_results[result.thread_id] = result
+                thread_started.set()
                 process = subprocess.Popen(
                     command,
                     cwd=cwd,
@@ -166,6 +169,7 @@ class RunCommandTool(Tool):
                 result.status = CommandStatus.COMPLETED if exit_code == 0 else CommandStatus.ERROR
 
             except Exception as e:
+                thread_error.append(e)
                 result.stderr = str(e)
                 result.end_time = time.time()
                 result.status = CommandStatus.ERROR
@@ -174,12 +178,30 @@ class RunCommandTool(Tool):
 
         if blocking:
             __run()
-        else:
-            thread = threading.Thread(target=__run)
-            thread.start()
-            thread_started.wait()
+            return result.message
 
-        return result.message
+        thread = threading.Thread(target=__run)
+        thread.daemon = True
+        thread.start()
+
+        if not thread_started.wait(timeout=self._THREAD_STARTED_TIMEOUT):
+            return json.dumps({
+                "error": f"Command failed to start within {self._THREAD_STARTED_TIMEOUT}s",
+                "status": CommandStatus.ERROR.value
+            })
+
+        if thread_error:
+            return json.dumps({
+                "error": f"Command thread failed to start: {thread_error[0]}",
+                "status": CommandStatus.ERROR.value
+            })
+
+        return json.dumps({
+            "thread_id": result.thread_id,
+            "status": CommandStatus.RUNNING.value,
+            "started": True,
+            "message": "Command started in non-blocking mode. Use command_status_tool with thread_id to query."
+        })
 
 
 def get_command_result(thread_id: int) -> Optional[CommandResult]:
