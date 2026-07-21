@@ -309,3 +309,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [JsonSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/json_splitter.yaml)
+
+`JsonSplitter` recursively traverses a JSON document and emits one chunk per leaf scalar value (or per configurable depth), recording the JSON path (e.g. `"root > users > [0] > name"`) as metadata on every chunk. It is the right splitter for structured data sources — API docs, database schemas, configuration files — where each field/value pair should be a separately retrievable unit. It is a sibling of `MarkdownHeaderTextSplitter` and `HtmlHeaderTextSplitter`, all addressing the *knowledge pre-processing* direction of issue #258.
+
+Pure Python with no third-party dependency; copy `json_splitter.yaml` into your application configuration directory and resolve the built-in `json_splitter` component to use it. When the input text is not valid JSON, the original document is emitted unchanged.
+
+The component definition file is as follows:
+```yaml
+name: 'json_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.json_splitter'
+  class: 'JsonSplitter'
+description: 'Splits JSON documents into one chunk per leaf value, recording the JSON path as metadata.'
+path_key: 'json_path'
+max_depth: null
+max_value_length: 10000
+drop_empty: true
+```
+- path_key: Metadata key under which each chunk's JSON path is recorded.
+- max_depth: Maximum traversal depth (`null` = unlimited). At `max_depth`, a nested object/array is serialised as JSON text rather than traversed further.
+- max_value_length: Maximum characters of a scalar value included in chunk text; longer values are truncated with an ellipsis.
+- drop_empty: When `true` (default), empty strings / `None` / empty containers are not emitted as chunks.
