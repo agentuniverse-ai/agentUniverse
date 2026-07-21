@@ -1,0 +1,9 @@
+name: 'markdown_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.markdown_text_splitter'
+  class: 'MarkdownTextSplitter'
+description: 'Splits Markdown by structural blocks (code, table, list, paragraph) with size-bounded chunking.'
+max_chunk_size: 1500
+min_chunk_size: 200
+chunk_overlap: 100
