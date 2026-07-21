@@ -310,3 +310,25 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [CsvSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/csv_splitter.yaml)
+
+`CsvSplitter` 把 CSV/TSV 文本按行组切分，每组包含若干数据行加上表头。表头会被预置到每个块中，使每块都是自包含、可独立检索的。它与其它结构感知切分器（`MarkdownHeaderTextSplitter`、`HtmlHeaderTextSplitter`、`JsonSplitter` 等）同属一类，对应 issue #258。
+
+纯 Python 实现，基于标准库 `csv`，无第三方依赖。将 `csv_splitter.yaml` 复制到应用配置目录，加载内置 `csv_splitter` 组件即可使用。每个生成的块在 metadata 中带 `chunk_method: "csv"`。
+
+组件定义文件如下：
+```yaml
+name: 'csv_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.csv_splitter'
+  class: 'CsvSplitter'
+description: '将 CSV/TSV 文本按行组切分，并在每块保留表头。'
+rows_per_chunk: 50
+delimiter: ','
+max_cell_chars: 1000
+```
+- rows_per_chunk: 每块的数据行数（默认 50）。表头会被预置到每个块。
+- delimiter: 列分隔符。CSV 用 `","`（默认），TSV 用 `"\t"`，也可为任意单字符。
+- max_cell_chars: 输出文本中每个单元格的最大字符数；超出部分截断（默认 1000）。
