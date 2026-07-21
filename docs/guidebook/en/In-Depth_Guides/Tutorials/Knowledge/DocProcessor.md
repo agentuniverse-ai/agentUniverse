@@ -309,3 +309,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [SemanticChunker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/semantic_chunker.yaml)
+
+`SemanticChunker` splits a document into semantically coherent chunks by grouping adjacent sentences whose similarity stays above a threshold. When adjacent sentences are dissimilar and the similarity drop crosses a breakpoint, a new chunk begins, so chunks respect topic boundaries better than fixed-size splitters (character / token / recursive). It addresses issue #258's *knowledge pre-processing* direction.
+
+Two modes are supported. **Embedding mode** — set `embedding_name` to a registered aU embedding component — embeds each sentence and splits at the largest cosine-similarity gaps between adjacent sentences. **Extractive mode** (default, `embedding_name` unset) is a dependency-free fallback that groups sentences by lexical overlap (Jaccard similarity on word sets). Copy `semantic_chunker.yaml` into your application configuration directory and resolve the built-in `semantic_chunker` component to use it.
+
+The component definition file is as follows:
+```yaml
+name: 'semantic_chunker'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.semantic_chunker'
+  class: 'SemanticChunker'
+description: 'Semantic similarity-based chunker that splits documents at topic boundaries.'
+embedding_name: null
+breakpoint_threshold: 75
+max_chunk_size: 2000
+min_chunk_size: 100
+```
+- embedding_name: Name of a registered aU embedding component. When set, cosine similarity between adjacent sentence embeddings drives splitting; when unset, a lexical-overlap fallback is used.
+- breakpoint_threshold: Percentile of similarity drops that triggers a new chunk. Higher = fewer, larger chunks; lower = more, smaller chunks (default 75, the top quartile of drops become split points).
+- max_chunk_size: Maximum characters per chunk; a chunk exceeding this is hard-split at a sentence boundary.
+- min_chunk_size: Minimum characters per chunk; shorter chunks are merged into the next one.
