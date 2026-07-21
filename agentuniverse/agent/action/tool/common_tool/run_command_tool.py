@@ -131,6 +131,11 @@ class RunCommandTool(Tool):
             })
         return self._run_command(command, cwd, blocking)
 
+    # Maximum time (seconds) to wait for the worker thread to register its
+    # command result. Prevents indefinite blocking when the worker fails to
+    # start (e.g. thread creation error or early exception before set()).
+    _THREAD_STARTED_TIMEOUT = 10.0
+
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:
         result = CommandResult(
             thread_id=threading.get_ident(),
@@ -141,12 +146,13 @@ class RunCommandTool(Tool):
         )
 
         thread_started = threading.Event()
+        thread_error: list = []  # captured from worker if it fails before set()
 
         def __run() -> None:
-            result.thread_id = threading.get_ident()
-            _command_results[result.thread_id] = result
-            thread_started.set()
             try:
+                result.thread_id = threading.get_ident()
+                _command_results[result.thread_id] = result
+                thread_started.set()
                 process = subprocess.Popen(
                     command,
                     cwd=cwd,
@@ -166,6 +172,7 @@ class RunCommandTool(Tool):
                 result.status = CommandStatus.COMPLETED if exit_code == 0 else CommandStatus.ERROR
 
             except Exception as e:
+                thread_error.append(e)
                 result.stderr = str(e)
                 result.end_time = time.time()
                 result.status = CommandStatus.ERROR
@@ -174,12 +181,36 @@ class RunCommandTool(Tool):
 
         if blocking:
             __run()
-        else:
-            thread = threading.Thread(target=__run)
-            thread.start()
-            thread_started.wait()
+            return result.message
 
-        return result.message
+        # Non-blocking: spawn worker, wait with timeout for it to register.
+        thread = threading.Thread(target=__run)
+        thread.daemon = True
+        thread.start()
+
+        if not thread_started.wait(timeout=self._THREAD_STARTED_TIMEOUT):
+            # Worker did not signal readiness in time; surface a clear error
+            # instead of leaving the caller blocked forever.
+            return json.dumps({
+                "error": f"Command failed to start within {self._THREAD_STARTED_TIMEOUT}s",
+                "status": CommandStatus.ERROR.value
+            })
+
+        if thread_error:
+            return json.dumps({
+                "error": f"Command thread failed to start: {thread_error[0]}",
+                "status": CommandStatus.ERROR.value
+            })
+
+        # Return a minimal "started" acknowledgement. stdout/stderr/exit_code
+        # are not yet populated; the caller should query CommandStatusTool with
+        # thread_id to retrieve the final result.
+        return json.dumps({
+            "thread_id": result.thread_id,
+            "status": CommandStatus.RUNNING.value,
+            "started": True,
+            "message": "Command started in non-blocking mode. Use command_status_tool with thread_id to query."
+        })
 
 
 def get_command_result(thread_id: int) -> Optional[CommandResult]:
