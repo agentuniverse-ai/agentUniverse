@@ -310,3 +310,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [PythonCodeTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/python_code_text_splitter.yaml)
+
+`PythonCodeTextSplitter` 按 Python 顶层函数和类切分源代码（可选额外输出一块模块级代码），保留每个单元完整的源文本（含 docstring 与装饰器）。单元名和类型（`module` / `function` / `class`）写入 metadata，使召回块可回溯到所属的具体函数或类。它与 `MarkdownHeaderTextSplitter`、`HtmlHeaderTextSplitter`、`JsonSplitter`、`SemanticChunker` 同属一类，对应 issue #258。
+
+基于 Python 标准库 `ast` 实现，无第三方依赖。将 `python_code_text_splitter.yaml` 复制到应用配置目录，加载内置 `python_code_text_splitter` 组件即可使用。若输入不是合法 Python，原样输出原文档。
+
+组件定义文件如下：
+```yaml
+name: 'python_code_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.python_code_text_splitter'
+  class: 'PythonCodeTextSplitter'
+description: '按顶层函数和类切分 Python 源代码用于知识预处理。'
+name_key: 'code_unit_name'
+type_key: 'code_unit_type'
+max_chunk_chars: 5000
+include_module_level: true
+```
+- name_key: 记录单元名所用的 metadata 键。
+- type_key: 记录单元类型（`module` / `function` / `class`）所用的 metadata 键。
+- max_chunk_chars: 每块最大字符数；该上限只对模块级块生效（代码单元即便更大也保持完整）。
+- include_module_level: 为 `true`（默认）时，模块级代码（imports、常量、`if __name__ == "__main__"`）作为独立块输出；为 `false` 时丢弃。
