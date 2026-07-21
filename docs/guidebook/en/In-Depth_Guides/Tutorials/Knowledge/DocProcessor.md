@@ -309,3 +309,29 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [CohereReranker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/cohere_reranker.yaml)
+
+`CohereReranker` re-ranks the documents recalled by the Store using the Cohere Rerank API, ordering them by relevance to the `Query`. It is a sibling of `JinaReranker` (#646) and `DashscopeReranker`, addressing the *Rerank* direction of issue #248.
+
+It needs no extra install (`requests` is already a core dependency) — only a Cohere API key. Copy `cohere_reranker.yaml` into your application configuration directory, set `api_key` (or expose `COHERE_API_KEY`), and resolve the built-in `cohere_reranker` component. A query string is required: without one the documents are returned unchanged.
+
+The component definition file is as follows:
+```yaml
+name: 'cohere_reranker'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cohere_reranker'
+  class: 'CohereReranker'
+description: 'Cohere Rerank API post-processor for knowledge retrieval.'
+api_key: ''
+model_name: 'rerank-multilingual-v3.0'
+top_n: 10
+request_timeout: 30
+score_key: 'rerank_score'
+```
+- api_key: Cohere API key. Falls back to the `COHERE_API_KEY` environment variable when left empty.
+- model_name: Cohere rerank model (default `rerank-multilingual-v3.0`).
+- top_n: Maximum number of documents returned after reranking.
+- request_timeout: Timeout in seconds for the rerank HTTP call.
+- score_key: Metadata key under which each document's relevance score is stamped; empty stamps nothing.
