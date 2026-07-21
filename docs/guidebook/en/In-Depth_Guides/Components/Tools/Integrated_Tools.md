@@ -331,3 +331,23 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## DateTimeTool
+
+`DateTimeTool` gives an agent bounded datetime and timezone operations: `now`, `convert` (between IANA timezones), `format`, `parse`, and `diff`. All timezone conversions use the IANA timezone database through Python's built-in `zoneinfo` (Python 3.9+), so there is zero third-party dependency. `parse` tries a fixed list of common formats and rejects ambiguous inputs; `diff` is capped at `max_diff_days` to prevent overflow.
+
+Register a component pointing at `agentuniverse.agent.action.tool.common_tool.datetime_tool.DateTimeTool`, then call `execute(mode=..., datetime_str=..., timezone_str=..., target_timezone=..., fmt=..., unit=..., end_datetime=...)`.
+
+```yaml
+name: datetime_tool
+description: Bounded datetime and timezone operations
+default_timezone: UTC
+max_diff_days: 100000
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.datetime_tool
+  class: DateTimeTool
+input_keys: ["mode"]
+```
+- default_timezone: IANA timezone name used by `now` when no timezone is specified (default `UTC`).
+- max_diff_days: Maximum absolute difference in days for `diff` to prevent overflow (default 100000).
