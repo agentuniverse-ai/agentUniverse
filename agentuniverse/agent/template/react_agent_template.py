@@ -184,7 +184,7 @@ class ReActAgentTemplate(AgentTemplate):
         output_stream = input_object.get_data('output_stream')
         callbacks.append(StreamOutPutCallbackHandler(output_stream, agent_info=self.agent_model.info))
         callbacks.append(InvokeCallbackHandler(source=self.agent_model.info.get('name'),
-                                               llm_name=self.agent_model.profile.get('llm_model').get('name')))
+                                               llm_name=self.agent_model.profile.get('llm_model', {}).get('name')))
         config.setdefault("callbacks", callbacks)
         return config
 
