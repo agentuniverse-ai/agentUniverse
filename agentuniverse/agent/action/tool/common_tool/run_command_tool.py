@@ -131,9 +131,6 @@ class RunCommandTool(Tool):
             })
         return self._run_command(command, cwd, blocking)
 
-    # Maximum time (seconds) to wait for the worker thread to register its
-    # command result. Prevents indefinite blocking when the worker fails to
-    # start (e.g. thread creation error or early exception before set()).
     _THREAD_STARTED_TIMEOUT = 10.0
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:
@@ -146,7 +143,7 @@ class RunCommandTool(Tool):
         )
 
         thread_started = threading.Event()
-        thread_error: list = []  # captured from worker if it fails before set()
+        thread_error: list = []
 
         def __run() -> None:
             try:
@@ -183,14 +180,11 @@ class RunCommandTool(Tool):
             __run()
             return result.message
 
-        # Non-blocking: spawn worker, wait with timeout for it to register.
         thread = threading.Thread(target=__run)
         thread.daemon = True
         thread.start()
 
         if not thread_started.wait(timeout=self._THREAD_STARTED_TIMEOUT):
-            # Worker did not signal readiness in time; surface a clear error
-            # instead of leaving the caller blocked forever.
             return json.dumps({
                 "error": f"Command failed to start within {self._THREAD_STARTED_TIMEOUT}s",
                 "status": CommandStatus.ERROR.value
@@ -202,9 +196,6 @@ class RunCommandTool(Tool):
                 "status": CommandStatus.ERROR.value
             })
 
-        # Return a minimal "started" acknowledgement. stdout/stderr/exit_code
-        # are not yet populated; the caller should query CommandStatusTool with
-        # thread_id to retrieve the final result.
         return json.dumps({
             "thread_id": result.thread_id,
             "status": CommandStatus.RUNNING.value,
