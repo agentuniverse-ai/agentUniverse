@@ -96,3 +96,35 @@ results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metada
 ## PGVectorStore
 
 `PGVectorStore` 提供基于 PostgreSQL/pgvector 的同步与异步 CRUD、余弦/L2/内积检索、JSONB 包含过滤、可选的自动向量化、维度校验、自动建表和可选 HNSW 索引。安装 `store_ext` extra，并将 `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` 复制到应用配置目录。连接地址可以写在本地配置的 `connection_url` 中，或通过 `PGVECTOR_CONNECTION_URL` 提供；请勿提交数据库凭据。
+
+## WeaviateStore
+
+`WeaviateStore` 是基于 Weaviate（v4 客户端 API）的向量存储。提供插入、查询、upsert、更新、删除及巡检能力，支持 cosine / dot / L2 距离度量、可配置向量维度、通过已注册 aU embedding 组件按需向量化、metadata 过滤，以及受控的资源使用（`similarity_top_k`、`max_insert_batch`）。安装可选依赖 `pip install 'agentUniverse[store_ext]'`，并运行 Weaviate 服务（如 `http://localhost:8080`，gRPC 端口 `50051`）。
+
+将 `agentuniverse/agent/action/knowledge/store/weaviate_store.yaml.example` 复制到应用配置目录，加载内置 `weaviate_store` 组件。在该配置副本中设置 `url` / `grpc_port` / `api_key`（用于带鉴权的集群）；`embedding_model` 指定一个已注册的 aU embedding 组件，用于按需对文档和查询向量化。
+
+```yaml
+name: weaviate_store
+description: Weaviate vector store for knowledge retrieval
+url: http://localhost:8080
+grpc_port: 50051
+api_key: ''
+collection_name: AgentuniverseDocument
+embedding_model: openai_embedding
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+max_insert_batch: 500
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.weaviate_store
+  class: WeaviateStore
+```
+- url / grpc_port: Weaviate 的 REST 地址与 gRPC 端口（将 `grpc_port` 设为 `0` 可禁用 gRPC）。
+- api_key: 用于带鉴权集群的可选 Weaviate API Key。
+- collection_name: Weaviate 集合（class）名；必须是合法的 Weaviate 标识符。
+- embedding_model: 用于按需对文档/查询向量化的已注册 aU embedding 组件名。
+- dimensions: 向量维度；为 `null` 时由首条插入文档推断。
+- distance: 距离度量——`cosine`、`dot` 或 `l2`。
+- similarity_top_k: `query` 默认返回的结果数。
+- max_insert_batch: 每次 Weaviate 批量插入的最大文档数。
