@@ -309,3 +309,23 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [LatexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/latex_text_splitter.yaml)
+
+`LatexTextSplitter` splits LaTeX documents into one chunk per `\part` / `\chapter` / `\section` / `\subsection` / `\subsubsection` / `\paragraph` / `\subparagraph`, recording the section hierarchy (e.g. `"Introduction > Background"`) as metadata on every chunk so a retrieved chunk can be traced back to its source section. It is the right splitter for academic papers, technical reports, and any LaTeX-formatted knowledge source, and is a sibling of `MarkdownHeaderTextSplitter` and `HtmlHeaderTextSplitter` addressing issue #258.
+
+Pure Python with no third-party dependency. A regex-based parser respects LaTeX comment lines (`%`) and does not split inside `verbatim` / `lstlisting` / `minted` environments. Copy `latex_text_splitter.yaml` into your application configuration directory and resolve the built-in `latex_text_splitter` component to use it.
+
+The component definition file is as follows:
+```yaml
+name: 'latex_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.latex_text_splitter'
+  class: 'LatexTextSplitter'
+description: 'Splits LaTeX documents by section hierarchy for knowledge pre-processing.'
+section_path_key: 'section_path'
+include_unsectioned: true
+```
+- section_path_key: Metadata key under which each chunk's section path is recorded.
+- include_unsectioned: When `true` (default), text before the first section is emitted as a chunk with an empty section path; when `false` it is dropped.
