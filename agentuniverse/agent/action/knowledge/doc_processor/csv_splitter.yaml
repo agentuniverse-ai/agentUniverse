@@ -1,0 +1,9 @@
+name: 'csv_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.csv_splitter'
+  class: 'CsvSplitter'
+description: 'Splits CSV/TSV text into row-grouped chunks with header preserved on every chunk.'
+rows_per_chunk: 50
+delimiter: ','
+max_cell_chars: 1000
