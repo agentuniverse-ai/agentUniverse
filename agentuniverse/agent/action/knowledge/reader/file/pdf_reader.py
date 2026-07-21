@@ -39,9 +39,19 @@ class PdfReader(Reader):
             # Iterate over every page
             docs = []
             for page in range(num_pages):
-                # Extract the text from the page
-                page_text = pdf.pages[page].extract_text()
-                page_label = pdf.page_labels[page]
+                # Extract the text from the page. extract_text() can return
+                # None on scanned/encrypted pages; fall back to empty string.
+                try:
+                    page_text = pdf.pages[page].extract_text() or ""
+                except Exception:
+                    page_text = ""
+
+                # page_labels is not always available (depends on PDF type);
+                # fall back to the 1-based page number.
+                try:
+                    page_label = pdf.page_labels[page]
+                except (IndexError, KeyError, AttributeError):
+                    page_label = str(page + 1)
 
                 metadata = {"page_label": page_label, "file_name": file.name}
                 if ext_info is not None:

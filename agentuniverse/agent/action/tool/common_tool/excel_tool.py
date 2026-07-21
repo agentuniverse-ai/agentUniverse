@@ -373,6 +373,10 @@ class ExcelTool(Tool):
                 row_counts[sheet_name] = row_count
                 col_counts[sheet_name] = col_count
 
+            # Cache sheet names before close(): openpyxl read_only workbooks
+            # are invalid after close(), and accessing .sheetnames afterwards
+            # raises or returns empty, producing wrong total_sheets.
+            sheet_names = list(workbook.sheetnames)
             workbook.close()
 
             file_size = os.path.getsize(file_path)
@@ -382,9 +386,9 @@ class ExcelTool(Tool):
                 "file_path": file_path,
                 "file_size": file_size,
                 "file_size_mb": round(file_size / (1024 * 1024), 2),
-                "total_sheets": len(workbook.sheetnames),
+                "total_sheets": len(sheet_names),
                 "sheets": sheets_info,
-                "sheet_names": workbook.sheetnames
+                "sheet_names": sheet_names
             }
 
         except Exception as e:
