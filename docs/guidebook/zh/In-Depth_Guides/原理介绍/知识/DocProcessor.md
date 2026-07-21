@@ -310,3 +310,25 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [LanguageFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/language_filter.yaml)
+
+`LanguageFilter` 按语言过滤召回文档，仅保留匹配目标语言的文档。适用于多语言知识库——希望智能体只接收与用户语言一致的文档。对应 issue #248。
+
+支持两种检测模式。**Library 模式**——安装 `langdetect` 并保持 `use_langdetect: true`——使用经过充分测试的 `langdetect` 做精确检测。**脚本模式**（默认，无依赖）是基于 Unicode 码点范围的快速启发式判断，可把文本归为 CJK（中文/日文/韩文）、西里尔文、阿拉伯文、拉丁文等。将 `language_filter.yaml` 复制到应用配置目录，加载内置 `language_filter` 组件即可使用。检测策略偏保守：文本过短或置信度低于 `min_confidence` 的文档会被保留而非丢弃。
+
+组件定义文件如下：
+```yaml
+name: 'language_filter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.language_filter'
+  class: 'LanguageFilter'
+description: '按语言过滤文档，仅保留允许的语言。'
+allowed_languages: ['en', 'zh']
+min_confidence: 0.7
+use_langdetect: true
+```
+- allowed_languages: 要保留的 ISO 639-1 语言码集合（如 `["en", "zh"]`）。检测为其它语言的文档会被过滤。
+- min_confidence: `langdetect` 接受检测结果所需的最低置信度（0.0–1.0）；低于该值则保留文档（保守策略，宁可误留也不误删）。默认 0.7。脚本模式下忽略。
+- use_langdetect: 为 `true` 且已安装 `langdetect` 时使用之；否则回退到脚本检测。

@@ -309,3 +309,25 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [LanguageFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/language_filter.yaml)
+
+`LanguageFilter` filters recalled documents by language, keeping only those that match the configured target language(s). It is useful for multi-lingual knowledge bases where the agent should only receive documents in the user's language. It addresses issue #248.
+
+Two detection modes are supported. **Library mode** — install `langdetect` and leave `use_langdetect: true` — uses the well-tested `langdetect` library for accurate detection. **Script-based mode** (default, no dependency) is a fast heuristic that inspects Unicode code-point ranges to classify text as CJK (Chinese/Japanese/Korean), Cyrillic, Arabic, Latin, etc. Copy `language_filter.yaml` into your application configuration directory and resolve the built-in `language_filter` component to use it. Detection is conservative: documents too short to detect or with confidence below `min_confidence` are kept rather than dropped.
+
+The component definition file is as follows:
+```yaml
+name: 'language_filter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.language_filter'
+  class: 'LanguageFilter'
+description: 'Filters documents by language, keeping only the allowed languages.'
+allowed_languages: ['en', 'zh']
+min_confidence: 0.7
+use_langdetect: true
+```
+- allowed_languages: Set of ISO 639-1 language codes to keep (e.g. `["en", "zh"]`). Documents detected as any other language are filtered out.
+- min_confidence: Minimum confidence (0.0–1.0) for `langdetect` to accept a detection; below this the document is kept (conservative — prefer false-keep over false-drop). Default 0.7. Ignored in script-based mode.
+- use_langdetect: When `true` and `langdetect` is installed, use it; otherwise fall back to script detection.
