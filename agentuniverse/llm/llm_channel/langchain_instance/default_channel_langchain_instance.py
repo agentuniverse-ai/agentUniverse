@@ -81,11 +81,11 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
             chunk = llm_result.raw
             if not isinstance(chunk, dict):
                 chunk = chunk.dict()
-            if len(chunk["choices"]) == 0:
+            if len(chunk.get("choices") or []) == 0:
                 continue
-            choice = chunk["choices"][0]
+            choice = (chunk.get("choices") or [])[0]
             chunk = self._convert_delta_to_message_chunk(
-                choice["delta"], default_chunk_class
+                (choice.get("delta") or {}), default_chunk_class
             )
             finish_reason = choice.get("finish_reason")
             generation_info = (
@@ -104,11 +104,11 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
             chunk = llm_result.raw
             if not isinstance(chunk, dict):
                 chunk = chunk.dict()
-            if len(chunk["choices"]) == 0:
+            if len(chunk.get("choices") or []) == 0:
                 continue
-            choice = chunk["choices"][0]
+            choice = (chunk.get("choices") or [])[0]
             chunk = self._convert_delta_to_message_chunk(
-                choice["delta"], default_chunk_class
+                (choice.get("delta") or {}), default_chunk_class
             )
             finish_reason = choice.get("finish_reason")
             generation_info = (
@@ -175,11 +175,11 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
             chunk = chunk.raw
             if not isinstance(chunk, dict):
                 chunk = chunk.dict()
-            if len(chunk["choices"]) == 0:
+            if len(chunk.get("choices") or []) == 0:
                 continue
-            choice = chunk["choices"][0]
+            choice = (chunk.get("choices") or [])[0]
             chunk = self._convert_delta_to_message_chunk(
-                choice["delta"], default_chunk_class
+                (choice.get("delta") or {}), default_chunk_class
             )
             finish_reason = choice.get("finish_reason")
             generation_info = (
@@ -210,11 +210,11 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
             chunk = chunk.raw
             if not isinstance(chunk, dict):
                 chunk = chunk.dict()
-            if len(chunk["choices"]) == 0:
+            if len(chunk.get("choices") or []) == 0:
                 continue
-            choice = chunk["choices"][0]
+            choice = (chunk.get("choices") or [])[0]
             chunk = self._convert_delta_to_message_chunk(
-                choice["delta"], default_chunk_class
+                (choice.get("delta") or {}), default_chunk_class
             )
             finish_reason = choice.get("finish_reason")
             generation_info = (

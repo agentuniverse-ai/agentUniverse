@@ -156,10 +156,12 @@ class LLMChannel(ComponentBase):
             **kwargs,
         )
         if not streaming:
-            text = chat_completion.choices[0].message.content
+            if not chat_completion.choices:
+                return LLMOutput(text="", raw=chat_completion.model_dump())
+            msg = chat_completion.choices[0].message
+            text = msg.content or ""
             return LLMOutput(text=text, raw=chat_completion.model_dump(),
-                             message=Message(content=chat_completion.choices[0].message.content,
-                                             type=chat_completion.choices[0].message.role))
+                             message=Message(content=text, type=msg.role))
         return self.generate_stream_result(chat_completion)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
@@ -192,10 +194,12 @@ class LLMChannel(ComponentBase):
             **kwargs,
         )
         if not streaming:
-            text = chat_completion.choices[0].message.content
+            if not chat_completion.choices:
+                return LLMOutput(text="", raw=chat_completion.model_dump())
+            msg = chat_completion.choices[0].message
+            text = msg.content or ""
             return LLMOutput(text=text, raw=chat_completion.model_dump(),
-                             message=Message(content=chat_completion.choices[0].message.content,
-                                             type=chat_completion.choices[0].message.role))
+                             message=Message(content=text, type=msg.role))
         return self.agenerate_stream_result(chat_completion)
 
     def as_langchain(self) -> BaseLanguageModel:
@@ -269,11 +273,17 @@ class LLMChannel(ComponentBase):
         if not isinstance(chunk, dict):
             chunk = chunk.model_dump()
 
-        if len(chunk["choices"]) == 0:
+        # Guard: some OpenAI-compatible servers emit chunks without a
+        # "choices" key (usage-only chunks, error chunks). Without this
+        # guard, chunk["choices"] raises KeyError and kills the stream.
+        choices = chunk.get("choices") or []
+        if len(choices) == 0:
             return LLMOutput(text="", raw=chunk,
                              usage=TokenUsage.from_openai(chunk.get('usage', {})))
-        choice = chunk["choices"][0]
-        message = choice.get("delta")
+        choice = choices[0]
+        # delta can be None on the final chunk of some providers; guard
+        # before .get to avoid AttributeError.
+        message = choice.get("delta") or {}
         text = message.get("content")
         role = message.get("role")
         if text is None:
