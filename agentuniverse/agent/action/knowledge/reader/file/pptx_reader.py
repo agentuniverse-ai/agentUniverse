@@ -29,14 +29,17 @@ class PptxReader(Reader):
             )
         if isinstance(file, str):
             file = Path(file)
-        presentation = Presentation(file)
+        try:
+            presentation = Presentation(file)
+        except Exception as exc:
+            raise ValueError(
+                f"Failed to parse PPTX file {file.name}: {exc}") from exc
         document_list = []
         for slide_number, slide in enumerate(presentation.slides, start=1):
             for shape in slide.shapes:
-                if hasattr(shape, "text"):
+                if hasattr(shape, "text") and shape.text and shape.text.strip():
                     metadata = {"slide_number": slide_number, "file_name": file.name}
                     if ext_info is not None:
                         metadata.update(ext_info)
-                    # Extract the text from the shape
                     document_list.append(Document(text=shape.text, metadata=metadata))
         return document_list
