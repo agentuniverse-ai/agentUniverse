@@ -96,3 +96,11 @@ results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metada
 ## PGVectorStore
 
 `PGVectorStore` 提供基于 PostgreSQL/pgvector 的同步与异步 CRUD、余弦/L2/内积检索、JSONB 包含过滤、可选的自动向量化、维度校验、自动建表和可选 HNSW 索引。安装 `store_ext` extra，并将 `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` 复制到应用配置目录。连接地址可以写在本地配置的 `connection_url` 中，或通过 `PGVECTOR_CONNECTION_URL` 提供；请勿提交数据库凭据。
+
+## ElasticsearchVectorStore
+
+`ElasticsearchStore` 使用 Elasticsearch 的 `dense_vector` 字段类型和 kNN 搜索进行向量增删改查。通过 `pip install 'agentUniverse[store_ext]'` 安装可选依赖，并运行启用了向量搜索功能的 Elasticsearch 8.x。
+
+复制 `elasticsearch_store.yaml.example`，配置主机地址、索引名称、向量维度和相似度度量（`cosine`、`l2` 或 `dot_product`）。认证支持 API 密钥（`api_key: "id:api_key"`）或基本认证（`username` / `password`）。凭证也可通过环境变量注入，避免写入 YAML。
+
+维度校验会在向量维度不匹配时抛出明确的错误。首次连接时若索引不存在，将自动创建正确的 `dense_vector` 映射。
