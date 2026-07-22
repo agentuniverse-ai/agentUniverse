@@ -7,9 +7,13 @@
 # @FileName: feishu_reader.py
 
 from bs4 import BeautifulSoup
+import logging
 import time
 from typing import Dict,List
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+logger = logging.getLogger(__name__)
+
 
 class PublicFeishuReader:
     """Feishu public document reader using Selenium
@@ -60,7 +64,7 @@ class PublicFeishuReader:
             soup = BeautifulSoup(page_source, 'html.parser')
             return self._parse_content(soup)
         except Exception as e:
-            print(f"Error fetching document: {e}")
+            logger.warning("Failed to fetch Feishu document from %s: %s", url, e)
             return ""
 
     def _parse_content(self, soup: BeautifulSoup) -> str:
