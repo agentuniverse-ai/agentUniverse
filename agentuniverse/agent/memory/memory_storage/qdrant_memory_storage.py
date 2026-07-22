@@ -26,6 +26,7 @@ from agentuniverse.agent.action.knowledge.embedding.embedding_manager import Emb
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+from agentuniverse.base.util.logging.logging_util import LOGGER
 
 
 DEFAULT_CONNECTION_ARGS: Dict[str, Any] = {
@@ -234,5 +235,5 @@ class QdrantMemoryStorage(MemoryStorage):
                 )
                 message_list.append(msg)
         except Exception as e:
-            print("QdrantMemoryStorage.to_messages failed, exception= " + str(e))
+            LOGGER.error(f"QdrantMemoryStorage.to_messages failed, exception= {e}")
         return message_list
