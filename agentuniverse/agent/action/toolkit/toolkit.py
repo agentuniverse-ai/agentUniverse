@@ -10,6 +10,7 @@ from agentuniverse.base.config.application_configer.application_config_manager i
     ApplicationConfigManager
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
+from agentuniverse.base.util.logging.logging_util import LOGGER
 
 
 class Toolkit(ComponentBase):
@@ -64,7 +65,7 @@ class Toolkit(ComponentBase):
                 if key != 'metadata':
                     setattr(self, key, value)
         except Exception as e:
-            print(f"Error during configuration initialization: {str(e)}")
+            LOGGER.error(f"Error during toolkit configuration initialization: {str(e)}")
         if component_configer.name:
             self.name = component_configer.name
         if component_configer.description:
