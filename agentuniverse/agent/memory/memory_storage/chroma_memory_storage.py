@@ -101,12 +101,13 @@ class ChromaMemoryStorage(MemoryStorage):
             self._init_collection()
         if not message_list:
             return
-        metadata = {'gmt_created': datetime.now().isoformat()}
+        base_metadata = {'gmt_created': datetime.now().isoformat()}
         if session_id:
-            metadata['session_id'] = session_id
+            base_metadata['session_id'] = session_id
         if agent_id:
-            metadata['agent_id'] = agent_id
+            base_metadata['agent_id'] = agent_id
         for message in message_list:
+            metadata = dict(base_metadata)
             embedding = []
             if self.embedding_model:
                 embedding = EmbeddingManager().get_instance_obj(
