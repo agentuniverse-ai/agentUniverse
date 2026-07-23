@@ -9,9 +9,9 @@ def test_parse_input_defaults_feedback_on_first_round():
         {},
     )
 
-    assert agent_input["previous_planning_result"] == []
-    assert agent_input["review_score"] == ""
-    assert agent_input["review_suggestion"] == ""
+    assert agent_input.get("previous_planning_result") == []
+    assert agent_input.get("review_score") == ""
+    assert agent_input.get("review_suggestion") == ""
 
 
 def test_parse_input_exposes_output_object_feedback():
@@ -27,9 +27,9 @@ def test_parse_input_exposes_output_object_feedback():
         {},
     )
 
-    assert agent_input["previous_planning_result"] == ["first plan"]
-    assert agent_input["review_score"] == 20
-    assert agent_input["review_suggestion"] == "add evidence"
+    assert agent_input.get("previous_planning_result") == ["first plan"]
+    assert agent_input.get("review_score") == 20
+    assert agent_input.get("review_suggestion") == "add evidence"
 
 
 def test_parse_input_exposes_dict_feedback_and_preserves_zero_score():
@@ -45,9 +45,9 @@ def test_parse_input_exposes_dict_feedback_and_preserves_zero_score():
         {},
     )
 
-    assert agent_input["previous_planning_result"] == ["first plan"]
-    assert agent_input["review_score"] == 0
-    assert agent_input["review_suggestion"] == "add evidence"
+    assert agent_input.get("previous_planning_result") == ["first plan"]
+    assert agent_input.get("review_score") == 0
+    assert agent_input.get("review_suggestion") == "add evidence"
 
 
 def test_parse_input_defaults_malformed_top_level_feedback():
@@ -60,9 +60,9 @@ def test_parse_input_defaults_malformed_top_level_feedback():
         {},
     )
 
-    assert agent_input["previous_planning_result"] == []
-    assert agent_input["review_score"] == ""
-    assert agent_input["review_suggestion"] == ""
+    assert agent_input.get("previous_planning_result") == []
+    assert agent_input.get("review_score") == ""
+    assert agent_input.get("review_suggestion") == ""
 
 
 def test_parse_input_defaults_malformed_feedback_fields():
@@ -78,6 +78,6 @@ def test_parse_input_defaults_malformed_feedback_fields():
         {},
     )
 
-    assert agent_input["previous_planning_result"] == []
-    assert agent_input["review_score"] == ""
-    assert agent_input["review_suggestion"] == ""
+    assert agent_input.get("previous_planning_result") == []
+    assert agent_input.get("review_score") == ""
+    assert agent_input.get("review_suggestion") == ""
