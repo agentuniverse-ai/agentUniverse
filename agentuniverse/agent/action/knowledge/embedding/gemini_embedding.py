@@ -46,9 +46,8 @@ class GeminiEmbedding(Embedding):
             )
             return [embedding.values for embedding in response.embeddings]
         except Exception as e:
-            print(f"Error generating embedding for text: {texts}. Error: {e}")
-            # Handle the error appropriately, e.g., return a zero vector or raise an exception
-            raise ValueError(e)
+            raise RuntimeError(
+                f"Error generating Gemini embeddings for {len(texts)} text(s)") from e
 
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Asynchronously get embeddings for a list of texts using the Gemini API."""
