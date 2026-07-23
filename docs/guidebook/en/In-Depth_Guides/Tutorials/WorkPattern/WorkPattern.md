@@ -32,14 +32,21 @@ The `invoke` and `async_invoke` methods are the synchronous and asynchronous exe
 
 ## How to Use the Work Pattern
 
-Taking the PEER work pattern mentioned above as an example, its invocation relationship exists within the [PEER Agent Template](../../../../../../agentuniverse/agent/template/peer_agent_template.py). 
+Taking the PEER work pattern mentioned above as an example, its invocation relationship exists within the [PEER Agent Template](../../../../../../agentuniverse/agent/template/peer_agent_template.py).
 In the execution logic of the agent template, a specified work pattern instance is obtained, its attributes are assembled, and then it is executed.
 
-The flowchart is as follows:  
+The flowchart is as follows:
 ![PEER Work Pattern](../../../../_picture/peer_work_pattern.png)
 
-By invoking the agent instance corresponding to the PEER agent template, the entire process is initiated. After performing the necessary pre-checks, the PEER agent template calls the work pattern. The work pattern executes the transition logic between the node members and ultimately returns the result to the PEER agent template. 
+By invoking the agent instance corresponding to the PEER agent template, the entire process is initiated. After performing the necessary pre-checks, the PEER agent template calls the work pattern. The work pattern executes the transition logic between the node members and ultimately returns the result to the PEER agent template.
 The PEER agent template then performs specific assembly and post-processing before concluding the entire process.
+
+When `jump_step` is `planning`, a review score below `eval_threshold` starts a new PEER round,
+subject to `retry_count`. In the next round, the built-in planning agent receives the previous
+framework, review score, and review suggestion and uses this feedback to revise the plan. These
+optional feedback values are empty in the first round; custom planning prompts can choose whether
+to consume the optional `previous_planning_result`, `review_score`, and `review_suggestion`
+variables.
 
 ## Using the WorkPattern Work Mode Manager
 

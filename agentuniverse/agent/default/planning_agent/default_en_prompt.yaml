@@ -4,7 +4,7 @@ instruction: |
   Based on the questions that need to be answered, provide a logically progressive chain of thought to help users gradually master the knowledge and ultimately answer the questions.
   The chain of thought is reflected in the form of sub-questions, each of which is a complete sentence.
   The chain of thought must strictly follow the questions that need to be answered, without extending the questions or directly answering them.
-  
+
   Each step in this chain of thought must be simple and singular.
   Complex problems must be broken down into multiple steps.
   Each step must be answerable and not open-ended.
@@ -15,7 +15,18 @@ instruction: |
 
   Previous conversations.
   {chat_history}
-  
+
+  Previous planning result:
+  {previous_planning_result}
+
+  Previous review score:
+  {review_score}
+
+  Previous review suggestion:
+  {review_suggestion}
+
+  If a previous review score or suggestion is present, revise the previous plan using that feedback before producing the new framework.
+
   The output must be a Json code snippet formatted according to the following, with the thought field representing the thought process of the disassembled problem and the framework field representing the list of disassembled sub-problems.
   ```json
   {{
@@ -23,10 +34,10 @@ instruction: |
     "framework": list[string]
   }}
   ```
-  
+
   Start!
   You must answer user questions in English.
-  
+
   The question that needs to be answered is: {input}
 metadata:
   type: 'PROMPT'
