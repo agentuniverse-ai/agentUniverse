@@ -6,10 +6,12 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: planning_agent_template.py
 from queue import Queue
+from typing import Any
 
 from langchain_core.utils.json import parse_json_markdown
 
 from agentuniverse.agent.input_object import InputObject
+from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
 from agentuniverse.base.util.common_util import stream_output
@@ -24,9 +26,34 @@ class PlanningAgentTemplate(AgentTemplate):
     def output_keys(self) -> list[str]:
         return ['framework', 'thought']
 
+    @staticmethod
+    def _result_to_dict(result: Any) -> dict:
+        if isinstance(result, OutputObject):
+            return result.to_dict()
+        if isinstance(result, dict):
+            return result
+        return {}
+
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         agent_input['input'] = input_object.get_data('input')
         agent_input['expert_framework'] = input_object.get_data('expert_framework', {}).get('planning')
+
+        planning_result = self._result_to_dict(input_object.get_data('planning_result'))
+        reviewing_result = self._result_to_dict(input_object.get_data('reviewing_result'))
+
+        previous_planning_result = planning_result.get('framework')
+        review_score = reviewing_result.get('score')
+        review_suggestion = reviewing_result.get('suggestion')
+
+        agent_input['previous_planning_result'] = (
+            previous_planning_result if isinstance(previous_planning_result, list) else []
+        )
+        agent_input['review_score'] = (
+            review_score if isinstance(review_score, (int, float)) else ''
+        )
+        agent_input['review_suggestion'] = (
+            review_suggestion if isinstance(review_suggestion, str) else ''
+        )
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
