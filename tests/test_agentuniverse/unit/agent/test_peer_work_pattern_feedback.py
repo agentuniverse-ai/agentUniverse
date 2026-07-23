@@ -1,5 +1,7 @@
 import asyncio
 
+from pydantic import Field
+
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.executing_agent_template import (
@@ -14,27 +16,31 @@ from agentuniverse.agent.work_pattern.peer_work_pattern import PeerWorkPattern
 
 
 class RecordingPlanningAgent(PlanningAgentTemplate):
-    calls: list[dict] = []
+    calls: list[dict] = Field(default_factory=list)
 
     def run(self, **kwargs) -> OutputObject:
         self.calls.append({"mode": "sync", "kwargs": kwargs})
         call_number = len(self.calls)
-        return OutputObject({
-            "framework": [f"plan-{call_number}"],
-            "thought": f"thought-{call_number}",
-        })
+        return OutputObject(
+            {
+                "framework": [f"plan-{call_number}"],
+                "thought": f"thought-{call_number}",
+            }
+        )
 
     async def async_run(self, **kwargs) -> OutputObject:
         self.calls.append({"mode": "async", "kwargs": kwargs})
         call_number = len(self.calls)
-        return OutputObject({
-            "framework": [f"plan-{call_number}"],
-            "thought": f"thought-{call_number}",
-        })
+        return OutputObject(
+            {
+                "framework": [f"plan-{call_number}"],
+                "thought": f"thought-{call_number}",
+            }
+        )
 
 
 class RecordingExecutingAgent(ExecutingAgentTemplate):
-    calls: list[dict] = []
+    calls: list[dict] = Field(default_factory=list)
 
     def run(self, **kwargs) -> OutputObject:
         self.calls.append({"mode": "sync", "kwargs": kwargs})
@@ -46,7 +52,7 @@ class RecordingExecutingAgent(ExecutingAgentTemplate):
 
 
 class RecordingExpressingAgent(ExpressingAgentTemplate):
-    calls: list[dict] = []
+    calls: list[dict] = Field(default_factory=list)
 
     def run(self, **kwargs) -> OutputObject:
         self.calls.append({"mode": "sync", "kwargs": kwargs})
@@ -58,8 +64,8 @@ class RecordingExpressingAgent(ExpressingAgentTemplate):
 
 
 class RecordingReviewingAgent(ReviewingAgentTemplate):
-    calls: list[dict] = []
-    review_scores: list[int] = []
+    calls: list[dict] = Field(default_factory=list)
+    review_scores: list[int] = Field(default_factory=list)
 
     def run(self, **kwargs) -> OutputObject:
         self.calls.append({"mode": "sync", "kwargs": kwargs})
@@ -74,17 +80,21 @@ class RecordingReviewingAgent(ReviewingAgentTemplate):
     def _review_output(self, call_number: int) -> OutputObject:
         score = self.review_scores[call_number - 1]
         suggestion = f"review-{call_number}"
-        return OutputObject({
-            "output": {
-                "is_useful": score >= 60,
+        return OutputObject(
+            {
+                "output": {
+                    "is_useful": score >= 60,
+                    "suggestion": suggestion,
+                },
+                "score": score,
                 "suggestion": suggestion,
-            },
-            "score": score,
-            "suggestion": suggestion,
-        })
+            }
+        )
 
 
-def _build_pattern(review_scores: list[int]) -> tuple[
+def _build_pattern(
+    review_scores: list[int],
+) -> tuple[
     PeerWorkPattern,
     RecordingPlanningAgent,
 ]:
@@ -106,10 +116,7 @@ def _assert_retry_feedback(
 ) -> None:
     assert len(result["result"]) == 2
     assert len(planning.calls) == 2
-    assert [
-        round_result["reviewing_result"]["score"]
-        for round_result in result["result"]
-    ] == [0, 80]
+    assert [round_result["reviewing_result"]["score"] for round_result in result["result"]] == [0, 80]
 
     second_planning_input = planning.calls[1]["kwargs"]
     assert second_planning_input["planning_result"].framework == ["plan-1"]
@@ -129,15 +136,6 @@ def _assert_call_modes(
         pattern.reviewing,
     )
     for agent in agents:
-        assert isinstance(
-            agent,
-            (
-                RecordingPlanningAgent,
-                RecordingExecutingAgent,
-                RecordingExpressingAgent,
-                RecordingReviewingAgent,
-            ),
-        )
         assert [call["mode"] for call in agent.calls] == [expected_mode] * expected_count
 
 
