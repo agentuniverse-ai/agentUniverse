@@ -60,7 +60,8 @@ class GitHubTool(Tool):
             response = requests.get(
                 url, 
                 headers=self._get_headers(), 
-                params=params, 
+                params=params,
+                timeout=30,
                 timeout=self.timeout
             )
             response.raise_for_status()

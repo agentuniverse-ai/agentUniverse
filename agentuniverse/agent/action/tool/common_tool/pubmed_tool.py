@@ -232,6 +232,7 @@ class PubMedTool(Tool):
 
         response = requests.get(
             f"{self.base_url}/esearch.fcgi",
+            timeout=30,
             params=params,
             timeout=self.timeout,
         )
@@ -308,6 +309,7 @@ class PubMedTool(Tool):
     def _fetch_articles(self, pmids: List[str]) -> List[Dict[str, Any]]:
         response = requests.get(
             f"{self.base_url}/efetch.fcgi",
+            timeout=30,
             params={
                 **self._common_params(),
                 "db": "pubmed",
