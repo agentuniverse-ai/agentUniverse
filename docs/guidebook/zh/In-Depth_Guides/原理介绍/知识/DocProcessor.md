@@ -310,3 +310,33 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [SentimentFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sentiment_filter.yaml)
+
+该组件只保留情感极性符合目标（`positive` / `negative` / `neutral` / `all`）的召回文档。对应 issue #248 的*情感过滤*方向，且与其它文档处理器都不同（没有任何组件会审视文本的情感极性）。设置 `allowed_sentiment: all` 可关闭过滤，仅给每篇文档标注其计算出的情感。
+
+打分过程确定、无额外依赖。文本被转为小写并分词，使用内置的小型词袋词典（自带英文和中文两套）计算 `score = (正向命中 - 负向命中) / 词典命中数`，取值 `[-1.0, 1.0]`。不在词典中的词不计入分母，因此中性填充词不会稀释明确的信号。`language: auto`（默认）对所有词典打分并保留绝对值最大的信号；也可指定 `en` 或 `zh`。得分通过 `threshold`（区分正/负与中性的 `|score|` 边界）和 `min_confidence`（可选下限，低于此值的非中性极性会被降级为中性）映射为极性。每个保留文档的 metadata 会写入得分、极性与所用词典。
+
+组件定义文件如下：
+```yaml
+name: 'sentiment_filter'
+description: '按情感极性过滤召回文档'
+allowed_sentiment: 'positive'   # positive | negative | neutral | all
+threshold: 0.05                 # 区分正/负与中性的 |score| 边界
+min_confidence: 0.0             # 低于此值时极性强制为中性
+language: 'auto'                # auto | en | zh
+# text_field: 'content'         # Document.text 为空时读取的 metadata 键
+score_key: 'sentiment_score'    # 设为 null 则不写入
+polarity_key: 'sentiment_polarity'
+language_key: 'sentiment_language'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sentiment_filter'
+  class: 'SentimentFilter'
+```
+- allowed_sentiment: 保留哪种极性。`all` 关闭过滤，仅标注文档。
+- threshold: 区分正/负与中性的绝对得分边界，取值 `(0.0, 1.0]`。
+- min_confidence: 非中性极性被采信所需的最低 `|score|`；`0.0` 表示不启用此门槛。
+- language: 词典选择 —— `auto`（取最强信号）、`en` 或 `zh`。
+- text_field: `Document.text` 为空时读取文本的 metadata 键。
+- score_key / polarity_key / language_key: 写入每个保留文档的 metadata 键；任一项设为 null 则跳过。

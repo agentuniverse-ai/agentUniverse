@@ -309,3 +309,33 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [SentimentFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sentiment_filter.yaml)
+
+This component keeps only the recalled documents whose detected sentiment polarity matches a configured target (`positive` / `negative` / `neutral` / `all`). It addresses the *sentiment filtering* direction of issue #248 and is distinct from every other doc processor: none of them inspect the emotional polarity of the text. Set `allowed_sentiment: all` to disable filtering and only annotate each document with its computed sentiment.
+
+Scoring is deterministic and dependency-free. The text is lowercased and tokenized, and a compact built-in bag-of-words lexicon (English and Chinese ship out of the box) computes `score = (positive_hits - negative_hits) / lexicon_hits`, a value in `[-1.0, 1.0]`. Non-lexicon tokens are excluded from the denominator, so neutral filler words cannot dilute a clear signal. `language: auto` (default) scores the text against every lexicon and keeps the strongest absolute signal; set it to `en` or `zh` to force a lexicon. The score is mapped to a polarity via `threshold` (the `|score|` boundary separating positive/negative from neutral) and `min_confidence` (an optional floor below which a non-neutral polarity is demoted to neutral). Each kept document is annotated in its metadata with the score, polarity and lexicon used.
+
+The component definition file is as follows:
+```yaml
+name: 'sentiment_filter'
+description: 'Filter recalled documents by sentiment polarity'
+allowed_sentiment: 'positive'   # positive | negative | neutral | all
+threshold: 0.05                 # |score| boundary for positive/negative vs neutral
+min_confidence: 0.0             # floor below which polarity is forced to neutral
+language: 'auto'                # auto | en | zh
+# text_field: 'content'         # metadata key read when Document.text is empty
+score_key: 'sentiment_score'    # set to null to skip stamping
+polarity_key: 'sentiment_polarity'
+language_key: 'sentiment_language'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sentiment_filter'
+  class: 'SentimentFilter'
+```
+- allowed_sentiment: Which polarity to keep. `all` disables filtering and only annotates documents.
+- threshold: Absolute score boundary in `(0.0, 1.0]` separating positive/negative from neutral.
+- min_confidence: Minimum `|score|` required before a non-neutral polarity is trusted; `0.0` disables the gate.
+- language: Lexicon selection — `auto` (strongest signal wins), `en`, or `zh`.
+- text_field: Metadata key to read text from when `Document.text` is empty.
+- score_key / polarity_key / language_key: Metadata keys stamped on every kept document; set any to null to skip it.
