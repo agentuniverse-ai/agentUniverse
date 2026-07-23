@@ -51,7 +51,7 @@ class APITool(Tool):
                         return str(value)
                     elif option['type'] == 'boolean':
                         return self._convert_boolean(value)
-                    elif option['type'] == 'null' and not value:
+                    elif option['type'] == 'null' and value is None:
                         return None
                     else:
                         # Unsupported type, try next option
