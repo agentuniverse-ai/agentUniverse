@@ -588,11 +588,16 @@ class Agent(ComponentBase, ABC):
         if self.agent_model.action.get('tool', []):
             for tool in self.agent_model.action.get('tool', []):
                 tool_ins = ToolManager().get_instance_obj(tool)
+                if tool_ins is None:
+                    continue
                 description_list.append(f'tool name:{tool_ins.name}\ntool description:{tool_ins.description}\n')
 
         if self.agent_model.action.get('toolkit', []):
             for toolkit in self.agent_model.action.get('toolkit', []):
-                description_list.extend(ToolkitManager().get_instance_obj(toolkit).tool_descriptions)
+                toolkit_ins = ToolkitManager().get_instance_obj(toolkit)
+                if toolkit_ins is None:
+                    continue
+                description_list.extend(toolkit_ins.tool_descriptions)
 
         return description_list
 
