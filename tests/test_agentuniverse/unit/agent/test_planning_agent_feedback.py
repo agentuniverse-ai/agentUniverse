@@ -1,8 +1,37 @@
+from pathlib import Path
+
 import pytest
 
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.planning_agent_template import PlanningAgentTemplate
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+
+
+def test_default_english_prompt_uses_peer_review_feedback():
+    prompt = (
+        PROJECT_ROOT
+        / "agentuniverse/agent/default/planning_agent/default_en_prompt.yaml"
+    ).read_text(encoding="utf-8")
+
+    assert "{previous_planning_result}" in prompt
+    assert "{review_score}" in prompt
+    assert "{review_suggestion}" in prompt
+    assert "revise" in prompt.lower()
+
+
+def test_default_chinese_prompt_uses_peer_review_feedback():
+    prompt = (
+        PROJECT_ROOT
+        / "agentuniverse/agent/default/planning_agent/default_cn_prompt.yaml"
+    ).read_text(encoding="utf-8")
+
+    assert "{previous_planning_result}" in prompt
+    assert "{review_score}" in prompt
+    assert "{review_suggestion}" in prompt
+    assert "修订" in prompt
 
 
 def test_parse_input_defaults_feedback_on_first_round():

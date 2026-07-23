@@ -14,6 +14,17 @@ instruction: |
   
   之前的对话:
   {chat_history}
+
+  上一轮规划结果:
+  {previous_planning_result}
+
+  上一轮评价分数:
+  {review_score}
+
+  上一轮评价建议:
+  {review_suggestion}
+
+  如果存在上一轮评价分数或建议，请先根据这些反馈修订上一轮规划，再输出新的思考链路。
   
   输出必须是按照以下格式化的Json代码片段，thought字段代表拆解问题的思考过程，framework字段代表拆解后的子问题列表。
   ```json
