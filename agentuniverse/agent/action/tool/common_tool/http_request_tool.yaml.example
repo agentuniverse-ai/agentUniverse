@@ -1,0 +1,14 @@
+name: http_request_tool
+description: Bounded HTTP request tool — general-purpose HTTP client (GET/POST/PUT/DELETE/PATCH/HEAD) with configurable timeout, response size limit, and SSRF-safe opt-in redirects.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.http_request_tool
+  class: HttpRequestTool
+input_keys:
+  - url
+  - method
+default_timeout: 30.0
+max_response_bytes: 1048576
+allow_redirects: false
+max_redirects: 5
