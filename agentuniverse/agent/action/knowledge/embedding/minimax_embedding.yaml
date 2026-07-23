@@ -1,0 +1,7 @@
+name: 'minimax_embedding'
+description: 'embedding use MiniMax API (OpenAI-compatible)'
+embedding_model_name: 'embo-01'
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.minimax_embedding'
+  class: 'MiniMaxEmbedding'
