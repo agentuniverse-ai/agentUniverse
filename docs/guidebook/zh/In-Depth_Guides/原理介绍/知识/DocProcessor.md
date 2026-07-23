@@ -310,3 +310,23 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [LatexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/latex_text_splitter.yaml)
+
+`LatexTextSplitter` 按 `\part` / `\chapter` / `\section` / `\subsection` / `\subsubsection` / `\paragraph` / `\subparagraph` 层级切分 LaTeX 文档，把章节路径（如 `"Introduction > Background"`）写入每个块的 metadata，使召回块可回溯到所属章节。它适用于学术论文、技术报告及任何 LaTeX 格式知识源，与 `MarkdownHeaderTextSplitter`、`HtmlHeaderTextSplitter` 同属一类，对应 issue #258。
+
+纯 Python 实现，无第三方依赖。基于正则的解析器会忽略 LaTeX 注释行（`%`），且不会在 `verbatim` / `lstlisting` / `minted` 环境内部切分。将 `latex_text_splitter.yaml` 复制到应用配置目录，加载内置 `latex_text_splitter` 组件即可使用。
+
+组件定义文件如下：
+```yaml
+name: 'latex_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.latex_text_splitter'
+  class: 'LatexTextSplitter'
+description: '按章节层级切分 LaTeX 文档用于知识预处理。'
+section_path_key: 'section_path'
+include_unsectioned: true
+```
+- section_path_key: 记录每个块章节路径所用的 metadata 键。
+- include_unsectioned: 为 `true`（默认）时，首个章节之前的文本会作为空章节路径的块输出；为 `false` 时丢弃该段文本。
