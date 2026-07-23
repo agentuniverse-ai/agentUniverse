@@ -310,3 +310,23 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [HtmlHeaderTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/html_header_text_splitter.yaml)
+
+`HtmlHeaderTextSplitter` 按 HTML 标题层级（`<h1>`–`<h6>`）把每个输入 `Document` 切分成多个块，并把标题路径（如 `"安装 > macOS"`）作为 metadata 写入每个块，使召回的块可以回溯到所属章节。它对应 issue #258 的 *HTML 预处理* 方向，是 `MarkdownHeaderTextSplitter` 的 HTML 版本。
+
+实现刻意保持轻量：基于 Python 标准库 `html.parser.HTMLParser`，无需安装 `beautifulsoup4` / `lxml`，没有任何第三方依赖。将 `html_header_text_splitter.yaml` 复制到应用配置目录，加载内置 `html_header_text_splitter` 组件即可使用。
+
+组件定义文件如下：
+```yaml
+name: 'html_header_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.html_header_text_splitter'
+  class: 'HtmlHeaderTextSplitter'
+description: '按 HTML 标题层级（h1–h6）切分文档用于知识预处理。'
+header_path_key: 'header_path'
+include_unsectioned: true
+```
+- header_path_key: 记录每个块标题路径所用的 metadata 键。
+- include_unsectioned: 为 `true`（默认）时，首个标题之前的文本会作为空标题路径的块输出；为 `false` 时丢弃该段文本。
