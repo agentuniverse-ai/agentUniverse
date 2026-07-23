@@ -310,3 +310,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ContentTypeFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/content_type_filter.yaml)
+
+该组件按文档元数据中的 `content_type` 字段过滤召回的文档，仅保留内容类型属于 `allowed_types` 的文档。适用于多模态或混合格式的知识库——例如代理只应接收 `text` 文本块、`code` 代码或 `table` 表格行。对应 issue #248 中“按内容类型过滤”的方向。
+
+匹配过程为确定性、无第三方依赖：内容类型在允许集合中的文档被保留；内容类型存在但不在允许集合中的文档被丢弃；没有内容类型（缺少元数据、缺少该键或值为空白）的文档按 `default_policy` 处理——`keep`（默认，保守保留）或 `drop`（丢弃）。当 `allowed_types` 为空时，过滤器为空操作（保留全部），因此可在配置前安全启用。
+
+组件定义文件如下：
+```yaml
+name: 'content_type_filter'
+description: '仅保留 content_type 属于 allowed_types 的文档'
+allowed_types: ['text', 'code', 'table']
+type_key: 'content_type'
+default_policy: 'keep'      # keep | drop —— 对没有 content_type 的文档的策略
+case_sensitive: false       # 默认大小写不敏感
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.content_type_filter'
+  class: 'ContentTypeFilter'
+```
+- allowed_types：要保留的内容类型字符串集合。为空时保留全部。
+- type_key：存放内容类型的元数据键（默认 `content_type`）。
+- default_policy：对没有内容类型的文档的策略——`keep`（默认）或 `drop`。
+- case_sensitive：为假时（默认）大小写不敏感匹配；数字类型会被强制转为字符串，首尾空白会被去除。

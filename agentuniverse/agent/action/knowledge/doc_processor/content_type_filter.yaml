@@ -1,0 +1,16 @@
+name: 'content_type_filter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.content_type_filter'
+  class: 'ContentTypeFilter'
+description: >-
+  Filters documents by the content_type metadata field, keeping only the
+  allowed content types. Documents without a content type follow
+  default_policy (keep or drop).
+allowed_types:
+  - 'text'
+  - 'code'
+  - 'table'
+type_key: 'content_type'
+default_policy: 'keep'
+case_sensitive: false
