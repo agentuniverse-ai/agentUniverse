@@ -1,0 +1,11 @@
+name: datetime_tool
+description: Bounded datetime tool — get the current time (now), parse/format datetimes, compute differences, and add/subtract durations across timezones.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.datetime_tool
+  class: DateTimeTool
+input_keys:
+  - mode
+default_timezone: UTC
+max_diff_days: 100000
