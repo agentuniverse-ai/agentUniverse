@@ -171,6 +171,29 @@ metadata:
 ```
 该组件需要在环境变量中配置`DASHSCOPE_API_KEY`。
 
+### [VoyageReranker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/voyage_reranker.yaml)
+
+该组件使用 Voyage AI 的 Rerank API（`https://api.voyageai.com/v1/rerank`）对 Store 召回的文档按与 Query 的相关性重新排序。Voyage AI 提供了一系列 rerank 模型，如 `rerank-2`（默认）、`rerank-2-lite`、`rerank-2.5` 与 `rerank-2.5-lite`。只需一个 Voyage AI 的 API Key（`requests` 已是 agentUniverse 的核心依赖）。
+
+组件定义文件如下：
+```yaml
+name: 'voyage_reranker'
+description: 'reranker use voyage ai api'
+model_name: 'rerank-2'
+top_n: 10
+request_timeout: 30
+score_key: 'rerank_score'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.voyage_reranker'
+  class: 'VoyageReranker'
+```
+- model_name：Voyage AI rerank 模型（默认 `rerank-2`）。
+- top_n：rerank 后返回的最大文档数。对应 API 的 `top_k` 参数，并会被截断到输入文档数，避免向 API 请求超出实际数量的结果。
+- request_timeout：rerank HTTP 调用的超时时间，单位秒（默认 30）。`requests` 默认无超时，若不设置，一旦 Voyage API 卡住，整步 rerank 会无限期挂起。
+- score_key：将每个保留文档的相关性分数写入 metadata 时使用的键（默认 `rerank_score`）。
+该组件需要在环境变量中配置`VOYAGE_API_KEY`。
+
 ### [HierarchicalRegexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/hierarchical_regex_text_splitter.py)
 
 该组件使用通过指定的正则规则对原始文本进行多层级的拆分，形成树状的文档结构。

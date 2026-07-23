@@ -1,0 +1,10 @@
+name: 'voyage_reranker'
+description: 'reranker use voyage ai api'
+model_name: 'rerank-2'
+top_n: 10
+request_timeout: 30
+score_key: 'rerank_score'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.voyage_reranker'
+  class: 'VoyageReranker'
