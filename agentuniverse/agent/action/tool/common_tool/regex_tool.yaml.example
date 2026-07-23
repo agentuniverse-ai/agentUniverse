@@ -1,0 +1,12 @@
+name: regex_tool
+description: Bounded regular-expression tool — match, find_all, search, and sub (replace) with input length and match-count bounds.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.regex_tool
+  class: RegexTool
+input_keys:
+  - mode
+  - pattern
+max_input_chars: 100000
+max_matches: 1000
