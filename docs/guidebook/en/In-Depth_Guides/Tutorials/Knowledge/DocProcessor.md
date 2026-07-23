@@ -309,3 +309,33 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [DuplicateRemover](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/duplicate_remover.yaml)
+
+This component removes **exact-duplicate** documents from the recalled set using a SHA-256 content hash. It addresses the *exact dedup* direction of issue #248 and is the light, deterministic companion to `SemanticDeduplicator`: `SemanticDeduplicator` removes *near*-duplicates via embeddings (fuzzy, model-driven), while `DuplicateRemover` only drops *bit-for-bit identical* text, needs no model and no third-party dependency, and is fully reproducible. Use it as a cheap first stage before any fuzzy dedup, or on its own when exact dedup is all that is required.
+
+Each document is assigned a stable identity — by default the SHA-256 of its text — and one representative is kept per identity. `keep_first: true` (default) keeps the first occurrence, preserving the ranking coming out of the store / earlier processors; `keep_first: false` keeps the last occurrence (useful when later documents are fresher) and still returns them in their input order. Set `hash_key` to read a precomputed hash from metadata instead of recomputing one, and `text_field` to hash a metadata field when `Document.text` is empty. Hashing is "exact text equality" by default; flip `normalize_whitespace` / `ignore_case` to collapse cosmetic differences that should not count as distinct content. The number of discarded documents is logged, and each kept document's `duplicate_stats` records its `duplicate_group_size`.
+
+The component definition file is as follows:
+```yaml
+name: 'duplicate_remover'
+description: 'remove exact-duplicate documents via SHA-256 content hash'
+hash_key: ''                  # metadata key with a precomputed hash; '' hashes the text
+keep_first: true              # true = keep first occurrence, false = keep last
+# text_field: 'canonical'     # metadata key read when Document.text is empty
+normalize_whitespace: false   # collapse whitespace runs before hashing
+ignore_case: false            # lowercase before hashing
+record_stats_key: 'duplicate_stats'  # set to null to skip per-document stats
+log_discarded: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.duplicate_remover'
+  class: 'DuplicateRemover'
+```
+- hash_key: Metadata key holding a precomputed hash; when set, that value is used as the document identity instead of recomputing a hash. Empty hashes the text.
+- keep_first: Keep policy — `true` keeps the first occurrence (preserves ranking), `false` keeps the last.
+- text_field: Metadata key to read the hashing text from when `Document.text` is empty.
+- normalize_whitespace: Collapse all whitespace runs to a single space and trim before hashing.
+- ignore_case: Lowercase the text before hashing.
+- record_stats_key: Metadata key recording `{duplicate_group_size}` per kept document; set to null to skip.
+- log_discarded: Log how many documents were discarded.
