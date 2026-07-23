@@ -49,7 +49,9 @@ class PlanningAgentTemplate(AgentTemplate):
             previous_planning_result if isinstance(previous_planning_result, list) else []
         )
         agent_input['review_score'] = (
-            review_score if isinstance(review_score, (int, float)) else ''
+            review_score
+            if isinstance(review_score, (int, float)) and not isinstance(review_score, bool)
+            else ''
         )
         agent_input['review_suggestion'] = (
             review_suggestion if isinstance(review_suggestion, str) else ''
