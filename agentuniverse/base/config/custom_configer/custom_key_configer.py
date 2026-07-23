@@ -9,6 +9,7 @@
 import os
 
 from agentuniverse.base.annotation.singleton import singleton
+from agentuniverse.base.util.logging.logging_util import LOGGER
 from ..configer import Configer
 
 
@@ -22,8 +23,9 @@ class CustomKeyConfiger(Configer):
             try:
                 self.load()
             except FileNotFoundError as e:
-                print(f"Custom key file {config_path} read error, "
-                      f"skip load custom key.")
+                LOGGER.warning(
+                    f"Custom key file {config_path} read error, skip load custom key."
+                )
         if self._Configer__value.get("KEY_LIST"):
             for key, value in self._Configer__value.get("KEY_LIST").items():
                 os.environ[key] = str(value)
