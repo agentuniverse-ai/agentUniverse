@@ -1,0 +1,14 @@
+name: 'default_yi_llm'
+description: 'default yi llm powered by 01.AI (零一万物) Yi series models'
+model_name: 'yi-large'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${YI_API_KEY}'
+api_base: 'https://api.01.ai/v1'
+organization: '${YI_ORGANIZATION}'
+proxy: '${YI_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.yi_llm'
+  class: 'YiLLM'
