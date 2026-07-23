@@ -330,4 +330,26 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 
 ## 4. PDF Tool
 
-The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentuniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## JSONFormatterTool
+
+`JSONFormatterTool` is a dependency-free JSON utility for cleaning up, shrinking, and sanity-checking JSON payloads. It supports four modes: `beautify` (re-indent with a configurable `indent` width), `minify` (strip all optional whitespace), `validate` (report whether the input is well-formed JSON plus its top-level type), and `extract` (pull the first balanced JSON value out of arbitrary text such as an LLM response or a fenced markdown block).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.json_formatter_tool import JSONFormatterTool
+
+tool = JSONFormatterTool()  # max_input_chars=100000, indent=2
+tool.execute(mode="beautify", input='{"a":1,"b":[2,3]}')
+tool.execute(mode="minify", input='{"a": 1, "b": [2, 3]}')
+tool.execute(mode="validate", input='{"a": 1}')
+tool.execute(mode="extract", input='Here is the data:\n```json\n{"a": 1}\n```')
+```
+
+The tool relies only on the Python standard library `json` module. Every result is a structured dict with a `status` field (`success` or `error`); beautify/minify results carry `output`, validate results carry `valid`/`type`/`size`, and extract results carry `output`/`type`/`start`/`end`. Inputs longer than `max_input_chars` are rejected, and all parsing errors are surfaced as `json_error` payloads rather than raised exceptions.
+
+## JSONFormatterTool / JSON 格式化工具
+
+`JSONFormatterTool`（JSON 格式化工具）是一个无第三方依赖的 JSON 工具，用于美化、压缩和校验 JSON 数据，以及从文本中提取 JSON 片段。支持四种模式：`beautify`（按指定缩进重新格式化）、`minify`（去除所有可选空白）、`validate`（校验是否为合法 JSON 并返回顶层类型）、`extract`（从大段文本，如大模型输出或带 ```json 代码块的内容中，抽取第一个完整的 JSON 值）。
+
+工具仅依赖 Python 标准库 `json` 模块。所有返回结果均为结构化字典，包含 `status` 字段（`success` 或 `error`）：beautify/minify 结果包含 `output`，validate 结果包含 `valid`/`type`/`size`，extract 结果包含 `output`/`type`/`start`/`end`。当输入超过 `max_input_chars` 时会被拒绝，所有解析错误会以 `json_error` 形式返回而非抛出异常。
