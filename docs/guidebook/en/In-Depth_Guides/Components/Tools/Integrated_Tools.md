@@ -330,4 +330,47 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 
 ## 4. PDF Tool
 
-The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentuniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## UnitConverterTool
+
+`UnitConverterTool` converts numeric values between units within a physical category. It has no third-party dependencies and covers the common quantities an agent is likely to need.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.unit_converter_tool import UnitConverterTool
+
+tool = UnitConverterTool()  # precision=6
+tool.execute(category="length", value=10, from_unit="km", to_unit="mile")      # 6.213727
+tool.execute(category="weight", value=1, from_unit="kg", to_unit="lb")         # 2.204624
+tool.execute(category="temperature", value=100, from_unit="c", to_unit="f")    # 212.0
+tool.execute(category="data", value=2048, from_unit="kb", to_unit="mb")        # 2.0
+tool.execute(category="time", value=2, from_unit="h", to_unit="min")           # 120.0
+```
+
+Supported categories and units (case-insensitive):
+
+| Category        | Units (canonical base in **bold**)                                       |
+|-----------------|--------------------------------------------------------------------------|
+| `length`        | mm, cm, **m**, km, in, ft, yd, mile (alias `mi`)                         |
+| `weight`        | mg, g, **kg**, t (metric tonne), oz, lb                                  |
+| `temperature`   | c (Celsius), f (Fahrenheit), k (Kelvin) — non-linear offset conversions  |
+| `data`          | **b**, kb, mb, gb, tb, pb (binary multiples of 1024)                     |
+| `time`          | ms, **s**, min, h, day, week                                             |
+
+Each linear category uses a multiplicative factor table relative to its base unit; temperature is converted through dedicated Celsius offset formulas. The `value` argument accepts a number or a numeric string, results are rounded to `precision` decimals (default 6), and every result is a structured dict with a `status` field and a human-readable `expression`. Unknown categories, unknown units, and non-numeric values are returned as `validation_error` payloads rather than raised exceptions.
+
+## UnitConverterTool / 单位换算工具
+
+`UnitConverterTool`（单位换算工具）用于在同一物理量类别下进行单位换算，无第三方依赖，覆盖代理常见的物理量。
+
+支持类别与单位（大小写不敏感）：
+
+| 类别            | 单位（粗体为基准单位）                                                  |
+|-----------------|------------------------------------------------------------------------|
+| `length` 长度   | mm, cm, **m**, km, in, ft, yd, mile（别名 `mi`）                       |
+| `weight` 重量   | mg, g, **kg**, t（公吨）, oz, lb                                       |
+| `temperature`   | c（摄氏）、f（华氏）、k（开尔文）——非线性偏移换算                       |
+| `data` 数据     | **b**, kb, mb, gb, tb, pb（以 1024 为底的二进制倍数）                   |
+| `time` 时间     | ms, **s**, min, h, day, week                                           |
+
+线性类别使用相对于基准单位的乘法因子表进行换算；温度则通过专门的摄氏度偏移公式换算。`value` 参数支持数字或数字字符串，结果按 `precision`（默认 6）位小数四舍五入，所有返回均为包含 `status` 字段的结构化字典，并附带可读的 `expression`。未知的类别、单位或非数字值会以 `validation_error` 形式返回而非抛出异常。

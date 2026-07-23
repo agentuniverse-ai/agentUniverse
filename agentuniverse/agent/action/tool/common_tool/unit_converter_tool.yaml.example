@@ -1,0 +1,41 @@
+name: unit_converter_tool
+description: >-
+  Convert values across unit categories (length, weight, temperature, data
+  size, time). Pure Python, no third-party dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.unit_converter_tool
+  class: UnitConverterTool
+input_keys:
+  - category
+  - value
+  - from_unit
+  - to_unit
+precision: 6
+max_abs_value: 1000000000000000000
+args_model:
+  category: {type: string, required: true}
+  value: {type: number, required: true}
+  from_unit: {type: string, required: true}
+  to_unit: {type: string, required: true}
+args_model_schema:
+  type: object
+  properties:
+    category:
+      type: string
+      enum: [length, weight, temperature, data, time]
+      description: Physical category of the units being converted.
+    value:
+      oneOf:
+        - {type: number}
+        - {type: string}
+      description: Numeric value to convert (number or numeric string).
+    from_unit:
+      type: string
+      description: Source unit symbol (case-insensitive, e.g. km, lb, c).
+    to_unit:
+      type: string
+      description: Target unit symbol (case-insensitive, e.g. mile, kg, f).
+  required: [category, value, from_unit, to_unit]
+  additionalProperties: false
