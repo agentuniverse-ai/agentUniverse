@@ -331,3 +331,9 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## 5. Communication Tools
+
+### EmailSenderTool
+
+`EmailSenderTool` sends plain-text or HTML emails via SMTP with optional file attachments. Uses Python's built-in `smtplib` — zero third-party dependency. **Opt-in required**: set `allow_send: true` on the component (default False). Supports TLS/SSL, CC/BCC, and attachment size limits via `max_attachment_bytes`. Attachment paths are confined to `base_dir` through `resolve_safe_path`.
