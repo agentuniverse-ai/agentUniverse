@@ -330,4 +330,31 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 
 ## 4. PDF Tool
 
-The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentuniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## ImageResizerTool
+
+`ImageResizerTool` resizes, scales, crops, converts, and inspects images using Pillow (`PIL`). Install `agentuniverse[image_ext]` or `Pillow`. It is well suited to agent workflows that need to normalize, thumbnail, or re-encode images before storage, display, or downstream vision-model ingestion.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.image_resizer_tool import ImageResizerTool
+
+tool = ImageResizerTool(base_dir="/srv/agent-images")
+tool.execute(mode="info", file_path="photo.png")
+tool.execute(mode="resize", file_path="photo.png", output_path="small.png", width=256, height=256)
+tool.execute(mode="scale", file_path="photo.png", output_path="half.png", factor=0.5)
+tool.execute(mode="crop", file_path="photo.png", output_path="face.png", box=[10, 10, 210, 210])
+tool.execute(mode="convert", file_path="photo.png", output_path="photo.jpg", target_format="jpg", quality=85)
+```
+
+Operations (`mode`): `resize` (exact `width` x `height` via Lanczos), `scale` (multiply each axis by `factor`, strictly positive), `crop` (extract a `[left, top, right, bottom]` box that must lie within the source bounds), `convert` (re-encode to a `target_format` of jpg/jpeg/png/webp with an optional lossy `quality`), and `info` (report format, dimensions, channel mode, and byte size without writing).
+
+All file paths are confined to `base_dir` via `resolve_safe_path`, so traversal attempts and absolute paths outside the base are rejected. Input and output byte sizes are bounded by `max_input_bytes`/`max_output_bytes` (default 25 MiB each), output formats are restricted to `allowed_formats` (default jpg/jpeg/png/webp), and image dimensions are capped. JPEG encoding automatically flattens alpha/transparency to RGB. Pillow is imported lazily, so a missing dependency is surfaced as a `dependency_error` only when an operation actually needs it. Writes are atomic: the encoded image is written to a same-directory temporary file and size-checked before replacing the target, and existing files are never overwritten unless `overwrite=true` is explicit.
+
+## ImageResizerTool / 图片缩放工具
+
+`ImageResizerTool`（图片缩放工具）基于 Pillow（`PIL`）对图片进行缩放、按比例缩放、裁剪、格式转换和信息查看。安装 `agentuniverse[image_ext]` 或 `Pillow`。适用于代理在存储、展示或送入视觉模型前对图片进行归一化、生成缩略图或重新编码的场景。
+
+操作（`mode`）：`resize`（按 `width` x `height` 精确尺寸，使用 Lanczos 重采样）、`scale`（按 `factor` 系数缩放各轴，系数必须严格为正）、`crop`（裁剪 `[left, top, right, bottom]` 矩形区域，必须在原图范围内）、`convert`（转换为 jpg/jpeg/png/webp 的 `target_format`，可选有损 `quality`）、`info`（查看格式、尺寸、通道模式和字节大小，不写文件）。
+
+所有文件路径通过 `resolve_safe_path` 限制在 `base_dir` 下，可拒绝目录穿越（`../`）和越界的绝对路径。输入输出字节大小分别受 `max_input_bytes`/`max_output_bytes`（默认各 25 MiB）限制，输出格式限定在 `allowed_formats`（默认 jpg/jpeg/png/webp），图片尺寸也有上限。JPEG 编码会自动将透明度/Alpha 通道合并为 RGB。Pillow 采用懒加载，仅在实际需要时若依赖缺失会以 `dependency_error` 形式返回。写入为原子操作：先写入同目录临时文件并通过大小校验后再替换目标文件，且在未显式设置 `overwrite=true` 时不会覆盖已存在文件。
