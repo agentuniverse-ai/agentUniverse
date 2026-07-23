@@ -8,6 +8,7 @@
 from typing import Optional
 
 from agentuniverse.base.annotation.singleton import singleton
+from agentuniverse.base.util.logging.logging_util import LOGGER
 from ..configer import Configer
 
 
@@ -28,8 +29,10 @@ class DefaultLLMConfiger(Configer):
             try:
                 self.load()
             except FileNotFoundError as e:
-                print(f"Configuration file not found at path: {config_path}. "
-                      f"The default LLM configuration will not be loaded. "
-                      f"Error is {str(e)}")
+                LOGGER.warning(
+                    f"Configuration file not found at path: {config_path}. "
+                    f"The default LLM configuration will not be loaded. "
+                    f"Error is {str(e)}"
+                )
         if self.value:
             self.default_llm = self.value.get('DEFAULT', {}).get('default_llm', None)
