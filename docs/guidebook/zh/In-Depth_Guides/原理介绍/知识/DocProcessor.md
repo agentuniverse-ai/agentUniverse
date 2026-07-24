@@ -310,3 +310,42 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [QualityScorer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/quality_scorer.yaml)
+
+该组件对召回文档的文本质量进行打分，并可丢弃低分文档。最终分数是若干个互相独立、无第三方依赖的启发式维度的加权平均，每个维度归一化到 `[0.0, 1.0]`。对应 issue #248 的*质量评估 / 后处理*方向。
+
+打分维度包括：`length`（文本长度，在 `ideal_length` 附近得分最高，过短/过长扣分）、`sentence_completeness`（句子完整度，考察真正的句末终止符 `.`/`!`/`?` 占比与每句词数节奏）、`special_char_ratio`（特殊符号占比，过高说明是日志/样板噪声）、`repetition`（重复内容，综合字符 n-gram 重复率与最高频词重复率）、`information_density`（词法多样性，不同词数 / 总词数）。最终分数为 `Σ(weight_i × score_i) / Σweight_i`。
+
+它与 `ThresholdFilter` 互补：`ThresholdFilter` 依据**外部提供**的分数字段做过滤，而本组件**从文本本身**计算出一个分数，无需任何外部信号或模型。`min_score` 为 `null` 时仅做标注（把分数写入 `score_key`、把各维度明细写入 `detail_key`），不丢弃任何文档。
+
+组件定义文件如下：
+```yaml
+name: 'quality_scorer'
+description: '对召回文档做文本质量打分'
+min_score: null              # 低于此分数的文档被丢弃；null = 仅标注
+score_key: 'quality_score'   # 最终分数的 metadata 键
+detail_key: 'quality_detail' # 各维度明细的 metadata 键；'' 表示不写入
+weights:                     # 各维度权重；0 表示禁用该维度
+  length: 0.15
+  sentence_completeness: 0.25
+  special_char_ratio: 0.15
+  repetition: 0.20
+  information_density: 0.25
+ideal_length: 500            # length 维度得 1.0 时的字符数
+min_length: 20               # 短于此长度的文本 length 维度得 0
+repetition_shingle_size: 8   # 重复检测的字符 n-gram 大小
+repetition_word_window: 10   # 词重复检测考虑的最高频词数量
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.quality_scorer'
+  class: 'QualityScorer'
+```
+- min_score: 最低最终分数，取值 `[0.0, 1.0]`；低于此值的文档被丢弃。设为 `null` 则仅标注不丢弃。
+- score_key: 写入每个文档最终质量分数的 metadata 键。
+- detail_key: 写入各维度 `{dim: {score, weight}}` 明细的 metadata 键；设为空则不写入。
+- weights: 各维度权重映射，键必须是 `{length, sentence_completeness, special_char_ratio, repetition, information_density}` 的子集；某维度权重为 0 即跳过；至少一个维度需为正。
+- ideal_length: `length` 维度得 1.0 时的字符数；过短或过长都会扣分。
+- min_length: 文本短于此字符数时 `length` 维度直接得 0。
+- repetition_shingle_size: 重复检测所用的字符 n-gram 大小。
+- repetition_word_window: 词重复检测中考虑的最高频词数量。

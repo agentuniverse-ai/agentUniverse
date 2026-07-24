@@ -309,3 +309,42 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [QualityScorer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/quality_scorer.yaml)
+
+This component scores each recalled document on overall text quality and optionally drops low-quality ones. The final score is a weighted average of several independent, dependency-free heuristic dimensions, each normalised to `[0.0, 1.0]`. It addresses the *quality assessment / post-processing* direction of issue #248.
+
+The scoring dimensions are: `length` (text length, peaking near `ideal_length`, penalising very short/long text), `sentence_completeness` (fraction of real sentence terminators `.`/`!`/`?` plus a per-sentence word-count cadence), `special_char_ratio` (share of non-word symbols — high values signal log/boilerplate noise), `repetition` (combining character n-gram duplication rate and dominant-word repetition rate), and `information_density` (lexical diversity: distinct tokens / total tokens). The final score is `Σ(weight_i × score_i) / Σweight_i`.
+
+It complements `ThresholdFilter`: `ThresholdFilter` filters on an **externally supplied** score field, while this component **computes** a score from the text alone, with no external signals or models required. With `min_score` set to `null` it only annotates (writing the score to `score_key` and the per-dimension breakdown to `detail_key`) and drops nothing.
+
+The component definition file is as follows:
+```yaml
+name: 'quality_scorer'
+description: 'score recalled documents on text quality'
+min_score: null              # documents scoring below this are dropped; null = annotate only
+score_key: 'quality_score'   # metadata key for the final score
+detail_key: 'quality_detail' # metadata key for the per-dimension breakdown; '' to omit
+weights:                     # per-dimension weights; 0 disables a dimension
+  length: 0.15
+  sentence_completeness: 0.25
+  special_char_ratio: 0.15
+  repetition: 0.20
+  information_density: 0.25
+ideal_length: 500            # chars at which the length dimension scores 1.0
+min_length: 20               # texts shorter than this get length score 0
+repetition_shingle_size: 8   # character n-gram size for repetition detection
+repetition_word_window: 10   # most-common words considered for word repetition
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.quality_scorer'
+  class: 'QualityScorer'
+```
+- min_score: Minimum final score in `[0.0, 1.0]`; documents below it are dropped. Set to `null` to annotate without dropping.
+- score_key: Metadata key under which each document's final quality score is written.
+- detail_key: Metadata key for the per-dimension `{dim: {score, weight}}` breakdown; set to empty to omit.
+- weights: Mapping of per-dimension weights; keys must be a subset of `{length, sentence_completeness, special_char_ratio, repetition, information_density}`. A weight of 0 skips that dimension; at least one dimension must be positive.
+- ideal_length: Character count at which the `length` dimension scores 1.0; shorter or longer text is penalised.
+- min_length: Texts shorter than this many characters get a `length` score of 0.
+- repetition_shingle_size: Character n-gram size used for repetition detection.
+- repetition_word_window: Number of most-common words considered when measuring word repetition.
