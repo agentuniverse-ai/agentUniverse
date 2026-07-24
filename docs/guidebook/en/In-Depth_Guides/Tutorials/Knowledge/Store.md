@@ -96,3 +96,17 @@ Supported metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are 
 ## PGVectorStore
 
 `PGVectorStore` adds PostgreSQL/pgvector persistence with synchronous and asynchronous CRUD, cosine/L2/inner-product search, JSONB containment filters, optional managed embeddings, dimension validation, automatic table/extension creation, and an optional HNSW index. Install the `store_ext` extra and copy `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` into the application configuration directory. Set `connection_url` in that copy or use `PGVECTOR_CONNECTION_URL`; never commit credentials.
+
+## MyScaleStore
+
+`MyScaleStore` integrates MyScale — a ClickHouse-based SQL vector database — for synchronous and asynchronous vector CRUD plus nearest-neighbour search. Install the optional dependency with `pip install clickhouse-connect` and point the configuration at a running MyScale (or ClickHouse) instance.
+
+Copy `agentuniverse/agent/action/knowledge/store/myscale_store.yaml.example` into the application configuration directory and set the connection (`host`, `port`, `username`, `password`, `database`, `secure`) plus the target `table_name`. When `create_table` is enabled the component creates a `MergeTree` table with an `Array(Float32)` embedding column on first use.
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"team": "acme"}, embedding=[0.1, 0.2])])
+results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metadata_filter={"team": "acme"})
+```
+
+Search uses ClickHouse's built-in distance functions (`cosineDistance`, `L2Distance`, `dotProduct`) selected via the `distance` setting (`cosine`, `l2`, `inner_product`). The table and database identifiers are validated against a strict allowlist, and every value — embeddings, top-k, metadata-filter literals and document ids — flows through `clickhouse-connect`'s native parameter binding, so no user input is interpolated into the SQL text. Every embedding is dimension-checked against `dimensions` (inferred from the first document when unset).
+
