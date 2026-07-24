@@ -1,0 +1,22 @@
+name: translator_tool
+description: >-
+  Translate text between 100+ languages using the free Google Translate
+  endpoint (no API key required).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.translator_tool
+  class: TranslatorTool
+input_keys:
+  - text
+default_source: auto
+default_target: en
+request_timeout: 15.0
+args_model_schema:
+  type: object
+  properties:
+    text: {type: string, description: "Text to translate."}
+    source: {type: string, description: "Source language code. Defaults to 'auto' for detection."}
+    target: {type: string, description: "Target language code, e.g. 'en', 'zh', 'ja'."}
+  required: [text]
+  additionalProperties: false
