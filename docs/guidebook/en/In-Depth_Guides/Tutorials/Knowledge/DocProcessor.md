@@ -309,3 +309,33 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ProfanityFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/profanity_filter.yaml)
+
+This component filters, masks, or flags profanity in recalled documents based on a built-in English word list. It suits end-user-facing agents where offensive content should be blocked, redacted, or at least surfaced for review before it reaches the model or the user. It addresses the *content compliance / post-processing* direction of issue #248.
+
+Three actions are supported: `drop` (discard documents whose profanity ratio meets `threshold`), `mask` (replace every matched profane word with `replacement`, e.g. `***`, keeping the document), and `redact` (leave the text untouched but write a `profanity_summary` into metadata for downstream decisions). Detection is deterministic, case-insensitive, and dependency-free; by default it matches whole words only (so "class" never trips on "ass") and tolerates common leet/obfuscation substitutions (`@`→`a`, `$`/`5`→`s`, `0`→`o`, `1`/`!`→`i`), so trivial evasions such as `sh1t` are still caught. Domain-specific terms can be added via `extra_words`.
+
+It mirrors `LanguageFilter` structurally (a filter-style post-processor with a conservative keep policy) and complements `SensitiveDataRedactor`: the latter redacts structured PII, while this component targets offensive vocabulary.
+
+The component definition file is as follows:
+```yaml
+name: 'profanity_filter'
+description: 'filter/mask/flag recalled documents containing profanity'
+action: 'mask'            # drop | mask | redact
+replacement: '***'        # text substituted for each match when action == mask
+threshold: 0.05           # profanity ratio at/above which a document is dropped (drop action)
+extra_words: []           # extra profane terms merged with the built-in list
+whole_word_only: true     # match whole tokens only (avoid 'ass' in 'class')
+summary_key: 'profanity_summary'   # metadata key for the per-document summary; '' to omit
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.profanity_filter'
+  class: 'ProfanityFilter'
+```
+- action: How profanity is handled. `drop` discards, `mask` masks/replaces, `redact` flags without changing text.
+- replacement: Text substituted for each match under the `mask` action, default `***`.
+- threshold: Profanity ratio (profane word count / total word count, in [0.0, 1.0]); only the `drop` action uses it to decide whether to discard a document.
+- extra_words: Extra profane terms merged with the built-in list; matching is case-insensitive and whole-word.
+- whole_word_only: When true, only whole tokens are matched; when false, matching degrades to substring (faster but prone to false positives — rarely recommended).
+- summary_key: Metadata key recording a `{words, count, ratio, action}` summary per document; set to empty to omit.
