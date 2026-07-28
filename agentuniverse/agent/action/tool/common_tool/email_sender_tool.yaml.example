@@ -1,0 +1,23 @@
+name: email_sender_tool
+description: Bounded SMTP email-sender tool — send plain-text or HTML email with opt-in send gate, bounded attachments, and recipient limits.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.email_sender_tool
+  class: EmailSenderTool
+input_keys:
+  - mode
+  - to
+  - subject
+  - body
+smtp_host: ''
+smtp_port: 587
+smtp_username: ''
+smtp_password: ''
+use_tls: true
+use_ssl: false
+sender_email: ''
+allow_send: false
+max_attachment_bytes: 10485760
+max_recipients: 50
+base_dir: '.'
