@@ -310,3 +310,33 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ProfanityFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/profanity_filter.yaml)
+
+该组件基于内置的英文脏话词表，对召回文档中的脏话进行过滤、遮蔽或标记。适用于面向终端用户的智能体场景——在这些场景下，冒犯性内容应在进入模型上下文或展示给用户之前被拦截、脱敏或至少被标注出来以供审核。对应 issue #248 的*内容合规 / 后处理*方向。
+
+支持三种动作：`drop`（丢弃脏话比例达到 `threshold` 的文档）、`mask`（把每个命中的脏话词替换为 `replacement`，如 `***`，保留文档）、`redact`（不改文本，仅在 metadata 中写入 `profanity_summary`，交由下游决策）。检测过程确定性、大小写不敏感、无第三方依赖；默认只匹配整词（因此 "class" 不会因包含 "ass" 而误判），并能容忍常见的 leet 混淆替换（`@`→`a`、`$`/`5`→`s`、`0`→`o`、`1`/`!`→`i`），从而能识破 `sh1t` 这类简单伪装。可通过 `extra_words` 追加领域专属词。
+
+它在结构上参照 `LanguageFilter`（同为保守保留的过滤型后处理器），与针对结构化 PII 的 `SensitiveDataRedactor` 互补：后者脱敏的是个人敏感信息，本组件针对的是冒犯性词汇。
+
+组件定义文件如下：
+```yaml
+name: 'profanity_filter'
+description: '基于内置英文脏话词表过滤/遮蔽/标记召回文档'
+action: 'mask'            # drop | mask | redact
+replacement: '***'        # action == mask 时替换每个命中的文本
+threshold: 0.05           # 脏话比例达到该值即丢弃文档（drop 动作生效）
+extra_words: []           # 追加到内置词表的额外脏话词
+whole_word_only: true     # 仅匹配整词（避免 "class" 命中 "ass"）
+summary_key: 'profanity_summary'   # 每篇文档汇总的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.profanity_filter'
+  class: 'ProfanityFilter'
+```
+- action: 处理脏话的方式。`drop` 丢弃、`mask` 遮蔽替换、`redact` 仅标记不改文本。
+- replacement: `mask` 动作下替换每个命中文本的字符串，默认 `***`。
+- threshold: 脏话比例（脏话词数 / 总词数，取值 [0.0, 1.0]），仅 `drop` 动作据此判定是否丢弃文档。
+- extra_words: 与内置词表合并的额外脏话词，匹配大小写不敏感且按整词。
+- whole_word_only: 为真时只匹配整词；为假时退化为子串匹配（更快但易误判，通常不建议）。
+- summary_key: 每篇文档 `{words, count, ratio, action}` 汇总的 metadata 键；设为空则不写入。

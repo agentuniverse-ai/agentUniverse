@@ -1,0 +1,12 @@
+name: 'profanity_filter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.profanity_filter'
+  class: 'ProfanityFilter'
+description: 'Filters, masks, or flags recalled documents containing profanity based on a built-in English word list.'
+action: 'mask'            # drop | mask | redact
+replacement: '***'        # text substituted for each match when action == mask
+threshold: 0.05           # profanity ratio at/above which a document is dropped (drop action)
+extra_words: []           # extra profane terms merged with the built-in list
+whole_word_only: true     # match whole tokens only (avoid 'ass' in 'class')
+summary_key: 'profanity_summary'   # metadata key for the per-document summary; '' to omit
