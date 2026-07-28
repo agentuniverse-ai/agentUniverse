@@ -2,6 +2,9 @@ import unittest
 import tempfile
 import os
 import shutil
+import sys
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 import time
 from pathlib import Path
 from agentuniverse.agent.action.knowledge.reader.file.sevenzip_reader import SevenZipReader
@@ -82,6 +85,108 @@ class TestSevenZipReaderBasic(unittest.TestCase):
         non_existent_file = os.path.join(self.temp_dir, "non_existent.7z")
         with self.assertRaises(FileNotFoundError):
             self.reader._load_data(non_existent_file)
+
+    def test_file_not_found_precedes_optional_dependency_check(self):
+        non_existent_file = os.path.join(self.temp_dir, "missing.7z")
+
+        with patch.dict(sys.modules, {"py7zr": None}):
+            with self.assertRaises(FileNotFoundError):
+                self.reader._load_data(non_existent_file)
+
+    def test_rejects_unsafe_archive_entry_names(self):
+        unsafe_names = [
+            "",
+            ".",
+            "../escape.txt",
+            "safe/../../escape.txt",
+            "/tmp/escape.txt",
+            r"..\escape.txt",
+            r"safe\..\escape.txt",
+            r"C:\Windows\escape.txt",
+        ]
+
+        for entry_name in unsafe_names:
+            with self.subTest(entry_name=entry_name):
+                self.assertTrue(self.reader._is_unsafe_entry_name(entry_name))
+
+        self.assertFalse(self.reader._is_unsafe_entry_name("docs/readme.txt"))
+
+    @patch("py7zr.SevenZipFile")
+    def test_validates_members_before_extracting_selected_targets(self, seven_zip_file):
+        archive = MagicMock()
+        archive.__enter__.return_value = archive
+        archive.list.return_value = [
+            SimpleNamespace(
+                filename="safe.txt", compressed=10, uncompressed=20,
+                is_directory=False, is_file=True, is_symlink=False,
+            ),
+            SimpleNamespace(
+                filename="../escape.txt", compressed=10, uncompressed=20,
+                is_directory=False, is_file=True, is_symlink=False,
+            ),
+            SimpleNamespace(
+                filename="large.txt", compressed=20, uncompressed=200,
+                is_directory=False, is_file=True, is_symlink=False,
+            ),
+            SimpleNamespace(
+                filename="link.txt", compressed=1, uncompressed=1,
+                is_directory=False, is_file=False, is_symlink=True,
+            ),
+        ]
+        archive.getnames.return_value = [item.filename for item in archive.list.return_value]
+        seven_zip_file.return_value = archive
+
+        self.reader._process_7z(
+            sevenzip_path=Path("archive.7z"),
+            temp_dir=self.temp_dir,
+            current_depth=0,
+            max_depth=1,
+            max_file_size=100,
+            max_total_size=100,
+            max_files=10,
+            max_compression_ratio=10.0,
+            base_metadata={},
+            archive_root="archive.7z",
+        )
+
+        archive.extractall.assert_not_called()
+        archive.extract.assert_called_once_with(
+            path=self.temp_dir, targets=["safe.txt"]
+        )
+
+    @patch("py7zr.SevenZipFile")
+    def test_compression_bomb_is_rejected_before_any_extraction(self, seven_zip_file):
+        archive = MagicMock()
+        archive.__enter__.return_value = archive
+        archive.list.return_value = [
+            SimpleNamespace(
+                filename="safe.txt", compressed=10, uncompressed=20,
+                is_directory=False, is_file=True, is_symlink=False,
+            ),
+            SimpleNamespace(
+                filename="bomb.txt", compressed=1, uncompressed=100,
+                is_directory=False, is_file=True, is_symlink=False,
+            ),
+        ]
+        archive.getnames.return_value = [item.filename for item in archive.list.return_value]
+        seven_zip_file.return_value = archive
+
+        with self.assertRaisesRegex(ValueError, "compression ratio"):
+            self.reader._process_7z(
+                sevenzip_path=Path("archive.7z"),
+                temp_dir=self.temp_dir,
+                current_depth=0,
+                max_depth=1,
+                max_file_size=200,
+                max_total_size=200,
+                max_files=10,
+                max_compression_ratio=10.0,
+                base_metadata={},
+                archive_root="archive.7z",
+            )
+
+        archive.extractall.assert_not_called()
+        archive.extract.assert_not_called()
     def test_metadata_structure(self):
         try:
             import py7zr
