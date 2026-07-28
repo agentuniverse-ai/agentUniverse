@@ -310,3 +310,33 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [XmlSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/xml_splitter.yaml)
+
+该组件把召回的 XML 文档按元素切分，每个元素产出一个 chunk，并把元素路径（如 `root > items > item`）记录到 metadata。适用于基于标签的结构化数据源（SVG、NLM/JATS 论文、TEI、Maven POM、站点地图、配置文件），其中每个元素都应是一个可检索单元。对应 issue #258 的*知识预处理*方向。
+
+它是 `JsonSplitter`（#258）的姊妹组件：两者都遍历结构化文档并为每个 chunk 记录路径。本组件面向尖括号标记，使用标准库 `xml.etree.ElementTree` 解析，因此**无第三方依赖**。
+
+每个元素成为一个候选 chunk，其文本为该元素的可见内容。路径是从根到该元素的标签链，用 `" > "` 连接（可通过 `path_key` 配置）。`max_depth` 限制遍历深度——到达该深度时把子树序列化回 XML 字符串而非继续下钻；叶子元素始终产出自己的文本 chunk。`include_attributes` 可把元素属性渲染进 chunk 文本与路径。XML 命名空间会被从路径中剥离，`{http://example.com}child` 会变成 `child`。非 XML / 格式错误的文档原样返回。
+
+组件定义文件如下：
+```yaml
+name: 'xml_splitter'
+description: '按元素切分 XML 文档，并记录元素路径'
+path_key: 'xml_path'        # 元素路径的 metadata 键
+max_depth: null             # 最大遍历深度；null = 不限，1 = 仅根
+include_attributes: false   # 是否把元素属性渲染进 chunk 文本与路径
+drop_empty: true            # 是否跳过无可见文本的 chunk
+path_separator: ' > '       # 路径中连接标签的分隔符
+root_name: null             # 路径根层的名称；null = 使用根标签
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.xml_splitter'
+  class: 'XmlSplitter'
+```
+- path_key: 写入每个 chunk 元素路径的 metadata 键。
+- max_depth: 最大遍历深度；`null`（默认）为不限，`1` 仅产出根。到达 `max_depth` 时，嵌套子树被序列化为一个 XML 字符串 chunk。
+- include_attributes: 为真时，每个元素的属性被渲染进 chunk 文本（形如 `[k=v ...]`）并追加到路径。
+- drop_empty: 为真（默认）时，无可见文本（且开启 `include_attributes` 时也无属性）的元素不会被产出。
+- path_separator: 路径中连接标签的字符串，默认 `" > "`。
+- root_name: 路径根层使用的名称；`null`（默认）使用根元素自身的标签。

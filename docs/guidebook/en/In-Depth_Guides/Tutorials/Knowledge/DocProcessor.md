@@ -309,3 +309,33 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [XmlSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/xml_splitter.yaml)
+
+This component splits each recalled XML document into one chunk per element, recording the element path (e.g. `root > items > item`) as metadata. It suits structured, tag-based sources (SVG, NLM/JATS articles, TEI, Maven POMs, sitemaps, configuration) where each element should be a retrievable unit. It addresses the *knowledge pre-processing* direction of issue #258.
+
+It is the sibling of `JsonSplitter` (#258): both walk a structured document and record a path per chunk. This one targets angle-bracket markup using the standard-library `xml.etree.ElementTree` parser, so it has **no third-party dependency**.
+
+Each element becomes a candidate chunk whose text is its visible content. The path is the chain of tags from the root to the element, joined with `" > "` (configurable via `path_key`). `max_depth` caps traversal — at that depth a subtree is serialised back to an XML string rather than descended into; leaf elements always emit their own text chunk. `include_attributes` renders element attributes into the chunk text and path. XML namespaces are stripped from paths so `{http://example.com}child` becomes `child`. Non-XML / malformed documents are passed through unchanged.
+
+The component definition file is as follows:
+```yaml
+name: 'xml_splitter'
+description: 'split XML documents into one chunk per element, recording the path'
+path_key: 'xml_path'        # metadata key for the element path
+max_depth: null             # max traversal depth; null = unlimited, 1 = root only
+include_attributes: false   # render element attributes into chunk text and path
+drop_empty: true            # do not emit chunks with no visible text
+path_separator: ' > '       # string used to join tags in the path
+root_name: null             # name for the root level of the path; null = use root tag
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.xml_splitter'
+  class: 'XmlSplitter'
+```
+- path_key: Metadata key under which each chunk's element path is written.
+- max_depth: Maximum traversal depth; `null` (default) is unlimited, `1` yields only the root. At `max_depth` a nested subtree is serialised as an XML string into one chunk.
+- include_attributes: When true, each element's attributes are rendered into the chunk text (as `[k=v ...]`) and appended to the path.
+- drop_empty: When true (default), elements with no visible text (and no attributes, when `include_attributes` is on) are not emitted.
+- path_separator: String used to join tags in the path; default `" > "`.
+- root_name: Name used for the root level of the path; `null` (default) uses the root element's own tag.

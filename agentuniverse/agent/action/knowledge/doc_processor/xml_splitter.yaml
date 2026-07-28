@@ -1,0 +1,12 @@
+name: 'xml_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.xml_splitter'
+  class: 'XmlSplitter'
+description: 'Splits XML documents into one chunk per element, recording the element path (e.g. root > items > item) as metadata.'
+path_key: 'xml_path'        # metadata key for the element path
+max_depth: null             # max traversal depth; null = unlimited, 1 = root only
+include_attributes: false   # render element attributes into chunk text and path
+drop_empty: true            # do not emit chunks with no visible text
+path_separator: ' > '       # string used to join tags in the path
+root_name: null             # name for the root level of the path; null = use root tag
