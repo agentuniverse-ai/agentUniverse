@@ -131,7 +131,7 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
         if getattr(memory_storage_config, 'sqldb_wrapper_name', None):
             self.sqldb_wrapper_name = memory_storage_config.sqldb_wrapper_name
         if self.sqldb_wrapper_name is None:
-            raise Exception('`sqldb_wrapper_name` is not set')
+            raise ValueError('`sqldb_wrapper_name` is not set')
         # initialize the memory converter if not set
         if self.memory_converter is None:
             self.memory_converter = DefaultMemoryConverter(self.sqldb_table_name)
@@ -141,7 +141,7 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
         """Initialize the database."""
         self._sqldb_wrapper = SQLDBWrapperManager().get_instance_obj(self.sqldb_wrapper_name)
         if self._sqldb_wrapper is None:
-            raise Exception('The sqldb_wrapper for the `sqldb_wrapper_name` was not found,'
+            raise ValueError('The sqldb_wrapper for the `sqldb_wrapper_name` was not found,'
                             ' please check the `sqldb_wrapper_name`.')
         self._create_table_if_not_exists()
 

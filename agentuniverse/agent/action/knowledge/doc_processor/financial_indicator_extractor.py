@@ -454,7 +454,7 @@ class FinancialIndicatorExtractor(DocProcessor):
                             if val and re.match(r'^[0-9,.]+$', val):
                                 change_percent_str = val
                                 break
-                        except:
+                        except (IndexError, AttributeError):
                             continue
 
                     if not change_percent_str:

@@ -259,7 +259,7 @@ class CrossrefTool(Tool):
         if self.email:
             request_params["mailto"] = self.email
 
-        response = requests.get(
+        response = requests.get(timeout=30, 
             f"{self.base_url}{path}",
             params=request_params,
             headers={"User-Agent": self._user_agent_value()},

@@ -54,6 +54,7 @@ class DashscopeEmbedding(Embedding):
         def post(post_params):
             response = requests.post(
                 url=DASHSCOPE_EMBEDDING_URL,
+                timeout=300,
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {self.dashscope_api_key}"

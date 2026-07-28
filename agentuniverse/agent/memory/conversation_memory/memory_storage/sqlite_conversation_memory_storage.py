@@ -182,7 +182,7 @@ class SqliteMemoryStorage(MemoryStorage):
         if getattr(memory_storage_config, 'sqldb_path', None):
             self.sqldb_path = memory_storage_config.sqldb_path
         if self.sqldb_path is None:
-            raise Exception('`sqldb_wrapper_name` is not set')
+            raise ValueError('`sqldb_wrapper_name` is not set')
         # initialize the memory converter if not set
         if self.memory_converter is None:
             self.memory_converter = DefaultMemoryConverter(self.sqldb_table_name)
