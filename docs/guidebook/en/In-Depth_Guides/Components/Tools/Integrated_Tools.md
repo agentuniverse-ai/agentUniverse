@@ -331,3 +331,9 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## 5. Text Tools
+
+### RegexTool
+
+`RegexTool` provides match, extract, replace, and split operations using Python's built-in `re` module — zero third-party dependency. Resolve the built-in `regex_tool` component. Operations: `match` (first match with groups), `extract` (all matches, bounded by `max_matches`), `replace` (supports group references like `\1`), `split`. Flags: `i` (case-insensitive), `m` (multiline), `s` (dotall), `x` (verbose). Invalid patterns return a structured error.
