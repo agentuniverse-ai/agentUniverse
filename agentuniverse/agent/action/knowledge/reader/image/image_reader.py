@@ -148,4 +148,4 @@ class ImageReader(Reader):
             })
             return [Document(text=image_text, metadata=metadata)]
         except Exception as e:
-            raise Exception(f"Error processing image {file}: {str(e)}")
+            raise RuntimeError(f"Error processing image {file}: {e}") from e
