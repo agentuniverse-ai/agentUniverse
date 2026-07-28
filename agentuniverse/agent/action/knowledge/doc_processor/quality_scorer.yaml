@@ -1,0 +1,19 @@
+name: 'quality_scorer'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.quality_scorer'
+  class: 'QualityScorer'
+description: 'Scores recalled documents on text quality (length, sentence completeness, special-char ratio, repetition, information density) and optionally drops low-quality ones.'
+min_score: null              # documents scoring below this are dropped; null = annotate only
+score_key: 'quality_score'   # metadata key for the final score
+detail_key: 'quality_detail' # metadata key for the per-dimension breakdown; '' to omit
+weights:                     # per-dimension weights; 0 disables a dimension
+  length: 0.15
+  sentence_completeness: 0.25
+  special_char_ratio: 0.15
+  repetition: 0.20
+  information_density: 0.25
+ideal_length: 500            # chars at which the length dimension scores 1.0
+min_length: 20               # texts shorter than this get length score 0
+repetition_shingle_size: 8   # character n-gram size for repetition detection
+repetition_word_window: 10   # most-common words considered for word repetition
