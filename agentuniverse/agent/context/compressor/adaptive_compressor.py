@@ -126,11 +126,11 @@ class AdaptiveCompressor(ContextCompressor):
         Raises:
             ValueError: If target_tokens <= 0 or segments is empty
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         # Handle empty input - return empty result
         if not segments:
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             metrics = CompressionMetrics(
                 original_tokens=0,
                 compressed_tokens=0,
@@ -172,7 +172,7 @@ class AdaptiveCompressor(ContextCompressor):
         )
 
         # Update metrics with selection info
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
         metrics.strategy_used = f"adaptive_{selected_strategy.value}"
         metrics.compression_time_ms = elapsed_ms
 
@@ -382,7 +382,7 @@ class AdaptiveCompressor(ContextCompressor):
         Returns:
             Tuple of (compressed_segments, compression_metrics)
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         # Separate by category
         high_priority = [
@@ -430,7 +430,7 @@ class AdaptiveCompressor(ContextCompressor):
                 )
                 result.extend(rem_compressed)
 
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
         metrics = self.create_metrics(
             segments, result, elapsed_ms, "hybrid",
             segments_compressed=len(result)
