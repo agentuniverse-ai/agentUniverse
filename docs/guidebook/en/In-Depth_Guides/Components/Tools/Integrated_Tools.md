@@ -331,3 +331,23 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## TextConverterTool
+
+`TextConverterTool` converts text between Markdown, HTML, and plain text: `markdown_to_html`, `html_to_text`, and `markdown_to_text` (Markdown → HTML → text). It is built on Python's standard `html.parser` and `re`, so it has zero third-party dependency. Input length is bounded by `max_input_chars` (default 100000). It addresses issue #252.
+
+Register a component pointing at `agentuniverse.agent.action.tool.common_tool.text_converter_tool.TextConverterTool`, then call `execute(mode=..., text=...)`. The result is returned as `{"status": "success", "mode": ..., "converted": ...}`.
+
+```yaml
+name: text_converter_tool
+description: Convert text between Markdown, HTML, and plain text
+max_input_chars: 100000
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_converter_tool
+  class: TextConverterTool
+input_keys: ["mode", "text"]
+```
+- max_input_chars: Maximum input length in characters (default 100000); longer inputs are rejected.
+- mode: One of `markdown_to_html`, `html_to_text`, `markdown_to_text`.
+- text: Input text to convert.
