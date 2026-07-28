@@ -88,11 +88,11 @@ class SelectiveCompressor(ContextCompressor):
         Raises:
             ValueError: If target_tokens <= 0 or segments is empty
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         # Handle empty input - return empty result
         if not segments:
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             metrics = CompressionMetrics(
                 original_tokens=0,
                 compressed_tokens=0,
@@ -116,7 +116,7 @@ class SelectiveCompressor(ContextCompressor):
         # Check if already under budget - no compression needed
         total_tokens = self.calculate_total_tokens(segments)
         if total_tokens <= target_tokens:
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             metrics = CompressionMetrics(
                 original_tokens=total_tokens,
                 compressed_tokens=total_tokens,
@@ -139,7 +139,7 @@ class SelectiveCompressor(ContextCompressor):
 
         if remaining_tokens <= 0:
             # CRITICAL alone exceeds target
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             metrics = self.create_metrics(
                 original_segments, selected, elapsed_ms, "selective"
             )
@@ -152,7 +152,7 @@ class SelectiveCompressor(ContextCompressor):
             remaining_tokens -= self.calculate_total_tokens(type_preserved)
 
         if remaining_tokens <= 0:
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             metrics = self.create_metrics(
                 original_segments, selected, elapsed_ms, "selective"
             )
@@ -201,7 +201,7 @@ class SelectiveCompressor(ContextCompressor):
                     break
                 selected.append(seg)
 
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
         metrics = self.create_metrics(
             original_segments, selected, elapsed_ms, "selective"
         )

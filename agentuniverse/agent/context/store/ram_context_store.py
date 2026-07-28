@@ -391,22 +391,26 @@ class RamContextStore(ContextStore):
         Returns:
             float: Relevance score
         """
-        score = 0.0
-
         content_lower = segment.content.lower()
 
         # Exact phrase match
-        if query_lower in content_lower:
-            score += 10.0
+        phrase_match = bool(query_lower) and query_lower in content_lower
 
         # Term matching in content
         content_terms = set(re.findall(r'\w+', content_lower))
         matching_terms = query_terms & content_terms
-        score += len(matching_terms) * 2.0
 
         # Keyword matching
         segment_keywords = set(k.lower() for k in segment.metadata.keywords)
         matching_keywords = query_terms & segment_keywords
+
+        # Ranking bonuses must not manufacture relevance for unrelated
+        # segments. Require at least one query match before applying them.
+        if not phrase_match and not matching_terms and not matching_keywords:
+            return 0.0
+
+        score = 10.0 if phrase_match else 0.0
+        score += len(matching_terms) * 2.0
         score += len(matching_keywords) * 5.0
 
         # Priority bonus
