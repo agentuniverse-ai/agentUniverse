@@ -1,0 +1,8 @@
+name: 'default_minimax_llm'
+description: 'default default_minimax_llm llm with spi'
+model_name: 'MiniMax-Text-01'
+max_tokens: 1000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.minimax_openai_style_llm'
+  class: 'MiniMaxOpenAIStyleLLM'
