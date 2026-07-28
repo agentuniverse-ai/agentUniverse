@@ -19,6 +19,14 @@ test_context = {"LOG_CONTEXT": {"REQUEST_ID": "1111-2222-3333",
                                 "AGENT_ID": "TEST_AGENT"}}
 
 
+def test_logging_config_without_path_uses_safe_defaults():
+    LoggingConfig.log_extend_module_switch["sls_log"] = True
+
+    LoggingConfig()
+
+    assert LoggingConfig.log_extend_module_switch["sls_log"] is False
+
+
 def test_logging_util():
     LoggingConfig.log_path = "./.test_log_dir"
 
