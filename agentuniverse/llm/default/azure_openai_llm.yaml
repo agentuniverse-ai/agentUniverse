@@ -1,0 +1,11 @@
+name: 'default_azure_openai_llm'
+description: 'default azure openai llm with spi'
+model_name: 'gpt-4o-mini'
+max_tokens: 1000
+api_key: '${AZURE_OPENAI_API_KEY}'
+api_base: '${AZURE_OPENAI_ENDPOINT}'
+api_version: '2024-10-21'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.azure_openai_llm'
+  class: 'AzureOpenAILLM'
