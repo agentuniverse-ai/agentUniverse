@@ -5,3 +5,19 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: __init__.py
+
+from agentuniverse.agent.action.knowledge.reader.reader_errors import (
+    ReaderError,
+    ReaderLoadError,
+    ReaderDependencyError,
+    ReaderParseError,
+    ReaderConfigError,
+)
+
+__all__ = [
+    "ReaderError",
+    "ReaderLoadError",
+    "ReaderDependencyError",
+    "ReaderParseError",
+    "ReaderConfigError",
+]
