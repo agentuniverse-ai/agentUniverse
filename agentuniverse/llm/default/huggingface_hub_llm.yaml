@@ -1,0 +1,9 @@
+name: 'default_huggingface_hub_llm'
+description: 'default huggingface hub llm with spi'
+model_name: 'meta-llama/Llama-3.2-3B-Instruct'
+max_tokens: 1000
+api_key: '${HF_TOKEN}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.huggingface_hub_llm'
+  class: 'HuggingFaceHubLLM'
