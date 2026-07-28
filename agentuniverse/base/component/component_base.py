@@ -18,6 +18,9 @@ class ComponentBase(BaseModel):
     """The ComponentBase class, which is used to define the base class of the component."""
 
     component_type: ComponentEnum
+    # Shared component identity. Subclasses may override this with stricter
+    # validation or a component-specific default.
+    name: Optional[str] = None
     # component yaml path
     component_config_path: Optional[str] = None
 
