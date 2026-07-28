@@ -1,0 +1,9 @@
+name: 'minimax-m2'
+description: 'minimax-m2'
+model_name: 'MiniMax-M2'
+max_tokens: 2000
+temperature: 0.5
+streaming: True
+max_context_length: 204800
+channel: minimax-m2-official-cn
+meta_class: 'agentuniverse.llm.default.minimax_openai_style_llm.MiniMaxOpenAIStyleLLM'

@@ -1,0 +1,9 @@
+name: 'minimax-m3'
+description: 'minimax-m3'
+model_name: 'MiniMax-M3'
+max_tokens: 2000
+temperature: 0.5
+streaming: True
+max_context_length: 1000000
+channel: minimax-m3-official-cn
+meta_class: 'agentuniverse.llm.default.minimax_openai_style_llm.MiniMaxOpenAIStyleLLM'
