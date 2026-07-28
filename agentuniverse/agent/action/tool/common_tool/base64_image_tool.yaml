@@ -1,0 +1,28 @@
+name: base64_image_tool
+description: >-
+  Encode image files to base64 (optionally as data URIs), decode base64 back
+  to image files, and inspect base64 image metadata. All paths are sandboxed
+  under base_dir.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.base64_image_tool
+  class: Base64ImageTool
+input_keys:
+  - mode
+base_dir: .
+max_read_bytes: 26214400
+max_write_bytes: 52428800
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [encode, decode, info]
+    file_path: {type: string, description: "Image file to encode (encode)."}
+    data: {type: string, description: "Base64 payload (decode / info)."}
+    output_path: {type: string, description: "Destination image file (decode)."}
+    as_data_uri: {type: boolean, default: false}
+    overwrite: {type: boolean, default: false}
+  required: [mode]
+  additionalProperties: false
