@@ -331,3 +331,24 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## HashCryptoTool
+
+`HashCryptoTool` exposes hash, HMAC, and encoding/decoding utilities for agent workflows: `hash` (md5 / sha1 / sha256 / sha512), `hmac` (keyed hash with the same algorithms), and `encode` / `decode` for `base64` and `hex`. Everything is implemented with Python's standard `hashlib`, `hmac`, and `base64` modules — zero third-party dependency. It addresses issue #252.
+
+Register a component pointing at `agentuniverse.agent.action.tool.common_tool.hash_crypto_tool.HashCryptoTool`, then call `execute(mode=..., text=..., algorithm=..., key=..., encoding=...)`.
+
+```yaml
+name: hash_crypto_tool
+description: Hash, HMAC, and encoding/decoding utility tool
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.hash_crypto_tool
+  class: HashCryptoTool
+input_keys: ["mode", "text"]
+```
+- mode: One of `hash`, `hmac`, `encode`, `decode`.
+- text: Input string for the operation.
+- algorithm: Hash algorithm for `hash` / `hmac` — `md5`, `sha1`, `sha256` (default), or `sha512`.
+- key: Secret key required by `hmac`.
+- encoding: Encoding format for `encode` / `decode` — `base64` (default) or `hex`.

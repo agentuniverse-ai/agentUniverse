@@ -1,0 +1,10 @@
+name: hash_crypto_tool
+description: Bounded hash and HMAC tool — compute message digests (sha256, sha512, md5, blake2, etc.) and keyed HMAC over text inputs.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.hash_crypto_tool
+  class: HashCryptoTool
+input_keys:
+  - mode
+  - text
