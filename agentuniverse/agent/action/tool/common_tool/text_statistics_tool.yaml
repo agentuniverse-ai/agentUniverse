@@ -1,0 +1,25 @@
+name: text_statistics_tool
+description: >-
+  Analyze text to compute character/word/sentence/paragraph counts, average
+  lengths, estimated reading time and a readability complexity score.
+  Zero dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_statistics_tool
+  class: TextStatisticsTool
+input_keys:
+  - text
+words_per_minute: 200
+min_syllables: 1
+args_model_schema:
+  type: object
+  properties:
+    text: {type: string, description: "The text to analyze."}
+    words_per_minute:
+      type: integer
+      minimum: 1
+      maximum: 2000
+      description: "Reading speed used for the reading-time estimate."
+  required: [text]
+  additionalProperties: false
