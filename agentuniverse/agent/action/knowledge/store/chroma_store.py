@@ -139,7 +139,7 @@ class ChromaStore(Store):
             self.collection.upsert(
                 documents=[document.text],
                 metadatas=[document.metadata],
-                embeddings=[embedding] if embedding is not None else None,
+                embeddings=[embedding] if len(embedding) > 0 else None,
                 ids=[document.id]
             )
 
@@ -154,7 +154,7 @@ class ChromaStore(Store):
             self.collection.update(
                 documents=[document.text],
                 metadatas=[document.metadata],
-                embeddings=[embedding] if embedding is not None else None,
+                embeddings=[embedding] if len(embedding) > 0 else None,
                 ids=[document.id]
             )
 
