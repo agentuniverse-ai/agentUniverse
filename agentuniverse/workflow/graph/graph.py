@@ -47,11 +47,12 @@ class Graph(nx.DiGraph):
         node_id = node_config.get('id')
         if self.has_node(node_id):
             return
-        node_cls = NODE_CLS_MAPPING[node_config.get('type')]
-        node_type = node_config.pop('type')
+        node_type = node_config.get('type')
+        node_cls = NODE_CLS_MAPPING[node_type]
+        node_kwargs = node_config.copy()
+        node_kwargs.pop('type')
         node_instance = node_cls(type=NodeEnum.from_value(node_type), workflow_id=workflow_id,
-                                 **node_config)
-        node_config['type'] = node_type
+                                 **node_kwargs)
         self.add_node(node_id, instance=node_instance, type=node_type)
 
     def _add_graph_edge(self, edge_config: dict) -> None:
