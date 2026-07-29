@@ -29,7 +29,7 @@ def get_current_context_archive():
         'context_archive', None)
     if not context_archive:
         context_archive = {}
-        FrameworkContextManager().set_context('context_archive', {})
+        FrameworkContextManager().set_context('context_archive', context_archive)
 
     return context_archive
 

@@ -217,7 +217,7 @@ class ConversationMemoryModule:
                    pair_id: str):
         if "kwargs" in params:
             params = params['kwargs']
-        if params is str:
+        if isinstance(params, str):
             params = {
                 type: params
             }
