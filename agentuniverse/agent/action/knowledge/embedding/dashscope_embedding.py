@@ -32,6 +32,27 @@ class DashscopeEmbedding(Embedding):
         default_factory=lambda: get_from_env("DASHSCOPE_API_KEY")
     )
 
+    @staticmethod
+    def _extract_batch_embeddings(
+            resp_json: dict,
+            expected_count: int) -> List[List[float]]:
+        data = resp_json.get("output")
+        if not data:
+            error_code = resp_json.get("code", "")
+            error_message = resp_json.get("message", "")
+            raise Exception(f"Failed to call dashscope embedding api, "
+                            f"error code:{error_code}, "
+                            f"error message:{error_message}")
+
+        embeddings = data.get("embeddings") or []
+        batch_result = [d['embedding'] for d in embeddings if 'embedding' in d]
+        if len(batch_result) != expected_count:
+            raise Exception(
+                "Dashscope embedding response count mismatch: "
+                f"expected {expected_count}, got {len(batch_result)}"
+            )
+        return batch_result
+
     def get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """
         Retrieve text embeddings for a list of input texts.
@@ -83,17 +104,7 @@ class DashscopeEmbedding(Embedding):
         for batch in batched(texts):
             post_params["input"]["texts"] = batch
             resp_json: dict = post(post_params)
-            data = resp_json.get("output")
-            if data:
-                data = data["embeddings"]
-                batch_result = [d['embedding'] for d in data if 'embedding' in d]
-                result += batch_result
-            else:
-                error_code = resp_json.get("code", "")
-                error_message = resp_json.get("message", "")
-                raise Exception(f"Failed to call dashscope embedding api, "
-                                f"error code:{error_code}, "
-                                f"error message:{error_message}")
+            result += self._extract_batch_embeddings(resp_json, len(batch))
         return result
 
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
@@ -151,16 +162,5 @@ class DashscopeEmbedding(Embedding):
         for batch in batched(texts):
             post_params["input"]["texts"] = batch
             resp_json: dict = await async_post(post_params)
-            data = resp_json.get("output")
-            if data:
-                data = data["embeddings"]
-                batch_result = [d['embedding'] for d in data if
-                                'embedding' in d]
-                result += batch_result
-            else:
-                error_code = resp_json.get("code", "")
-                error_message = resp_json.get("message", "")
-                raise Exception(f"Failed to call dashscope embedding api, "
-                                f"error code:{error_code}, "
-                                f"error message:{error_message}")
+            result += self._extract_batch_embeddings(resp_json, len(batch))
         return result
