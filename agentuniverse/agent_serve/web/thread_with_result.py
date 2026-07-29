@@ -72,6 +72,9 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
         future._context_pack = context_pack
 
         def context_wrapper():
+            if not future.set_running_or_notify_cancel():
+                return
+
             otel_token = None
             try:
                 otel_token = ContextCoordinator.recover_context(context_pack)
