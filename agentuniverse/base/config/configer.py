@@ -200,5 +200,7 @@ class Configer(object):
         """
         with open(path, 'r', encoding='utf-8') as stream:
             config_data = yaml.safe_load(stream)
+        if config_data is None:
+            config_data = {}
         config_data = PlaceholderResolver().resolve(config_data)
         return config_data
