@@ -14,6 +14,7 @@ from pydantic import Field
 
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.base.util.env_util import get_from_env
+from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.base.util.system_util import process_yaml_func
 from agentuniverse.llm.claude_langchain_instance import ClaudeLangChainInstance
 from agentuniverse.llm.llm import LLM
@@ -120,7 +121,7 @@ class ClaudeLLM(LLM):
 
     async def agenerate_stream_result(self, chat_completion: AsyncIterator):
         async for chunk in chat_completion:
-            print(chunk)
+            LOGGER.debug(f"ClaudeLLM received async stream chunk: {chunk.type}")
             if chunk.type != 'content_block_delta':
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
