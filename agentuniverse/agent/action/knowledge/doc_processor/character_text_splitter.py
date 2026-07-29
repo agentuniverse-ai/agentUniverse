@@ -30,7 +30,7 @@ class CharacterTextSplitter(DocProcessor):
     """
     chunk_size: int = 200
     chunk_overlap: int = 20
-    separator: str = "/n/n"
+    separator: str = "\n\n"
     __splitter: Optional[Splitter] = None
 
 

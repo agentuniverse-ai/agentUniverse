@@ -60,7 +60,7 @@ def _llm_plugins(func):
     llm_plugins = ApplicationConfigManager().app_configer.llm_plugins
     warp_func = func
     for item in llm_plugins:
-        warp_func = item(func)
+        warp_func = item(warp_func)
     return warp_func
 
 
@@ -92,10 +92,11 @@ def _get_llm_info(func, *args, **kwargs):
         temperature = None
         if self and hasattr(self, 'channel_model_config'):
             temperature = self.channel_model_config.get('temperature')
-        if not temperature and hasattr(self, 'temperature'):
-            temperature = self.temperature or -1
-        else:
-            temperature = -1
+        if not temperature:
+            if self and hasattr(self, 'temperature'):
+                temperature = self.temperature or -1
+            else:
+                temperature = -1
 
     params = {
         'temperature': temperature,
