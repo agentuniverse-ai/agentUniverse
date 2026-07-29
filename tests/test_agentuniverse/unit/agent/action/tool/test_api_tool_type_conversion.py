@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
+import json
 import unittest
+from unittest.mock import patch
 
 from agentuniverse.agent.action.tool.api_tool import APITool
 
@@ -54,6 +56,37 @@ class TestAPIToolTypeConversion(unittest.TestCase):
         )
 
         self.assertIs(result, False)
+
+    def test_request_body_omits_missing_optional_properties(self):
+        self.tool.openapi_spec = {
+            "operation": {"parameters": []},
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "required": ["name"],
+                            "properties": {
+                                "name": {"type": "string"},
+                                "nickname": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
+        }
+
+        with patch(
+            "agentuniverse.agent.action.tool.api_tool.ssrf_proxy.post"
+        ) as post:
+            self.tool.do_http_request(
+                "https://example.com/users",
+                "post",
+                {},
+                {"name": "Ada"},
+            )
+
+        request_body = json.loads(post.call_args.kwargs["data"])
+        self.assertEqual(request_body, {"name": "Ada"})
 
 
 if __name__ == "__main__":
