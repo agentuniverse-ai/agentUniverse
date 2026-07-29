@@ -27,12 +27,12 @@ class ToolInput(BaseModel):
 
     def __init__(self, params: dict, **kwargs):
         super().__init__(**kwargs)
-        self.__origin_params = params
-        for k, v in params.items():
+        self.__origin_params = params.copy()
+        for k, v in self.__origin_params.items():
             self.__dict__[k] = v
 
     def to_dict(self):
-        return self.__origin_params
+        return self.__origin_params.copy()
 
     def to_json_str(self):
         return json.dumps(self.__origin_params, ensure_ascii=False)
