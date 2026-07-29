@@ -118,8 +118,12 @@ class TokenUsage(BaseModel):
 
         # ---------- image/audio ----------
         if "input_tokens" in usage:
-            det_in = usage.get("input_tokens_details", {})
-            det_out = usage.get("output_token_details", {})
+            det_in = usage.get("input_tokens_details") or usage.get(
+                "input_token_details", {}
+            )
+            det_out = usage.get("output_tokens_details") or usage.get(
+                "output_token_details", {}
+            )
 
             return cls(
                 text_in=det_in.get("text_tokens", usage["input_tokens"]),
@@ -131,23 +135,6 @@ class TokenUsage(BaseModel):
                 audio_out=det_out.get("audio_tokens", 0),
                 cached_out=det_out.get("cached_tokens", 0),
                 reasoning_out=det_out.get("reasoning_tokens", 0),
-            )
-
-        # ---------- Realtime ----------
-        if "input_tokens" in usage and "output_tokens" in usage:
-            return cls(
-                text_in=usage.get("input_token_details", {}).get(
-                    "text_tokens", usage["input_tokens"]
-                ),
-                audio_in=usage.get("input_token_details", {}).get("audio_tokens", 0),
-                cached_in=usage.get("input_token_details", {}).get("cached_tokens", 0),
-                text_out=usage.get("output_token_details", {}).get(
-                    "text_tokens", usage["output_tokens"]
-                ),
-                audio_out=usage.get("output_token_details", {}).get("audio_tokens", 0),
-                cached_out=usage.get("output_token_details", {}).get(
-                    "cached_tokens", 0
-                ),
             )
 
         return cls()
