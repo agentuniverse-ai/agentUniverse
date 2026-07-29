@@ -149,7 +149,6 @@ class RunCommandTool(Tool):
             try:
                 result.thread_id = threading.get_ident()
                 _command_results[result.thread_id] = result
-                thread_started.set()
                 process = subprocess.Popen(
                     command,
                     cwd=cwd,
@@ -158,6 +157,7 @@ class RunCommandTool(Tool):
                     text=True,
                     shell=True
                 )
+                thread_started.set()
 
                 stdout, stderr = process.communicate()
                 exit_code = process.returncode
@@ -173,6 +173,7 @@ class RunCommandTool(Tool):
                 result.stderr = str(e)
                 result.end_time = time.time()
                 result.status = CommandStatus.ERROR
+                thread_started.set()
 
             _command_results[result.thread_id] = result
 
@@ -181,7 +182,6 @@ class RunCommandTool(Tool):
             return result.message
 
         thread = threading.Thread(target=__run)
-        thread.daemon = True
         thread.start()
 
         if not thread_started.wait(timeout=self._THREAD_STARTED_TIMEOUT):
