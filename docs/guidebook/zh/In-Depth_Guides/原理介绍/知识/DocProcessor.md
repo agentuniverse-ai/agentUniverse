@@ -310,3 +310,29 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [CohereReranker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/cohere_reranker.yaml)
+
+`CohereReranker` 使用 Cohere Rerank API 对 store 召回的文档重排，按与 `Query` 的相关性重新排序。它是 `JinaReranker`（#646）、`DashscopeReranker` 的同类组件，对应 issue #248 的*Rerank*方向。
+
+无需额外安装（`requests` 已是核心依赖）——只需一个 Cohere API Key。将 `cohere_reranker.yaml` 复制到应用配置目录，设置 `api_key`（或配置 `COHERE_API_KEY` 环境变量），加载内置 `cohere_reranker` 组件即可使用。调用时必须提供查询字符串，否则原样返回文档。
+
+组件定义文件如下：
+```yaml
+name: 'cohere_reranker'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cohere_reranker'
+  class: 'CohereReranker'
+description: 'Cohere Rerank API 知识检索后处理组件。'
+api_key: ''
+model_name: 'rerank-multilingual-v3.0'
+top_n: 10
+request_timeout: 30
+score_key: 'rerank_score'
+```
+- api_key: Cohere API Key。留空时回退读取 `COHERE_API_KEY` 环境变量。
+- model_name: Cohere rerank 模型（默认 `rerank-multilingual-v3.0`）。
+- top_n: 重排后返回的最大文档数。
+- request_timeout: rerank HTTP 调用的超时秒数。
+- score_key: 写入每个文档相关性得分的 metadata 键；为空则不写入。

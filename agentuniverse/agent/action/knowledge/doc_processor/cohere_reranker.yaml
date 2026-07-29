@@ -1,0 +1,11 @@
+name: 'cohere_reranker'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cohere_reranker'
+  class: 'CohereReranker'
+description: 'Cohere Rerank API post-processor for knowledge retrieval.'
+api_key: ''
+model_name: 'rerank-multilingual-v3.0'
+top_n: 10
+request_timeout: 30
+score_key: 'rerank_score'
