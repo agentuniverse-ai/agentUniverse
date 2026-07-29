@@ -40,10 +40,23 @@ def summarize_by_map_reduce(texts: List[str], llm: LLM, summary_prompt, combine_
 
 def split_text_on_tokens(text: str, text_token: int, chunk_size=800, chunk_overlap=100) -> List[str]:
     """Split incoming text and return chunks using tokenizer."""
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero")
+    if chunk_overlap < 0:
+        raise ValueError("chunk_overlap must not be negative")
+    if chunk_overlap >= chunk_size:
+        raise ValueError("chunk_overlap must be smaller than chunk_size")
+    if not text:
+        return [""]
+    if text_token <= 0:
+        raise ValueError("text_token must be greater than zero")
+
     # calculate the number of characters represented by each token.
     char_per_token = len(text) / text_token
-    chunk_char_size = int(chunk_size * char_per_token)
-    chunk_char_overlap = int(chunk_overlap * char_per_token)
+    chunk_char_size = max(1, int(chunk_size * char_per_token))
+    chunk_char_overlap = min(
+        int(chunk_overlap * char_per_token), chunk_char_size - 1
+    )
 
     result = []
     current_position = 0
