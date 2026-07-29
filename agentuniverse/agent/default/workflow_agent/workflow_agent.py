@@ -10,6 +10,7 @@ from typing import Optional
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
+from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.workflow.workflow import Workflow
 from agentuniverse.workflow.workflow_manager import WorkflowManager
 from agentuniverse.workflow.workflow_output import WorkflowOutput
@@ -55,7 +56,7 @@ class WorkflowAgent(Agent):
             raise Exception('Workflow graph is None, please add nodes and edges to the workflow graph.')
         workflow = workflow.build()
         workflow_output: WorkflowOutput = workflow.run(input_object.to_dict())
-        print(workflow_output.workflow_node_results)
+        LOGGER.debug("Workflow node results: {}".format(workflow_output.workflow_node_results))
         return workflow_output.workflow_end_params
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'WorkflowAgent':
