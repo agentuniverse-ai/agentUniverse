@@ -1,0 +1,9 @@
+name: 'voyage_embedding'
+description: 'embedding via Voyage AI embeddings API'
+embedding_model_name: 'voyage-3'
+input_type: 'document'
+request_timeout: 30
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.voyage_embedding'
+  class: 'VoyageEmbedding'
