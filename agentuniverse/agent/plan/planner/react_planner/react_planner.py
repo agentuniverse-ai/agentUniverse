@@ -70,7 +70,7 @@ class ReActPlanner(Planner):
         agent_executor = AgentExecutor(agent=agent, tools=tools,
                                        verbose=True,
                                        handle_parsing_errors=True,
-                                       max_iterations=agent_model.plan.get('planner').get("max_iterations", 15))
+                                       max_iterations=(agent_model.plan.get('planner') or {}).get("max_iterations", 15))
 
         return agent_executor.invoke(input=planner_input, memory=memory.as_langchain() if memory else None,
                                      chat_history=planner_input.get(memory.memory_key) if memory else '',
@@ -83,7 +83,7 @@ class ReActPlanner(Planner):
         output_stream = input_object.get_data('output_stream')
         callbacks.append(StreamOutPutCallbackHandler(output_stream, agent_info=agent_model.info))
         callbacks.append(InvokeCallbackHandler(source=agent_model.info.get('name'),
-                                               llm_name=agent_model.profile.get('llm_model').get('name')))
+                                               llm_name=agent_model.profile.get('llm_model', {}).get('name')))
         config.setdefault("callbacks", callbacks)
         return config
 
