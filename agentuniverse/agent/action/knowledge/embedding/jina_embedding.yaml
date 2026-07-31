@@ -1,0 +1,12 @@
+name: 'jina_embedding'
+description: 'embedding use jina ai api'
+embedding_model_name: 'jina-embeddings-v3'
+api_key: '${JINA_API_KEY}'
+api_base: 'https://api.jina.ai/v1/embeddings'
+dimensions: 1024
+request_timeout: 30
+batch_size: 32
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.jina_embedding'
+  class: 'JinaEmbedding'
