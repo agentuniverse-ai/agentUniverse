@@ -5,14 +5,16 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: node.py
+import time
 from abc import abstractmethod
 from typing import Optional, Dict, List, Any
 
 from pydantic import BaseModel
 
-from agentuniverse.workflow.node.enum import NodeEnum, NodeStatusEnum
-from agentuniverse.workflow.node.node_output import NodeOutput
+from agentuniverse.workflow.node.enum import NodeEnum
 from agentuniverse.workflow.node.node_config import NodeOutputParams, NodeInputParams
+from agentuniverse.workflow.node.node_output import NodeOutput
+from agentuniverse.workflow.node.retry_policy import RetryPolicy
 from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 
@@ -29,6 +31,7 @@ class Node(BaseModel):
     type: NodeEnum = None
     workflow_id: Optional[str] = None
     position: Optional[dict] = None
+    retry_policy: RetryPolicy | None = None
     _data: Optional[NodeData] = None
     _data_cls = NodeData
 
@@ -41,7 +44,25 @@ class Node(BaseModel):
         raise NotImplementedError
 
     def run(self, workflow_output: WorkflowOutput) -> NodeOutput:
-        return self._run(workflow_output)
+        policy = self.retry_policy or RetryPolicy()
+        attempt = 1
+        while True:
+            try:
+                node_output = self._run(workflow_output)
+            except Exception:
+                if attempt >= policy.max_attempts:
+                    raise
+                attempt += 1
+                delay = policy.delay_before_attempt(attempt)
+                if delay:
+                    time.sleep(delay)
+            else:
+                if attempt > 1:
+                    node_output.metadata = {
+                        **(node_output.metadata or {}),
+                        'attempt_count': attempt,
+                    }
+                return node_output
 
     @staticmethod
     def _resolve_input_params(input_params: List[NodeInputParams],
