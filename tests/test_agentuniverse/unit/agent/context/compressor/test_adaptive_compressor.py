@@ -8,6 +8,7 @@
 
 import pytest
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 from agentuniverse.agent.context.compressor.adaptive_compressor import AdaptiveCompressor
 from agentuniverse.agent.context.compressor.truncate_compressor import TruncateCompressor
@@ -39,6 +40,20 @@ class TestAdaptiveCompressor:
         adaptive.selective_weight = 1.0
         adaptive.summarize_weight = 0.0  # Disable summarize (requires LLM)
         return adaptive
+
+    def test_initialize_propagates_configured_llm_name(self):
+        """Initialization should not depend on an out-of-scope kwargs mapping."""
+        compressor = AdaptiveCompressor(
+            name="test_adaptive",
+            compression_ratio=0.6,
+            llm_name="summary_llm",
+        )
+
+        compressor.initialize_by_component_configer(
+            SimpleNamespace(default_symbol=False)
+        )
+
+        assert compressor._summarize_compressor.llm_name == "summary_llm"
 
     @pytest.fixture
     def sample_segments(self):
