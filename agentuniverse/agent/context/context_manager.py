@@ -297,10 +297,7 @@ class ContextManager(ComponentBase):
             **kwargs
         )
 
-        # Mark as accessed for LRU tracking
-        for segment in segments:
-            segment.mark_accessed()
-
+        # Storage backends own access tracking and persistence.
         return segments
 
     def search_context(
@@ -331,10 +328,7 @@ class ContextManager(ComponentBase):
             **kwargs
         )
 
-        # Mark as accessed
-        for segment in results:
-            segment.mark_accessed()
-
+        # Storage backends own access tracking and persistence.
         return results
 
     def get_context_window(self, session_id: str) -> Optional[ContextWindow]:
