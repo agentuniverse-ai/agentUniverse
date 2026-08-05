@@ -1,0 +1,12 @@
+name: 'huggingface_llm'
+description: 'huggingface llm based on the native huggingface_hub inference client'
+model_name: 'meta-llama/Llama-3.1-8B-Instruct'
+task: 'chat'
+max_tokens: 2048
+temperature: 0.7
+streaming: true
+meta_class: 'agentuniverse.llm.default.huggingface_llm.HuggingFaceLLM'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.huggingface_llm'
+  class: 'HuggingFaceLLM'
