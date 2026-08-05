@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding:utf-8 -*-
 
 # @Time    : 2026/04/24
 # @Author  : RheagalFire
 # @FileName: litellm.py
 
-from typing import Optional, Any, Union, Iterator, AsyncIterator
+from collections.abc import AsyncIterator, Iterator
+from typing import Any
 
+from langchain_core.language_models.base import BaseLanguageModel
 from pydantic import Field
 
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
@@ -14,6 +15,7 @@ from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.base.util.system_util import process_yaml_func
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_output import LLMOutput
+from agentuniverse.llm.openai_style_langchain_instance import LangchainOpenAIStyleInstance
 
 
 class LiteLLM(LLM):
@@ -39,10 +41,12 @@ class LiteLLM(LLM):
         api_base: Optional base URL — only needed for LiteLLM proxy.
     """
 
-    api_key: Optional[str] = Field(default_factory=lambda: get_from_env("LITELLM_API_KEY"))
-    api_base: Optional[str] = Field(default_factory=lambda: get_from_env("LITELLM_API_BASE"))
+    api_key: str | None = Field(default_factory=lambda: get_from_env("LITELLM_API_KEY"))
+    api_base: str | None = Field(default_factory=lambda: get_from_env("LITELLM_API_BASE"))
+    organization: str | None = None
+    proxy: str | None = None
 
-    def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
+    def _call(self, messages: list, **kwargs: Any) -> LLMOutput | Iterator[LLMOutput]:
         """Run the LiteLLM LLM.
 
         Args:
@@ -76,7 +80,7 @@ class LiteLLM(LLM):
             return LLMOutput(text=text, raw=response.model_dump())
         return self._generate_stream_result(response)
 
-    async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
+    async def _acall(self, messages: list, **kwargs: Any) -> LLMOutput | AsyncIterator[LLMOutput]:
         """Asynchronously run the LiteLLM LLM.
 
         Args:
@@ -147,6 +151,20 @@ class LiteLLM(LLM):
             return len(encoding.encode(text))
         except Exception:
             return len(text) // 4
+
+    def as_langchain(self) -> BaseLanguageModel:
+        """Convert the agentUniverse LiteLLM to a langchain-compatible chat model.
+
+        LiteLLM speaks the OpenAI wire format, so the shared
+        ``LangchainOpenAIStyleInstance`` adapter is reused. It routes generation
+        back through this class' ``call``/``acall``, so React and collaborative
+        agent paths that call ``llm.as_langchain()`` work with any
+        LiteLLM-supported provider.
+        """
+        self.init_channel()
+        if self._channel_instance:
+            return self._channel_instance.as_langchain()
+        return LangchainOpenAIStyleInstance(self)
 
     def initialize_by_component_configer(self, component_configer: LLMConfiger) -> "LiteLLM":
         super().initialize_by_component_configer(component_configer)

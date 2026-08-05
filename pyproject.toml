@@ -79,6 +79,7 @@ beautifulsoup4 = "^4.12.0"
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
 store_ext = ["pymilvus"]
+litellm_ext = ["litellm"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"

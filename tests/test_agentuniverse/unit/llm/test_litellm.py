@@ -1,13 +1,15 @@
 import asyncio
 import os
 import sys
+import types
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 
-from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.application_configer.app_configer import AppConfiger
+from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.llm.default.litellm import LiteLLM
 
 FOUNDRY_KEY = os.environ.get("ANTHROPIC_FOUNDRY_API_KEY", "")
@@ -123,6 +125,92 @@ class TestLiteLLMEdgeCases(unittest.TestCase):
         finally:
             os.environ.pop("ANTHROPIC_API_KEY", None)
             os.environ.pop("ANTHROPIC_API_BASE", None)
+
+
+class TestLiteLLMMocked(unittest.TestCase):
+    """Deterministic tests with a stubbed litellm module (no keys or network)."""
+
+    def setUp(self):
+        ApplicationConfigManager().app_configer = AppConfiger()
+        self._orig_litellm = sys.modules.get("litellm")
+        self._fake = types.ModuleType("litellm")
+        sys.modules["litellm"] = self._fake
+        self.llm = LiteLLM(model_name="openai/gpt-4o", api_key="sk-test")
+
+    def tearDown(self):
+        if self._orig_litellm is not None:
+            sys.modules["litellm"] = self._orig_litellm
+        else:
+            sys.modules.pop("litellm", None)
+
+    @staticmethod
+    def _response(text):
+        choice = SimpleNamespace(message=SimpleNamespace(content=text))
+        resp = SimpleNamespace(choices=[choice])
+        resp.model_dump = lambda: {"choices": [{"message": {"content": text}}]}
+        return resp
+
+    @staticmethod
+    def _chunk(text):
+        choice = SimpleNamespace(delta=SimpleNamespace(content=text))
+        chunk = SimpleNamespace(choices=[choice])
+        chunk.model_dump = lambda: {"choices": [{"delta": {"content": text}}]}
+        return chunk
+
+    def test_call_non_streaming(self):
+        self._fake.completion = lambda **kwargs: self._response("4")
+        output = self.llm.call(
+            messages=[{"role": "user", "content": "2+2?"}], streaming=False
+        )
+        self.assertEqual(output.text, "4")
+        self.assertIn("choices", output.raw)
+
+    def test_call_streaming(self):
+        self._fake.completion = lambda **kwargs: iter(
+            [self._chunk("O"), self._chunk("K")]
+        )
+        chunks = list(
+            self.llm.call(messages=[{"role": "user", "content": "hi"}], streaming=True)
+        )
+        self.assertEqual("".join(c.text for c in chunks), "OK")
+
+    def test_acall_non_streaming(self):
+        async def _acompletion(**kwargs):
+            return self._response("4")
+
+        self._fake.acompletion = _acompletion
+        output = asyncio.run(
+            self.llm.acall(
+                messages=[{"role": "user", "content": "2+2?"}], streaming=False
+            )
+        )
+        self.assertEqual(output.text, "4")
+
+    def test_acall_streaming(self):
+        async def _agen():
+            for token in ["O", "K"]:
+                yield self._chunk(token)
+
+        async def _acompletion(**kwargs):
+            return _agen()
+
+        self._fake.acompletion = _acompletion
+
+        async def _run():
+            stream = await self.llm.acall(
+                messages=[{"role": "user", "content": "hi"}], streaming=True
+            )
+            return [c async for c in stream]
+
+        chunks = asyncio.run(_run())
+        self.assertEqual("".join(c.text for c in chunks), "OK")
+
+    def test_as_langchain_adapter(self):
+        from langchain_core.language_models.base import BaseLanguageModel
+
+        langchain_llm = self.llm.as_langchain()
+        self.assertIsInstance(langchain_llm, BaseLanguageModel)
+        self.assertIs(langchain_llm.llm, self.llm)
 
 
 if __name__ == "__main__":
