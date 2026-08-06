@@ -169,13 +169,13 @@ class SupervisionAgentTemplate(AgentTemplate):
             'recommendations:'
         ]
 
+        import re
+
         for marker in feedback_markers:
-            if marker in output.lower():
-                parts = output.lower().split(marker, 1)
-                if len(parts) > 1:
-                    # Extract text after marker until next section or end
-                    feedback_text = parts[1].split('\n\n')[0].strip()
-                    return feedback_text
+            match = re.search(re.escape(marker), output, flags=re.IGNORECASE)
+            if match:
+                # Extract from the original output to preserve user-facing casing.
+                return output[match.end():].split('\n\n', 1)[0].strip()
 
         # If no explicit feedback section, return the full output
         return output
