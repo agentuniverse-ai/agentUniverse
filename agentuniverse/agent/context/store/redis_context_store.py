@@ -218,7 +218,10 @@ class RedisContextStore(ContextStore):
                 if term in content_lower:
                     score += 2.0
 
-            # Priority bonus
+            if score <= 0:
+                continue
+
+            # Priority only ranks segments that matched the query.
             priority_bonus = {
                 ContextPriority.CRITICAL: 10.0,
                 ContextPriority.HIGH: 5.0,
@@ -230,9 +233,7 @@ class RedisContextStore(ContextStore):
 
             # Decay factor
             score *= segment.calculate_decay()
-
-            if score > 0:
-                scored.append((segment, score))
+            scored.append((segment, score))
 
         # Sort by score and return top_k
         scored.sort(key=lambda x: x[1], reverse=True)
