@@ -323,3 +323,14 @@ class TestContextWindow:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_decay_does_not_increase_relevance_for_future_access_time():
+    """Clock skew must not turn decay into a relevance boost."""
+    metadata = ContextMetadata(
+        last_accessed=datetime.now() + timedelta(days=10),
+        relevance_score=0.8,
+        decay_rate=0.5,
+    )
+
+    assert metadata.calculate_decay() == pytest.approx(0.8)
