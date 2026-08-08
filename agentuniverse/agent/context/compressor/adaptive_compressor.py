@@ -413,7 +413,10 @@ class AdaptiveCompressor(ContextCompressor):
 
         # Step 2: Summarize background/reference
         if summarizable and tokens_used < target_tokens:
-            sum_target = int(target_tokens * 0.4) - tokens_used  # 40% budget
+            sum_target = min(
+                int(target_tokens * 0.4),
+                target_tokens - tokens_used,
+            )  # Dedicated 40% budget, capped by remaining space
             if sum_target > 0:
                 sum_compressed, _ = self._summarize_compressor.compress(
                     summarizable, sum_target, **kwargs
