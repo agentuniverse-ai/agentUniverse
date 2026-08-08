@@ -323,3 +323,12 @@ class TestContextWindow:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_context_window_rejects_reserve_larger_than_capacity():
+    with pytest.raises(ValueError, match="reserved_tokens cannot exceed max_tokens"):
+        ContextWindow(
+            session_id="session-1",
+            max_tokens=100,
+            reserved_tokens=101,
+        )
