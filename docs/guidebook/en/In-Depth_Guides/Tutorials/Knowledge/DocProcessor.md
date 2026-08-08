@@ -309,3 +309,23 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [HtmlHeaderTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/html_header_text_splitter.yaml)
+
+`HtmlHeaderTextSplitter` chunks each input `Document` by HTML header hierarchy (`<h1>`–`<h6>`), recording the header path (e.g. `"Installation > macOS"`) as metadata on every chunk so a retrieved chunk can be traced back to its source section. It fills the *HTML pre-processing* direction of issue #258 and is the HTML analogue of `MarkdownHeaderTextSplitter`.
+
+It is intentionally dependency-light: built on Python's standard `html.parser.HTMLParser`, so it works without `beautifulsoup4` / `lxml` and has no third-party install requirement. Copy `html_header_text_splitter.yaml` into your application configuration directory and resolve the built-in `html_header_text_splitter` component to use it.
+
+The component definition file is as follows:
+```yaml
+name: 'html_header_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.html_header_text_splitter'
+  class: 'HtmlHeaderTextSplitter'
+description: 'Splits HTML documents by header hierarchy (h1–h6) for knowledge pre-processing.'
+header_path_key: 'header_path'
+include_unsectioned: true
+```
+- header_path_key: Metadata key under which each chunk's header path is recorded.
+- include_unsectioned: When `true` (default), text before the first header is emitted as a chunk with an empty header path; when `false` it is dropped.
