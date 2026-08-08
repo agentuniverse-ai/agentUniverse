@@ -258,7 +258,7 @@ class ContextStore(ComponentBase):
                 return True
 
         # Check age
-        if max_age_hours:
+        if max_age_hours is not None:
             age_hours = (datetime.now() - segment.metadata.created_at).total_seconds() / 3600
             if age_hours > max_age_hours:
                 return True
