@@ -139,7 +139,7 @@ class GRRWorkPattern(WorkPattern):
             generating_result = OutputObject({"output": agent_input.get('input')})
         else:
             generating_result = self.generating.run(**input_object.to_dict())
-            grr_round_results['generating_result'] = generating_result.to_dict()
+        grr_round_results['generating_result'] = generating_result.to_dict()
         input_object.add_data('generating_result', generating_result)
         # Also add as expressing_result for compatibility with ReviewingAgentTemplate
         input_object.add_data('expressing_result', generating_result)
@@ -152,7 +152,7 @@ class GRRWorkPattern(WorkPattern):
             generating_result = OutputObject({"output": agent_input.get('input')})
         else:
             generating_result = await self.generating.async_run(**input_object.to_dict())
-            grr_round_results['generating_result'] = generating_result.to_dict()
+        grr_round_results['generating_result'] = generating_result.to_dict()
         input_object.add_data('generating_result', generating_result)
         # Also add as expressing_result for compatibility with ReviewingAgentTemplate
         input_object.add_data('expressing_result', generating_result)
@@ -164,7 +164,7 @@ class GRRWorkPattern(WorkPattern):
             reviewing_result = OutputObject({"score": 100})
         else:
             reviewing_result = self.reviewing.run(**input_object.to_dict())
-            grr_round_results['reviewing_result'] = reviewing_result.to_dict()
+        grr_round_results['reviewing_result'] = reviewing_result.to_dict()
         input_object.add_data('reviewing_result', reviewing_result)
         return reviewing_result.to_dict()
 
@@ -174,7 +174,7 @@ class GRRWorkPattern(WorkPattern):
             reviewing_result = OutputObject({"score": 100})
         else:
             reviewing_result = await self.reviewing.async_run(**input_object.to_dict())
-            grr_round_results['reviewing_result'] = reviewing_result.to_dict()
+        grr_round_results['reviewing_result'] = reviewing_result.to_dict()
         input_object.add_data('reviewing_result', reviewing_result)
         return reviewing_result.to_dict()
 
@@ -184,7 +184,7 @@ class GRRWorkPattern(WorkPattern):
             rewriting_result = OutputObject({})
         else:
             rewriting_result = self.rewriting.run(**input_object.to_dict())
-            grr_round_results['rewriting_result'] = rewriting_result.to_dict()
+        grr_round_results['rewriting_result'] = rewriting_result.to_dict()
         input_object.add_data('rewriting_result', rewriting_result)
         return rewriting_result.to_dict()
 
@@ -194,7 +194,7 @@ class GRRWorkPattern(WorkPattern):
             rewriting_result = OutputObject({})
         else:
             rewriting_result = await self.rewriting.async_run(**input_object.to_dict())
-            grr_round_results['rewriting_result'] = rewriting_result.to_dict()
+        grr_round_results['rewriting_result'] = rewriting_result.to_dict()
         input_object.add_data('rewriting_result', rewriting_result)
         return rewriting_result.to_dict()
 
