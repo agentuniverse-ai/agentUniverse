@@ -309,3 +309,32 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ContentTypeFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/content_type_filter.yaml)
+
+This component filters recalled documents by the `content_type` field stored in their metadata, keeping only those whose content type is in `allowed_types`. It is useful for multi-modal or mixed-format knowledge bases where an agent should only receive documents of a particular kind (for example, only `text` chunks, only `code`, or only `table` rows). It addresses the *content-type filtering* direction of issue #248.
+
+Matching is deterministic and dependency-free. Documents whose content type is in `allowed_types` are kept; documents whose content type is present but not allowed are dropped; documents with no content type (missing metadata, missing key, or blank value) follow `default_policy` — `keep` (default) retains them conservatively while `drop` removes them. An empty `allowed_types` set is a no-op (keeps everything), so the filter is safe to enable before configuring it.
+
+```yaml
+name: 'content_type_filter'
+description: 'keep only documents whose content_type is in allowed_types'
+allowed_types: ['text', 'code', 'table']
+type_key: 'content_type'
+default_policy: 'keep'      # keep | drop — policy for documents without a content_type
+case_sensitive: false       # case-insensitive matching by default
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.content_type_filter'
+  class: 'ContentTypeFilter'
+```
+- allowed_types: Set of content-type strings to keep. Empty keeps everything.
+- type_key: Metadata key holding the content type (default `content_type`).
+- default_policy: Policy for documents without a content type — `keep` (default) or `drop`.
+- case_sensitive: When false (default), content types are matched case-insensitively; numeric content types are coerced to strings and surrounding whitespace is stripped.
+
+## ContentTypeFilter / 内容类型过滤器
+
+`ContentTypeFilter`（内容类型过滤器）按文档元数据中的 `content_type` 字段过滤召回的文档，仅保留其内容类型属于 `allowed_types` 的文档。适用于多模态或混合格式的知识库——例如代理只应接收 `text` 文本块、`code` 代码或 `table` 表格行。对应 issue #248 中“按内容类型过滤”的方向。
+
+匹配过程为确定性、无依赖：内容类型在允许集合中的文档被保留；内容类型存在但不在允许集合中的文档被丢弃；没有内容类型（缺少元数据、缺少该键或值为空白）的文档按 `default_policy` 处理——`keep`（默认，保守保留）或 `drop`（丢弃）。当 `allowed_types` 为空时，过滤器为空操作（保留全部），因此可以在配置前安全启用。匹配默认大小写不敏感，数字类型会被强制转为字符串，首尾空白会被去除。
