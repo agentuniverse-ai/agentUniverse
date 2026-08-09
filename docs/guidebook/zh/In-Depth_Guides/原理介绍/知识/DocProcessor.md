@@ -310,3 +310,33 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [DuplicateRemover](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/duplicate_remover.yaml)
+
+该组件使用 SHA-256 内容哈希从召回集中移除**完全相同**的重复文档。对应 issue #248 的*精确去重*方向，是 `SemanticDeduplicator` 的轻量、确定性配套组件：`SemanticDeduplicator` 通过向量计算移除*近似*重复（模糊、依赖模型），而 `DuplicateRemover` 只丢弃*逐字相同*的文本，无需模型、无第三方依赖、结果完全可复现。可作为任何模糊去重之前的廉价第一道工序，也可在只需精确去重时单独使用。
+
+每个文档被赋予一个稳定身份——默认为其文本的 SHA-256——每个身份只保留一个代表。`keep_first: true`（默认）保留首次出现，以保持来自 store / 前置处理器的排序；`keep_first: false` 保留最后一次出现（适用于后续文档更新鲜的场景），并仍按其输入顺序返回。设置 `hash_key` 可从 metadata 读取预计算哈希而无需重新计算，设置 `text_field` 可在 `Document.text` 为空时对某个 metadata 字段做哈希。默认为"精确文本相等"；开启 `normalize_whitespace` / `ignore_case` 可折叠不应视为不同内容的外观差异。被丢弃的文档数量会被记录日志，每个保留文档的 `duplicate_stats` 会记录其 `duplicate_group_size`。
+
+组件定义文件如下：
+```yaml
+name: 'duplicate_remover'
+description: '用 SHA-256 内容哈希移除完全相同的重复文档'
+hash_key: ''                  # 存有预计算哈希的 metadata 键；'' 表示对文本哈希
+keep_first: true              # true = 保留首次出现，false = 保留最后一次
+# text_field: 'canonical'     # Document.text 为空时读取的 metadata 键
+normalize_whitespace: false   # 哈希前折叠空白符
+ignore_case: false            # 哈希前转小写
+record_stats_key: 'duplicate_stats'  # 设为 null 则不写每文档统计
+log_discarded: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.duplicate_remover'
+  class: 'DuplicateRemover'
+```
+- hash_key: 存有预计算哈希的 metadata 键；设置后用该值作为文档身份而无需重新计算。为空则对文本哈希。
+- keep_first: 保留策略 —— `true` 保留首次出现（保持排序），`false` 保留最后一次。
+- text_field: `Document.text` 为空时读取做哈希文本的 metadata 键。
+- normalize_whitespace: 哈希前将所有空白符折叠为单个空格并去除首尾。
+- ignore_case: 哈希前将文本转小写。
+- record_stats_key: 记录每个保留文档 `{duplicate_group_size}` 的 metadata 键；设为 null 则跳过。
+- log_discarded: 是否记录被丢弃的文档数量。

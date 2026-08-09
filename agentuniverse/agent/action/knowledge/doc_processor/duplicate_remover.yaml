@@ -1,0 +1,31 @@
+name: 'duplicate_remover'
+description: 'Remove exact-duplicate documents using a SHA-256 content hash (dependency-free, deterministic)'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.duplicate_remover'
+  class: 'DuplicateRemover'
+
+# Metadata key holding a precomputed hash. When set, that value is used as the
+# document identity instead of recomputing a hash from the text. Leave empty to
+# hash the text.
+hash_key: ''
+
+# Keep policy: true = keep the FIRST occurrence of each duplicate group (default,
+# preserves the store's ranking); false = keep the LAST occurrence.
+keep_first: true
+
+# Metadata key to read the hashing text from when Document.text is empty.
+# text_field: 'canonical_text'
+
+# Normalization (off by default for true "exact" equality). Enable to collapse
+# cosmetic differences that should not count as distinct content.
+normalize_whitespace: false
+ignore_case: false
+
+# Metadata key recording per-document dedup stats ({duplicate_group_size}).
+# Set to null to skip stamping.
+record_stats_key: 'duplicate_stats'
+
+# Log how many documents were discarded.
+log_discarded: true
