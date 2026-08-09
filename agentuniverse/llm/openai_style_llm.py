@@ -133,7 +133,9 @@ class OpenAIStyleLLM(LLM):
             **kwargs,
         )
         if not streaming:
-            text = chat_completion.choices[0].message.content
+            if not chat_completion.choices:
+                return LLMOutput(text="", raw=chat_completion.model_dump())
+            text = chat_completion.choices[0].message.content or ""
             return LLMOutput(text=text, raw=chat_completion.model_dump())
         return self.generate_stream_result(chat_completion)
 
@@ -168,7 +170,9 @@ class OpenAIStyleLLM(LLM):
             **kwargs,
         )
         if not streaming:
-            text = chat_completion.choices[0].message.content
+            if not chat_completion.choices:
+                return LLMOutput(text="", raw=chat_completion.model_dump())
+            text = chat_completion.choices[0].message.content or ""
             return LLMOutput(text=text, raw=chat_completion.model_dump())
         return self.agenerate_stream_result(chat_completion)
 
@@ -198,10 +202,11 @@ class OpenAIStyleLLM(LLM):
         chat_completion = chunk
         if not isinstance(chunk, dict):
             chunk = chunk.dict()
-        if len(chunk["choices"]) == 0:
+        choices = chunk.get("choices") or []
+        if len(choices) == 0:
             return LLMOutput(text="", raw=chat_completion.model_dump())
-        choice = chunk["choices"][0]
-        message = choice.get("delta")
+        choice = choices[0]
+        message = choice.get("delta") or {}
         text = message.get("content")
         if text is None:
             text = ""
