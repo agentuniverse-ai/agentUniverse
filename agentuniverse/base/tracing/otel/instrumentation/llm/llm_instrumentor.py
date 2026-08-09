@@ -95,7 +95,7 @@ class LLMSpanManager:
                     get_current_token_usage(self.span.context.span_id),
                     self.span.parent.span_id
                 )
-            except:
+            except Exception:
                 pass
             self.span.end()
             self.span = None
