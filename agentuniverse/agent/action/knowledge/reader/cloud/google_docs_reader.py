@@ -19,7 +19,6 @@ class GoogleDocsReader(Reader):
     """
 
     def _load_data(self, doc_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        print(f"debugging: GoogleDocsReader start load doc_id={doc_id}")
         if not doc_id:
             raise ValueError("GoogleDocsReader requires doc_id")
 
@@ -60,7 +59,6 @@ class GoogleDocsReader(Reader):
     def _export_html(self, drive, file_id: str) -> str:
         from googleapiclient.http import MediaIoBaseDownload  # type: ignore
         import io
-        print("debugging: GoogleDocsReader exporting as HTML")
         request = drive.files().export(fileId=file_id, mimeType='text/html')
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
