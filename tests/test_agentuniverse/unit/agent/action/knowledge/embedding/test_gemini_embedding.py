@@ -5,6 +5,8 @@
 # @Email   : wozhapen@gmail.com
 # @FileName: test_gemini_embedding.py
 import asyncio
+import contextlib
+import io
 import unittest
 import os
 
@@ -41,6 +43,26 @@ class GeminiEmbeddingTest(unittest.TestCase):
         print(res)
         self.assertEqual(len(res), 2)
         self.assertEqual(len(res[0]), 768)
+
+    def test_get_embeddings_does_not_print_input_on_error(self) -> None:
+        class FailingModels:
+            def embed_content(self, **kwargs):
+                raise RuntimeError("boom")
+
+        class FailingClient:
+            models = FailingModels()
+
+        embedding = GeminiEmbedding(embedding_model_name='text-embedding-004',
+                                    embedding_dims=768,
+                                    gemini_api_key='xxxxxxx')
+        embedding.client = FailingClient()
+        stdout = io.StringIO()
+
+        with contextlib.redirect_stdout(stdout):
+            with self.assertRaises(ValueError):
+                embedding.get_embeddings(texts=["secret text"])
+
+        self.assertEqual(stdout.getvalue(), "")
 
 
 if __name__ == '__main__':
