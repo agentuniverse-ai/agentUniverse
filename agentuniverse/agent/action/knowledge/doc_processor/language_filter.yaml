@@ -1,0 +1,9 @@
+name: 'language_filter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.language_filter'
+  class: 'LanguageFilter'
+description: 'Filters documents by language, keeping only the allowed languages.'
+allowed_languages: ['en', 'zh']
+min_confidence: 0.7
+use_langdetect: true
