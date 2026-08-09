@@ -93,15 +93,21 @@ class ReActPlanner(Planner):
         lc_tools: list[LangchainTool] = list()
         for tool_name in tool_names:
             tool: Tool = ToolManager().get_instance_obj(tool_name)
+            if tool is None:
+                continue
             lc_tools.append(tool.as_langchain())
         knowledge: list = action.get('knowledge') or list()
         for knowledge_name in knowledge:
             knowledge_tool: Knowledge = KnowledgeManager().get_instance_obj(knowledge_name)
+            if knowledge_tool is None:
+                continue
             lc_tools.append(knowledge_tool.as_langchain_tool())
 
         agents: list = action.get('agent') or list()
         for agent_name in agents:
             agent_tool: Agent = AgentManager().get_instance_obj(agent_name)
+            if agent_tool is None:
+                continue
             lc_tools.append(agent_tool.as_langchain_tool())
         return lc_tools
 
