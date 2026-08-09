@@ -1,0 +1,8 @@
+name: 'latex_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.latex_text_splitter'
+  class: 'LatexTextSplitter'
+description: 'Splits LaTeX documents by section hierarchy for knowledge pre-processing.'
+section_path_key: 'section_path'
+include_unsectioned: true
