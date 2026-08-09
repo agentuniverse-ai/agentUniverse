@@ -111,6 +111,18 @@ impl Config {
         self.assertEqual(docs[0].metadata["file_suffix"], ".rs")
         self.assertEqual(docs[0].metadata["file_name"], "test.rs")
 
+    def test_load_non_utf8_code_file(self):
+        gbk_code = '# 注释：中文内容\nprint("你好")\n'
+        file_path = os.path.join(self.temp_dir.name, "gbk_script.py")
+        with open(file_path, 'w', encoding='gb18030') as f:
+            f.write(gbk_code)
+
+        docs = self.reader._load_data(file_path)
+
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0].text, gbk_code)
+        self.assertEqual(docs[0].metadata["language"], "python")
+
 
 if __name__ == "__main__":
     unittest.main()
