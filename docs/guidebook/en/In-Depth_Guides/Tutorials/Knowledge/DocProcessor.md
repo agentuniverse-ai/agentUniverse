@@ -309,3 +309,25 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [MarkdownTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/markdown_text_splitter.yaml)
+
+`MarkdownTextSplitter` splits Markdown documents along structural boundaries — code fences, list blocks, blockquotes, table blocks, and paragraph breaks — while respecting a configurable size budget. Unlike `MarkdownHeaderTextSplitter` (#625), which splits by header hierarchy, this splitter focuses on keeping structurally cohesive blocks together and only splitting when a chunk exceeds `max_chunk_size`. It addresses issue #258.
+
+Pure Python with zero third-party dependency. Copy `markdown_text_splitter.yaml` into your application configuration directory and resolve the built-in `markdown_text_splitter` component to use it. Each produced chunk carries `chunk_method: "markdown_text"` in its metadata.
+
+The component definition file is as follows:
+```yaml
+name: 'markdown_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.markdown_text_splitter'
+  class: 'MarkdownTextSplitter'
+description: 'Splits Markdown by structural blocks (code, table, list, paragraph) with size-bounded chunking.'
+max_chunk_size: 1500
+min_chunk_size: 200
+chunk_overlap: 100
+```
+- max_chunk_size: Maximum characters per chunk (default 1500).
+- min_chunk_size: Minimum characters; smaller chunks are merged into the next one (default 200).
+- chunk_overlap: Number of characters of overlap between adjacent chunks when a hard split is needed (default 100).

@@ -310,3 +310,25 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [MarkdownTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/markdown_text_splitter.yaml)
+
+`MarkdownTextSplitter` 沿结构边界切分 Markdown 文档——代码块、列表、引用块、表格块、段落换行——同时遵守可配置的大小预算。与按标题层级切分的 `MarkdownHeaderTextSplitter`（#625）不同，本切分器优先保持结构上聚合的块完整，只有当块超出 `max_chunk_size` 时才进一步切分。对应 issue #258。
+
+纯 Python 实现，零第三方依赖。将 `markdown_text_splitter.yaml` 复制到应用配置目录，加载内置 `markdown_text_splitter` 组件即可使用。每个生成的块在 metadata 中带 `chunk_method: "markdown_text"`。
+
+组件定义文件如下：
+```yaml
+name: 'markdown_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.markdown_text_splitter'
+  class: 'MarkdownTextSplitter'
+description: '按结构块（代码、表格、列表、段落）切分 Markdown，并以大小约束分块。'
+max_chunk_size: 1500
+min_chunk_size: 200
+chunk_overlap: 100
+```
+- max_chunk_size: 每块最大字符数（默认 1500）。
+- min_chunk_size: 最小字符数；过小的块会被合并到下一块（默认 200）。
+- chunk_overlap: 硬切分时相邻块之间的重叠字符数（默认 100）。
