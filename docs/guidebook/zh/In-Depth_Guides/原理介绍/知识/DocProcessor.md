@@ -310,3 +310,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [JsonSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/json_splitter.yaml)
+
+`JsonSplitter` 递归遍历 JSON 文档，对每个叶子标量值（或指定深度的每一层）生成一个块，并把 JSON 路径（如 `"root > users > [0] > name"`）写入每个块的 metadata。它适用于结构化数据源——API 文档、数据库 schema、配置文件——这类场景下每个字段/取值都应是一个独立的检索单元。它与 `MarkdownHeaderTextSplitter`、`HtmlHeaderTextSplitter` 同属一类，对应 issue #258 的*知识预处理*方向。
+
+纯 Python 实现，无第三方依赖；将 `json_splitter.yaml` 复制到应用配置目录，加载内置 `json_splitter` 组件即可使用。若输入文本不是合法 JSON，则原样输出原文档。
+
+组件定义文件如下：
+```yaml
+name: 'json_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.json_splitter'
+  class: 'JsonSplitter'
+description: '将 JSON 文档切分为每个叶子取值一个块，并把 JSON 路径记录到 metadata。'
+path_key: 'json_path'
+max_depth: null
+max_value_length: 10000
+drop_empty: true
+```
+- path_key: 记录每个块 JSON 路径所用的 metadata 键。
+- max_depth: 最大遍历深度（`null` 表示不限）。到达 `max_depth` 时，嵌套对象/数组会被序列化为 JSON 文本，而不再继续下钻。
+- max_value_length: 写入块文本的标量值最大字符数，超出部分以省略号截断。
+- drop_empty: 为 `true`（默认）时，空字符串 / `None` / 空容器不会作为块输出。
