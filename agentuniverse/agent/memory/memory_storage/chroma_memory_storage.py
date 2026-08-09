@@ -219,7 +219,7 @@ class ChromaMemoryStorage(MemoryStorage):
                 # order by gmt_created asc
                 message_list = sorted(
                     message_list,
-                    key=lambda msg: msg.metadata.get('gmt_created', ''),
+                    key=lambda msg: (msg.metadata or {}).get('gmt_created', ''),
                 )
         except Exception as e:
             print('ChromaMemory.to_messages failed, exception= ' + str(e))
