@@ -1,0 +1,21 @@
+name: opensearch_vector_store
+description: OpenSearch HNSW vector knowledge store
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.opensearch_vector_store
+  class: OpenSearchVectorStore
+connection_args:
+  hosts:
+    - host: localhost
+      port: 9200
+  use_ssl: false
+  verify_certs: true
+index_name: agentuniverse-documents
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+create_index: true
+refresh: false
+filter_fields: [tenant, source]
+ef_construction: 128
+m: 16
