@@ -128,6 +128,15 @@ class SQLiteStore(Store):
                     'INSERT OR REPLACE INTO documents (id, text, word_count, metadata) VALUES (?, ?, ?, ?)',
                     (document.id, document.text, len(jieba.lcut(document.text)), metadata)
                 )
+                # Clear any stale inverted-index rows for this id so a re-insert
+                # of the same id (e.g. re-running ingest) does not accumulate
+                # old keywords alongside the new ones. Matches upsert_document
+                # semantics; without this the BM25 term-frequency / IDF counts
+                # get polluted and stale keywords keep recalling the document.
+                self.conn.execute(
+                    'DELETE FROM inverted_index WHERE doc_id = ?',
+                    (document.id,)
+                )
                 self._get_document_keyword(document)
                 for term in set(document.keywords):
                     self.conn.execute(
@@ -197,16 +206,26 @@ class SQLiteStore(Store):
             cursor = self.conn.cursor()
             cursor.execute('SELECT text FROM documents WHERE id = ?',
                            (doc_id,))
-            doc_text = cursor.fetchone()[0]
+            row = cursor.fetchone()
             cursor.close()
+            # The inverted index can reference a doc_id whose row was since
+            # replaced or removed (INSERT OR REPLACE does not touch the index,
+            # and a stale entry should not crash the whole query).
+            if row is None:
+                continue
+            doc_text = row[0]
 
             bm25_score = self.compute_bm25(query.query_str, doc_text,
                                            inverted_index, total_doc_count, total_word_count)
             doc_scores.append((doc_id, bm25_score))
 
-        # Order the docs with bm25, and return top k.
+        # Order the docs with bm25, and return top k. Honour the per-query
+        # similarity_top_k when the caller supplied one; otherwise fall back to
+        # the store default. The previous code always used the store default,
+        # silently truncating caller-requested recall.
+        top_k = query.similarity_top_k if query.similarity_top_k else self.similarity_top_k
         doc_scores.sort(key=lambda x: x[1], reverse=True)
-        top_docs = doc_scores[:self.similarity_top_k]
+        top_docs = doc_scores[:top_k]
         results = []
         for doc_id, score in top_docs:
             cursor = self.conn.cursor()
@@ -214,24 +233,59 @@ class SQLiteStore(Store):
                            (doc_id,))
             doc_row = cursor.fetchone()
             cursor.close()
+            if doc_row is None:
+                continue
 
+            # metadata is stored as JSON or NULL; json.loads(None) would raise
+            # TypeError, so guard it explicitly.
+            raw_metadata = doc_row[3]
+            metadata = json.loads(raw_metadata) if raw_metadata else None
             document = Document(id=doc_row[0], text=doc_row[1],
                                 word_count=doc_row[2],
-                                metadata=json.loads(doc_row[3]))
+                                metadata=metadata)
             results.append(document)
 
         return results
 
     @staticmethod
     def to_documents(query_result) -> List[Document]:
-        """Convert the query results of sqlite to the agentUniverse(aU) document format."""
+        """Convert rows from the documents table to aU Documents.
 
+        Accepts either a Chroma-style dict (``{'ids': [[...]], 'documents': [[...]],
+        'metadatas': [[...]]}``) for cross-store compatibility, or a list of
+        tuples shaped like ``(id, text, word_count, metadata_json)`` as produced
+        by the SQLiteStore query path. Returns an empty list for ``None`` or an
+        unrecognised shape, rather than crashing on a missing key.
+        """
         if query_result is None:
             return []
-        documents = []
-        for i in range(len(query_result['ids'][0])):
-            documents.append(Document(id=query_result['ids'][0][i],
-                                      text=query_result['documents'][0][i],
-                                      embedding=[],
-                                      metadata=json.loads(query_result[2]) if query_result[2] else None))
+
+        documents: List[Document] = []
+
+        # Chroma-style nested-list-of-lists dict.
+        if isinstance(query_result, dict) and 'ids' in query_result:
+            ids = query_result.get('ids') or [[]]
+            texts = query_result.get('documents') or [[]]
+            metadatas = query_result.get('metadatas') or [[]]
+            if not ids or not isinstance(ids[0], list):
+                return []
+            for i, doc_id in enumerate(ids[0]):
+                text = texts[0][i] if texts and len(texts[0]) > i else ''
+                meta = metadatas[0][i] if metadatas and len(metadatas[0]) > i else None
+                documents.append(Document(id=doc_id, text=text, embedding=[],
+                                          metadata=meta if isinstance(meta, dict) else None))
+            return documents
+
+        # SQLite row tuples: (id, text, word_count, metadata_json).
+        if isinstance(query_result, list):
+            for row in query_result:
+                if not row or len(row) < 2:
+                    continue
+                raw_metadata = row[3] if len(row) > 3 else None
+                try:
+                    metadata = json.loads(raw_metadata) if raw_metadata else None
+                except (TypeError, ValueError):
+                    metadata = None
+                documents.append(Document(id=row[0], text=row[1], embedding=[],
+                                          metadata=metadata))
         return documents
