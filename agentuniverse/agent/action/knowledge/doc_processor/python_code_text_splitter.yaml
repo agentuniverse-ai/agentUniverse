@@ -1,0 +1,10 @@
+name: 'python_code_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.python_code_text_splitter'
+  class: 'PythonCodeTextSplitter'
+description: 'Splits Python source code by top-level functions and classes for knowledge pre-processing.'
+name_key: 'code_unit_name'
+type_key: 'code_unit_type'
+max_chunk_chars: 5000
+include_module_level: true

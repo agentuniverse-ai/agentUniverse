@@ -309,3 +309,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [PythonCodeTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/python_code_text_splitter.yaml)
+
+`PythonCodeTextSplitter` splits Python source code into one chunk per top-level function or class (plus optionally one chunk for module-level code), preserving the full source text of each unit including its docstring and decorators. The unit name and type (`module` / `function` / `class`) are recorded in metadata so a retrieved chunk can be traced back to the exact function or class it came from. It is a sibling of `MarkdownHeaderTextSplitter`, `HtmlHeaderTextSplitter`, `JsonSplitter`, and `SemanticChunker`, addressing issue #258.
+
+Built on Python's standard `ast` module — no third-party dependency. Copy `python_code_text_splitter.yaml` into your application configuration directory and resolve the built-in `python_code_text_splitter` component to use it. When the input is not valid Python, the original document is emitted unchanged.
+
+The component definition file is as follows:
+```yaml
+name: 'python_code_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.python_code_text_splitter'
+  class: 'PythonCodeTextSplitter'
+description: 'Splits Python source code by top-level functions and classes for knowledge pre-processing.'
+name_key: 'code_unit_name'
+type_key: 'code_unit_type'
+max_chunk_chars: 5000
+include_module_level: true
+```
+- name_key: Metadata key under which the unit name is recorded.
+- type_key: Metadata key under which the unit type (`module` / `function` / `class`) is recorded.
+- max_chunk_chars: Maximum characters per chunk; the limit only applies to the module-level chunk (code units are kept intact even when larger).
+- include_module_level: When `true` (default), module-level code (imports, constants, `if __name__ == "__main__"`) is emitted as a separate chunk; when `false` it is dropped.
