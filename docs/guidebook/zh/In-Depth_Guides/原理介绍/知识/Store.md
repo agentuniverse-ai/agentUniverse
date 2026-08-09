@@ -96,3 +96,41 @@ results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metada
 ## PGVectorStore
 
 `PGVectorStore` 提供基于 PostgreSQL/pgvector 的同步与异步 CRUD、余弦/L2/内积检索、JSONB 包含过滤、可选的自动向量化、维度校验、自动建表和可选 HNSW 索引。安装 `store_ext` extra，并将 `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` 复制到应用配置目录。连接地址可以写在本地配置的 `connection_url` 中，或通过 `PGVECTOR_CONNECTION_URL` 提供；请勿提交数据库凭据。
+
+## PineconeStore
+
+`PineconeStore` 是基于 Pinecone（v3 客户端 API，全托管云原生向量数据库）的向量存储。提供插入、查询、upsert、更新、删除及巡检能力，支持 cosine / euclidean / dotproduct 距离度量、可配置向量维度、通过已注册 aU embedding 组件按需向量化、可选 metadata 过滤、namespace 分区，以及受控的资源使用（`similarity_top_k`）。安装可选依赖 `pip install 'agentUniverse[store_ext]'`（或 `pip install pinecone`），并准备一个 Pinecone 项目。
+
+将 `agentuniverse/agent/action/knowledge/store/pinecone_store.yaml.example` 复制到应用配置目录，加载内置 `pinecone_store` 组件。在该配置副本中设置 `api_key`（或通过 `PINECONE_API_KEY` 环境变量提供）；`embedding_model` 指定一个已注册的 aU embedding 组件，用于按需对文档和查询向量化。
+
+```yaml
+name: pinecone_store
+description: Pinecone cloud-native vector store for knowledge retrieval
+api_key: ''
+environment: aws-us-east-1
+index_host: ''
+index_name: agentuniverse-documents
+embedding_model: openai_embedding
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+namespace: ''
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.pinecone_store
+  class: PineconeStore
+```
+- api_key: Pinecone API Key；未设置时回退到 `PINECONE_API_KEY` 环境变量。
+- environment: 云/区域提示（如 `aws-us-east-1`），用于在需要创建索引时构建 serverless 规格。
+- index_host: 已有索引的完整 host 地址；设置后直接连接，不再列举索引。
+- index_name: Pinecone 索引名。
+- embedding_model: 用于按需对文档/查询向量化的已注册 aU embedding 组件名。
+- dimensions: 向量维度；为 `null` 时由首条插入文档推断。
+- distance: 距离度量——`cosine`、`euclidean` 或 `dotproduct`。
+- similarity_top_k: `query` 默认返回的结果数。
+- namespace: 用于分区记录的可选 Pinecone namespace。
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"tenant": "acme"}, embedding=[0.1, 0.2, 0.3])])
+results = store.query(Query(embeddings=[[0.1, 0.2, 0.3]], similarity_top_k=5), metadata_filter={"tenant": "acme"})
+```

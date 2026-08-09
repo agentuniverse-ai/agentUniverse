@@ -96,3 +96,41 @@ Supported metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are 
 ## PGVectorStore
 
 `PGVectorStore` adds PostgreSQL/pgvector persistence with synchronous and asynchronous CRUD, cosine/L2/inner-product search, JSONB containment filters, optional managed embeddings, dimension validation, automatic table/extension creation, and an optional HNSW index. Install the `store_ext` extra and copy `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` into the application configuration directory. Set `connection_url` in that copy or use `PGVECTOR_CONNECTION_URL`; never commit credentials.
+
+## PineconeStore
+
+`PineconeStore` is a vector store backed by Pinecone (v3 client API), a fully-managed, cloud-native vector database. It provides insert, query, upsert, update, delete, and inspection with `cosine` / `euclidean` / `dotproduct` distance metrics, configurable vector dimensions, optional on-demand embedding through a registered aU embedding component, optional metadata filtering, namespace partitioning, and bounded resource usage (`similarity_top_k`). Install the optional dependency with `pip install 'agentUniverse[store_ext]'` (or `pip install pinecone`) and provision a Pinecone project.
+
+Copy `agentuniverse/agent/action/knowledge/store/pinecone_store.yaml.example` into the application configuration directory and resolve the built-in `pinecone_store` component. Set `api_key` in that copy (or via the `PINECONE_API_KEY` environment variable); `embedding_model` names a registered aU embedding component used to embed documents and queries on demand.
+
+```yaml
+name: pinecone_store
+description: Pinecone cloud-native vector store for knowledge retrieval
+api_key: ''
+environment: aws-us-east-1
+index_host: ''
+index_name: agentuniverse-documents
+embedding_model: openai_embedding
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+namespace: ''
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.pinecone_store
+  class: PineconeStore
+```
+- api_key: Pinecone API key; falls back to the `PINECONE_API_KEY` environment variable.
+- environment: Cloud/region hint (e.g. `aws-us-east-1`) used to build the serverless spec when the index must be created.
+- index_host: Fully-qualified host of an existing index; when set, the store connects directly without listing indexes.
+- index_name: Pinecone index name.
+- embedding_model: Registered aU embedding component used to embed documents / queries on demand.
+- dimensions: Vector dimension; if `null`, inferred from the first inserted document.
+- distance: Distance metric — `cosine`, `euclidean`, or `dotproduct`.
+- similarity_top_k: Default number of results returned by `query`.
+- namespace: Optional Pinecone namespace used to partition records.
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"tenant": "acme"}, embedding=[0.1, 0.2, 0.3])])
+results = store.query(Query(embeddings=[[0.1, 0.2, 0.3]], similarity_top_k=5), metadata_filter={"tenant": "acme"})
+```
