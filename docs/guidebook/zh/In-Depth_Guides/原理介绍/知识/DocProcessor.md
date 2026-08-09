@@ -310,3 +310,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [KeywordExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/keyword_extractor.yaml)
+
+`KeywordExtractor` 使用无依赖的 YAKE 风格算法从召回文档中抽取关键词：综合词频、位置、大小写和词长对候选词打分，把 top-N 关键词写入每篇文档的 metadata。它与已有的 `JiebaKeywordExtractor` 不同——后者依赖 `jieba` 包且仅针对中文。对应 issue #248。
+
+纯 Python 实现，零第三方依赖；将 `keyword_extractor.yaml` 复制到应用配置目录，加载内置 `keyword_extractor` 组件即可使用。关键词列表写入每篇文档 metadata 中的 `keywords_key` 字段，文档原文保持不变。
+
+组件定义文件如下：
+```yaml
+name: 'keyword_extractor'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.keyword_extractor'
+  class: 'KeywordExtractor'
+description: '使用无依赖 YAKE 风格算法从文档中抽取 top-N 关键词。'
+top_k: 10
+ngram_size: 3
+keywords_key: 'keywords'
+min_term_freq: 1
+```
+- top_k: 每篇文档抽取的关键词数量（默认 10）。
+- ngram_size: 候选词的最大 n-gram 长度（默认 3）。
+- keywords_key: 存放关键词列表的 metadata 键。
+- min_term_freq: 候选词被纳入考虑的最低词频（默认 1）。
