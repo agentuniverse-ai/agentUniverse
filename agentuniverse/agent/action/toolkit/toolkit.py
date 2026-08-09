@@ -40,7 +40,7 @@ class Toolkit(ComponentBase):
     def tool_descriptions(self) -> list:
         """Return all tools' descriptions in toolkit."""
         tools = [ToolManager().get_instance_obj(tool_name, new_instance=False) for tool_name in self.include]
-        tools_descriptions = [f'tool name:{tool.name}\ntool description:{tool.description}\n' for tool in tools]
+        tools_descriptions = [f'tool name:{tool.name}\ntool description:{tool.description}\n' for tool in tools if tool is not None]
         return tools_descriptions
 
     @property

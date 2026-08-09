@@ -151,14 +151,20 @@ class ReActAgentTemplate(AgentTemplate):
         if self.tool_names:
             for tool_name in self.tool_names:
                 tool: Tool = ToolManager().get_instance_obj(tool_name)
+                if tool is None:
+                    continue
                 lc_tools.append(tool.as_langchain())
         if self.knowledge_names:
             for knowledge_name in self.knowledge_names:
                 knowledge: Knowledge = KnowledgeManager().get_instance_obj(knowledge_name)
+                if knowledge is None:
+                    continue
                 lc_tools.append(knowledge.as_langchain_tool())
         if self.agent_names:
             for agent_name in self.agent_names:
                 agent: Agent = AgentManager().get_instance_obj(agent_name)
+                if agent is None:
+                    continue
                 lc_tools.append(agent.as_langchain_tool())
         return lc_tools
 
@@ -167,14 +173,20 @@ class ReActAgentTemplate(AgentTemplate):
         if self.tool_names:
             for tool_name in self.tool_names:
                 tool: Tool = ToolManager().get_instance_obj(tool_name)
+                if tool is None:
+                    continue
                 lc_tools.append(await tool.async_as_langchain())
         if self.knowledge_names:
             for knowledge_name in self.knowledge_names:
                 knowledge: Knowledge = KnowledgeManager().get_instance_obj(knowledge_name)
+                if knowledge is None:
+                    continue
                 lc_tools.append(await knowledge.async_as_langchain_tool())
         if self.agent_names:
             for agent_name in self.agent_names:
                 agent: Agent = AgentManager().get_instance_obj(agent_name)
+                if agent is None:
+                    continue
                 lc_tools.append(await agent.async_as_langchain_tool())
         return lc_tools
 
