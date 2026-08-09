@@ -146,10 +146,13 @@ class ChromaMemoryStorage(MemoryStorage):
         if source:
             filters["$and"].append({'source': source})
         if kwargs.get('type'):
-            if isinstance(kwargs.get('type'), list):
-                types = kwargs.get('type')
-            elif isinstance(kwargs.get('type'), str):
-                types = [kwargs.get('type')]
+            type_value = kwargs.get('type')
+            if isinstance(type_value, str):
+                types = [type_value]
+            elif isinstance(type_value, (list, tuple, set)):
+                types = list(type_value)
+            else:
+                types = [type_value]
             filters["$and"].append({'type': {'$in': types}})
         if len(filters["$and"]) < 2:
             filters = filters["$and"][0] if len(filters["$and"]) == 1 else {}
