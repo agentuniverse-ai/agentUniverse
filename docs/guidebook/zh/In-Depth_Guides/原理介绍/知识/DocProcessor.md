@@ -310,3 +310,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [SemanticChunker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/semantic_chunker.yaml)
+
+`SemanticChunker` 按语义相似度切分文档：把相似度高于阈值的相邻句子聚成一块，当相邻句子语义差异较大、相似度下降越过断点时即开启新块，使切分结果比定长切分器（字符 / token / 递归）更贴合主题边界。对应 issue #258 的*知识预处理*方向。
+
+支持两种模式。**Embedding 模式**——设置 `embedding_name` 为已注册的 aU embedding 组件——为每句生成向量，并在相邻句子余弦相似度差异最大的位置切分。**抽取模式**（默认，不设 `embedding_name`）是无依赖的兜底方案，按词法重叠（词集合上的 Jaccard 相似度）聚类相邻句子。将 `semantic_chunker.yaml` 复制到应用配置目录，加载内置 `semantic_chunker` 组件即可使用。
+
+组件定义文件如下：
+```yaml
+name: 'semantic_chunker'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.semantic_chunker'
+  class: 'SemanticChunker'
+description: '基于语义相似度、按主题边界切分文档的切分器。'
+embedding_name: null
+breakpoint_threshold: 75
+max_chunk_size: 2000
+min_chunk_size: 100
+```
+- embedding_name: 已注册的 aU embedding 组件名。设置后用相邻句向量余弦相似度驱动切分；不设置则使用词法重叠兜底方案。
+- breakpoint_threshold: 触发新块的相似度下降分位数。越大块越少越大，越小块越多越小（默认 75，即下降幅度最大的四分之一作为切分点）。
+- max_chunk_size: 每块最大字符数；超出时在句子边界硬切分。
+- min_chunk_size: 每块最小字符数；过短的块会被合并到下一块。
