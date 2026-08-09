@@ -38,7 +38,7 @@ class Document(BaseModel):
 
     def as_langchain(self) -> LCDocument:
         """Convert to LangChain document format."""
-        metadata = self.metadata or {}
+        metadata = (self.metadata or {}).copy()
         return LCDocument(page_content=self.text, metadata=metadata)
 
     @staticmethod
