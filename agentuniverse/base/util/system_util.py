@@ -7,6 +7,7 @@
 # @FileName: system_util.py
 import ast
 import inspect
+import logging
 import os
 from pathlib import Path
 import importlib
@@ -16,6 +17,7 @@ from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 
 PROJECT_ROOT_PATH = None
+logger = logging.getLogger(__name__)
 
 
 def get_project_root_path() -> Path:
@@ -236,7 +238,7 @@ def is_system_builtin(component_instance: ComponentBase) -> bool:
         # Check if the system path is part of the normalized config path
         return system_path in normalized_config_path
     except Exception as e:
-        print(f"An error occurred while checking if the component is system-built-in: {str(e)}")
+        logger.warning("An error occurred while checking if the component is system-built-in: %s", e)
         return False
 
 
@@ -288,5 +290,5 @@ def find_default_llm_config(package_list: list[str]):
                     continue
         return None
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logger.warning("An error occurred while finding default LLM config: %s", e)
         return None
