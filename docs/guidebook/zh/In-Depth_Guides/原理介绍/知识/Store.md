@@ -96,3 +96,17 @@ results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metada
 ## PGVectorStore
 
 `PGVectorStore` 提供基于 PostgreSQL/pgvector 的同步与异步 CRUD、余弦/L2/内积检索、JSONB 包含过滤、可选的自动向量化、维度校验、自动建表和可选 HNSW 索引。安装 `store_ext` extra，并将 `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` 复制到应用配置目录。连接地址可以写在本地配置的 `connection_url` 中，或通过 `PGVECTOR_CONNECTION_URL` 提供；请勿提交数据库凭据。
+
+## VespaStore
+
+`VespaStore` 接入开源的 Vespa 搜索与向量引擎，提供同步与异步的向量增删改查及近似最近邻（ANN）检索。通过 `pip install pyvespa` 安装可选依赖，并部署一个 Vespa 应用，其 schema 需暴露 `embedding`（tensor）、`id`、`text`、`metadata` 字段——本组件只负责数据面操作，不会部署或修改应用包。
+
+将 `agentuniverse/agent/action/knowledge/store/vespa_store.yaml.example` 复制到应用配置目录，把 `application_url` 指向应用容器端点；若端点启用了 mTLS（如 Vespa Cloud），请同时提供 `cert_path` 与 `key_path`。字段名（`schema_name`、`namespace`、`embedding_field`、`id_field`、`text_field`、`metadata_field`）均可配置，以便对接已有 schema。
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"team": "acme"}, embedding=[0.1, 0.2])])
+results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metadata_filter={"team": "acme"})
+```
+
+检索逻辑将 YQL 的 `nearestNeighbor` 与可选的元数据过滤条件组合；所有标识符在构造请求体前都会通过严格白名单校验，每条 embedding 都会按 `dimensions`（未配置时由首条文档推断）进行维度校验。
+

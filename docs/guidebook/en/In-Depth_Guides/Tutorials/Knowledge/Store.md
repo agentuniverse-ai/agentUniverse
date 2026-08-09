@@ -96,3 +96,17 @@ Supported metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are 
 ## PGVectorStore
 
 `PGVectorStore` adds PostgreSQL/pgvector persistence with synchronous and asynchronous CRUD, cosine/L2/inner-product search, JSONB containment filters, optional managed embeddings, dimension validation, automatic table/extension creation, and an optional HNSW index. Install the `store_ext` extra and copy `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` into the application configuration directory. Set `connection_url` in that copy or use `PGVECTOR_CONNECTION_URL`; never commit credentials.
+
+## VespaStore
+
+`VespaStore` integrates the open-source Vespa search and vector engine for synchronous and asynchronous vector CRUD plus approximate nearest neighbour (ANN) search. Install the optional dependency with `pip install pyvespa` and deploy a Vespa application whose schema exposes `embedding` (tensor), `id`, `text`, and `metadata` fields — the component only performs data-plane operations and does not deploy or alter the application package.
+
+Copy `agentuniverse/agent/action/knowledge/store/vespa_store.yaml.example` into the application configuration directory, set `application_url` to the application container endpoint, and (for mTLS-secured endpoints such as Vespa Cloud) provide `cert_path` and `key_path`. Field names (`schema_name`, `namespace`, `embedding_field`, `id_field`, `text_field`, `metadata_field`) are configurable so the component can target an existing schema.
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"team": "acme"}, embedding=[0.1, 0.2])])
+results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metadata_filter={"team": "acme"})
+```
+
+Query combines YQL `nearestNeighbor` with optional metadata clauses; all identifiers are validated against a strict allowlist before the request body is constructed, and every embedding is dimension-checked against `dimensions` (inferred from the first document when not set).
+
