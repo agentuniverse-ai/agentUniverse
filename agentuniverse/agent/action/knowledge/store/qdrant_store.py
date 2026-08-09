@@ -54,6 +54,22 @@ class QdrantStore(Store):
 
     VECTOR_NAME: ClassVar[str] = "embedding"
 
+    @staticmethod
+    def _coerce_bool(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        if isinstance(value, int) and value in (0, 1):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "n", "off"}:
+                return False
+        raise ValueError(f"Invalid boolean value for with_vectors: {value!r}")
+
     def _metric_from_str(self) -> Distance:
         return {
             "COSINE": Distance.COSINE,
@@ -82,7 +98,7 @@ class QdrantStore(Store):
         if hasattr(qdrant_store_configer, "similarity_top_k"):
             self.similarity_top_k = qdrant_store_configer.similarity_top_k
         if hasattr(qdrant_store_configer, "with_vectors"):
-            self.with_vectors = bool(qdrant_store_configer.with_vectors)
+            self.with_vectors = self._coerce_bool(qdrant_store_configer.with_vectors)
         return self
 
     def _ensure_collection(self, dim: int):
