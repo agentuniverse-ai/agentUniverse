@@ -1,0 +1,13 @@
+name: mistral_llm
+description: Mistral AI LLM component
+model_name: mistral-large-latest
+api_key: ''
+api_base: 'https://api.mistral.ai/v1'
+proxy: ''
+max_tokens: 4096
+temperature: 0.7
+streaming: false
+metadata:
+  type: LLM
+  module: agentuniverse.llm.default.mistral_llm
+  class: MistralLLM
