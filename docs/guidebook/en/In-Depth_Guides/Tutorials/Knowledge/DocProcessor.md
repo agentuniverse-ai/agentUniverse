@@ -309,3 +309,25 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [CsvSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/csv_splitter.yaml)
+
+`CsvSplitter` splits CSV or TSV text into one chunk per row group, where each chunk contains a configurable number of data rows plus the header. The header is prepended to every chunk so each chunk is self-contained and retrievable in context. It is a sibling of the other structure-aware splitters (`MarkdownHeaderTextSplitter`, `HtmlHeaderTextSplitter`, `JsonSplitter`, …) addressing issue #258.
+
+Pure Python with the built-in `csv` module — no third-party dependency. Copy `csv_splitter.yaml` into your application configuration directory and resolve the built-in `csv_splitter` component to use it. Each produced chunk carries `chunk_method: "csv"` in its metadata.
+
+The component definition file is as follows:
+```yaml
+name: 'csv_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.csv_splitter'
+  class: 'CsvSplitter'
+description: 'Splits CSV/TSV text into row-grouped chunks with header preserved on every chunk.'
+rows_per_chunk: 50
+delimiter: ','
+max_cell_chars: 1000
+```
+- rows_per_chunk: Number of data rows per chunk (default 50). The header row is prepended to every chunk.
+- delimiter: Column delimiter. `","` for CSV (default), `"\t"` for TSV, or any other single character.
+- max_cell_chars: Maximum characters per cell in the output text; longer cells are truncated (default 1000).
