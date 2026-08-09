@@ -96,3 +96,11 @@ Supported metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are 
 ## PGVectorStore
 
 `PGVectorStore` adds PostgreSQL/pgvector persistence with synchronous and asynchronous CRUD, cosine/L2/inner-product search, JSONB containment filters, optional managed embeddings, dimension validation, automatic table/extension creation, and an optional HNSW index. Install the `store_ext` extra and copy `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` into the application configuration directory. Set `connection_url` in that copy or use `PGVECTOR_CONNECTION_URL`; never commit credentials.
+
+## ElasticsearchVectorStore
+
+`ElasticsearchStore` uses Elasticsearch's `dense_vector` field type and kNN search for vector CRUD and retrieval. Install the optional dependency with `pip install 'agentUniverse[store_ext]'` and run Elasticsearch 8.x with the vector search feature enabled.
+
+Copy `elasticsearch_store.yaml.example` and configure the hosts, index name, vector dimensions, and similarity metric (`cosine`, `l2`, or `dot_product`). Authentication supports API key (`api_key: "id:api_key"`) or basic auth (`username` / `password`). Credentials may be supplied through environment variables instead of YAML.
+
+Dimension validation rejects mismatched vectors with a clear error. The index is auto-created with the correct `dense_vector` mapping on first connect if it does not exist.
