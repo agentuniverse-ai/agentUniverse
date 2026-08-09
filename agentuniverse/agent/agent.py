@@ -356,6 +356,23 @@ class Agent(ComponentBase, ABC):
                            chain: RunnableSerializable[Any, str]) -> bool:
         streaming = False
         for _step in chain.steps:
+            # The chain is built as prompt | llm.as_langchain_runnable(params).
+            # The second element is a RunnableBinding (from .bind()), which
+            # exposes .bound (the underlying runnable) and .kwargs. It does NOT
+            # have .llm or .llm_channel attributes, so the previous detection
+            # always fell through to ``return False``, silently disabling
+            # streaming even when the LLM was configured with streaming: true.
+            #
+            # Check for RunnableBinding first, then unwrap to find the LLM.
+            if hasattr(_step, "kwargs") and "streaming" in (_step.kwargs or {}):
+                return bool(_step.kwargs.get("streaming"))
+            if hasattr(_step, "bound"):
+                inner = _step.bound
+                if hasattr(inner, "streaming"):
+                    return bool(inner.streaming)
+                if hasattr(inner, "llm") and hasattr(inner.llm, "streaming"):
+                    return bool(inner.llm.streaming)
+            # Direct attribute check (for non-bound runnables).
             if hasattr(_step, "llm"):
                 return _step.kwargs.get('streaming', _step.llm.streaming)
             if hasattr(_step, "llm_channel"):
