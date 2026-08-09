@@ -1,0 +1,71 @@
+name: 'weather_tool'
+description: 'Weather tool backed by the free wttr.in API (no API key required). Fetch current conditions, a multi-day forecast, or a custom one-line format for any location.'
+tool_type: 'api'
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.weather_tool'
+  class: 'WeatherTool'
+input_keys:
+  - operation
+
+# Default location used when the caller omits 'location'. Any free-form string
+# wttr.in accepts: a city name (Beijing), an airport code (PEK), a zip code, or
+# 'lat,long'.
+default_location: 'Beijing'
+
+# Measurement system: metric (Celsius, km/h) | imperial (Fahrenheit, mph) | auto
+units: 'metric'
+
+# Per-request HTTP timeout in seconds.
+request_timeout: 10.0
+
+# Number of days requested in 'forecast' mode. wttr.in supports 0 (today only),
+# 1, 2, or 3.
+forecast_days: 3
+
+args_model:
+  operation:
+    type: string
+    description: Query operation — current (current conditions), forecast (multi-day forecast), or format (custom one-line format).
+    required: true
+  location:
+    type: string
+    description: Free-form location (city, airport code, zip, or 'lat,long'). Defaults to default_location when empty.
+    required: false
+  format:
+    type: string
+    description: Output format — text (human-readable) or json (structured). Ignored in 'format' operation.
+    required: false
+    default: 'text'
+  forecast_days:
+    type: integer
+    description: Days to include in forecast mode (0-3). Overrides forecast_days for this call.
+    required: false
+  format_string:
+    type: string
+    description: A wttr.in ?format string, e.g. '%l: %c %t'. Only used in 'format' operation.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    operation:
+      type: string
+      enum: ["current", "forecast", "format"]
+      description: Query operation.
+    location:
+      type: string
+      description: Free-form location.
+    format:
+      type: string
+      enum: ["text", "json"]
+      default: "text"
+      description: Output format.
+    forecast_days:
+      type: integer
+      minimum: 0
+      maximum: 3
+      description: Forecast days (forecast mode only).
+    format_string:
+      type: string
+      description: Custom format string (format mode only).
+  required: ["operation"]

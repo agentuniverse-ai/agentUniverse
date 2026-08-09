@@ -331,3 +331,36 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## WeatherTool
+
+`WeatherTool` fetches weather data from the free **wttr.in** service — no API key and no account are required. It supports three operations: `current` (current conditions), `forecast` (a multi-day forecast, up to 3 days), and `format` (a one-line custom-format snapshot such as `%l: %c %t`). Output can be human-readable `text` (the default) or structured `json`. Any free-form location wttr.in accepts is supported: a city name (`Beijing`), an airport code (`PEK`), a zip code, or `lat,long`.
+
+The built-in component config is
+[`weather_tool.yaml.example`](../../../../../../agentuniverse/agent/action/tool/common_tool/weather_tool.yaml.example):
+
+```yaml
+name: 'weather_tool'
+description: 'Weather tool backed by the free wttr.in API (no API key required).'
+tool_type: 'api'
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.weather_tool'
+  class: 'WeatherTool'
+input_keys: [operation]
+default_location: 'Beijing'   # used when the caller omits 'location'
+units: 'metric'               # metric | imperial | auto
+request_timeout: 10.0         # per-request HTTP timeout in seconds
+forecast_days: 3              # days requested in forecast mode (0-3)
+```
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj("weather_tool")
+tool.run(operation="current", location="Shanghai")
+tool.run(operation="forecast", location="Shanghai", format="json", forecast_days=2)
+tool.run(operation="format", location="Shanghai", format_string="%l: %c %t")
+```
+
+Every HTTP call uses a configurable `request_timeout` and surfaces failures as a clear `Error: ...` string instead of raising out of the tool.
