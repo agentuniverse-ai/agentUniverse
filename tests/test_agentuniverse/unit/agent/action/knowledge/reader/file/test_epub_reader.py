@@ -184,6 +184,25 @@ class TestEpubReader(unittest.TestCase):
         self.assertNotIn("<h1>", result)
         self.assertNotIn("&amp;", result)
 
+    def test_extract_text_with_regex_drops_script_and_style(self):
+        html_content = '''
+        <html>
+        <head>
+        <style>.hidden { display: none; }</style>
+        <script>window.secret = "token";</script>
+        </head>
+        <body>
+        <p>Visible &#39;text&#39; &nbsp; here</p>
+        </body>
+        </html>
+        '''
+
+        result = self.reader._extract_text_with_regex(html_content)
+
+        self.assertIn("Visible 'text' here", result)
+        self.assertNotIn("window.secret", result)
+        self.assertNotIn("display: none", result)
+
     def test_path_handling(self):
         """Test different path input types"""
         try:
