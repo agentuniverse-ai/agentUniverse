@@ -171,6 +171,29 @@ metadata:
 ```
 This component requires configuring DASHSCOPE_API_KEY in the environment variables.
 
+### [VoyageReranker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/voyage_reranker.yaml)
+
+This component reranks the documents recalled by the Store using the Voyage AI Rerank API (`https://api.voyageai.com/v1/rerank`), sorting them by relevance to the Query. Voyage AI exposes a family of rerank models such as `rerank-2` (default), `rerank-2-lite`, `rerank-2.5` and `rerank-2.5-lite`. Only a Voyage AI API key is required — `requests` is already a core dependency of agentUniverse.
+
+The component definition file is as follows:
+```yaml
+name: 'voyage_reranker'
+description: 'reranker use voyage ai api'
+model_name: 'rerank-2'
+top_n: 10
+request_timeout: 30
+score_key: 'rerank_score'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.voyage_reranker'
+  class: 'VoyageReranker'
+```
+- model_name: Voyage AI rerank model (default `rerank-2`).
+- top_n: Maximum number of documents to return after reranking. Maps to the API's `top_k` parameter and is capped at the number of input documents so the API is never asked for more results than exist.
+- request_timeout: Timeout in seconds for the rerank HTTP call (default 30). `requests` defaults to no timeout, so without this a stalled Voyage API would hang the whole rerank step indefinitely.
+- score_key: Metadata key under which each kept document's relevance score is stamped (default `rerank_score`).
+This component requires configuring `VOYAGE_API_KEY` in the environment variables.
+
 ### [HierarchicalRegexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/hierarchical_regex_text_splitter.py)
 
 This component splits the original text into multiple hierarchical levels using specified regex rules, forming a tree-like document structure. Users need to create a custom definition file, with an example as follows:
