@@ -331,3 +331,79 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+
+## UUIDGeneratorTool
+
+`UUIDGeneratorTool` generates, validates, and extracts UUIDs using only the Python standard-library `uuid` module, so it has zero external dependencies and runs anywhere. It supports four modes: `generate`, `generate_batch`, `validate`, and `extract`.
+
+The built-in component configuration is
+[`uuid_generator_tool.yaml`](../../../../../../agentuniverse/agent/action/tool/common_tool/uuid_generator_tool.yaml):
+
+```yaml
+name: uuid_generator_tool
+description: Generate, validate, and extract UUIDs using only the Python standard library.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.uuid_generator_tool
+  class: UUIDGeneratorTool
+input_keys: [mode]
+version: 4
+namespace: dns
+name: agentuniverse
+count: 1
+format: string
+max_batch_size: 1000
+max_extract_chars: 100000
+```
+
+Generate a single UUID (random `uuid4` by default):
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj("uuid_generator_tool")
+print(tool.run(mode="generate")["uuid"])
+# 06b7fde6-8b8b-4d66-8d7d-63cd860ec69a
+```
+
+Deterministic UUIDs from a name (versions 3 and 5 require a `namespace` and `name`):
+
+```python
+result = tool.run(mode="generate", version=5, namespace="dns", name="example.com")
+# same inputs always yield cfbff0d1-9375-5685-968c-48ce8b15ae17
+```
+
+Generate several at once:
+
+```python
+result = tool.run(mode="generate_batch", count=10)
+print(result["uuids"])  # 10 unique uuid4 strings
+```
+
+Validate a candidate string:
+
+```python
+result = tool.run(mode="validate", value="550e8400-e29b-41d4-a716-446655440000")
+print(result["valid"], result.get("version"))
+```
+
+Pull every UUID out of arbitrary text:
+
+```python
+result = tool.run(mode="extract", value="ids: 550e8400-e29b-41d4-a716-446655440000 and ...")
+print(result["uuids"], result["count"])
+```
+
+Parameters:
+
+- `mode`: required — `generate`, `generate_batch`, `validate`, or `extract`.
+- `version`: UUID version `3`, `4`, or `5`; defaults to the tool-level `version` (`4`). Versions 3 and 5 are deterministic and derive the UUID from a `namespace` and `name`.
+- `namespace`: required for versions 3 and 5. Accepts the well-known keys `dns`, `url`, `oid`, `x500`, or any valid UUID string.
+- `name`: required for versions 3 and 5; the name to hash with the namespace.
+- `count`: number of UUIDs for `generate_batch`; defaults to the tool-level `count` and is capped by `max_batch_size`.
+- `format`: output format for generated UUIDs — `string` (canonical hyphenated form, default), `hex` (32 hex digits), or `urn` (`urn:uuid:...`).
+- `value`: the candidate UUID for `validate`, or the text to scan for `extract`.
+
+`generate` returns the UUID plus its format/version (and namespace/name when used). `generate_batch` returns the list and the produced count. `validate` returns `valid` with the parsed UUID, hex, urn, version, and variant on success. `extract` returns the deduplicated UUIDs, their count, and the raw match total. Batch size and extraction text length are bounded; booleans are rejected where integers are expected.
