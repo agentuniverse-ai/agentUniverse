@@ -96,3 +96,35 @@ Supported metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are 
 ## PGVectorStore
 
 `PGVectorStore` adds PostgreSQL/pgvector persistence with synchronous and asynchronous CRUD, cosine/L2/inner-product search, JSONB containment filters, optional managed embeddings, dimension validation, automatic table/extension creation, and an optional HNSW index. Install the `store_ext` extra and copy `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` into the application configuration directory. Set `connection_url` in that copy or use `PGVECTOR_CONNECTION_URL`; never commit credentials.
+
+## WeaviateStore
+
+`WeaviateStore` is a vector store backed by Weaviate (v4 client API). It provides insert, query, upsert, update, delete, and inspection with cosine / dot / L2 distance metrics, configurable vector dimensions, optional on-demand embedding through a registered aU embedding component, metadata filtering, and bounded resource usage (`similarity_top_k`, `max_insert_batch`). Install the optional dependency with `pip install 'agentUniverse[store_ext]'` and run a Weaviate server (e.g. `http://localhost:8080` with gRPC on `50051`).
+
+Copy `agentuniverse/agent/action/knowledge/store/weaviate_store.yaml.example` into the application configuration directory and resolve the built-in `weaviate_store` component. Set `url` / `grpc_port` / `api_key` (for authenticated clusters) in that copy; `embedding_model` names a registered aU embedding component used to embed documents and queries on demand.
+
+```yaml
+name: weaviate_store
+description: Weaviate vector store for knowledge retrieval
+url: http://localhost:8080
+grpc_port: 50051
+api_key: ''
+collection_name: AgentuniverseDocument
+embedding_model: openai_embedding
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+max_insert_batch: 500
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.weaviate_store
+  class: WeaviateStore
+```
+- url / grpc_port: Weaviate REST URL and gRPC port (set `grpc_port: 0` to disable gRPC).
+- api_key: Optional Weaviate API key for authenticated clusters.
+- collection_name: Weaviate collection (class) name; must be a valid Weaviate identifier.
+- embedding_model: Registered aU embedding component used to embed documents / queries on demand.
+- dimensions: Vector dimension; if `null`, inferred from the first inserted document.
+- distance: Distance metric — `cosine`, `dot`, or `l2`.
+- similarity_top_k: Default number of results returned by `query`.
+- max_insert_batch: Maximum documents per Weaviate batch insert.
