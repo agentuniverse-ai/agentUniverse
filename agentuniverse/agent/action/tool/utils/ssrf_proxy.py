@@ -19,11 +19,30 @@ proxies = {
 
 
 def make_request(method, url, **kwargs):
+    """Issue an HTTP request through the configured SSRF proxy.
+
+    When the caller asks to follow redirects, route through a short-lived
+    ``httpx.Client`` so that ``max_redirects`` can bound the chain — the
+    top-level ``httpx.request`` does not accept ``max_redirects`` and would
+    otherwise follow up to the default of 20, which is large enough for a
+    redirect loop to consume a tool call. When redirects are not followed
+    (the safe default), the request goes through the top-level helper as
+    before.
+    """
     kwargs.setdefault("timeout", 20)
+    follow_redirects = kwargs.get("follow_redirects", False)
+    max_redirects = kwargs.pop("max_redirects", None)
+    proxy_kwargs = {}
     if SSRF_PROXY_ALL_URL:
-        kwargs["proxy"] = SSRF_PROXY_ALL_URL
+        proxy_kwargs["proxy"] = SSRF_PROXY_ALL_URL
     elif proxies:
-        kwargs["proxies"] = proxies
+        proxy_kwargs["proxies"] = proxies
+    if follow_redirects and max_redirects is not None:
+        with httpx.Client(follow_redirects=True, max_redirects=max_redirects,
+                          **proxy_kwargs) as client:
+            return client.request(method=method, url=url, **kwargs)
+    if proxy_kwargs:
+        kwargs.update(proxy_kwargs)
     return httpx.request(method=method, url=url, **kwargs)
 
 

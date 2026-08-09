@@ -20,8 +20,21 @@ class APITool(Tool):
 
     Attributes:
         openapi_spec(str): The openapi schema of the api tool.
+        allow_redirects (bool): Whether to follow HTTP redirects. Defaults to
+            ``False``: an OpenAPI-described endpoint is expected to answer at
+            the configured URL, and silently following redirects is a known
+            SSRF escape hatch (an external 30x can redirect the request to an
+            internal metadata service or link-local address). Integrators who
+            genuinely need redirect handling can opt in by setting
+            ``allow_redirects: true`` in the tool yaml; ``max_redirects``
+            still bounds the chain.
+        max_redirects (int): Upper bound on the redirect chain length when
+            ``allow_redirects`` is enabled. Defaults to ``5`` to mirror the
+            project's bounded-by-default stance and prevent redirect loops.
     """
     openapi_spec: Optional[dict] = None
+    allow_redirects: bool = False
+    max_redirects: int = 5
 
     def execute(self, tool_input: ToolInput):
         res = self.do_http_request(self.openapi_spec.get('url'), self.openapi_spec.get('method'), {},
@@ -199,8 +212,19 @@ class APITool(Tool):
             else:
                 body = body
         if method in ('get', 'head', 'post', 'put', 'delete', 'patch'):
-            response = getattr(ssrf_proxy, method)(url, params=params, headers=headers, data=body,
-                                                   follow_redirects=True)
+            # follow_redirects is opt-in (see allow_redirects). Defaulting to
+            # False closes an SSRF escape hatch: an OpenAPI-described endpoint
+            # is expected to answer at the configured URL, but a 30x from a
+            # compromised or attacker-controlled endpoint could redirect the
+            # authenticated request to an internal metadata service or a
+            # link-local address. When redirects are enabled, max_redirects
+            # still bounds the chain so a redirect loop cannot exhaust the
+            # tool call.
+            response = getattr(ssrf_proxy, method)(
+                url, params=params, headers=headers, data=body,
+                follow_redirects=self.allow_redirects,
+                max_redirects=self.max_redirects if self.allow_redirects else 0,
+            )
             return response
         else:
             raise ValueError(f'Invalid http method')
