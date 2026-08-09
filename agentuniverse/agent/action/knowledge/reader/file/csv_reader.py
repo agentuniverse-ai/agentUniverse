@@ -60,11 +60,12 @@ class CSVReader(Reader):
             csv_content: List[str] = []
             try:
                 csv_reader = csv.reader(text_stream, delimiter=delimiter, quotechar=quotechar)
+                output_delimiter = delimiter if delimiter != "," else ", "
                 for row in csv_reader:
                     if any(cell.strip() for cell in row):
                         while row and not row[-1].strip():
                             row.pop()
-                        csv_content.append(", ".join(row))
+                        csv_content.append(output_delimiter.join(row))
             finally:
                 if should_close:
                     text_stream.close()
