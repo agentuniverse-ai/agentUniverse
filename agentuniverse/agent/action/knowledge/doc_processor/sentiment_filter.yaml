@@ -1,0 +1,32 @@
+name: 'sentiment_filter'
+description: 'Filter recalled documents by sentiment polarity using a dependency-free bag-of-words sentiment scorer'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sentiment_filter'
+  class: 'SentimentFilter'
+
+# Which polarity to keep. One of: positive | negative | neutral | all.
+# 'all' disables filtering and only annotates documents with their sentiment.
+allowed_sentiment: 'positive'
+
+# Absolute score boundary in (0.0, 1.0] that separates positive / negative
+# from neutral. A document with |score| < threshold is classified as neutral.
+threshold: 0.05
+
+# Minimum |score| required before a non-neutral polarity is trusted.
+# Documents whose absolute score is below this are treated as neutral.
+# 0.0 disables the confidence gate.
+min_confidence: 0.0
+
+# Lexicon selection: 'auto' (default) scores with every lexicon and keeps the
+# strongest signal, or force 'en' / 'zh'.
+language: 'auto'
+
+# Metadata key to read text from when Document.text is empty (optional).
+# text_field: 'content'
+
+# Metadata keys stamped on every kept document. Set any to null to skip it.
+score_key: 'sentiment_score'
+polarity_key: 'sentiment_polarity'
+language_key: 'sentiment_language'
