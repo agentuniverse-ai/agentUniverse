@@ -112,6 +112,16 @@ class Graph(nx.DiGraph):
                 for s in successors:
                     if self.get_edge_data(predecessor_node.id, s).get('source_handler') == source_handler:
                         return self.nodes[s]['instance']
+                # The node produced a source_handler (e.g. a condition branch
+                # name) but no outgoing edge is configured for it. The
+                # previous code fell through to an implicit `return None`,
+                # silently ending the workflow with empty output and no error.
+                available = [self.get_edge_data(predecessor_node.id, s).get('source_handler')
+                             for s in successors]
+                raise ValueError(
+                    f"Node {predecessor_node.id!r} emitted source_handler "
+                    f"{source_handler!r} but no outgoing edge matches it. "
+                    f"Available handlers on successor edges: {available}.")
             else:
                 return self.nodes[successors[0]]['instance']
 
