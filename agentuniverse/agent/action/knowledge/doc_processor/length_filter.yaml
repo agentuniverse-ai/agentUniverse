@@ -1,0 +1,11 @@
+name: 'length_filter'
+description: 'filter recalled documents by text length'
+min_length: 10           # drop documents shorter than this (0 disables)
+max_length: 0            # drop documents longer than this (0 disables)
+counter: 'char'          # char | word | token
+drop_mode: 'drop_short'  # drop_short | drop_long | both
+tiktoken_encoding: 'cl100k_base'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.length_filter'
+  class: 'LengthFilter'

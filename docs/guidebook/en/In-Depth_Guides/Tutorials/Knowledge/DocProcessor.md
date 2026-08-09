@@ -309,3 +309,31 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [LengthFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/length_filter.yaml)
+
+This component filters the recalled documents by their **length**, so documents that are too short to be informative (fragments, boilerplate, single-word hits) or too long to be useful (dumped whole pages) can be dropped before they reach the LLM. It addresses the *length filtering* direction of issue #258.
+
+It is a focused, per-document predicate processor. It is distinct from `ThresholdFilter` (a general filter combinator with score / length / top-k / percentile filters and AND/OR logic) and from `ContextBudgetCompressor` (which manages the **cumulative** size of the kept set and can split the boundary document). `LengthFilter` only applies a per-document length range and never truncates.
+
+Length is measured explicitly via `counter`: `char` (exact character count, default), `word` (whitespace word count), or `token` (BPE tokens via tiktoken, falling back to a chars/4 estimate with a warning when tiktoken is not installed). `drop_mode` controls which side of the range is removed: `drop_short` (below `min_length`), `drop_long` (above `max_length`), or `both` (outside `[min_length, max_length]`). Bounds are inclusive; a bound of `0` disables that side.
+
+The component definition file is as follows:
+```yaml
+name: 'length_filter'
+description: 'filter recalled documents by text length'
+min_length: 10           # drop documents shorter than this (0 disables)
+max_length: 0            # drop documents longer than this (0 disables)
+counter: 'char'          # char | word | token
+drop_mode: 'drop_short'  # drop_short | drop_long | both
+tiktoken_encoding: 'cl100k_base'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.length_filter'
+  class: 'LengthFilter'
+```
+- min_length: Minimum inclusive length; documents shorter than this are dropped when `drop_mode` includes the short side. `0` disables the lower bound.
+- max_length: Maximum inclusive length; documents longer than this are dropped when `drop_mode` includes the long side. `0` disables the upper bound.
+- counter: How each document's length is measured: `char` (default), `word`, or `token`.
+- drop_mode: Which side of the range is removed: `drop_short`, `drop_long`, or `both`.
+- tiktoken_encoding: Encoding passed to tiktoken when `counter` is `token`.

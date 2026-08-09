@@ -310,3 +310,31 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [LengthFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/length_filter.yaml)
+
+该组件按**长度**过滤召回文档，从而在到达 LLM 之前丢弃过短（无信息量的片段、样板文本、单词命中）或过长（整页搬运）的文档。对应 issue #258 的*长度过滤*方向。
+
+它是一个聚焦的单文档断言处理器。与 `ThresholdFilter`（支持得分/长度/top-k/百分位过滤并支持 AND/OR 组合的通用过滤组合器）以及 `ContextBudgetCompressor`（管理保留集合的**累计**大小，可切分边界文档）不同，`LengthFilter` 只对每个文档应用一个长度区间，且不会截断。
+
+长度通过 `counter` 显式计量：`char`（精确字符数，默认）、`word`（按空白符切分的词数）或 `token`（经 tiktoken 计算的 BPE token 数；未安装 tiktoken 时回退为字符数/4 的估算值并给出告警）。`drop_mode` 控制移除哪一侧：`drop_short`（低于 `min_length`）、`drop_long`（高于 `max_length`）或 `both`（落在 `[min_length, max_length]` 区间外）。边界为闭区间；某侧设为 `0` 表示关闭该侧过滤。
+
+组件定义文件如下：
+```yaml
+name: 'length_filter'
+description: '按长度过滤召回文档'
+min_length: 10           # 丢弃短于此长度的文档（0 表示关闭）
+max_length: 0            # 丢弃长于此长度的文档（0 表示关闭）
+counter: 'char'          # char | word | token
+drop_mode: 'drop_short'  # drop_short | drop_long | both
+tiktoken_encoding: 'cl100k_base'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.length_filter'
+  class: 'LengthFilter'
+```
+- min_length: 最小长度（闭区间）；当 `drop_mode` 包含短侧时，短于此值的文档被丢弃。`0` 表示关闭下界。
+- max_length: 最大长度（闭区间）；当 `drop_mode` 包含长侧时，长于此值的文档被丢弃。`0` 表示关闭上界。
+- counter: 计量每个文档长度的方式：`char`（默认）、`word` 或 `token`。
+- drop_mode: 移除区间哪一侧：`drop_short`、`drop_long` 或 `both`。
+- tiktoken_encoding: 当 `counter` 为 `token` 时传给 tiktoken 的编码。
