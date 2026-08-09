@@ -1,0 +1,26 @@
+[BASE_INFO]
+appname = 'financial_research_app'
+
+[PACKAGE_PATH_INFO]
+ROOT_PACKAGE = 'examples.sample_apps.financial_research_app'
+
+[CORE_PACKAGE]
+default = ['${ROOT_PACKAGE}.intelligence.agentic']
+tool = ['${ROOT_PACKAGE}.intelligence.agentic.tool']
+doc_processor = []
+work_pattern = []
+
+[SUB_CONFIG_PATH]
+log_config_path = './log_config.toml'
+
+[DB]
+system_db_uri = 'sqlite:///financial-research-system.db'
+
+[GUNICORN]
+activate = 'false'
+
+[GRPC]
+activate = 'false'
+
+[MONITOR]
+activate = false

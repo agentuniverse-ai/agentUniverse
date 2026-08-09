@@ -1,0 +1,1 @@
+"""Financial research application components."""
