@@ -223,20 +223,49 @@ class MilvusStore(Store):
                     max_length=max_length,
                     index_params=index_params
                 )
-            expr = f'id == "{document.id}"'
-            existing_docs = self.collection.query(expr)
             entities = [
                 [document.id],
                 [embedding],
                 [document.text],
                 [document.metadata]
             ]
-            if existing_docs:
-                self.collection.delete(expr)
-                self.collection.insert(entities)
+            # Prefer the native upsert when available: it is atomic and
+            # sidesteps the query/delete/insert race in the manual path below.
+            # The previous code built the existence-check expression with an
+            # f-string (f'id == "{document.id}"'), which let a document id
+            # containing a double-quote escape the Milvus expression and inject
+            # arbitrary predicates (or just crash the query).
+            if hasattr(self.collection, "upsert"):
+                self.collection.upsert(entities)
             else:
+                # Fallback for pymilvus versions without Collection.upsert:
+                # validate the id before interpolating it into the filter
+                # expression so it cannot escape the string literal.
+                self._validate_filterable_id(document.id)
+                expr = f'id == "{document.id}"'
+                existing_docs = self.collection.query(expr)
+                if existing_docs:
+                    self.collection.delete(expr)
                 self.collection.insert(entities)
             self.collection.load()
+
+    @staticmethod
+    def _validate_filterable_id(document_id: str) -> None:
+        """Reject ids that can escape a Milvus filter string literal.
+
+        Milvus filter expressions embed string values inside double quotes.
+        An id containing a double-quote or backslash can break out of the
+        literal and inject arbitrary predicates. The native upsert path
+        does not build such an expression, so this only guards the legacy
+        query/delete/insert fallback.
+        """
+        if not isinstance(document_id, str) or not document_id:
+            raise ValueError("document id must be a non-empty string")
+        if '"' in document_id or "\\" in document_id:
+            raise ValueError(
+                f"document id {document_id!r} contains a character that can "
+                "escape the Milvus filter expression; use a safe id or "
+                "upgrade pymilvus to a version with Collection.upsert.")
 
     def insert_document(self,
                          documents: List[Document],
