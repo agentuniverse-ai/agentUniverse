@@ -1,0 +1,12 @@
+name: 'scholarly_evidence_tool'
+description: |
+  Search PubMed, Crossref, and Semantic Scholar for a research question. The tool
+  returns a bounded, DOI/PMID/title-deduplicated evidence set with stable evidence
+  IDs, source provenance, citation identifiers, source status, and explicit errors.
+  Input `query` should contain the user's complete research question.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'scholarly_research_app.intelligence.agentic.tool.scholarly_evidence_tool'
+  class: 'ScholarlyEvidenceTool'
