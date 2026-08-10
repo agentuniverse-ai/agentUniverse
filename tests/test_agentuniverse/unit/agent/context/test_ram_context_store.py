@@ -85,7 +85,7 @@ class TestRamContextStore:
         store.add(sample_segments, session_id="session_1")
 
         # Get all segments
-        segments = store.get("session_id"="session_1")
+        segments = store.get(session_id="session_1")
         assert len(segments) == 4
 
     def test_get_with_type_filter(self, store, sample_segments):
@@ -180,6 +180,34 @@ class TestRamContextStore:
         results = store.search("machine learning", "session_1", top_k=10)
 
         assert len(results) == 2
+
+    def test_search_empty_query_returns_no_results(self, store, sample_segments):
+        """Test that an empty query does not match every segment."""
+        store.add(sample_segments, session_id="session_1")
+
+        assert store.search("", "session_1") == []
+        assert store.search("   ", "session_1") == []
+
+    def test_search_matches_metadata_keywords(self, store):
+        """Test that metadata keywords remain valid relevance signals."""
+        segment = ContextSegment(
+            type=ContextType.BACKGROUND,
+            priority=ContextPriority.LOW,
+            content="A language reference",
+            tokens=3,
+            metadata=ContextMetadata(keywords=["python"]),
+        )
+        unrelated = ContextSegment(
+            type=ContextType.SYSTEM,
+            priority=ContextPriority.CRITICAL,
+            content="Cooking instructions",
+            tokens=2,
+        )
+        store.add([unrelated, segment], session_id="session_1")
+
+        results = store.search("python", "session_1")
+
+        assert results == [segment]
 
     def test_search_with_top_k(self, store):
         """Test search with top_k limit."""
