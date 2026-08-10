@@ -1,0 +1,9 @@
+# Replace the placeholder before running the agent. The three scholarly data
+# sources work without keys; the optional values improve identification or
+# rate limits. Environment variables with the same names are also supported.
+[KEY_LIST]
+DASHSCOPE_API_KEY = 'your-dashscope-api-key-here'
+# NCBI_EMAIL = 'you@example.com'
+# NCBI_API_KEY = ''
+# CROSSREF_EMAIL = 'you@example.com'
+# S2_API_KEY = ''
