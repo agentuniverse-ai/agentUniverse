@@ -331,3 +331,44 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## deps.dev Package Intelligence Tool
+
+`DepsDevPackageTool` uses the official deps.dev Open Source Insights API to
+inspect one exact package version. It supports Go, RubyGems, npm, Cargo, Maven,
+PyPI, and NuGet package coordinates.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.deps_dev_package_tool import DepsDevPackageTool
+
+tool = DepsDevPackageTool()
+metadata = tool.execute(
+    name="jinja2",
+    system="PYPI",
+    version="2.4.1",
+)
+graph = tool.execute(
+    name="react",
+    system="NPM",
+    version="18.2.0",
+    mode="dependencies",
+    max_nodes=100,
+    max_edges=200,
+)
+```
+
+The default `version` mode returns the canonical package key, publication and
+deprecation state, licenses, directly affecting OSV advisory IDs, safe external
+links, SLSA provenance, attestations, registries, related projects, and project
+status. The `dependencies` mode returns a resolved graph for npm, Cargo, Maven,
+and PyPI. Node indices are preserved, and edges whose endpoints are not in the
+bounded node result are omitted so the returned graph cannot contain dangling
+references.
+
+The tool uses fixed endpoints, percent-encodes package coordinates, makes one
+request per call, and needs no API key. Inputs, scalar text, URLs, collections,
+nodes, edges, and node errors are bounded; collection counts and truncation
+metadata expose omitted data. Timeout, connection, HTTP, not-found, rate-limit,
+JSON, and response-shape failures are structured. Package metadata and graph
+text are untrusted external data rather than agent instructions, and non-HTTP(S)
+links are omitted.
