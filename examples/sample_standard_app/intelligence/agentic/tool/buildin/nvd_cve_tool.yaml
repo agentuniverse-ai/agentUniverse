@@ -1,0 +1,40 @@
+name: 'nvd_cve_tool'
+description: |
+  Search the U.S. National Vulnerability Database (NVD) CVE API 2.0.
+
+  Input parameters:
+    - query (required): A CVE identifier such as CVE-2021-44228, or keywords
+      expected in vulnerability descriptions. Limited to 500 UTF-8 bytes.
+    - max_results (optional): Keyword results per request, from 1 to 20.
+      Defaults to 5. A CVE-ID lookup always requests one record.
+    - start_index (optional): Zero-based pagination offset for keyword searches.
+      Defaults to 0 and is limited to 10,000,000.
+    - exact_match (optional): Set true to require the complete keyword phrase.
+      Only valid for keyword searches. Defaults to false.
+
+  Examples:
+    {"query": "CVE-2021-44228"}
+    {"query": "Apache HTTP Server", "max_results": 5, "exact_match": true}
+    {"query": "remote code execution", "max_results": 10, "start_index": 10}
+
+  The normalized response includes pagination context and a cves list. Each CVE
+  may include its identifier, source, publication and modification dates, status,
+  rejection flag, bounded description, the highest available CVSS v4/v3/v2
+  metric, CWE weaknesses, references, affected CPE criteria, CVE tags, CISA Known
+  Exploited Vulnerabilities (KEV) fields, and its NVD detail URL. Descriptions are
+  limited to 4000 characters; references, weaknesses, products, and tags are also
+  bounded and description_truncated reports description truncation.
+
+  The tool performs exactly one NVD request per call and does not bulk-download
+  datasets. It works without credentials at the lower public rate limit. Set
+  NVD_API_KEY to send an API key in the apiKey request header. HTTP timeouts,
+  rate limits, access-policy responses, connection failures, malformed JSON, and
+  invalid response shapes are returned in a structured error field without
+  exposing the API key. The result includes NVD attribution and the notice
+  required by NVD API guidance.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.nvd_cve_tool'
+  class: 'NvdCveTool'
