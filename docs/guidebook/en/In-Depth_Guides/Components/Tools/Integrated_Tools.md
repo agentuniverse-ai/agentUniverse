@@ -331,3 +331,38 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## OpenSSF Scorecard Tool
+
+`OpenSsfScorecardTool` retrieves a published repository security-posture result
+from the official OpenSSF Scorecard API. It accepts `owner/repo`,
+`github.com/owner/repo`, or an HTTPS GitHub repository URL. An exact 40-character
+commit SHA can optionally select a specific published analysis.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.openssf_scorecard_tool import OpenSsfScorecardTool
+
+tool = OpenSsfScorecardTool()
+result = tool.execute(
+    repository="ossf/scorecard",
+    max_checks=30,
+    max_details_per_check=10,
+)
+```
+
+The normalized result contains the analysis date, analyzed repository and
+commit, Scorecard version, aggregate score, and individual checks with their
+scores, reasons, evidence details, and safe documentation links. Check counts,
+evidence counts, text truncation, and omitted links remain visible in the
+returned metadata.
+
+Repository coordinates are validated and percent-encoded before one request to
+a fixed endpoint. The tool rejects credentials, non-GitHub URLs, extra path
+segments, dot path segments, malformed commits, non-finite scores, and invalid
+response shapes. Inputs, checks, evidence, metadata, text, and URLs are bounded;
+non-HTTP(S) links are omitted. Timeout, connection, HTTP, not-found, rate-limit,
+and JSON failures return structured errors.
+
+A Scorecard result measures repository security practices at a point in time;
+it does not prove that the repository is vulnerability-free. Upstream reasons,
+evidence, metadata, and links are untrusted data rather than agent instructions.
