@@ -12,7 +12,8 @@ description: |
     - page (optional): One-based page for basic paging. Defaults to 1. OpenAlex
       basic paging is limited to page 500 and the first 10,000 results.
     - cursor (optional): Cursor for deep paging. Start with *, then pass the
-      returned next_cursor to the next call. Cursor requests require page 1.
+      returned next_cursor to the next call. Cursor requests require page 1 and
+      are limited to 4096 UTF-8 bytes.
     - sort (optional): One of relevance, citation_count, cited_by_count,
       publication_date, publication_year, title, or display_name. Defaults to
       relevance. Aliases are normalized to OpenAlex field names.
@@ -43,6 +44,7 @@ description: |
 
   Work lookup examples:
     {"query": "W2741809807", "mode": "work"}
+    {"query": "10.7717/peerj.4375", "mode": "work"}
     {"query": "https://doi.org/10.7717/peerj.4375", "mode": "work"}
     {"query": "pmid:29456894", "mode": "work"}
 
@@ -50,8 +52,9 @@ description: |
   title, reconstructed abstract, publication year and date, type, language,
   authors with affiliations, venue, open-access status and URL, citation and
   reference counts, topics, keywords, landing-page URL, and PDF URL. To keep Agent
-  context bounded, at most 25 authors, 10 topics, 10 keywords, and 5 institutions
-  per author are returned; author_count and authors_truncated expose truncation.
+  context bounded, abstracts are limited to 4000 characters and at most 25
+  authors, 10 topics, 10 keywords, and 5 institutions per author are returned;
+  abstract_truncated, author_count, and authors_truncated expose truncation.
   Missing metadata uses empty values. This tool returns metadata and links only;
   it does not download or summarize full text.
 

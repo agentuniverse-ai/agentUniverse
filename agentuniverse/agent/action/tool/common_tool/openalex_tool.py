@@ -2,14 +2,10 @@
 
 """Scholarly work discovery through the OpenAlex REST API."""
 
-# Input validation intentionally uses ValueError to match the public contracts of
-# the existing built-in scholarly tools.
-# ruff: noqa: TRY003, TRY004, TRY301
-
 import re
 from calendar import monthrange
 from datetime import date
-from typing import Any, ClassVar
+from typing import Any, ClassVar, NoReturn
 from urllib.parse import quote
 
 import requests
@@ -54,20 +50,23 @@ class OpenAlexTool(Tool):
             "referenced_works_count",
             "topics",
             "keywords",
-            "ids",
             "abstract_inverted_index",
         )
     )
     MAX_AUTHORS: ClassVar[int] = 25
     MAX_TOPICS: ClassVar[int] = 10
     MAX_KEYWORDS: ClassVar[int] = 10
+    MAX_INSTITUTIONS: ClassVar[int] = 5
+    MAX_CURSOR_BYTES: ClassVar[int] = 4096
+    MAX_ABSTRACT_CHARS: ClassVar[int] = 4000
+    MAX_API_ERROR_CHARS: ClassVar[int] = 500
 
     base_url: str = "https://api.openalex.org"
     timeout: float = Field(default=15.0, description="HTTP request timeout in seconds")
     api_key: str | None = Field(default_factory=lambda: get_from_env("OPENALEX_API_KEY"))
     email: str | None = Field(default_factory=lambda: get_from_env("OPENALEX_EMAIL"))
 
-    def execute(  # noqa: C901
+    def execute(
         self,
         query: str,
         mode: str = "search",
@@ -106,89 +105,26 @@ class OpenAlexTool(Tool):
             ValueError: If an input parameter is invalid.
         """
         normalized_mode = self._normalize_mode(mode)
-        normalized_query = query.strip() if isinstance(query, str) else ""
-        if not normalized_query:
-            raise ValueError("query must not be empty")
-        if len(normalized_query.encode("utf-8")) > 3000:
-            raise ValueError("query must be at most 3000 UTF-8 bytes")
-
+        normalized_query = self._normalize_query(query)
         if normalized_mode == "search":
-            self._validate_max_results(max_results)
-            self._validate_page(page, max_results)
-            normalized_cursor = self._normalize_cursor(cursor)
-            if normalized_cursor and page != 1:
-                raise ValueError("page must be 1 when cursor is provided")
-            normalized_sort = self._normalize_sort(sort)
-            normalized_order = self._normalize_order(order)
-            normalized_from_date = self._normalize_date(
-                from_publication_date, "from_publication_date", upper_bound=False
+            context = self._build_search_context(
+                query=normalized_query,
+                max_results=max_results,
+                page=page,
+                cursor=cursor,
+                sort=sort,
+                order=order,
+                from_publication_date=from_publication_date,
+                to_publication_date=to_publication_date,
+                work_type=work_type,
+                open_access_only=open_access_only,
+                min_citation_count=min_citation_count,
             )
-            normalized_to_date = self._normalize_date(to_publication_date, "to_publication_date", upper_bound=True)
-            if (
-                normalized_from_date
-                and normalized_to_date
-                and date.fromisoformat(normalized_from_date) > date.fromisoformat(normalized_to_date)
-            ):
-                raise ValueError("from_publication_date must not be later than to_publication_date")
-            normalized_work_type = self._normalize_work_type(work_type)
-            self._validate_bool(open_access_only, "open_access_only")
-            self._validate_min_citation_count(min_citation_count)
-            effective_max_results = max_results
-            effective_page = page
         else:
-            normalized_query = self._normalize_work_id(normalized_query)
-            normalized_cursor = ""
-            normalized_sort = ""
-            normalized_order = ""
-            normalized_from_date = ""
-            normalized_to_date = ""
-            normalized_work_type = ""
-            open_access_only = False
-            min_citation_count = 0
-            effective_max_results = 1
-            effective_page = 1
-
-        context = {
-            "mode": normalized_mode,
-            "query": normalized_query,
-            "max_results": effective_max_results,
-            "page": effective_page,
-            "cursor": normalized_cursor,
-            "sort": normalized_sort,
-            "order": normalized_order,
-            "from_publication_date": normalized_from_date,
-            "to_publication_date": normalized_to_date,
-            "work_type": normalized_work_type,
-            "open_access_only": open_access_only,
-            "min_citation_count": min_citation_count,
-        }
+            context = self._build_work_context(normalized_query)
 
         try:
-            if normalized_mode == "search":
-                data = self._search(
-                    query=normalized_query,
-                    max_results=effective_max_results,
-                    page=effective_page,
-                    cursor=normalized_cursor,
-                    sort=normalized_sort,
-                    order=normalized_order,
-                    from_publication_date=normalized_from_date,
-                    to_publication_date=normalized_to_date,
-                    work_type=normalized_work_type,
-                    open_access_only=open_access_only,
-                    min_citation_count=min_citation_count,
-                )
-                meta = data.get("meta")
-                raw_works = data.get("results")
-                if not isinstance(meta, dict) or not isinstance(raw_works, list):
-                    raise ValueError("invalid OpenAlex search response")
-                total_results = self._safe_int(meta.get("count"))
-                next_cursor = meta.get("next_cursor") or ""
-            else:
-                raw_works = [self._get_work(normalized_query)]
-                total_results = 1
-                next_cursor = ""
-
+            raw_works, total_results, next_cursor = self._fetch_works(context)
             works = [self._parse_work(work) for work in raw_works]
             return {
                 **context,
@@ -211,11 +147,11 @@ class OpenAlexTool(Tool):
                 f"OpenAlex returned HTTP status {status_code}." if status_code else "OpenAlex HTTP request failed."
             )
             return self._error_result(**context, error_type="http_error", message=message)
-        except requests.RequestException as exc:
+        except requests.RequestException:
             return self._error_result(
                 **context,
                 error_type="request_error",
-                message=f"OpenAlex request failed: {exc}",
+                message="OpenAlex request failed.",
             )
         except (KeyError, TypeError, ValueError) as exc:
             return self._error_result(
@@ -224,42 +160,104 @@ class OpenAlexTool(Tool):
                 message=f"Unable to parse OpenAlex response: {exc}",
             )
 
-    def _search(
+    def _build_search_context(
         self,
         query: str,
         max_results: int,
         page: int,
-        cursor: str,
+        cursor: str | None,
         sort: str,
         order: str,
-        from_publication_date: str,
-        to_publication_date: str,
-        work_type: str,
+        from_publication_date: str | None,
+        to_publication_date: str | None,
+        work_type: str | None,
         open_access_only: bool,
         min_citation_count: int,
     ) -> dict[str, Any]:
+        self._validate_max_results(max_results)
+        self._validate_page(page, max_results)
+        normalized_cursor = self._normalize_cursor(cursor)
+        if normalized_cursor and page != 1:
+            self._invalid("page must be 1 when cursor is provided")
+        normalized_from_date = self._normalize_date(from_publication_date, "from_publication_date", upper_bound=False)
+        normalized_to_date = self._normalize_date(to_publication_date, "to_publication_date", upper_bound=True)
+        if (
+            normalized_from_date
+            and normalized_to_date
+            and date.fromisoformat(normalized_from_date) > date.fromisoformat(normalized_to_date)
+        ):
+            self._invalid("from_publication_date must not be later than to_publication_date")
+        self._validate_bool(open_access_only, "open_access_only")
+        self._validate_min_citation_count(min_citation_count)
+        return {
+            "mode": "search",
+            "query": query,
+            "max_results": max_results,
+            "page": page,
+            "cursor": normalized_cursor,
+            "sort": self._normalize_sort(sort),
+            "order": self._normalize_order(order),
+            "from_publication_date": normalized_from_date,
+            "to_publication_date": normalized_to_date,
+            "work_type": self._normalize_work_type(work_type),
+            "open_access_only": open_access_only,
+            "min_citation_count": min_citation_count,
+        }
+
+    @classmethod
+    def _build_work_context(cls, query: str) -> dict[str, Any]:
+        return {
+            "mode": "work",
+            "query": cls._normalize_work_id(query),
+            "max_results": 1,
+            "page": 1,
+            "cursor": "",
+            "sort": "",
+            "order": "",
+            "from_publication_date": "",
+            "to_publication_date": "",
+            "work_type": "",
+            "open_access_only": False,
+            "min_citation_count": 0,
+        }
+
+    def _fetch_works(self, context: dict[str, Any]) -> tuple[list[Any], int, str]:
+        if context["mode"] == "work":
+            return [self._get_work(context["query"])], 1, ""
+        data = self._search(context)
+        meta = data.get("meta")
+        raw_works = data.get("results")
+        if not isinstance(meta, dict) or not isinstance(raw_works, list):
+            self._invalid("invalid OpenAlex search response")
+        next_cursor = self._normalize_next_cursor(meta.get("next_cursor"))
+        return raw_works, self._safe_int(meta.get("count")), next_cursor
+
+    def _search(
+        self,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
         params: dict[str, Any] = {
-            "search": query,
-            "per_page": max_results,
-            "sort": f"{sort}:{order}",
+            "search": context["query"],
+            "per_page": context["max_results"],
+            "sort": f"{context['sort']}:{context['order']}",
             "select": self.SELECT_FIELDS,
         }
-        if cursor:
-            params["cursor"] = cursor
+        if context["cursor"]:
+            params["cursor"] = context["cursor"]
         else:
-            params["page"] = page
+            params["page"] = context["page"]
 
         filters = []
-        if from_publication_date:
-            filters.append(f"from_publication_date:{from_publication_date}")
-        if to_publication_date:
-            filters.append(f"to_publication_date:{to_publication_date}")
-        if work_type:
-            filters.append(f"type:{work_type}")
-        if open_access_only:
+        if context["from_publication_date"]:
+            filters.append(f"from_publication_date:{context['from_publication_date']}")
+        if context["to_publication_date"]:
+            filters.append(f"to_publication_date:{context['to_publication_date']}")
+        if context["work_type"]:
+            filters.append(f"type:{context['work_type']}")
+        if context["open_access_only"]:
             filters.append("open_access.is_oa:true")
-        if min_citation_count > 0:
-            filters.append(f"cited_by_count:>{min_citation_count - 1}")
+        if context["min_citation_count"] > 0:
+            filters.append(f"cited_by_count:>{context['min_citation_count'] - 1}")
         if filters:
             params["filter"] = ",".join(filters)
 
@@ -282,22 +280,23 @@ class OpenAlexTool(Tool):
         try:
             data = response.json()
         except requests.JSONDecodeError as exc:
-            raise ValueError("invalid OpenAlex JSON response") from exc
+            self._invalid("invalid OpenAlex JSON response", cause=exc)
         if not isinstance(data, dict):
-            raise ValueError("invalid OpenAlex response")
+            self._invalid("invalid OpenAlex response")
         if data.get("error"):
             message = data.get("message") or data.get("error")
-            raise _OpenAlexAPIError(f"OpenAlex API error: {message}")
+            self._api_error(message)
         return data
 
     @classmethod
-    def _parse_work(cls, work: dict[str, Any]) -> dict[str, Any]:
+    def _parse_work(cls, work: Any) -> dict[str, Any]:
         if not isinstance(work, dict):
-            raise ValueError("work must be an object")
+            cls._invalid("work must be an object")
         authorships = work.get("authorships") or []
         if not isinstance(authorships, list):
             authorships = []
-        authors = [cls._parse_authorship(item) for item in authorships[: cls.MAX_AUTHORS] if isinstance(item, dict)]
+        valid_authorships = [item for item in authorships if isinstance(item, dict)]
+        authors = [cls._parse_authorship(item) for item in valid_authorships[: cls.MAX_AUTHORS]]
         primary_location = work.get("primary_location") or {}
         if not isinstance(primary_location, dict):
             primary_location = {}
@@ -307,19 +306,22 @@ class OpenAlexTool(Tool):
         open_access = work.get("open_access") or {}
         if not isinstance(open_access, dict):
             open_access = {}
+        raw_abstract = cls._reconstruct_abstract(work.get("abstract_inverted_index"))
+        abstract_truncated = len(raw_abstract) > cls.MAX_ABSTRACT_CHARS
 
         return {
             "openalex_id": cls._short_openalex_id(work.get("id")),
             "doi": cls._strip_doi_url(work.get("doi")),
             "title": work.get("display_name") or "",
-            "abstract": cls._reconstruct_abstract(work.get("abstract_inverted_index")),
+            "abstract": raw_abstract[: cls.MAX_ABSTRACT_CHARS],
+            "abstract_truncated": abstract_truncated,
             "publication_year": cls._safe_int(work.get("publication_year")),
             "publication_date": work.get("publication_date") or "",
             "type": work.get("type") or "",
             "language": work.get("language") or "",
             "authors": authors,
-            "author_count": len(authorships),
-            "authors_truncated": len(authorships) > cls.MAX_AUTHORS,
+            "author_count": len(valid_authorships),
+            "authors_truncated": len(valid_authorships) > cls.MAX_AUTHORS,
             "venue": {
                 "openalex_id": cls._short_openalex_id(source.get("id")),
                 "name": source.get("display_name") or "",
@@ -359,7 +361,7 @@ class OpenAlexTool(Tool):
                     "name": item.get("display_name") or "",
                     "country_code": item.get("country_code") or "",
                 }
-                for item in institutions[:5]
+                for item in institutions[: cls.MAX_INSTITUTIONS]
                 if isinstance(item, dict)
             ],
         }
@@ -423,7 +425,16 @@ class OpenAlexTool(Tool):
     def _normalize_mode(cls, mode: str) -> str:
         normalized = mode.strip().lower() if isinstance(mode, str) else ""
         if normalized not in cls.MODES:
-            raise ValueError(f"mode must be one of: {', '.join(sorted(cls.MODES))}")
+            cls._invalid(f"mode must be one of: {', '.join(sorted(cls.MODES))}")
+        return normalized
+
+    @classmethod
+    def _normalize_query(cls, query: Any) -> str:
+        normalized = query.strip() if isinstance(query, str) else ""
+        if not normalized:
+            cls._invalid("query must not be empty")
+        if len(normalized.encode("utf-8")) > 3000:
+            cls._invalid("query must be at most 3000 UTF-8 bytes")
         return normalized
 
     @classmethod
@@ -431,41 +442,54 @@ class OpenAlexTool(Tool):
         key = sort.strip().lower().replace("-", "_").replace(" ", "_") if isinstance(sort, str) else ""
         normalized = cls.SORT_FIELDS.get(key)
         if normalized is None:
-            raise ValueError(f"sort must be one of: {', '.join(sorted(cls.SORT_FIELDS))}")
+            cls._invalid(f"sort must be one of: {', '.join(sorted(cls.SORT_FIELDS))}")
         return normalized
 
     @classmethod
     def _normalize_order(cls, order: str) -> str:
         normalized = order.strip().lower() if isinstance(order, str) else ""
         if normalized not in cls.ORDERS:
-            raise ValueError(f"order must be one of: {', '.join(sorted(cls.ORDERS))}")
+            cls._invalid(f"order must be one of: {', '.join(sorted(cls.ORDERS))}")
         return normalized
 
-    @staticmethod
-    def _normalize_cursor(cursor: str | None) -> str:
+    @classmethod
+    def _normalize_cursor(cls, cursor: str | None) -> str:
         if cursor is None:
             return ""
         if not isinstance(cursor, str) or not cursor.strip():
-            raise ValueError("cursor must be a non-empty string when provided")
-        return cursor.strip()
+            cls._invalid("cursor must be a non-empty string when provided")
+        normalized = cursor.strip()
+        if len(normalized.encode("utf-8")) > cls.MAX_CURSOR_BYTES:
+            cls._invalid(f"cursor must be at most {cls.MAX_CURSOR_BYTES} UTF-8 bytes")
+        return normalized
 
-    @staticmethod
-    def _normalize_work_type(work_type: str | None) -> str:
+    @classmethod
+    def _normalize_next_cursor(cls, cursor: Any) -> str:
+        if cursor is None:
+            return ""
+        if not isinstance(cursor, str):
+            cls._invalid("OpenAlex next_cursor must be a string or null")
+        if len(cursor.encode("utf-8")) > cls.MAX_CURSOR_BYTES:
+            cls._invalid(f"OpenAlex next_cursor must be at most {cls.MAX_CURSOR_BYTES} UTF-8 bytes")
+        return cursor
+
+    @classmethod
+    def _normalize_work_type(cls, work_type: str | None) -> str:
         if work_type is None:
             return ""
         if not isinstance(work_type, str) or not re.fullmatch(r"[a-z][a-z0-9_-]*", work_type.strip().lower()):
-            raise ValueError("work_type must be a lowercase OpenAlex work type")
+            cls._invalid("work_type must contain only letters, digits, underscores, or hyphens and start with a letter")
         return work_type.strip().lower()
 
-    @staticmethod
-    def _normalize_date(value: str | None, field_name: str, upper_bound: bool) -> str:
+    @classmethod
+    def _normalize_date(cls, value: str | None, field_name: str, upper_bound: bool) -> str:
         if value is None:
             return ""
         if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"{field_name} must be a date string")
+            cls._invalid(f"{field_name} must be a date string")
         normalized = value.strip()
         if not re.fullmatch(r"\d{4}(-\d{2}){0,2}", normalized):
-            raise ValueError(f"{field_name} must use YYYY, YYYY-MM, or YYYY-MM-DD format")
+            cls._invalid(f"{field_name} must use YYYY, YYYY-MM, or YYYY-MM-DD format")
         parts = [int(part) for part in normalized.split("-")]
         year = parts[0]
         month = parts[1] if len(parts) > 1 else (12 if upper_bound else 1)
@@ -473,45 +497,60 @@ class OpenAlexTool(Tool):
         try:
             return date(year, month, day).isoformat()
         except ValueError as exc:
-            raise ValueError(f"{field_name} must be a valid date") from exc
+            cls._invalid(f"{field_name} must be a valid date", cause=exc)
 
-    @staticmethod
-    def _normalize_work_id(query: str) -> str:
+    @classmethod
+    def _normalize_work_id(cls, query: str) -> str:
         value = query.strip()
         value = re.sub(r"^https?://(?:api\.)?openalex\.org/works/", "", value, flags=re.I)
         value = re.sub(r"^https?://openalex\.org/", "", value, flags=re.I)
-        doi_match = re.match(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)(10\.\S+)$", value, flags=re.I)
+        doi_match = re.fullmatch(r"(?:https?://(?:dx\.)?doi\.org/|doi:)?(10\.\S+)", value, flags=re.I)
         if doi_match:
             return f"doi:{doi_match.group(1)}"
         if re.fullmatch(r"W\d+", value, flags=re.I):
             return value.upper()
         if re.fullmatch(r"pmid:\d+", value, flags=re.I):
             return value.lower()
-        raise ValueError("query must be an OpenAlex work ID, DOI, DOI URL, or PMID identifier in work mode")
+        cls._invalid("query must be an OpenAlex work ID, DOI, DOI URL, or PMID identifier in work mode")
 
-    @staticmethod
-    def _validate_max_results(max_results: int) -> None:
+    @classmethod
+    def _validate_max_results(cls, max_results: int) -> None:
         if isinstance(max_results, bool) or not isinstance(max_results, int):
-            raise ValueError("max_results must be an integer between 1 and 20")
+            cls._invalid("max_results must be an integer between 1 and 20")
         if not 1 <= max_results <= 20:
-            raise ValueError("max_results must be between 1 and 20")
+            cls._invalid("max_results must be between 1 and 20")
 
-    @staticmethod
-    def _validate_page(page: int, max_results: int) -> None:
+    @classmethod
+    def _validate_page(cls, page: int, max_results: int) -> None:
         if isinstance(page, bool) or not isinstance(page, int) or page < 1:
-            raise ValueError("page must be a positive integer")
+            cls._invalid("page must be a positive integer")
         if page > 500 or page * max_results > 10000:
-            raise ValueError("page and max_results must stay within OpenAlex's first 10,000 results")
+            cls._invalid("page and max_results must stay within OpenAlex's first 10,000 results")
 
-    @staticmethod
-    def _validate_bool(value: Any, field_name: str) -> None:
+    @classmethod
+    def _validate_bool(cls, value: Any, field_name: str) -> None:
         if not isinstance(value, bool):
-            raise ValueError(f"{field_name} must be a boolean")
+            cls._invalid(f"{field_name} must be a boolean")
+
+    @classmethod
+    def _validate_min_citation_count(cls, value: int) -> None:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            cls._invalid("min_citation_count must be a non-negative integer")
 
     @staticmethod
-    def _validate_min_citation_count(value: int) -> None:
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise ValueError("min_citation_count must be a non-negative integer")
+    def _invalid(message: str, cause: Exception | None = None) -> NoReturn:
+        if cause is None:
+            raise ValueError(message)
+        raise ValueError(message) from cause
+
+    @classmethod
+    def _api_error(cls, message: Any) -> NoReturn:
+        detail = str(message) if isinstance(message, (str, int, float, bool)) else "Unknown API error"
+        cls._raise_api_error(f"OpenAlex API error: {detail[: cls.MAX_API_ERROR_CHARS]}")
+
+    @staticmethod
+    def _raise_api_error(message: str) -> NoReturn:
+        raise _OpenAlexAPIError(message)
 
     @staticmethod
     def _safe_int(value: Any) -> int:

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import copy
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -8,6 +9,8 @@ import requests
 import yaml
 
 from agentuniverse.agent.action.tool.common_tool.openalex_tool import OpenAlexTool
+from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
+from agentuniverse.base.config.configer import Configer
 
 SAMPLE_WORK = {
     "id": "https://openalex.org/W123",
@@ -112,6 +115,7 @@ class OpenAlexToolTest(unittest.TestCase):
         self.assertEqual(work["doi"], "10.1000/example")
         self.assertEqual(work["title"], "Example multi-agent paper")
         self.assertEqual(work["abstract"], "Agent systems cooperate.")
+        self.assertFalse(work["abstract_truncated"])
         self.assertEqual(work["publication_year"], 2025)
         self.assertEqual(work["citation_count"], 42)
         self.assertEqual(work["reference_count"], 21)
@@ -163,6 +167,24 @@ class OpenAlexToolTest(unittest.TestCase):
         )
 
     @patch("agentuniverse.agent.action.tool.common_tool.openalex_tool.requests.get")
+    def test_anonymous_search_omits_optional_credentials_and_empty_filter(self, mock_get: Mock) -> None:
+        mock_get.return_value = response_mock(json_data={"meta": {"count": 0}, "results": []})
+        anonymous_tool = OpenAlexTool(api_key=None, email=None)
+
+        result = anonymous_tool.execute(
+            query="agents",
+            min_citation_count=0,
+            to_publication_date="2024-02",
+        )
+
+        self.assertEqual(result["to_publication_date"], "2024-02-29")
+        params = mock_get.call_args.kwargs["params"]
+        self.assertNotIn("api_key", params)
+        self.assertNotIn("mailto", params)
+        self.assertEqual(params["filter"], "to_publication_date:2024-02-29")
+        self.assertNotIn("ids", params["select"].split(","))
+
+    @patch("agentuniverse.agent.action.tool.common_tool.openalex_tool.requests.get")
     def test_cursor_paging_returns_next_cursor(self, mock_get: Mock) -> None:
         mock_get.return_value = response_mock(
             json_data={"meta": {"count": 50000, "next_cursor": "next-token"}, "results": []}
@@ -181,6 +203,7 @@ class OpenAlexToolTest(unittest.TestCase):
         mock_get.return_value = response_mock(json_data=SAMPLE_WORK)
         inputs = (
             ("https://openalex.org/W123", "W123", "W123"),
+            ("10.1000/example", "doi:10.1000/example", "doi:10.1000%2Fexample"),
             ("https://doi.org/10.1000/example", "doi:10.1000/example", "doi:10.1000%2Fexample"),
             ("PMID:29456894", "pmid:29456894", "pmid:29456894"),
         )
@@ -217,6 +240,8 @@ class OpenAlexToolTest(unittest.TestCase):
             self.tool.execute(query="agents", page=2, cursor="*")
         with self.assertRaisesRegex(ValueError, "non-empty string"):
             self.tool.execute(query="agents", cursor=" ")
+        with self.assertRaisesRegex(ValueError, "4096 UTF-8 bytes"):
+            self.tool.execute(query="agents", cursor="x" * 4097)
         with self.assertRaisesRegex(ValueError, "sort must be one of"):
             self.tool.execute(query="agents", sort="newest")
         with self.assertRaisesRegex(ValueError, "order must be one of"):
@@ -247,6 +272,7 @@ class OpenAlexToolTest(unittest.TestCase):
         self.assertEqual(work["doi"], "")
         self.assertEqual(work["title"], "")
         self.assertEqual(work["abstract"], "")
+        self.assertFalse(work["abstract_truncated"])
         self.assertEqual(work["publication_year"], 0)
         self.assertEqual(work["authors"], [])
         self.assertEqual(work["author_count"], 0)
@@ -260,6 +286,12 @@ class OpenAlexToolTest(unittest.TestCase):
         abstract = OpenAlexTool._reconstruct_abstract({"world": [1], "Hello": [0], "ignored": ["bad"], "again": [2]})
         self.assertEqual(abstract, "Hello world again")
 
+    def test_abstract_output_is_bounded_and_reports_truncation(self) -> None:
+        parsed = OpenAlexTool._parse_work({"abstract_inverted_index": {"word": list(range(1000))}})
+
+        self.assertEqual(len(parsed["abstract"]), 4000)
+        self.assertTrue(parsed["abstract_truncated"])
+
     def test_author_output_is_bounded_and_reports_truncation(self) -> None:
         work = {"authorships": [{"author": {"display_name": str(index)}} for index in range(30)]}
 
@@ -268,6 +300,18 @@ class OpenAlexToolTest(unittest.TestCase):
         self.assertEqual(parsed["author_count"], 30)
         self.assertEqual(len(parsed["authors"]), 25)
         self.assertTrue(parsed["authors_truncated"])
+
+    def test_nested_collections_are_bounded(self) -> None:
+        work = copy.deepcopy(SAMPLE_WORK)
+        work["authorships"][0]["institutions"] = [{"display_name": f"Institution {index}"} for index in range(7)]
+        work["topics"] = [{"display_name": f"Topic {index}"} for index in range(12)]
+        work["keywords"] = [{"display_name": f"Keyword {index}"} for index in range(12)]
+
+        parsed = OpenAlexTool._parse_work(work)
+
+        self.assertEqual(len(parsed["authors"][0]["institutions"]), 5)
+        self.assertEqual(len(parsed["topics"]), 10)
+        self.assertEqual(len(parsed["keywords"]), 10)
 
     @patch("agentuniverse.agent.action.tool.common_tool.openalex_tool.requests.get")
     def test_timeout_returns_structured_error_with_context(self, mock_get: Mock) -> None:
@@ -294,10 +338,13 @@ class OpenAlexToolTest(unittest.TestCase):
         self.assertEqual(http_result["error"]["type"], "http_error")
         self.assertIn("429", http_result["error"]["message"])
 
-        mock_get.side_effect = requests.ConnectionError("connection failed")
+        mock_get.side_effect = requests.ConnectionError(
+            "connection failed for https://api.openalex.org/works?api_key=test-api-key"
+        )
         connection_result = self.tool.execute(query="agents")
         self.assertEqual(connection_result["error"]["type"], "request_error")
-        self.assertIn("connection failed", connection_result["error"]["message"])
+        self.assertEqual(connection_result["error"]["message"], "OpenAlex request failed.")
+        self.assertNotIn("test-api-key", str(connection_result))
 
     @patch("agentuniverse.agent.action.tool.common_tool.openalex_tool.requests.get")
     def test_api_error_and_invalid_json_are_structured(self, mock_get: Mock) -> None:
@@ -305,6 +352,10 @@ class OpenAlexToolTest(unittest.TestCase):
         api_result = self.tool.execute(query="agents")
         self.assertEqual(api_result["error"]["type"], "api_error")
         self.assertIn("Unsupported filter", api_result["error"]["message"])
+
+        mock_get.return_value = response_mock(json_data={"error": "x" * 1000})
+        bounded_error_result = self.tool.execute(query="agents")
+        self.assertLessEqual(len(bounded_error_result["error"]["message"]), 521)
 
         invalid_json = response_mock()
         invalid_json.json.side_effect = requests.JSONDecodeError("invalid JSON", "", 0)
@@ -321,6 +372,34 @@ class OpenAlexToolTest(unittest.TestCase):
 
         self.assertEqual(result["error"]["type"], "invalid_response")
         self.assertIn("invalid OpenAlex search response", result["error"]["message"])
+
+    @patch("agentuniverse.agent.action.tool.common_tool.openalex_tool.requests.get")
+    def test_invalid_work_shape_is_structured(self, mock_get: Mock) -> None:
+        mock_get.return_value = response_mock(
+            json_data={
+                "meta": {"count": 1},
+                "results": ["not-an-object"],
+            }
+        )
+
+        result = self.tool.execute(query="agents")
+
+        self.assertEqual(result["error"]["type"], "invalid_response")
+        self.assertIn("work must be an object", result["error"]["message"])
+
+    @patch("agentuniverse.agent.action.tool.common_tool.openalex_tool.requests.get")
+    def test_invalid_response_cursor_is_structured(self, mock_get: Mock) -> None:
+        mock_get.return_value = response_mock(
+            json_data={
+                "meta": {"count": 0, "next_cursor": {"unexpected": "object"}},
+                "results": [],
+            }
+        )
+
+        result = self.tool.execute(query="agents")
+
+        self.assertEqual(result["error"]["type"], "invalid_response")
+        self.assertIn("next_cursor must be a string or null", result["error"]["message"])
 
     def test_shipped_config_documents_contract(self) -> None:
         config_path = (
@@ -369,7 +448,33 @@ class OpenAlexToolTest(unittest.TestCase):
             self.assertIn(metadata_field, description)
         self.assertIn("next_cursor", description)
         self.assertIn("OPENALEX_API_KEY", description)
+        self.assertIn("abstract_truncated", description)
         self.assertIn("authors_truncated", description)
+
+    @patch("agentuniverse.agent.action.tool.common_tool.openalex_tool.requests.get")
+    def test_shipped_config_initializes_tool(self, mock_get: Mock) -> None:
+        config_path = (
+            Path(__file__).resolve().parents[6]
+            / "examples"
+            / "sample_standard_app"
+            / "intelligence"
+            / "agentic"
+            / "tool"
+            / "buildin"
+            / "openalex_tool.yaml"
+        )
+        configer = Configer(str(config_path)).load()
+        tool_configer = ToolConfiger(configer).load_by_configer(configer)
+        tool = OpenAlexTool(api_key=None, email=None).initialize_by_component_configer(tool_configer)
+        mock_get.return_value = response_mock(json_data={"meta": {"count": 0}, "results": []})
+
+        result = tool.execute(query="configuration pipeline")
+
+        self.assertEqual(tool.name, "openalex_tool")
+        self.assertEqual(tool.input_keys, ["query"])
+        self.assertEqual(result["mode"], "search")
+        self.assertEqual(result["query"], "configuration pipeline")
+        self.assertEqual(result["works"], [])
 
 
 if __name__ == "__main__":
