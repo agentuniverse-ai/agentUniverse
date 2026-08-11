@@ -117,10 +117,12 @@ class DefaultMemoryConverter(BaseMemoryConverter):
                                               'type': sql_message.type,
                                               'trace_id': sql_message.trace_id,
                                               'additional_args': json.loads(sql_message.additional_args)
+                                              if sql_message.additional_args else {}
                                               })
 
     def to_sql_model(self, message: ConversationMessage, session_id: str = None, **kwargs) -> Any:
         """Convert a Message instance to a SQLAlchemy model."""
+        metadata = message.metadata or {}
         return self.model_class(
             session_id=session_id, content=message.content,
             trace_id=message.trace_id,
@@ -129,10 +131,10 @@ class DefaultMemoryConverter(BaseMemoryConverter):
             target=message.target,
             target_type=message.target_type,
             type=message.type,
-            prefix=message.metadata.get('prefix'),
-            timestamp=message.metadata.get('timestamp', datetime.datetime.now()),
-            params=message.metadata.get('params'),
-            pair_id=message.metadata.get('pair_id'),
+            prefix=metadata.get('prefix'),
+            timestamp=metadata.get('timestamp', datetime.datetime.now()),
+            params=metadata.get('params'),
+            pair_id=metadata.get('pair_id'),
             message_id=message.id or uuid.uuid4().hex,
             additional_args=json.dumps(message.additional_args)
         )
