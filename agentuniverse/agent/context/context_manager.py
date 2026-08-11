@@ -245,15 +245,19 @@ class ContextManager(ComponentBase):
             self._make_room(window, tokens)
 
         # Create segment
-        segment = ContextSegment(
-            type=context_type,
-            priority=priority,
-            content=content,
-            tokens=tokens,
-            session_id=session_id,
-            parent_id=kwargs.get("parent_id"),
-            related_ids=kwargs.get("related_ids", []),
-        )
+        segment_data = {
+            "type": context_type,
+            "priority": priority,
+            "content": content,
+            "tokens": tokens,
+            "session_id": session_id,
+            "parent_id": kwargs.get("parent_id"),
+            "related_ids": kwargs.get("related_ids", []),
+        }
+        if kwargs.get("metadata") is not None:
+            segment_data["metadata"] = kwargs["metadata"]
+
+        segment = ContextSegment(**segment_data)
 
         # Store in hot storage
         if self._hot_store:
