@@ -301,7 +301,7 @@ class OpenSsfScorecardTool(Tool):
         minimum: int | float,
         maximum: int | float,
     ) -> int | float:
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
+        if isinstance(value, bool) or not isinstance(value, int | float):
             cls._invalid(f"{field_name} must be a number")
         if not math.isfinite(value) or not minimum <= value <= maximum:
             cls._invalid(f"{field_name} must be between {minimum} and {maximum}")
