@@ -65,8 +65,15 @@ class CommandResult:
         """Truncate output to keep beginning and end, removing middle when too long"""
         if not output or len(output) <= max_length:
             return output
-        half_length = max_length // 2
-        return output[:half_length] + "\n... [truncated output] ...\n" + output[-half_length:]
+        if max_length <= 0:
+            return ""
+        marker = "\n... [truncated output] ...\n"
+        if max_length <= len(marker):
+            return marker[:max_length]
+        remaining = max_length - len(marker)
+        head_length = (remaining + 1) // 2
+        tail_length = remaining // 2
+        return output[:head_length] + marker + output[-tail_length:]
 
 
 _command_results: Dict[int, CommandResult] = {}
