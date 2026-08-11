@@ -50,7 +50,7 @@ class ChromaStore(Store):
             settings = Settings(
                 chroma_api_impl="chromadb.api.fastapi.FastAPI",
                 chroma_server_host=parsed_url.hostname,
-                chroma_server_http_port=str(parsed_url.port)
+                chroma_server_http_port=str(parsed_url.port or (443 if parsed_url.scheme == 'https' else 80))
             )
         elif self.persist_path:
             # Local persistent database
