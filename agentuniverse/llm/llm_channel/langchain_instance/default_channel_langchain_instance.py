@@ -26,7 +26,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
     def __init__(self, llm_channel):
         init_params = dict()
         init_params['model_name'] = llm_channel.channel_model_name
-        init_params['temperature'] = llm_channel.temperature if llm_channel.temperature else 0.7
+        init_params['temperature'] = llm_channel.temperature if llm_channel.temperature is not None else 0.7
         init_params['request_timeout'] = llm_channel.request_timeout
         init_params['max_tokens'] = llm_channel.max_tokens
         init_params['max_retries'] = llm_channel.max_retries if llm_channel.max_retries else 2
