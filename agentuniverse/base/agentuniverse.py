@@ -155,8 +155,8 @@ class AgentUniverse(object):
                                      + self.__system_default_planner_package)
         core_tool_package_list = ((app_configer.core_tool_package_list or app_configer.core_default_package_list)
                                     + self.__system_default_tool_package)
-        core_toolkit_package_list = ((app_configer.core_toolkit_package_list or app_configer.core_tool_package_list or app_configer.core_default_package_list)
-                                  + self.__system_default_tool_package)
+        core_toolkit_package_list = ((app_configer.core_toolkit_package_list or app_configer.core_default_package_list)
+                                     + self.__system_default_toolkit_package)
         core_service_package_list = app_configer.core_service_package_list or app_configer.core_default_package_list
         core_sqldb_wrapper_package_list = app_configer.core_sqldb_wrapper_package_list or app_configer.core_default_package_list
         core_memory_package_list = ((app_configer.core_memory_package_list or app_configer.core_default_package_list)
