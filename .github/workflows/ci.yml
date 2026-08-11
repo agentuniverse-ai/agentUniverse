@@ -1,0 +1,52 @@
+name: Core CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . "pytest>=7.2,<9" "pytest-asyncio>=0.23,<1"
+
+      - name: Compile shipped packages
+        run: |
+          python -m compileall -q \
+            agentuniverse \
+            agentuniverse_connector \
+            agentuniverse_extension \
+            agentuniverse_product
+
+      - name: Run deterministic core smoke tests
+        run: |
+          python -m pytest \
+            tests/test_agentuniverse/unit/test_ci_workflow.py \
+            tests/test_agentuniverse/unit/base/annotation/test_trace.py \
+            tests/test_agentuniverse/unit/base/config/test_component_configer_load.py \
+            tests/test_agentuniverse/unit/base/config/test_planner_configer.py \
+            tests/test_agentuniverse/unit/base/context/test_framework_context.py \
+            tests/test_agentuniverse/unit/base/util/monitor/test_monitor.py \
+            -q
