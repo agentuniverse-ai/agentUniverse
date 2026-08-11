@@ -1,14 +1,25 @@
 import importlib.util
 import os
-import tempfile
 import shutil
+import tempfile
 import threading
 import uuid
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import List, Union, Optional, Dict, Type
+from typing import Dict, List, NoReturn, Optional, Type, Union
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+
+def _raise_reader_error(
+    error_type: type[Exception],
+    message: str,
+    cause: Exception | None = None,
+) -> NoReturn:
+    """Raise a reader error while preserving an optional exception cause."""
+    if cause is None:
+        raise error_type(message)
+    raise error_type(message) from cause
 
 
 class _ExtractionBudget:
@@ -40,7 +51,7 @@ class _ExtractionBudget:
         """Enforce the total limit against bytes actually produced by py7zr."""
         with self.lock:
             if self.written_bytes + size > self.max_total_size:
-                raise ValueError("7Z archive exceeds maximum total size")
+                _raise_reader_error(ValueError, "7Z archive exceeds maximum total size")
             self.written_bytes += size
 
 
@@ -64,9 +75,9 @@ class _BoundedFileIO:
     def write(self, data: Union[bytes, bytearray]) -> int:
         size = len(data)
         if self._written + size > self._expected_size:
-            raise ValueError("7Z member produced more data than declared")
+            _raise_reader_error(ValueError, "7Z member produced more data than declared")
         if self._written + size > self._budget.max_file_size:
-            raise ValueError("7Z entry exceeds maximum size")
+            _raise_reader_error(ValueError, "7Z entry exceeds maximum size")
         self._budget.reserve_write(size)
         written = self._file.write(data)
         self._written += written
@@ -110,10 +121,10 @@ class _BoundedWriterFactory:
         try:
             relative = Path(filename).resolve().relative_to(self.temp_dir)
         except ValueError as exc:
-            raise ValueError("7Z extraction target escaped the temporary root") from exc
+            _raise_reader_error(ValueError, "7Z extraction target escaped the temporary root", exc)
         member_name = PurePosixPath(relative.as_posix()).as_posix()
         if member_name not in self.selected_sizes:
-            raise ValueError(f"Unexpected 7Z extraction target: {member_name}")
+            _raise_reader_error(ValueError, f"Unexpected 7Z extraction target: {member_name}")
         suffix = PurePosixPath(member_name).suffix.lower()
         writer = _BoundedFileIO(
             self.temp_dir,
@@ -124,7 +135,7 @@ class _BoundedWriterFactory:
         with self.lock:
             if member_name in self.products:
                 writer.close()
-                raise ValueError(f"Duplicate 7Z member name: {member_name}")
+                _raise_reader_error(ValueError, f"Duplicate 7Z member name: {member_name}")
             self.products[member_name] = writer
         return writer
 
@@ -170,27 +181,27 @@ class SevenZipReader(Reader):
         if isinstance(file, str):
             file = Path(file)
         if not isinstance(file, Path):
-            raise TypeError("file must be path-like")
+            _raise_reader_error(TypeError, "file must be path-like")
         if not file.exists():
-            raise FileNotFoundError(f"7Z file not found: {file}")
+            _raise_reader_error(FileNotFoundError, f"7Z file not found: {file}")
         for name, value in {
             "max_file_size": max_file_size,
             "max_total_size": max_total_size,
             "max_files": max_files,
         }.items():
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-                raise ValueError(f"{name} must be a positive integer")
+                _raise_reader_error(ValueError, f"{name} must be a positive integer")
         if isinstance(max_depth, bool) or not isinstance(max_depth, int) or max_depth < 0:
-            raise ValueError("max_depth must be a non-negative integer")
+            _raise_reader_error(ValueError, "max_depth must be a non-negative integer")
         if (
             isinstance(max_compression_ratio, bool)
-            or not isinstance(max_compression_ratio, (int, float))
+            or not isinstance(max_compression_ratio, int | float)
             or max_compression_ratio <= 0
         ):
-            raise ValueError("max_compression_ratio must be positive")
+            _raise_reader_error(ValueError, "max_compression_ratio must be positive")
 
         if importlib.util.find_spec("py7zr") is None:
-            raise ImportError('py7zr is required to read 7Z files: `pip install "py7zr>=1.1.3"`')
+            _raise_reader_error(ImportError, 'py7zr is required to read 7Z files: `pip install "py7zr>=1.1.3"`')
 
         temp_dir = tempfile.mkdtemp(prefix="7z_reader_")
         try:
@@ -238,7 +249,7 @@ class SevenZipReader(Reader):
                     max_extract_size=budget.max_total_size,
                 )
             except TypeError as exc:
-                raise ImportError("SevenZipReader requires py7zr>=1.1.3 for bounded extraction") from exc
+                _raise_reader_error(ImportError, "SevenZipReader requires py7zr>=1.1.3 for bounded extraction", exc)
 
             with archive_context as archive:
                 selected_sizes: Dict[str, int] = {}
@@ -256,13 +267,16 @@ class SevenZipReader(Reader):
                     if isinstance(compressed_size, int) and compressed_size > 0:
                         ratio = uncompressed_size / compressed_size
                         if ratio > max_compression_ratio:
-                            raise ValueError(f"7Z entry has suspicious compression ratio: {entry_name}")
+                            _raise_reader_error(
+                                ValueError,
+                                f"7Z entry has suspicious compression ratio: {entry_name}",
+                            )
 
                     suffix = PurePosixPath(entry_name).suffix.lower()
                     if suffix != ".7z" and self._get_reader_class(suffix) is None:
                         continue
                     if suffix == ".7z" and current_depth >= max_depth:
-                        raise ValueError("7Z nesting depth exceeded")
+                        _raise_reader_error(ValueError, "7Z nesting depth exceeded")
                     if entry_name in selected_sizes:
                         continue
                     if uncompressed_size < 0 or uncompressed_size > budget.max_file_size:
@@ -311,8 +325,8 @@ class SevenZipReader(Reader):
                         )
                     )
 
-        except (py7zr.Bad7zFile, py7zr.exceptions.Bad7zFile) as e:
-            raise ValueError(f"Failed to read 7Z file: {str(e)}")
+        except (py7zr.Bad7zFile, py7zr.exceptions.Bad7zFile) as exc:
+            _raise_reader_error(ValueError, f"Failed to read 7Z file: {exc!s}", exc)
 
         return documents
 
