@@ -545,7 +545,7 @@ class OpenAlexTool(Tool):
 
     @classmethod
     def _api_error(cls, message: Any) -> NoReturn:
-        detail = str(message) if isinstance(message, (str, int, float, bool)) else "Unknown API error"
+        detail = str(message) if isinstance(message, str | int | float | bool) else "Unknown API error"
         cls._raise_api_error(f"OpenAlex API error: {detail[: cls.MAX_API_ERROR_CHARS]}")
 
     @staticmethod
