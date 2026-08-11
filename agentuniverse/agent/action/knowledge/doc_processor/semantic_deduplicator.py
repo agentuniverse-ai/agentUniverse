@@ -211,6 +211,9 @@ class SemanticDeduplicator(DocProcessor):
         Returns:
             Cosine similarity score (0.0-1.0).
         """
+        if len(embedding1) != len(embedding2):
+            return 0.0
+
         # Compute dot product
         dot_product = sum(a * b for a, b in zip(embedding1, embedding2))
 
