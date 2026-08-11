@@ -17,8 +17,8 @@ profile:
     开始！
     需要回答的问题是: {input}
   llm_model:
-    name: 'qwen_llm'
-    model_name: 'qwen2.5-72b-instruct'
+    name: 'deepseek_llm'
+    model_name: 'deepseek-chat'
     temperature: 0.1
 action:
   tool:
