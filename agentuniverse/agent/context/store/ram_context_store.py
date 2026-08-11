@@ -306,7 +306,7 @@ class RamContextStore(ContextStore):
         return segments
 
     def count(self, session_id: str, **kwargs) -> int:
-        """Count total segments for session (O(1) operation).
+        """Count non-expired segments for a session.
 
         Args:
             session_id: Session identifier
@@ -318,7 +318,10 @@ class RamContextStore(ContextStore):
         if session_id not in self._storage:
             return 0
 
-        return len(self._storage[session_id])
+        return sum(
+            not self._is_expired(segment)
+            for segment in self._storage[session_id].values()
+        )
 
     def get_all_sessions(self) -> List[str]:
         """Get list of all session IDs in storage.
