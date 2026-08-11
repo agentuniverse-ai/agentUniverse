@@ -148,8 +148,11 @@ class AWSBedrockLLM(LLM):
                 )
                 
                 # Extract response text
-                output_message = response['output']['message']
-                text = output_message['content'][0]['text']
+                output = response.get('output') if isinstance(response, dict) else None
+                output_message = output.get('message') if isinstance(output, dict) else None
+                content = output_message.get('content') if isinstance(output_message, dict) else None
+                first_content = content[0] if isinstance(content, list) and content else None
+                text = first_content.get('text', '') if isinstance(first_content, dict) else ''
                 
                 return LLMOutput(text=text, raw=response)
         
