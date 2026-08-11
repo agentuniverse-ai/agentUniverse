@@ -12,6 +12,10 @@ from agentuniverse.agent.action.knowledge.knowledge_manager import KnowledgeMana
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
 from agentuniverse.agent.action.toolkit.toolkit_manager import ToolkitManager
 from agentuniverse.agent.agent_manager import AgentManager
+from agentuniverse.agent.context.compressor.context_compressor_manager import ContextCompressorManager
+from agentuniverse.agent.context.context_manager_manager import ContextManagerManager
+from agentuniverse.agent.context.context_store_manager import ContextStoreManager
+from agentuniverse.agent.context.router.context_router_manager import ContextRouterManager
 from agentuniverse.agent.memory.memory_compressor.memory_compressor_manager import MemoryCompressorManager
 from agentuniverse.agent.memory.memory_manager import MemoryManager
 from agentuniverse.agent.memory.memory_storage.memory_storage_manager import MemoryStorageManager
@@ -73,7 +77,11 @@ class ComponentConfigerUtil(object):
         ComponentEnum.WORK_PATTERN: WorkPatternConfiger,
         ComponentEnum.LOG_SINK: ComponentConfiger,
         ComponentEnum.DEFAULT: ComponentConfiger,
-        ComponentEnum.LLM_CHANNEL: ComponentConfiger
+        ComponentEnum.LLM_CHANNEL: ComponentConfiger,
+        ComponentEnum.CONTEXT_MANAGER: ComponentConfiger,
+        ComponentEnum.CONTEXT_STORE: ComponentConfiger,
+        ComponentEnum.CONTEXT_COMPRESSOR: ComponentConfiger,
+        ComponentEnum.CONTEXT_ROUTER: ComponentConfiger,
     }
 
     __COMPONENT_MANAGER_CLZ_MAP = {
@@ -99,6 +107,10 @@ class ComponentConfigerUtil(object):
         ComponentEnum.WORK_PATTERN: WorkPatternManager,
         ComponentEnum.LOG_SINK: LogSinkManager,
         ComponentEnum.LLM_CHANNEL: LLMChannelManager,
+        ComponentEnum.CONTEXT_MANAGER: ContextManagerManager,
+        ComponentEnum.CONTEXT_STORE: ContextStoreManager,
+        ComponentEnum.CONTEXT_COMPRESSOR: ContextCompressorManager,
+        ComponentEnum.CONTEXT_ROUTER: ContextRouterManager,
     }
 
     @classmethod

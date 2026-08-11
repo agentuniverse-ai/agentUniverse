@@ -45,6 +45,10 @@ class AppConfiger(object):
         self.__core_work_pattern_package_list: Optional[list[str]] = None
         self.__core_log_sink_package_list: Optional[list[str]] = None
         self.__core_llm_channel_package_list: Optional[list[str]] = None
+        self.__core_context_manager_package_list: Optional[list[str]] = None
+        self.__core_context_store_package_list: Optional[list[str]] = None
+        self.__core_context_compressor_package_list: Optional[list[str]] = None
+        self.__core_context_router_package_list: Optional[list[str]] = None
         self.__conversation_memory_configer: Optional[dict] = {}
         self.__root_package_name: Optional[str] = None
         self.__yaml_func_instance = None
@@ -180,6 +184,26 @@ class AppConfiger(object):
         return self.__core_llm_channel_package_list
 
     @property
+    def core_context_manager_package_list(self) -> Optional[list[str]]:
+        """Return the context manager package list of the core."""
+        return self.__core_context_manager_package_list
+
+    @property
+    def core_context_store_package_list(self) -> Optional[list[str]]:
+        """Return the context store package list of the core."""
+        return self.__core_context_store_package_list
+
+    @property
+    def core_context_compressor_package_list(self) -> Optional[list[str]]:
+        """Return the context compressor package list of the core."""
+        return self.__core_context_compressor_package_list
+
+    @property
+    def core_context_router_package_list(self) -> Optional[list[str]]:
+        """Return the context router package list of the core."""
+        return self.__core_context_router_package_list
+
+    @property
     def conversation_memory_configer(self) -> dict:
         return self.__conversation_memory_configer
 
@@ -295,6 +319,10 @@ class AppConfiger(object):
         self.__core_work_pattern_package_list = configer.value.get('CORE_PACKAGE', {}).get('work_pattern')
         self.__core_log_sink_package_list = configer.value.get('CORE_PACKAGE', {}).get('log_sink')
         self.__core_llm_channel_package_list = configer.value.get('CORE_PACKAGE', {}).get('llm_channel')
+        self.__core_context_manager_package_list = configer.value.get('CORE_PACKAGE', {}).get('context_manager')
+        self.__core_context_store_package_list = configer.value.get('CORE_PACKAGE', {}).get('context_store')
+        self.__core_context_compressor_package_list = configer.value.get('CORE_PACKAGE', {}).get('context_compressor')
+        self.__core_context_router_package_list = configer.value.get('CORE_PACKAGE', {}).get('context_router')
         self.__conversation_memory_configer = configer.value.get('CONVERSATION_MEMORY', {})
         self.__llm_plugins = self.load_llm_plugins(configer.value.get("PLUGINS", {}).get("llm_plugins", []))
         return self
