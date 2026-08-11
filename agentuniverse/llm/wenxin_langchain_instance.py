@@ -26,7 +26,7 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
                        "max_tokens": llm.max_tokens, "timeout": llm.request_timeout,
                        'max_retries': llm.max_retries if llm.max_retries else 2,
                        'streaming': llm.streaming if llm.streaming else False,
-                       'temperature': llm.temperature if llm.temperature else 0.7, 'llm': llm}
+                       'temperature': llm.temperature if llm.temperature is not None else 0.7, 'llm': llm}
         super().__init__(**init_params)
 
     def _generate(

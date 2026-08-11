@@ -35,7 +35,7 @@ class LangchainOpenAI(ChatOpenAI):
         """
         init_params = dict()
         init_params['model_name'] = llm.model_name if llm.model_name else 'gpt-3.5-turbo'
-        init_params['temperature'] = llm.temperature if llm.temperature else 0.7
+        init_params['temperature'] = llm.temperature if llm.temperature is not None else 0.7
         init_params['request_timeout'] = llm.request_timeout
         init_params['max_tokens'] = llm.max_tokens
         init_params['max_retries'] = llm.max_retries if llm.max_retries else 2
