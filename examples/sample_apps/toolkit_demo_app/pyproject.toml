@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "sample_standard_app"
+name = "toolkit_demo_app"
 version = "0.0.1"
 description = "This is a sample project for agentuniverse."
 authors = ["AntGroup <AntGroup>"]
-repository = "https://github.com/alipay/agentUniverse/tree/master/sample_standard_app"
+repository = "https://github.com/agentuniverse-ai/agentUniverse/tree/master/examples/sample_apps/toolkit_demo_app"
 readme = "README.md"
 packages = [
-    { include = "sample_standard_app" }
+    { include = "toolkit_demo_app", from = ".." }
 ]
 
 [tool.poetry.dependencies]
@@ -102,6 +102,4 @@ skip_empty = true
 
 [tool.coverage.run]
 branch = true
-source = ["sample_standard_app"]
-
-
+source = ["toolkit_demo_app"]
