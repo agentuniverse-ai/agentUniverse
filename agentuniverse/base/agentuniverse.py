@@ -79,8 +79,11 @@ class AgentUniverse(object):
         configer = Configer(path=config_path).load()
 
         # try to load custom key first
+        sub_config_path = configer.value.get('SUB_CONFIG_PATH')
+        if not isinstance(sub_config_path, dict):
+            sub_config_path = {}
         custom_key_configer_path = self.__parse_sub_config_path(
-            configer.value.get('SUB_CONFIG_PATH', {}).get('custom_key_path'),
+            sub_config_path.get('custom_key_path'),
             config_path)
         CustomKeyConfiger(custom_key_configer_path)
 
@@ -89,9 +92,13 @@ class AgentUniverse(object):
         app_configer = AppConfiger().load_by_configer(configer)
         self.__config_container.app_configer = app_configer
 
+        sub_config_path = configer.value.get('SUB_CONFIG_PATH')
+        if not isinstance(sub_config_path, dict):
+            sub_config_path = {}
+
         # init loguru loggers
         log_config_path = self.__parse_sub_config_path(
-            configer.value.get('SUB_CONFIG_PATH', {}).get('log_config_path'),
+            sub_config_path.get('log_config_path'),
             config_path)
         init_loggers(log_config_path)
 
