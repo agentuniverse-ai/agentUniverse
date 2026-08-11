@@ -28,3 +28,21 @@ def test_get_llm_token_usage_preserves_llm_input():
 
     assert usage["total_tokens"] > 0
     assert llm_input == original_input
+
+
+def test_get_llm_token_usage_reads_top_level_messages():
+    llm_input = {
+        "messages": [
+            {"role": "user", "content": "hello"},
+        ],
+        "kwargs": {},
+    }
+
+    usage = Monitor.get_llm_token_usage(
+        _StubLLM(),
+        llm_input,
+        LLMOutput(text="response"),
+    )
+
+    assert usage["prompt_tokens"] > 0
+    assert usage["completion_tokens"] > 0
