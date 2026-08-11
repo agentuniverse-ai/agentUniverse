@@ -133,8 +133,11 @@ class OpenAIStyleLLM(LLM):
             **kwargs,
         )
         if not streaming:
+            raw_response = chat_completion.model_dump()
+            if not getattr(chat_completion, 'choices', None):
+                return LLMOutput(text="", raw=raw_response)
             text = chat_completion.choices[0].message.content
-            return LLMOutput(text=text, raw=chat_completion.model_dump())
+            return LLMOutput(text=text, raw=raw_response)
         return self.generate_stream_result(chat_completion)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
@@ -168,8 +171,11 @@ class OpenAIStyleLLM(LLM):
             **kwargs,
         )
         if not streaming:
+            raw_response = chat_completion.model_dump()
+            if not getattr(chat_completion, 'choices', None):
+                return LLMOutput(text="", raw=raw_response)
             text = chat_completion.choices[0].message.content
-            return LLMOutput(text=text, raw=chat_completion.model_dump())
+            return LLMOutput(text=text, raw=raw_response)
         return self.agenerate_stream_result(chat_completion)
 
     def as_langchain(self) -> BaseLanguageModel:
