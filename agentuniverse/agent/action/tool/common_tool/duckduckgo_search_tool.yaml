@@ -1,0 +1,43 @@
+name: duckduckgo_search_tool
+description: Free DuckDuckGo web search tool requiring no API key
+class_path: agentuniverse.agent.action.tool.common_tool.duckduckgo_search_tool.DuckDuckGoSearchTool
+args_model:
+  input:
+    type: string
+    description: The search query string
+    required: true
+  max_results:
+    type: integer
+    description: Maximum number of results to return (1-20), default 5
+    required: false
+  region:
+    type: string
+    description: >-
+      Region code for search results, e.g. 'us', 'cn', 'uk', 'jp'.
+      When None, DuckDuckGo's default region is used.
+    required: false
+  safesearch:
+    type: string
+    description: Safe-search level - 'on', 'moderate', or 'off', default 'moderate'
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    input:
+      type: string
+      description: The search query string
+    max_results:
+      type: integer
+      description: Maximum number of results to return (1-20)
+      default: 5
+      minimum: 1
+      maximum: 20
+    region:
+      type: string
+      description: Region code for search results
+    safesearch:
+      type: string
+      enum: ["on", "moderate", "off"]
+      default: "moderate"
+      description: Safe-search level
+  required: ["input"]
