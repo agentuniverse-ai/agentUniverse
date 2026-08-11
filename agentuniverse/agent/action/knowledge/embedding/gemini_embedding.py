@@ -44,7 +44,10 @@ class GeminiEmbedding(Embedding):
                 # gemini default 768, and only support 768
                 # config=EmbedContentConfig(output_dimensionality=(self.embedding_dims or 768))
             )
-            return [embedding.values for embedding in response.embeddings]
+            return [
+                embedding.values
+                for embedding in (getattr(response, "embeddings", None) or [])
+            ]
         except Exception as e:
             print(f"Error generating embedding for text: {texts}. Error: {e}")
             # Handle the error appropriately, e.g., return a zero vector or raise an exception
@@ -74,9 +77,10 @@ class GeminiEmbedding(Embedding):
                 """Embed a list of documents."""
                 return self.gemini_embedding.get_embeddings(texts)
 
-            def embed_query(self, text: str) -> List[float]:
-                """Embed a single query."""
-                return self.gemini_embedding.get_embeddings([text])[0]
+    def embed_query(self, text: str) -> List[float]:
+        """Embed a single query."""
+        embeddings = self.gemini_embedding.get_embeddings([text])
+        return embeddings[0] if embeddings else []
 
         return GeminiLangchainEmbedding(gemini_embedding=self)  # Pass the instance of GeminiEmbedding
 
