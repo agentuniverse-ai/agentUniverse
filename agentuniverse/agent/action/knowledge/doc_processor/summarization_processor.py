@@ -103,7 +103,7 @@ class SummarizationProcessor(DocProcessor):
             List[Document]: A one-element list containing the summary document.
             An empty input yields an empty list.
         """
-        if not origin_docs:
+        if not origin_docs or self.max_input_docs <= 0:
             return []
 
         # Bound the input size; recall results are typically relevance-ordered
