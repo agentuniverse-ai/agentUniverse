@@ -5,21 +5,18 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: chroma_store.py
-from urllib.parse import urlparse
-from typing import List, Any, Optional
-from pydantic import SkipValidation
+from typing import Any, List, Optional
 
-import chromadb
 from chromadb import QueryResult
-from chromadb.config import Settings
 from chromadb.api.models.Collection import Collection
+from pydantic import SkipValidation
 
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.store.store import Store
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+from agentuniverse.base.util.chroma_util import create_chroma_client
 
 
 class ChromaStore(Store):
@@ -41,28 +38,7 @@ class ChromaStore(Store):
 
     def _new_client(self) -> Any:
         """Initialize the chroma client."""
-        if self.persist_path and (
-            self.persist_path.startswith('http') or
-            self.persist_path.startswith('https')
-        ):
-            # Remote database URL
-            parsed_url = urlparse(self.persist_path)
-            settings = Settings(
-                chroma_api_impl="chromadb.api.fastapi.FastAPI",
-                chroma_server_host=parsed_url.hostname,
-                chroma_server_http_port=str(parsed_url.port)
-            )
-        elif self.persist_path:
-            # Local persistent database
-            settings = Settings(
-                is_persistent=True,
-                persist_directory=self.persist_path
-            )
-        else:
-            # In-memory only (no persistence path configured)
-            settings = Settings()
-
-        client = chromadb.Client(settings)
+        client = create_chroma_client(self.persist_path)
         if self.collection is None:
             # default to create a new collection or get an existed collection.
             self.collection = client.get_or_create_collection(

@@ -16,16 +16,47 @@ Use cases:
 - Cold storage tier for rarely accessed context
 """
 
-import json
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from agentuniverse.agent.context.context_store import ContextStore
+from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
+from chromadb.config import Settings
+
 from agentuniverse.agent.context.context_model import (
+    ContextPriority,
     ContextSegment,
     ContextType,
-    ContextPriority,
 )
+from agentuniverse.agent.context.context_store import ContextStore
+from agentuniverse.base.util.chroma_util import create_chroma_client
+
+
+class AgentUniverseEmbeddingFunction(EmbeddingFunction[Documents]):
+    """Adapt an agentUniverse embedding model to Chroma's protocol."""
+
+    def __init__(self, model_name: str):
+        from agentuniverse.llm.llm_manager import LLMManager
+
+        self.model_name = model_name
+        self.llm = LLMManager().get_instance_obj(model_name)
+
+    def __call__(self, input: Documents) -> Embeddings:  # noqa: A002 - required by Chroma's protocol
+        """Embed Chroma documents with the configured agentUniverse model."""
+        return [self.llm.get_embeddings(text) for text in input]
+
+    @staticmethod
+    def name() -> str:
+        """Return the stable Chroma embedding-function identifier."""
+        return "agentuniverse_llm"
+
+    def get_config(self) -> dict[str, Any]:
+        """Return serializable embedding-function configuration."""
+        return {"model_name": self.model_name}
+
+    @staticmethod
+    def build_from_config(config: dict[str, Any]) -> 'AgentUniverseEmbeddingFunction':
+        """Rebuild the adapter from Chroma collection configuration."""
+        return AgentUniverseEmbeddingFunction(config["model_name"])
 
 
 class ChromaContextStore(ContextStore):
@@ -62,14 +93,11 @@ class ChromaContextStore(ContextStore):
 
         # Initialize Chroma client
         try:
-            import chromadb
-            from chromadb.config import Settings
-
             # Create persistent client
-            self._chroma_client = chromadb.Client(Settings(
-                persist_directory=self.persist_directory,
-                anonymized_telemetry=False
-            ))
+            self._chroma_client = create_chroma_client(
+                self.persist_directory,
+                settings=Settings(anonymized_telemetry=False),
+            )
 
             # Get or create collection with embedding function
             self._setup_embedding_function()
@@ -97,22 +125,12 @@ class ChromaContextStore(ContextStore):
         if self.embedding_model_name:
             # Try to use specified embedding model
             try:
-                from agentuniverse.llm.llm_manager import LLMManager
-                llm = LLMManager().get_instance_obj(self.embedding_model_name)
-
-                if hasattr(llm, 'get_embeddings'):
-                    # Custom wrapper for LLM embeddings
-                    class LLMEmbeddingFunction:
-                        def __init__(self, llm_instance):
-                            self.llm = llm_instance
-
-                        def __call__(self, texts: List[str]) -> List[List[float]]:
-                            return [self.llm.get_embeddings(text) for text in texts]
-
-                    self._embedding_function = LLMEmbeddingFunction(llm)
-                    return
+                embedding_function = AgentUniverseEmbeddingFunction(self.embedding_model_name)
             except Exception:
                 pass  # Fall back to default
+            else:
+                self._embedding_function = embedding_function
+                return
 
         # Use Chroma's default embedding function
         from chromadb.utils import embedding_functions
