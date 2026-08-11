@@ -36,6 +36,7 @@ position-based scoring that preserves the input order — making the component
 safe to drop into an existing single-store pipeline.
 """
 
+import json
 from typing import Dict, List, Optional, Tuple
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -147,6 +148,8 @@ class ReciprocalRankFusionProcessor(DocProcessor):
         buckets: Dict = {}
         for doc in origin_docs:
             channel_id = (doc.metadata or {}).get(self.channel_key)
+            if channel_id is not None:
+                channel_id = self._hashable_value(channel_id)
             if channel_id is None:
                 channel_id = "__default__"
             if channel_id not in buckets:
@@ -176,7 +179,15 @@ class ReciprocalRankFusionProcessor(DocProcessor):
         meta_value = (doc.metadata or {}).get(self.dedup_key)
         if meta_value is None:
             return ("id", doc.id)
-        return ("meta", self.dedup_key, meta_value)
+        return ("meta", self.dedup_key, self._hashable_value(meta_value))
+
+    @staticmethod
+    def _hashable_value(value):
+        try:
+            hash(value)
+            return value
+        except TypeError:
+            return json.dumps(value, sort_keys=True, default=str)
 
     @staticmethod
     def _tiebreak(doc: Document) -> str:
