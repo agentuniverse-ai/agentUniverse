@@ -128,8 +128,8 @@ class SQLiteStore(Store):
                     'INSERT OR REPLACE INTO documents (id, text, word_count, metadata) VALUES (?, ?, ?, ?)',
                     (document.id, document.text, len(jieba.lcut(document.text)), metadata)
                 )
-                self._get_document_keyword(document)
-                for term in set(document.keywords):
+                keywords = self._get_document_keyword(document)
+                for term in set(keywords):
                     self.conn.execute(
                         'INSERT INTO inverted_index (term, doc_id) VALUES (?, ?)',
                         (term, document.id)
@@ -161,8 +161,8 @@ class SQLiteStore(Store):
                     'DELETE FROM inverted_index WHERE doc_id = ?',
                     (document.id,)
                 )
-                self._get_document_keyword(document)
-                for term in set(document.keywords):
+                keywords = self._get_document_keyword(document)
+                for term in set(keywords):
                     self.conn.execute(
                         'INSERT INTO inverted_index (term, doc_id) VALUES (?, ?)',
                         (term, document.id)
