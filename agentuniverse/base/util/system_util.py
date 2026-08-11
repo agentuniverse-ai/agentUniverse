@@ -18,9 +18,13 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 PROJECT_ROOT_PATH = None
 
 
-def get_project_root_path() -> Path:
-    """Get the project root path."""
+def get_project_root_path(config_path: str | Path | None = None) -> Path:
+    """Get the project root path, optionally deriving it from an app config."""
     global PROJECT_ROOT_PATH
+    if config_path is not None:
+        config_file_path = Path(config_path).expanduser().resolve()
+        PROJECT_ROOT_PATH = config_file_path.parent.parent
+        return PROJECT_ROOT_PATH
     if PROJECT_ROOT_PATH:
         return PROJECT_ROOT_PATH
     current_work_directory = Path.cwd()

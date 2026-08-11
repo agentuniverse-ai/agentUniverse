@@ -5,11 +5,15 @@
 # @Author  :
 # @Email   :
 # @FileName: run_demo_agent.py
+from pathlib import Path
+
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.base.agentuniverse import AgentUniverse
 
-AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
+CONFIG_PATH = Path(__file__).resolve().parents[2] / 'config' / 'config.toml'
+
+AgentUniverse().start(config_path=str(CONFIG_PATH), core_mode=True)
 
 
 def chat(question: str, session_id=None):
