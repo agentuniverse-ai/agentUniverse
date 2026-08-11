@@ -277,6 +277,7 @@ class DefaultMemoryConverter:
 
     def to_es_action(self, message: ConversationMessage, session_id: str = None, agent_id: str = None, **kwargs) -> str:
         """Convert a message to an Elasticsearch action (index operation)."""
+        metadata = message.metadata or {}
         document = {
             "session_id": session_id,
             "content": message.content,
@@ -286,11 +287,11 @@ class DefaultMemoryConverter:
             "target": message.target,
             "target_type": message.target_type,
             "type": message.type,
-            "prefix": message.metadata.get("prefix"),
-            "timestamp": message.metadata.get("timestamp", datetime.datetime.now()).isoformat(),
-            "params": message.metadata.get("params"),
-            "pair_id": message.metadata.get("pair_id"),
-            "additional_args": message.metadata.get("additional_args")
+            "prefix": metadata.get("prefix"),
+            "timestamp": metadata.get("timestamp", datetime.datetime.now()).isoformat(),
+            "params": metadata.get("params"),
+            "pair_id": metadata.get("pair_id"),
+            "additional_args": metadata.get("additional_args")
 
         }
         index_info = {
