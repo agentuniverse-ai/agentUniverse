@@ -92,7 +92,9 @@ def service_run_result(request_id: str):
     if data is None:
         return {
             "success": False,
-            "message": f"request {request_id} not found"
+            "result": "",
+            "message": f"request {request_id} not found",
+            "request_id": request_id
         }
     return {
         "success": True,
