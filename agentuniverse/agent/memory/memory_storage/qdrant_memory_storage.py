@@ -199,7 +199,8 @@ class QdrantMemoryStorage(MemoryStorage):
                     with_vectors=False,
                     query_filter=filt,
                 )
-                messages = self.to_messages(results)
+                points = getattr(results, "points", results)
+                messages = self.to_messages(points)
                 messages.reverse()
                 return messages
             else:
