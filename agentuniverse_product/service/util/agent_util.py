@@ -274,6 +274,8 @@ def get_tool_dto_list(agent_model: AgentModel) -> List[ToolDTO]:
     for tool_name in tool_name_list:
         product: Product = ProductManager().get_instance_obj(tool_name, new_instance=False)
         tool: Tool = ToolManager().get_instance_obj(tool_name, new_instance=False)
+        if tool is None:
+            continue
         tool_dto = ToolDTO(nickname=product.nickname if product is not None else '',
                            avatar=product.avatar if product is not None else '',
                            id=tool.name)
