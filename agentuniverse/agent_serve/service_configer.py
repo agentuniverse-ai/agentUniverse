@@ -71,14 +71,17 @@ class ServiceConfiger(ComponentConfiger):
         Returns:
             ServiceConfiger: A ServiceConfiger instance.
         """
+        if not isinstance(configer.value, dict):
+            configer.value = {}
         super().load_by_configer(configer)
-        agent_code = configer.value.get('agent')
-        service_name = configer.value.get('name') or '<unnamed>'
+        config_value = configer.value
+        agent_code = config_value.get('agent')
+        service_name = config_value.get('name') or '<unnamed>'
         config_path = configer.path or '<unknown>'
         self.__set_default_meta_info()
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
+            self.__name = config_value.get('name')
+            self.__description = config_value.get('description')
             if not agent_code:
                 raise ValueError(
                     f"Service '{service_name}' in config '{config_path}' must define a non-empty 'agent'."
