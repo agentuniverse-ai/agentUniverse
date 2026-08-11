@@ -31,20 +31,22 @@ class KnowledgeNode(Node):
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
         inputs: KnowledgeNodeInputParams = self._data.inputs
+        if inputs is None:
+            raise ValueError("Knowledge node inputs are required.")
 
         param_map = {
             'top_k': None,
             'id': None
         }
 
-        for knowledge_param in inputs.knowledge_param:
+        for knowledge_param in inputs.knowledge_param or []:
             if knowledge_param.name in param_map:
                 if isinstance(knowledge_param.value, str):
                     param_map[knowledge_param.name] = knowledge_param.value
-                else:
+                elif isinstance(knowledge_param.value, dict):
                     param_map[knowledge_param.name] = knowledge_param.value.get('content', None)
 
-        knowledge_id_list = param_map.get('id')
+        knowledge_id_list = param_map.get('id') or []
         query_top_k = param_map.get('top_k')
 
         knowledge_list = []
@@ -54,7 +56,7 @@ class KnowledgeNode(Node):
                 raise ValueError("No knowledge with id {} was found.".format(knowledge_id))
             knowledge_list.append(knowledge)
 
-        knowledge_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
+        knowledge_input_params = self._resolve_input_params(inputs.input_param or [], workflow_output)
         if query_top_k:
             knowledge_input_params['similarity_top_k'] = query_top_k
         if 'query' in knowledge_input_params:
@@ -64,7 +66,9 @@ class KnowledgeNode(Node):
         for knowledge in knowledge_list:
             document_texts = [document.text for document in knowledge.query_knowledge(**knowledge_input_params)]
             knowledge_res += '\n'.join(document_texts)
-        output_params: List[NodeOutputParams] = self._data.outputs
+        output_params: List[NodeOutputParams] = self._data.outputs or []
+        if not output_params:
+            raise ValueError("Knowledge node outputs are required.")
         output_params[0].value = knowledge_res
 
         workflow_output.workflow_parameters[self.id] = output_params
