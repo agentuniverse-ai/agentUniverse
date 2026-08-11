@@ -210,6 +210,8 @@ class ContextWindow(BaseModel):
             segment_tokens: Number of tokens to add/remove
             operation: "add" or "remove"
         """
+        if segment_tokens < 0:
+            raise ValueError("segment_tokens must be non-negative")
         if operation == "add":
             self.total_tokens += segment_tokens
         elif operation == "remove":
