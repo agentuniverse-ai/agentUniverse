@@ -15,7 +15,10 @@ from typing import Coroutine, TypeVar, Any, Optional
 T = TypeVar('T')
 
 
-def _async_runner_thread_target(coro: Coroutine[Any, Any, T], result_queue: Queue):
+def _async_runner_thread_target(coro: Coroutine[Any, Any, T], result_queue: Queue,
+                                runner_context: dict,
+                                runner_ready: threading.Event,
+                                cancellation_requested: threading.Event):
     """
     Internal target function for the worker thread.
 
@@ -23,8 +26,19 @@ def _async_runner_thread_target(coro: Coroutine[Any, Any, T], result_queue: Queu
     runs the provided coroutine within that loop, and puts the result
     or any exception encountered into the result_queue.
     """
+    async def run_coro():
+        runner_context['loop'] = asyncio.get_running_loop()
+        runner_context['task'] = asyncio.current_task()
+        runner_ready.set()
+        try:
+            return await coro
+        except asyncio.CancelledError:
+            if cancellation_requested.is_set():
+                return None
+            raise
+
     try:
-        result = asyncio.run(coro)
+        result = asyncio.run(run_coro())
         result_queue.put(result)
     except Exception as e:
         result_queue.put(e)
@@ -63,9 +77,13 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
 
     # Using a queue for thread-safe communication of the result/exception
     result_queue: Queue = Queue(maxsize=1)
+    runner_context = {}
+    runner_ready = threading.Event()
+    cancellation_requested = threading.Event()
     worker_thread = threading.Thread(
         target=_async_runner_thread_target,
-        args=(coro, result_queue),
+        args=(coro, result_queue, runner_context, runner_ready,
+              cancellation_requested),
         daemon=True
     )
     worker_thread.start()
@@ -73,6 +91,10 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
     try:
         result = result_queue.get(timeout=timeout)
     except queue.Empty:
+        cancellation_requested.set()
+        if runner_ready.wait(timeout=1.0):
+            runner_context['loop'].call_soon_threadsafe(
+                runner_context['task'].cancel)
         raise TimeoutError(f"Operation timed out after {timeout} seconds")
     finally:
         worker_thread.join(timeout=1.0)
