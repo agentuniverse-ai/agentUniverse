@@ -257,7 +257,9 @@ class RedisContextStore(ContextStore):
         key = self._make_session_key(session_id)
         index_key = self._make_index_key(session_id)
 
-        if segment_ids:
+        if segment_ids is not None:
+            if not segment_ids:
+                return
             # Delete specific segments
             self._redis.hdel(key, *segment_ids)
             self._redis.zrem(index_key, *segment_ids)
