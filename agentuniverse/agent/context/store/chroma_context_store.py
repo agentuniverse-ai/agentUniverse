@@ -125,12 +125,12 @@ class ChromaContextStore(ContextStore):
         if self.embedding_model_name:
             # Try to use specified embedding model
             try:
-                self._embedding_function = AgentUniverseEmbeddingFunction(
-                    self.embedding_model_name
-                )
-                return
+                embedding_function = AgentUniverseEmbeddingFunction(self.embedding_model_name)
             except Exception:
                 pass  # Fall back to default
+            else:
+                self._embedding_function = embedding_function
+                return
 
         # Use Chroma's default embedding function
         from chromadb.utils import embedding_functions
