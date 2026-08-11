@@ -109,8 +109,13 @@ class ContextBudgetCompressor(DocProcessor):
             if truncated_text:
                 metadata = dict(doc.metadata or {})
                 metadata["truncated"] = True
-                kept.append(Document(text=truncated_text, metadata=metadata,
-                                     id=doc.id))
+                kept.append(Document(
+                    text=truncated_text,
+                    metadata=metadata,
+                    id=doc.id,
+                    embedding=list(doc.embedding),
+                    keywords=set(doc.keywords),
+                ))
             break  # budget exhausted after the (possibly truncated) boundary doc
         return kept
 
