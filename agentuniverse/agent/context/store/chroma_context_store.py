@@ -339,7 +339,9 @@ class ChromaContextStore(ContextStore):
         if not self._collection:
             return
 
-        if segment_ids:
+        if segment_ids is not None:
+            if not segment_ids:
+                return
             # Delete specific segments
             ids_to_delete = [f"{session_id}:{seg_id}" for seg_id in segment_ids]
             self._collection.delete(ids=ids_to_delete)
