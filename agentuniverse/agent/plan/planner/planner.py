@@ -7,6 +7,7 @@
 """Base class for Planner."""
 from abc import abstractmethod
 import logging
+import json
 from queue import Queue
 from typing import Optional, List, Any
 
@@ -113,7 +114,10 @@ class Planner(ComponentBase):
             if tool is None:
                 continue
             tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
-            action_result.append(tool.run(**tool_input))
+            tool_result = tool.run(**tool_input)
+            if not isinstance(tool_result, str):
+                tool_result = json.dumps(tool_result, ensure_ascii=False, default=str)
+            action_result.append(tool_result)
 
         for knowledge_name in knowledge:
             knowledge: Knowledge = KnowledgeManager().get_instance_obj(knowledge_name)
