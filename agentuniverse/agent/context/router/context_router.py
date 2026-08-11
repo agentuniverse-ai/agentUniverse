@@ -271,7 +271,7 @@ class ContextRouter(ComponentBase):
             List of context types to prioritize
         """
         rule = self.get_routing_rule(task_type)
-        return rule.priority_types
+        return rule.priority_types.copy()
 
     def optimize_search_order(
         self,
