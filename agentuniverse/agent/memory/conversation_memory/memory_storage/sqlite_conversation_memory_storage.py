@@ -326,6 +326,8 @@ class SqliteMemoryStorage(MemoryStorage):
             # Execute the query and fetch the results
             records = query.all()
 
+            if top_k <= 0:
+                return []
             records = records[-top_k:]
 
             messages = []
