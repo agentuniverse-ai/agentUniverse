@@ -169,7 +169,7 @@ class ChromaConversationMemoryStorage(MemoryStorage):
                     {'target_type': ConversationMessageSourceType.AGENT.value}
                 ]
             }
-            if kwargs['memory_types'] and len(kwargs["memory_types"]) > 0:
+            if kwargs.get('memory_types'):
                 condition = {
                     "$or": [
                         condition,
