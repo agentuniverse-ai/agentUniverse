@@ -53,14 +53,21 @@ class Node(BaseModel):
             workflow_output (WorkflowOutput): The output of the workflow.
         """
         node_input_params = {}
-        for input_param in input_params:
+        for input_param in input_params or []:
             val = input_param.value
+            if val is None:
+                node_input_params[input_param.name] = None
+                continue
             if val.type == 'reference':
-                reference_node_id = val.content[0]
+                content = val.content
+                if not isinstance(content, (list, tuple)) or len(content) < 2:
+                    node_input_params[input_param.name] = None
+                    continue
+                reference_node_id = content[0]
                 reference_output_params: List[NodeOutputParams] = workflow_output.workflow_parameters.get(
                     reference_node_id, [])
                 node_input_params[input_param.name] = next(
-                    (param.value for param in reference_output_params if param.name == val.content[1]), None)
+                    (param.value for param in reference_output_params if param.name == content[1]), None)
             else:
                 node_input_params[input_param.name] = val.content
         return node_input_params
