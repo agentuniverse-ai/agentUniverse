@@ -10,8 +10,6 @@ from concurrent.futures import ThreadPoolExecutor, Future
 from threading import Thread
 from typing import Callable
 
-from opentelemetry import context as otel_context
-
 from agentuniverse.base.context.context_coordinator import ContextCoordinator
 
 
@@ -35,14 +33,13 @@ class ThreadWithReturnValue(Thread):
         """Run the target func and save result in _return."""
         if self.target is not None:
             # set the context values in the thread
-            otel_token = ContextCoordinator.recover_context(self._context_pack)
+            recovered_context = ContextCoordinator.recover_context(self._context_pack)
             try:
                 self._return = self.target(*self.args, **self.kwargs)
             except Exception as e:
                 self.error = e
             finally:
-                if otel_token:
-                    otel_context.detach(otel_token)
+                recovered_context.close()
 
     def result(self):
         """Wait for target func finished, then return the result or raise an
@@ -72,9 +69,9 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
         future._context_pack = context_pack
 
         def context_wrapper():
-            otel_token = None
+            recovered_context = None
             try:
-                otel_token = ContextCoordinator.recover_context(context_pack)
+                recovered_context = ContextCoordinator.recover_context(context_pack)
 
                 result = fn(*args, **kwargs)
                 future.set_result(result)
@@ -84,8 +81,8 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
                 future.set_exception(e)
 
             finally:
-                if otel_token:
-                    otel_context.detach(otel_token)
+                if recovered_context:
+                    recovered_context.close()
 
         super().submit(context_wrapper)
 
@@ -93,18 +90,5 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
 
     def map(self, func: Callable, *iterables, timeout=None, chunksize=1):
         """Apply func to each element of iterables with context preservation."""
-        context_pack = ContextCoordinator.save_context()
-
-        def context_aware_func(*args):
-            otel_token = None
-            try:
-                otel_token = ContextCoordinator.recover_context(context_pack)
-                return func(*args)
-            except Exception as e:
-                raise e
-            finally:
-                if otel_token:
-                    otel_context.detach(otel_token)
-
-        return super().map(context_aware_func, *iterables,
+        return super().map(func, *iterables,
                            timeout=timeout, chunksize=chunksize)
