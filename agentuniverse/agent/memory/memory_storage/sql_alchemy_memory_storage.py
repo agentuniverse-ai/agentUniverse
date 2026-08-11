@@ -232,10 +232,14 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             if kwargs.get('type'):
                 if isinstance(kwargs['type'], list):
                     types = kwargs['type']
-                if not isinstance(kwargs['type'], str):
+                elif isinstance(kwargs['type'], str):
                     types = [kwargs['type']]
-                type_col = getattr(model_class, 'type')
-                conditions.append(conditions.append(type_col.in_(types)))
+                else:
+                    raise ValueError("type must be a list or str")
+                type_col = getattr(model_class, 'type', None)
+                if type_col is None:
+                    raise ValueError("the configured memory model does not support type filtering")
+                conditions.append(type_col.in_(types))
 
             # build the query with dynamic conditions
             query = session.query(self.memory_converter.model_class)
