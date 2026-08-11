@@ -33,16 +33,18 @@ class AgentNode(Node):
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
         inputs: AgentNodeInputParams = self._data.inputs
+        if inputs is None:
+            raise ValueError("Agent node inputs are required.")
 
         param_map = {
             'id': None
         }
 
-        for agent_param in inputs.agent_param:
+        for agent_param in inputs.agent_param or []:
             if agent_param.name in param_map:
                 if isinstance(agent_param.value, str):
                     param_map[agent_param.name] = agent_param.value
-                else:
+                elif isinstance(agent_param.value, dict):
                     param_map[agent_param.name] = agent_param.value.get('content', None)
 
         agent_id = param_map['id']
@@ -51,11 +53,13 @@ class AgentNode(Node):
         if agent is None:
             raise ValueError("No agent with id {} was found.".format(agent_id))
 
-        agent_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
+        agent_input_params = self._resolve_input_params(inputs.input_param or [], workflow_output)
 
         agent_output: OutputObject = agent.run(**agent_input_params)
-        agent_output_dict = agent_output.to_dict()
-        output_params: List[NodeOutputParams] = self._data.outputs
+        agent_output_dict = agent_output.to_dict() or {}
+        output_params: List[NodeOutputParams] = self._data.outputs or []
+        if not output_params:
+            raise ValueError("Agent node outputs are required.")
 
         for output_param in output_params:
             output_param.value = agent_output_dict.get(output_param.name, None)
