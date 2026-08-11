@@ -146,6 +146,47 @@ class TestFAISSStore(unittest.TestCase):
                 self.assertIsNotNone(store.faiss_index)
                 self.assertEqual(store.get_document_count(), 5)
 
+    def test_ivf_flat_rejects_training_batches_smaller_than_nlist(self):
+        store = self.create_store(index_type="IndexIVFFlat", nlist=100)
+        store._new_client()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"IndexIVFFlat.*5 training vectors.*at least 100.*nlist=100",
+        ):
+            store.insert_document(self.test_documents)
+
+        self.assertEqual(store.get_document_count(), 0)
+        self.assertEqual(store._next_index, 0)
+
+    def test_ivf_pq_rejects_batches_smaller_than_codebook_size(self):
+        store = self.create_store(
+            index_type="IndexIVFPQ",
+            nlist=4,
+            m=2,
+            nbits=8,
+        )
+        store._new_client()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"IndexIVFPQ.*5 training vectors.*at least 256.*nbits=8",
+        ):
+            store.insert_document(self.test_documents)
+
+        self.assertEqual(store.get_document_count(), 0)
+        self.assertEqual(store._next_index, 0)
+
+    def test_ivf_flat_accepts_a_valid_training_batch(self):
+        store = self.create_store(index_type="IndexIVFFlat", nlist=4)
+        store._new_client()
+
+        store.insert_document(self.test_documents)
+
+        self.assertTrue(store.faiss_index.is_trained)
+        self.assertEqual(store.faiss_index.ntotal, 5)
+        self.assertEqual(store.get_document_count(), 5)
+
     def test_unsupported_index_type(self):
         """Test handling of unsupported index types."""
         store = self.create_store(index_type="UnsupportedIndexType")
