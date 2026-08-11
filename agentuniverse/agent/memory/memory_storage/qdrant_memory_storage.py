@@ -157,11 +157,13 @@ class QdrantMemoryStorage(MemoryStorage):
                 "content": message.content,
                 **metadata,
             }
+            if message.id:
+                payload["message_id"] = str(message.id)
 
             try:
                 point_id = str(uuid.UUID(str(message.id))) if message.id else str(uuid.uuid4())
             except Exception:
-                point_id = str(uuid.uuid4())
+                point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, str(message.id)))
 
             points.append(
                 PointStruct(
@@ -226,7 +228,7 @@ class QdrantMemoryStorage(MemoryStorage):
             for item in results:
                 payload: Dict[str, Any] = getattr(item, "payload", None) or {}
                 msg = Message(
-                    id=str(getattr(item, "id", None)),
+                    id=payload.get("message_id", str(getattr(item, "id", None))),
                     content=payload.get("content"),
                     metadata={k: v for k, v in payload.items() if k not in {"content"}},
                     source=payload.get("source"),
