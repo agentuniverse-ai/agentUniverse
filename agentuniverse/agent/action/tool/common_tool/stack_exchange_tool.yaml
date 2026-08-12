@@ -1,0 +1,134 @@
+name: stack_exchange_tool
+description: |
+  Search Stack Exchange technical questions through API v2.3 and return bounded,
+  normalized question metadata with accepted and top-voted answer excerpts.
+
+  Input parameters:
+    - query (required): Search keywords, up to 300 characters.
+    - site (optional): Stack Exchange API site parameter. Defaults to stackoverflow.
+    - tags (optional): Up to five tags as a JSON string list or a comma/semicolon-
+      delimited string.
+    - sort (optional): relevance, activity, creation, or votes. Defaults to relevance.
+    - order (optional): desc or asc. Defaults to desc.
+    - page (optional): One-based page from 1 to 100. Defaults to 1.
+    - page_size (optional): Questions per page from 1 to 8. Defaults to 5.
+    - from_date and to_date (optional): Inclusive YYYY-MM-DD creation-date bounds.
+    - answers_per_question (optional): Accepted/top-voted answers retained per question,
+      from 1 to 3. Defaults to 2.
+
+  The result contains has_more, quota_remaining, quota_max, backoff_seconds, answer
+  fetch status, and a questions list. Question and answer HTML is converted to bounded
+  plain-text excerpts while links, scores, dates, owners, accepted-answer status, and
+  content licenses are preserved. HTTP, network, JSON, and API failures use structured
+  error fields. Basic use needs no key. Optional STACKEXCHANGE_KEY and
+  STACKEXCHANGE_ACCESS_TOKEN environment variables are never included in output.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.stack_exchange_tool
+  class: StackExchangeTool
+input_keys:
+  - query
+args_model:
+  query:
+    type: string
+    description: Search keywords, up to 300 characters.
+    required: true
+  site:
+    type: string
+    description: Stack Exchange API site parameter.
+    required: false
+    default: stackoverflow
+  tags:
+    type: array
+    description: Up to five Stack Exchange tags.
+    required: false
+  sort:
+    type: string
+    description: Search sort field.
+    required: false
+    default: relevance
+  order:
+    type: string
+    description: Search sort direction.
+    required: false
+    default: desc
+  page:
+    type: integer
+    description: One-based result page.
+    required: false
+    default: 1
+  page_size:
+    type: integer
+    description: Questions returned per page.
+    required: false
+    default: 5
+  from_date:
+    type: string
+    description: Optional inclusive lower creation-date bound in YYYY-MM-DD format.
+    required: false
+  to_date:
+    type: string
+    description: Optional inclusive upper creation-date bound in YYYY-MM-DD format.
+    required: false
+  answers_per_question:
+    type: integer
+    description: Accepted/top-voted answers retained per question.
+    required: false
+    default: 2
+args_model_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    query:
+      type: string
+      minLength: 1
+      maxLength: 300
+      description: Search keywords.
+    site:
+      type: string
+      minLength: 1
+      maxLength: 64
+      default: stackoverflow
+      description: Stack Exchange API site parameter.
+    tags:
+      oneOf:
+        - type: array
+          maxItems: 5
+          items:
+            type: string
+            minLength: 1
+            maxLength: 35
+        - type: string
+          description: Comma/semicolon-delimited tags.
+      description: Optional Stack Exchange tags.
+    sort:
+      type: string
+      enum: [relevance, activity, creation, votes]
+      default: relevance
+    order:
+      type: string
+      enum: [desc, asc]
+      default: desc
+    page:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 1
+    page_size:
+      type: integer
+      minimum: 1
+      maximum: 8
+      default: 5
+    from_date:
+      type: string
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+    to_date:
+      type: string
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+    answers_per_question:
+      type: integer
+      minimum: 1
+      maximum: 3
+      default: 2
+  required: [query]

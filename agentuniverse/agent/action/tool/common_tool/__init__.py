@@ -11,6 +11,7 @@ from .powerpoint_tool import PowerPointTool
 from .word_document_tool import WordDocumentTool
 from .pdf_tool import PDFTool
 from .yahoo_finance_tool import YahooFinanceTool
+from .stack_exchange_tool import StackExchangeTool
 from .email_document_tool import EmailDocumentTool
 from .secure_archive_tool import SecureArchiveTool
 
@@ -20,6 +21,7 @@ __all__ = [
     'WordDocumentTool',
     'PDFTool',
     'YahooFinanceTool',
+    'StackExchangeTool',
     'EmailDocumentTool',
     'SecureArchiveTool',
 ]
