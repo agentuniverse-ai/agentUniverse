@@ -6,20 +6,19 @@
 # @Email   :
 # @FileName: mock_search_tool.py
 
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 
 
 class MockSearchTool(Tool):
     """The demo google search mock tool.
     """
 
-    def execute(self, input: str):
+    def execute(self, **kwargs):
         # get top10 results from mock search.
         res = self.mock_api_res()
         return res
 
-    async def async_execute(self, tool_input: ToolInput):
-        input = tool_input.get_data("input")
+    async def async_execute(self, **kwargs):
         # get top10 results from mock search.
         res = self.mock_api_res()
         return res
