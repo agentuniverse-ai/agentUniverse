@@ -51,7 +51,8 @@ class PeerWorkPattern(WorkPattern):
             peer_results.append(peer_round_results)
 
             if not reviewing_result or (
-                    reviewing_result.get('score') and reviewing_result.get('score') >= eval_threshold):
+                    reviewing_result.get('score') is not None
+                    and reviewing_result.get('score') >= eval_threshold):
                 break
 
         return {'result': peer_results}
@@ -87,7 +88,8 @@ class PeerWorkPattern(WorkPattern):
             peer_results.append(peer_round_results)
 
             if not reviewing_result or (
-                    reviewing_result.get('score') and reviewing_result.get('score') >= eval_threshold):
+                    reviewing_result.get('score') is not None
+                    and reviewing_result.get('score') >= eval_threshold):
                 break
         return {'result': peer_results}
 

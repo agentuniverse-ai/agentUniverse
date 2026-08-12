@@ -184,10 +184,16 @@ class PeerAgentTemplate(AgentTemplate):
         if self.agent_model.profile.get('reviewing') is not None or planner_config.get('reviewing') is not None:
             self.reviewing_agent_name = self.agent_model.profile.get('reviewing') \
                 if self.agent_model.profile.get('reviewing') is not None else planner_config.get('reviewing')
-        if self.agent_model.profile.get('eval_threshold') or planner_config.get('eval_threshold'):
-            self.eval_threshold = self.agent_model.profile.get('eval_threshold') or planner_config.get('eval_threshold')
-        if self.agent_model.profile.get('retry_count') or planner_config.get('retry_count'):
-            self.retry_count = self.agent_model.profile.get('retry_count') or planner_config.get('retry_count')
+        if self.agent_model.profile.get('eval_threshold') is not None \
+                or planner_config.get('eval_threshold') is not None:
+            self.eval_threshold = self.agent_model.profile.get('eval_threshold') \
+                if self.agent_model.profile.get('eval_threshold') is not None \
+                else planner_config.get('eval_threshold')
+        if self.agent_model.profile.get('retry_count') is not None \
+                or planner_config.get('retry_count') is not None:
+            self.retry_count = self.agent_model.profile.get('retry_count') \
+                if self.agent_model.profile.get('retry_count') is not None \
+                else planner_config.get('retry_count')
         if self.agent_model.profile.get('jump_step') or planner_config.get('jump_step'):
             self.jump_step = self.agent_model.profile.get('jump_step') or planner_config.get('jump_step')
         if self.agent_model.profile.get('expert_framework') or planner_config.get('expert_framework'):
