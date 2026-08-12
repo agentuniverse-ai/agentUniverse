@@ -46,7 +46,7 @@ class EndNode(Node):
                 if var not in end_node_input_params:
                     raise KeyError(f"The variable '{var}' is not found in the input params.")
                 prompt_val = prompt_val.replace(f'{{{{{var}}}}}',
-                                                str(end_node_input_params[var]) if end_node_input_params[var] else '')
+                                                str(end_node_input_params[var]) if end_node_input_params[var] is not None else '')
         except KeyError as e:
             raise ValueError(f"Error processing template variables: {e}")
 
