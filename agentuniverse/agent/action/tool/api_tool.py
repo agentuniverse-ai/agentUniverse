@@ -177,8 +177,11 @@ class APITool(Tool):
                             body[name] = self.convert_body_property_type(
                                 property, parameters[name])
                         elif name in required:
-                            raise Exception(
-                                f"Missing required parameter {name} in operation {self.plugin_api_model.operation_id}"
+                            operation_id = self.openapi_spec.get('operation', {}).get(
+                                'operationId', self.name
+                            )
+                            raise ValueError(
+                                f"Missing required parameter {name} in operation {operation_id}"
                             )
                         elif 'default' in property:
                             body[name] = property['default']
