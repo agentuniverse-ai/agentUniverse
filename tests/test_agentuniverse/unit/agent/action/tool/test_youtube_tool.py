@@ -134,6 +134,32 @@ class FakeYouTubeService:
         return self.playlist_items_resource
 
 
+class PartialVideosResource:
+    def list(self, **kwargs):
+        if kwargs.get("chart") == "mostPopular":
+            return FakeRequest({
+                "items": [{"id": "trending-partial", "snippet": {"title": "Partial"}}]
+            })
+        return FakeRequest({
+            "items": [{"id": "video-partial", "snippet": {"title": "Partial"}}]
+        })
+
+
+class PartialChannelsResource:
+    def list(self, **kwargs):
+        return FakeRequest({
+            "items": [{"snippet": {"title": "Partial channel"}}]
+        })
+
+
+class PartialYouTubeService(FakeYouTubeService):
+    def videos(self):
+        return PartialVideosResource()
+
+    def channels(self):
+        return PartialChannelsResource()
+
+
 class YouTubeToolTest(unittest.TestCase):
     """
     Test cases for YouTubeTool class
@@ -196,6 +222,32 @@ class YouTubeToolTest(unittest.TestCase):
         self.assertEqual(self.tool._parse_stat_count(None), 0)
         self.assertEqual(self.tool._parse_stat_count(""), 0)
         self.assertEqual(self.tool._parse_stat_count("hidden"), 0)
+
+    def test_search_videos_handles_missing_optional_resource_fields(self) -> None:
+        tool = YouTubeTool(service=PartialYouTubeService(), api_key="test-key")
+
+        result = tool.execute(Mode.VIDEO_SEARCH.value, "partial")
+
+        self.assertEqual(result[0]["view_count"], 0)
+        self.assertEqual(result[0]["duration_seconds"], 0)
+
+    def test_trending_videos_handles_missing_optional_resource_fields(self) -> None:
+        tool = YouTubeTool(service=PartialYouTubeService(), api_key="test-key")
+
+        result = tool.execute(Mode.TRENDING_VIDEOS.value)
+
+        self.assertEqual(result[0]["channel_title"], "")
+        self.assertEqual(result[0]["view_count"], 0)
+        self.assertEqual(result[0]["duration_seconds"], 0)
+
+    def test_channel_info_handles_missing_optional_resource_fields(self) -> None:
+        tool = YouTubeTool(service=PartialYouTubeService(), api_key="test-key")
+
+        result = tool.execute(Mode.CHANNEL_INFO.value, "partial-channel")
+
+        self.assertEqual(result["name"], "Partial channel")
+        self.assertEqual(result["subscriber_count"], 0)
+        self.assertEqual(result["latest_video_list"], [])
 
 if __name__ == '__main__':
     unittest.main()
