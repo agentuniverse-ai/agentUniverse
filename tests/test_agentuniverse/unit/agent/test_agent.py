@@ -189,3 +189,41 @@ def test_tool_names_does_not_mutate_agent_action(monkeypatch):
     assert agent.tool_names == ["direct_tool", "toolkit_tool"]
     assert agent.tool_names == ["direct_tool", "toolkit_tool"]
     assert agent.agent_model.action["tool"] == ["direct_tool"]
+
+
+def test_async_invoke_tools_includes_toolkit_tools(monkeypatch):
+    class _StubToolkit:
+        tool_names = ["toolkit_tool"]
+
+    class _StubToolkitManager:
+        def get_instance_obj(self, toolkit_name):
+            assert toolkit_name == "test_toolkit"
+            return _StubToolkit()
+
+    class _StubTool:
+        input_keys = []
+
+        async def async_run(self, **kwargs):
+            return "toolkit result"
+
+    class _StubToolManager:
+        def get_instance_obj(self, tool_name):
+            assert tool_name == "toolkit_tool"
+            return _StubTool()
+
+    monkeypatch.setattr(
+        "agentuniverse.agent.agent.ToolkitManager",
+        _StubToolkitManager,
+    )
+    monkeypatch.setattr(
+        "agentuniverse.agent.agent.ToolManager",
+        _StubToolManager,
+    )
+    agent = _StubAgent()
+    agent.agent_model = AgentModel(
+        action={"tool": [], "toolkit": ["test_toolkit"]}
+    )
+
+    result = asyncio.run(agent.async_invoke_tools(InputObject({})))
+
+    assert result == "toolkit result"
