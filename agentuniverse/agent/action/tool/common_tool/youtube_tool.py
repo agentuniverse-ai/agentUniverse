@@ -89,14 +89,18 @@ class YouTubeTool(Tool):
 
             results = []
             for item in video_response.get('items', []):
+                snippet = item.get('snippet') or {}
+                statistics = item.get('statistics') or {}
+                content_details = item.get('contentDetails') or {}
+                video_id = item.get('id', '')
                 results.append({
-                    'id': item['id'],
-                    'title': item['snippet']['title'],
-                    'view_count': self._parse_stat_count(item['statistics'].get('viewCount')),
-                    'like_count': self._parse_stat_count(item['statistics'].get('likeCount')),
-                    'comment_count': self._parse_stat_count(item['statistics'].get('commentCount')),
-                    'duration_seconds': self.parse_duration(item['contentDetails']['duration']),
-                    'url': f"https://www.youtube.com/watch?v={item['id']}"
+                    'id': video_id,
+                    'title': snippet.get('title', ''),
+                    'view_count': self._parse_stat_count(statistics.get('viewCount')),
+                    'like_count': self._parse_stat_count(statistics.get('likeCount')),
+                    'comment_count': self._parse_stat_count(statistics.get('commentCount')),
+                    'duration_seconds': self.parse_duration(content_details.get('duration', '')),
+                    'url': f"https://www.youtube.com/watch?v={video_id}"
                 })
             return results
 
@@ -118,11 +122,14 @@ class YouTubeTool(Tool):
                 return {"error": "Channel not found"}
 
             channel_info = response['items'][0]
-            playlist_id = channel_info['contentDetails']['relatedPlaylists']['uploads']
+            snippet = channel_info.get('snippet') or {}
+            statistics = channel_info.get('statistics') or {}
+            content_details = channel_info.get('contentDetails') or {}
+            playlist_id = (content_details.get('relatedPlaylists') or {}).get('uploads')
 
             video_list = []
             next_page_token = None
-            for _ in range(self.max_results):
+            for _ in range(self.max_results if playlist_id else 0):
                 remaining = self.max_results - len(video_list)
                 if remaining <= 0:
                     break
@@ -136,10 +143,12 @@ class YouTubeTool(Tool):
                 for item in playlist_items.get('items', []):
                     if len(video_list) >= self.max_results:
                         break
+                    item_snippet = item.get('snippet') or {}
+                    item_content_details = item.get('contentDetails') or {}
                     video_list.append({
-                        'id': item['contentDetails']['videoId'],
-                        'title': item['snippet']['title'],
-                        'published_at': item['snippet']['publishedAt']
+                        'id': item_content_details.get('videoId', ''),
+                        'title': item_snippet.get('title', ''),
+                        'published_at': item_snippet.get('publishedAt', '')
                     })
 
                 next_page_token = playlist_items.get('nextPageToken')
@@ -147,11 +156,11 @@ class YouTubeTool(Tool):
                     break
 
             return {
-                'name': channel_info['snippet']['title'],
-                'description': channel_info['snippet'].get('description', ''),
-                'subscriber_count': self._parse_stat_count(channel_info['statistics'].get('subscriberCount')),
-                'total_view_count': self._parse_stat_count(channel_info['statistics'].get('viewCount')),
-                'total_video_count': self._parse_stat_count(channel_info['statistics'].get('videoCount')),
+                'name': snippet.get('title', ''),
+                'description': snippet.get('description', ''),
+                'subscriber_count': self._parse_stat_count(statistics.get('subscriberCount')),
+                'total_view_count': self._parse_stat_count(statistics.get('viewCount')),
+                'total_video_count': self._parse_stat_count(statistics.get('videoCount')),
                 'latest_video_list': video_list
             }
 
@@ -176,17 +185,21 @@ class YouTubeTool(Tool):
 
             results = []
             for item in response.get('items', []):
-                view_count = self._parse_stat_count(item['statistics'].get('viewCount'))
+                snippet = item.get('snippet') or {}
+                statistics = item.get('statistics') or {}
+                content_details = item.get('contentDetails') or {}
+                video_id = item.get('id', '')
+                view_count = self._parse_stat_count(statistics.get('viewCount'))
                 results.append({
-                    'id': item['id'],
-                    'title': item['snippet']['title'],
-                    'channel_title': item['snippet']['channelTitle'],
-                    'published_at': item['snippet']['publishedAt'],
+                    'id': video_id,
+                    'title': snippet.get('title', ''),
+                    'channel_title': snippet.get('channelTitle', ''),
+                    'published_at': snippet.get('publishedAt', ''),
                     'view_count': view_count,
-                    'like_count': self._parse_stat_count(item['statistics'].get('likeCount')),
-                    'comment_count': self._parse_stat_count(item['statistics'].get('commentCount')),
-                    'duration_seconds': self.parse_duration(item['contentDetails']['duration']),
-                    'url': f"https://www.youtube.com/watch?v={item['id']}"
+                    'like_count': self._parse_stat_count(statistics.get('likeCount')),
+                    'comment_count': self._parse_stat_count(statistics.get('commentCount')),
+                    'duration_seconds': self.parse_duration(content_details.get('duration', '')),
+                    'url': f"https://www.youtube.com/watch?v={video_id}"
                 })
             return results
 
