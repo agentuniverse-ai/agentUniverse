@@ -43,6 +43,10 @@ class Node(BaseModel):
     def run(self, workflow_output: WorkflowOutput) -> NodeOutput:
         return self._run(workflow_output)
 
+    def _output_params_for_run(self) -> List[NodeOutputParams]:
+        """Return output parameters isolated from the persistent node config."""
+        return [output.model_copy(deep=True) for output in (self._data.outputs or [])]
+
     @staticmethod
     def _resolve_input_params(input_params: List[NodeInputParams],
                               workflow_output: WorkflowOutput) -> Dict[str, Any]:
