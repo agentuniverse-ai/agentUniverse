@@ -19,6 +19,8 @@ from agentuniverse_product.service.util.workflow_util import register_workflow
 class WorkflowService:
     """Workflow Service for aU-product."""
 
+    MAX_ID_GENERATION_ATTEMPTS = 100
+
     @staticmethod
     def create_workflow(workflow_dto: WorkflowDTO) -> str:
         """Creates a workflow and returns its ID.
@@ -29,7 +31,16 @@ class WorkflowService:
         Returns:
             str: The ID of the created workflow.
         """
-        workflow_id = f"workflow_{random.randint(100, 999)}"
+        path = get_core_path()
+        for _ in range(WorkflowService.MAX_ID_GENERATION_ATTEMPTS):
+            workflow_id = f"workflow_{random.randint(100, 999)}"
+            workflow_file_path = path / 'workflow' / f"{workflow_id}.yaml" if path \
+                else os.path.join('..', '..', 'platform', 'difizen', 'workflow', f"{workflow_id}.yaml")
+            if not os.path.exists(workflow_file_path):
+                break
+        else:
+            raise RuntimeError("Failed to generate a unique workflow ID.")
+
         workflow_config = {
             'id': workflow_id,
             'name': workflow_dto.name,
@@ -42,9 +53,6 @@ class WorkflowService:
             }
         }
         # write workflow YAML file
-        path = get_core_path()
-        workflow_file_path = path / 'workflow' / f"{workflow_id}.yaml" if path \
-            else os.path.join('..', '..', 'platform', 'difizen', 'workflow', f"{workflow_id}.yaml")
         write_yaml_file(str(workflow_file_path), workflow_config)
         # register workflow instance
         register_workflow(str(workflow_file_path))
