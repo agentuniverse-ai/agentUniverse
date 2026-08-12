@@ -46,7 +46,7 @@ class Graph(nx.DiGraph):
             raise ValueError('The node type is not supported')
         node_id = node_config.get('id')
         if self.has_node(node_id):
-            return
+            raise ValueError(f"The node id '{node_id}' is duplicated in the workflow configuration.")
         node_cls = NODE_CLS_MAPPING[node_config.get('type')]
         node_type = node_config.pop('type')
         node_instance = node_cls(type=NodeEnum.from_value(node_type), workflow_id=workflow_id,
