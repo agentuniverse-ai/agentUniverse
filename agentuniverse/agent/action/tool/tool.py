@@ -150,7 +150,7 @@ class Tool(ComponentBase):
 
     async def async_as_langchain(self) -> LangchainTool:
         return LangchainTool(name=self.name,
-                             func=self.run,
+                             func=self.langchain_run,
                              coroutine=self.async_langchain_run,
                              description=self.description)
 
