@@ -73,7 +73,7 @@ class LLMNode(Node):
         llm_output: LLMOutput = llm.call(messages=messages, streaming=False)
 
         # handle output parameters
-        output_params: List[NodeOutputParams] = self._data.outputs
+        output_params: List[NodeOutputParams] = [NodeOutputParams(**p.model_dump()) for p in self._data.outputs]
         output_params[0].value = llm_output.text
         workflow_output.workflow_parameters[self.id] = output_params
 

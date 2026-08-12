@@ -64,7 +64,7 @@ class KnowledgeNode(Node):
         for knowledge in knowledge_list:
             document_texts = [document.text for document in knowledge.query_knowledge(**knowledge_input_params)]
             knowledge_res += '\n'.join(document_texts)
-        output_params: List[NodeOutputParams] = self._data.outputs
+        output_params: List[NodeOutputParams] = [NodeOutputParams(**p.model_dump()) for p in self._data.outputs]
         output_params[0].value = knowledge_res
 
         workflow_output.workflow_parameters[self.id] = output_params

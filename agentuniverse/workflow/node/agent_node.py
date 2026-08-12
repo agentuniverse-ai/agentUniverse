@@ -55,7 +55,7 @@ class AgentNode(Node):
 
         agent_output: OutputObject = agent.run(**agent_input_params)
         agent_output_dict = agent_output.to_dict()
-        output_params: List[NodeOutputParams] = self._data.outputs
+        output_params: List[NodeOutputParams] = [NodeOutputParams(**p.model_dump()) for p in self._data.outputs]
 
         for output_param in output_params:
             output_param.value = agent_output_dict.get(output_param.name, None)
