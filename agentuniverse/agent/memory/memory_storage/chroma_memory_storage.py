@@ -171,7 +171,6 @@ class ChromaMemoryStorage(MemoryStorage):
         else:
             results = self._collection.get(where=filters)
             messages = self.to_messages(result=results, sort_by_time=True)
-            messages.reverse()
             return messages[-top_k:]
 
     def to_messages(self, result: dict, sort_by_time: bool = False) -> List[Message]:
