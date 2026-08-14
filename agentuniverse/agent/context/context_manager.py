@@ -426,7 +426,9 @@ class ContextManager(ComponentBase):
                 return  # Nothing to compress
 
             # Calculate target tokens for compression
-            target_tokens = window.calculate_input_tokens()
+            target_tokens = max(
+                0, window.calculate_input_tokens() - needed_tokens
+            )
 
             try:
                 # Use compressor to intelligently compress segments
