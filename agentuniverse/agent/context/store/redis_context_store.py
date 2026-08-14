@@ -145,7 +145,7 @@ class RedisContextStore(ContextStore):
         Returns:
             List of matching segments
         """
-        if not self._redis:
+        if limit <= 0 or not self._redis:
             return []
 
         key = self._make_session_key(session_id)
