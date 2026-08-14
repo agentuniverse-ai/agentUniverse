@@ -207,7 +207,7 @@ class ChromaContextStore(ContextStore):
         Returns:
             List of matching segments
         """
-        if not self._collection:
+        if limit <= 0 or not self._collection:
             return []
 
         # Build where clause for filtering
