@@ -52,6 +52,8 @@ class GoogleSearchTool(Tool):
         Returns:
             格式化的搜索结果字符串
         """
+        if not isinstance(query, str) or not query.strip():
+            return "搜索查询不能为空"
         if not self.serper_api_key:
             return self._get_mock_result(query)
             
@@ -75,6 +77,8 @@ class GoogleSearchTool(Tool):
     async def async_execute(self, query: str, search_type: str = "search", k: int = None,
                            gl: str = None, hl: str = None, **kwargs) -> str:
         """异步执行Google搜索"""
+        if not isinstance(query, str) or not query.strip():
+            return "搜索查询不能为空"
         if not self.serper_api_key:
             return self._get_mock_result(query)
             
