@@ -7,6 +7,13 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 class WriteWordDocumentTool(Tool):
     def execute(self, file_path: str, content: str = "", append: bool = False) -> str:
+        if not isinstance(file_path, str) or not file_path.strip():
+            return json.dumps({
+                "error": "file_path must be a non-empty string",
+                "file_path": file_path,
+                "status": "error",
+            })
+        file_path = file_path.strip()
         if not file_path.lower().endswith(".docx"):
             return json.dumps(
                 {"error": "The target file must have a .docx extension.", "file_path": file_path, "status": "error"}
