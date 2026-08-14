@@ -33,6 +33,11 @@ class ContextStore(ComponentBase):
     enable_metrics: bool = False
     _metrics: Dict[str, Any] = {}
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.enable_metrics:
+            self.initialize_metrics()
+
     def initialize_metrics(self) -> None:
         """Initialize performance metrics tracking."""
         self._metrics = {
