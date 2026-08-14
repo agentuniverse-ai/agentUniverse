@@ -149,7 +149,9 @@ class ContextStore(ComponentBase):
         Returns:
             List[ContextSegment]: Retrieved segments
         """
-        all_segments = self.get(session_id, **kwargs)
+        lookup_kwargs = kwargs.copy()
+        lookup_kwargs.setdefault("limit", self.max_segments)
+        all_segments = self.get(session_id, **lookup_kwargs)
         segment_id_set = set(segment_ids)
         return [s for s in all_segments if s.id in segment_id_set]
 
