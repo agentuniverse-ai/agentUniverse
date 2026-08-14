@@ -455,6 +455,9 @@ class ContextBenchmarkSuite:
         """
         import sys
 
+        if num_turns <= 0:
+            raise ValueError("num_turns must be positive")
+
         session_id = f"benchmark_resource_{datetime.now().timestamp()}"
         self.context_manager.create_context_window(session_id)
 
