@@ -176,8 +176,12 @@ class Tool(ComponentBase):
         self.name = component_configer.name
         self.description = component_configer.description
         if component_configer.tool_type:
-            self.tool_type = next((member for member in ToolTypeEnum if
-                                   member.value == component_configer.tool_type))
+            try:
+                self.tool_type = ToolTypeEnum(component_configer.tool_type)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Unsupported tool_type: {component_configer.tool_type}"
+                ) from exc
         self.input_keys = component_configer.input_keys
         if hasattr(component_configer, "tracing"):
             self.tracing = component_configer.tracing
