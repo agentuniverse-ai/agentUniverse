@@ -99,6 +99,7 @@ class RamContextStore(ContextStore):
             List[ContextSegment]: Retrieved segments (sorted by last_accessed desc)
         """
         start_time = time.time() if self.enable_metrics else None
+        limit = max(0, limit)
 
         if session_id not in self._storage:
             return []
