@@ -26,10 +26,17 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         # The component pool map, which is used to store the component instance.
         # _instance_obj_map - Format: {component_instance_name: component_instance_obj}.
         self._instance_obj_map: dict[str, ComponentTypeVar] = {}
+        # Alias and target values use the same fully-qualified codes as the
+        # component pool. Targets are canonicalized when aliases are added.
+        self._alias_map: dict[str, str] = {}
         self._component_type: ComponentEnum = component_type
 
     def register(self, component_instance_name: str, component_instance_obj: ComponentTypeVar):
         """Register the component instance."""
+        if component_instance_name in self._alias_map:
+            LOGGER.warn(f"{self._component_type.value} component name "
+                        f"'{component_instance_name}' is already registered as an alias.")
+            return
         if component_instance_name in self._instance_obj_map.keys():
             if is_system_builtin(component_instance_obj):
                 LOGGER.info(f"Component name '{component_instance_name}' is already registered. "
@@ -66,7 +73,8 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         if component_instance_name == "__default_instance__":
             return self.get_default_instance(new_instance)
         appname = appname or ApplicationConfigManager().app_configer.base_info_appname
-        instance_code = f'{appname}.{self._component_type.value.lower()}.{component_instance_name}'
+        instance_code = self._build_instance_code(component_instance_name, appname)
+        instance_code = self._alias_map.get(instance_code, instance_code)
         instance = self._instance_obj_map.get(instance_code)
         if instance is None:
             if strict:
@@ -81,6 +89,51 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         if new_instance:
             return instance.create_copy()
         return instance
+
+    def register_alias(self, alias_name: str, target_name: str,
+                       appname: str = None) -> None:
+        """Register an alternative name for an existing component.
+
+        Alias targets are resolved to canonical component codes immediately.
+        This permits alias chains without leaving cycles or dependencies
+        between aliases.
+
+        Args:
+            alias_name: New bare component name used by callers.
+            target_name: Existing bare component name or alias.
+            appname: Application name; defaults to the configured app.
+
+        Raises:
+            ValueError: If the alias collides or the target is not registered.
+        """
+        appname = appname or ApplicationConfigManager().app_configer.base_info_appname
+        alias_code = self._build_instance_code(alias_name, appname)
+        target_code = self._build_instance_code(target_name, appname)
+        canonical_target = self._alias_map.get(target_code, target_code)
+
+        if alias_code in self._instance_obj_map or alias_code in self._alias_map:
+            raise ValueError(
+                f"Cannot register alias '{alias_name}': the name is already in use."
+            )
+        if canonical_target not in self._instance_obj_map:
+            raise ValueError(
+                f"Cannot register alias '{alias_name}': target component "
+                f"'{target_name}' is not registered."
+            )
+        self._alias_map[alias_code] = canonical_target
+
+    def unregister_alias(self, alias_name: str, appname: str = None) -> None:
+        """Remove an alias without unregistering its target component."""
+        appname = appname or ApplicationConfigManager().app_configer.base_info_appname
+        self._alias_map.pop(self._build_instance_code(alias_name, appname))
+
+    def get_alias_map(self) -> dict[str, str]:
+        """Return an isolated alias-to-canonical-code mapping."""
+        return self._alias_map.copy()
+
+    def _build_instance_code(self, component_name: str, appname: str) -> str:
+        """Build the registry key for a bare component name."""
+        return f'{appname}.{self._component_type.value.lower()}.{component_name}'
 
     def get_default_instance(self, new_instance: bool = False) -> ComponentTypeVar:
         """Return the default instance of component."""
