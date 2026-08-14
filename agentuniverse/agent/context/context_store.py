@@ -181,7 +181,9 @@ class ContextStore(ComponentBase):
         Returns:
             int: Number of segments
         """
-        return len(self.get(session_id, **kwargs))
+        count_kwargs = kwargs.copy()
+        count_kwargs.setdefault("limit", self.max_segments)
+        return len(self.get(session_id, **count_kwargs))
 
     def get_metrics(self) -> Dict[str, Any]:
         """Get performance metrics.
