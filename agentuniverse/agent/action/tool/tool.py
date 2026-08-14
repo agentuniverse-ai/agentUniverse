@@ -73,7 +73,7 @@ class Tool(ComponentBase):
     @trace_tool
     def run(self, **kwargs):
         """The callable method that runs the tool."""
-        self.input_check(kwargs)
+        kwargs = self.validate_input(kwargs)
         if self.check_execute_signature_deprecated():
             return self.execute(ToolInput(kwargs))
         return self.execute(**kwargs)
@@ -81,10 +81,25 @@ class Tool(ComponentBase):
     @trace_tool
     async def async_run(self, **kwargs):
         """The callable method that runs the tool."""
-        self.input_check(kwargs)
+        kwargs = self.validate_input(kwargs)
         if self.check_execute_signature_deprecated():
             return await asyncio.to_thread(self.execute, ToolInput(kwargs))
         return await self.async_execute(**kwargs)
+
+    def validate_input(self, kwargs: dict) -> dict:
+        """Validate and normalize tool keyword arguments.
+
+        ``input_keys`` remains the lightweight compatibility contract. Tools
+        that set ``args_model`` to a Pydantic model additionally receive type
+        coercion, defaults, and nested validation through one shared sync and
+        async path.
+        """
+        self.input_check(kwargs)
+        if self.args_model is None:
+            return kwargs
+        if not isinstance(self.args_model, type) or not issubclass(self.args_model, BaseModel):
+            raise TypeError('Tool.args_model must be a Pydantic BaseModel subclass.')
+        return self.args_model.model_validate(kwargs).model_dump()
 
     def input_check(self, kwargs: dict) -> None:
         """Check whether the input parameters of the tool contain input keys of the tool"""
@@ -98,10 +113,9 @@ class Tool(ComponentBase):
         """The callable method that runs the tool."""
         if self.check_execute_signature_deprecated():
             """Deprecated in future, use kwargs as tool input instead of ToolInput."""
-            tool_input = ToolInput(kwargs)
             parse_result = self.parse_react_input(args[0])
-            for key in self.input_keys:
-                tool_input.add_data(key, parse_result[key])
+            validated_input = self.validate_input({**kwargs, **parse_result})
+            tool_input = ToolInput(validated_input)
             return self.execute(tool_input)
         else:
             try:
@@ -109,20 +123,21 @@ class Tool(ComponentBase):
                                                             self.input_keys)
             except Exception as e:
                 return str(e)
+            parse_result = self.validate_input(parse_result)
             return self.execute(**parse_result)
 
     @trace_tool
     async def async_langchain_run(self, *args, callbacks=None, **kwargs):
         if self.check_execute_signature_deprecated():
-            tool_input = ToolInput(kwargs)
             parse_result = self.parse_react_input(args[0])
-            for key in self.input_keys:
-                tool_input.add_data(key, parse_result[key])
+            validated_input = self.validate_input({**kwargs, **parse_result})
+            tool_input = ToolInput(validated_input)
             return await asyncio.to_thread(self.execute, tool_input)
         try:
             parse_result = parse_and_check_json_markdown(args[0], self.input_keys)
         except Exception as e:
             return str(e)
+        parse_result = self.validate_input(parse_result)
         return await self.async_execute(**parse_result)
 
     def parse_react_input(self, input_str: str):
