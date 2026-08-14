@@ -318,6 +318,9 @@ class ContextBenchmarkSuite:
         Returns:
             Tuple of (compression_ratio, information_loss)
         """
+        if num_segments <= 0:
+            raise ValueError("num_segments must be positive")
+
         session_id = f"benchmark_compression_{datetime.now().timestamp()}"
         window = self.context_manager.create_context_window(
             session_id,
