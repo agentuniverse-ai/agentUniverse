@@ -160,6 +160,8 @@ class RamContextStore(ContextStore):
         """
         start_time = time.time() if self.enable_metrics else None
 
+        if not isinstance(query, str) or not query.strip():
+            return []
         if session_id not in self._storage:
             return []
 
