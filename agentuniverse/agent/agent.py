@@ -367,8 +367,8 @@ class Agent(ComponentBase, ABC):
             return ""
         if isinstance(data[0], str):
             return "".join(data)
-        text = [val.get('text') for val in data]
-        reasoning_content = [val.get('reasoning_content', "") for val in data]
+        text = [val.get('text') or '' for val in data]
+        reasoning_content = [val.get('reasoning_content') or '' for val in data]
         return {
             'text': "".join(text),
             'reasoning_content': "".join(reasoning_content)
