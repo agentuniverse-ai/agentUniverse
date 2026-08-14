@@ -25,8 +25,13 @@ class RequestTool(Tool):
 
     @staticmethod
     def _clean_url(url: str) -> str:
-        """Strips quotes from the url."""
-        return url.strip("\"'")
+        """Validate a URL value and strip surrounding whitespace/quotes."""
+        if not isinstance(url, str):
+            raise ValueError("url must be a non-empty string")
+        cleaned = url.strip().strip("\"'").strip()
+        if not cleaned:
+            raise ValueError("url must be a non-empty string")
+        return cleaned
 
     def _normalized_method(self) -> str:
         if not isinstance(self.method, str):
