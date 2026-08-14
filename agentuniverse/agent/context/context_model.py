@@ -214,6 +214,8 @@ class ContextWindow(BaseModel):
             self.total_tokens += segment_tokens
         elif operation == "remove":
             self.total_tokens = max(0, self.total_tokens - segment_tokens)
+        else:
+            raise ValueError(f"Unsupported token operation: {operation}")
 
         self.last_updated = datetime.now()
 
