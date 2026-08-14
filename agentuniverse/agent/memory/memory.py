@@ -254,7 +254,12 @@ class Memory(ComponentBase):
         if component_configer.description:
             self.description = component_configer.description
         if component_configer.type:
-            self.type = next((member for member in MemoryTypeEnum if member.value == component_configer.type))
+            try:
+                self.type = MemoryTypeEnum(component_configer.type)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Unsupported memory type: {component_configer.type}"
+                ) from exc
         if component_configer.memory_key:
             self.memory_key = component_configer.memory_key
         if component_configer.max_tokens:
