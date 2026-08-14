@@ -270,6 +270,8 @@ class ChromaContextStore(ContextStore):
         Returns:
             List of matching segments ranked by semantic similarity
         """
+        if not isinstance(query, str) or not query.strip():
+            return []
         if not self._collection:
             return []
 
