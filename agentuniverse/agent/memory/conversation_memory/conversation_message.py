@@ -90,25 +90,24 @@ class ConversationMessage(Message):
 
     @classmethod
     def from_message(cls, message: Message, session_id: str):
-        if not message.metadata:
-            message.metadata = {}
-        message.metadata['prefix'] = '之前对话的摘要：' if message.type == 'summarize' else ''
-        message.metadata['params'] = "{}"
-        trace_id = message.metadata.get('trace_id')
+        metadata = dict(message.metadata or {})
+        metadata['prefix'] = '之前对话的摘要：' if message.type == 'summarize' else ''
+        metadata['params'] = "{}"
+        trace_id = metadata.get('trace_id')
         if not trace_id:
             trace_id = FrameworkContextManager().get_context('trace_id')
-            message.metadata['trace_id'] = trace_id
+            metadata['trace_id'] = trace_id
         return cls(
             id=uuid.uuid4().hex,
             content=message.content,
-            metadata=message.metadata,
+            metadata=metadata,
             type=message.type,
             source=message.source,
             source_type='agent',
             target=message.source,
             target_type='agent',
             trace_id=trace_id,
-            conversation_id=message.metadata.get('session_id') if not session_id else session_id,
+            conversation_id=metadata.get('session_id') if not session_id else session_id,
         )
 
     @classmethod
