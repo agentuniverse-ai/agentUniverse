@@ -55,6 +55,13 @@ class ViewFileTool(Tool):
                 "status": "error"
             })
 
+        if end_line is not None and start_line > end_line:
+            return json.dumps({
+                "error": "start_line must be less than or equal to end_line",
+                "file_path": file_path,
+                "status": "error"
+            })
+
         try:
             safe_file_path = resolve_safe_path(file_path, self.base_dir)
         except ValueError as e:
