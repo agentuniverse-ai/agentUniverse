@@ -1,95 +1,144 @@
 # DuckDuckGo Search Tool
 
-A free web search tool that uses the [DuckDuckGo](https://duckduckgo.com) search engine via the `duckduckgo_search` Python package. Unlike the existing Google, Bing, and Tavily search tools, this tool requires **no API key** and works out of the box — ideal for quick prototyping and developers who do not yet have accounts with paid search providers.
+`DuckDuckGoSearchTool` is a native agentUniverse search component for web and
+news discovery. It requires no API key and returns a stable structured response
+instead of provider-specific fields.
+
+The repository also includes a DuckDuckGo example through the generic LangChain
+adapter. Use this native component when you need runtime parameter validation,
+normalized metadata, explicit error responses, proxy/timeout configuration, or
+the same contract for synchronous and asynchronous execution.
+
+## Capabilities
+
+- web (`text`) and recent-news (`news`) search;
+- 1-20 results per request;
+- region, safe-search, recency, and text-backend controls;
+- proxy configuration through `DUCKDUCKGO_PROXY`;
+- non-blocking `async_execute`/`async_run` support;
+- normalized title, URL, and snippet fields, plus news source/date/image fields;
+- deterministic validation and dependency/network errors with no fabricated
+  fallback results.
 
 ## Installation
 
-Install the optional dependency:
+`duckduckgo-search` is already declared by agentUniverse. If installing the
+component independently, run:
 
 ```bash
-pip install duckduckgo_search
+pip install duckduckgo-search
 ```
 
-## Configuration
+No DuckDuckGo API key is required.
 
-### YAML Configuration
+## Component configuration
 
 ```yaml
-name: 'duckduckgo_search_tool'
-description: 'Free DuckDuckGo web search tool requiring no API key'
-class_path: 'agentuniverse.agent.action.tool.common_tool.duckduckgo_search_tool.DuckDuckGoSearchTool'
-tool_type: 'api'
-input_keys: ['input']
-args_model:
-  input:
-    type: string
-    description: The search query string
-    required: true
-  max_results:
-    type: integer
-    description: Maximum number of results to return (1-20), default 5
-    required: false
-  region:
-    type: string
-    description: Region code for search results, e.g. 'us', 'cn', 'uk', 'jp'
-    required: false
-  safesearch:
-    type: string
-    description: Safe-search level - 'on', 'moderate', or 'off', default 'moderate'
-    required: false
+name: duckduckgo_search_tool
+description: Search DuckDuckGo without an API key
+tool_type: api
+input_keys: [input]
+max_results: 5
+safesearch: moderate
+search_type: text
+backend: auto
+timeout: 10
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.duckduckgo_search_tool
+  class: DuckDuckGoSearchTool
 ```
 
-### Environment Variables (Optional)
+The packaged component file also exposes an `args_model_schema` for tool-schema
+consumers.
 
-| Variable | Description |
-|----------|-------------|
-| `DUCKDUCKGO_PROXY` | Proxy URL for DuckDuckGo requests (e.g. `http://127.0.0.1:7890`) |
+## Input parameters
+
+| Parameter | Required | Default | Description |
+|---|---:|---|---|
+| `input` | yes | - | Non-empty search query. |
+| `search_type` | no | `text` | `text` or `news`. |
+| `max_results` | no | `5` | Integer from 1 through 20. |
+| `region` | no | provider default | Region such as `us-en` or `cn-zh`. |
+| `safesearch` | no | `moderate` | `on`, `moderate`, or `off`. |
+| `timelimit` | no | none | `d`, `w`, `m`, or `y`. |
+| `backend` | no | `auto` | Text-search backend; ignored for news. |
+
+Component-level options also include `proxy` and a 1-120 second `timeout`.
+`proxy` defaults to the `DUCKDUCKGO_PROXY` environment variable.
 
 ## Usage
 
-### Basic Usage
+### Web search
 
 ```python
-from agentuniverse.agent.action.tool.common_tool.duckduckgo_search_tool import DuckDuckGoSearchTool
-
-tool = DuckDuckGoSearchTool(name="duckduckgo_search_tool")
-result = tool.execute("Python programming language")
-print(result)
-```
-
-### With Custom Parameters
-
-```python
-tool = DuckDuckGoSearchTool(
-    name="duckduckgo_search_tool",
-    max_results=10,
-    region="us",
-    safesearch="moderate",
+from agentuniverse.agent.action.tool.common_tool.duckduckgo_search_tool import (
+    DuckDuckGoSearchTool,
 )
-result = tool.execute("machine learning tutorials")
+
+search = DuckDuckGoSearchTool(name="duckduckgo_search_tool")
+result = search.execute(
+    input="agent framework observability",
+    max_results=8,
+    region="us-en",
+    safesearch="moderate",
+    timelimit="m",
+)
 ```
 
-### Async Usage
+### News search
+
+```python
+result = search.execute(
+    input="large language model releases",
+    search_type="news",
+    max_results=5,
+    timelimit="w",
+)
+```
+
+### Framework and asynchronous calls
 
 ```python
 import asyncio
-from agentuniverse.agent.action.tool.tool import ToolInput
 
-tool = DuckDuckGoSearchTool(name="duckduckgo_search_tool")
-tool_input = ToolInput({"input": "async programming in Python"})
-result = asyncio.run(tool.async_execute(tool_input))
+search.input_keys = ["input"]
+sync_result = search.run(input="agentUniverse")
+async_result = asyncio.run(
+    search.async_run(input="agentUniverse", search_type="news")
+)
 ```
 
-## Features
+`run`, `async_run`, `execute`, and `async_execute` all use the framework's
+modern keyword-argument tool contract.
 
-- **No API key required** — works with zero configuration
-- **Text search** — returns web results with title, URL, and snippet
-- **Region support** — filter results by region code
-- **Safe search** — control the safe-search level
-- **Proxy support** — configurable via environment variable or direct parameter
-- **Graceful fallback** — falls back to `MockSearchTool` when the optional dependency is not installed or when network errors occur
-- **Async support** — non-blocking search via `async_execute`
+## Response contract
 
-## Fallback Behavior
+Successful calls return:
 
-When the `duckduckgo_search` package is not installed, the tool automatically falls back to `MockSearchTool` (the same pattern used by `BingSearchTool`). This ensures the framework continues to function even without the optional dependency.
+```json
+{
+  "status": "success",
+  "query": "agent framework observability",
+  "search_type": "text",
+  "region": "us-en",
+  "safesearch": "moderate",
+  "timelimit": "m",
+  "count": 1,
+  "results": [
+    {
+      "title": "Example result",
+      "url": "https://example.com/result",
+      "snippet": "Result summary"
+    }
+  ]
+}
+```
+
+News results additionally contain `date`, `source`, and `image`.
+
+Validation, missing-dependency, and network/provider failures return
+`status: error`, `count: 0`, an empty `results` list, and an `error` object with
+`type` and `message`. The tool deliberately does not replace failed live
+searches with mock content, because fabricated search results are unsafe for
+agents that treat tool output as evidence.
