@@ -486,7 +486,11 @@ class ChromaContextStore(ContextStore):
             # Extract unique session IDs
             session_ids = set()
             for metadata in results["metadatas"]:
-                session_ids.add(metadata["session_id"])
+                if not isinstance(metadata, dict):
+                    continue
+                session_id = metadata.get("session_id")
+                if isinstance(session_id, str) and session_id:
+                    session_ids.add(session_id)
 
             return list(session_ids)
 
