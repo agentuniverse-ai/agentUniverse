@@ -108,6 +108,9 @@ class RedisContextStore(ContextStore):
         ttl_seconds = kwargs.get("ttl_seconds", self.default_ttl_seconds)
 
         for segment in segments:
+            if not segment.session_id:
+                segment.session_id = session_id
+
             # Serialize segment to JSON
             segment_data = self._serialize_segment(segment)
 
