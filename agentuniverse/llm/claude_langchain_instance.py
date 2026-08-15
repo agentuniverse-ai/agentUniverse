@@ -39,6 +39,14 @@ class ClaudeLangChainInstance(ChatAnthropic):
         init_params['llm'] = llm
         super().__init__(**init_params)
 
+    @staticmethod
+    def _normalize_messages(messages: List[BaseMessage]) -> List[BaseMessage]:
+        """Return Anthropic-compatible messages without mutating caller input."""
+        normalized = list(messages)
+        if len(normalized) > 1 and isinstance(normalized[1], SystemMessage):
+            normalized[1] = HumanMessage(content=normalized[1].content)
+        return normalized
+
     def _generate(
             self,
             messages: List[BaseMessage],
@@ -46,8 +54,7 @@ class ClaudeLangChainInstance(ChatAnthropic):
             run_manager: Optional[CallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> ChatResult:
-        if len(messages) > 1 and isinstance(messages[1], SystemMessage):
-            messages[1] = HumanMessage(content=messages[1].content)
+        messages = self._normalize_messages(messages)
         params = self._format_params(messages=messages, stop=stop, **kwargs)
         if self.streaming:
             if _tools_in_params(params):
@@ -72,8 +79,7 @@ class ClaudeLangChainInstance(ChatAnthropic):
             run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> ChatResult:
-        if len(messages) > 1 and isinstance(messages[1], SystemMessage):
-            messages[1] = HumanMessage(content=messages[1].content)
+        messages = self._normalize_messages(messages)
         params = self._format_params(messages=messages, stop=stop, **kwargs)
         if self.streaming:
             if _tools_in_params(params):
