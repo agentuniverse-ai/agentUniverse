@@ -386,7 +386,7 @@ class Agent(ComponentBase, ABC):
         return tool_name_list
 
     def invoke_tools(self, input_object: InputObject, **kwargs) -> str:
-        tool_names = kwargs.get('tool_names') or self.tool_names
+        tool_names = kwargs['tool_names'] if 'tool_names' in kwargs else self.tool_names
         if not tool_names:
             return ''
 
@@ -410,7 +410,8 @@ class Agent(ComponentBase, ABC):
         return "\n\n".join(tool_results)
 
     async def async_invoke_tools(self, input_object: InputObject, **kwargs) -> str:
-        tool_names = kwargs.get('tool_names') or self.agent_model.action.get('tool', [])
+        tool_names = (kwargs['tool_names'] if 'tool_names' in kwargs
+                      else self.agent_model.action.get('tool', []))
         if not tool_names:
             return ''
         tool_results: list = list()
