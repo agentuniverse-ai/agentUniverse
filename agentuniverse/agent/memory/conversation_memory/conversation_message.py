@@ -115,8 +115,14 @@ class ConversationMessage(Message):
     def check_and_convert_message(cls, messages, session_id: str = None):
         if len(messages) == 0:
             return []
-        message = messages[0]
-        if isinstance(message, cls):
-            return messages
-        if isinstance(message, Message):
-            return [cls.from_message(m, session_id) for m in messages]
+        converted_messages = []
+        for message in messages:
+            if isinstance(message, cls):
+                converted_messages.append(message)
+            elif isinstance(message, Message):
+                converted_messages.append(cls.from_message(message, session_id))
+            else:
+                raise TypeError(
+                    "messages must contain only Message or ConversationMessage instances"
+                )
+        return converted_messages
