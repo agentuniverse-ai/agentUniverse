@@ -1,0 +1,14 @@
+name: default_sitemap_reader
+description: Bounded XML sitemap and sitemap-index reader for knowledge ingestion
+max_urls: 100
+max_sitemaps: 20
+max_depth: 3
+max_sitemap_bytes: 5242880
+request_timeout: 20
+max_redirects: 5
+max_workers: 4
+same_origin_only: true
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.web.sitemap_reader
+  class: SitemapReader
