@@ -29,7 +29,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
         init_params['temperature'] = llm_channel.temperature if llm_channel.temperature else 0.7
         init_params['request_timeout'] = llm_channel.request_timeout
         init_params['max_tokens'] = llm_channel.max_tokens
-        init_params['max_retries'] = llm_channel.max_retries if llm_channel.max_retries else 2
+        init_params['max_retries'] = llm_channel.max_retries if llm_channel.max_retries is not None else 2
         init_params['streaming'] = llm_channel.streaming if llm_channel.streaming else False
         init_params['openai_api_key'] = llm_channel.channel_api_key if llm_channel.channel_api_key else 'blank'
         init_params['openai_organization'] = llm_channel.channel_organization
