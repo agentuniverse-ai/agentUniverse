@@ -1,43 +1,49 @@
 name: duckduckgo_search_tool
-description: Free DuckDuckGo web search tool requiring no API key
-class_path: agentuniverse.agent.action.tool.common_tool.duckduckgo_search_tool.DuckDuckGoSearchTool
-args_model:
-  input:
-    type: string
-    description: The search query string
-    required: true
-  max_results:
-    type: integer
-    description: Maximum number of results to return (1-20), default 5
-    required: false
-  region:
-    type: string
-    description: >-
-      Region code for search results, e.g. 'us', 'cn', 'uk', 'jp'.
-      When None, DuckDuckGo's default region is used.
-    required: false
-  safesearch:
-    type: string
-    description: Safe-search level - 'on', 'moderate', or 'off', default 'moderate'
-    required: false
+description: >-
+  Search DuckDuckGo without an API key. Supports web and news search and
+  returns normalized structured result metadata.
+tool_type: api
+input_keys: [input]
+max_results: 5
+safesearch: moderate
+search_type: text
+backend: auto
+timeout: 10
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.duckduckgo_search_tool
+  class: DuckDuckGoSearchTool
 args_model_schema:
   type: object
   properties:
     input:
       type: string
-      description: The search query string
+      minLength: 1
+      description: Search query.
+    search_type:
+      type: string
+      enum: [text, news]
+      default: text
+      description: Search web pages or recent news.
     max_results:
       type: integer
-      description: Maximum number of results to return (1-20)
-      default: 5
       minimum: 1
       maximum: 20
+      default: 5
     region:
       type: string
-      description: Region code for search results
+      description: Optional DuckDuckGo region, for example us-en or cn-zh.
     safesearch:
       type: string
-      enum: ["on", "moderate", "off"]
-      default: "moderate"
-      description: Safe-search level
-  required: ["input"]
+      enum: [on, moderate, off]
+      default: moderate
+    timelimit:
+      type: string
+      enum: [d, w, m, y]
+      description: Optional day, week, month, or year recency filter.
+    backend:
+      type: string
+      default: auto
+      description: DuckDuckGo text-search backend; ignored for news.
+  required: [input]
+  additionalProperties: false
