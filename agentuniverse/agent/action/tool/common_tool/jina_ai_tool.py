@@ -50,19 +50,20 @@ class JinaAITool(Tool):
         if not input:
             return None
         
-        # Update optional configurations
-        if mode:
-            self.mode = mode
-        if timeout:
-            self.timeout = timeout
-        if api_key:
-            self.api_key = api_key
-        if max_read_content_length:
-            self.max_read_content_length = max_read_content_length
-        if remove_image is not None:
-            self.remove_image = remove_image
-        if headers:
-            self.headers = headers
+        overrides = {
+            "mode": mode,
+            "timeout": timeout,
+            "api_key": api_key,
+            "max_read_content_length": max_read_content_length,
+            "remove_image": remove_image,
+            "headers": headers,
+        }
+        if any(value is not None for value in overrides.values()):
+            request_tool = self.model_copy(deep=True)
+            for name, value in overrides.items():
+                if value is not None:
+                    setattr(request_tool, name, value)
+            return request_tool.execute(input)
 
         # print(f"mode: {self.mode}, max_read_content_length: {self.max_read_content_length}, headers: {self.headers}")
 
