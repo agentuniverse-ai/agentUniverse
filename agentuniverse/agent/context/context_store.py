@@ -166,8 +166,10 @@ class ContextStore(ComponentBase):
             segments_by_session: Dict mapping session_id to segment list
             **kwargs: Additional parameters
         """
+        add_kwargs = dict(kwargs)
+        add_kwargs.pop("session_id", None)
         for session_id, segments in segments_by_session.items():
-            self.add(segments, session_id=session_id, **kwargs)
+            self.add(segments, session_id=session_id, **add_kwargs)
 
     def count(self, session_id: str, **kwargs) -> int:
         """Count total segments for session.
