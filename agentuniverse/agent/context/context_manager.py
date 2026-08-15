@@ -321,7 +321,7 @@ class ContextManager(ComponentBase):
         Returns:
             List of matching ContextSegments ranked by relevance
         """
-        if not self._hot_store:
+        if not self._hot_store or top_k <= 0:
             return []
 
         results = self._hot_store.search(
