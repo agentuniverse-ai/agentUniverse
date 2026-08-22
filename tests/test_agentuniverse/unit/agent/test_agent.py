@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import unittest
 from copy import deepcopy
 from unittest.mock import patch
@@ -162,6 +163,25 @@ def test_generate_result_returns_empty_text_for_empty_stream():
     agent = _StubAgent()
 
     assert agent.generate_result([]) == ""
+
+
+class TestAgentMemoryMethodsMutableDefault(unittest.TestCase):
+    """Regression test for #1184.
+
+    The Agent memory helper methods previously declared
+    ``agent_input: dict[str, Any] = {}``. A mutable default is created once at
+    function definition time and shared across all calls, so any in-place
+    mutation leaks into every subsequent call that relies on the default. The
+    default must stay ``None`` (a fresh dict is built inside the body).
+    """
+
+    def test_memory_methods_default_agent_input_to_none(self):
+        for name in ("add_memory", "summarize_memory", "load_summarize_memory"):
+            with self.subTest(method=name):
+                default = inspect.signature(getattr(Agent, name)).parameters[
+                    "agent_input"
+                ].default
+                self.assertIsNone(default)
 
 
 def test_tool_names_does_not_mutate_agent_action(monkeypatch):
