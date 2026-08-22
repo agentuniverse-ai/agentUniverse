@@ -101,5 +101,12 @@ class Store(ComponentBase):
         raise NotImplementedError
 
     def create_copy(self):
-        # TODO: Store copy need to solve thread lock problem
-        return self
+        # Mirror LLM.create_copy: produce an independent instance so per-caller
+        # configuration/state does not leak between runtimes, while sharing the
+        # lazily-initialized (thread-safe) client connections. Deep-copying a
+        # live client connection is unsafe and would duplicate connections,
+        # which is the thread-safety concern the previous TODO referred to.
+        copied = self.model_copy()
+        copied.client = self.client
+        copied.async_client = self.async_client
+        return copied
