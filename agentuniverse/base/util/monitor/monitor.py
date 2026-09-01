@@ -243,7 +243,7 @@ class Monitor(BaseModel):
                 for key, value in cur_token_usage.items():
                     try:
                         result_usage[key] = old_token_usage[key] + value if key in old_token_usage else value
-                    except:
+                    except Exception:
                         # not addable value
                         pass
                 FrameworkContextManager().set_context(trace_id + '_token_usage', result_usage)
