@@ -39,6 +39,24 @@ class OpenAIProtocolTemplate(AgentTemplate):
         return self.parse_openai_protocol_output(output_object)
 
     def parse_openai_agent_input(self, agent_input):
+        """Convert an OpenAI-protocol request into agent input.
+        
+        Validates that the required protocol keys are present, extracts the text
+        content of the last message (plain string or text item of a multimodal
+        content list), and stores the earlier messages as chat_history and any
+        image URLs when present.
+        
+        Args:
+            agent_input: The raw OpenAI-protocol request dict.
+        
+        Returns:
+            dict: The agent input with 'input' set, plus 'chat_history' and
+                'image_urls' when applicable.
+        
+        Raises:
+            ValueError: If a required key is missing or a content item is
+                unsupported.
+        """
         for key in self.openai_protocol_input_keys():
             if key not in agent_input:
                 raise ValueError(f"{key} is not in agent input")
