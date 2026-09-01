@@ -73,6 +73,15 @@ class DoubaoEmbedding(Embedding):
 
     async def async_get_embeddings(self, texts: List[str],
                                    **kwargs) -> List[List[float]]:
+        """Async wrapper around the synchronous Doubao embeddings call.
+        
+        Args:
+            texts: The texts to embed.
+            **kwargs: Additional keyword arguments (currently unused).
+        
+        Returns:
+            List[List[float]]: The embeddings corresponding to the input texts.
+        """
         return self.get_embeddings(texts)
 
     def _initialize_by_component_configer(
