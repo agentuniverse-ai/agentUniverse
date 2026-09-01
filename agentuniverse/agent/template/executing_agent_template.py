@@ -36,6 +36,7 @@ class ExecutingAgentTemplate(AgentTemplate):
         arbitrary_types_allowed = True
 
     def input_keys(self) -> list[str]:
+        """Return the input keys of the agent: 'input' and 'planning_result'."""
         return ['input', 'planning_result']
 
     def output_keys(self) -> list[str]:
