@@ -42,6 +42,19 @@ class FunctionCall(BaseModel):
 
 
 def prune_none(obj):
+    """Recursively remove ``None`` values from a nested dict/list structure.
+
+    Dict entries and list items whose value is ``None`` are dropped, and
+    nested dicts and lists are pruned the same way. Any other object is
+    returned unchanged.
+
+    Args:
+        obj: A dict, list, or any other object.
+
+    Returns:
+        The pruned structure, or ``obj`` itself when it is neither a
+        dict nor a list.
+    """
     if isinstance(obj, dict):
         return {k: prune_none(v) for k, v in obj.items() if v is not None}
 
