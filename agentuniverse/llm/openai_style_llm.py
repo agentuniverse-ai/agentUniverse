@@ -198,7 +198,7 @@ class OpenAIStyleLLM(LLM):
         chat_completion = chunk
         if not isinstance(chunk, dict):
             chunk = chunk.dict()
-        if len(chunk["choices"]) == 0:
+        if not chunk["choices"]:
             return LLMOutput(text="", raw=chat_completion.model_dump())
         choice = chunk["choices"][0]
         message = choice.get("delta")
