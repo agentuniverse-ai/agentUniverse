@@ -90,6 +90,19 @@ class ConversationMessage(Message):
 
     @classmethod
     def from_message(cls, message: Message, session_id: str):
+        """Create a ConversationMessage from a base Message.
+        
+        Copies the message content, type and metadata (filling in a summary
+        prefix and trace id when missing) and a new uuid id, with 'agent' as
+        both the source and target type.
+        
+        Args:
+            message: The base message to convert.
+            session_id: Optional session id used as the conversation id.
+        
+        Returns:
+            ConversationMessage: The converted conversation message.
+        """
         if not message.metadata:
             message.metadata = {}
         message.metadata['prefix'] = '之前对话的摘要：' if message.type == 'summarize' else ''
