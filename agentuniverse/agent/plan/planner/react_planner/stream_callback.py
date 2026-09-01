@@ -36,6 +36,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
     def on_chain_start(
             self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any
     ) -> None:
+        """Callback invoked when a chain starts; does nothing by default."""
         return
 
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
