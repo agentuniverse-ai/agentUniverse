@@ -61,7 +61,7 @@ class PlanningAgentTemplate(AgentTemplate):
             return
         try:
             output = parse_json_markdown(agent_output).get('framework')
-        except:
+        except Exception:
             output = agent_output
         # add planning agent final result into the stream output.
         stream_output(output_stream,
