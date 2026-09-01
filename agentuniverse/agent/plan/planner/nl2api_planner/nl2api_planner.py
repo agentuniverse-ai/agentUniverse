@@ -55,6 +55,15 @@ class Nl2ApiPlanner(Planner):
 
     @staticmethod
     def acquire_tools(action) -> list[LangchainTool]:
+        """Resolve the langchain tools listed in a planning action.
+        
+        Args:
+            action: An action dict whose 'tool' key holds tool names.
+        
+        Returns:
+            list[LangchainTool]: The langchain tools resolved from the
+                ToolManager for each name; empty when the action lists none.
+        """
         tool_names: list = action.get('tool') or list()
         lc_tools: list[LangchainTool] = list()
         for tool_name in tool_names:
