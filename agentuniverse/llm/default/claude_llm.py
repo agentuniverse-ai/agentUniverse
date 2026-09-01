@@ -106,6 +106,17 @@ class ClaudeLLM(LLM):
 
     @staticmethod
     def parse_result(data):
+        """Extract the text content from a Claude chat completion.
+
+        Args:
+            data: The Claude response whose first content block is
+                expected to be text.
+
+        Returns:
+            An ``LLMOutput`` with the extracted text and the raw
+            response, or ``None`` when the first content block has no
+            text.
+        """
         text = data.content[0].text
         if not text:
             return
