@@ -26,6 +26,7 @@ class RecursiveCharacterTextSplitter(DocProcessor):
 
     @property
     def splitter(self) -> Splitter:
+        """Return the lazily constructed recursive character text splitter."""
         if not self.__splitter:
             self.__splitter = Splitter(separators=self.separators,
                                        chunk_size=self.chunk_size,
