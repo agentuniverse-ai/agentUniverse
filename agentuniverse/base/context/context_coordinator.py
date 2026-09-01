@@ -98,8 +98,6 @@ class ContextCoordinator:
             token = otel_context.attach(context_pack.otel_context)
             return token
 
-        return None
-
     @classmethod
     def end_context(cls):
         """Clear all active contexts and close resources safely.
