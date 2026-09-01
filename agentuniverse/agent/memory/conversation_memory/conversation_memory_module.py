@@ -93,7 +93,6 @@ def generate_relation_str_en(source: str, target: str, source_type: str, target_
         return f"{target} answered {source}'s question"
     elif type == 'summary':
         return f"{source} summary"
-    return None
 
 
 def sync_to_sub_agent_memory(message: ConversationMessage, session_id: str, memory_name: str):
