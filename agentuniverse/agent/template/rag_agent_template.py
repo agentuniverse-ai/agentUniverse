@@ -16,6 +16,7 @@ from agentuniverse.prompt.prompt import Prompt
 class RagAgentTemplate(AgentTemplate):
 
     def input_keys(self) -> list[str]:
+        """Return the input keys of the agent: 'input'."""
         return ['input']
 
     def output_keys(self) -> list[str]:
