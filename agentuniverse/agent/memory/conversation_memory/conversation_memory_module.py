@@ -29,6 +29,12 @@ from agentuniverse.base.util.logging.logging_util import LOGGER
 
 
 def generate_relation_str(source: str, target: str, source_type: str, target_type: str, type: str):
+    """Build a Chinese relation sentence describing a conversation message.
+    
+    Selects a human-readable sentence based on the source/target types and
+    the message type (input/output/summary); returns None when no case
+    matches.
+    """
     if source_type == 'agent' and target_type == 'agent' and type == 'input':
         return f"智能体 {source} 向智能体 {target} 提出了一个问题"
     if source_type == 'agent' and target_type == 'agent' and type == 'output':
