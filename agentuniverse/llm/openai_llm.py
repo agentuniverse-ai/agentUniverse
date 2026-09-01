@@ -176,7 +176,7 @@ class OpenAILLM(LLM):
         chat_completion = chunk
         if not isinstance(chunk, dict):
             chunk = chunk.dict()
-        if len(chunk["choices"]) == 0:
+        if not chunk["choices"]:
             return
         choice = chunk["choices"][0]
         message = choice.get("delta")
