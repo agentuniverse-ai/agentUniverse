@@ -222,6 +222,21 @@ class OpenAIStyleLLM(LLM):
                 yield llm_output
 
     def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'LLM':
+        """Initialize OpenAI-style settings from the component configer.
+
+        Reads ``api_base``/``api_key`` (or the ``api_base_env``/
+        ``api_key_env`` environment-variable variants), ``organization``,
+        ``proxy``, ``extra_headers`` and ``extra_body`` from the configer
+        value, resolving yaml functions and environment variables, then
+        delegates to the base class implementation.
+
+        Args:
+            component_configer: The configer carrying the component's
+                configuration values.
+
+        Returns:
+            The initialized LLM instance returned by the base class.
+        """
         if 'api_base' in component_configer.configer.value:
             api_base = component_configer.configer.value.get('api_base')
             self.api_base = process_yaml_func(api_base, component_configer.yaml_func_instance)
