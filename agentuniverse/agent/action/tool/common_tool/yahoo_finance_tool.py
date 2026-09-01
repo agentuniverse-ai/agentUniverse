@@ -247,7 +247,6 @@ class YahooFinanceTool(Tool):
         for key in keys:
             if key in row and row[key] is not None:
                 return row[key]
-        return None
 
     @staticmethod
     def _fmt_num(value: Any) -> str:
