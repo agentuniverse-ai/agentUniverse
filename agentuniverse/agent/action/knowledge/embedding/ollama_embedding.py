@@ -78,6 +78,7 @@ class OllamaEmbedding(Embedding):
 
         try:
             async def get_single_embedding(text: str) -> List[float]:
+                """Fetch the embedding of a single text from the Ollama API."""
                 response = await self.async_client.post(
                     f"{self.ollama_base_url}/api/embeddings",
                     json={
