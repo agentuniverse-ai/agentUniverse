@@ -157,6 +157,31 @@ def create_react_agent(
         stop_sequence: Union[bool, List[str]] = True,
         bind_params: Optional[dict],
 ) -> Runnable:
+    """Build a ReAct agent runnable from an LLM, tools and prompt.
+    
+    Validates that the prompt provides the required tools/tool_names/
+    agent_scratchpad variables, partially applies the rendered tools to the
+    prompt, optionally binds a stop sequence to the LLM and pipes the
+    result through the given (or a default single-input) ReAct output parser.
+    
+    Args:
+        llm: The language model used for reasoning.
+        tools: The tools the agent can use.
+        prompt: The prompt template; must provide tools, tool_names and
+            agent_scratchpad variables.
+        output_parser: Optional output parser; a ReAct single input parser is
+            used when omitted.
+        tools_renderer: Callable that renders the tools into prompt text.
+        stop_sequence: Stop sequence(s) for the LLM; True uses the default
+            "Observation" stop, a list provides custom stop strings.
+        bind_params: Extra parameters bound to the LLM.
+    
+    Returns:
+        Runnable: The assembled ReAct agent runnable.
+    
+    Raises:
+        ValueError: If the prompt is missing required variables.
+    """
     missing_vars = {"tools", "tool_names", "agent_scratchpad"}.difference(
         prompt.input_variables + list(prompt.partial_variables)
     )
