@@ -91,6 +91,7 @@ class NotionReader(Reader):
         t = block.get("type")
         data = block.get(t, {}) if t else {}
         def rich_text_to_str(items: List[Dict]) -> str:
+            """Concatenate the plain text of Notion rich text items."""
             parts: List[str] = []
             for it in items or []:
                 plain = it.get("plain_text") or ""
