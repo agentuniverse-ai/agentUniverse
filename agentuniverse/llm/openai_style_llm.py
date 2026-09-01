@@ -133,6 +133,8 @@ class OpenAIStyleLLM(LLM):
             **kwargs,
         )
         if not streaming:
+            if not chat_completion.choices:
+                raise ValueError(f"OpenAI style LLM '{self.model_name}' returned a completion with no choices")
             text = chat_completion.choices[0].message.content
             return LLMOutput(text=text, raw=chat_completion.model_dump())
         return self.generate_stream_result(chat_completion)
@@ -168,6 +170,8 @@ class OpenAIStyleLLM(LLM):
             **kwargs,
         )
         if not streaming:
+            if not chat_completion.choices:
+                raise ValueError(f"OpenAI style LLM '{self.model_name}' returned a completion with no choices")
             text = chat_completion.choices[0].message.content
             return LLMOutput(text=text, raw=chat_completion.model_dump())
         return self.agenerate_stream_result(chat_completion)
