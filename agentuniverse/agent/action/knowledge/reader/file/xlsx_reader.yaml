@@ -6,5 +6,7 @@
 # @FileName: xlsx_reader.yaml
 name: 'xlsx_reader'
 description: 'Excel (.xlsx) file reader for knowledge base'
-type: 'READER'
-module: 'agentuniverse.agent.action.knowledge.reader.file.xlsx_reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.xlsx_reader'
+  class: 'XlsxReader'
