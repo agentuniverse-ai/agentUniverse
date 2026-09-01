@@ -17,7 +17,7 @@ class JinaAIToolTest(unittest.TestCase):
     Test cases for the jina ai tool
     """
     api_key = "jina_xxxxxxxxxxx"
-    url = "https://github.com/antgroup/agentUniverse"
+    url = "https://github.com/agentuniverse-ai/agentUniverse"
 
     def test_jina_ai_tool(self):
         jina_ai_tool = ToolManager().get_instance_obj("jina_ai_tool")
