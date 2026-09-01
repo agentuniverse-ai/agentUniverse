@@ -98,6 +98,11 @@ class Agent(ComponentBase, ABC):
         pass
 
     def update_trace_context(self, input_object: InputObject):
+        """Copy trace ids from the input object into the trace context.
+        
+        Sets the session id and trace id on the AuTraceManager trace context
+        when the corresponding keys are present in the input object.
+        """
         session_id = input_object.get_data("session_id")
         if session_id:
             AuTraceManager().trace_context.set_session_id(session_id)
