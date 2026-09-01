@@ -71,4 +71,5 @@ class MemoryStorage(ComponentBase):
         pass
 
     def create_copy(self):
+        """Create a copy of the memory storage; the base implementation returns self."""
         return self
