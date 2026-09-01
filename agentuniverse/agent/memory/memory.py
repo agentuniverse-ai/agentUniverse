@@ -95,6 +95,18 @@ class Memory(ComponentBase):
         return []
 
     def prune(self, memories: List[Message]) -> List[Message]:
+        """Prune memory messages so they fit within the configured token budget.
+        
+        Messages are dropped from the beginning until the remaining list fits
+        within ``max_tokens``; the dropped messages are optionally compressed
+        into a single summary message inserted at the front.
+        
+        Args:
+            memories: The messages to prune.
+        
+        Returns:
+            List[Message]: The pruned message list.
+        """
         if not memories:
             return []
         new_memories = memories[:]
