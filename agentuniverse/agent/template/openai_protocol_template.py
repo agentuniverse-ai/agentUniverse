@@ -77,7 +77,7 @@ class OpenAIProtocolTemplate(AgentTemplate):
                 text = ""
                 for item in content:
                     if item.get('type') == 'text':
-                        text = item.get('text')
+                        text += item.get('text') or ''
                     elif item.get('type') == 'image_url':
                         image_urls.append(item.get('image_url'))
                 message['content'] = text
