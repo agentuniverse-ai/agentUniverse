@@ -434,6 +434,12 @@ class SelectiveCompressor(ContextCompressor):
             Sorted list (highest score first)
         """
         def calculate_score(seg: ContextSegment) -> float:
+            """Calculate a keep/drop score for a context segment.
+            
+            Combines the segment's decay (relevance) score, recency of its last
+            access within a 24-hour window and a normalized access count using the
+            configurer weights; a higher score means the segment is kept first.
+            """
             # Relevance: decay score
             relevance_score = seg.calculate_decay()
 
