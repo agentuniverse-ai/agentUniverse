@@ -269,7 +269,7 @@ class LLMChannel(ComponentBase):
         if not isinstance(chunk, dict):
             chunk = chunk.model_dump()
 
-        if len(chunk["choices"]) == 0:
+        if not chunk["choices"]:
             return LLMOutput(text="", raw=chunk,
                              usage=TokenUsage.from_openai(chunk.get('usage', {})))
         choice = chunk["choices"][0]
