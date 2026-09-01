@@ -7,13 +7,16 @@
 # @FileName: prompt_generation_action.py
 """Prompt generation action for the prompt toolkit demo."""
 
-from typing import Dict, Any, Optional
-from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import (
-    PromptToolkit,
-    PromptToolkitConfig,
-    PromptGenerationRequest
-)
+from typing import Any
+
 from agentuniverse.agent.action.tool.tool import Tool
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import (
+    PromptComplexity,
+)
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import (
+    PromptGenerationRequest,
+    PromptToolkit,
+)
 
 
 class PromptGenerationAction(Tool):
@@ -23,45 +26,53 @@ class PromptGenerationAction(Tool):
     high-quality prompts based on user scenarios and requirements.
     """
     
-    def __init__(self):
-        """Initialize the PromptGenerationAction."""
-        super().__init__()
-        self.toolkit = PromptToolkit()
-    
-    def run(self, scenario_description: str, **kwargs) -> Dict[str, Any]:
+    def execute(
+        self,
+        scenario_description: str,
+        content: str | None = None,
+        target_audience: str | None = None,
+        domain: str | None = None,
+        constraints: list[str] | None = None,
+        examples: list[dict[str, str]] | None = None,
+        tone: str | None = None,
+        complexity: str | PromptComplexity | None = None,
+        custom_requirements: str | None = None,
+    ) -> dict[str, Any]:
         """Generate a prompt based on scenario description.
         
         Args:
             scenario_description: Description of the scenario for prompt generation.
-            **kwargs: Additional parameters including:
-                - content: Additional content or requirements
-                - target_audience: Target audience for the prompt
-                - domain: Domain or field of application
-                - constraints: List of constraints or requirements
-                - examples: List of example inputs and outputs
-                - tone: Desired tone for the prompt
-                - complexity: Desired complexity level
-                - custom_requirements: Additional custom requirements
+            content: Additional content or requirements.
+            target_audience: Target audience for the prompt.
+            domain: Domain or field of application.
+            constraints: List of constraints or requirements.
+            examples: List of example inputs and outputs.
+            tone: Desired tone for the prompt.
+            complexity: Desired complexity level.
+            custom_requirements: Additional custom requirements.
         
         Returns:
             Dict[str, Any]: Generated prompt information and metadata.
         """
         try:
+            if isinstance(complexity, str):
+                complexity = PromptComplexity(complexity.strip().lower())
+
             # Create prompt generation request
             request = PromptGenerationRequest(
                 scenario_description=scenario_description,
-                content=kwargs.get('content'),
-                target_audience=kwargs.get('target_audience'),
-                domain=kwargs.get('domain'),
-                constraints=kwargs.get('constraints'),
-                examples=kwargs.get('examples'),
-                tone=kwargs.get('tone'),
-                complexity=kwargs.get('complexity'),
-                custom_requirements=kwargs.get('custom_requirements')
+                content=content,
+                target_audience=target_audience,
+                domain=domain,
+                constraints=constraints,
+                examples=examples,
+                tone=tone,
+                complexity=complexity,
+                custom_requirements=custom_requirements
             )
             
             # Generate prompt using toolkit
-            result = self.toolkit.generate_prompt_from_request(request)
+            result = PromptToolkit().generate_prompt_from_request(request)
             
             # Format response
             response = {
@@ -103,7 +114,7 @@ class PromptGenerationAction(Tool):
         """
         return "Generate high-quality prompts based on user scenarios and requirements using the prompt toolkit."
     
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Get parameters for the action.
         
         Returns:
