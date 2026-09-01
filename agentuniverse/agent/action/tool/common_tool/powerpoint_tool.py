@@ -599,7 +599,6 @@ class PowerPointTool(Tool):
             if title_shape is not None and shape.shape_id == title_shape.shape_id:
                 continue
             return shape
-        return None
 
     def _get_title_shape(self, slide: Any) -> Any | None:
         """Return a native title placeholder or a title textbox created by this tool."""
