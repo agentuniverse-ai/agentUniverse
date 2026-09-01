@@ -5,11 +5,16 @@
 # @Author  : zhouxiaoji
 # @Email   : zh_xiaoji@qq.com
 # @FileName: arxiv_tool.py
-from typing import Optional, Any, List
-import os
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Any, List, Optional
+from urllib.parse import urlparse
+from urllib.request import urlretrieve
+
 from pydantic import Field
+
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.annotation.retry import retry
 
@@ -106,7 +111,11 @@ class ArxivTool(Tool):
             raise ImportError("arxiv is required. Install with: pip install arxiv")
         search = arxiv.Search(id_list=[paper_id])
         paper = next(self.sch_engine.results(search))
-        paper.download_pdf(filename="downloaded-paper.pdf") 
+        pdf_url = paper.pdf_url
+        parsed_pdf_url = urlparse(pdf_url) if pdf_url else None
+        if not parsed_pdf_url or parsed_pdf_url.scheme not in {"http", "https"} or not parsed_pdf_url.netloc:
+            error_message = f"No valid PDF URL found for arXiv paper: {paper_id}"
+            raise ValueError(error_message)
         
         try:
             import pypdf
@@ -114,10 +123,14 @@ class ArxivTool(Tool):
             raise ImportError(
                 "pypdf is required to read PDF files: `pip install pypdf`"
             )
-        reader = pypdf.PdfReader('downloaded-paper.pdf')
-        text_content = [page.extract_text() for page in reader.pages]
-        if os.path.exists("downloaded-paper.pdf"):
-            os.remove("downloaded-paper.pdf")
+
+        with TemporaryDirectory() as temp_dir:
+            pdf_path = Path(temp_dir) / "paper.pdf"
+            # The arXiv API URL is restricted to HTTP(S) above.
+            urlretrieve(pdf_url, str(pdf_path))  # noqa: S310
+            reader = pypdf.PdfReader(str(pdf_path))
+            text_content = [page.extract_text() or "" for page in reader.pages]
+
         return "\n\n".join(text_content)
 
     def _format_paper_results(self, papers: List[PaperSummary]) -> str:
