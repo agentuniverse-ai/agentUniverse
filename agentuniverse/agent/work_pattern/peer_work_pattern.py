@@ -21,6 +21,20 @@ class PeerWorkPattern(WorkPattern):
     reviewing: ReviewingAgentTemplate = None
 
     def invoke(self, input_object: InputObject, work_pattern_input: dict, **kwargs) -> dict:
+        """Run the peer work pattern loop and collect the per-round results.
+        
+        Iterates up to retry_count times, invoking the planning, executing,
+        expressing and reviewing templates (honoring jump_step), and stops
+        early when the reviewing score reaches eval_threshold.
+        
+        Args:
+            input_object: The input parameters passed by the user.
+            work_pattern_input: Work pattern input; may carry retry_count,
+                jump_step and eval_threshold.
+        
+        Returns:
+            dict: A dict with the 'result' key holding the per-round results.
+        """
         self._validate_work_pattern_members()
 
         peer_results = list()
