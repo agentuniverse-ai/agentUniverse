@@ -53,7 +53,11 @@ class AgentUniverse(object):
         self.__system_default_prompt_package = ['agentuniverse.agent', 'agentuniverse.base.util']
         self.__system_default_embedding_package = ['agentuniverse.agent.action.knowledge.embedding']
         self.__system_default_doc_processor_package = ['agentuniverse.agent.action.knowledge.doc_processor']
-        self.__system_default_reader_package = ['agentuniverse.agent.action.knowledge.reader.file']
+        self.__system_default_reader_package = [
+            'agentuniverse.agent.action.knowledge.reader.file',
+            'agentuniverse.agent.action.knowledge.reader.web',
+            'agentuniverse.agent.action.knowledge.reader.image',
+        ]
         self.__system_default_rag_router_package = ['agentuniverse.agent.action.knowledge.rag_router']
         self.__system_default_query_paraphraser_package = ['agentuniverse.agent.action.knowledge.query_paraphraser']
         self.__system_default_memory_compressor_package = ['agentuniverse.agent.memory.memory_compressor']
