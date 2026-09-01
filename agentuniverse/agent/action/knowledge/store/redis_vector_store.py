@@ -337,6 +337,19 @@ class RedisVectorStore(Store):
         return documents
 
     def query(self, query: Query, **kwargs: Any) -> list[Document]:
+        """Query the vector index and return the matching documents.
+        
+        Uses the query's precomputed embedding or embeds its text with the
+        configured model, ensures the index exists, runs the vector search and
+        converts the raw rows to Document objects.
+        
+        Args:
+            query: The query to search with.
+            **kwargs: May carry a metadata_filter for the search.
+        
+        Returns:
+            list[Document]: The documents returned by the vector search.
+        """
         vector = self._embedding_for_query(query)
         top_k = self._top_k(query)
         self._ensure_index(len(vector))
