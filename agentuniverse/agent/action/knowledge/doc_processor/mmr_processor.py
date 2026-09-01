@@ -213,6 +213,7 @@ class MMRProcessor(DocProcessor):
         sim_cache: Dict[Tuple[int, int], float] = {}
 
         def pair_sim(i: int, j: int) -> float:
+            """Return the cached cosine similarity between two document vectors."""
             key = (i, j) if i < j else (j, i)
             cached = sim_cache.get(key)
             if cached is None:
