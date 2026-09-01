@@ -10,7 +10,7 @@
 import unittest
 from agentuniverse.prompt.prompt_model import AgentPromptModel
 from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generator import ScenarioContext, \
-    PromptGenerator, PromptScenario, PromptComplexity
+    PromptGenerator, PromptScenario, PromptComplexity, PromptOptimizationResult
 
 
 class TestPromptGenerator(unittest.TestCase):
