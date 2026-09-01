@@ -36,7 +36,7 @@ spec:
         ports:
         - containerPort: 8888
         command: ["/bin/bash", "-c"]
-        args: ["git clone git@github.com:antgroup/agentUniverse.git; mv agentUniverse/sample_standard_app /usr/local/etc/workspace/project; /bin/bash --login /usr/local/etc/workspace/shell/start.sh"]
+        args: ["git clone git@github.com:agentuniverse-ai/agentUniverse.git; mv agentUniverse/sample_standard_app /usr/local/etc/workspace/project; /bin/bash --login /usr/local/etc/workspace/shell/start.sh"]
         # Uncomment and replace "XXX" with your key to configure the agent
         # env:
         # - name: OPENAI_API_KEY

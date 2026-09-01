@@ -12,7 +12,7 @@
   [下载链接](https://cherry-ai.com/download)
 
 ### 2. 准备agentUniverse项目
-参考aU[快速开始](https://github.com/antgroup/agentUniverse/blob/master/README_zh.md)文档，创建一个agentUniverse项目, 并成功启动 demo_agent 示例应用。
+参考aU[快速开始](https://github.com/agentuniverse-ai/agentUniverse/blob/master/README_zh.md)文档，创建一个agentUniverse项目, 并成功启动 demo_agent 示例应用。
 
 
 ## 二、创建 OpenAI 协议兼容智能体
@@ -118,7 +118,6 @@ curl -X POST http://127.0.0.1:8888/chat/completions \
 ## 4. 测试
 * 在chatbox中输入任意内容，点击发送按钮，即可看到agent的输出。如图:  
 <img src="../../../_picture/chatbox_test_result.png" width="600" />
-
 
 
 

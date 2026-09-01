@@ -5,7 +5,7 @@ labels: ["question"]
 body:
 - type: markdown
   attributes:
-    value: "Please check whether there are any [issues](https://github.com/antgroup/agentUniverse/issues) or [documents](https://github.com/antgroup/agentUniverse/tree/master/docs/guidebook/en) that address your questions. | 搜索是否有[issues](https://github.com/antgroup/agentUniverse/issues) 或[文档](https://github.com/antgroup/agentUniverse/tree/master/docs/guidebook/zh) 提到了您的提问。"
+    value: "Please check whether there are any [issues](https://github.com/agentuniverse-ai/agentUniverse/issues) or [documents](https://github.com/agentuniverse-ai/agentUniverse/tree/master/docs/guidebook/en) that address your questions. | 搜索是否有[issues](https://github.com/agentuniverse-ai/agentUniverse/issues) 或[文档](https://github.com/agentuniverse-ai/agentUniverse/tree/master/docs/guidebook/zh) 提到了您的提问。"
 - type: markdown
   attributes:
     value: "Please fill out the info before you submit a question | 请在您提交问题之前，填写以下信息。"

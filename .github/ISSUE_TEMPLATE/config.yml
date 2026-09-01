@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: 📜 agentUniverse Docs | agentUniverse官方文档
-    url: https://github.com/antgroup/agentUniverse/blob/master/docs/guidebook/en/Contents.md
+    url: https://github.com/agentuniverse-ai/agentUniverse/blob/master/docs/guidebook/en/Contents.md
     about: The docs contains detailed info about the agentUniverse's design concepts, examples, guides, and more.
   - name: 👀 agentUniverse Discussions | agentUniverse讨论
-    url: https://github.com/antgroup/agentUniverse/discussions
+    url: https://github.com/agentuniverse-ai/agentUniverse/discussions
     about: More topics related to the LLM, AI or Agent can be discussed here.
