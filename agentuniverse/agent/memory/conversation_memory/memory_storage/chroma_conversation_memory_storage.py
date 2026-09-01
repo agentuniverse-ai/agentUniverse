@@ -108,9 +108,12 @@ class ChromaConversationMemoryStorage(MemoryStorage):
         for message in message_list:
             embedding = []
             if self.embedding_model:
-                embedding = EmbeddingManager().get_instance_obj(
+                embeddings = EmbeddingManager().get_instance_obj(
                     self.embedding_model
-                ).get_embeddings([message.content])[0]
+                ).get_embeddings([message.content])
+                if not embeddings:
+                    raise ValueError(f"Embedding model '{self.embedding_model}' returned no embeddings")
+                embedding = embeddings[0]
             metadata = {'timestamp': datetime.now().isoformat()}
             if session_id:
                 metadata['session_id'] = session_id
