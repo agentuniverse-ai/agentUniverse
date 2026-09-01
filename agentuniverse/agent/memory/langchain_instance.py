@@ -95,6 +95,7 @@ class AuConversationSummaryBufferMemory(ConversationSummaryBufferMemory):
         """Save context from the conversation to buffer and prune memories"""
 
         def message_to_dict(message):
+            """Convert a message to a plain dict with its content and type."""
             return {
                 "content": message.content,
                 "type": message.type
