@@ -49,6 +49,18 @@ class WorkflowAgent(Agent):
         return agent_result
 
     def execute(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Build and run the configured workflow for the given input.
+        
+        Args:
+            input_object: The input parameters passed by the user.
+            agent_input: The agent input parsed from the input object.
+        
+        Returns:
+            dict: The workflow end parameters.
+        
+        Raises:
+            Exception: If the workflow is missing or has no graph config.
+        """
         workflow: Workflow = WorkflowManager().get_instance_obj(self.workflow_id)
         # build and run workflow
         if not workflow or workflow.graph_config is None:
