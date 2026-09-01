@@ -59,7 +59,6 @@ def generate_relation_str(source: str, target: str, source_type: str, target_typ
         return f"{source} 回答了 {target} 的问题"
     elif type == 'summary':
         return f"{source} 的摘要"
-    return None
 
 
 def generate_relation_str_en(source: str, target: str, source_type: str, target_type: str, type: str):
