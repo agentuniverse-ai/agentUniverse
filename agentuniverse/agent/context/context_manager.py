@@ -460,6 +460,11 @@ class ContextManager(ComponentBase):
 
         # Sort by: priority (lower first), decay score (lower first), last_accessed (older first)
         def eviction_key(seg):
+            """Return the sort key used to order segments for eviction.
+            
+            Segments are ordered by priority (lowest first), decay score and last
+            access time, so the least important segment is evicted first.
+            """
             priority_order = {
                 ContextPriority.EPHEMERAL: 0,
                 ContextPriority.LOW: 1,
