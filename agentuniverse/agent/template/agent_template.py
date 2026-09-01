@@ -32,6 +32,19 @@ class AgentTemplate(Agent, ABC):
     conversation_memory_name: Optional[str] = None
 
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
+        """Execute the agent with the given input.
+        
+        Processes the memory, LLM and prompt components, then delegates to
+        ``customized_execute`` for the actual execution.
+        
+        Args:
+            input_object: The input parameters passed by the user.
+            agent_input: The agent input parsed from the input object.
+            **kwargs: Additional keyword arguments.
+        
+        Returns:
+            dict: The agent execution result.
+        """
         memory: Memory = self.process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
         prompt: Prompt = self.process_prompt(agent_input, **kwargs)
