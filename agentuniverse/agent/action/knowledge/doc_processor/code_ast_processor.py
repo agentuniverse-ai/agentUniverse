@@ -41,6 +41,7 @@ class CodeAstProcessor(DocProcessor):
     def _process_with_tree_sitter(self, code: str, language: str,
                                   metadata: Dict[str, Any]) -> List[Document]:
         def _ensure_language() -> None:
+            """Load and register the tree-sitter language module for language when it is not cached yet. Raises: ImportError when the language grammar is unavailable."""
             if language not in self._languages:
                 try:
                     from tree_sitter import Language
@@ -123,6 +124,7 @@ class CodeAstProcessor(DocProcessor):
         cursor = node.walk()
 
         def _visit():
+            """Walk the tree-sitter cursor and update the feature counters for identifiers, functions and classes."""
             nonlocal features
             current_node = cursor.node
 
@@ -148,6 +150,7 @@ class CodeAstProcessor(DocProcessor):
         counts = {}
 
         def _traverse(node):
+            """Recursively count every node type of the tree. Args: node: The tree-sitter node."""
             if node.type not in counts:
                 counts[node.type] = 0
             counts[node.type] += 1
@@ -179,11 +182,13 @@ class CodeAstProcessor(DocProcessor):
             root_node,
             language: str,
             metadata: Dict[str, Any]) -> List[Document]:
+        """Split the parsed code into chunk documents at declaration boundaries, honoring chunk_size and chunk_overlap. Args: code (str): The source code. root_node: The root tree-sitter node. language (str): The language name. metadata (Dict[str, Any]): Document metadata. Returns: List[Document]: The chunk documents."""
         chunks = []
         lines = code.splitlines()
         boundaries = []
 
         def _collect_declarations(node, path=""):
+            """Collect declaration (function/class) boundaries spanning at least three lines into the chunk boundaries list. Args: node: The tree-sitter node. path (str): The declaration path prefix."""
 
             if node.type in ("function_definition", "method_definition", "class_definition",
                              "function_declaration", "method_declaration", "class_declaration"):
@@ -211,6 +216,7 @@ class CodeAstProcessor(DocProcessor):
         traverse_cursor = root_node.walk()
 
         def _traverse_nodes():
+            """Depth-first traversal of the tree-sitter cursor collecting declaration boundaries."""
             current_node = traverse_cursor.node
 
             _collect_declarations(current_node)
@@ -283,6 +289,7 @@ class CodeAstProcessor(DocProcessor):
 
     def _initialize_by_component_configer(
             self, doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
+        """Apply the doc-processor configuration and initialize the tree-sitter parser and language registry. Raises: ImportError when tree-sitter is unavailable. Args: doc_processor_configer (ComponentConfiger): The processor configuration. Returns: DocProcessor: self."""
         super()._initialize_by_component_configer(doc_processor_configer)
         try:
             from tree_sitter import Parser
