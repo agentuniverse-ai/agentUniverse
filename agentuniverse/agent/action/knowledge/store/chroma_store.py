@@ -103,7 +103,7 @@ class ChromaStore(Store):
         # convert to the agentUniverse(aU) document format
         return self.to_documents(query_result)
 
-    def insert_document(self, documents: List[Document], **kwargs: Any):
+    def insert_document(self, documents: List[Document], **kwargs: Any) -> None:
         """Insert documents to the chroma collection.
 
         Args:
@@ -128,7 +128,7 @@ class ChromaStore(Store):
                 ids=[document.id]
             )
 
-    def upsert_document(self, documents: List[Document], **kwargs):
+    def upsert_document(self, documents: List[Document], **kwargs) -> None:
         """Upsert document into the store."""
         for document in documents:
             embedding = document.embedding
@@ -143,7 +143,7 @@ class ChromaStore(Store):
                 ids=[document.id]
             )
 
-    def update_document(self, documents: List[Document], **kwargs):
+    def update_document(self, documents: List[Document], **kwargs) -> None:
         """Update document into the store."""
         for document in documents:
             embedding = document.embedding
