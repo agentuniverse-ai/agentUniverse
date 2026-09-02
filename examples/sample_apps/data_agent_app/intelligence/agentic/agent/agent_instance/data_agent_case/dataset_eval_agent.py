@@ -56,7 +56,7 @@ class DatasetEvalAgent(Agent):
         """
         return planner_result
 
-    def execute(self, input_object: InputObject, agent_input: dict):
+    def execute(self, input_object: InputObject, agent_input: dict) -> dict:
         """Execute agent instance.
 
         Args:
@@ -249,7 +249,7 @@ class DatasetEvalAgent(Agent):
         return eval_report_json_list
 
     @staticmethod
-    def generate_total_eval_report(eval_report_json_list: List[dict]):
+    def generate_total_eval_report(eval_report_json_list: List[dict]) -> None:
         """Generate total evaluation report, integrate and calculate the total evaluation score for each turn.
 
         Args:
@@ -279,7 +279,7 @@ class DatasetEvalAgent(Agent):
 
     @staticmethod
     def generate_eval_results_excel(query_answer_list: List[List[Tuple[str, str]]],
-                                    eval_dims_json_list: List[List[dict]], date: str):
+                                    eval_dims_json_list: List[List[dict]], date: str) -> None:
         """Generate evaluation results in excel format."""
 
         columns: List[str] = ['Line Number', 'Overall Score', 'Query', 'Answer']
@@ -317,7 +317,7 @@ class DatasetEvalAgent(Agent):
             LOGGER.info("-------------------------------------------")
 
     @staticmethod
-    def generate_eval_report_excel(eval_report_json_list: List[dict], date: str):
+    def generate_eval_report_excel(eval_report_json_list: List[dict], date: str) -> None:
         """Generate excel eval report."""
 
         rows = []
