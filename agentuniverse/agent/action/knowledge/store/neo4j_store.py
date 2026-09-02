@@ -116,6 +116,7 @@ class Neo4jStore(Store):
         return documents
 
     def _get_graph_schema_info(self) -> dict:
+        """Fetch the graph schema from Neo4j via the APOC meta schema call. Returns: dict: The schema dict, or an empty dict when unavailable."""
         cypher = "CALL apoc.meta.schema() YIELD value RETURN value"
         session = self.driver.session()
         try:
@@ -129,6 +130,7 @@ class Neo4jStore(Store):
 
     def _llm_generate_cypher(self, natural_language_query: str,
                                       schema_info: dict) -> str:
+        """Generate a Cypher statement for the natural-language query. Args: natural_language_query (str): The query text. schema_info (dict): The graph schema. Returns: str: The Cypher statement."""
         return "MATCH (n) RETURN n LIMIT 10"
 
 
@@ -177,6 +179,7 @@ class Neo4jStore(Store):
 
 
     def insert_document(self, documents: List[Document], **kwargs: Any):
+        """Insert the documents into the graph, merging a Document node per document with its text and metadata. Args: documents (List[Document]): The documents to insert. **kwargs: Extra options."""
         session = self.driver.session()
         try:
             for doc in documents:
@@ -191,10 +194,12 @@ class Neo4jStore(Store):
 
 
     def upsert_document(self, documents: List[Document], **kwargs):
+        """Insert or update the documents, delegating to insert_document. Args: documents (List[Document]): The documents to persist. **kwargs: Extra options."""
 
         self.insert_document(documents, **kwargs)
 
     def update_document(self, documents: List[Document], **kwargs):
+        """Update the existing Document nodes with the new text and metadata. Args: documents (List[Document]): The documents to update. **kwargs: Extra options."""
         session = self.driver.session()
         try:
             for doc in documents:
@@ -209,6 +214,7 @@ class Neo4jStore(Store):
 
     def _initialize_by_component_configer(self,
                                           neo4j_store_configer: ComponentConfiger) -> 'Neo4jStore':
+        """Apply the store configuration (uri, user, password, database) onto this store. Args: neo4j_store_configer (ComponentConfiger): The store configuration. Returns: Neo4jStore: self."""
         super()._initialize_by_component_configer(neo4j_store_configer)
         if hasattr(neo4j_store_configer, "uri"):
             self.uri = neo4j_store_configer.uri
