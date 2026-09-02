@@ -173,6 +173,9 @@ class PromptAutoDesigner:
 
     @staticmethod
     def _build_prompt_model(parsed: Dict[str, Any], fallback: Optional[AgentPromptModel] = None) -> AgentPromptModel:
+        """Build an AgentPromptModel from the parsed LLM response, merging fallback
+        and raising PromptAutoDesignerError when the seed model is empty.
+        """
         data = {
             "introduction": parsed.get("introduction"),
             "target": parsed.get("target"),
@@ -187,6 +190,11 @@ class PromptAutoDesigner:
 
     @staticmethod
     def _ensure_list(value: Any) -> List[str]:
+        """Normalize value into a list of strings, returning [] when it is None.
+
+        Returns:
+            List[str]: The normalized string list.
+        """
         if value is None:
             return []
         if isinstance(value, list):
@@ -195,12 +203,20 @@ class PromptAutoDesigner:
 
     @staticmethod
     def _format_bullets(values: List[str], fallback: str = "无") -> str:
+        """Format values as '- item' bullets joined by newlines, or return the
+        fallback string when no values are given.
+        """
         if not values:
             return fallback
         return "\n".join(f"- {value}" for value in values)
 
     @staticmethod
     def _coerce_float(value: Any) -> Optional[float]:
+        """Convert an int/float or a numeric-leading string into a float, else None.
+
+        Returns:
+            Optional[float]: The coerced number.
+        """
         if isinstance(value, (int, float)):
             return float(value)
         if isinstance(value, str):
@@ -211,6 +227,12 @@ class PromptAutoDesigner:
 
     @staticmethod
     def _parse_json(raw: str) -> Dict[str, Any]:
+        """Parse a JSON string into a dict, recovering a JSON object substring when
+        the whole string fails to parse.
+
+        Returns:
+            dict: The parsed JSON object.
+        """
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
@@ -224,6 +246,11 @@ class PromptAutoDesigner:
 
     @staticmethod
     def _safe_get(payload: Dict[str, Any], key: str) -> Optional[str]:
+        """Return payload[key] converted to a string, or None when the key is absent.
+
+        Returns:
+            Optional[str]: The string value.
+        """
         value = payload.get(key)
         if value is None:
             return None
