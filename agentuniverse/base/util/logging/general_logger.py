@@ -194,6 +194,11 @@ class GeneralLogger(Logger):
         await self._logger.complete()
 
     def critical(self, msg, *args, **kwargs):
+        """Log the given message at the critical level.
+
+        Args:
+            msg: The message to log; *args and **kwargs are forwarded to loguru.
+        """
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
@@ -201,10 +206,20 @@ class GeneralLogger(Logger):
         ).critical(msg, *args, **kwargs)
 
     async def acritical(self, msg, *args, **kwargs):
+        """Log the given message and wait for the logger queue to flush.
+
+        Args:
+            msg: The message to log; *args and **kwargs are forwarded to loguru.
+        """
         self.error(msg, *args, **kwargs)
         await self._logger.complete()
 
     def trace(self, msg, *args, **kwargs):
+        """Log the given message at the trace level.
+
+        Args:
+            msg: The message to log; *args and **kwargs are forwarded to loguru.
+        """
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
@@ -212,10 +227,20 @@ class GeneralLogger(Logger):
         ).trace(msg, *args, **kwargs)
 
     async def atrace(self, msg, *args, **kwargs):
+        """Log the given message and wait for the logger queue to flush.
+
+        Args:
+            msg: The message to log; *args and **kwargs are forwarded to loguru.
+        """
         self.trace(msg, *args, **kwargs)
         await self._logger.complete()
 
     def debug(self, msg, *args, **kwargs):
+        """Log the given message at the debug level.
+
+        Args:
+            msg: The message to log; *args and **kwargs are forwarded to loguru.
+        """
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
@@ -223,6 +248,11 @@ class GeneralLogger(Logger):
         ).debug(msg, *args, **kwargs)
 
     async def adebug(self, msg, *args, **kwargs):
+        """Log the given message and wait for the logger queue to flush.
+
+        Args:
+            msg: The message to log; *args and **kwargs are forwarded to loguru.
+        """
         self.debug(msg, *args, **kwargs)
         await self._logger.complete()
 
