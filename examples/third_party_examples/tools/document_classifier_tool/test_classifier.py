@@ -34,7 +34,7 @@ from examples.third_party_examples.tools.document_classifier_tool.chinese_docume
 class TestDocumentClassifier(unittest.TestCase):
     """文档分类器测试类"""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """测试前准备"""
         self.classifier = DocumentClassifier()
         self.classifier.set_categories(['技术文档', '学术论文', '新闻资讯', '其他'])
@@ -51,7 +51,7 @@ class TestDocumentClassifier(unittest.TestCase):
             Document(text="今天天气很好，适合出门散步。")  # 应该分类为"其他"
         ]
     
-    def test_keyword_classification(self):
+    def test_keyword_classification(self) -> None:
         """测试关键词分类"""
         self.classifier.strategy = ClassificationStrategy.KEYWORD_MATCHING
         
@@ -85,7 +85,7 @@ class TestDocumentClassifier(unittest.TestCase):
             '其他'
         )
     
-    def test_regex_classification(self):
+    def test_regex_classification(self) -> None:
         """测试正则表达式分类"""
         self.classifier.strategy = ClassificationStrategy.REGEX_PATTERN
         
@@ -110,7 +110,7 @@ class TestDocumentClassifier(unittest.TestCase):
             '新闻资讯'
         )
     
-    def test_empty_document(self):
+    def test_empty_document(self) -> None:
         """测试空文档处理"""
         empty_doc = Document(text="")
         classified_doc = self.classifier._classify_document(empty_doc)
@@ -124,7 +124,7 @@ class TestDocumentClassifier(unittest.TestCase):
             0.0
         )
     
-    def test_none_text_document(self):
+    def test_none_text_document(self) -> None:
         """测试None文本文档处理"""
         none_doc = Document(text=None)
         classified_doc = self.classifier._classify_document(none_doc)
@@ -134,7 +134,7 @@ class TestDocumentClassifier(unittest.TestCase):
             '其他'
         )
     
-    def test_classification_summary(self):
+    def test_classification_summary(self) -> None:
         """测试分类统计摘要"""
         classified_docs = self.classifier.process_docs(self.test_documents)
         summary = self.classifier.get_classification_summary(classified_docs)
@@ -145,7 +145,7 @@ class TestDocumentClassifier(unittest.TestCase):
         self.assertIn('新闻资讯', summary['category_counts'])
         self.assertIn('其他', summary['category_counts'])
     
-    def test_add_keyword_rule(self):
+    def test_add_keyword_rule(self) -> None:
         """测试添加关键词规则"""
         initial_count = len(self.classifier.keyword_rules)
         
@@ -155,7 +155,7 @@ class TestDocumentClassifier(unittest.TestCase):
         self.assertIn('新类别', self.classifier.keyword_rules)
         self.assertIn('新类别', self.classifier.categories)
     
-    def test_add_regex_rule(self):
+    def test_add_regex_rule(self) -> None:
         """测试添加正则表达式规则"""
         initial_count = len(self.classifier.regex_rules)
         
@@ -169,7 +169,7 @@ class TestDocumentClassifier(unittest.TestCase):
 class TestChineseDocumentClassifier(unittest.TestCase):
     """中文文档分类器测试类"""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """测试前准备"""
         self.classifier = ChineseDocumentClassifier()
         self.classifier.set_categories(['技术文档', '学术论文', '新闻资讯', '其他'])
@@ -186,7 +186,7 @@ class TestChineseDocumentClassifier(unittest.TestCase):
             Document(text="今天天气很好，适合出门散步。")  # 应该分类为"其他"
         ]
     
-    def test_chinese_keyword_classification(self):
+    def test_chinese_keyword_classification(self) -> None:
         """测试中文关键词分类"""
         classified_docs = self.classifier.process_docs(self.chinese_documents)
         
@@ -214,7 +214,7 @@ class TestChineseDocumentClassifier(unittest.TestCase):
             '其他'
         )
     
-    def test_jieba_keyword_extraction(self):
+    def test_jieba_keyword_extraction(self) -> None:
         """测试jieba关键词提取"""
         text = "这是一个Python编程教程，介绍了如何使用API和函数。"
         keywords = self.classifier._extract_keywords(text)
@@ -225,7 +225,7 @@ class TestChineseDocumentClassifier(unittest.TestCase):
         self.assertNotIn('的', keywords)
         self.assertNotIn('是', keywords)
     
-    def test_fuzzy_match(self):
+    def test_fuzzy_match(self) -> None:
         """测试模糊匹配"""
         # 精确匹配
         self.assertTrue(self.classifier._fuzzy_match('编程', '这是一个编程教程'))
@@ -236,7 +236,7 @@ class TestChineseDocumentClassifier(unittest.TestCase):
         # 不匹配
         self.assertFalse(self.classifier._fuzzy_match('Java', '这是一个Python教程'))
     
-    def test_text_statistics(self):
+    def test_text_statistics(self) -> None:
         """测试文本统计"""
         text = "这是一个Python编程教程，介绍了如何使用API和函数。"
         stats = self.classifier.get_text_statistics(text)
@@ -250,7 +250,7 @@ class TestChineseDocumentClassifier(unittest.TestCase):
         self.assertGreater(stats['total_chars'], 0)
         self.assertGreater(stats['total_words'], 0)
     
-    def test_content_type_classification(self):
+    def test_content_type_classification(self) -> None:
         """测试内容类型分类"""
         # 技术文档
         tech_text = "这是一个Python编程教程，介绍了如何使用API和函数。"
@@ -273,7 +273,7 @@ class TestChineseDocumentClassifier(unittest.TestCase):
             '新闻资讯'
         )
     
-    def test_chinese_regex_classification(self):
+    def test_chinese_regex_classification(self) -> None:
         """测试中文正则表达式分类"""
         self.classifier.add_chinese_regex_rule('技术文档', r'(代码|编程|API|函数|技术)')
         self.classifier.add_chinese_regex_rule('学术论文', r'(研究|实验|分析|论文|学术)')
@@ -301,12 +301,12 @@ class TestChineseDocumentClassifier(unittest.TestCase):
 class TestEdgeCases(unittest.TestCase):
     """边界情况测试"""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """测试前准备"""
         self.classifier = DocumentClassifier()
         self.classifier.set_categories(['类别1', '类别2'])
     
-    def test_no_categories(self):
+    def test_no_categories(self) -> None:
         """测试无分类类别"""
         classifier = DocumentClassifier()
         doc = Document(text="测试文档")
@@ -317,7 +317,7 @@ class TestEdgeCases(unittest.TestCase):
             '未分类'
         )
     
-    def test_no_keyword_rules(self):
+    def test_no_keyword_rules(self) -> None:
         """测试无关键词规则"""
         classifier = DocumentClassifier()
         classifier.set_categories(['类别1', '类别2'])
@@ -330,7 +330,7 @@ class TestEdgeCases(unittest.TestCase):
             '未分类'
         )
     
-    def test_very_long_text(self):
+    def test_very_long_text(self) -> None:
         """测试超长文本"""
         long_text = "测试" * 10000  # 20000个字符
         doc = Document(text=long_text)
@@ -339,7 +339,7 @@ class TestEdgeCases(unittest.TestCase):
         # 应该能正常处理，不会出错
         self.assertIn('classification', classified_doc.metadata)
     
-    def test_special_characters(self):
+    def test_special_characters(self) -> None:
         """测试特殊字符"""
         special_text = "!@#$%^&*()_+-=[]{}|;':\",./<>?`~"
         doc = Document(text=special_text)
