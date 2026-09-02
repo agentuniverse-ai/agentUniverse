@@ -203,7 +203,7 @@ class APITool(Tool):
                                                    follow_redirects=True)
             return response
         else:
-            raise ValueError(f'Invalid http method')
+            raise ValueError('Invalid http method')
 
     @staticmethod
     def get_parameter_value(parameter, parameters):
