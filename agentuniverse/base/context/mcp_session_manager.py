@@ -149,6 +149,11 @@ class MCPTempClient:
             exc_val: BaseException | None,
             exc_tb: TracebackType | None,
     ) -> None:
+        """Close the exit stack, releasing every client resource of this temp client.
+
+        Args:
+        exc_type: exception type; exc_val: exception value; exc_tb: traceback.
+        """
         await self.exit_stack.aclose()
 
 
@@ -174,11 +179,21 @@ class MCPSessionManager:
         self.__exit_stack = ContextVar("__mcp_exit_stack__")
 
     def init_session(self):
+        """Reset the manager state for the current context.
+
+        Creates a fresh exit stack (sync or async depending on the caller) and sets
+        the session dict to empty.
+        """
         self.__exit_stack.set(pick_exit_stack())
         self.__mcp_session_dict.set({})
 
     @property
     def mcp_session_dict(self) -> dict:
+        """Sessions currently held by the manager, keyed by server name.
+
+        Returns:
+        dict: lazily initialized mapping of server name to ClientSession.
+        """
         if not self.__mcp_session_dict.get(None):
             self.__mcp_session_dict.set({})
         return self.__mcp_session_dict.get({})
@@ -186,11 +201,17 @@ class MCPSessionManager:
 
     @property
     def exit_stack(self) -> AsyncExitStack:
+        """The exit stack holding the manager's open session resources.
+
+        Returns:
+        the context's AsyncExitStack or SyncAsyncExitStack, created on first access.
+        """
         if not self.__exit_stack.get(None):
             self.__exit_stack.set(pick_exit_stack())
         return self.__exit_stack.get()
 
     async def clear_session(self):
+        """Asynchronously close all open sessions and reset the current context state."""
         await self.exit_stack.aclose()
         self.__exit_stack.set(None)
         self.__mcp_session_dict.set(None)
@@ -745,6 +766,11 @@ class MCPSessionManager:
         return session
 
     def safe_close_stack(self) -> None:
+        """Close the exit stack without raising, from either sync or async code.
+
+        Picks aclose/close or schedules the close as a task depending on whether an
+        event loop is running, then clears both context variables.
+        """
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -761,6 +787,11 @@ class MCPSessionManager:
         self.__mcp_session_dict.set(None)
 
     async def safe_close_stack_async(self) -> None:
+        """Close the active exit stack from async code.
+
+        Closes an AsyncExitStack with aclose and a SyncAsyncExitStack with close,
+        then clears both context variables.
+        """
         if isinstance(self.exit_stack, AsyncExitStack):
             await self.exit_stack.aclose()
         elif isinstance(self.exit_stack, SyncAsyncExitStack):
@@ -769,4 +800,12 @@ class MCPSessionManager:
         self.__mcp_session_dict.set(None)
 
     def run_async(self, func, *args, **kwargs):
+        """Run an async callable on the active exit stack's portal.
+
+        Args:
+        func: the async callable to run; *args/**kwargs forwarded to it.
+
+        Returns:
+        Any: the result of the async call.
+        """
         return self.exit_stack.run_async(func, *args, **kwargs)
