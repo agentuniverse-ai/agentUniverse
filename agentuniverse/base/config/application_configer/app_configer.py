@@ -192,7 +192,7 @@ class AppConfiger(object):
         return self.__yaml_func_instance
 
     @yaml_func_instance.setter
-    def yaml_func_instance(self, value):
+    def yaml_func_instance(self, value) -> None:
         self.__yaml_func_instance = value
 
     @property
@@ -200,7 +200,7 @@ class AppConfiger(object):
         return self.__default_llm_configer
 
     @default_llm_configer.setter
-    def default_llm_configer(self, value: DefaultLLMConfiger):
+    def default_llm_configer(self, value: DefaultLLMConfiger) -> None:
         self.__default_llm_configer = value
 
     @property
@@ -208,7 +208,7 @@ class AppConfiger(object):
         return self.__tool_configer_map
 
     @tool_configer_map.setter
-    def tool_configer_map(self, value: Dict[str, ToolConfiger]):
+    def tool_configer_map(self, value: Dict[str, ToolConfiger]) -> None:
         self.__tool_configer_map = value
 
     @property
@@ -216,7 +216,7 @@ class AppConfiger(object):
         return self.__toolkit_configer_map
 
     @toolkit_configer_map.setter
-    def toolkit_configer_map(self, value: Dict[str, ComponentConfiger]):
+    def toolkit_configer_map(self, value: Dict[str, ComponentConfiger]) -> None:
         self.__toolkit_configer_map = value
 
     @property
@@ -224,7 +224,7 @@ class AppConfiger(object):
         return self.__llm_configer_map
 
     @llm_configer_map.setter
-    def llm_configer_map(self, value: Dict[str, LLMConfiger]):
+    def llm_configer_map(self, value: Dict[str, LLMConfiger]) -> None:
         self.__llm_configer_map = value
 
     @property
@@ -232,7 +232,7 @@ class AppConfiger(object):
         return self.__agent_llm_set
 
     @agent_llm_set.setter
-    def agent_llm_set(self, value: set):
+    def agent_llm_set(self, value: set) -> None:
         self.__agent_llm_set = value
 
     @property
@@ -244,7 +244,7 @@ class AppConfiger(object):
         return self.__agent_toolkit_set
 
     @agent_tool_set.setter
-    def agent_tool_set(self, value: set):
+    def agent_tool_set(self, value: set) -> None:
         self.__agent_tool_set = value
 
     @property
