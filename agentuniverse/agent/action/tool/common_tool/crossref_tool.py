@@ -399,6 +399,14 @@ class CrossrefTool(Tool):
 
     @classmethod
     def _authors(cls, value: Any) -> List[str]:
+        """Extract display names from Crossref author entries.
+
+        Args:
+            value: Raw author field, which is ignored unless it is a list of dicts.
+
+        Returns:
+            A list of author names built from given and family parts, falling back to the organization name.
+        """
         if not isinstance(value, list):
             return []
 
@@ -417,6 +425,14 @@ class CrossrefTool(Tool):
 
     @classmethod
     def _funders(cls, value: Any) -> List[Dict[str, Any]]:
+        """Extract funder records from a Crossref funder field.
+
+        Args:
+            value: Raw funder field, which is ignored unless it is a list of dicts.
+
+        Returns:
+            A list of dicts with name, doi, and awards, omitting entries with none of those values.
+        """
         if not isinstance(value, list):
             return []
         funders = []
@@ -432,6 +448,14 @@ class CrossrefTool(Tool):
 
     @classmethod
     def _licenses(cls, value: Any) -> List[Dict[str, Any]]:
+        """Extract license records that carry a URL from a Crossref license field.
+
+        Args:
+            value: Raw license field, which is ignored unless it is a list of dicts.
+
+        Returns:
+            A list of dicts with url, start_date, content_version, and delay_in_days.
+        """
         if not isinstance(value, list):
             return []
         licenses = []
@@ -453,6 +477,14 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _markup_text(value: Any) -> str:
+        """Convert HTML or JATS-style markup in value into plain text.
+
+        Args:
+            value: Markup string to strip, or any non-string value.
+
+        Returns:
+            The text with markup removed and whitespace normalized, or an empty string for blank or non-string input.
+        """
         if not isinstance(value, str) or not value.strip():
             return ""
         parser = _MarkupTextExtractor()
@@ -462,6 +494,14 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _published_date(value: Any) -> str:
+        """Format a Crossref date-parts structure as YYYY, YYYY-MM, or YYYY-MM-DD.
+
+        Args:
+            value: Raw date field expected to be a dict with a date-parts list of lists.
+
+        Returns:
+            The formatted date string with zero-padded components, or an empty string when the structure is absent or invalid.
+        """
         if not isinstance(value, dict):
             return ""
         date_parts = value.get("date-parts")
@@ -475,6 +515,14 @@ class CrossrefTool(Tool):
 
     @classmethod
     def _first_text(cls, value: Any) -> str:
+        """Return the first non-empty plain-text value found in a string or list.
+
+        Args:
+            value: A markup string, a list of such strings, or any other value.
+
+        Returns:
+            The first item whose stripped text is non-empty, or an empty string when none is found.
+        """
         if isinstance(value, str):
             return cls._markup_text(value)
         if isinstance(value, list):
@@ -486,10 +534,19 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _string_value(value: Any) -> str:
+        """Return value stripped of surrounding whitespace when it is a string, otherwise an empty string."""
         return value.strip() if isinstance(value, str) else ""
 
     @classmethod
     def _string_list(cls, value: Any) -> List[str]:
+        """Normalize a list of string values, keeping only non-empty unique stripped entries.
+
+        Args:
+            value: Raw list field, which is ignored unless it is a list.
+
+        Returns:
+            A list of stripped non-empty strings with duplicates removed.
+        """
         if not isinstance(value, list):
             return []
         values = []
@@ -501,10 +558,19 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _integer_value(value: Any) -> int:
+        """Return value when it is an integer, otherwise 0."""
         return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
     @staticmethod
     def _api_error_message(value: Any) -> str:
+        """Extract a human-readable message from a Crossref API error payload.
+
+        Args:
+            value: The API message field, which may be a string or a list of error dicts.
+
+        Returns:
+            A stripped message string, or the placeholder "unknown Crossref API error" when nothing usable is found.
+        """
         if isinstance(value, str) and value.strip():
             return value.strip()
         if isinstance(value, list):
@@ -533,6 +599,15 @@ class CrossrefTool(Tool):
         error_type: str,
         message: str,
     ) -> Dict[str, Any]:
+        """Build a structured error result that echoes the request context alongside the failure details.
+
+        Args:
+            error_type: Machine-readable category of the failure.
+            message: Human-readable description of the failure.
+
+        Returns:
+            A dict echoing the request context with zeroed result counts, an empty works list, and an error field holding the failure type and message.
+        """
         return {
             "mode": mode,
             "query": query,
