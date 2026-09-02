@@ -9,7 +9,9 @@ from queue import Queue
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.input_object import InputObject
+from agentuniverse.agent.memory.enum import ChatMessageEnum
 from agentuniverse.agent.memory.memory import Memory
+from agentuniverse.agent.memory.message import Message
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
@@ -82,6 +84,8 @@ class ISAgentTemplate(AgentTemplate):
         Returns:
             dict: The agent result dictionary.
         """
+        memory: Memory = self.process_memory(agent_input, **kwargs)
+
         # Build expert framework if enabled
         self.agent_model.profile['expert_framework'] = self._build_expert_framework(
             agent_input,
@@ -102,6 +106,7 @@ class ISAgentTemplate(AgentTemplate):
             is_work_pattern,
             input_object,
             agent_input,
+            memory,
             **kwargs
         )
 
@@ -118,6 +123,8 @@ class ISAgentTemplate(AgentTemplate):
         Returns:
             dict: The agent result dictionary.
         """
+        memory: Memory = self.process_memory(agent_input, **kwargs)
+
         # Build expert framework if enabled
         self.agent_model.profile['expert_framework'] = self._build_expert_framework(
             agent_input,
@@ -138,6 +145,7 @@ class ISAgentTemplate(AgentTemplate):
             is_work_pattern,
             input_object,
             agent_input,
+            memory,
             **kwargs
         )
 
@@ -217,7 +225,14 @@ class ISAgentTemplate(AgentTemplate):
         final_result = dict()
 
         # Extract result and execution context
-        is_results = planner_result.get('result', [])
+        raw_results = planner_result.get('result', [])
+        is_results = [
+            {
+                **checkpoint_result,
+                'effective_result': self._get_effective_result(checkpoint_result),
+            }
+            for checkpoint_result in raw_results
+        ]
         execution_context = planner_result.get('execution_context', {})
 
         # Build comprehensive output
@@ -260,8 +275,11 @@ class ISAgentTemplate(AgentTemplate):
         # Final result
         if is_results:
             last_checkpoint = is_results[-1]
-            final_impl = last_checkpoint.get('implementation_result', {})
-            final_output = final_impl.get('checkpoint_output', '')
+            effective_result = last_checkpoint.get('effective_result', {})
+            final_output = (
+                effective_result.get('checkpoint_output')
+                or effective_result.get('output', '')
+            )
             output_lines.append(f"\n\n=== Final Output ===\n{final_output}")
             final_result['output'] = final_output
         else:
@@ -274,24 +292,30 @@ class ISAgentTemplate(AgentTemplate):
 
         return final_result
 
+    @staticmethod
+    def _get_effective_result(checkpoint_result: dict) -> dict:
+        """Return the result that should represent a completed checkpoint."""
+        return (
+            checkpoint_result.get('effective_result')
+            or checkpoint_result.get('correction_result')
+            or checkpoint_result.get('implementation_result')
+            or {}
+        )
+
     def customized_execute(self, work_pattern, input_object: InputObject,
-                          agent_input: dict, **kwargs) -> dict:
+                          agent_input: dict, memory: Memory = None, **kwargs) -> dict:
         """Execute work pattern with customized logic.
 
         Args:
             work_pattern: The IS work pattern instance.
             input_object (InputObject): The input parameters.
             agent_input (dict): The agent input dictionary.
+            memory (Memory): The configured memory instance, if available.
             **kwargs: Additional keyword arguments.
 
         Returns:
             dict: The execution result.
         """
-        # Add memory to input object if available
-        memory: Memory = self.agent_model.memory
-        if memory:
-            input_object.add_data('memory', memory)
-
         # Execute work pattern
         work_pattern_result = work_pattern.invoke(
             input_object=input_object,
@@ -312,23 +336,19 @@ class ISAgentTemplate(AgentTemplate):
         return work_pattern_result
 
     async def async_customized_execute(self, work_pattern, input_object: InputObject,
-                                      agent_input: dict, **kwargs) -> dict:
+                                      agent_input: dict, memory: Memory = None, **kwargs) -> dict:
         """Execute work pattern asynchronously with customized logic.
 
         Args:
             work_pattern: The IS work pattern instance.
             input_object (InputObject): The input parameters.
             agent_input (dict): The agent input dictionary.
+            memory (Memory): The configured memory instance, if available.
             **kwargs: Additional keyword arguments.
 
         Returns:
             dict: The execution result.
         """
-        # Add memory to input object if available
-        memory: Memory = self.agent_model.memory
-        if memory:
-            input_object.add_data('memory', memory)
-
         # Execute work pattern asynchronously
         work_pattern_result = await work_pattern.async_invoke(
             input_object=input_object,
@@ -359,20 +379,20 @@ class ISAgentTemplate(AgentTemplate):
         # Parse result for storage
         parsed_result = self.parse_result(work_pattern_result)
 
-        # Create message objects for memory
-        user_message = {
-            'role': 'user',
-            'content': agent_input.get('input', '')
-        }
-
-        assistant_message = {
-            'role': 'assistant',
-            'content': parsed_result.get('output', '')
-        }
-
-        # Add to memory
-        memory.add_message(user_message)
-        memory.add_message(assistant_message)
+        source = self.agent_model.info.get('name')
+        messages = [
+            Message(
+                type=ChatMessageEnum.HUMAN.value,
+                content=agent_input.get('input', ''),
+                source=source,
+            ),
+            Message(
+                type=ChatMessageEnum.AI.value,
+                content=parsed_result.get('output', ''),
+                source=source,
+            ),
+        ]
+        memory.add(messages, **self.get_memory_params(agent_input))
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'ISAgentTemplate':
         """Initialize the IS agent template by component configer.

@@ -13,6 +13,7 @@ instruction: |
      - 实施输出: {implementation_output}
      - 历史执行记录: {checkpoint_history}
      - 已修正次数: {corrections_made}
+     - 历史对话: {chat_history}
 
   2. **评估维度**:
      - **目标符合度** (40%): 执行结果是否符合用户目标
