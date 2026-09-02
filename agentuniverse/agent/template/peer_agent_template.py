@@ -79,6 +79,7 @@ class PeerAgentTemplate(AgentTemplate):
         return work_pattern_result
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Extract the final expressing output from the peer work pattern result, scanning the turns in reverse order. Args: agent_result (dict): The work pattern result. Returns: dict: The output dict, or None when no expressing result is present."""
         peer_results: list[dict] = agent_result.get('result', [])
         for item in reversed(peer_results):
             expressing_result = item.get('expressing_result')
@@ -86,6 +87,7 @@ class PeerAgentTemplate(AgentTemplate):
                 return {'output': expressing_result.get('output')}
 
     def _generate_agents(self) -> dict:
+        """Instantiate the four peer agents (planning/executing/expressing/reviewing) of this template. Returns: dict: Mapping of peer role names to agent instances."""
         planning_agent = self._get_and_validate_agent(self.planning_agent_name, PlanningAgentTemplate)
         executing_agent = self._get_and_validate_agent(self.executing_agent_name, ExecutingAgentTemplate)
         expressing_agent = self._get_and_validate_agent(self.expressing_agent_name, ExpressingAgentTemplate)
@@ -97,6 +99,7 @@ class PeerAgentTemplate(AgentTemplate):
 
     @staticmethod
     def _get_and_validate_agent(agent_name: str, expected_type: type):
+        """Return the agent registered under agent_name if it is an instance of expected_type. Raises: ValueError when the agent has the wrong type. Args: agent_name (str): The registered agent name. expected_type (type): The expected agent class. Returns: The agent instance, or None when it is not registered."""
         agent = AgentManager().get_instance_obj(agent_name)
         if not agent:
             return None
@@ -105,12 +108,14 @@ class PeerAgentTemplate(AgentTemplate):
         return agent
 
     def add_peer_memory(self, peer_memory: Memory, agent_input: dict, work_pattern_result: dict):
+        """Persist the peer work pattern turns into the peer memory as messages. Args: peer_memory (Memory): The peer memory instance. agent_input (dict): The parsed agent input. work_pattern_result (dict): The work pattern result."""
         if not peer_memory:
             return
         query = agent_input.get('input')
         message_list = []
 
         def _create_message_content(turn, role, agent_name, result):
+            """Build the message content for one peer work pattern turn. Args: turn: The zero-based turn index. role (str): The role of the agent. agent_name (str): The agent that produced the result. result: The turn result. Returns: Message: The created message."""
             content = (f"Peer work pattern turn {turn + 1}: The agent responsible for {role} is: {agent_name}, "
                        f"Human: {query}, AI: {result}")
             return Message(source=agent_name, content=content)
@@ -170,6 +175,7 @@ class PeerAgentTemplate(AgentTemplate):
                 input_object.add_data('expert_framework', context)
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'PeerAgentTemplate':
+        """Apply the agent configuration and resolve the peer agent names and planner settings (planning/executing/expressing/reviewing agents, eval_threshold, retry_count, jump_step, expert_framework). Args: component_configer (AgentConfiger): The agent configuration. Returns: PeerAgentTemplate: self."""
         super().initialize_by_component_configer(component_configer)
         planner_config = self.agent_model.plan.get('planner', {})
         if self.agent_model.profile.get('planning') is not None or planner_config.get('planning') is not None:
