@@ -41,6 +41,7 @@ TEXT_FALLBACK_EXTENSIONS = {
 
 
 class ZipReader(Reader):
+    """Reader that loads the members of a ZIP archive with structural limits (sizes, depth, file count, compression ratio) and delegates each member to the matching reader."""
     max_total_size: int = 512 * 1024 * 1024
     max_file_size: int = 64 * 1024 * 1024
     max_depth: int = 5
@@ -49,6 +50,7 @@ class ZipReader(Reader):
     stream_chunk_size: int = 1024 * 1024
         
     def _get_reader(self, suffix: str) -> Reader:
+        """Return the cached reader for the file suffix, creating a CodeReader or registered reader class on first use. Args: suffix (str): The member file suffix. Returns: Reader: The reader, or None when no reader is registered for the suffix."""
         if suffix not in self._readers:
             if suffix in CODE_FILE_EXTENSIONS:
                 self._readers[suffix] = CodeReader()
@@ -57,6 +59,7 @@ class ZipReader(Reader):
         return self._readers.get(suffix)
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
+        """Load and return the documents of the archive at file, enforcing the configured limits while iterating its members. Raises: TypeError/FileNotFoundError on invalid input. Args: file (Union[str, Path]): The archive path. ext_info (Optional[Dict]): Extra metadata. Returns: List[Document]: The loaded documents."""
         if isinstance(file, str):
             file = Path(file)
         if not isinstance(file, Path):
@@ -99,6 +102,7 @@ class ZipReader(Reader):
         depth: int,
         path_stack: List[str],
     ) -> List[Document]:
+        """Iterate the archive members, skipping directories and unsafe paths, and read each file with its reader, handling nested archives and enforcing limits. Args: archive (zipfile.ZipFile): The archive. archive_path (Path): The archive path. temp_dir (Path): Directory for temporary files. ext_meta (Dict): Extra metadata. depth (int): Current nesting depth. path_stack (List[str]): Member path stack. Returns: List[Document]: The loaded documents."""
         documents: List[Document] = []
         for info in archive.infolist():
             if info.is_dir():
@@ -145,6 +149,7 @@ class ZipReader(Reader):
         depth: int,
         current_stack: List[str],
     ) -> List[Document]:
+        """Extract and read a nested archive member, recursing while the nesting depth stays within max_depth. Raises: ValueError when the depth is exceeded. Args: archive (zipfile.ZipFile): The parent archive. info (zipfile.ZipInfo): The nested archive member. archive_path (Path): The parent archive path. temp_dir (Path): Temporary directory. ext_meta (Dict): Extra metadata. depth (int): Current nesting depth. current_stack (List[str]): Member path stack. Returns: List[Document]: The loaded documents."""
         if depth + 1 > self.max_depth:
             raise ValueError("Zip nesting depth exceeded")
         
@@ -174,6 +179,7 @@ class ZipReader(Reader):
         metadata: Dict,
         reader: Reader,
     ) -> List[Document]:
+        """Write the member to a temporary file and load it with the given reader, merging metadata into each document. Args: archive (zipfile.ZipFile): The archive. info (zipfile.ZipInfo): The member. temp_dir (Path): Temporary directory. metadata (Dict): Member metadata. reader (Reader): The reader for the member type. Returns: List[Document]: The loaded documents."""
         file_path = self._write_temp_file(archive, info, temp_dir)
         try:
             docs = reader.load_data(file_path, ext_info=dict(metadata))
@@ -190,6 +196,7 @@ class ZipReader(Reader):
         info: zipfile.ZipInfo,
         metadata: Dict,
     ) -> List[Document]:
+        """Read the member as plain text and wrap it into a single Document. Args: archive (zipfile.ZipFile): The archive. info (zipfile.ZipInfo): The member. metadata (Dict): Member metadata. Returns: List[Document]: The loaded documents."""
         with archive.open(info) as raw:
             text = self._read_text(raw)
         if not text:
