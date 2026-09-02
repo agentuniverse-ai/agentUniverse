@@ -172,7 +172,7 @@ class PeerPlanner(Planner):
 
         input_object.add_data('planning_result', planning_result)
         # add planning agent log info
-        logger_info = f"\nPlanning agent execution result is :\n"
+        logger_info = "\nPlanning agent execution result is :\n"
         for index, one_framework in enumerate(planning_result.get_data('framework')):
             logger_info += f"[{index + 1}] {one_framework} \n"
         LOGGER.info(logger_info)
