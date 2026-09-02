@@ -292,7 +292,7 @@ class PeerPlanner(Planner):
 
         input_object.add_data('reviewing_result', reviewing_result)
         # add reviewing agent log info
-        logger_info = f"\nReviewing agent execution result is :\n"
+        logger_info = "\nReviewing agent execution result is :\n"
         reviewing_info_str = f"review suggestion: {reviewing_result.get_data('suggestion')} \n"
         reviewing_info_str += f"review score: {reviewing_result.get_data('score')} \n"
         LOGGER.info(logger_info + reviewing_info_str)
