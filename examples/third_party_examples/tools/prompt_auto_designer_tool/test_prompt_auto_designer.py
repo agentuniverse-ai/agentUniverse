@@ -11,7 +11,7 @@ from examples.third_party_examples.tools.prompt_auto_designer_tool.prompt_auto_d
 from agentuniverse.prompt.prompt_model import AgentPromptModel
 
 
-def test_generate_prompt_success(monkeypatch):
+def test_generate_prompt_success(monkeypatch) -> None:
     captured: dict = {}
 
     def fake_invoke(self, version, payload):
@@ -54,7 +54,7 @@ def test_generate_prompt_success(monkeypatch):
     assert "- 用户提问" in captured["payload"]["inputs"]
 
 
-def test_optimize_prompt_merges_fallback(monkeypatch):
+def test_optimize_prompt_merges_fallback(monkeypatch) -> None:
     base_prompt = AgentPromptModel(
         introduction="你是一名财务分析助手。",
         target="帮助分析季度营收表现。",
@@ -96,7 +96,7 @@ def test_optimize_prompt_merges_fallback(monkeypatch):
     assert result.rationale == "强化指标顺序并加入风险提醒。"
 
 
-def test_generate_prompt_invalid_json(monkeypatch):
+def test_generate_prompt_invalid_json(monkeypatch) -> None:
     monkeypatch.setattr(PromptAutoDesigner, "_invoke_llm", lambda self, version, payload: "not-json")
     designer = PromptAutoDesigner()
     request = PromptGenerationRequest(
