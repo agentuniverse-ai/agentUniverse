@@ -35,6 +35,9 @@ from agentuniverse.prompt.prompt import Prompt
 
 
 class ReActAgentTemplate(AgentTemplate):
+    """Agent template that runs a ReAct-style agent executor over configured
+    tools, knowledge and sub-agents.
+    """
     agent_names: Optional[list[str]] = None
     stop_sequence: Optional[list[str]] = None
     max_iterations: Optional[int] = None
@@ -43,9 +46,13 @@ class ReActAgentTemplate(AgentTemplate):
         return ['input']
 
     def output_keys(self) -> list[str]:
+        """Return the list of output keys this template exposes."""
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Fill agent_input with the user input, the rendered tools context, tool
+        names, an empty scratchpad and the current time.
+        """
         agent_input['input'] = input_object.get_data('input')
         tools_context = self.build_tools_context()
         agent_input['tools'] = tools_context[0]
@@ -57,10 +64,14 @@ class ReActAgentTemplate(AgentTemplate):
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Return agent_result unchanged after ensuring it carries the 'output' key."""
         return {**agent_result, 'output': agent_result['output']}
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
                            **kwargs) -> dict:
+        """Create the ReAct agent executor from the configured tools and invoke it
+        with agent_input, returning the executor result dict.
+        """
         self.load_memory(memory, agent_input)
         process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
         lc_tools: List[LangchainTool] = self._convert_to_langchain_tool()
@@ -81,6 +92,9 @@ class ReActAgentTemplate(AgentTemplate):
 
     async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory,
                                        llm: LLM, prompt: Prompt, **kwargs) -> dict:
+        """Asynchronously create the ReAct agent executor and invoke it with
+        agent_input, returning the executor result dict.
+        """
         self.load_memory(memory, agent_input)
         process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
         lc_tools: List[LangchainTool] = await self._async_convert_to_langchain_tool()
