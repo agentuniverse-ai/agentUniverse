@@ -16,7 +16,7 @@ from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_generat
 class TestPromptGenerator(unittest.TestCase):
     """Test cases for PromptGenerator class."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.generator = PromptGenerator()
         self.sample_context = ScenarioContext(
@@ -28,7 +28,7 @@ class TestPromptGenerator(unittest.TestCase):
             tone="友好"
         )
     
-    def test_generate_prompt_basic(self):
+    def test_generate_prompt_basic(self) -> None:
         """Test basic prompt generation."""
         prompt = self.generator.generate_prompt(
             scenario=PromptScenario.CODE_GENERATION,
@@ -41,7 +41,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIsNotNone(prompt.target)
         self.assertIsNotNone(prompt.instruction)
     
-    def test_generate_prompt_invalid_scenario(self):
+    def test_generate_prompt_invalid_scenario(self) -> None:
         """Test prompt generation with invalid scenario."""
         with self.assertRaises(ValueError):
             self.generator.generate_prompt(
@@ -49,7 +49,7 @@ class TestPromptGenerator(unittest.TestCase):
                 context=self.sample_context
             )
     
-    def test_generate_prompt_invalid_context(self):
+    def test_generate_prompt_invalid_context(self) -> None:
         """Test prompt generation with invalid context."""
         with self.assertRaises(ValueError):
             self.generator.generate_prompt(
@@ -57,7 +57,7 @@ class TestPromptGenerator(unittest.TestCase):
                 context="invalid_context"  # type: ignore
             )
     
-    def test_generate_prompt_different_scenarios(self):
+    def test_generate_prompt_different_scenarios(self) -> None:
         """Test prompt generation for different scenarios."""
         scenarios = [
             PromptScenario.CONVERSATIONAL,
@@ -75,7 +75,7 @@ class TestPromptGenerator(unittest.TestCase):
             self.assertIsInstance(prompt, AgentPromptModel)
             self.assertIsNotNone(prompt.introduction)
     
-    def test_generate_prompt_different_complexity(self):
+    def test_generate_prompt_different_complexity(self) -> None:
         """Test prompt generation with different complexity levels."""
         complexities = [
             PromptComplexity.SIMPLE,
@@ -91,7 +91,7 @@ class TestPromptGenerator(unittest.TestCase):
             )
             self.assertIsInstance(prompt, AgentPromptModel)
     
-    def test_generate_prompt_with_custom_requirements(self):
+    def test_generate_prompt_with_custom_requirements(self) -> None:
         """Test prompt generation with custom requirements."""
         custom_requirements = "请确保回答包含具体的代码示例"
         
@@ -104,7 +104,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIsInstance(prompt, AgentPromptModel)
         self.assertIn("代码示例", prompt.instruction)
     
-    def test_optimize_prompt(self):
+    def test_optimize_prompt(self) -> None:
         """Test prompt optimization."""
         original_prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -123,7 +123,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertGreaterEqual(result.confidence_score, 0.0)
         self.assertLessEqual(result.confidence_score, 1.0)
     
-    def test_analyze_scenario(self):
+    def test_analyze_scenario(self) -> None:
         """Test scenario analysis."""
         content = "我需要一个编程助手来帮助我写代码"
         context = self.sample_context
@@ -133,7 +133,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIsInstance(scenario, PromptScenario)
         self.assertEqual(scenario, PromptScenario.CODE_GENERATION)
     
-    def test_analyze_scenario_analytical(self):
+    def test_analyze_scenario_analytical(self) -> None:
         """Test scenario analysis for analytical content."""
         content = "我需要分析数据并生成报告"
         context = self.sample_context
@@ -142,7 +142,7 @@ class TestPromptGenerator(unittest.TestCase):
         
         self.assertEqual(scenario, PromptScenario.ANALYTICAL)
     
-    def test_analyze_scenario_creative(self):
+    def test_analyze_scenario_creative(self) -> None:
         """Test scenario analysis for creative content."""
         content = "我需要创意设计一个logo"
         context = self.sample_context
@@ -151,7 +151,7 @@ class TestPromptGenerator(unittest.TestCase):
         
         self.assertEqual(scenario, PromptScenario.CREATIVE)
     
-    def test_analyze_scenario_customer_service(self):
+    def test_analyze_scenario_customer_service(self) -> None:
         """Test scenario analysis for customer service content."""
         content = "我需要处理客户咨询和投诉"
         context = self.sample_context
@@ -163,7 +163,7 @@ class TestPromptGenerator(unittest.TestCase):
         # 检查是否识别为客服相关场景
         self.assertIn(scenario.value, ['customer_service', 'conversational'])
     
-    def test_analyze_scenario_educational(self):
+    def test_analyze_scenario_educational(self) -> None:
         """Test scenario analysis for educational content."""
         content = "我需要教学Python编程"
         context = self.sample_context
@@ -175,7 +175,7 @@ class TestPromptGenerator(unittest.TestCase):
         # 检查是否识别为教育或代码生成相关场景
         self.assertIn(scenario.value, ['educational', 'code_generation', 'technical'])
     
-    def test_analyze_scenario_research(self):
+    def test_analyze_scenario_research(self) -> None:
         """Test scenario analysis for research content."""
         content = "我需要研究人工智能技术"
         context = self.sample_context
@@ -184,7 +184,7 @@ class TestPromptGenerator(unittest.TestCase):
         
         self.assertEqual(scenario, PromptScenario.RESEARCH)
     
-    def test_analyze_scenario_default(self):
+    def test_analyze_scenario_default(self) -> None:
         """Test scenario analysis with default fallback."""
         content = "我需要一个普通的对话助手"
         context = self.sample_context
@@ -193,7 +193,7 @@ class TestPromptGenerator(unittest.TestCase):
         
         self.assertEqual(scenario, PromptScenario.CONVERSATIONAL)
     
-    def test_generate_introduction(self):
+    def test_generate_introduction(self) -> None:
         """Test introduction generation."""
         introduction = self.generator._generate_introduction(
             PromptScenario.CODE_GENERATION,
@@ -207,7 +207,7 @@ class TestPromptGenerator(unittest.TestCase):
         # 由于中文字符编码问题，只检查基本结构而不检查具体关键词
         self.assertTrue(len(introduction.strip()) > 0)  # 确保生成了非空内容
     
-    def test_generate_target(self):
+    def test_generate_target(self) -> None:
         """Test target generation."""
         target = self.generator._generate_target(
             PromptScenario.CODE_GENERATION,
@@ -218,7 +218,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIsInstance(target, str)
         self.assertIn("目标", target)
     
-    def test_generate_instruction(self):
+    def test_generate_instruction(self) -> None:
         """Test instruction generation."""
         instruction = self.generator._generate_instruction(
             PromptScenario.CODE_GENERATION,
@@ -235,7 +235,7 @@ class TestPromptGenerator(unittest.TestCase):
         instruction_lower = instruction.lower()
         self.assertTrue(any(keyword in instruction_lower for keyword in ['instruction', 'guide', 'step', '要求', '约束', '示例', 'instruction']))
     
-    def test_optimize_introduction(self):
+    def test_optimize_introduction(self) -> None:
         """Test introduction optimization."""
         original = "你是一个助手"
         optimized = self.generator._optimize_introduction(original)
@@ -243,7 +243,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIsInstance(optimized, str)
         self.assertNotEqual(original, optimized)
     
-    def test_optimize_target(self):
+    def test_optimize_target(self) -> None:
         """Test target optimization."""
         original = "帮助用户"
         optimized = self.generator._optimize_target(original)
@@ -251,7 +251,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIsInstance(optimized, str)
         self.assertIn("目标", optimized)
     
-    def test_optimize_instruction(self):
+    def test_optimize_instruction(self) -> None:
         """Test instruction optimization."""
         original = "回答问题\n- 步骤1\n- 步骤2"
         optimized = self.generator._optimize_instruction(original)
@@ -259,7 +259,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIsInstance(optimized, str)
         self.assertIn("•", optimized)
     
-    def test_calculate_confidence_score(self):
+    def test_calculate_confidence_score(self) -> None:
         """Test confidence score calculation."""
         original = AgentPromptModel(
             introduction="你是一个助手",
@@ -275,7 +275,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)
     
-    def test_format_prompt(self):
+    def test_format_prompt(self) -> None:
         """Test prompt formatting."""
         prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -290,7 +290,7 @@ class TestPromptGenerator(unittest.TestCase):
         self.assertIn("目标：", formatted)
         self.assertIn("指令：", formatted)
     
-    def test_format_optimized_prompt(self):
+    def test_format_optimized_prompt(self) -> None:
         """Test optimized prompt formatting."""
         formatted = self.generator._format_optimized_prompt(
             "优化介绍", "优化目标", "优化指令"
