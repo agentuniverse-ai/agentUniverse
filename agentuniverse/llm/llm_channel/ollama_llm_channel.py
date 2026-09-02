@@ -20,9 +20,11 @@ from agentuniverse.llm.llm_output import LLMOutput
 
 
 class OllamaLLMChannel(LLMChannel):
+    """LLMChannel implementation that calls a local Ollama server, exposing an OpenAI-compatible channel surface."""
     channel_api_base: Optional[str] = "http://localhost:11434"
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'OllamaLLMChannel':
+        """Apply the channel component configuration and return the channel. Args: component_configer (ComponentConfiger): The channel configuration. Returns: OllamaLLMChannel: self."""
         super()._initialize_by_component_configer(component_configer)
         return self
 
@@ -30,6 +32,7 @@ class OllamaLLMChannel(LLMChannel):
         return OllamaChannelLangchainInstance(self)
 
     def _new_client(self):
+        """Return the cached synchronous ollama client, creating one bound to channel_api_base when needed. Returns: The ollama Client."""
         if self.client:
             return self.client
         from ollama import Client
@@ -38,6 +41,7 @@ class OllamaLLMChannel(LLMChannel):
         )
 
     def _new_async_client(self):
+        """Return the cached asynchronous ollama client, creating one bound to channel_api_base when needed. Returns: The ollama AsyncClient."""
         if self.async_client:
             return self.async_client
         from ollama import AsyncClient
@@ -46,6 +50,7 @@ class OllamaLLMChannel(LLMChannel):
         )
 
     def _options(self):
+        """Build the ollama Options from the current model settings (context length, max tokens, temperature, timeout and extended info). Returns: The ollama Options."""
         return Options(**{
             "num_ctx": self.max_context_length(),
             "num_predict": self.max_tokens,
@@ -55,6 +60,7 @@ class OllamaLLMChannel(LLMChannel):
         })
 
     def _call(self, messages, stop=None, **kwargs) -> Union[LLMOutput, Iterator[LLMOutput]]:
+        """Call the Ollama chat endpoint for the messages. When streaming is on the streamed responses are returned, otherwise a single LLMOutput is built. Args: messages: The chat messages. stop: Optional stop words. **kwargs: Extra call options. Returns: Union[LLMOutput, Iterator[LLMOutput]]: The model result."""
         should_stream = kwargs.pop("stream", self.streaming)
         client = self._new_client()
         options = self._options()
@@ -67,6 +73,7 @@ class OllamaLLMChannel(LLMChannel):
                              message=Message.from_dict(res.get("message")))
 
     async def _acall(self, messages, stop=None, **kwargs) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
+        """Asynchronously call the Ollama chat endpoint for the messages. When streaming is on the streamed responses are returned, otherwise a single LLMOutput is built. Args: messages: The chat messages. stop: Optional stop words. **kwargs: Extra call options. Returns: Union[LLMOutput, AsyncIterator[LLMOutput]]: The model result."""
         client = self._new_async_client()
         should_stream = kwargs.pop("stream", self.streaming)
         options = self._options()
@@ -79,11 +86,13 @@ class OllamaLLMChannel(LLMChannel):
             return self.agenerate_result(res)
 
     def generate_result(self, data):
+        """Yield one LLMOutput per streamed response line. Args: data: The stream of response lines. Yields: LLMOutput: The parsed output of each line."""
         for line in data:
             yield LLMOutput(text=line.get("message").get('content'), raw=json.dumps(line),
                             message=Message.from_dict(line.get("message")))
 
     async def agenerate_result(self, data):
+        """Asynchronously yield one LLMOutput per streamed response line. Args: data: The async stream of response lines. Yields: LLMOutput: The parsed output of each line."""
         async for line in data:
             yield LLMOutput(text=line.get("message").get('content'), raw=json.dumps(line),
                             message=Message.from_dict(line.get("message")))
