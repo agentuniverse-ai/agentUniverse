@@ -34,10 +34,10 @@ class ToolInput(BaseModel):
     def to_dict(self):
         return self.__origin_params
 
-    def to_json_str(self):
+    def to_json_str(self) -> str:
         return json.dumps(self.__origin_params, ensure_ascii=False)
 
-    def add_data(self, key, value):
+    def add_data(self, key, value) -> None:
         self.__origin_params[key] = value
         self.__dict__[key] = value
 
@@ -125,7 +125,7 @@ class Tool(ComponentBase):
             return str(e)
         return await self.async_execute(**parse_result)
 
-    def parse_react_input(self, input_str: str):
+    def parse_react_input(self, input_str: str) -> dict:
         """
             parse react string to you input
             you can define your own logic here by override this function
@@ -135,7 +135,7 @@ class Tool(ComponentBase):
         }
 
     @abstractmethod
-    def execute(self, **kwargs):
+    def execute(self, **kwargs) -> None:
         raise NotImplementedError
 
     async def async_execute(self, **kwargs):
