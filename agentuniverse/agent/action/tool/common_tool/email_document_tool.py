@@ -61,6 +61,15 @@ class EmailDocumentTool(Tool):
         attachment_names: list[str] | None = None,
         overwrite: bool = False,
     ) -> dict[str, Any]:
+        """Dispatch one email document operation (create, read, info, or extract) on an EML file and return a structured result or error dict.
+        Args:
+            mode: Operation to run; must be create, read, info, or extract.
+            file_path: Path to the target .eml file, resolved against base_dir; must use a .eml extension.
+            headers: Mapping of header fields to values, used only in create mode.
+            text_body: Plain-text body for create mode.
+            html_body: HTML body for create mode.
+        Returns: A success dict with mode-specific fields, or an error dict with error_type, error, and file_path.
+        """
         try:
             self._validate_config()
             operation = self._mode(mode)
@@ -80,9 +89,17 @@ class EmailDocumentTool(Tool):
 
     @staticmethod
     def _error(path: Any, kind: str, message: str) -> dict[str, Any]:
+        """Build a structured error result dict.
+        Args:
+            path: Value reported under the file_path key of the result.
+            kind: Error type string, e.g. validation_error or operation_error.
+            message: Human-readable description of the failure.
+        Returns: Dict with status, error_type, error, and file_path keys.
+        """
         return {"status": "error", "error_type": kind, "error": message, "file_path": path}
 
     def _validate_config(self) -> None:
+        """Verify that every configurable size limit is a positive integer and that base_dir is a non-empty string."""
         for name in (
             "max_read_bytes",
             "max_write_bytes",
@@ -100,6 +117,14 @@ class EmailDocumentTool(Tool):
 
     @staticmethod
     def _mode(value: Any) -> str:
+        """Normalize a mode argument to a lowercase operation name, raising on invalid input.
+
+        Args:
+            value: Raw mode input; must be a string that is create, read, info, or extract (case-insensitive).
+
+        Returns:
+            The normalized lowercase mode string.
+        """
         if not isinstance(value, str):
             raise TypeError("mode must be a string")
         mode = value.strip().lower()
@@ -108,6 +133,15 @@ class EmailDocumentTool(Tool):
         return mode
 
     def _eml_path(self, value: Any, field: str) -> str:
+        """Validate an EML path argument and resolve it against base_dir.
+
+        Args:
+            value: Path string to validate; must be non-empty and end with a .eml extension.
+            field: Argument name used in validation error messages.
+
+        Returns:
+            The path resolved to a safe location under base_dir.
+        """
         if not isinstance(value, str) or not value:
             raise ValueError(f"{field} must be a non-empty string")
         if os.path.splitext(value)[1].lower() != ".eml":
@@ -115,11 +149,27 @@ class EmailDocumentTool(Tool):
         return cast(str, resolve_safe_path(value, self.base_dir))
 
     def _directory(self, value: Any) -> str:
+        """Validate an output directory argument and resolve it against base_dir.
+
+        Args:
+            value: Output directory string; must be non-empty.
+
+        Returns:
+            The resolved safe directory path under base_dir.
+        """
         if not isinstance(value, str) or not value:
             raise ValueError("output_dir must be a non-empty string")
         return cast(str, resolve_safe_path(value, self.base_dir))
 
     def _message(self, path: str) -> EmailMessage:
+        """Load an existing EML file into an EmailMessage, enforcing size, header-count, and attachment limits.
+
+        Args:
+            path: Path to the .eml file to parse; must exist and fit within read limits.
+
+        Returns:
+            The parsed EmailMessage.
+        """
         if not os.path.isfile(path):
             raise ValueError(f"file_path does not exist: {path}")
         if os.path.getsize(path) > self.max_read_bytes:
@@ -133,6 +183,15 @@ class EmailDocumentTool(Tool):
 
     @staticmethod
     def _safe_header(value: Any, field: str) -> str:
+        """Validate a single header value and return it stripped.
+
+        Args:
+            value: Raw header value; must be a non-empty string with no line breaks and at most 2000 characters.
+            field: Qualified header name, e.g. headers.subject, used in error messages.
+
+        Returns:
+            The stripped, validated header value.
+        """
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"headers.{field} must be a non-empty string")
         if "\r" in value or "\n" in value or len(value) > 2_000:
@@ -140,6 +199,14 @@ class EmailDocumentTool(Tool):
         return value.strip()
 
     def _headers(self, value: Any) -> dict[str, str]:
+        """Validate a create-mode headers mapping against the supported fields and require from and to.
+
+        Args:
+            value: Mapping of header keys to raw values; unknown keys are rejected.
+
+        Returns:
+            Dict of validated, stripped header values for each input key.
+        """
         if not isinstance(value, dict):
             raise TypeError("headers must be an object")
         unknown = set(value) - set(self._CREATE_HEADERS)
@@ -152,6 +219,15 @@ class EmailDocumentTool(Tool):
         return output
 
     def _body(self, value: Any, field: str) -> str | None:
+        """Validate an optional body string against max_body_chars.
+
+        Args:
+            value: Raw body value; None is allowed and returned unchanged.
+            field: Argument name, e.g. text_body, used in error messages.
+
+        Returns:
+            The validated body string, or None when value is None.
+        """
         if value is None:
             return None
         if not isinstance(value, str):
