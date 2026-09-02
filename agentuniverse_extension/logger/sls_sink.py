@@ -22,6 +22,11 @@ from loguru import logger
 
 
 class AsyncSlsSender:
+    """Async sender that batches log items and uploads them to Aliyun SLS.
+
+    Log items are queued by put and uploaded by a background worker task through
+    a thread pool on a fixed interval.
+    """
     def __init__(
         self,
         project: str,
@@ -35,6 +40,15 @@ class AsyncSlsSender:
         max_workers: int = 2,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
+        """Initialize the async SLS sender with the given SLS connection settings.
+
+        Args:
+        project, log_store: SLS project and log store names;
+        endpoint, access_key_id, access_key_secret: LogClient credentials;
+        queue_max_size: log queue capacity; send_interval: upload interval seconds;
+        batch_size: items per upload batch; max_workers: upload pool size;
+        loop: event loop to schedule uploads on (defaults to the running loop).
+        """
         self.project = project
         self.log_store = log_store
         self._client = LogClient(endpoint, access_key_id, access_key_secret)
@@ -56,7 +70,16 @@ class AsyncSlsSender:
             self._bg_task = self._loop.create_task(self._worker())
 
     def put(self, item: LogItem, /) -> None:
+        """Enqueue a log item for asynchronous upload.
+
+        Thread-safe: scheduling happens on the sender's loop; items are silently
+        dropped when the queue is full.
+
+        Args:
+        item: the LogItem to enqueue.
+        """
         def _safe_put():
+            """Put the item into the queue without blocking, ignoring a full queue."""
             try:
                 self._queue.put_nowait(item)
             except asyncio.QueueFull:
@@ -128,6 +151,11 @@ class AsyncSlsSender:
     async def _upload(self, items: List[LogItem]) -> Optional[PutLogsResponse]:
         """把同步 put_logs 扔进线程池"""
         def _blocking_upload() -> PutLogsResponse:
+            """Build the PutLogsRequest for the batch and upload it synchronously.
+
+            Returns:
+            PutLogsResponse: the response of the upload.
+            """
             req = PutLogsRequest(self.project, self.log_store, "", "", items)
             return self._client.put_logs(req)
 
@@ -302,10 +330,21 @@ class SlsSender:
 # ------------------------- Loguru sink ------------------------- #
 class AsyncSlsSink:
 
+    """Loguru sink forwarding log messages to an AsyncSlsSender."""
     def __init__(self, sender: AsyncSlsSender):
+        """Create the loguru sink.
+
+        Args:
+        sender: the AsyncSlsSender used to enqueue log items.
+        """
         self._sender = sender
 
     def __call__(self, message):
+        """Send a loguru message to the async SLS sender.
+
+        Args:
+        message: the loguru message wrapper being logged.
+        """
         record = message.record
         item = LogItem(
             contents=[("content", message)],
