@@ -206,7 +206,7 @@ class PeerPlanner(Planner):
             LOGGER.warn("no executing agent.")
             executing_result = OutputObject({})
         else:
-            LOGGER.info(f"Starting executing agent.")
+            LOGGER.info("Starting executing agent.")
             executing_result = executing_agent.run(**input_object.to_dict())
 
         input_object.add_data('executing_result', executing_result)
