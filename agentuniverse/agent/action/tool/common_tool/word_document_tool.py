@@ -38,6 +38,7 @@ class WordDocumentTool(Tool):
         template_path: str | None = None,
         metadata: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        """Run the requested word operation (create, append, read or info) on a DOCX file, converting raised errors into structured result dicts. Args: mode (str): The operation to run. file_path (str): The target DOCX path. blocks (list | None): Optional blocks for create/append. overwrite (bool): Whether to replace an existing file. template_path (str | None): Optional DOCX template for create. metadata (dict | None): Optional core-property metadata. Returns: dict[str, Any]: A structured success or error result."""
         try:
             self._validate_config()
             operation = self._mode(mode)
@@ -63,12 +64,14 @@ class WordDocumentTool(Tool):
 
     @staticmethod
     def _error(path: Any, kind: str, message: str, detail: str | None = None) -> dict[str, Any]:
+        """Build a structured error result dict. Args: path (Any): The file path involved. kind (str): The error type. message (str): The error message. detail (str | None): Optional extra detail. Returns: dict[str, Any]: The error result."""
         result = {"status": "error", "error_type": kind, "error": message, "file_path": path}
         if detail:
             result["detail"] = detail
         return result
 
     def _validate_config(self) -> None:
+        """Validate the configured numeric limits and base_dir, raising ValueError when any of them is invalid."""
         for name in (
             "max_read_bytes",
             "max_write_bytes",
@@ -87,6 +90,7 @@ class WordDocumentTool(Tool):
 
     @staticmethod
     def _mode(mode: str) -> str:
+        """Normalize and validate the operation mode. Raises: TypeError when mode is not a string; ValueError when it is not create, append, read or info. Args: mode (str): The raw mode. Returns: str: The normalized mode."""
         if not isinstance(mode, str):
             raise TypeError("mode must be a string")
         operation = mode.strip().lower()
@@ -95,6 +99,7 @@ class WordDocumentTool(Tool):
         return operation
 
     def _path(self, value: str, field: str) -> str:
+        """Validate that value is a non-empty .docx path and resolve it safely against base_dir. Raises: ValueError on an invalid path. Args: value (str): The raw path. field (str): The field name used in error messages. Returns: str: The resolved path."""
         if not isinstance(value, str) or not value:
             raise ValueError(f"{field} must be a non-empty string")
         if os.path.splitext(value)[1].lower() != ".docx":
@@ -102,6 +107,7 @@ class WordDocumentTool(Tool):
         return cast(str, resolve_safe_path(value, self.base_dir))
 
     def _check_archive(self, path: str, field: str = "file_path", max_bytes: int | None = None) -> None:
+        """Validate that the path exists and that the DOCX archive stays within the configured byte, entry and uncompressed-size limits. Raises: ValueError when any limit is exceeded or the file is not a valid DOCX archive. Args: path (str): The file to inspect. field (str): The field name used in error messages. max_bytes (int | None): Optional override of the byte limit."""
         if not os.path.isfile(path):
             raise ValueError(f"{field} does not exist: {path}")
         size = os.path.getsize(path)
@@ -120,13 +126,15 @@ class WordDocumentTool(Tool):
 
     @staticmethod
     def _document_class() -> Any:
+        """Return the python-docx Document class. Raises: ImportError when python-docx is not installed. Returns: Any: The Document class."""
         try:
             from docx import Document
         except ImportError as exc:
             raise ImportError("No module named 'docx'") from exc
         return Document
 
-    def _validate_blocks(self, blocks: Any) -> list[dict[str, Any]]:  # noqa: C901
+    def _validate_blocks(self, blocks: Any) -> list[dict[str, Any]]:
+        """Normalize and validate the block list, enforcing block types, text/level rules, table shape and the configured limits. Raises: TypeError/ValueError on invalid blocks. Args: blocks (Any): The raw block list. Returns: list[dict[str, Any]]: The normalized blocks."""  # noqa: C901
         if not isinstance(blocks, list) or not blocks:
             raise ValueError("blocks must be a non-empty list")
         if len(blocks) > self.max_blocks:
