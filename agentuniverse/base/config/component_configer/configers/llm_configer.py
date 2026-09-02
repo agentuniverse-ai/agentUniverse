@@ -40,6 +40,7 @@ class LLMConfiger(ComponentConfiger):
 
     @property
     def model_name(self) -> Optional[str]:
+        """Return the model name of the LLM."""
         return self.__model_name
 
     @property
@@ -49,30 +50,37 @@ class LLMConfiger(ComponentConfiger):
 
     @property
     def request_timeout(self) -> Optional[int]:
+        """Return the request timeout of the LLM."""
         return self.__request_timeout
 
     @property
     def max_tokens(self) -> Optional[int]:
+        """Return the max tokens of the LLM."""
         return self.__max_tokens
 
     @property
     def max_retries(self) -> Optional[int]:
+        """Return the max retries of the LLM."""
         return self.__max_retries
 
     @property
     def streaming(self) -> Optional[bool]:
+        """Return the streaming flag of the LLM."""
         return self.__streaming
 
     @property
     def ext_info(self) -> Optional[dict]:
+        """Return the extended info dict of the LLM."""
         return self.__ext_info
 
     @property
     def max_content_length(self) -> Optional[int]:
+        """Return the maximum context length of the LLM."""
         return self.__max_context_length
 
     @property
     def tracing(self) -> Optional[bool]:
+        """Return the tracing flag of the LLM."""
         return self.__tracing
 
     def load(self) -> 'LLMConfiger':
