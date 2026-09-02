@@ -23,6 +23,7 @@ from agentuniverse.base.config.component_configer.configers.agent_configer impor
 
 
 class PeerAgentTemplate(AgentTemplate):
+    """Peer work-pattern agent template: runs planning/executing/expressing/reviewing agents cooperatively and stores the produced turns into peer memory."""
     planning_agent_name: str = "PlanningAgent"
     executing_agent_name: str = "ExecutingAgent"
     expressing_agent_name: str = "ExpressingAgent"
@@ -36,9 +37,11 @@ class PeerAgentTemplate(AgentTemplate):
         return ['input']
 
     def output_keys(self) -> list[str]:
+        """Return the output keys exposed by this template. Returns: list[str]: The output keys."""
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Fill the agent input with the raw input and the peer pattern parameters (eval_threshold, retry_count, jump_step). Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. Returns: dict: The enriched agent input."""
         agent_input['input'] = input_object.get_data('input')
         agent_input.update({'eval_threshold': self.eval_threshold,
                             'retry_count': self.retry_count,
@@ -46,6 +49,7 @@ class PeerAgentTemplate(AgentTemplate):
         return agent_input
 
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
+        """Execute the peer work pattern synchronously: generate the peer agents, run the pattern and persist the result into peer memory. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. **kwargs: Extra options. Returns: dict: The work pattern result."""
         memory: Memory = self.process_memory(agent_input, **kwargs)
         agents = self._generate_agents()
         peer_work_pattern: PeerWorkPattern = WorkPatternManager().get_instance_obj('peer_work_pattern')
@@ -56,6 +60,7 @@ class PeerAgentTemplate(AgentTemplate):
         return work_pattern_result
 
     async def async_execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
+        """Execute the peer work pattern asynchronously: generate the peer agents, run the pattern and persist the result into peer memory. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. **kwargs: Extra options. Returns: dict: The work pattern result."""
         memory: Memory = self.process_memory(agent_input, **kwargs)
         agents = self._generate_agents()
         peer_work_pattern: PeerWorkPattern = WorkPatternManager().get_instance_obj('peer_work_pattern')
@@ -68,12 +73,14 @@ class PeerAgentTemplate(AgentTemplate):
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory,
                            peer_work_pattern: PeerWorkPattern, **kwargs) -> dict:
+        """Run the peer work pattern on the given input. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. memory (Memory): The resolved memory. peer_work_pattern (PeerWorkPattern): The pattern instance. **kwargs: Extra options. Returns: dict: The work pattern result."""
         self.build_expert_framework(input_object)
         work_pattern_result = peer_work_pattern.invoke(input_object, agent_input)
         return work_pattern_result
 
     async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory,
                                        peer_work_pattern: PeerWorkPattern, **kwargs) -> dict:
+        """Asynchronously run the peer work pattern on the given input. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. memory (Memory): The resolved memory. peer_work_pattern (PeerWorkPattern): The pattern instance. **kwargs: Extra options. Returns: dict: The work pattern result."""
         self.build_expert_framework(input_object)
         work_pattern_result = await peer_work_pattern.async_invoke(input_object, agent_input)
         return work_pattern_result
