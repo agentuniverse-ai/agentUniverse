@@ -83,9 +83,11 @@ class AgentTemplate(Agent, ABC):
         return self
 
     def process_llm(self, **kwargs) -> LLM:
+        """Resolve the LLM instance configured by llm_name. Returns: LLM: The LLM instance."""
         return super().process_llm(llm_name=self.llm_name)
 
     def process_memory(self, agent_input: dict, **kwargs) -> Memory | None:
+        """Resolve the memory instance configured by memory_name, short-circuiting when the agent input already carries chat history. Args: agent_input (dict): The parsed agent input. **kwargs: Extra options. Returns: Memory | None: The memory instance."""
         if 'chat_history' in agent_input and agent_input.get('chat_history'):
             if isinstance(agent_input.get('chat_history'), list):
                 agent_input['chat_history'] = get_memory_string(agent_input.get('chat_history'),
@@ -96,19 +98,24 @@ class AgentTemplate(Agent, ABC):
         return super().process_memory(agent_input=agent_input, memory_name=self.memory_name, llm_name=self.llm_name)
 
     def invoke_tools(self, input_object: InputObject, **kwargs) -> str:
+        """Invoke the tools configured on this template and return their combined output. Args: input_object (InputObject): The agent input object. **kwargs: Extra options. Returns: str: The tool outputs."""
         return super().invoke_tools(input_object=input_object, tool_names=self.tool_names)
 
     async def async_invoke_tools(self, input_object: InputObject, **kwargs) -> str:
+        """Asynchronously invoke the tools configured on this template and return their combined output. Args: input_object (InputObject): The agent input object. **kwargs: Extra options. Returns: str: The tool outputs."""
         return await super().async_invoke_tools(input_object=input_object, tool_names=self.tool_names)
 
     def invoke_knowledge(self, query_str: str, input_object: InputObject, **kwargs) -> str:
+        """Query the knowledge bases configured on this template. Args: query_str (str): The query text. input_object (InputObject): The agent input object. **kwargs: Extra options. Returns: str: The knowledge output."""
         return super().invoke_knowledge(query_str=query_str, input_object=input_object,
                                         knowledge_names=self.knowledge_names)
 
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
+        """Build the ChatPrompt for this run using the configured prompt_version. Args: agent_input (dict): The parsed agent input. **kwargs: Extra options. Returns: ChatPrompt: The assembled prompt."""
         return super().process_prompt(agent_input=agent_input, prompt_version=self.prompt_version)
 
     def create_copy(self) -> 'AgentTemplate':
+        """Return a deep copy of this template carrying over the llm/memory/knowledge/prompt settings. Returns: AgentTemplate: The copied template."""
         copied = super().create_copy()
         copied.llm_name = self.llm_name
         copied.memory_name = self.memory_name
