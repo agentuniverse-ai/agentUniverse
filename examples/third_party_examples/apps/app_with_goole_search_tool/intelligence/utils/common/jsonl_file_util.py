@@ -22,7 +22,7 @@ class JsonFileOps(object):
         return
 
     @classmethod
-    def is_file_exist(cls, file_path):
+    def is_file_exist(cls, file_path) -> bool:
         file_name, ext = os.path.splitext(file_path)
         if ext.lower() != '.jsonl':
             raise Exception('Unsupported file extension')
@@ -50,7 +50,7 @@ class JsonFileReader(object):
         else:
             return None
 
-    def read_json_obj_list(self):
+    def read_json_obj_list(self) -> list:
         obj_list = []
         while True:
             obj = self.read_json_obj()
@@ -68,7 +68,7 @@ class JsonFileWriter(object):
             os.makedirs(directory)
         self.outfile_handler = open(self.outfile_path, 'w', encoding='utf-8')
 
-    def write_json_obj(self, json_obj: dict):
+    def write_json_obj(self, json_obj: dict) -> None:
         try:
             # confirm that it's a json string and then write.
             json_line = json.dumps(json_obj, ensure_ascii=False)
@@ -78,15 +78,15 @@ class JsonFileWriter(object):
             LOGGER.warn(f"except[write_json_obj]>>>{e}:{json_obj}")
         return
 
-    def write_json_obj_list(self, json_obj_list: list):
+    def write_json_obj_list(self, json_obj_list: list) -> None:
         for i in range(0, len(json_obj_list)):
             self.write_json_obj(json_obj_list[i])
         return
 
-    def write_json_query_answer(self, query: str, answer: str):
+    def write_json_query_answer(self, query: str, answer: str) -> None:
         json_obj = {"query": query, "answer": answer}
         self.write_json_obj(json_obj)
 
-    def write_json_query_answer_list(self, query_answer_list: list):
+    def write_json_query_answer_list(self, query_answer_list: list) -> None:
         for i in range(0, len(query_answer_list)):
             self.write_json_query_answer(query_answer_list[i][0], query_answer_list[i][1])
