@@ -68,6 +68,7 @@ class Tool(ComponentBase):
     args_model_schema: Optional[dict] = None
 
     def __init__(self, **kwargs):
+        """Initialize the Tool component. Args: **kwargs: Tool configuration, passed to the component base."""
         super().__init__(component_type=ComponentEnum.TOOL, **kwargs)
 
     @trace_tool
@@ -113,6 +114,7 @@ class Tool(ComponentBase):
 
     @trace_tool
     async def async_langchain_run(self, *args, callbacks=None, **kwargs):
+        """Run the tool in LangChain style asynchronously, parsing the react-style input before execution. Args: *args: Positional arguments, the first is the react input string. callbacks: Optional callbacks. **kwargs: Extra options. Returns: The tool output or an error message string."""
         if self.check_execute_signature_deprecated():
             tool_input = ToolInput(kwargs)
             parse_result = self.parse_react_input(args[0])
@@ -136,6 +138,7 @@ class Tool(ComponentBase):
 
     @abstractmethod
     def execute(self, **kwargs):
+        """Execute the tool. Subclasses implement their behaviour here. Raises: NotImplementedError."""
         raise NotImplementedError
 
     async def async_execute(self, **kwargs):
@@ -149,6 +152,7 @@ class Tool(ComponentBase):
                              description=self.description)
 
     async def async_as_langchain(self) -> LangchainTool:
+        """Build a LangChain-compatible tool wrapper for this tool. Returns: LangchainTool: The wrapper."""
         return LangchainTool(name=self.name,
                              func=self.run,
                              coroutine=self.async_langchain_run,
@@ -184,6 +188,7 @@ class Tool(ComponentBase):
         return self
 
     def create_copy(self):
+        """Return a deep copy of the tool, copying the input keys as well. Returns: The copied tool."""
         copied = self.model_copy()
         if self.input_keys is not None:
             copied.input_keys = self.input_keys.copy()
