@@ -34,6 +34,15 @@ class PDFTool(Tool):
         overwrite: bool = False,
         metadata: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        """Run a PDF operation selected by mode and return a structured result. Exceptions are caught and returned as error dicts rather than raised.
+        Args:
+            mode: Operation to run: merge, split, rotate, extract, or info.
+            file_path: Source PDF path; for merge, the destination output file.
+            input_paths: PDFs to merge, in order (merge only).
+            output_path: Destination file for rotate; ignored by other modes.
+            output_dir: Directory receiving per-page files for split; ignored by other modes.
+        Returns: Success dict with status, mode, and operation-specific fields, or an error dict with status, error_type, error, and file_path.
+        """
         try:
             self._validate_config()
             operation = self._mode(mode)
@@ -58,12 +67,21 @@ class PDFTool(Tool):
 
     @staticmethod
     def _error(path: Any, kind: str, message: str, detail: str | None = None) -> dict[str, Any]:
+        """Build a structured error result dict.
+        Args:
+            path: Value reported in the result as file_path.
+            kind: Error category stored as error_type.
+            message: Human-readable error message.
+            detail: Optional extra error detail.
+        Returns: Dict with status, error_type, error, and file_path, plus detail when given.
+        """
         result = {"status": "error", "error_type": kind, "error": message, "file_path": path}
         if detail:
             result["detail"] = detail
         return result
 
     def _validate_config(self) -> None:
+        """Validate that size/page limits are positive integers and base_dir is a non-empty string."""
         for name in ("max_read_bytes", "max_write_bytes", "max_pages", "max_text_chars", "max_input_files"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -73,6 +91,14 @@ class PDFTool(Tool):
 
     @staticmethod
     def _mode(mode: str) -> str:
+        """Normalize and validate an operation name.
+
+        Args:
+            mode: Raw operation name, e.g. 'Merge'.
+
+        Returns:
+            Lowercased, stripped operation: merge, split, rotate, extract, or info.
+        """
         if not isinstance(mode, str):
             raise TypeError("mode must be a string")
         operation = mode.strip().lower()
@@ -81,6 +107,15 @@ class PDFTool(Tool):
         return operation
 
     def _pdf_path(self, value: str, field: str) -> str:
+        """Resolve a value to a safe absolute .pdf path under base_dir.
+
+        Args:
+            value: Candidate PDF path to resolve.
+            field: Field name used in validation error messages.
+
+        Returns:
+            Resolved safe absolute path.
+        """
         if not isinstance(value, str) or not value:
             raise ValueError(f"{field} must be a non-empty string")
         if os.path.splitext(value)[1].lower() != ".pdf":
@@ -88,11 +123,25 @@ class PDFTool(Tool):
         return cast(str, resolve_safe_path(value, self.base_dir))
 
     def _directory(self, value: str) -> str:
+        """Resolve a value to a safe absolute directory path under base_dir.
+
+        Args:
+            value: Candidate directory path.
+
+        Returns:
+            Resolved safe absolute directory path.
+        """
         if not isinstance(value, str) or not value:
             raise ValueError("output_dir must be a non-empty string")
         return cast(str, resolve_safe_path(value, self.base_dir))
 
     def _check_file(self, path: str, field: str = "file_path") -> None:
+        """Verify that a file exists, stays within max_read_bytes, and starts with the PDF header.
+
+        Args:
+            path: Absolute path to inspect.
+            field: Field name used in validation error messages.
+        """
         if not os.path.isfile(path):
             raise ValueError(f"{field} does not exist: {path}")
         if os.path.getsize(path) > self.max_read_bytes:
@@ -103,6 +152,11 @@ class PDFTool(Tool):
 
     @staticmethod
     def _classes() -> tuple[Any, Any]:
+        """Import and return pypdf's PdfReader and PdfWriter classes.
+
+        Returns:
+            Tuple of (PdfReader, PdfWriter); raises ImportError when pypdf is unavailable.
+        """
         try:
             from pypdf import PdfReader, PdfWriter
         except ImportError as exc:
@@ -110,6 +164,14 @@ class PDFTool(Tool):
         return PdfReader, PdfWriter
 
     def _reader(self, path: str) -> Any:
+        """Open a validated PDF file as a pypdf PdfReader.
+
+        Args:
+            path: PDF file path to open.
+
+        Returns:
+            Pypdf PdfReader instance for the validated file.
+        """
         self._check_file(path)
         Reader, _ = self._classes()
         reader = Reader(path)
