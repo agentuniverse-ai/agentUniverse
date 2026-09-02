@@ -17,6 +17,7 @@ from agentuniverse.llm.llm_manager import LLMManager
 
 
 def calculate_chunk_size(token_count: int, token_limit: int) -> int:
+    """Compute a chunk size that splits a text of token_count tokens into chunks that each stay within token_limit. Args: token_count (int): The total number of tokens. token_limit (int): The maximum tokens per chunk. Returns: int: The chunk size."""
     if token_count <= token_limit:
         return token_count
 
@@ -31,16 +32,20 @@ def calculate_chunk_size(token_count: int, token_limit: int) -> int:
 
 
 def output_middle_result(input_object: InputObject, data: any):
+    """Push data onto the output stream of input_object when one is configured. Args: input_object (InputObject): The agent input object. data (any): The intermediate result."""
     output_stream: Queue = input_object.get_data('output_stream', None)
     if output_stream:
         output_stream.put(data)
 
 
 class TranslationAgent(Agent):
+    """Agent that translates the source text in a single pass or in chunks by orchestrating translation work/reflection/improve sub-agents."""
     def input_keys(self) -> list[str]:
+        """Return the input keys configured in the agent profile. Returns: list[str]: The input keys."""
         return self.agent_model.profile.get('input_keys')
 
     def output_keys(self) -> list[str]:
+        """Return the output keys configured in the agent profile. Returns: list[str]: The output keys."""
         return self.agent_model.profile.get('output_keys')
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
