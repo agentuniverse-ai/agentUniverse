@@ -29,11 +29,22 @@ AGENT_INVOCATION_SUBDIR = "agent_invocation"
 
 @singleton
 class Monitor(BaseModel):
+    """Monitor that traces LLM/agent/tool invocations to logs and jsonl files.
+    
+        Holds the monitor directory, activation flags and helpers for token usage
+        and invocation-chain bookkeeping.
+    """
     dir: Optional[str] = './monitor'
     activate: Optional[bool] = False
     log_activate: Optional[bool] = True
 
     def __init__(self, configer: Configer = None, **kwargs):
+        """Initialize the monitor with defaults, optionally reading MONITOR settings from a configer.
+        
+        Args:
+            configer (Configer, optional): Configer whose 'MONITOR' section provides dir/activate/log_activate.
+            **kwargs: Extra pydantic BaseModel fields.
+        """
         super().__init__(**kwargs)
         if configer:
             config: dict = configer.value.get('MONITOR', {})
@@ -53,6 +64,14 @@ class Monitor(BaseModel):
     @staticmethod
     def trace_llm_invocation(source: str, llm_input: Union[str, dict], llm_output: Union[str, dict],
                              cost_time: float = None) -> None:
+        """Log an LLM invocation with its token usage and cost time.
+        
+        Args:
+            source (str): The invocation source.
+            llm_input (Union[str, dict]): The LLM input.
+            llm_output (Union[str, dict]): The LLM output.
+            cost_time (float, optional): The invocation cost time.
+        """
         logger.bind(
             log_type=LogTypeEnum.llm_invocation,
             used_token=Monitor.get_token_usage(),
@@ -264,6 +283,11 @@ class Monitor(BaseModel):
 
     @staticmethod
     def get_invocation_chain_str() -> str:
+        """Render the invocation chain as a readable string.
+        
+        Returns:
+            str: The joined invocation chain description.
+        """
         invocation_chain_str = ''
         invocation_chain = Monitor.get_invocation_chain()
         if len(invocation_chain) > 0:
@@ -360,9 +384,25 @@ class Monitor(BaseModel):
                 return False
 
         def filter_dict(d):
+            """Keep only JSON-serializable values in a dict.
+            
+            Args:
+                d (dict): The dict to filter.
+            
+            Returns:
+                dict: The filtered dict.
+            """
             return {k: v for k, v in d.items() if is_json_serializable(v)}
 
         def recursive_filter(o):
+            """Recursively drop non-JSON-serializable values from nested dicts and lists.
+            
+            Args:
+                o: The object to filter.
+            
+            Returns:
+                The filtered object.
+            """
             if isinstance(o, dict):
                 return filter_dict({k: recursive_filter(v) for k, v in o.items()})
             elif isinstance(o, list):
