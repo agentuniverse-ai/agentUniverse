@@ -25,13 +25,24 @@ class _MarkupTextExtractor(HTMLParser):
     """Extract text from HTML or JATS-style abstract markup."""
 
     def __init__(self) -> None:
+        """Initialize the extractor with an empty list for collected text parts."""
         super().__init__(convert_charrefs=True)
         self.parts: List[str] = []
 
     def handle_data(self, data: str) -> None:
+        """Append a parsed data chunk to the collected text parts.
+
+        Args:
+            data: Raw text chunk emitted by the HTML parser.
+        """
         self.parts.append(data)
 
     def text(self) -> str:
+        """Join all collected parts into a single text string.
+
+        Returns:
+            The parts joined together with runs of whitespace collapsed to single spaces.
+        """
         return " ".join(" ".join(self.parts).split())
 
 
@@ -213,6 +224,15 @@ class CrossrefTool(Tool):
         from_pub_date: str,
         until_pub_date: str,
     ) -> tuple[int, List[Dict[str, Any]], str]:
+        """Query the Crossref ``/works`` endpoint for bibliographic matches.
+
+        Args:
+            query: Bibliographic search keywords.
+            cursor: Deep-pagination cursor token; when set, offset is not sent.
+
+        Returns:
+            tuple: (total result count, raw work dicts, next cursor token).
+        """
         params: Dict[str, Any] = {
             "query.bibliographic": query,
             "rows": max_results,
@@ -245,6 +265,14 @@ class CrossrefTool(Tool):
         return int(message.get("total-results", 0)), items, next_cursor
 
     def _lookup_doi(self, doi: str) -> Dict[str, Any]:
+        """Retrieve a single Crossref work by DOI and return its raw message.
+
+        Args:
+            doi: DOI to look up, URL-encoded into the request path.
+
+        Returns:
+            The Crossref work message dict for the requested DOI.
+        """
         data = self._request(f"/works/{quote(doi, safe='')}")
         if data.get("message-type") != "work":
             raise ValueError("unexpected message-type for Crossref DOI lookup")
@@ -255,6 +283,15 @@ class CrossrefTool(Tool):
         return message
 
     def _request(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """GET a Crossref API path and return the parsed JSON body after HTTP, JSON, and API status checks.
+
+        Args:
+            path: API path appended to base_url, for example /works.
+            params: Optional extra query parameters merged with the mailto contact.
+
+        Returns:
+            The parsed JSON response dict for a successful, status-ok response.
+        """
         request_params = dict(params or {})
         if self.email:
             request_params["mailto"] = self.email
@@ -279,12 +316,25 @@ class CrossrefTool(Tool):
         return data
 
     def _user_agent_value(self) -> str:
+        """Build the HTTP User-Agent header value for Crossref requests.
+
+        Returns:
+            The user_agent string, suffixed with the contact email when one is configured.
+        """
         if self.email:
             return f"{self.user_agent} (mailto:{self.email})"
         return self.user_agent
 
     @classmethod
     def _normalize_mode(cls, mode: str) -> str:
+        """Strip and lowercase the operation mode and require it to be one of the supported modes.
+
+        Args:
+            mode: Operation mode string, expected to be search or doi.
+
+        Returns:
+            The normalized lowercase mode string.
+        """
         normalized_mode = mode.strip().lower() if isinstance(mode, str) else ""
         if normalized_mode not in cls.MODES:
             raise ValueError("mode must be one of: doi, search")
@@ -292,6 +342,11 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _validate_max_results(max_results: int) -> None:
+        """Ensure max_results is an integer between 1 and 20, raising ValueError otherwise.
+
+        Args:
+            max_results: Maximum number of results to validate.
+        """
         if isinstance(max_results, bool) or not isinstance(max_results, int):
             raise ValueError("max_results must be an integer between 1 and 20")
         if not 1 <= max_results <= 20:
