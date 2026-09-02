@@ -128,6 +128,14 @@ class PowerPointTool(Tool):
         message: str,
         detail: str | None = None,
     ) -> dict[str, Any]:
+        """Build the structured error result returned for a failed operation.
+        Args:
+            file_path: Original file path echoed back in the result.
+            error_type: Stable machine-readable error category.
+            message: Human-readable error message.
+            detail: Optional extra detail included in the result when provided.
+        Returns: Error result dict containing status, error_type, error, file_path, and optional detail.
+        """
         result = {
             "status": "error",
             "error_type": error_type,
@@ -139,6 +147,7 @@ class PowerPointTool(Tool):
         return result
 
     def _validate_configuration(self) -> None:
+        """Validate configured limits and base_dir, raising ValueError when any is invalid."""
         limits = {
             "max_read_bytes": self.max_read_bytes,
             "max_write_bytes": self.max_write_bytes,
@@ -158,6 +167,14 @@ class PowerPointTool(Tool):
 
     @staticmethod
     def _normalize_mode(mode: str) -> str:
+        """Validate a raw mode string and normalize it to a canonical lowercase form.
+
+        Args:
+            mode: Raw operation mode supplied by the caller.
+
+        Returns:
+            Canonical mode, one of create, append, read, or info.
+        """
         if not isinstance(mode, str) or not mode.strip():
             raise ValueError("mode must be a non-empty string")
         normalized = mode.strip().lower()
@@ -167,6 +184,15 @@ class PowerPointTool(Tool):
         return normalized
 
     def _resolve_pptx_path(self, file_path: str, field_name: str) -> str:
+        """Validate file_path as a non-empty .pptx path and resolve it underneath base_dir.
+
+        Args:
+            file_path: Path to validate and resolve.
+            field_name: Parameter name used in error messages.
+
+        Returns:
+            Resolved file path for the presentation.
+        """
         if not isinstance(file_path, str) or not file_path.strip():
             raise ValueError(f"{field_name} must be a non-empty string")
         if os.path.splitext(file_path)[1].lower() != ".pptx":
@@ -174,6 +200,12 @@ class PowerPointTool(Tool):
         return cast(str, resolve_safe_path(file_path, self.base_dir))
 
     def _ensure_readable(self, file_path: str, field_name: str = "file_path") -> None:
+        """Raise ValueError unless file_path exists, is within max_read_bytes, and passes archive-safety validation.
+
+        Args:
+            file_path: Path of the presentation to verify.
+            field_name: Parameter name used in error messages.
+        """
         if not os.path.isfile(file_path):
             raise ValueError(f"{field_name} does not exist: {file_path}")
         size = os.path.getsize(file_path)
@@ -202,6 +234,11 @@ class PowerPointTool(Tool):
 
     @staticmethod
     def _load_pptx() -> tuple[Any, Any]:
+        """Lazily import python-pptx, raising ImportError when it is not installed.
+
+        Returns:
+            Tuple of the Presentation class and the Inches helper.
+        """
         try:
             from pptx import Presentation
             from pptx.util import Inches
@@ -217,6 +254,15 @@ class PowerPointTool(Tool):
         template_path: str | None,
         metadata: dict[str, str] | None,
     ) -> dict[str, Any]:
+        """Create a new presentation at file_path and return a structured success result.
+        Args:
+            file_path: Destination path for the generated presentation.
+            slides: Structured slide specifications to add.
+            overwrite: Whether an existing file may be replaced.
+            template_path: Optional template presentation to start from.
+            metadata: Optional core-property metadata to apply.
+        Returns: Success dict with mode create, slide counts, file size, template path, and overwrite status.
+        """
         if not isinstance(overwrite, bool):
             raise ValueError("overwrite must be a boolean")
         if os.path.exists(file_path) and not overwrite:
