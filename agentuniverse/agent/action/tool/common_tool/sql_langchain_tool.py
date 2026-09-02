@@ -22,7 +22,7 @@ class SqlLangchainTool(LangChainTool):
             self.get_sql_database()
         return super().execute(input, callbacks)
 
-    def get_sql_database(self):
+    def get_sql_database(self) -> None:
         db_wrapper = SQLDBWrapperManager().get_instance_obj(self.db_wrapper_name)
         self.tool = self.clz(db=db_wrapper.sql_database)
         self.description = self.tool.description
@@ -32,6 +32,6 @@ class SqlLangchainTool(LangChainTool):
             self.get_sql_database()
         return super().as_langchain()
 
-    def get_langchain_tool(self, init_params: dict, clz: Type[BaseTool]):
+    def get_langchain_tool(self, init_params: dict, clz: Type[BaseTool]) -> None:
         self.db_wrapper_name = init_params.get("db_wrapper")
         self.clz = clz
