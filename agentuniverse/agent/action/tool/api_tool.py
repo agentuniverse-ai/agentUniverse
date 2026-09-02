@@ -24,11 +24,27 @@ class APITool(Tool):
     openapi_spec: Optional[dict] = None
 
     def execute(self, tool_input: ToolInput):
+        """Execute the API call described by the tool input.
+        
+        Args:
+            tool_input (ToolInput): Input parameters for the API call.
+        
+        Returns:
+            str: The response text of the HTTP request.
+        """
         res = self.do_http_request(self.openapi_spec.get('url'), self.openapi_spec.get('method'), {},
                                    tool_input.to_dict())
         return res.text
 
     def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'APITool':
+        """Initialize the APITool from a component configer.
+        
+        Args:
+            component_configer (ToolConfiger): The component configer.
+        
+        Returns:
+            APITool: The initialized tool.
+        """
         super().initialize_by_component_configer(component_configer)
         if component_configer.__dict__['openapi_spec']:
             self.openapi_spec = component_configer.__dict__['openapi_spec']
@@ -99,12 +115,34 @@ class APITool(Tool):
 
     @staticmethod
     def _convert_integer(value: Any) -> int:
+        """Convert a value to an integer, rejecting booleans.
+        
+        Args:
+            value (Any): The value to convert.
+        
+        Returns:
+            int: The converted integer.
+        
+        Raises:
+            ValueError: If the value is a boolean.
+        """
         if isinstance(value, bool):
             raise ValueError("boolean is not an integer")
         return int(value)
 
     @staticmethod
     def _convert_number(value: Any) -> int | float:
+        """Convert a value to an int or float, rejecting booleans.
+        
+        Args:
+            value (Any): The value to convert.
+        
+        Returns:
+            int | float: The converted numeric value.
+        
+        Raises:
+            ValueError: If the value is a boolean.
+        """
         if isinstance(value, bool):
             raise ValueError("boolean is not a number")
         if isinstance(value, (int, float)):
@@ -116,6 +154,17 @@ class APITool(Tool):
 
     @staticmethod
     def _convert_boolean(value: Any) -> bool:
+        """Convert a value to a boolean.
+        
+        Args:
+            value (Any): The value to convert.
+        
+        Returns:
+            bool: The converted boolean.
+        
+        Raises:
+            ValueError: If the value cannot be interpreted as a boolean.
+        """
         if isinstance(value, bool):
             return value
         if isinstance(value, (int, float)) and value in (0, 1):
@@ -207,6 +256,18 @@ class APITool(Tool):
 
     @staticmethod
     def get_parameter_value(parameter, parameters):
+        """Look up a parameter value in the parameters dict.
+        
+        Args:
+            parameter: The parameter definition with a 'name' key.
+            parameters: The dict of available parameter values.
+        
+        Returns:
+            The parameter value, or its schema default when absent and optional.
+        
+        Raises:
+            Exception: If a required parameter is missing.
+        """
         if parameter['name'] in parameters:
             return parameters[parameter['name']]
         elif parameter.get('required', False):
