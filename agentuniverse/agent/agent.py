@@ -577,7 +577,7 @@ class Agent(ComponentBase, ABC):
             params = self.get_memory_params(agent_input)
             params['type'] = 'summarize'
             memory_messages = memory.get(**params)
-            if len(memory_messages) == 0:
+            if not memory_messages:
                 return "Up to Now, No Summarize Memory"
             else:
                 return memory_messages[-1].content
