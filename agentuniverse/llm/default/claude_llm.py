@@ -45,6 +45,7 @@ class ClaudeLLM(LLM):
     connection_pool_limits: Optional[int] = None
 
     def _new_client(self):
+        """Create and return a synchronous anthropic.Anthropic client from the api_key, api_url, timeout, retry, proxy and pool-limit settings of this instance."""
         client = anthropic.Anthropic(
             api_key=self.api_key,
             base_url=self.api_url,
@@ -56,6 +57,7 @@ class ClaudeLLM(LLM):
         return client
 
     def _new_async_client(self):
+        """Create and return an anthropic.AsyncAnthropic client from the same settings as _new_client."""
         client = anthropic.AsyncAnthropic(
             api_key=self.api_key,
             base_url=self.api_url,
@@ -89,6 +91,9 @@ class ClaudeLLM(LLM):
         return self.generate_stream_result(chat_completion)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
+        """Send an async chat completion request to Claude.
+        Returns the parsed LLMOutput for non-streaming calls or an async iterator of LLMOutput chunks when streaming.
+        """
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
         self.client = self._new_async_client()
         chat_completion = await self.client.messages.create(
@@ -112,6 +117,7 @@ class ClaudeLLM(LLM):
         return LLMOutput(text=text, raw=data)
 
     def generate_stream_result(self, chat_completion: Iterator):
+        """Generator yielding an LLMOutput per content_block_delta chunk of a streaming Claude response and closing the client when done."""
         for chunk in chat_completion:
             if chunk.type != 'content_block_delta':
                 continue
@@ -119,6 +125,7 @@ class ClaudeLLM(LLM):
         self.close()
 
     async def agenerate_stream_result(self, chat_completion: AsyncIterator):
+        """Async generator yielding an LLMOutput per content_block_delta chunk of a streaming Claude response and closing the async client at the end."""
         async for chunk in chat_completion:
             print(chunk)
             if chunk.type != 'content_block_delta':
@@ -136,10 +143,12 @@ class ClaudeLLM(LLM):
         return ClaudeLangChainInstance(self)
 
     def get_num_tokens(self, text: str) -> int:
+        """Return the token count of the given text as reported by the Anthropic API."""
         encode = self._new_client().count_tokens(text)
         return encode
 
     def max_context_length(self) -> int:
+        """Return the maximum context length for the current model, preferring the base implementation and falling back to the built-in model table."""
         if super().max_context_length():
             return super().max_context_length()
         return ClaudeMAXCONTETNLENGTH[self.model_name]
@@ -155,6 +164,7 @@ class ClaudeLLM(LLM):
             await self.async_client.aclose()
 
     def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'ClaudeLLM':
+        """Apply api_key, api_url, proxy and connection_pool_limits from the component configer, running yaml functions for api_key and api_url, and return this instance."""
         super().initialize_by_component_configer(component_configer)
         if 'api_key' in component_configer.configer.value:
             api_key = component_configer.configer.value.get('api_key')
