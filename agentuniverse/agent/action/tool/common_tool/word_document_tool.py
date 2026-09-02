@@ -189,6 +189,7 @@ class WordDocumentTool(Tool):
         return normalized
 
     def _metadata(self, metadata: Any) -> dict[str, str]:
+        """Validate and normalize the document metadata against the allowed core-property fields. Raises: TypeError/ValueError on invalid input. Args: metadata (Any): The raw metadata dict. Returns: dict[str, str]: The normalized metadata."""
         if metadata is None:
             return {}
         if not isinstance(metadata, dict):
@@ -202,6 +203,7 @@ class WordDocumentTool(Tool):
         return dict(metadata)
 
     def _create(self, path: str, blocks: Any, overwrite: bool, template: str | None, metadata: Any) -> dict[str, Any]:
+        """Create a new DOCX file at path (optionally based on a template) from the given blocks and metadata. Args: path (str): Target path. blocks (Any): Raw blocks. overwrite (bool): Whether to replace an existing file. template (str | None): Optional template path. metadata (Any): Raw metadata. Returns: dict[str, Any]: A success result."""
         if not isinstance(overwrite, bool):
             raise TypeError("overwrite must be a boolean")
         if os.path.exists(path) and not overwrite:
@@ -219,6 +221,7 @@ class WordDocumentTool(Tool):
         return self._success("create", path, len(validated), document, template_path=source, overwritten=overwrite)
 
     def _append(self, path: str, blocks: Any) -> dict[str, Any]:
+        """Open the existing DOCX at path, append the given blocks and save it back. Args: path (str): The DOCX path. blocks (Any): Raw blocks. Returns: dict[str, Any]: A success result."""
         self._check_archive(path)
         Document = self._document_class()
         document = Document(path)
@@ -229,11 +232,13 @@ class WordDocumentTool(Tool):
 
     @staticmethod
     def _apply_metadata(document: Any, metadata: dict[str, str]) -> None:
+        """Write the metadata entries onto the document core properties. Args: document (Any): The python-docx document. metadata (dict[str, str]): The metadata to apply."""
         for key, value in metadata.items():
             setattr(document.core_properties, key, value)
 
     @staticmethod
     def _apply_blocks(document: Any, blocks: list[dict[str, Any]]) -> None:
+        """Apply the normalized blocks to the document, adding headings, paragraphs, bullets, page breaks and tables. Args: document (Any): The python-docx document. blocks (list[dict[str, Any]]): The normalized blocks."""
         for block in blocks:
             kind = block["type"]
             if kind == "heading":
@@ -257,6 +262,7 @@ class WordDocumentTool(Tool):
                         table.cell(row_index, column).text = row[column] if column < len(row) else ""
 
     def _read(self, path: str) -> dict[str, Any]:
+        """Read the paragraphs and tables of the DOCX at path within the configured structural budgets. Args: path (str): The DOCX path. Returns: dict[str, Any]: A result with paragraphs, tables and truncation info."""
         self._check_archive(path)
         document = self._document_class()(path)
         # The same structural budgets that bound create/append also bound the
@@ -283,6 +289,7 @@ class WordDocumentTool(Tool):
         }
 
     def _read_paragraphs(self, document: Any, budget: "_ReadBudget") -> list[dict[str, Any]]:
+        """Read the paragraphs of the document while honoring the shared read budget. Args: document (Any): The python-docx document. budget (_ReadBudget): The shared read budget. Returns: list[dict[str, Any]]: The paragraphs read."""
         paragraphs: list[dict[str, Any]] = []
         last_index = len(document.paragraphs) - 1
         for index, paragraph in enumerate(document.paragraphs):
@@ -301,6 +308,7 @@ class WordDocumentTool(Tool):
         return paragraphs
 
     def _read_tables(self, document: Any, budget: "_ReadBudget") -> list[list[list[str]]]:
+        """Read the tables of the document while honoring the shared read budget and row/column limits. Args: document (Any): The python-docx document. budget (_ReadBudget): The shared read budget. Returns: list[list[list[str]]]: The cell values read."""
         tables: list[list[list[str]]] = []
         for table in document.tables:
             if not budget.allow_block():
