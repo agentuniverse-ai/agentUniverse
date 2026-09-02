@@ -20,20 +20,61 @@ from agentuniverse.prompt.prompt import Prompt
 
 class MultimodalAgent(Agent):
 
+    """Demo agent that handles multimodal input.
+    
+        It assembles memory and prompt, invokes tools and knowledge, then runs
+        the generation chain via customized_execute.
+    """
     def input_keys(self) -> list[str]:
+        """Return the input key names consumed by this agent.
+        
+        Returns:
+            list[str]: The input keys.
+        """
         return ['input']
 
     def output_keys(self) -> list[str]:
+        """Return the output key names produced by this agent.
+        
+        Returns:
+            list[str]: The output keys.
+        """
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Move the raw user input into the agent input dict.
+        
+        Args:
+            input_object (InputObject): Parsed user input.
+            agent_input (dict): Agent input dict.
+        
+        Returns:
+            dict: Updated agent input dict.
+        """
         agent_input['input'] = input_object.get_data('input')
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Ensure the result dict contains the 'output' key.
+        
+        Args:
+            agent_result (dict): Raw agent result.
+        
+        Returns:
+            dict: Result dict including 'output'.
+        """
         return {**agent_result, 'output': agent_result['output']}
 
     def execute(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Run the full agent flow: memory, LLM, prompt, tools, knowledge and chain execution.
+        
+        Args:
+            input_object (InputObject): Parsed user input.
+            agent_input (dict): Agent input dict.
+        
+        Returns:
+            dict: The final agent result.
+        """
         memory: Memory = self.process_memory(agent_input)
         llm: LLM = self.process_llm()
         prompt: Prompt = self.process_prompt(agent_input)
@@ -45,6 +86,18 @@ class MultimodalAgent(Agent):
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
                            **kwargs) -> dict:
+        """Assemble memory around the prompt-to-LLM chain run and return the output.
+        
+        Args:
+            input_object (InputObject): Parsed user input.
+            agent_input (dict): Agent input dict.
+            memory (Memory): Agent memory instance.
+            llm (LLM): Language model instance.
+            prompt (Prompt): Agent prompt instance.
+        
+        Returns:
+            dict: Agent input dict with the 'output' result.
+        """
         assemble_memory_input(memory, agent_input)
         process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
         chain = prompt.as_langchain() | llm.as_langchain_runnable(
