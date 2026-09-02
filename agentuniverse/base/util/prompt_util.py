@@ -131,7 +131,7 @@ def generate_chat_template(agent_prompt_model: AgentPromptModel, prompt_assemble
 
 
 def process_llm_token(agent_llm: LLM, lc_prompt_template, profile: dict, planner_input: dict,
-                      var_to_process: str = 'background'):
+                      var_to_process: str = 'background') -> None:
     """Process the prompt template based on the prompt processor.
 
     Args:
