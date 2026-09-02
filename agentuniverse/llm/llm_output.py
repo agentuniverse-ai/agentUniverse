@@ -95,6 +95,7 @@ class TokenUsage(BaseModel):
     # ======== Entry point for parsing ========
     @classmethod
     def from_openai(cls, usage: Dict[str, Any]) -> "TokenUsage":
+        """Build a TokenUsage from an OpenAI-style usage dict, mapping its prompt/completion token fields onto the modality counters of this model. Args: usage (Dict[str, Any]): The OpenAI usage payload. Returns: TokenUsage: The converted token usage."""
         if not usage:
             return cls()
         usage = prune_none(usage)
@@ -153,6 +154,7 @@ class TokenUsage(BaseModel):
         return cls()
 
     def __add__(self, other: "TokenUsage") -> "TokenUsage":
+        """Return a new TokenUsage whose counters are the sum of this instance and other. Args: other (TokenUsage): The usage to add. Returns: TokenUsage: The combined usage, or NotImplemented for non-TokenUsage operands."""
         if not isinstance(other, TokenUsage):
             return NotImplemented
 
@@ -169,13 +171,16 @@ class TokenUsage(BaseModel):
         )
 
     def __iadd__(self, other: "TokenUsage") -> "TokenUsage":
+        """Add other into this TokenUsage in place and return self. Args: other (TokenUsage): The usage to add. Returns: TokenUsage: self after the addition."""
         tmp = self + other
         for field in self.__fields__:
             setattr(self, field, getattr(tmp, field))
         return self
 
     def to_dict(self, *, keep_zero: bool = False) -> dict:
+        """Serialize this token usage into an OpenAI-style dict, dropping zero counters unless keep_zero is True. Args: keep_zero (bool): Whether to keep zero-valued counters. Returns: dict: The serialized usage."""
         def _filter(d: dict) -> dict:
+            """Filter zero-valued items out of the dict unless keep_zero is enabled. Args: d (dict): The counters dict. Returns: dict: The filtered dict."""
             return d if keep_zero else {k: v for k, v in d.items() if v}
 
         prompt_details = _filter(
@@ -232,7 +237,9 @@ class LLMOutput(BaseModel):
     usage: Optional[TokenUsage] = None
 
     def is_stream(self) -> bool:
+        """Whether this LLM output is a streaming output. Returns: bool: True when the output type is stream."""
         return self.type == "stream"
 
     def is_function_call(self) -> bool:
+        """Whether this LLM output is a function/tool call. Returns: bool: True when the output type is function_call or tool_call."""
         return self.type in ("function_call", "tool_call")
