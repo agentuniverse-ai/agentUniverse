@@ -83,9 +83,19 @@ class InsuranceMayaLLM(LLM):
         return LLMOutput(text=line["out_string"], raw=line)
 
     def _call(self, *args: Any, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
+        """Synchronous call entry that delegates to the model call logic.
+        
+        Returns:
+            LLMOutput or Iterator[LLMOutput]: The model result.
+        """
         return self.call(*args, **kwargs)
 
     async def _acall(self, *args: Any, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
+        """Async call entry that delegates to the async model call logic.
+        
+        Returns:
+            LLMOutput or Iterator[LLMOutput]: The model result.
+        """
         return await self.acall(*args, **kwargs)
 
     def max_context_length(self) -> int:
@@ -111,6 +121,15 @@ class InsuranceMayaLLM(LLM):
         return len(encoding.encode(text))
 
     def request_stream_data(self, prompt: str, stop: str = ''):
+        """Build the request payload used for a streaming model call.
+        
+        Args:
+            prompt (str): The input prompt to send to the model.
+            stop (str): Stop words for the generation.
+        
+        Returns:
+            dict: The streaming request payload.
+        """
         return {
             "sceneName": self.sceneName,
             "chainName": self.chainName,
@@ -122,6 +141,15 @@ class InsuranceMayaLLM(LLM):
         }
 
     def request_data(self, prompt: str, stop: str = None):
+        """Build the request payload used for a model call.
+        
+        Args:
+            prompt (str): The input prompt to send to the model.
+            stop (Optional[str]): Optional stop words for the generation.
+        
+        Returns:
+            dict: The request payload.
+        """
         return {
             "sceneName": self.sceneName,
             "chainName": self.chainName,
@@ -139,6 +167,19 @@ class InsuranceMayaLLM(LLM):
                           temperature: Optional[float] = None,
                           stream: Optional[bool] = None,
                           **kwargs) -> LLMOutput:
+        """Run a non-streaming model call and return the parsed result.
+        
+        Args:
+            prompt (str): The input prompt to send to the model.
+            stop (Optional[List[str]]): Optional list of stop words.
+            model (Optional[str]): Optional model name override.
+            temperature (Optional[float]): Optional sampling temperature.
+            stream (Optional[bool]): Optional streaming flag override.
+            **kwargs: Additional arguments for the call.
+        
+        Returns:
+            LLMOutput: The parsed model output.
+        """
         suffix = f"?model_name={self.model_name}"
         # 进行模型http调用
         # resp = requests.post(
@@ -166,6 +207,19 @@ class InsuranceMayaLLM(LLM):
                        temperature: Optional[float] = None,
                        stream: Optional[bool] = None,
                        **kwargs):
+        """Run a streaming model call and yield parsed result chunks.
+        
+        Args:
+            prompt (str): The input prompt to send to the model.
+            stop (Optional[List[str]]): Optional list of stop words.
+            model (Optional[str]): Optional model name override.
+            temperature (Optional[float]): Optional sampling temperature.
+            stream (Optional[bool]): Optional streaming flag override.
+            **kwargs: Additional arguments for the call.
+        
+        Yields:
+            LLMOutput: Parsed output chunks produced by the model.
+        """
         suffix = f"?model_name={self.model_name}"
         # 进行模型http调用
         # with requests.post(
@@ -192,6 +246,14 @@ class InsuranceMayaLLM(LLM):
                 yield output
 
     def set_by_agent_model(self, **kwargs) -> 'InsuranceMayaLLM':
+        """Apply agent-model settings onto a copy of this model.
+        
+        Args:
+            **kwargs: May include an ``ext_info`` dict of model attributes to override.
+        
+        Returns:
+            The copied model instance with the applied settings.
+        """
         copied_obj = super().set_by_agent_model(**kwargs)
         if "ext_info" in kwargs:
             ext_info = kwargs.get("ext_info", self.ext_info)
