@@ -254,6 +254,15 @@ class PowerPointTool(Tool):
         file_path: str,
         slides: list[dict[str, Any]] | None,
     ) -> dict[str, Any]:
+        """Append validated slides to an existing presentation and return a structured success result.
+
+        Args:
+            file_path: Path of the presentation to extend.
+            slides: Structured slide specifications to append.
+
+        Returns:
+            Success dict with mode append, added and total slide counts, and file size.
+        """
         self._ensure_readable(file_path)
         Presentation, Inches = self._load_pptx()
         presentation = Presentation(file_path)
@@ -275,6 +284,14 @@ class PowerPointTool(Tool):
         }
 
     def _read(self, file_path: str) -> dict[str, Any]:  # noqa: C901
+        """Read slide titles, body text, tables, and notes from a presentation within configured budgets.
+
+        Args:
+            file_path: Path of the presentation to read.
+
+        Returns:
+            Success dict with per-slide content, echoed read limits, and a truncated flag.
+        """
         self._ensure_readable(file_path)
         Presentation, _ = self._load_pptx()
         presentation = Presentation(file_path)
@@ -344,6 +361,15 @@ class PowerPointTool(Tool):
         }
 
     def _read_table(self, table: Any, budget: "_ReadBudget") -> list[list[str]]:
+        """Read the cell text of one table under row, column, and character budgets.
+
+        Args:
+            table: python-pptx table object whose cells are read.
+            budget: Shared read budget that caps characters and marks truncation.
+
+        Returns:
+            Rows of cell text, one list per table row.
+        """
         rows: list[list[str]] = []
         for row_index, row in enumerate(table.rows):
             if row_index >= self.max_table_rows:
@@ -362,6 +388,14 @@ class PowerPointTool(Tool):
         return rows
 
     def _info(self, file_path: str) -> dict[str, Any]:
+        """Collect structural slide summaries and core metadata for a presentation.
+
+        Args:
+            file_path: Path of the presentation to inspect.
+
+        Returns:
+            Success dict with per-slide summaries, dimensions, and core metadata.
+        """
         self._ensure_readable(file_path)
         Presentation, _ = self._load_pptx()
         presentation = Presentation(file_path)
@@ -395,6 +429,7 @@ class PowerPointTool(Tool):
         }
 
     def _validate_presentation_slide_count(self, presentation: Any) -> None:
+        """Raise ValueError when a presentation has more slides than max_slides."""
         count = len(presentation.slides)
         if count > self.max_slides:
             raise ValueError(f"presentation has {count} slides, exceeding max_slides ({self.max_slides})")
@@ -404,6 +439,15 @@ class PowerPointTool(Tool):
         slides: list[dict[str, Any]] | None,
         current_count: int,
     ) -> list[dict[str, Any]]:
+        """Validate and normalize structured slide specs against tool limits.
+
+        Args:
+            slides: Raw slide specifications to validate.
+            current_count: Existing slide count used when enforcing max_slides.
+
+        Returns:
+            Normalized copies of the slide specs.
+        """
         if not isinstance(slides, list) or not slides:
             raise ValueError("slides must be a non-empty list")
         if current_count + len(slides) > self.max_slides:
@@ -508,6 +552,14 @@ class PowerPointTool(Tool):
         self,
         metadata: dict[str, str] | None,
     ) -> dict[str, str]:
+        """Validate metadata against the allowed core-property fields and return a cleaned copy.
+
+        Args:
+            metadata: Raw metadata mapping, or None.
+
+        Returns:
+            Cleaned metadata dict; empty when metadata is None.
+        """
         if metadata is None:
             return {}
         if not isinstance(metadata, dict):
