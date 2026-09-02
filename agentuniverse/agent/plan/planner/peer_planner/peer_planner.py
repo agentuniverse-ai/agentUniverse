@@ -248,7 +248,7 @@ class PeerPlanner(Planner):
             LOGGER.warn("no expressing agent.")
             expressing_result = OutputObject({})
         else:
-            LOGGER.info(f"Starting expressing agent.")
+            LOGGER.info("Starting expressing agent.")
             expressing_result = expressing_agent.run(**input_object.to_dict())
 
         input_object.add_data('expressing_result', expressing_result)
