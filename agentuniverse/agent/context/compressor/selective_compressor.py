@@ -306,7 +306,7 @@ class SelectiveCompressor(ContextCompressor):
                 tokens_used += seg.tokens
             else:
                 # Try to fit at least one HIGH priority segment
-                if len(selected) == 0 and seg.tokens <= available_tokens:
+                if not selected and seg.tokens <= available_tokens:
                     selected.append(seg)
                 break
 
