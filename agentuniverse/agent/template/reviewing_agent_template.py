@@ -49,7 +49,7 @@ class ReviewingAgentTemplate(AgentTemplate):
         final_result['score'] = score
         final_result['suggestion'] = output.get('suggestion')
         # add reviewing agent log info.
-        logger_info = f"\nReviewing agent execution result is :\n"
+        logger_info = "\nReviewing agent execution result is :\n"
         reviewing_info_str = f"review suggestion: {final_result.get('suggestion')} \n"
         reviewing_info_str += f"review score: {final_result.get('score')} \n"
         LOGGER.info(logger_info + reviewing_info_str)
