@@ -188,6 +188,11 @@ class RedisVectorStore(Store):
                 raise
 
     async def _async_ensure_index(self, dimensions: int) -> None:
+        """Asynchronously create the index unless create_index is disabled, ignoring the error when the index already exists; when disabled, only build and validate the command.
+
+        Args:
+            dimensions: Embedding dimension used to build the index.
+        """
         if not self.create_index:
             self._index_command(dimensions)
             return
@@ -199,6 +204,14 @@ class RedisVectorStore(Store):
                 raise
 
     def _embedding_for_query(self, query: Query) -> list[float]:
+        """Resolve the query embedding, either from the query's precomputed embeddings or by generating one with the configured embedding model.
+
+        Args:
+            query: Query carrying the raw query string or precomputed embeddings.
+
+        Returns:
+            The validated embedding vector for the query.
+        """
         if query.embeddings:
             vector = query.embeddings[0]
         elif self.embedding_model and query.query_str:
@@ -210,6 +223,14 @@ class RedisVectorStore(Store):
         return vector
 
     def _vectors_for_documents(self, documents: list[Document]) -> list[list[float]]:
+        """Resolve an embedding for every document, generating missing ones with the configured embedding model and filling them in place.
+
+        Args:
+            documents: Documents to embed; entries without an embedding are filled in place.
+
+        Returns:
+            List of validated embedding vectors aligned with documents.
+        """
         missing = [index for index, document in enumerate(documents) if not document.embedding]
         if missing:
             if not self.embedding_model:
@@ -224,6 +245,11 @@ class RedisVectorStore(Store):
         return vectors
 
     def _check_vector(self, vector: Any) -> None:
+        """Validate that a vector is a non-empty list of finite numbers, recording the dimension from it when unset or enforcing the configured dimension.
+
+        Args:
+            vector: Embedding candidate to validate.
+        """
         if (
             not isinstance(vector, list)
             or not vector
@@ -242,6 +268,14 @@ class RedisVectorStore(Store):
 
     @staticmethod
     def _vector_bytes(vector: list[float]) -> bytes:
+        """Pack a float vector into little-endian FLOAT32 bytes for Redis.
+
+        Args:
+            vector: List of floats to encode.
+
+        Returns:
+            The vector encoded as raw bytes.
+        """
         values = array("f", (float(value) for value in vector))
         if sys.byteorder != "little":
             values.byteswap()
@@ -249,6 +283,14 @@ class RedisVectorStore(Store):
 
     @staticmethod
     def _bytes_vector(value: Any) -> list[float]:
+        """Decode raw FLOAT32 bytes returned by Redis back into a list of floats.
+
+        Args:
+            value: Raw vector bytes from Redis, or None for a missing vector.
+
+        Returns:
+            The decoded list of floats; an empty list when value is None.
+        """
         if value is None:
             return []
         raw = bytes(value)
@@ -261,6 +303,14 @@ class RedisVectorStore(Store):
         return list(values)
 
     def _top_k(self, query: Query) -> int:
+        """Return the effective number of results for a query, falling back to the store default.
+
+        Args:
+            query: Query whose similarity_top_k is used when set.
+
+        Returns:
+            A validated positive integer number of results.
+        """
         value = query.similarity_top_k or self.similarity_top_k
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise ValueError("similarity_top_k must be a positive integer")
@@ -268,6 +318,15 @@ class RedisVectorStore(Store):
 
     @classmethod
     def _tag_value(cls, value: Any, field: str) -> str:
+        """Convert a scalar filter value into an escaped RediSearch tag value.
+
+        Args:
+            value: Scalar value to stringify and escape.
+            field: Indexed field name reported in validation errors.
+
+        Returns:
+            The escaped tag text for the value.
+        """
         if isinstance(value, bool):
             text = "true" if value else "false"
         elif isinstance(value, (str, int, float)) and not isinstance(value, bool):
@@ -279,6 +338,14 @@ class RedisVectorStore(Store):
         return cls._TAG_ESCAPE.sub(r"\\\1", text)
 
     def _filter(self, value: Any) -> str:
+        """Build the RediSearch tag filter expression for a metadata filter dict, restricted to indexed fields.
+
+        Args:
+            value: Metadata filter mapping indexed field names to scalar values, or None for no filter.
+
+        Returns:
+            A filter expression string, '*' when value is None or empty.
+        """
         if value is None:
             return "*"
         if not isinstance(value, dict):
@@ -289,6 +356,15 @@ class RedisVectorStore(Store):
         return " ".join(f"@meta_{field}:{{{self._tag_value(item, field)}}}" for field, item in value.items()) or "*"
 
     def _search_command(self, vector: list[float], top_k: int, metadata_filter: Any) -> list[Any]:
+        """Build the FT.SEARCH KNN command for the given vector and filter.
+
+        Args:
+            top_k: Number of neighbors to retrieve.
+            metadata_filter: Filter applied to narrow the search.
+
+        Returns:
+            The FT.SEARCH command as a list of tokens.
+        """
         base_filter = self._filter(metadata_filter)
         query = f"({base_filter})=>[KNN {top_k} @embedding $query_vector AS vector_distance]"
         return [
@@ -317,6 +393,14 @@ class RedisVectorStore(Store):
 
     @staticmethod
     def _decode(value: Any) -> str:
+        """Decode a raw Redis response value to text.
+
+        Args:
+            value: Raw value from a Redis response.
+
+        Returns:
+            The value decoded as UTF-8 text when bytes, otherwise its string form.
+        """
         return value.decode("utf-8") if isinstance(value, bytes) else str(value)
 
     @classmethod
