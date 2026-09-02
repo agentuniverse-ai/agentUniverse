@@ -25,7 +25,7 @@ class PromptOptimizerTest(unittest.TestCase):
     Prompt optimizer functionality test class.
     """
 
-    def test_basic_prompt_optimization(self):
+    def test_basic_prompt_optimization(self) -> None:
         """Test basic prompt optimization functionality."""
         original_prompt = "你是一个AI助手，帮助用户回答问题。"
         optimization_goal = "提高专业性和准确性"
@@ -47,7 +47,7 @@ class PromptOptimizerTest(unittest.TestCase):
         print(f"Original: {original_prompt}")
         print(f"Optimized introduction: {result.introduction}")
 
-    def test_typed_prompt_optimization(self):
+    def test_typed_prompt_optimization(self) -> None:
         """Test type-specific prompt optimization."""
         original_prompt = "你是客服，回答用户问题。"
         optimization_goal = "增强服务质量"
@@ -68,7 +68,7 @@ class PromptOptimizerTest(unittest.TestCase):
         print(f"Type: {agent_type}")
         print(f"Optimized instruction includes tools: {'工具' in result.instruction}")
 
-    def test_scenario_prompt_optimization(self):
+    def test_scenario_prompt_optimization(self) -> None:
         """Test scenario-based prompt optimization."""
         original_prompt = "分析数据"
         optimization_goal = "提升分析深度"
@@ -90,7 +90,7 @@ class PromptOptimizerTest(unittest.TestCase):
         print(f"Scenario: {scenario}")
         print(f"Optimized content includes analysis elements: {'分析' in combined_content}")
 
-    def test_yaml_format_optimization(self):
+    def test_yaml_format_optimization(self) -> None:
         """Test YAML format prompt optimization."""
         yaml_prompt = """
 introduction: 你是助手
@@ -116,7 +116,7 @@ metadata:
         print(f"Original instruction length: {len('回答问题')}")
         print(f"Optimized instruction length: {len(result.instruction)}")
 
-    def test_optimization_error_handling(self):
+    def test_optimization_error_handling(self) -> None:
         """Test error handling in optimization process."""
         # Test handling of empty prompt (should return reasonable result without throwing exception)
         result = optimize_existing_prompt(
@@ -137,7 +137,7 @@ metadata:
 
         print(f"\nError handling test passed")
 
-    def test_multiple_optimizations_consistency(self):
+    def test_multiple_optimizations_consistency(self) -> None:
         """Test consistency of multiple optimizations."""
         original_prompt = "你是分析师"
         optimization_goal = "提升专业能力"
