@@ -28,7 +28,7 @@ class FlaskServerManager:
         return self._sync_service_timeout
 
     @sync_service_timeout.setter
-    def sync_service_timeout(self, timeout):
+    def sync_service_timeout(self, timeout) -> None:
         self._sync_service_timeout = timeout
 
 
