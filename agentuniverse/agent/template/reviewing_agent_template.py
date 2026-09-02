@@ -18,19 +18,42 @@ from agentuniverse.base.util.logging.logging_util import LOGGER
 
 class ReviewingAgentTemplate(AgentTemplate):
 
+    """Template agent that reviews another agent's output and produces a score and a suggestion."""
     def input_keys(self) -> list[str]:
         return ['input', 'expressing_result']
 
     def output_keys(self) -> list[str]:
+        """Return the output key names produced by this agent.
+        
+        Returns:
+            list[str]: The output keys.
+        """
         return ['output', 'score', 'suggestion']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Populate the agent input with the request, the expressed result and the expert framework.
+        
+        Args:
+            input_object (InputObject): Parsed user input.
+            agent_input (dict): Agent input dict.
+        
+        Returns:
+            dict: Updated agent input dict.
+        """
         agent_input['input'] = input_object.get_data('input')
         agent_input['expressing_result'] = input_object.get_data('expressing_result').get_data('output')
         agent_input['expert_framework'] = input_object.get_data('expert_framework', {}).get('reviewing')
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Parse the reviewed output into a final result with output, score and suggestion.
+        
+        Args:
+            agent_result (dict): Raw agent result.
+        
+        Returns:
+            dict: Result dict with 'output', 'score' and 'suggestion' keys.
+        """
         final_result = dict()
 
         output = agent_result.get('output')
@@ -57,6 +80,12 @@ class ReviewingAgentTemplate(AgentTemplate):
         return final_result
 
     def add_output_stream(self, output_stream: Queue, agent_output: str) -> None:
+        """Push the reviewed agent output into the streaming queue.
+        
+        Args:
+            output_stream (Queue): The streaming output queue.
+            agent_output (str): The agent output text to stream.
+        """
         if not output_stream:
             return
         # add reviewing agent final result into the stream output.
@@ -80,6 +109,11 @@ class ReviewingAgentTemplate(AgentTemplate):
         return self
 
     def validate_required_params(self):
+        """Validate that required parameters such as llm_name are configured.
+        
+        Raises:
+            ValueError: If llm_name is not set for the agent.
+        """
         if not self.llm_name:
             raise ValueError(f'llm_name of the agent {self.agent_model.info.get("name")}'
                              f' is not set, please go to the agent profile configuration'
