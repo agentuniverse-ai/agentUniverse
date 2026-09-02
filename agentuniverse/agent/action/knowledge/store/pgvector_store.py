@@ -38,6 +38,7 @@ class PGVectorStore(Store):
     }
 
     def _initialize_by_component_configer(self, configer: ComponentConfiger) -> "PGVectorStore":
+        """Apply the component configuration to the store and validate it. Copies the known PGVector field values from the configer onto the instance and then runs validation. Args: configer (ComponentConfiger): The component configuration to apply. Returns: PGVectorStore: self."""
         super()._initialize_by_component_configer(configer)
         for field in (
             "connection_url",
@@ -55,6 +56,7 @@ class PGVectorStore(Store):
         return self
 
     def _validate_config(self, require_dimensions: bool = True) -> None:
+        """Validate the store configuration. Raises: ValueError if table_name is not a simple PostgreSQL identifier, distance is unsupported, similarity_top_k/dimensions are not positive integers, or dimensions is missing while require_dimensions is True. Args: require_dimensions (bool): Whether a missing dimensions value is an error. Defaults to True."""
         if not self._IDENTIFIER.fullmatch(self.table_name or ""):
             raise ValueError("table_name must be a simple PostgreSQL identifier")
         self.distance = (self.distance or "").lower()
@@ -75,6 +77,7 @@ class PGVectorStore(Store):
 
     @staticmethod
     def _dependencies() -> tuple[Any, Any, Any]:
+        """Import and return the psycopg modules used by the store. Returns: tuple[Any, Any, Any]: (psycopg, register_vector, register_vector_async). Raises: ImportError if psycopg or pgvector is not installed."""
         try:
             import psycopg
             from pgvector.psycopg import register_vector, register_vector_async
@@ -83,12 +86,14 @@ class PGVectorStore(Store):
         return psycopg, register_vector, register_vector_async
 
     def _url(self) -> str:
+        """Return the PostgreSQL connection URL from the connection_url field or the PGVECTOR_CONNECTION_URL environment variable. Raises: ValueError when neither provides a value. Returns: str: The connection URL."""
         value = self.connection_url or os.getenv("PGVECTOR_CONNECTION_URL")
         if not value:
             raise ValueError("connection_url is required; set it in YAML or PGVECTOR_CONNECTION_URL")
         return value
 
     def _new_client(self) -> Any:
+        """Create and cache a synchronous psycopg connection for the store, ensuring the vector extension exists and creating the table when create_table and dimensions are set. Returns: Any: The psycopg connection."""
         psycopg, register_vector, _ = self._dependencies()
         self.client = psycopg.connect(self._url(), autocommit=True)
         # pgvector adapters query the vector type, so the extension must exist first.
@@ -99,6 +104,7 @@ class PGVectorStore(Store):
         return self.client
 
     async def _new_async_client(self) -> Any:
+        """Create and cache an asynchronous psycopg connection for the store, ensuring the vector extension exists and creating the table when create_table and dimensions are set. Returns: Any: The asynchronous psycopg connection."""
         psycopg, _, register_vector_async = self._dependencies()
         self.async_client = await psycopg.AsyncConnection.connect(self._url(), autocommit=True)
         # Async registration has the same ordering requirement as sync registration.
@@ -109,12 +115,15 @@ class PGVectorStore(Store):
         return self.async_client
 
     def _ensure_client(self) -> Any:
+        """Return the existing synchronous client, creating a new one if it does not exist yet. Returns: Any: The psycopg connection."""
         return self.client or self._new_client()
 
     async def _ensure_async_client(self) -> Any:
+        """Return the existing asynchronous client, creating a new one if it does not exist yet. Returns: Any: The asynchronous psycopg connection."""
         return self.async_client or await self._new_async_client()
 
     def _table_sql(self, dimensions: int) -> list[str]:
+        """Build the SQL statements that prepare storage for the given embedding dimension, i.e. the vector extension, the document table and, when enabled, the HNSW index. Args: dimensions (int): The embedding dimensionality to create the table for. Returns: list[str]: The SQL statements to execute."""
         self.dimensions = self.dimensions or dimensions
         if dimensions != self.dimensions:
             raise ValueError(f"embedding dimension {dimensions} does not match configured dimensions {self.dimensions}")
