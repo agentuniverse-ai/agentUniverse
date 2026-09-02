@@ -73,6 +73,7 @@ class Knowledge(ComponentBase):
     """
 
     class Config:
+        """Pydantic model configuration allowing arbitrary types for knowledge instances."""
         arbitrary_types_allowed = True
 
     name: str = ""
@@ -90,6 +91,7 @@ class Knowledge(ComponentBase):
     ext_info: Optional[Dict] = None
 
     def __init__(self, **kwargs):
+        """Initialize the knowledge component and build the insert and query thread pool executors used by the store operations."""
         super().__init__(component_type=ComponentEnum.KNOWLEDGE, **kwargs)
         self.insert_executor = ThreadPoolExecutorWithReturnValue(
             max_workers=5,
@@ -101,6 +103,9 @@ class Knowledge(ComponentBase):
         )
 
     def _load_data(self, *args: Any, **kwargs: Any) -> List[Document]:
+        """Load documents for the given source_path through the reader that matches the source type.
+        The source type is detected as a URL or from the local file extension; an unregistered type falls back to the default reader.
+        """
         # check if source is a local file or remote url
         if kwargs.get("source_path"):
             source_path = kwargs.get("source_path")
@@ -128,18 +133,21 @@ class Knowledge(ComponentBase):
         return reader.load_data(source_path)
 
     def _insert_process(self, origin_docs: List[Document]) -> List[Document]:
+        """Apply every configured insert processor to the documents in order and return the processed documents."""
         for _processor_code in self.insert_processors:
             doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
             origin_docs = doc_processor.process_docs(origin_docs)
         return origin_docs
 
     def _update_process(self, origin_docs: List[Document]) -> List[Document]:
+        """Apply every configured update processor to the documents in order and return the processed documents."""
         for _processor_code in self.update_processors:
             doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
             origin_docs = doc_processor.process_docs(origin_docs)
         return origin_docs
 
     def _rag_post_process(self, origin_docs: List[Document], query: Query):
+        """Apply every configured RAG post processor to the retrieved documents, passing the query, and return the processed documents."""
         for _processor_code in self.post_processors:
             doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
             origin_docs = doc_processor.process_docs(origin_docs, query=query)
@@ -166,6 +174,7 @@ class Knowledge(ComponentBase):
         return False
 
     def _paraphrase_query(self, origin_query: Query) -> Query:
+        """Run the query through every configured query paraphraser in order and return the paraphrased query."""
         for _paraphraser_code in self.query_paraphrasers:
             query_paraphraser: QueryParaphraser = QueryParaphraserManager().get_instance_obj(
                 _paraphraser_code)
@@ -225,6 +234,7 @@ class Knowledge(ComponentBase):
         LOGGER.info("Knowledge update complete.")
 
     def _route_rag(self, query: Query):
+        """Route the query to the knowledge stores through the configured rag router and return the produced query tasks."""
         return RagRouterManager().get_instance_obj(self.rag_router, strict=True).rag_route(query, self.stores)
 
     @trace_knowledge
