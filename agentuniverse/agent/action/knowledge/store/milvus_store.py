@@ -208,7 +208,7 @@ class MilvusStore(Store):
         """
         for document in documents:
             embedding = document.embedding
-            if len(embedding) == 0:
+            if not embedding:
                 if not self.embedding_model:
                     raise Exception("Milvus store can only save vector, "
                                     "you should provide embedding in your document or specify an embedding model.")
