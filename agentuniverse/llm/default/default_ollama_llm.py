@@ -59,6 +59,7 @@ class OllamaLLM(LLM):
             return LLMOutput(text=res.get("message").get('content'), raw=json.dumps(res))
 
     async def _acall(self, messages, stop=None, **kwargs) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
+        """Asynchronously call the Ollama chat endpoint for the messages. When streaming is on the streamed responses are returned, otherwise a single LLMOutput is built. Args: messages: The chat messages. stop: Optional stop words. **kwargs: Extra call options. Returns: Union[LLMOutput, AsyncIterator[LLMOutput]]: The model result."""
         client = self._new_async_client()
         should_stream = kwargs.pop("stream", self.streaming)
         options = self._options()
@@ -74,10 +75,12 @@ class OllamaLLM(LLM):
             yield LLMOutput(text=line.get("message").get('content'), raw=json.dumps(line))
 
     async def agenerate_result(self, data):
+        """Asynchronously yield one LLMOutput per streamed response line. Args: data: The async stream of response lines. Yields: LLMOutput: The parsed output of each line."""
         async for line in data:
             yield LLMOutput(text=line.get("message").get('content'), raw=json.dumps(line))
 
     def as_langchain(self) -> BaseLanguageModel:
+        """Return a LangChain-compatible wrapper for this LLM, preferring the configured channel instance. Returns: BaseLanguageModel: The LangChain wrapper."""
         self.init_channel()
         if self._channel_instance:
             return self._channel_instance.as_langchain()
@@ -86,6 +89,7 @@ class OllamaLLM(LLM):
         )
 
     def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'LLM':
+        """Apply the LLM component configuration, reading base_url and max_context_length. Args: component_configer (LLMConfiger): The LLM configuration. Returns: LLM: self."""
         super().initialize_by_component_configer(component_configer)
         if 'base_url' in component_configer.configer.value:
             base_url = component_configer.configer.value['base_url']
@@ -95,6 +99,7 @@ class OllamaLLM(LLM):
         return self
 
     def get_num_tokens(self, text: str) -> int:
+        """Count the tokens of text using a tiktoken encoding for the model. Args: text (str): The input text. Returns: int: The number of tokens."""
         try:
             encoding = tiktoken.encoding_for_model(self.model_name)
         except KeyError:
