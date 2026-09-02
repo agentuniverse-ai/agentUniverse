@@ -2,5 +2,5 @@ name: 'default_feishu_reader'
 description: 'default feishu cloud document reader'
 metadata:
   type: 'READER'
-  module: 'agentuniverse.agent.action.knowledge.reader.cloud_document.feishu_reader'
+  module: 'agentuniverse.agent.action.knowledge.reader.cloud_file_reader.feishu_reader'
   class: 'PublicFeishuReader'
