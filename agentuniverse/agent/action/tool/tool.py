@@ -26,22 +26,27 @@ class ToolInput(BaseModel):
     """The basic class for tool input."""
 
     def __init__(self, params: dict, **kwargs):
+        """Initialize the ToolInput with the given origin params and expose them as instance attributes. Args: params (dict): The origin parameters. **kwargs: Extra options."""
         super().__init__(**kwargs)
         self.__origin_params = params
         for k, v in params.items():
             self.__dict__[k] = v
 
     def to_dict(self):
+        """Return the origin parameters as a dict. Returns: The origin parameter dict."""
         return self.__origin_params
 
     def to_json_str(self):
+        """Serialize the origin parameters to a JSON string. Returns: str: The JSON text."""
         return json.dumps(self.__origin_params, ensure_ascii=False)
 
     def add_data(self, key, value):
+        """Store a value both in the origin parameters and as an instance attribute. Args: key: The parameter key. value: The parameter value."""
         self.__origin_params[key] = value
         self.__dict__[key] = value
 
     def get_data(self, key, default=None):
+        """Return the value stored under key, or default when absent. Args: key: The parameter key. default: Value returned when key is missing. Returns: The stored value."""
         return self.__origin_params.get(key, default)
 
 
