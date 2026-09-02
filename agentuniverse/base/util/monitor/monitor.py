@@ -144,21 +144,21 @@ class Monitor(BaseModel):
             ).info("Trace tool invocation.")
 
     @staticmethod
-    def init_invocation_chain():
+    def init_invocation_chain() -> None:
         """Initialize the invocation chain in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
         if FrameworkContextManager().get_context(trace_id + '_invocation_chain') is None:
             FrameworkContextManager().set_context(trace_id + '_invocation_chain', [])
 
     @staticmethod
-    def init_invocation_chain_bak():
+    def init_invocation_chain_bak() -> None:
         """Initialize the invocation chain bak version in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
         if FrameworkContextManager().get_context(trace_id + '_invocation_chain_bak') is None:
             FrameworkContextManager().set_context(trace_id + '_invocation_chain_bak', [])
 
     @staticmethod
-    def pop_invocation_chain():
+    def pop_invocation_chain() -> None:
         """Pop the last chain node in invocation chain."""
         trace_id = AuTraceManager().get_trace_id()
         if trace_id is not None:
@@ -170,7 +170,7 @@ class Monitor(BaseModel):
                     trace_id + '_invocation_chain', invocation_chain)
 
     @staticmethod
-    def clear_invocation_chain():
+    def clear_invocation_chain() -> None:
         """Clear the invocation chain in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
         if trace_id is not None:
@@ -178,7 +178,7 @@ class Monitor(BaseModel):
             FrameworkContextManager().del_context(trace_id + '_invocation_chain_bak')
 
     @staticmethod
-    def add_invocation_chain(source: dict):
+    def add_invocation_chain(source: dict) -> None:
         """Add the source to the invocation chain"""
         trace_id = AuTraceManager().get_trace_id()
         if trace_id is not None:
@@ -224,14 +224,14 @@ class Monitor(BaseModel):
             return current_chain
 
     @staticmethod
-    def init_token_usage():
+    def init_token_usage() -> None:
         """Initialize the token usage in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
         if FrameworkContextManager().get_context(trace_id + '_token_usage') is None:
             FrameworkContextManager().set_context(trace_id + '_token_usage', {})
 
     @staticmethod
-    def add_token_usage(cur_token_usage: dict):
+    def add_token_usage(cur_token_usage: dict) -> None:
         """Add the token usage to the framework context."""
         if cur_token_usage is None:
             return
@@ -249,7 +249,7 @@ class Monitor(BaseModel):
                 FrameworkContextManager().set_context(trace_id + '_token_usage', result_usage)
 
     @staticmethod
-    def clear_token_usage():
+    def clear_token_usage() -> None:
         """Clear the token usage in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
         if trace_id is not None:
@@ -351,7 +351,7 @@ class Monitor(BaseModel):
     def filter_and_serialize(self, obj):
         """Recursively filter out non-serializable values from an object."""
 
-        def is_json_serializable(value):
+        def is_json_serializable(value) -> bool:
             """Check if value is a JSON serializable object."""
             try:
                 json.dumps(value, default=self.default_serializer)
@@ -359,7 +359,7 @@ class Monitor(BaseModel):
             except (TypeError, OverflowError):
                 return False
 
-        def filter_dict(d):
+        def filter_dict(d) -> dict:
             return {k: v for k, v in d.items() if is_json_serializable(v)}
 
         def recursive_filter(o):
