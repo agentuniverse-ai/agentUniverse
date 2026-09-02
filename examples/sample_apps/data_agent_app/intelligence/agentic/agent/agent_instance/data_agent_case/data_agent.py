@@ -46,7 +46,7 @@ class DataAgent(Agent):
         """
         return planner_result
 
-    def execute(self, input_object: InputObject, agent_input: dict):
+    def execute(self, input_object: InputObject, agent_input: dict) -> dict:
         """Execute agent instance.
 
         Args:
