@@ -82,10 +82,20 @@ class AuTraceContext:
 
     @property
     def session_id(self) -> str:
+        """Get the stored session id.
+
+        Returns:
+            The current session id, or None if unset.
+        """
         return self._session_id
 
     @property
     def trace_id(self) -> str:
+        """Get the trace id of the currently active valid OTel span when present; otherwise return the stored fallback trace id.
+
+        Returns:
+            The formatted trace id as a hex string.
+        """
         current_span = trace.get_current_span()
 
         if current_span and current_span.get_span_context().is_valid:
@@ -95,6 +105,11 @@ class AuTraceContext:
 
     @property
     def span_id(self) -> str:
+        """Get the span id of the currently active valid OTel span when present; otherwise return the stored fallback span id.
+
+        Returns:
+            The formatted span id as a hex string.
+        """
         current_span = trace.get_current_span()
 
         if current_span and current_span.get_span_context().is_valid:
@@ -103,17 +118,38 @@ class AuTraceContext:
         return self._span_id
 
     def set_session_id(self, session_id: str):
+        """Store the given session id on this context.
+
+        Args:
+            session_id: Session id to store.
+        """
         self._session_id = session_id
 
     def set_trace_id(self, trace_id: str):
+        """Store the given trace id and rebuild the attached OTel context with it and the current span id.
+
+        Args:
+            trace_id: Hex-string trace id to store.
+        """
         self._trace_id = trace_id
         self._set_otel_context(trace_id, self._span_id)
 
     def set_span_id(self, span_id: str):
+        """Store the given span id and rebuild the attached OTel context with the current trace id and it.
+
+        Args:
+            span_id: Hex-string span id to store.
+        """
         self._span_id = span_id
         self._set_otel_context(self._trace_id, span_id)
 
     def set_trace_context(self, trace_id: str, span_id: str):
+        """Store the given trace and span ids together and attach the matching OTel context.
+
+        Args:
+            trace_id: Hex-string trace id to store.
+            span_id: Hex-string span id to store.
+        """
         self._trace_id = trace_id
         self._span_id = span_id
         self._set_otel_context(trace_id, span_id)
