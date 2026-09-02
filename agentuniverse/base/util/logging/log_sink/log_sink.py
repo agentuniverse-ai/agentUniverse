@@ -33,7 +33,7 @@ class LogSink(ComponentBase):
     class Config:
         arbitrary_types_allowed = True
 
-    def get_inheritance_depth(self):
+    def get_inheritance_depth(self) -> int:
         """
         return the depth to base Logger
         """
@@ -42,15 +42,15 @@ class LogSink(ComponentBase):
     def __call__(self, message):
         self.process_record(message.record)
 
-    def process_record(self, record):
+    def process_record(self, record) -> None:
         raise NotImplementedError("Subclasses must implement process_record.")
 
-    def filter(self, record):
+    def filter(self, record) -> bool:
         if not record['extra'].get('log_type') == self.log_type:
             return False
         return True
 
-    def register_sink(self):
+    def register_sink(self) -> None:
         if self.sink_id == -1:
             self.sink_id = logger.add(
                 self,
