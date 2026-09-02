@@ -311,7 +311,7 @@ class FAISSStore(Store):
                     )
                     continue
 
-            if len(embedding) == 0:
+            if not embedding:
                 logger.warning(f"No embedding for document {document.id}, skipping")
                 continue
 
