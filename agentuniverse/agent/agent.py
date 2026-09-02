@@ -517,6 +517,7 @@ class Agent(ComponentBase, ABC):
         return RunnableConfig(callbacks=callbacks)
 
     def collect_current_memory(self, collect_type: str) -> bool:
+        """Decide whether memory of the given collect type should be collected during this run, based on the auto_trace and collection_types settings of the agent memory config. Args: collect_type (str): The memory collect type. Returns: bool: True when collection should happen."""
         collection_types = self.agent_model.memory.get('collection_types')
         auto_trace = self.agent_model.memory.get('auto_trace', True)
         if not auto_trace:
@@ -526,6 +527,7 @@ class Agent(ComponentBase, ABC):
         return True
 
     def load_memory(self, memory, agent_input: dict):
+        """Load the recent memory messages for this run as a formatted string. Args: memory: The memory instance, or None. agent_input (dict): The parsed agent input. Returns: str: The formatted memory content."""
         if memory:
             params = self.get_memory_params(agent_input)
             LOGGER.info(f"Load memory with params: {params}")
@@ -537,6 +539,7 @@ class Agent(ComponentBase, ABC):
         return memory_str
 
     def add_memory(self, memory: Memory, content: Any, type: str = 'Q&A', agent_input: dict[str, Any] = {}):
+        """Persist the given content into the memory as a Message of the given type for the current session. Args: memory (Memory): The memory instance. content (Any): The content to store. type (str): The message type, defaults to Q&A. agent_input (dict): The parsed agent input."""
         if not memory:
             return
         session_id = agent_input.get('session_id')
@@ -557,7 +560,9 @@ class Agent(ComponentBase, ABC):
         memory.add([message], session_id=session_id, agent_id=agent_id)
 
     def summarize_memory(self, agent_input: dict[str, Any] = {}, memory: Memory = None):
+        """Summarize the accumulated memory of the current session and store the summary as a summarize Message. Args: agent_input (dict): The parsed agent input. memory (Memory): The memory instance."""
         def do_summarize(params):
+            """Summarize the memory using the given parameters and add the summary as a summarize Message. Args: params: The memory summarization parameters."""
             content = memory.summarize_memory(**params)
             memory.add([
                 Message(
@@ -573,6 +578,7 @@ class Agent(ComponentBase, ABC):
             Thread(target=do_summarize, args=(params,)).start()
 
     def load_summarize_memory(self, memory: Memory, agent_input: dict[str, Any] = {}) -> str:
+        """Load the summarized memory for this run as a formatted string. Args: memory (Memory): The memory instance. agent_input (dict): The parsed agent input. Returns: str: The formatted summary content."""
         if memory:
             params = self.get_memory_params(agent_input)
             params['type'] = 'summarize'
@@ -584,6 +590,7 @@ class Agent(ComponentBase, ABC):
         return "Up to Now, No Summarize Memory"
 
     def get_tool_descriptions(self) -> List[str]:
+        """Return the name/description text of every tool configured on the agent, including toolkit members. Returns: List[str]: The tool description strings."""
         description_list = []
         if self.agent_model.action.get('tool', []):
             for tool in self.agent_model.action.get('tool', []):
@@ -597,9 +604,11 @@ class Agent(ComponentBase, ABC):
         return description_list
 
     def get_func_call_list(self) -> List[str]:
+        """Return the list of tools that support function calling; subclasses override. Returns: List[str]: The function-call tool names."""
         pass
 
     def create_copy(self):
+        """Return a copy of the agent whose agent_model is deep-copied. Returns: A deep copy of the agent."""
         copied = self.model_copy()
         if self.agent_model is not None:
             copied.agent_model = self.agent_model.model_copy(deep=True)
