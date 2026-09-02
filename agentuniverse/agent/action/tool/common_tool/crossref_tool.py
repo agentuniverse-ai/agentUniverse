@@ -299,6 +299,12 @@ class CrossrefTool(Tool):
 
     @classmethod
     def _validate_page(cls, page: int, max_results: int) -> None:
+        """Ensure page is a positive integer whose resulting offset stays within the Crossref offset cap.
+
+        Args:
+            page: One-based result page to validate.
+            max_results: Results per page used to compute the offset.
+        """
         if isinstance(page, bool) or not isinstance(page, int):
             raise ValueError("page must be a positive integer")
         if page < 1:
@@ -308,6 +314,14 @@ class CrossrefTool(Tool):
 
     @classmethod
     def _normalize_sort(cls, sort: str) -> str:
+        """Normalize a requested sort field into a canonical Crossref sort key.
+
+        Args:
+            sort: Sort field that may use aliases, underscores, or differing case.
+
+        Returns:
+            The canonical Crossref sort field, raising ValueError if unsupported.
+        """
         normalized_sort = sort.strip().lower().replace("_", "-") if isinstance(sort, str) else ""
         normalized_sort = cls.SORT_ALIASES.get(normalized_sort, normalized_sort)
         if normalized_sort not in cls.SORT_FIELDS:
@@ -316,6 +330,14 @@ class CrossrefTool(Tool):
 
     @classmethod
     def _normalize_order(cls, order: str) -> str:
+        """Strip and lowercase the sort order and require it to be asc or desc.
+
+        Args:
+            order: Sort order string to normalize.
+
+        Returns:
+            The normalized lowercase order string.
+        """
         normalized_order = order.strip().lower() if isinstance(order, str) else ""
         if normalized_order not in cls.ORDERS:
             raise ValueError("order must be one of: asc, desc")
@@ -323,6 +345,14 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _normalize_cursor(cursor: Optional[str]) -> str:
+        """Normalize a Crossref cursor value for request building.
+
+        Args:
+            cursor: Cursor token, or None or an empty string when absent.
+
+        Returns:
+            The trimmed cursor string, or an empty string when no cursor was provided.
+        """
         if cursor is None or cursor == "":
             return ""
         normalized_cursor = cursor.strip() if isinstance(cursor, str) else ""
@@ -332,6 +362,15 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _normalize_date(value: Optional[str], parameter_name: str) -> str:
+        """Validate and normalize a publication date, using parameter_name in error messages.
+
+        Args:
+            value: Date string in YYYY, YYYY-MM, or YYYY-MM-DD form, or None when absent.
+            parameter_name: Argument name included in validation error messages.
+
+        Returns:
+            The normalized date string, or an empty string when value is None or blank.
+        """
         if value is None or value == "":
             return ""
         normalized_value = value.strip() if isinstance(value, str) else ""
@@ -346,6 +385,12 @@ class CrossrefTool(Tool):
 
     @classmethod
     def _validate_date_range(cls, from_pub_date: str, until_pub_date: str) -> None:
+        """Ensure the publication date range is not reversed when both bounds are present.
+
+        Args:
+            from_pub_date: Normalized lower bound, possibly empty.
+            until_pub_date: Normalized upper bound, possibly empty.
+        """
         if not from_pub_date or not until_pub_date:
             return
         if cls._date_bound(from_pub_date, upper=False) > cls._date_bound(until_pub_date, upper=True):
@@ -353,6 +398,15 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _date_bound(value: str, upper: bool) -> date:
+        """Expand a possibly partial date string into a concrete date bound.
+
+        Args:
+            value: Date string in YYYY, YYYY-MM, or YYYY-MM-DD form.
+            upper: Whether to expand missing parts to the end of the period.
+
+        Returns:
+            A date where missing month or day parts default to 1, or to December 31 or the month end when upper is true.
+        """
         parts = [int(part) for part in value.split("-")]
         year = parts[0]
         month = parts[1] if len(parts) > 1 else (12 if upper else 1)
@@ -361,6 +415,14 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _normalize_doi(value: str) -> str:
+        """Strip common DOI URL and prefix forms and validate that the remainder looks like a DOI.
+
+        Args:
+            value: Raw query value that may be a bare DOI, a DOI URL, or a doi: prefixed string.
+
+        Returns:
+            The bare validated DOI string, raising ValueError when it does not look like a DOI.
+        """
         doi = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", value, flags=re.IGNORECASE).strip()
         if not doi.startswith("10.") or "/" not in doi or any(character.isspace() for character in doi):
             raise ValueError("query must contain a valid DOI in doi mode")
@@ -368,6 +430,14 @@ class CrossrefTool(Tool):
 
     @classmethod
     def _parse_work(cls, work: Dict[str, Any]) -> Dict[str, Any]:
+        """Map a raw Crossref work message into the tool's normalized work dict.
+
+        Args:
+            work: Raw Crossref work message dict to normalize.
+
+        Returns:
+            A dict with normalized fields, deriving a doi.org URL when the work has a DOI but no URL.
+        """
         doi = cls._string_value(work.get("DOI"))
         url = cls._string_value(work.get("URL"))
         if not url and doi:
