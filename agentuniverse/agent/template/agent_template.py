@@ -25,6 +25,7 @@ from agentuniverse.prompt.prompt import Prompt
 
 
 class AgentTemplate(Agent, ABC):
+    """Standard agent template that resolves the memory, LLM and prompt configured on the agent model and runs them through customized_execute."""
     llm_name: Optional[str] = ''
     memory_name: Optional[str] = None
     knowledge_names: Optional[list[str]] = None
@@ -38,6 +39,7 @@ class AgentTemplate(Agent, ABC):
         return self.customized_execute(input_object, agent_input, memory, llm, prompt, **kwargs)
 
     async def async_execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
+        """Asynchronously execute the template: resolve memory, LLM and prompt, then delegate to customized_async_execute. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. **kwargs: Extra options. Returns: dict: The agent result."""
         memory: Memory = self.process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
         prompt: Prompt = self.process_prompt(agent_input, **kwargs)
@@ -45,6 +47,7 @@ class AgentTemplate(Agent, ABC):
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
                            **kwargs) -> dict:
+        """Execute the template pipeline: load memory, run the prompt/LLM chain, persist the result to memory and stream the output. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. memory (Memory): The resolved memory. llm (LLM): The resolved LLM. prompt (Prompt): The resolved prompt. **kwargs: Extra options. Returns: dict: The agent result."""
         self.load_memory(memory, agent_input)
         process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
         chain = prompt.as_langchain() | llm.as_langchain_runnable(
@@ -56,6 +59,7 @@ class AgentTemplate(Agent, ABC):
 
     async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory,
                                        llm: LLM, prompt: Prompt, **kwargs) -> dict:
+        """Asynchronously execute the template pipeline: assemble memory, run the prompt/LLM chain, persist the result to memory and stream the output. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. memory (Memory): The resolved memory. llm (LLM): The resolved LLM. prompt (Prompt): The resolved prompt. **kwargs: Extra options. Returns: dict: The agent result."""
         assemble_memory_input(memory, agent_input, self.get_memory_params(agent_input))
         process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
         chain = prompt.as_langchain() | llm.as_langchain_runnable(
@@ -69,12 +73,15 @@ class AgentTemplate(Agent, ABC):
         return {**agent_input, 'output': res}
 
     def validate_required_params(self):
+        """Validate the parameters required by this template; subclasses override."""
         pass
 
     def add_output_stream(self, output_stream: Queue, agent_output: str) -> None:
+        """Push the agent output text into the output stream queue; subclasses override. Args: output_stream (Queue): The output stream. agent_output (str): The output text."""
         pass
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'AgentTemplate':
+        """Apply the agent component configuration and resolve the configured llm/memory/knowledge/conversation-memory names onto this template. Args: component_configer (AgentConfiger): The agent configuration. Returns: AgentTemplate: self."""
         super().initialize_by_component_configer(component_configer)
         self.llm_name = self.agent_model.profile.get('llm_model', {}).get('name')
         self.memory_name = self.agent_model.memory.get('name')
