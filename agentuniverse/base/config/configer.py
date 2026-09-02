@@ -22,11 +22,11 @@ class PlaceholderResolver:
         self.register_resolver(r'\${(.+?)}',
                                lambda match: os.getenv(match.group(1), ''))
 
-    def register_resolver(self, pattern, func):
+    def register_resolver(self, pattern, func) -> None:
         """Register a new resolver with a regex pattern and its corresponding function."""
         self._resolvers.append((re.compile(pattern), func))
 
-    def set_root_package_name(self, root_package_name: str):
+    def set_root_package_name(self, root_package_name: str) -> None:
         """Set the value of root_package_name for ${ROOT_PACKAGE} placeholder resolution.
 
         Args:
@@ -72,7 +72,7 @@ class Configer(object):
         return self.__path
 
     @path.setter
-    def path(self, path: str):
+    def path(self, path: str) -> None:
         """Set the path of the configuration file
         Args:
             path(str): the path of the configuration file
@@ -87,7 +87,7 @@ class Configer(object):
         return self.__value
 
     @value.setter
-    def value(self, value: dict):
+    def value(self, value: dict) -> None:
         """Set the value of the configuration file
         Args:
             value(dict): the value of the configuration file
@@ -132,7 +132,7 @@ class Configer(object):
         """
         return self.__value.get(key, default)
 
-    def set(self, key: str, value):
+    def set(self, key: str, value) -> None:
         """Set the value of the configuration file at the given key.
 
         Args:
