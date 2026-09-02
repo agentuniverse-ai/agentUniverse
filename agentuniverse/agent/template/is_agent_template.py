@@ -245,7 +245,7 @@ class ISAgentTemplate(AgentTemplate):
             feedback = super_result.get('feedback', '')
             score = super_result.get('score', 0)
 
-            output_lines.append(f"\nSupervision:")
+            output_lines.append("\nSupervision:")
             output_lines.append(f"  - Score: {score}")
             output_lines.append(f"  - Needs Correction: {needs_correction}")
             if feedback:
