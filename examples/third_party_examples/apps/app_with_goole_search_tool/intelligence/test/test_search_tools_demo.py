@@ -20,7 +20,7 @@ from agentuniverse.agent.action.tool.common_tool.google_search_tool_v2 import Go
 AgentUniverse().start(config_path='../../config/config.toml')
 
 
-def test_google_search():
+def test_google_search() -> None:
     """测试Google搜索工具"""
     print("=" * 50)
     print("测试Google搜索工具")
@@ -45,7 +45,7 @@ def test_google_search():
     print(result)
 
 
-def test_google_scholar_search():
+def test_google_scholar_search() -> None:
     """测试Google学术搜索工具"""
     print("\n" + "=" * 50)
     print("测试Google学术搜索工具")
@@ -70,7 +70,7 @@ def test_google_scholar_search():
     print(result)
 
 
-async def test_async_search():
+async def test_async_search() -> None:
     """测试异步搜索功能"""
     print("\n" + "=" * 50)
     print("测试异步搜索功能")
@@ -94,7 +94,7 @@ async def test_async_search():
         print(result)
 
 
-def main():
+def main() -> None:
     """主函数"""
     print("搜索工具演示测试")
     print(f"当前工作目录: {os.getcwd()}")
