@@ -109,7 +109,7 @@ class InsuranceMayaLLM(LLM):
         encoding = tiktoken.get_encoding("cl100k_base")
         return len(encoding.encode(text))
 
-    def request_stream_data(self, prompt: str, stop: str = ''):
+    def request_stream_data(self, prompt: str, stop: str = '') -> dict:
         return {
             "sceneName": self.sceneName,
             "chainName": self.chainName,
@@ -120,7 +120,7 @@ class InsuranceMayaLLM(LLM):
                          "max_output_length": self.max_tokens},
         }
 
-    def request_data(self, prompt: str, stop: str = None):
+    def request_data(self, prompt: str, stop: str = None) -> dict:
         return {
             "sceneName": self.sceneName,
             "chainName": self.chainName,
