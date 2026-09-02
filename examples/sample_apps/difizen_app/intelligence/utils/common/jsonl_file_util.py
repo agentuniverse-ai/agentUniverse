@@ -19,6 +19,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 class JsonFileOps(object):
     def __init__(self):
+        """Initialize the JsonFileOps utility object."""
         return
 
     @classmethod
@@ -31,6 +32,7 @@ class JsonFileOps(object):
 
 class JsonFileReader(object):
     def __init__(self, file_path: str):
+        """Open the .jsonl file at file_path for reading when it exists. Args: file_path (str): Path of the .jsonl file to read."""
         self.file_handler = None
         self.file_name = file_path
         if JsonFileOps.is_file_exist(file_path):
@@ -51,6 +53,7 @@ class JsonFileReader(object):
             return None
 
     def read_json_obj_list(self):
+        """Read every remaining line of the file and parse each as a JSON object. Returns: list: The parsed JSON objects."""
         obj_list = []
         while True:
             obj = self.read_json_obj()
@@ -62,6 +65,7 @@ class JsonFileReader(object):
 
 class JsonFileWriter(object):
     def __init__(self, output_file_name: str, extension='jsonl', directory=DATA_DIR):
+        """Open the output .jsonl file at directory/output_file_name.extension for writing, creating the directory when needed. Args: output_file_name (str): Base name of the output file. extension (str): File extension, defaults to jsonl. directory (str): Output directory, defaults to DATA_DIR."""
         self.outfile_path = directory + output_file_name + '.' + extension
         directory = os.path.dirname(self.outfile_path)
         if not os.path.exists(directory):
@@ -69,6 +73,7 @@ class JsonFileWriter(object):
         self.outfile_handler = open(self.outfile_path, 'w', encoding='utf-8')
 
     def write_json_obj(self, json_obj: dict):
+        """Serialize json_obj and append it as one line of the output file. Args: json_obj (dict): The JSON object to write."""
         try:
             # confirm that it's a json string and then write.
             json_line = json.dumps(json_obj, ensure_ascii=False)
@@ -79,14 +84,17 @@ class JsonFileWriter(object):
         return
 
     def write_json_obj_list(self, json_obj_list: list):
+        """Append each JSON object of json_obj_list to the output file as its own line. Args: json_obj_list (list): The JSON objects to write."""
         for i in range(0, len(json_obj_list)):
             self.write_json_obj(json_obj_list[i])
         return
 
     def write_json_query_answer(self, query: str, answer: str):
+        """Write a {"query": query, "answer": answer} record to the output file. Args: query (str): The query text. answer (str): The answer text."""
         json_obj = {"query": query, "answer": answer}
         self.write_json_obj(json_obj)
 
     def write_json_query_answer_list(self, query_answer_list: list):
+        """Write each (query, answer) pair of query_answer_list to the output file as a record. Args: query_answer_list (list): The query/answer pairs to write."""
         for i in range(0, len(query_answer_list)):
             self.write_json_query_answer(query_answer_list[i][0], query_answer_list[i][1])
