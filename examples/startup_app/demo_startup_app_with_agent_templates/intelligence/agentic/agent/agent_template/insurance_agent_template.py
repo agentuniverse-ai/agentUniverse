@@ -17,6 +17,9 @@ from agentuniverse.base.config.component_configer.configers.agent_configer impor
 
 
 class InsuranceAgentTemplate(AgentTemplate):
+    """Multi-agent template for the insurance product Q&A demo.
+    Runs a planning agent to split the question, an executing agent to gather context, and an expressing agent to compose the final answer, each resolved by name from the profile.
+    """
     planning_agent_name: str = None
     executing_agent_name: str = None
     expressing_agent_name: str = None
@@ -30,6 +33,9 @@ class InsuranceAgentTemplate(AgentTemplate):
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Populate the agent input with the user input.
+        Also queries the insurance_info_tool for the demo product description and attaches it to the input object for the sub-agents.
+        """
         agent_input['input'] = input_object.get_data('input')
         detail_tool = ToolManager().get_instance_obj('insurance_info_tool')
         tool_res = detail_tool.run(ins_name='保险产品A')
@@ -37,9 +43,13 @@ class InsuranceAgentTemplate(AgentTemplate):
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Return the agent result unchanged."""
         return agent_result
 
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
+        """Run the pipeline: build the sub-agents, then invoke planning, executing and expressing in sequence.
+        Returns the agent input extended with the expressing output under 'output'.
+        """
         agents = self._generate_agents()
 
         # 1. planning agent.
@@ -54,6 +64,9 @@ class InsuranceAgentTemplate(AgentTemplate):
         return {**agent_input, 'output': expressing_result.get('output', '')}
 
     def _invoke_planning(self, input_object: InputObject, agent_input: dict, agents: dict) -> dict:
+        """Run the planning agent to split the user question into sub-queries.
+        Without a planning agent the original input is kept as the single sub-query; the list is stored on the input object for the executing stage.
+        """
         planning_agent: Agent = agents.get('planning')
         if not planning_agent:
             planning_result = OutputObject({"sub_query_list": [agent_input.get('input')]})
@@ -66,6 +79,9 @@ class InsuranceAgentTemplate(AgentTemplate):
         return planning_result.to_dict()
 
     def _invoke_executing(self, input_object: InputObject, agents: dict) -> dict:
+        """Run the executing agent to gather search context for the sub-queries.
+        Without an executing agent an empty context is used; the context is stored on the input object for the expressing stage.
+        """
         executing_agent: Agent = agents.get('executing')
         if not executing_agent:
             executing_result = OutputObject({"search_context": ''})
@@ -75,6 +91,9 @@ class InsuranceAgentTemplate(AgentTemplate):
         return executing_result.to_dict()
 
     def _invoke_expressing(self, input_object: InputObject, agents: dict) -> dict:
+        """Run the expressing agent to compose the final answer from the gathered context.
+        Without an expressing agent an empty output is used.
+        """
         expressing_agent: Agent = agents.get('expressing')
         if not expressing_agent:
             expressing_result = OutputObject({"output": ''})
@@ -83,6 +102,11 @@ class InsuranceAgentTemplate(AgentTemplate):
         return expressing_result.to_dict()
 
     def _generate_agents(self) -> dict:
+        """Resolve the planning, executing and expressing agents by their configured names via AgentManager.
+
+        Returns:
+        dict: The agents keyed as 'planning', 'executing' and 'expressing'.
+        """
         planning_agent = AgentManager().get_instance_obj(self.planning_agent_name)
         executing_agent = AgentManager().get_instance_obj(self.executing_agent_name)
         expressing_agent = AgentManager().get_instance_obj(self.expressing_agent_name)
@@ -91,6 +115,7 @@ class InsuranceAgentTemplate(AgentTemplate):
                 'expressing': expressing_agent}
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'InsuranceAgentTemplate':
+        """Set the planning, executing and expressing agent names from the component configer profile and return this instance."""
         super().initialize_by_component_configer(component_configer)
         if self.agent_model.profile.get('planning') is not None:
             self.planning_agent_name = self.agent_model.profile.get('planning')
