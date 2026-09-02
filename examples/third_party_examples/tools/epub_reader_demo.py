@@ -23,7 +23,7 @@ JOBS_BIOGRAPHY_URL = "https://drive.google.com/uc?export=download&id=1_KVCcPFatp
 JOBS_BIOGRAPHY_FILENAME = "steve_jobs_biography.epub"
 
 
-def download_jobs_biography():
+def download_jobs_biography() -> bool:
     """
     下载乔布斯传记EPUB文件
     """
@@ -50,7 +50,7 @@ def download_jobs_biography():
         return False
 
 
-def demo_epub_reader_direct():
+def demo_epub_reader_direct() -> None:
     """
     直接使用EpubReader进行演示乔布斯传记
     """
@@ -96,7 +96,7 @@ def demo_epub_reader_direct():
         print("请先运行下载功能")
 
 
-def demo_file_reader_auto_detection():
+def demo_file_reader_auto_detection() -> None:
     """使用自动EPUB检测的FileReader演示乔布斯传记"""
     print("\n=== File Reader Auto Detection Demo - 乔布斯传记 ===")
     
@@ -138,7 +138,7 @@ def demo_file_reader_auto_detection():
         print("请先运行下载功能")
 
 
-def demo_with_custom_metadata():
+def demo_with_custom_metadata() -> None:
     """使用自定义元数据的EpubReader演示乔布斯传记"""
     print("\n=== EPUB Reader with Custom Metadata Demo - 乔布斯传记 ===")
     
@@ -190,7 +190,7 @@ def demo_with_custom_metadata():
         print("请先运行下载功能")
 
 
-def search_jobs_biography_content():
+def search_jobs_biography_content() -> None:
     """
     搜索乔布斯传记中的特定内容示例
     """
