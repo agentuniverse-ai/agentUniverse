@@ -63,6 +63,15 @@ def generate_relation_str(source: str, target: str, source_type: str, target_typ
 
 
 def generate_relation_str_en(source: str, target: str, source_type: str, target_type: str, type: str):
+    """Generate English text describing the relation between a source and a target participant for a given interaction type. Falls back to a type-only template when the participant types do not match a specific rule.
+    Args:
+        source: Name or identifier of the source participant.
+        target: Name or identifier of the target participant.
+        source_type: Type of the source participant, e.g. 'agent', 'user' or 'unknown'.
+        target_type: Type of the target participant, e.g. 'agent', 'tool', 'knowledge' or 'llm'.
+        type: Interaction type, one of 'input', 'output' or 'summary'.
+    Returns: English relation text describing the interaction, or None when no template matches the given combination.
+    """
     if source_type == 'agent' and target_type == 'agent' and type == 'input':
         return f"Agent {source} asked a question to agent {target}"
     if source_type == 'agent' and target_type == 'agent' and type == 'output':
@@ -97,7 +106,21 @@ def generate_relation_str_en(source: str, target: str, source_type: str, target_
 
 
 def sync_to_sub_agent_memory(message: ConversationMessage, session_id: str, memory_name: str):
+    """Persist the given conversation message to the memory of the agents that produced or received it. The message is written to the source agent's memory when an agent produced it and to the target agent's memory when it was addressed to an agent.
+
+    Args:
+        message: The conversation message to store in sub-agent memory.
+        session_id: Session id under which the message is stored.
+        memory_name: Name of the current agent's conversation memory instance, used as the seed for the collected memory names.
+    """
     def add_message(agent_name: str, memory_names: list, collect_type: str):
+        """Add the message to a given agent's conversation memory when the agent's collection types allow the interaction. Appends the written memory instance name to memory_names.
+
+        Args:
+            agent_name: Name of the agent whose conversation memory receives the message.
+            memory_names: List collecting the names of the memory instances that were written to.
+            collect_type: Type of the collection to check; the write is skipped when the agent configures collection_types that do not include this type.
+        """
         agent_instance = AgentManager().get_instance_obj(agent_name)
         agent_memory = agent_instance.agent_model.memory.get('conversation_memory')
         collection_types = agent_instance.agent_model.memory.get('collection_types')
@@ -119,7 +142,9 @@ def sync_to_sub_agent_memory(message: ConversationMessage, session_id: str, memo
 @singleton
 class ConversationMemoryModule:
 
+    """Singleton module that records agent interaction traces into conversation memory. It enqueues asynchronous trace-collection tasks, builds conversation messages from trace records, and stores them in the configured memory instance and relevant sub-agent memories."""
     def __init__(self):
+        """Initialize the module from the application's conversation memory configuration. Reads instance name, activation/logging flags, collection types, format and content limits, then starts the daemon thread that consumes the internal queue."""
         conversation_memory_configer = ApplicationConfigManager().app_configer.conversation_memory_configer
         self.instance_name = conversation_memory_configer.get('instance_name', '')
         self.activate = conversation_memory_configer.get('activate', False)
@@ -132,6 +157,7 @@ class ConversationMemoryModule:
         Thread(target=self._consume_queue, daemon=True).start()
 
     def _consume_queue(self):
+        """Continuously take callables from the internal queue and submit each to the thread pool for execution. Logs and prints the stack trace when submission fails, and marks every queued task done."""
         while True:
             func = self.queue.get()
             try:
@@ -149,6 +175,15 @@ class ConversationMemoryModule:
                         target_type: str,
                         type: str,
                         params: dict, **kwargs) -> None:
+        """Build a conversation message from trace information and store it in the module's memory instance and relevant sub-agent memories. Early-returns when collection is not activated or no relation prefix matches the given participant types.
+        Args:
+            source: Name of the participant that produced the trace record.
+            source_type: Type of the source participant, e.g. 'agent', 'user' or 'unknown'.
+            target: Name of the participant the trace record is directed to.
+            target_type: Type of the target participant, e.g. 'agent', 'tool', 'knowledge' or 'llm'.
+            type: Interaction type of the record, e.g. 'input' or 'output'.
+            params: Parameters of the interaction; used to derive the message content and stored as JSON in the message metadata.
+        """
         if not self.activate:
             return
         content = None
@@ -215,6 +250,15 @@ class ConversationMemoryModule:
 
     def _add_trace(self, start_info, target_info: dict, type: str, params: dict, session_id: str, trace_id: str,
                    pair_id: str):
+        """Normalize raw trace parameters and delegate to _add_trace_info with the source, target and context assembled from the given arguments.
+        Args:
+            start_info: Dict describing the starting participant; expected keys 'source' and 'type'.
+            target_info: Dict describing the target participant; expected keys 'source' and 'type'.
+            type: Interaction type of the trace, e.g. 'input' or 'output'.
+            params: Interaction parameters; unwrapped from its 'kwargs' entry when present, or wrapped as {type: params} when it is a string.
+            session_id: Session id of the trace.
+            trace_id: Trace id of the trace.
+        """
         if "kwargs" in params:
             params = params['kwargs']
         if params is str:
@@ -264,6 +308,15 @@ class ConversationMemoryModule:
 
     def add_knowledge_input_info(self, start_info: dict, target: str, params: dict, pair_id: str, auto: bool = True):
 
+        """Record an input trace for an agent-to-knowledge interaction, subject to automatic collection checks. Delegates to add_trace_info with the target typed as 'knowledge' when collection is enabled.
+
+        Args:
+            start_info: Dict describing the source participant; expected keys 'source' and 'type'.
+            target: Name of the knowledge store the agent searches in.
+            params: Parameters of the interaction, e.g. the search keywords.
+            pair_id: Pair id used to link the input and output traces.
+            auto: Whether to apply automatic collection checks before recording. Defaults to True.
+        """
         if not self.collection_current_agent_memory(start_info, 'knowledge', auto):
             return
 
