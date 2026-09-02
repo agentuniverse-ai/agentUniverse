@@ -15,12 +15,23 @@ from agentuniverse.base.annotation.retry import retry
 
 
 class SearchMode(Enum):
+    """Search modes supported by ArxivTool.
+
+    SEARCH: keyword search over arXiv; DETAIL: fetch the full text of a paper by id.
+    """
     SEARCH = "search"   
     DETAIL = "detail"  
 
 
 @dataclass
 class PaperSummary:
+    """Data class summarizing a single arXiv paper.
+
+    Attributes:
+    paper_id: arXiv identifier; title: paper title; authors: author name list;
+    publish_date: publication date string; summary: paper abstract;
+    pdf_url: URL of the paper PDF.
+    """
     paper_id: str
     title: str
     authors: List[str]
@@ -31,10 +42,26 @@ class PaperSummary:
 
 class ArxivTool(Tool):
     
+    """Tool for searching arXiv papers and reading their full text.
+
+    Runs in two modes: SEARCH returns formatted paper summaries for a keyword
+    query, while DETAIL downloads a paper PDF and extracts its text.
+
+    Requires the optional arxiv and pypdf packages.
+    """
     sch_engine: Optional[Any] = None
     MAX_QUERY_LENGTH: int = Field(default=300, description="查询字符串最大长度")
 
     def execute(self, input: str | ToolInput, mode: str = None):
+        """Dispatch the request according to the requested search mode.
+
+        Args:
+        input: keyword string or paper id, or a ToolInput holding input and mode;
+        mode: one of SearchMode values (from ToolInput when input is a ToolInput).
+
+        Returns:
+        str: formatted paper summaries (SEARCH) or full paper text (DETAIL).
+        """
         if isinstance(input, ToolInput):
             params = input.to_dict()
             mode = params.get("mode", mode)
@@ -56,6 +83,14 @@ class ArxivTool(Tool):
                 else self.retrieve_full_paper_text(query))
         
     def _process_query(self, query: str) -> str:
+        """Truncate a query to the maximum query length without splitting words.
+
+        Args:
+        query: the query string to process.
+
+        Returns:
+        str: the query when short enough, otherwise a prefix of whole words.
+        """
         if len(query) <= self.MAX_QUERY_LENGTH:
             return query
         
@@ -73,6 +108,14 @@ class ArxivTool(Tool):
 
     @retry(3, 1.0)
     def find_papers_by_str(self, query) -> str:
+        """Search arXiv by relevance and return formatted results for the query.
+
+        Args:
+        query: keyword string to search for.
+
+        Returns:
+        str: formatted paper results, or 'No papers found.' when none match.
+        """
         processed_query = self._process_query(query)
         result_num:int = 10   
         try:
@@ -100,6 +143,14 @@ class ArxivTool(Tool):
 
     @retry(3, 1.0)
     def retrieve_full_paper_text(self, paper_id: str) -> str:
+        """Download a paper PDF and extract its full text page by page.
+
+        Args:
+        paper_id: arXiv identifier of the paper to fetch.
+
+        Returns:
+        str: extracted text of all pages joined by blank lines.
+        """
         try:
             import arxiv
         except ImportError:
@@ -121,6 +172,14 @@ class ArxivTool(Tool):
         return "\n\n".join(text_content)
 
     def _format_paper_results(self, papers: List[PaperSummary]) -> str:
+        """Render paper summaries into a numbered, human-readable block.
+
+        Args:
+        papers: list of PaperSummary objects to format.
+
+        Returns:
+        str: formatted text, or 'No papers found.' for an empty list.
+        """
         if not papers:
             return "No papers found."
 
