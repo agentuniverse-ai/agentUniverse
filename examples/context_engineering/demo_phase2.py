@@ -27,14 +27,14 @@ from agentuniverse.agent.context.context_model import (
 )
 
 
-def print_banner(text):
+def print_banner(text) -> None:
     """Print a formatted banner."""
     print("\n" + "=" * 80)
     print(f"  {text}")
     print("=" * 80 + "\n")
 
 
-def print_metrics(metrics):
+def print_metrics(metrics) -> None:
     """Print budget utilization metrics."""
     print(f"Session: {metrics['session_id']}")
     print(f"Max Tokens: {metrics['max_tokens']}")
@@ -46,7 +46,7 @@ def print_metrics(metrics):
     print(f"Segment Count: {metrics['segment_count']}")
 
 
-def demo_basic_operations():
+def demo_basic_operations() -> None:
     """Demo 1: Basic context operations."""
     print_banner("Demo 1: Basic Context Operations")
 
@@ -116,7 +116,7 @@ def demo_basic_operations():
     print_metrics(metrics)
 
 
-def demo_intelligent_compression():
+def demo_intelligent_compression() -> None:
     """Demo 2: Intelligent compression with SelectiveCompressor."""
     print_banner("Demo 2: Intelligent Compression (SelectiveCompressor)")
 
@@ -201,7 +201,7 @@ def demo_intelligent_compression():
     print_metrics(metrics)
 
 
-def demo_task_adaptive_routing():
+def demo_task_adaptive_routing() -> None:
     """Demo 3: Task-adaptive routing and budget allocation."""
     print_banner("Demo 3: Task-Adaptive Routing & Budget Allocation")
 
@@ -245,7 +245,7 @@ def demo_task_adaptive_routing():
             print(f"   - {component}: {budget} tokens ({percentage:.1f}%)")
 
 
-def demo_search_and_retrieval():
+def demo_search_and_retrieval() -> None:
     """Demo 4: Context search and retrieval."""
     print_banner("Demo 4: Context Search & Retrieval")
 
@@ -311,7 +311,7 @@ def demo_search_and_retrieval():
         print(f"   Content: {seg.content}")
 
 
-def demo_memory_integration():
+def demo_memory_integration() -> None:
     """Demo 5: Memory class budget-aware retrieval."""
     print_banner("Demo 5: Memory Budget-Aware Retrieval")
 
@@ -340,7 +340,7 @@ def demo_memory_integration():
     print("     context_manager: 'default_context_manager'  # Enable integration")
 
 
-def main():
+def main() -> None:
     """Run all demos."""
     print("\n")
     print("╔" + "═" * 78 + "╗")
