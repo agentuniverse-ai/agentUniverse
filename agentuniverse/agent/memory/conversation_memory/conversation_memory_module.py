@@ -240,6 +240,7 @@ class ConversationMemoryModule:
             session_id = str(uuid.uuid4())
             FrameworkContextManager().set_context('session_id', session_id)
         def add_trace():
+            """Append the pending trace entry for the captured span using the values captured by the enclosing collector."""
             self._add_trace(start_info, target_info, type, params, session_id,
                             trace_id, pair_id)
 
@@ -272,6 +273,7 @@ class ConversationMemoryModule:
 
     def add_knowledge_output_info(self, start_info: dict, target: str, params: List[Document], pair_id: str,
                                   auto: bool = True):
+        """Record the knowledge retrieval output of a span into the trace memory when collection is active. Args: start_info (dict): The starting span info. target (str): The knowledge source name. params (List[Document]): The retrieved documents. pair_id (str): The trace pair id. auto (bool): Whether collection switches are honored. Defaults to True."""
 
         if not self.collection_current_agent_memory(start_info, 'knowledge', auto):
             return
@@ -285,6 +287,7 @@ class ConversationMemoryModule:
 
     def add_agent_input_info(self, start_info: dict, instance: 'Agent', params: dict, pair_id: str,
                              auto: bool = True):
+        """Record the agent input of a span into the trace memory when collection is active. Args: start_info (dict): The starting span info. instance (Agent): The agent that produced the span. params (dict): The agent input parameters. pair_id (str): The trace pair id. auto (bool): Whether collection switches are honored. Defaults to True."""
         if auto:
             if not instance.collect_current_memory(start_info.get('type')):
                 return
@@ -306,6 +309,7 @@ class ConversationMemoryModule:
     def add_agent_result_info(self, agent_instance: 'Agent', agent_result: Optional[OutputObject | dict],
                               target_info: dict,
                               pair_id: str, auto: bool = True):
+        """Record the agent output of a span into the trace memory when collection is active. Args: agent_instance (Agent): The agent that produced the result. agent_result (Optional[OutputObject | dict]): The agent output. target_info (dict): The target span info. pair_id (str): The trace pair id. auto (bool): Whether collection switches are honored. Defaults to True."""
 
         if auto:
             if not agent_instance.collect_current_memory(target_info.get('type')):
@@ -319,6 +323,7 @@ class ConversationMemoryModule:
         session_id = FrameworkContextManager().get_context('session_id')
 
         def add_trace():
+            """Append the pending trace entry for the captured span using the values captured by the enclosing collector."""
             output_keys = agent_instance.output_keys()
             if auto:
                 params = {key: agent_result.get_data(key) for key in output_keys}
@@ -332,6 +337,7 @@ class ConversationMemoryModule:
         self.queue.put_nowait(add_trace)
 
     def add_llm_input_info(self, start_info: dict, target: str, prompt: str, pair_id: str, auto=True):
+        """Record the LLM input of a span into the trace memory when collection is active. Args: start_info (dict): The starting span info. target (str): The LLM source name. prompt (str): The prompt sent to the LLM. pair_id (str): The trace pair id. auto (bool): Whether collection switches are honored. Defaults to True."""
         if not self.collection_current_agent_memory(start_info, 'llm', auto):
             return
 
@@ -339,6 +345,7 @@ class ConversationMemoryModule:
         self.add_trace_info(start_info, target_info, 'input', {'input': prompt}, pair_id)
 
     def add_llm_output_info(self, start_info: dict, target: str, output: str, pair_id: str, auto=True):
+        """Record the LLM output of a span into the trace memory when collection is active. Args: start_info (dict): The starting span info. target (str): The LLM source name. output (str): The LLM output text. pair_id (str): The trace pair id. auto (bool): Whether collection switches are honored. Defaults to True."""
         if not self.collection_current_agent_memory(start_info, 'llm', auto):
             return
         target_info = {'source': target, 'type': 'llm'}
@@ -347,6 +354,7 @@ class ConversationMemoryModule:
         }, pair_id)
 
     def collection_current_agent_memory(self, info: dict, collection_type: str, auto: bool):
+        """Decide whether a trace entry of the given collection type should currently be collected, honoring the activation state and the collection switches of the source agent when auto is enabled. Args: info (dict): The span info. collection_type (str): The type of entry to collect. auto (bool): Whether collection switches are checked. Returns: bool: True when the entry should be collected."""
         if not auto:
             return True
         if not self.activate:
