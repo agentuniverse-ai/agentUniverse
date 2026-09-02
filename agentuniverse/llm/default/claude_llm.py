@@ -144,12 +144,12 @@ class ClaudeLLM(LLM):
             return super().max_context_length()
         return ClaudeMAXCONTETNLENGTH[self.model_name]
 
-    def close(self):
+    def close(self) -> None:
         """Close the client."""
         if hasattr(self, 'client') and self.client:
             self.client.close()
 
-    async def aclose(self):
+    async def aclose(self) -> None:
         """Async close the client."""
         if hasattr(self, 'async_client') and self.async_client:
             await self.async_client.aclose()
