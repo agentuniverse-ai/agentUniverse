@@ -177,7 +177,7 @@ def create_sample_7z_archive():
         return None, temp_dir
 
 
-def demo_sevenzip_reader_direct(sevenzip_path):
+def demo_sevenzip_reader_direct(sevenzip_path) -> None:
     """直接使用 SevenZipReader"""
     print("\n" + "=" * 80)
     print("演示 1: 直接使用 SevenZipReader")
@@ -224,7 +224,7 @@ def demo_sevenzip_reader_direct(sevenzip_path):
         print(f"读取 7Z 文件错误: {e}")
 
 
-def demo_file_reader_integration(sevenzip_path):
+def demo_file_reader_integration(sevenzip_path) -> None:
     """FileReader 自动检测演示"""
     print("\n" + "=" * 80)
     print("演示 2: FileReader 集成")
@@ -257,7 +257,7 @@ def demo_file_reader_integration(sevenzip_path):
         print(f"FileReader 错误: {e}")
 
 
-def demo_custom_metadata(sevenzip_path):
+def demo_custom_metadata(sevenzip_path) -> None:
     """自定义元数据演示"""
     print("\n" + "=" * 80)
     print("演示 3: 自定义元数据")
@@ -295,7 +295,7 @@ def demo_custom_metadata(sevenzip_path):
         print(f"错误: {e}")
 
 
-def demo_custom_config(sevenzip_path):
+def demo_custom_config(sevenzip_path) -> None:
     """自定义配置演示"""
     print("\n" + "=" * 80)
     print("演示 4: 自定义读取器配置")
@@ -328,7 +328,7 @@ def demo_custom_config(sevenzip_path):
         print(f"错误: {e}")
 
 
-def demo_filter_by_type(sevenzip_path):
+def demo_filter_by_type(sevenzip_path) -> None:
     """按文件类型过滤文档"""
     print("\n" + "=" * 80)
     print("演示 5: 按文件类型过滤")
@@ -360,7 +360,7 @@ def demo_filter_by_type(sevenzip_path):
         print(f"错误: {e}")
 
 
-def demo_content_search(sevenzip_path):
+def demo_content_search(sevenzip_path) -> None:
     """在 7Z 压缩包中搜索内容"""
     print("\n" + "=" * 80)
     print("演示 6: 内容搜索")
@@ -405,7 +405,7 @@ def demo_content_search(sevenzip_path):
         print(f"错误: {e}")
 
 
-def demo_statistics(sevenzip_path):
+def demo_statistics(sevenzip_path) -> None:
     """显示压缩包统计信息"""
     print("\n" + "=" * 80)
     print("演示 7: 压缩包统计信息")
@@ -465,7 +465,7 @@ def demo_statistics(sevenzip_path):
         print(f"错误: {e}")
 
 
-def demo_nested_7z(temp_dir):
+def demo_nested_7z(temp_dir) -> None:
     """多层嵌套 7Z 演示"""
     print("\n" + "=" * 80)
     print("演示 8: 多层嵌套 7Z 压缩包")
@@ -619,7 +619,7 @@ def demo_nested_7z(temp_dir):
         print(f"\n错误: {e}")
 
 
-def demo_advanced_features(sevenzip_path):
+def demo_advanced_features(sevenzip_path) -> None:
     """高级功能演示"""
     print("\n" + "=" * 80)
     print("演示 9: 高级功能")
@@ -669,7 +669,7 @@ def demo_advanced_features(sevenzip_path):
         print(f"错误: {e}")
 
 
-def cleanup(temp_dir):
+def cleanup(temp_dir) -> None:
     """清理临时文件"""
     print("\n" + "=" * 80)
     print("清理演示文件")
