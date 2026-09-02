@@ -191,7 +191,7 @@ class MilvusStore(Store):
                         documents: List[Document],
                         max_length: int = 65535,
                         index_params: dict = None,
-                        **kwargs):
+                        **kwargs) -> None:
         """
         This method inserts new documents or updates existing documents in the collection.
         The upsert operation ensures that the documents are either added if they do not
@@ -242,11 +242,11 @@ class MilvusStore(Store):
                          documents: List[Document],
                          max_length: int = 65535,
                          index_params: dict = None,
-                         ):
+                         ) -> None:
         """Insert documents to the Milvus collection."""
         self.upsert_document(documents, max_length, index_params)
 
-    def update_document(self, documents: List[Document], **kwargs):
+    def update_document(self, documents: List[Document], **kwargs) -> None:
         """Update document into the store."""
         self.upsert_document(documents)
 
