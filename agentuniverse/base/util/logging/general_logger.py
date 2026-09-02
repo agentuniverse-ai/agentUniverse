@@ -65,7 +65,7 @@ def _get_source_filter(source: str) -> callable:
 class Logger(ABC):
     """The basic class of all logger, define all level log functions."""
 
-    def get_inheritance_depth(self):
+    def get_inheritance_depth(self) -> int:
         """
         return the depth to base Logger
         """
@@ -77,32 +77,32 @@ class Logger(ABC):
         return loguru.logger
 
     @abstractmethod
-    def warn(self, msg, *args, **kwargs):
+    def warn(self, msg, *args, **kwargs) -> None:
         """Log warn level message."""
         raise NotImplementedError
 
     @abstractmethod
-    def info(self, msg, *args, **kwargs):
+    def info(self, msg, *args, **kwargs) -> None:
         """Log info level message."""
         raise NotImplementedError
 
     @abstractmethod
-    def error(self, msg, *args, **kwargs):
+    def error(self, msg, *args, **kwargs) -> None:
         """Log error level message."""
         raise NotImplementedError
 
     @abstractmethod
-    def critical(self, msg, *args, **kwargs):
+    def critical(self, msg, *args, **kwargs) -> None:
         """Log critical level message."""
         raise NotImplementedError
 
     @abstractmethod
-    def trace(self, msg, *args, **kwargs):
+    def trace(self, msg, *args, **kwargs) -> None:
         """Log trace level message."""
         raise NotImplementedError
 
     @abstractmethod
-    def debug(self, msg, *args, **kwargs):
+    def debug(self, msg, *args, **kwargs) -> None:
         """Log debug level message."""
         raise NotImplementedError
 
@@ -151,7 +151,7 @@ class GeneralLogger(Logger):
         if add_handler:
             self._add_handler(log_level)
 
-    def update_properties(self, **kwargs):
+    def update_properties(self, **kwargs) -> None:
         """Update logger properties."""
         for key, value in kwargs.items():
             if hasattr(self, key):
@@ -160,69 +160,69 @@ class GeneralLogger(Logger):
                 raise AttributeError(f"{self.__class__.__name__} "
                                      f"has no attribute '{key}'")
 
-    def warn(self, msg, *args, **kwargs):
+    def warn(self, msg, *args, **kwargs) -> None:
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
             context_prefix=get_context_prefix()
         ).warning(msg, *args, **kwargs)
 
-    async def awarn(self, msg, *args, **kwargs):
+    async def awarn(self, msg, *args, **kwargs) -> None:
         self.warn(msg, *args, **kwargs)
         await self._logger.complete()
 
-    def info(self, msg, *args, **kwargs):
+    def info(self, msg, *args, **kwargs) -> None:
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
             context_prefix=get_context_prefix()
         ).info(msg, *args, **kwargs)
 
-    async def ainfo(self, msg, *args, **kwargs):
+    async def ainfo(self, msg, *args, **kwargs) -> None:
         self.info(msg, *args, **kwargs)
         await self._logger.complete()
 
-    def error(self, msg, *args, **kwargs):
+    def error(self, msg, *args, **kwargs) -> None:
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
             context_prefix=get_context_prefix()
         ).error(msg, *args, **kwargs)
 
-    async def aerror(self, msg, *args, **kwargs):
+    async def aerror(self, msg, *args, **kwargs) -> None:
         self.error(msg, *args, **kwargs)
         await self._logger.complete()
 
-    def critical(self, msg, *args, **kwargs):
+    def critical(self, msg, *args, **kwargs) -> None:
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
             context_prefix=get_context_prefix()
         ).critical(msg, *args, **kwargs)
 
-    async def acritical(self, msg, *args, **kwargs):
+    async def acritical(self, msg, *args, **kwargs) -> None:
         self.error(msg, *args, **kwargs)
         await self._logger.complete()
 
-    def trace(self, msg, *args, **kwargs):
+    def trace(self, msg, *args, **kwargs) -> None:
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
             context_prefix=get_context_prefix()
         ).trace(msg, *args, **kwargs)
 
-    async def atrace(self, msg, *args, **kwargs):
+    async def atrace(self, msg, *args, **kwargs) -> None:
         self.trace(msg, *args, **kwargs)
         await self._logger.complete()
 
-    def debug(self, msg, *args, **kwargs):
+    def debug(self, msg, *args, **kwargs) -> None:
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
             context_prefix=get_context_prefix()
         ).debug(msg, *args, **kwargs)
 
-    async def adebug(self, msg, *args, **kwargs):
+    async def adebug(self, msg, *args, **kwargs) -> None:
         self.debug(msg, *args, **kwargs)
         await self._logger.complete()
 
