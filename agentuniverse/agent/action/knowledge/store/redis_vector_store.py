@@ -44,6 +44,14 @@ class RedisVectorStore(Store):
     _TAG_ESCAPE: ClassVar[re.Pattern[str]] = re.compile(r"([\\,\.<>\{\}\[\]\"':;!@#$%\^&*\(\)\-\+=~|/ ])")
 
     def _initialize_by_component_configer(self, configer: ComponentConfiger) -> "RedisVectorStore":
+        """Initialize the store from a component configer, copying each supported field that is present onto the instance, then validate the configuration without requiring dimensions.
+
+        Args:
+            configer: Component configer whose matching attributes are copied onto this store.
+
+        Returns:
+            The initialized store instance (self), enabling chained calls.
+        """
         super()._initialize_by_component_configer(configer)
         for field in (
             "connection_url",
@@ -64,6 +72,11 @@ class RedisVectorStore(Store):
         return self
 
     def _validate_config(self, require_dimensions: bool = True) -> None:  # noqa: C901
+        """Validate identifier, key prefix, distance, dimension, tag-field and flag settings, raising ValueError or TypeError when invalid.
+
+        Args:
+            require_dimensions: If True, dimensions must be configured or already inferred before validation (default True).
+        """
         if not self._IDENTIFIER.fullmatch(self.index_name or ""):
             raise ValueError("index_name must be a simple identifier")
         if not self._PREFIX.fullmatch(self.key_prefix or ""):
@@ -92,6 +105,11 @@ class RedisVectorStore(Store):
 
     @staticmethod
     def _dependencies() -> tuple[Any, Any, Any]:
+        """Lazily import the redis package and return the pieces RedisVectorStore needs.
+
+        Returns:
+            A tuple of (redis module, redis.asyncio.from_url, redis.ResponseError); raises ImportError when the redis package is missing.
+        """
         try:
             import redis
             from redis import ResponseError
@@ -101,12 +119,22 @@ class RedisVectorStore(Store):
         return redis, async_from_url, ResponseError
 
     def _url(self) -> str:
+        """Return the connection URL from connection_url or the REDIS_VECTOR_URL environment variable.
+
+        Returns:
+            The configured connection URL; raises ValueError when neither source is set.
+        """
         value = self.connection_url or os.getenv("REDIS_VECTOR_URL")
         if not value:
             raise ValueError("connection_url is required; set it in YAML or REDIS_VECTOR_URL")
         return value
 
     def _new_client(self) -> Any:
+        """Create, ping and cache a synchronous Redis client, creating the index first when create_index and dimensions are set.
+
+        Returns:
+            The connected Redis client, also stored on self.client.
+        """
         redis, _, _ = self._dependencies()
         self.client = redis.from_url(self._url(), decode_responses=False)
         self.client.ping()
@@ -115,6 +143,11 @@ class RedisVectorStore(Store):
         return self.client
 
     async def _new_async_client(self) -> Any:
+        """Create, ping and cache an asynchronous Redis client, creating the index first when create_index and dimensions are set.
+
+        Returns:
+            The connected async Redis client, also stored on self.async_client.
+        """
         _, async_from_url, _ = self._dependencies()
         self.async_client = async_from_url(self._url(), decode_responses=False)
         await self.async_client.ping()
@@ -123,12 +156,30 @@ class RedisVectorStore(Store):
         return self.async_client
 
     def _ensure_client(self) -> Any:
+        """Return the cached synchronous client, building a new one on first use.
+
+        Returns:
+            An established synchronous Redis client.
+        """
         return self.client or self._new_client()
 
     async def _ensure_async_client(self) -> Any:
+        """Return the cached asynchronous client, building a new one on first use.
+
+        Returns:
+            An established asynchronous Redis client.
+        """
         return self.async_client or await self._new_async_client()
 
     def _index_command(self, dimensions: int) -> list[Any]:
+        """Build the FT.CREATE command for the index, adopting dimensions when unset and validating the resulting configuration.
+
+        Args:
+            dimensions: Embedding dimension the index will store; must match self.dimensions when already configured.
+
+        Returns:
+            The FT.CREATE command as a list of tokens.
+        """
         self.dimensions = self.dimensions or dimensions
         if dimensions != self.dimensions:
             raise ValueError(f"embedding dimension {dimensions} does not match configured dimensions {self.dimensions}")
@@ -174,9 +225,22 @@ class RedisVectorStore(Store):
 
     @staticmethod
     def _already_exists(exc: Exception) -> bool:
+        """Check whether a Redis error reports that the index already exists.
+
+        Args:
+            exc: Exception raised while creating the index.
+
+        Returns:
+            True when the error message mentions the index already existing.
+        """
         return "index already exists" in str(exc).lower()
 
     def _ensure_index(self, dimensions: int) -> None:
+        """Create the index unless create_index is disabled, ignoring the error when the index already exists; when disabled, only build and validate the command.
+
+        Args:
+            dimensions: Embedding dimension used to build the index.
+        """
         if not self.create_index:
             self._index_command(dimensions)
             return
