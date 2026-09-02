@@ -56,6 +56,7 @@ def _get_source_filter(source: str) -> callable:
     """
 
     def source_filter(record) -> bool:
+        """Return whether the loguru record carries the default log type and the captured source. Args: record: The loguru record. Returns: bool: True when the record should pass the filter."""
         return record["extra"].get("log_type") == LogTypeEnum.default and \
             record["extra"].get("source") == source
 
@@ -161,6 +162,7 @@ class GeneralLogger(Logger):
                                      f"has no attribute '{key}'")
 
     def warn(self, msg, *args, **kwargs):
+        """Log a warning message with the default log type and the module context. Args: msg: The message. *args/**kwargs: Formatting arguments."""
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
@@ -168,10 +170,12 @@ class GeneralLogger(Logger):
         ).warning(msg, *args, **kwargs)
 
     async def awarn(self, msg, *args, **kwargs):
+        """Asynchronously log a warning message and flush it. Args: msg: The message. *args/**kwargs: Formatting arguments."""
         self.warn(msg, *args, **kwargs)
         await self._logger.complete()
 
     def info(self, msg, *args, **kwargs):
+        """Log an info message with the default log type and the module context. Args: msg: The message. *args/**kwargs: Formatting arguments."""
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
@@ -179,10 +183,12 @@ class GeneralLogger(Logger):
         ).info(msg, *args, **kwargs)
 
     async def ainfo(self, msg, *args, **kwargs):
+        """Asynchronously log an info message and flush it. Args: msg: The message. *args/**kwargs: Formatting arguments."""
         self.info(msg, *args, **kwargs)
         await self._logger.complete()
 
     def error(self, msg, *args, **kwargs):
+        """Log an error message with the default log type and the module context. Args: msg: The message. *args/**kwargs: Formatting arguments."""
         self._logger.opt(depth=self.get_inheritance_depth()).bind(
             log_type=LogTypeEnum.default,
             source=self.module_name,
@@ -190,6 +196,7 @@ class GeneralLogger(Logger):
         ).error(msg, *args, **kwargs)
 
     async def aerror(self, msg, *args, **kwargs):
+        """Asynchronously log an error message and flush it. Args: msg: The message. *args/**kwargs: Formatting arguments."""
         self.error(msg, *args, **kwargs)
         await self._logger.complete()
 
