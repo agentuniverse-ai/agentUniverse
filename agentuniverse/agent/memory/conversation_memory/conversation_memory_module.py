@@ -96,8 +96,8 @@ def generate_relation_str_en(source: str, target: str, source_type: str, target_
     return None
 
 
-def sync_to_sub_agent_memory(message: ConversationMessage, session_id: str, memory_name: str):
-    def add_message(agent_name: str, memory_names: list, collect_type: str):
+def sync_to_sub_agent_memory(message: ConversationMessage, session_id: str, memory_name: str) -> None:
+    def add_message(agent_name: str, memory_names: list, collect_type: str) -> None:
         agent_instance = AgentManager().get_instance_obj(agent_name)
         agent_memory = agent_instance.agent_model.memory.get('conversation_memory')
         collection_types = agent_instance.agent_model.memory.get('collection_types')
@@ -228,7 +228,7 @@ class ConversationMemoryModule:
                   "pair_id": pair_id}
         self._add_trace_info(**kwargs)
 
-    def add_trace_info(self, start_info: dict, target_info: dict, type: str, params: dict, pair_id: str):
+    def add_trace_info(self, start_info: dict, target_info: dict, type: str, params: dict, pair_id: str) -> None:
         """Add trace info to the memory."""
         trace_id = FrameworkContextManager().get_context('trace_id')
         if trace_id is None:
@@ -239,13 +239,13 @@ class ConversationMemoryModule:
         if session_id is None:
             session_id = str(uuid.uuid4())
             FrameworkContextManager().set_context('session_id', session_id)
-        def add_trace():
+        def add_trace() -> None:
             self._add_trace(start_info, target_info, type, params, session_id,
                             trace_id, pair_id)
 
         self.queue.put_nowait(add_trace)
 
-    def add_tool_input_info(self, start_info: dict, target: str, params: dict, pair_id: str, auto: bool = True):
+    def add_tool_input_info(self, start_info: dict, target: str, params: dict, pair_id: str, auto: bool = True) -> None:
         """Add trace info to the memory."""
 
         if not self.collection_current_agent_memory(start_info, 'tool', auto):
@@ -254,7 +254,7 @@ class ConversationMemoryModule:
         target_info = {'source': target, 'type': 'tool'}
         self.add_trace_info(start_info, target_info, 'input', params, pair_id)
 
-    def add_tool_output_info(self, start_info: dict, target: str, params: dict, pair_id: str, auto: bool = True):
+    def add_tool_output_info(self, start_info: dict, target: str, params: dict, pair_id: str, auto: bool = True) -> None:
         """Add trace info to the memory."""
         if not self.collection_current_agent_memory(start_info, 'tool', auto):
             return
@@ -262,7 +262,7 @@ class ConversationMemoryModule:
         target_info = {'source': target, 'type': 'tool'}
         self.add_trace_info(start_info, target_info, 'output', params, pair_id)
 
-    def add_knowledge_input_info(self, start_info: dict, target: str, params: dict, pair_id: str, auto: bool = True):
+    def add_knowledge_input_info(self, start_info: dict, target: str, params: dict, pair_id: str, auto: bool = True) -> None:
 
         if not self.collection_current_agent_memory(start_info, 'knowledge', auto):
             return
@@ -271,7 +271,7 @@ class ConversationMemoryModule:
         self.add_trace_info(start_info, target_info, 'input', params, pair_id)
 
     def add_knowledge_output_info(self, start_info: dict, target: str, params: List[Document], pair_id: str,
-                                  auto: bool = True):
+                                  auto: bool = True) -> None:
 
         if not self.collection_current_agent_memory(start_info, 'knowledge', auto):
             return
@@ -284,7 +284,7 @@ class ConversationMemoryModule:
         }, pair_id)
 
     def add_agent_input_info(self, start_info: dict, instance: 'Agent', params: dict, pair_id: str,
-                             auto: bool = True):
+                             auto: bool = True) -> None:
         if auto:
             if not instance.collect_current_memory(start_info.get('type')):
                 return
@@ -305,7 +305,7 @@ class ConversationMemoryModule:
 
     def add_agent_result_info(self, agent_instance: 'Agent', agent_result: Optional[OutputObject | dict],
                               target_info: dict,
-                              pair_id: str, auto: bool = True):
+                              pair_id: str, auto: bool = True) -> None:
 
         if auto:
             if not agent_instance.collect_current_memory(target_info.get('type')):
@@ -318,7 +318,7 @@ class ConversationMemoryModule:
         trace_id = FrameworkContextManager().get_context('trace_id')
         session_id = FrameworkContextManager().get_context('session_id')
 
-        def add_trace():
+        def add_trace() -> None:
             output_keys = agent_instance.output_keys()
             if auto:
                 params = {key: agent_result.get_data(key) for key in output_keys}
@@ -331,14 +331,14 @@ class ConversationMemoryModule:
             self._add_trace(target_info, start_info, 'output', params, session_id, trace_id, pair_id)
         self.queue.put_nowait(add_trace)
 
-    def add_llm_input_info(self, start_info: dict, target: str, prompt: str, pair_id: str, auto=True):
+    def add_llm_input_info(self, start_info: dict, target: str, prompt: str, pair_id: str, auto=True) -> None:
         if not self.collection_current_agent_memory(start_info, 'llm', auto):
             return
 
         target_info = {'source': target, 'type': 'llm'}
         self.add_trace_info(start_info, target_info, 'input', {'input': prompt}, pair_id)
 
-    def add_llm_output_info(self, start_info: dict, target: str, output: str, pair_id: str, auto=True):
+    def add_llm_output_info(self, start_info: dict, target: str, output: str, pair_id: str, auto=True) -> None:
         if not self.collection_current_agent_memory(start_info, 'llm', auto):
             return
         target_info = {'source': target, 'type': 'llm'}
