@@ -59,6 +59,9 @@ class ExecutingAgentTemplate(AgentTemplate):
 
     def _execute_tasks(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
                        prompt: Prompt, **kwargs) -> dict:
+        """Run every subtask in the planning framework concurrently (up to 10 workers)
+        and return their results sorted by index together with the output stream.
+        """
         self._context_values: dict = FrameworkContextManager().get_all_contexts()
         _context_values: dict = FrameworkContextManager().get_all_contexts()
         framework = agent_input.get('framework', [])
@@ -83,6 +86,9 @@ class ExecutingAgentTemplate(AgentTemplate):
                 'output_stream': input_object.get_data('output_stream', None)}
 
     def _execute_subtask(self, subtask, input_object, agent_input, index, memory, llm, prompt, **kwargs) -> dict:
+        """Run a single subtask: gather knowledge and tool results, invoke the LLM
+        chain and return an {'index', 'input', 'output'} record.
+        """
         context_tokens = FrameworkContextManager().set_all_contexts(kwargs.get('context_values', {}))
         try:
             pair_id = uuid.uuid4().hex
@@ -127,6 +133,9 @@ class ExecutingAgentTemplate(AgentTemplate):
                 FrameworkContextManager().reset_context(var_name, token)
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Push the executing results to the stream output, log a readable summary
+        and return agent_result unchanged.
+        """
         # add executing agent final result into the stream output.
         stream_output(agent_result.pop('output_stream'),
                       {"data": {
@@ -146,6 +155,9 @@ class ExecutingAgentTemplate(AgentTemplate):
         return agent_result
 
     def _process_tool_inputs(self, input_object: InputObject, subtask: str) -> None:
+        """Insert the subtask text as the first input key value of each configured
+        tool in input_object.
+        """
         if not self.tool_names:
             return
         for tool_name in self.tool_names:
@@ -155,12 +167,16 @@ class ExecutingAgentTemplate(AgentTemplate):
                 input_object.add_data(tool.input_keys[0], subtask)
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'ExecutingAgentTemplate':
+        """Initialize this template from the agent configer, reading the prompt
+        version and validating the required parameters.
+        """
         super().initialize_by_component_configer(component_configer)
         self.prompt_version = self.agent_model.profile.get('prompt_version', 'default_executing_agent.cn')
         self.validate_required_params()
         return self
 
     def validate_required_params(self):
+        """Raise ValueError when no llm_name is configured for this agent's profile."""
         if not self.llm_name:
             raise ValueError(f'llm_name of the agent {self.agent_model.info.get("name")}'
                              f' is not set, please go to the agent profile configuration'
