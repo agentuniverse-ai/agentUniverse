@@ -119,7 +119,7 @@ class SQLiteStore(Store):
                 .process_docs([document])
             return _doc[0].keywords
 
-    def insert_document(self, documents: List[Document], **kwargs):
+    def insert_document(self, documents: List[Document], **kwargs) -> None:
         with self.conn:
             for document in documents:
                 metadata = json.dumps(
@@ -135,7 +135,7 @@ class SQLiteStore(Store):
                         (term, document.id)
                     )
 
-    def delete_document(self, document_id: int):
+    def delete_document(self, document_id: int) -> None:
         with self.conn:
             self.conn.execute(
                 'DELETE FROM documents WHERE id = ?',
@@ -146,7 +146,7 @@ class SQLiteStore(Store):
                 (document_id,)
             )
 
-    def upsert_document(self, documents: List[Document], **kwargs):
+    def upsert_document(self, documents: List[Document], **kwargs) -> None:
         with self.conn:
             for document in documents:
                 metadata = json.dumps(
