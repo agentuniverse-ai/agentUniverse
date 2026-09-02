@@ -50,6 +50,11 @@ class WenXinLLM(LLM):
     secret_key: str = Field(default_factory=lambda: get_from_env("QIANFAN_SK"))
 
     def _new_client(self):
+        """Build and cache the Qianfan ChatCompletion client.
+        
+        Returns:
+            qianfan.ChatCompletion: The Qianfan client instance.
+        """
         if self.client is None:
             self.client = qianfan.ChatCompletion(ak=self.api_key, sk=self.secret_key)
         """Create a new Qianfan client."""
@@ -108,6 +113,14 @@ class WenXinLLM(LLM):
         return res.max_input_chars
 
     def get_num_tokens(self, text: str) -> int:
+        """Estimate the number of tokens in the given text.
+        
+        Args:
+            text (str): The text to tokenize.
+        
+        Returns:
+            int: The token count of the text.
+        """
         model_name = ''
         if self.model_name.lower() in TokenModelList:
             model_name = self.model_name.lower()
@@ -120,18 +133,42 @@ class WenXinLLM(LLM):
 
     @staticmethod
     def parse_result(chunk: QfResponse):
+        """Extract the generated text from a Qianfan response chunk.
+        
+        Args:
+            chunk (QfResponse): A Qianfan response chunk.
+        
+        Returns:
+            LLMOutput or None: The parsed output, or None when the chunk has no result text.
+        """
         text = chunk.body.get('result')
         if not text:
             return None
         return LLMOutput(text=text, raw=chunk)
 
     def generate_stream_result(self, chat_completion) -> Iterator[LLMOutput]:
+        """Yield parsed outputs from a synchronous streaming response.
+        
+        Args:
+            chat_completion: The synchronous streaming response object.
+        
+        Yields:
+            LLMOutput: Each parsed non-empty chunk.
+        """
         for chunk in chat_completion:
             data = self.parse_result(chunk)
             if data:
                 yield data
 
     async def agenerate_stream_result(self, chat_completion: AsyncIterator) -> AsyncIterator[LLMOutput]:
+        """Yield parsed outputs from an asynchronous streaming response.
+        
+        Args:
+            chat_completion (AsyncIterator): The asynchronous streaming response object.
+        
+        Yields:
+            LLMOutput: Each parsed non-empty chunk.
+        """
         async for chunk in chat_completion:
             data = self.parse_result(chunk)
             if data:
@@ -145,6 +182,14 @@ class WenXinLLM(LLM):
         return WenXinLangChainInstance(llm=self)
 
     def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'WenXinLLM':
+        """Initialize the LLM from a component configer, resolving api_key and secret_key.
+        
+        Args:
+            component_configer (LLMConfiger): The component configer.
+        
+        Returns:
+            WenXinLLM: The initialized LLM instance.
+        """
         super().initialize_by_component_configer(component_configer)
         if 'api_key' in component_configer.configer.value:
             api_key = component_configer.configer.value.get('api_key')
