@@ -23,6 +23,11 @@ from agentuniverse.base.util.async_util import run_async_from_sync
 
 class MCPTool(Tool):
 
+    """MCP tool that exposes a Model Context Protocol server tool.
+
+    Connects to an MCP server over the configured transport and makes
+    one of its tools callable as an agentUniverse tool.
+    """
     server_name: str = ''
     transport: Literal["stdio", "sse", "websocket", "streamable_http"] = "stdio"
     url: str = ''
@@ -35,9 +40,22 @@ class MCPTool(Tool):
 
     @property
     def tool_name(self) -> str:
+        """Effective tool name used on the MCP server.
+
+        Returns:
+            str: origin_tool_name when set, otherwise the tool name.
+        """
         return self.origin_tool_name if self.origin_tool_name else self.name
 
     def execute(self, **kwargs) -> CallToolResult:
+        """Execute the tool on the MCP server synchronously.
+
+        Args:
+            **kwargs: arguments of the MCP tool call.
+
+        Returns:
+            CallToolResult: the result returned by the MCP server.
+        """
         session = MCPSessionManager().get_mcp_server_session_sync(
             server_name=self.server_name,
             **self.get_mcp_server_connect_args()
@@ -46,6 +64,14 @@ class MCPTool(Tool):
         return result
 
     async def async_execute(self, **kwargs) -> CallToolResult:
+        """Execute the tool on the MCP server asynchronously.
+
+        Args:
+            **kwargs: arguments of the MCP tool call.
+
+        Returns:
+            CallToolResult: the result returned by the MCP server.
+        """
         session = await MCPSessionManager().get_mcp_server_session(
             server_name=self.server_name,
             **self.get_mcp_server_connect_args()
@@ -55,6 +81,15 @@ class MCPTool(Tool):
 
 
     def get_mcp_server_connect_args(self) -> dict:
+        """Build the connection arguments used to reach the MCP server.
+
+        Raises:
+            Exception: if the configured transport is not supported.
+
+        Returns:
+            dict: transport-specific connection args, e.g. url, or command
+            and args/env for stdio transports.
+        """
         if self.transport == "sse":
             connect_args = {
                 'transport': self.transport,
@@ -91,6 +126,14 @@ class MCPTool(Tool):
         return self
 
     async def get_tool_info(self):
+        """Fetch the tool definition from the MCP server and sync this tool.
+
+        Updates input_keys, args_model_schema and description from the
+        server-side tool schema.
+
+        Raises:
+            Exception: if no tool named tool_name is found on the server.
+        """
         async with MCPTempClient(
             self.get_mcp_server_connect_args()
         ) as client:
@@ -109,6 +152,15 @@ class MCPTool(Tool):
             self.description = f'{tool_info.description}\n{str(tool_info.inputSchema)}'
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'MCPTool':
+        """Initialize the MCP tool from a component configer.
+        Sets the server name if not configured, then fetches the tool info
+        from the MCP server.
+
+        Args:
+            component_configer (ComponentConfiger): the tool component configer.
+        Returns:
+            MCPTool: the initialized tool.
+        """
         if not self.server_name:
             # use an unique name to manage session
             self.server_name = self.name
