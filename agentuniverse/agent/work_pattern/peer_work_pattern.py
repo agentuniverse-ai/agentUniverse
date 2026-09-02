@@ -129,6 +129,7 @@ class PeerWorkPattern(WorkPattern):
         return executing_result.to_dict()
 
     def _invoke_expressing(self, input_object: InputObject, peer_round_results: dict) -> dict:
+        """Run the expressing sub-agent for the current round and record its result in peer_round_results."""
         if not self.expressing:
             expressing_result = OutputObject({})
         else:
@@ -138,6 +139,7 @@ class PeerWorkPattern(WorkPattern):
         return expressing_result.to_dict()
 
     async def _async_invoke_expressing(self, input_object: InputObject, peer_round_results: dict) -> dict:
+        """Asynchronously run the expressing sub-agent for the current round and record its result."""
         if not self.expressing:
             expressing_result = OutputObject({})
         else:
@@ -147,6 +149,7 @@ class PeerWorkPattern(WorkPattern):
         return expressing_result.to_dict()
 
     def _invoke_reviewing(self, input_object: InputObject, peer_round_results: dict) -> dict:
+        """Run the reviewing sub-agent for the current round and record its result in peer_round_results."""
         if not self.reviewing:
             reviewing_result = OutputObject({})
         else:
@@ -156,6 +159,7 @@ class PeerWorkPattern(WorkPattern):
         return reviewing_result.to_dict()
 
     async def _async_invoke_reviewing(self, input_object: InputObject, peer_round_results: dict) -> dict:
+        """Asynchronously run the reviewing sub-agent for the current round and record its result."""
         if not self.reviewing:
             reviewing_result = OutputObject({})
         else:
@@ -165,6 +169,7 @@ class PeerWorkPattern(WorkPattern):
         return reviewing_result.to_dict()
 
     def _validate_work_pattern_members(self):
+        """Raise ValueError if any configured sub-agent member is not an instance of its expected agent template."""
         if self.planning and not isinstance(self.planning, PlanningAgentTemplate):
             raise ValueError(f"{self.planning} is not of the expected type AgentTemplate.")
         if self.executing and not isinstance(self.executing, ExecutingAgentTemplate):
@@ -175,6 +180,9 @@ class PeerWorkPattern(WorkPattern):
             raise ValueError(f"{self.reviewing} is not not of the expected type ReviewingAgentTemplate.")
 
     def set_by_agent_model(self, **kwargs):
+        """Create a copy of this work pattern, setting name, description and the
+        configured sub-agents from the given kwargs.
+        """
         peer_work_pattern_instance = self.__class__()
         peer_work_pattern_instance.name = self.name
         peer_work_pattern_instance.description = self.description
