@@ -49,7 +49,7 @@ class ConversationMessage(Message):
     additional_args: Optional[dict] = Field(default_factory=dict)
 
     @staticmethod
-    def as_langchain_list(message_list: List['ConversationMessage']):
+    def as_langchain_list(message_list: List['ConversationMessage']) -> list:
         """Convert agentUniverse(aU) message list to langchain message list """
         messages = []
         for message in message_list:
