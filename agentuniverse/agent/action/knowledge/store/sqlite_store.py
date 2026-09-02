@@ -85,6 +85,9 @@ class SQLiteStore(Store):
 
     def compute_bm25(self, query_text, doc_text, inverted_index,
                      total_doc_count, total_word_count):
+        """Compute the BM25 relevance score of doc_text for query_text using the
+        inverted index statistics and this store’s k1/b parameters.
+        """
         k1 = self.k1
         b = self.b
         query_words = jieba.lcut(query_text)
@@ -110,6 +113,9 @@ class SQLiteStore(Store):
 
 
     def _get_document_keyword(self, document: Document) -> Set[str]:
+        """Return the keywords extracted for document by the configured keyword
+        extractor; raise Exception when no keyword extractor is configured.
+        """
         if not self.keyword_extractor:
             raise Exception(
                 "You must specify a keyword extractor in sqlite store query")
@@ -120,6 +126,9 @@ class SQLiteStore(Store):
             return _doc[0].keywords
 
     def insert_document(self, documents: List[Document], **kwargs):
+        """Insert or replace the given documents together with their indexed terms
+        into the SQLite tables.
+        """
         with self.conn:
             for document in documents:
                 metadata = json.dumps(
@@ -136,6 +145,7 @@ class SQLiteStore(Store):
                     )
 
     def delete_document(self, document_id: int):
+        """Delete the document row and its inverted index terms by document_id."""
         with self.conn:
             self.conn.execute(
                 'DELETE FROM documents WHERE id = ?',
@@ -147,6 +157,9 @@ class SQLiteStore(Store):
             )
 
     def upsert_document(self, documents: List[Document], **kwargs):
+        """Upsert the given documents: replace each document row, clear its index
+        terms and re-insert them.
+        """
         with self.conn:
             for document in documents:
                 metadata = json.dumps(
@@ -169,6 +182,12 @@ class SQLiteStore(Store):
                     )
 
     def query(self, query: Query, **kwargs) -> List[Document]:
+        """Retrieve the top-k documents most relevant to the query, ranking them
+        with BM25 over the inverted index.
+
+        Returns:
+            List[Document]: The ranked result documents.
+        """
         if len(query.keywords) > 0:
             query_terms = query.keywords
         else:
