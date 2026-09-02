@@ -24,6 +24,15 @@ DEFAULT_SERVER_NAME = 'default_mcp_server'
 def is_method_overridden(
         override_method: callable,
         origin_method: callable) -> bool:
+    """Check whether a method really overrides another method.
+
+    Args:
+    override_method: candidate override; origin_method: base method to compare.
+
+    Returns:
+    bool: True when override_method is callable and origin_method is None or it
+    differs from origin_method.
+    """
     if not callable(override_method):
         return False
 
@@ -37,6 +46,15 @@ def is_method_overridden(
 
 
 def create_exposed_tool_method_wrapper(tool_name):
+    """Create a callable invoking a registered tool's async_execute (or execute when
+    not overridden), keeping the original signature without self.
+
+    Args:
+    tool_name: name of the registered tool to wrap.
+
+    Returns:
+    callable: async or sync wrapper of the chosen tool method.
+    """
     method_name = 'async_execute'
     original_method = getattr(ToolManager().get_instance_obj(tool_name).__class__, method_name)
 
@@ -61,11 +79,13 @@ def create_exposed_tool_method_wrapper(tool_name):
     if inspect.iscoroutinefunction(original_method):
         @functools.wraps(original_method)
         async def wrapper(*args, **kwargs):
+            """Async wrapper that runs the tool method on a freshly fetched tool instance."""
             instance = ToolManager().get_instance_obj(tool_name)
             return await getattr(instance, method_name)(*args, **kwargs)
     else:
         @functools.wraps(original_method)
         def wrapper(*args, **kwargs):
+            """Sync wrapper that runs the tool method on a freshly fetched tool instance."""
             instance = ToolManager().get_instance_obj(tool_name)
             return getattr(instance, method_name)(*args, **kwargs)
     wrapper.__signature__ = exposed_signature
@@ -75,6 +95,11 @@ def create_exposed_tool_method_wrapper(tool_name):
 
 @singleton
 class MCPServerManager:
+    """Singleton manager grouping tools and toolkits to expose via MCP servers.
+
+    server_tool_map maps each MCP server name to the lists of tool and toolkit
+    names that should be served by it.
+    """
     server_tool_map: dict = {
         DEFAULT_SERVER_NAME: {
             'tool': [],
@@ -83,6 +108,15 @@ class MCPServerManager:
     }
 
     def register_mcp_tool(self, configer_instance: ComponentConfiger, configer_type: str):
+        """Register a component on the MCP server it is configured for.
+
+        Components are ignored unless as_mcp_tool is enabled; the default server name
+        is used when no explicit server_name is declared.
+
+        Args:
+        configer_instance: configer of the component;
+        configer_type: component type (tool vs toolkit).
+        """
         if isinstance(configer_instance.as_mcp_tool, dict):
             mcp_tool_config = configer_instance.as_mcp_tool
             server_name = mcp_tool_config.get('server_name', DEFAULT_SERVER_NAME)
@@ -105,6 +139,15 @@ class MCPServerManager:
                      host: str = '0.0.0.0',
                      port: int = 8890,
                      transport: Literal["sse", "streamable_http"] = "sse"):
+        """Start MCP servers exposing every registered tool and toolkit.
+
+        Args:
+        host: address to bind; port: port to listen on;
+        transport: 'sse' or 'streamable_http'.
+
+        Raises:
+        Exception: for unsupported transports.
+        """
         import contextlib
         import uvicorn
         from fastapi import FastAPI
@@ -147,6 +190,10 @@ class MCPServerManager:
         elif transport == 'streamable_http':
             @contextlib.asynccontextmanager
             async def lifespan(app: FastAPI):
+                """Async context that runs each MCP server's session manager while the app lives.
+
+                Used as the FastAPI lifespan for the streamable_http transport.
+                """
                 async with contextlib.AsyncExitStack() as stack:
                     for _mcp_server in mcp_server_list:
                         await stack.enter_async_context(_mcp_server['server'].session_manager.run())
