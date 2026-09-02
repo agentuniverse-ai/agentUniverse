@@ -253,7 +253,7 @@ class PeerPlanner(Planner):
 
         input_object.add_data('expressing_result', expressing_result)
         # add expressing agent log info
-        logger_info = f"\nExpressing agent execution result is :\n"
+        logger_info = "\nExpressing agent execution result is :\n"
         logger_info += f"{expressing_result.get_data('output')}"
         LOGGER.info(logger_info)
         # add expressing agent intermediate steps
