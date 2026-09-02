@@ -120,6 +120,15 @@ class PDFTool(Tool):
         return reader
 
     def _page_indexes(self, pages: Any, count: int) -> list[int]:
+        """Normalize a page selection to a deduplicated list of 0-based indexes.
+
+        Args:
+            pages: Optional 1-based page numbers; None selects every page.
+            count: Total number of pages in the source.
+
+        Returns:
+            List of 0-based indexes in input order with duplicates removed.
+        """
         if pages is None:
             return list(range(count))
         if not isinstance(pages, list) or not pages:
@@ -133,6 +142,14 @@ class PDFTool(Tool):
         return indexes
 
     def _metadata(self, value: Any) -> dict[str, str]:
+        """Normalize metadata entries into a dict with '/'-prefixed string keys.
+
+        Args:
+            value: Metadata mapping or None.
+
+        Returns:
+            Dict with '/'-prefixed keys and bounded string values; empty dict when value is None.
+        """
         if value is None:
             return {}
         if not isinstance(value, dict):
@@ -145,6 +162,14 @@ class PDFTool(Tool):
         return result
 
     def _merge(self, output: str, inputs: Any, overwrite: bool, metadata: Any) -> dict[str, Any]:
+        """Merge multiple PDFs into a single output file.
+        Args:
+            output: Destination PDF path to write.
+            inputs: List of source PDF paths to merge, in order.
+            overwrite: Allow overwriting the destination file.
+            metadata: Optional metadata to embed in the merged file.
+        Returns: Success dict with mode, file_path, input_paths, page_count, and file_size.
+        """
         if not isinstance(inputs, list) or not inputs:
             raise ValueError("input_paths must be a non-empty list")
         if len(inputs) > self.max_input_files:
@@ -177,6 +202,14 @@ class PDFTool(Tool):
         }
 
     def _split(self, source: str, output_dir: Any, pages: Any, overwrite: bool) -> dict[str, Any]:
+        """Write each selected page of a source PDF as its own one-page file in a directory.
+        Args:
+            source: Source PDF path.
+            output_dir: Directory to receive the per-page files.
+            pages: Optional 1-based page numbers to split out.
+            overwrite: Allow overwriting existing output files.
+        Returns: Success dict with mode, file_path, output_paths, and page_count.
+        """
         reader = self._reader(source)
         indexes = self._page_indexes(pages, len(reader.pages))
         directory = self._directory(output_dir)
@@ -201,6 +234,15 @@ class PDFTool(Tool):
         }
 
     def _rotate(self, source: str, output: Any, pages: Any, rotation: Any, overwrite: bool) -> dict[str, Any]:
+        """Rotate selected pages of a source PDF and write the result to a destination.
+        Args:
+            source: Source PDF path to read.
+            output: Destination PDF path to write.
+            pages: Optional 1-based page numbers to rotate.
+            rotation: Degrees of clockwise rotation: 90, 180, or 270.
+            overwrite: Allow overwriting the destination file.
+        Returns: Success dict with mode, file_path, output_path, rotated_pages, and rotation.
+        """
         if isinstance(rotation, bool) or not isinstance(rotation, int) or rotation not in {90, 180, 270}:
             raise ValueError("rotation must be 90, 180, or 270")
         destination = self._pdf_path(output, "output_path")
@@ -224,6 +266,15 @@ class PDFTool(Tool):
         }
 
     def _extract(self, source: str, pages: Any) -> dict[str, Any]:
+        """Extract text from selected pages, truncating the total output to max_text_chars.
+
+        Args:
+            source: Source PDF path.
+            pages: Optional 1-based page numbers to extract.
+
+        Returns:
+            Success dict with mode, file_path, per-page text entries, truncated flag, and max_text_chars.
+        """
         reader = self._reader(source)
         indexes = self._page_indexes(pages, len(reader.pages))
         remaining = self.max_text_chars
@@ -248,6 +299,14 @@ class PDFTool(Tool):
         }
 
     def _info(self, source: str) -> dict[str, Any]:
+        """Gather file size, page count, and metadata for a PDF.
+
+        Args:
+            source: Source PDF path.
+
+        Returns:
+            Success dict with mode, file_path, file_size, page_count, and metadata.
+        """
         reader = self._reader(source)
         return {
             "status": "success",
@@ -260,12 +319,24 @@ class PDFTool(Tool):
 
     @staticmethod
     def _check_overwrite(path: str, overwrite: bool) -> None:
+        """Raise ValueError when a destination exists and overwrite is not enabled.
+
+        Args:
+            path: Destination path to check.
+            overwrite: Whether existing files may be replaced.
+        """
         if not isinstance(overwrite, bool):
             raise TypeError("overwrite must be a boolean")
         if os.path.exists(path) and not overwrite:
             raise ValueError(f"file exists: {path}; set overwrite=true")
 
     def _save(self, writer: Any, destination: str) -> None:
+        """Write a pypdf writer to a destination atomically via a temporary file, enforcing max_write_bytes.
+
+        Args:
+            writer: Pypdf PdfWriter to serialize.
+            destination: Final output path.
+        """
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         temporary = None
         try:
