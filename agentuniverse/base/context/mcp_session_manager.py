@@ -80,7 +80,7 @@ class SyncAsyncExitStack:
         """Register a callback on the underlying ExitStack via the portal."""
         return self._portal.call(self._stack.callback, func, *args, **kwargs)
 
-    def close(self):
+    def close(self) -> None:
         """Close the ExitStack and tear down the AnyIO blocking portal."""
         try:
             self._stack.close()
@@ -173,7 +173,7 @@ class MCPSessionManager:
         self.__mcp_session_dict = ContextVar("__mcp_session_dict__")
         self.__exit_stack = ContextVar("__mcp_exit_stack__")
 
-    def init_session(self):
+    def init_session(self) -> None:
         self.__exit_stack.set(pick_exit_stack())
         self.__mcp_session_dict.set({})
 
@@ -190,7 +190,7 @@ class MCPSessionManager:
             self.__exit_stack.set(pick_exit_stack())
         return self.__exit_stack.get()
 
-    async def clear_session(self):
+    async def clear_session(self) -> None:
         await self.exit_stack.aclose()
         self.__exit_stack.set(None)
         self.__mcp_session_dict.set(None)
