@@ -185,7 +185,7 @@ def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng'):
         try:
             # Use the original color image for EAST detection (usually yields better results)
             regions = detect_text_regions(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            if len(regions) == 0:
+            if not regions:
                 raise Exception("No text regions detected, falling back to full image OCR")
             raw_text = ocr_on_regions(regions, lang=lang)
         except Exception as e:
