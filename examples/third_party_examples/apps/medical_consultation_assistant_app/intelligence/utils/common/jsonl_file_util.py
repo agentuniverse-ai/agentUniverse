@@ -17,11 +17,21 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 
 class JsonFileOps(object):
+    """Utility class providing class-level helpers for JSON Lines files."""
     def __init__(self):
+        """Initialize the JsonFileOps utility class; its helpers are class methods."""
         return
 
     @classmethod
     def is_file_exist(cls, file_path):
+        """Check whether the JSON Lines file at file_path exists.
+
+        Args:
+            file_path (str): Path of the file to check; the extension must be '.jsonl'.
+
+        Returns:
+            True if the file exists; raises Exception for any other extension.
+        """
         file_name, ext = os.path.splitext(file_path)
         if ext.lower() != '.jsonl':
             raise Exception('Unsupported file extension')
@@ -29,13 +39,25 @@ class JsonFileOps(object):
 
 
 class JsonFileReader(object):
+    """Reads JSON objects from a JSON Lines file, one line at a time."""
     def __init__(self, file_path: str):
+        """Open the JSON Lines file at file_path for reading.
+
+        Args:
+            file_path (str): Path of the JSON Lines file to read; the file handler
+                is created only when the file exists.
+        """
         self.file_handler = None
         self.file_name = file_path
         if JsonFileOps.is_file_exist(file_path):
             self.file_handler = open(file_path, 'r', encoding='utf-8')
 
     def read_json_obj(self):
+        """Read and parse the next JSON object from the file.
+
+        Returns:
+            The parsed JSON object; an empty dict for a corrupted line; None at EOF.
+        """
         if not self.file_handler:
             raise Exception(f"None json file to read: {self.file_name}")
         json_line = self.file_handler.readline()
@@ -60,6 +82,7 @@ class JsonFileReader(object):
 
 
 class JsonFileWriter(object):
+    """Writes JSON objects to a JSON Lines file, one object per line."""
     def __init__(self, output_file_name: str, extension='jsonl', directory=DATA_DIR):
         self.outfile_path = directory + output_file_name + '.' + extension
         directory = os.path.dirname(self.outfile_path)
