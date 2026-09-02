@@ -66,6 +66,12 @@ class LLMSpanManager:
     """Manager for LLM span lifecycle with support for deferred cleanup."""
 
     def __init__(self, tracer: trace.Tracer, span_name: str):
+        """Initialize the span manager.
+
+        Args:
+        tracer: OpenTelemetry tracer used to create spans;
+        span_name: name assigned to spans created by this manager.
+        """
         self.tracer = tracer
         self.span_name = span_name
         self.span: Optional[Span] = None
@@ -105,9 +111,19 @@ class LLMSpanManager:
         Monitor.pop_invocation_chain()
 
     def __enter__(self) -> Span:
+        """Start a span and attach its context to the current execution context.
+
+        Returns:
+        Span: the newly started span.
+        """
         return self.start_span()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Clean up the span and detach the context when leaving the managed block.
+
+        Deferred cleanup (see defer_cleanup) is honored: nothing is ended when auto
+        cleanup has been disabled.
+        """
         if self.auto_cleanup:
             self.cleanup()
 
@@ -116,6 +132,11 @@ class LLMMetricsRecorder:
     """Handles LLM metrics recording."""
 
     def __init__(self, metrics: Dict[str, Any]):
+        """Initialize the metrics recorder.
+
+        Args:
+        metrics: dict mapping metric names to OpenTelemetry instruments.
+        """
         self.metrics = metrics
 
     def record_call_start(self, labels: Dict[str, str]) -> None:
@@ -214,6 +235,11 @@ class LLMSpanAttributesSetter:
 
     @staticmethod
     def set_streaming(span: Span, streaming: bool) -> None:
+        """Record whether the LLM result is streamed on the span.
+
+        Args:
+        span: span to update; streaming: whether the call streams its result.
+        """
         span.set_attribute(SpanAttributes.AU_LLM_STREAMING, streaming)
 
 
@@ -224,6 +250,14 @@ class StreamingResultProcessor:
                  start_time: float, span_manager: LLMSpanManager,
                  labels: Dict[str, str],
                  metrics_recorder: LLMMetricsRecorder):
+        """Initialize the streaming result processor.
+
+        Args:
+        source: LLM identifier; llm_input: the input passed to the LLM;
+        llm_instance: the LLM instance; start_time: wall-clock start time;
+        span_manager: manager of the active LLM span; labels: metric labels;
+        metrics_recorder: recorder used to emit LLM metrics.
+        """
         self.source = source
         self.llm_input = llm_input
         self.llm_instance = llm_instance
@@ -338,6 +372,9 @@ class LLMInstrumentor(BaseInstrumentor):
     """OpenTelemetry instrumentor for LLM calls."""
 
     def __init__(self):
+        """Initialize internal state; nothing is instrumented until the instrumentor
+        is enabled.
+        """
         super().__init__()
         self._tracer: Optional[trace.Tracer] = None
         self._meter: Optional[metrics.Meter] = None
@@ -347,6 +384,11 @@ class LLMInstrumentor(BaseInstrumentor):
         self._original_llm_wrapper_async = None
 
     def instrumentation_dependencies(self):
+        """Dependencies required by this instrumentation.
+
+        Returns:
+        list: empty; patching happens in-process so no extra packages are required.
+        """
         return []
 
     def _instrument(self, **kwargs):
