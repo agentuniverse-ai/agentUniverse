@@ -15,6 +15,9 @@ from agentuniverse.agent.work_pattern.work_pattern import WorkPattern
 
 
 class PeerWorkPattern(WorkPattern):
+    """Work pattern that coordinates planning, executing, expressing and reviewing
+    sub-agents over multiple rounds until the review score reaches the threshold.
+    """
     planning: PlanningAgentTemplate = None
     executing: ExecutingAgentTemplate = None
     expressing: ExpressingAgentTemplate = None
@@ -57,6 +60,7 @@ class PeerWorkPattern(WorkPattern):
         return {'result': peer_results}
 
     async def async_invoke(self, input_object: InputObject, work_pattern_input: dict, **kwargs) -> dict:
+        """Run the peer workflow asynchronously over retry_count rounds, invoking the planning, executing, expressing and reviewing sub-agents and stopping once the review score reaches eval_threshold."""
         self._validate_work_pattern_members()
 
         peer_results = list()
@@ -92,6 +96,7 @@ class PeerWorkPattern(WorkPattern):
         return {'result': peer_results}
 
     def _invoke_planning(self, input_object: InputObject, agent_input: dict, peer_round_results: dict) -> dict:
+        """Run the planning sub-agent for the current round and record its result in peer_round_results."""
         if not self.planning:
             planning_result = OutputObject({"framework": [agent_input.get('input')]})
         else:
@@ -102,6 +107,7 @@ class PeerWorkPattern(WorkPattern):
 
     async def _async_invoke_planning(self, input_object: InputObject, agent_input: dict,
                                      peer_round_results: dict) -> dict:
+        """Asynchronously run the planning sub-agent for the current round and record its result."""
         if not self.planning:
             planning_result = OutputObject({"framework": [agent_input.get('input')]})
         else:
@@ -111,6 +117,7 @@ class PeerWorkPattern(WorkPattern):
         return planning_result.to_dict()
 
     def _invoke_executing(self, input_object: InputObject, peer_round_results: dict) -> dict:
+        """Run the executing sub-agent for the current round and record its result in peer_round_results."""
         if not self.executing:
             executing_result = OutputObject({})
         else:
@@ -120,6 +127,7 @@ class PeerWorkPattern(WorkPattern):
         return executing_result.to_dict()
 
     async def _async_invoke_executing(self, input_object: InputObject, peer_round_results: dict) -> dict:
+        """Asynchronously run the executing sub-agent for the current round and record its result."""
         if not self.executing:
             executing_result = OutputObject({})
         else:
