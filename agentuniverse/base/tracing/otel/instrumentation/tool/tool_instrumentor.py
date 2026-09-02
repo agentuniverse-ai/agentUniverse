@@ -72,6 +72,12 @@ class ToolSpanManager:
     """Manager for Tool span lifecycle."""
 
     def __init__(self, tracer: trace.Tracer, span_name: str):
+        """Initialize the span manager.
+        
+        Args:
+            tracer (trace.Tracer): The OpenTelemetry tracer.
+            span_name (str): The name of the span to manage.
+        """
         self.tracer = tracer
         self.span_name = span_name
         self.span: Optional[Span] = None
@@ -99,9 +105,21 @@ class ToolSpanManager:
             self.token = None
 
     def __enter__(self) -> Span:
+        """Start and return the managed span.
+        
+        Returns:
+            Span: The started span.
+        """
         return self.start_span()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Finalize the managed span and detach the context token when leaving the context.
+        
+        Args:
+            exc_type: The exception type, if any.
+            exc_val: The exception value, if any.
+            exc_tb: The traceback, if any.
+        """
         self.cleanup()
 
 
@@ -109,6 +127,11 @@ class ToolMetricsRecorder:
     """Handles Tool metrics recording."""
 
     def __init__(self, metrics: Dict[str, Any]):
+        """Initialize the metrics recorder.
+        
+        Args:
+            metrics (Dict[str, Any]): The metrics dict to record into.
+        """
         self.metrics = metrics
 
     def record_call_start(self, labels: Dict[str, str]) -> None:
@@ -199,6 +222,7 @@ class ToolInstrumentor(BaseInstrumentor):
     """OpenTelemetry instrumentor for Tool calls."""
 
     def __init__(self):
+        """Initialize the instrumentor with an empty default state."""
         super().__init__()
         self._tracer: Optional[trace.Tracer] = None
         self._meter: Optional[metrics.Meter] = None
@@ -208,6 +232,11 @@ class ToolInstrumentor(BaseInstrumentor):
         self._original_tool_wrapper_async = None
 
     def instrumentation_dependencies(self):
+        """Return the instrumentation dependencies.
+        
+        Returns:
+            list: The list of dependent instrumentation packages.
+        """
         return []
 
     def _instrument(self, **kwargs):
