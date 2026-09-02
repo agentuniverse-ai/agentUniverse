@@ -97,7 +97,7 @@ class Agent(ComponentBase, ABC):
         """
         pass
 
-    def update_trace_context(self, input_object: InputObject):
+    def update_trace_context(self, input_object: InputObject) -> None:
         session_id = input_object.get_data("session_id")
         if session_id:
             AuTraceManager().trace_context.set_session_id(session_id)
@@ -187,13 +187,13 @@ class Agent(ComponentBase, ABC):
         return (f'{appname}.'
                 f'{self.component_type.value.lower()}.{name}')
 
-    def input_check(self, kwargs: dict):
+    def input_check(self, kwargs: dict) -> None:
         """Agent parameter check."""
         for key in self.input_keys():
             if key not in kwargs.keys():
                 raise Exception(f'Input must have key: {key}.')
 
-    def output_check(self, kwargs: dict):
+    def output_check(self, kwargs: dict) -> None:
         """Agent result check."""
         if not isinstance(kwargs, dict):
             raise Exception('Output type must be dict.')
@@ -525,7 +525,7 @@ class Agent(ComponentBase, ABC):
             return False
         return True
 
-    def load_memory(self, memory, agent_input: dict):
+    def load_memory(self, memory, agent_input: dict) -> str:
         if memory:
             params = self.get_memory_params(agent_input)
             LOGGER.info(f"Load memory with params: {params}")
@@ -536,7 +536,7 @@ class Agent(ComponentBase, ABC):
         agent_input[memory.memory_key] = memory_str
         return memory_str
 
-    def add_memory(self, memory: Memory, content: Any, type: str = 'Q&A', agent_input: dict[str, Any] = {}):
+    def add_memory(self, memory: Memory, content: Any, type: str = 'Q&A', agent_input: dict[str, Any] = {}) -> None:
         if not memory:
             return
         session_id = agent_input.get('session_id')
@@ -556,8 +556,8 @@ class Agent(ComponentBase, ABC):
                           })
         memory.add([message], session_id=session_id, agent_id=agent_id)
 
-    def summarize_memory(self, agent_input: dict[str, Any] = {}, memory: Memory = None):
-        def do_summarize(params):
+    def summarize_memory(self, agent_input: dict[str, Any] = {}, memory: Memory = None) -> None:
+        def do_summarize(params) -> None:
             content = memory.summarize_memory(**params)
             memory.add([
                 Message(
