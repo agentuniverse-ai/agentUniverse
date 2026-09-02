@@ -70,7 +70,7 @@ def assemble_knowledge_config(knowledge_dto: KnowledgeDTO) -> Dict:
     }
 
 
-def register_knowledge(file_path: str):
+def register_knowledge(file_path: str) -> None:
     """Register the knowledge instance to the knowledge manager.
 
     Args:
@@ -86,7 +86,7 @@ def register_knowledge(file_path: str):
     KnowledgeManager().register(component_instance.get_instance_code(), component_instance)
 
 
-def unregister_knowledge(file_path: str):
+def unregister_knowledge(file_path: str) -> None:
     """Unregister the knowledge instance from the knowledge manager.
 
     Args:
@@ -101,7 +101,7 @@ def unregister_knowledge(file_path: str):
     KnowledgeManager().unregister(component_instance.get_instance_code())
 
 
-def register_store(file_path: str):
+def register_store(file_path: str) -> None:
     """Register the store instance to the store manager.
 
     Args:
