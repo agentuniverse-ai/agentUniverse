@@ -118,6 +118,10 @@ async def _default_llm_wrapper_async(func, *args, **kwargs):
     else:
         # streaming
         async def gen_iterator():
+            """Async generator yielding each chunk of a streamed LLM result.
+
+            Pops the invocation chain once the stream is exhausted.
+            """
             async for chunk in result:
                 yield chunk
             # add llm invocation info to monitor
@@ -141,6 +145,10 @@ def _default_llm_wrapper_sync(func, *args, **kwargs):
     else:
         # streaming
         def gen_iterator():
+            """Generator yielding each chunk of a streamed LLM result.
+
+            Pops the invocation chain once the stream is exhausted.
+            """
             for chunk in result:
                 yield chunk
             Monitor.pop_invocation_chain()
@@ -160,12 +168,18 @@ def trace_llm(func):
 
     @wraps(func)
     async def wrapper_async(*args, **kwargs):
+        """Async replacement returned by ``@trace_llm``; runs the function through the
+        active async LLM tracing wrapper.
+        """
         impl = globals().get('_llm_wrapper_async',
                              _default_llm_wrapper_async)
         return await impl(func, *args, **kwargs)
 
     @wraps(func)
     def wrapper_sync(*args, **kwargs):
+        """Sync replacement returned by ``@trace_llm``; runs the function through the
+        active sync LLM tracing wrapper.
+        """
         impl = globals().get('_llm_wrapper_sync',
                              _default_llm_wrapper_sync)
         return impl(func, *args, **kwargs)
@@ -242,12 +256,18 @@ def trace_agent(func):
 
     @functools.wraps(func)
     async def wrapper_async(*args, **kwargs):
+        """Async replacement returned by ``@trace_agent``; runs the function through the
+        active async agent tracing wrapper.
+        """
         impl = globals().get('_agent_wrapper_async',
                              _default_agent_wrapper_async)
         return await impl(func, *args, **kwargs)
 
     @functools.wraps(func)
     def wrapper_sync(*args, **kwargs):
+        """Sync replacement returned by ``@trace_agent``; runs the function through the
+        active sync agent tracing wrapper.
+        """
         impl = globals().get('_agent_wrapper_sync',
                              _default_agent_wrapper_sync)
         return impl(func, *args, **kwargs)
@@ -338,6 +358,9 @@ def trace_tool(func):
     """
     @functools.wraps(func)
     async def wrapper_async(*args, **kwargs):
+        """Async replacement returned by ``@trace_tool``; runs the function through the
+        active async tool tracing wrapper.
+        """
         impl = globals().get('_tool_wrapper_async',
                              _default_tool_wrapper_async)
         return await impl(func, *args, **kwargs)
@@ -345,6 +368,9 @@ def trace_tool(func):
 
     @functools.wraps(func)
     def wrapper_sync(*args, **kwargs):
+        """Sync replacement returned by ``@trace_tool``; runs the function through the
+        active sync tool tracing wrapper.
+        """
         impl = globals().get('_tool_wrapper_sync',
                              _default_tool_wrapper_sync)
         return impl(func, *args, **kwargs)
@@ -432,12 +458,18 @@ def trace_knowledge(func):
     """
     @functools.wraps(func)
     async def wrapper_async(*args, **kwargs):
+        """Async replacement returned by ``@trace_knowledge``; runs the function through
+        the active async knowledge tracing wrapper.
+        """
         impl = globals().get('_knowledge_wrapper_async',
                              _default_knowledge_wrapper_async)
         return impl(func, *args, **kwargs)
 
     @functools.wraps(func)
     def wrapper_sync(*args, **kwargs):
+        """Sync replacement returned by ``@trace_knowledge``; runs the function through
+        the active sync knowledge tracing wrapper.
+        """
         impl = globals().get('_knowledge_wrapper_sync',
                              _default_knowledge_wrapper_sync)
         return impl(func, *args, **kwargs)
