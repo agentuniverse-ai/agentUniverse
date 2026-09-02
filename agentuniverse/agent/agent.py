@@ -376,9 +376,11 @@ class Agent(ComponentBase, ABC):
 
     @property
     def tool_names(self) -> list:
+        """Return the names of the tools configured for this agent. Returns: list: The tool names."""
         return self._get_tool_names()
 
     def _get_tool_names(self) -> list:
+        """Collect the tool names from the configured tool and toolkit actions of the agent model. Returns: list: The tool names."""
         tool_name_list = list(self.agent_model.action.get('tool') or [])
         for toolkit_name in self.agent_model.action.get('toolkit', []):
             toolkit = ToolkitManager().get_instance_obj(toolkit_name)
@@ -386,6 +388,7 @@ class Agent(ComponentBase, ABC):
         return tool_name_list
 
     def invoke_tools(self, input_object: InputObject, **kwargs) -> str:
+        """Invoke each configured tool in turn and return their outputs. Args: input_object (InputObject): The agent input object. **kwargs: May carry tool_names. Returns: str: The concatenated tool outputs, or an empty string when no tools are configured."""
         tool_names = kwargs.get('tool_names') or self.tool_names
         if not tool_names:
             return ''
@@ -410,6 +413,7 @@ class Agent(ComponentBase, ABC):
         return "\n\n".join(tool_results)
 
     async def async_invoke_tools(self, input_object: InputObject, **kwargs) -> str:
+        """Asynchronously invoke each configured tool in turn and return their outputs. Args: input_object (InputObject): The agent input object. **kwargs: May carry tool_names. Returns: str: The concatenated tool outputs, or an empty string when no tools are configured."""
         tool_names = kwargs.get('tool_names') or self.agent_model.action.get('tool', [])
         if not tool_names:
             return ''
@@ -430,6 +434,7 @@ class Agent(ComponentBase, ABC):
         return "\n\n".join(tool_results)
 
     def invoke_knowledge(self, query_str: str, input_object: InputObject, **kwargs) -> str:
+        """Query each configured knowledge base and combine the results. Args: query_str (str): The query text. input_object (InputObject): The agent input object. **kwargs: May carry knowledge_names. Returns: str: The combined knowledge output, or an empty string when no knowledge is configured or query_str is empty."""
         knowledge_names = kwargs.get('knowledge_names') or self.agent_model.action.get('knowledge', [])
         if not knowledge_names or not query_str:
             return ''
@@ -448,6 +453,7 @@ class Agent(ComponentBase, ABC):
         return "\n\n".join(knowledge_results)
 
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
+        """Build the ChatPrompt for this run from the profile instruction, expert framework and agent prompt model. Args: agent_input (dict): The parsed agent input. **kwargs: Extra prompt options. Returns: ChatPrompt: The assembled prompt."""
         expert_framework = agent_input.get('expert_framework', '') or ''
 
         profile: dict = self.agent_model.profile
@@ -484,6 +490,7 @@ class Agent(ComponentBase, ABC):
         return chat_prompt
 
     def get_memory_params(self, agent_input: dict) -> dict:
+        """Compute the memory retrieval parameters for the run, e.g. memory_types, prune, top_k and session_id. Args: agent_input (dict): The parsed agent input. Returns: dict: The memory retrieval parameters."""
         memory_info = self.agent_model.memory
         memory_types = self.agent_model.memory.get('memory_types', None)
         prune = self.agent_model.memory.get('prune', False)
@@ -509,6 +516,7 @@ class Agent(ComponentBase, ABC):
         return params
 
     def get_run_config(self, **kwargs) -> dict:
+        """Build the RunnableConfig used when invoking chains, attaching an InvokeCallbackHandler. Args: **kwargs: May carry llm_name. Returns: dict: The runnable config."""
         llm_name = kwargs.get('llm_name') or self.agent_model.profile.get('llm_model', {}).get('name')
         callbacks = [InvokeCallbackHandler(
             source=self.agent_model.info.get('name'),
