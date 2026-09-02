@@ -19,6 +19,7 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 
 
 class CodeAstProcessor(DocProcessor):
+    """DocProcessor that parses source code with tree-sitter and emits chunk documents augmented with AST structure and code metrics."""
 
     max_depth: int = 8
     language_dir: str = None
@@ -29,6 +30,7 @@ class CodeAstProcessor(DocProcessor):
     _languages: Dict[str, Any] = {}
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> List[Document]:
+        """Process each input document: parse its code with tree-sitter and extend the result with the generated AST chunk documents. Args: origin_docs (List[Document]): The input documents. query (Query): Unused query. Returns: List[Document]: The processed documents."""
         result_docs = []
         for doc in origin_docs:
             code = doc.text
@@ -40,6 +42,7 @@ class CodeAstProcessor(DocProcessor):
 
     def _process_with_tree_sitter(self, code: str, language: str,
                                   metadata: Dict[str, Any]) -> List[Document]:
+        """Parse code with tree-sitter and convert the tree into chunk documents with features; falls back to raw chunks when parsing fails. Args: code (str): The source code. language (str): The language name. metadata (Dict[str, Any]): Document metadata. Returns: List[Document]: The generated documents."""
         def _ensure_language() -> None:
             if language not in self._languages:
                 try:
@@ -77,6 +80,7 @@ class CodeAstProcessor(DocProcessor):
         return result_docs
 
     def _convert_tree_to_json(self, node, code: str, depth: int = 0) -> AstNode:
+        """Recursively convert a tree-sitter node into an AstNode dict, bounding the depth and text length. Args: node: The tree-sitter node. code (str): The source code. depth (int): Current recursion depth. Returns: AstNode: The JSON-serializable node."""
         if depth > self.max_depth:
             return cast(AstNode, {"type": "max_depth_reached"})
         if not node:
@@ -110,6 +114,7 @@ class CodeAstProcessor(DocProcessor):
         return result
 
     def _extract_features(self, node: Any, code: str, language: str) -> CodeFeatures:
+        """Extract structural features (node counts, code metrics, identifier/function/class counts) from the parsed tree. Args: node: The root tree-sitter node. code (str): The source code. language (str): The language name. Returns: CodeFeatures: The extracted features."""
 
         features: CodeFeatures = {
             "node_counts": self._count_node_types(node),
@@ -145,6 +150,7 @@ class CodeAstProcessor(DocProcessor):
         return features
 
     def _count_node_types(self, root_node) -> Dict[str, int]:
+        """Count how often each node type occurs in the tree. Args: root_node: The root tree-sitter node. Returns: Dict[str, int]: Node type counts."""
         counts = {}
 
         def _traverse(node):
@@ -159,6 +165,7 @@ class CodeAstProcessor(DocProcessor):
         return counts
 
     def _calculate_code_metrics(self, code: str, language: str) -> CodeMetrics:
+        """Compute basic code metrics: total lines, code lines and average code-line length. Args: code (str): The source code. language (str): The language name. Returns: CodeMetrics: The computed metrics."""
 
         lines = code.splitlines()
         code_lines = [line.strip() for line in lines if line.strip(
