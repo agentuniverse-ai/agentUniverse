@@ -171,6 +171,111 @@ metadata:
 ```
 该组件需要在环境变量中配置`DASHSCOPE_API_KEY`。
 
+### [JinaReranker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/jina_reranker.yaml)
+
+该组件调用 Jina AI Reranker API，根据 `Query.query_str` 与召回文档的相关性重新排序，并将返回分数写入每篇文档的 `metadata.relevance_score`。
+
+组件定义文件如下：
+```yaml
+name: 'jina_reranker'
+description: 'reranker use jina api'
+model_name: 'jina-reranker-v2-base-multilingual'
+top_n: 10
+request_timeout: 30
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.jina_reranker'
+  class: 'JinaReranker'
+```
+- model_name: 请求使用的 Jina 重排模型。
+- top_n: Jina 最多返回的文档数量。
+- request_timeout: 请求超时时间，单位为秒，必须为正数。
+
+使用前需在环境变量中配置 `JINA_API_KEY`；也可通过可选的组件属性 `api_key` 覆盖环境变量。查询和文档文本会发送到 Jina 的远程 API，如数据策略要求脱敏，应在该处理器之前执行脱敏。
+
+### [ReciprocalRankFusionProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/reciprocal_rank_fusion_processor.yaml)
+
+该组件使用倒数排名融合（Reciprocal Rank Fusion，RRF）合并多路召回结果。文档在一路召回中的排名为 `rank` 时，会累加 `1 / (k + rank)`。该算法不使用各 Store 的原始分数，因此可以融合分数尺度不同的检索结果。
+
+组件定义文件如下：
+```yaml
+name: 'reciprocal_rank_fusion_processor'
+description: 'Fuse multi-store recall results with Reciprocal Rank Fusion'
+channel_key: 'recall_channel'
+dedup_key: 'id'
+k: 60
+top_n: null
+score_field: 'relevance_score'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.reciprocal_rank_fusion_processor'
+  class: 'ReciprocalRankFusionProcessor'
+```
+- channel_key: 标识召回通道的 metadata 键。配置了通道感知的后处理器时，`Knowledge` 会自动将 Store code 写入 `recall_channel`。
+- dedup_key: 跨通道合并相同文档所使用的标识，可为 `id`、`text` 或某个 metadata 字段；自定义字段缺失时回退到文档 ID。
+- k: RRF 公式中的排名常量。值越大，相邻排名之间的分数差距越小。
+- top_n: 融合后最多返回的文档数；`null` 表示保留所有唯一文档。
+- score_field: 写入融合分数的 metadata 键。
+
+同一通道内重复出现的文档只计分一次。若所有文档都没有 `channel_key`，整个输入会被视为单个排名通道。分数相同时排序结果保持确定性。
+
+### [ThresholdFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/threshold_filter.yaml)
+
+该组件可按分数、文本长度、top-k 或百分位过滤召回文档。每条规则均针对原始输入独立计算，再使用 `AND` 或 `OR` 合并结果。
+
+组件定义文件如下：
+```yaml
+name: 'threshold_filter'
+description: 'Filter documents by configurable score, length, top-k, or percentile rules'
+filters:
+  - type: 'score'
+    min_score: 0.5
+  - type: 'length'
+    min_length: 50
+logic_operator: 'AND'
+score_field: 'relevance_score'
+default_score: 0.0
+preserve_order: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.threshold_filter'
+  class: 'ThresholdFilter'
+```
+- filters: 类型可为 `score`、`length`、`topk` 或 `percentile`。分数和长度边界均为包含边界；`topk` 使用 `k`，`percentile` 使用 `[0, 1]` 范围内的值。
+- logic_operator: `AND` 仅保留被所有规则选中的文档；`OR` 保留被至少一条规则选中的文档。
+- score_field: 分数、top-k 和百分位规则读取的 metadata 键。
+- default_score: 文档缺少 `score_field` 时使用的分数。
+- preserve_order: 将选中文档恢复为原始输入顺序。如需让 top-k 或百分位结果保持按分数排序，应设为 `false`。
+
+### [SemanticDeduplicator](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/semantic_deduplicator.yaml)
+
+该组件删除重复或语义相近的文档。它首先通过确定性的内容哈希删除文本完全相同的文档；启用 embedding 后，再使用余弦相似度比较其余文档。
+
+组件定义文件如下：
+```yaml
+name: 'semantic_deduplicator'
+description: 'Remove semantically similar documents using embeddings'
+similarity_threshold: 0.95
+exact_match_threshold: 1.0
+merge_strategy: 'keep_first'
+use_embeddings: true
+embedding_name: 'default_embedding'
+preserve_metadata: true
+skip_on_error: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.semantic_deduplicator'
+  class: 'SemanticDeduplicator'
+```
+- similarity_threshold: 余弦相似度大于等于该阈值时，将文档视为语义重复。
+- merge_strategy: 可选 `keep_first`、`keep_best` 或 `merge`。`keep_best` 优先保留 metadata 更丰富的文档，`merge` 合并不冲突的 metadata 和关键词列表。
+- use_embeddings: 是否在精确文本去重后继续执行语义去重。
+- embedding_name: 用于计算文档向量的已注册 embedding 组件。缺少该配置时仅执行精确文本去重。
+- preserve_metadata: `merge` 策略是否合并重复文档的 metadata。
+- skip_on_error: embedding 查找或计算失败时返回精确去重结果；设为 `false` 则继续抛出错误。
+
+`exact_match_threshold` 为兼容性保留在组件配置中；当前精确匹配阶段始终比较完全相同文本的哈希。
+
 ### [HierarchicalRegexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/hierarchical_regex_text_splitter.py)
 
 该组件使用通过指定的正则规则对原始文本进行多层级的拆分，形成树状的文档结构。
@@ -309,4 +414,31 @@ metadata:
 - budget: 保留文档的最大累计大小，单位同 `counter`。
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
- - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+- tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+## 组合召回后处理器
+
+`Knowledge` 会按照 `post_processors` 中的配置顺序依次执行组件，每个处理器接收上一个处理器的输出。一个实用的多 Store 组合如下：
+
+```yaml
+post_processors:
+  - sensitive_data_redactor
+  - reciprocal_rank_fusion_processor
+  - jina_reranker
+  - threshold_filter
+  - semantic_deduplicator
+  - context_budget_compressor
+```
+
+该顺序对应各阶段的职责：
+
+1. `SensitiveDataRedactor` 可在调用远程 API 前移除敏感文本。
+2. `ReciprocalRankFusionProcessor` 合并不同 Store 中的重复结果并建立融合排序。
+3. `JinaReranker` 根据查询对融合后的候选集重排。
+4. `ThresholdFilter` 使用最新分数删除弱相关或不符合要求的候选。
+5. `SemanticDeduplicator` 删除残留的语义近似重复文档。
+6. `ContextBudgetCompressor` 在筛选完成后应用累积上下文预算。
+
+串联处理器时需要明确分数字段的归属。RRF 默认写入 `relevance_score`，后续 Jina 会用重排分数覆盖该字段。如需同时保留两种分数，可将 RRF 配置为 `score_field: 'rrf_score'`，再让下游过滤器明确读取 `relevance_score` 或 `rrf_score`。当 `preserve_order` 为 `true` 时，`ThresholdFilter` 即使使用 top-k 或百分位规则也会恢复输入顺序。
+
+本地流水线可省略 `jina_reranker`，并直接按 RRF 分数过滤。需要兼顾多样性时，可在过滤后加入 `MMRProcessor`。`SummarizationProcessor` 会把文档列表转换为单篇摘要，因此通常作为最后一个改变结果形态的阶段。
