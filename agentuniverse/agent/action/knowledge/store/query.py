@@ -24,6 +24,8 @@ class Query(BaseModel):
         ext_info (dict): extra information used in query.
     """
     class Config:
+        """Pydantic model configuration for this component, allowing arbitrary types.
+        """
         arbitrary_types_allowed = True
 
     query_str: Optional[str] = None
