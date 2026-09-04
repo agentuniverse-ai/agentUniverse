@@ -17,6 +17,8 @@ from langchain_core.utils.json import parse_json_markdown
 
 
 class RequestTool(Tool):
+    """Tool that performs HTTP requests through a generic requests wrapper."""
+
     method: Optional[str] = 'GET'
     headers: Optional[dict] = {}
     response_content_type: Optional[str] = 'text'
@@ -29,11 +31,29 @@ class RequestTool(Tool):
         return url.strip("\"'")
 
     def _normalized_method(self) -> str:
+        """Return the configured HTTP method, trimmed and upper-cased.
+
+        Returns:
+            str: The normalized method, or an empty string when the
+                configured method is not a string.
+        """
         if not isinstance(self.method, str):
             return ""
         return self.method.strip().upper()
 
     def execute(self, input: str):
+        """Execute the request synchronously with the given raw input.
+
+        When json_parser is enabled the input is parsed as JSON and the
+        parsed parameters are forwarded to execute_by_method.
+
+        Args:
+            input (str): Raw input string to execute the request with.
+
+        Returns:
+            The response of the executed request, or the error message
+            string when JSON parsing fails.
+        """
         input_params: str = input
         if self.json_parser:
             try:
@@ -58,6 +78,19 @@ class RequestTool(Tool):
         return await self.async_execute_by_method(input_params)
 
     async def async_execute_by_method(self, url: str, data: dict = None, **kwargs):
+        """Execute an HTTP request asynchronously by the given url and method.
+
+        Args:
+            url (str): Target request url.
+            data (dict, optional): Payload data for POST/PUT requests.
+            **kwargs: Extra arguments passed to the requests wrapper.
+
+        Returns:
+            The response of the asynchronously executed request.
+
+        Raises:
+            ValueError: When the normalized method is not supported.
+        """
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
@@ -72,6 +105,19 @@ class RequestTool(Tool):
             raise ValueError(f"Unsupported method: {method or self.method}")
 
     def execute_by_method(self, url: str, data: dict = None, **kwargs):
+        """Execute an HTTP request synchronously by the given url and method.
+
+        Args:
+            url (str): Target request url.
+            data (dict, optional): Payload data for POST/PUT requests.
+            **kwargs: Extra arguments passed to the requests wrapper.
+
+        Returns:
+            The response of the executed request.
+
+        Raises:
+            ValueError: When the normalized method is not supported.
+        """
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
