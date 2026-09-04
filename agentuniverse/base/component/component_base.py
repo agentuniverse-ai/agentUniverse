@@ -46,12 +46,33 @@ class ComponentBase(BaseModel):
         return self
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'ComponentBase':
+        """Hook for subclasses to apply component-specific configuration.
+
+        Args:
+            component_configer: The ComponentConfiger holding the component's
+                configuration values. The base implementation performs no
+                additional work and subclasses override it as needed.
+
+        Returns:
+            ComponentBase: the component object itself.
+        """
         pass
 
     def is_default_object(self):
+        """Return whether this object is the default object of its component.
+
+        Returns:
+            bool: the value of the default_symbol flag.
+        """
         return self.default_symbol
 
     def create_copy(self):
+        """Create an independent copy of the component object.
+
+        Returns:
+            ComponentBase: a deep copy of the component, falling back to a
+                shallow copy when a deep copy cannot be created.
+        """
         try:
             return self.model_copy(deep=True)
         except:
