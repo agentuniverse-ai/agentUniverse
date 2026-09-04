@@ -19,6 +19,16 @@ class ConfluenceReader(Reader):
     """
 
     def _load_data(self, page_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
+        """Load a Confluence page by id and return it as one document.
+
+        Args:
+            page_id: The id of the Confluence page to load.
+            ext_info: Optional extra info used to resolve credentials and to
+                enrich the page metadata.
+
+        Returns:
+            A list with one Document built from the page body text.
+        """
         print(f"debugging: ConfluenceReader start load page_id={page_id}")
         if not page_id:
             raise ValueError("ConfluenceReader requires page_id")
@@ -46,6 +56,15 @@ class ConfluenceReader(Reader):
 
     @staticmethod
     def _public_metadata(ext_info: Dict) -> Dict:
+        """Filter sensitive credential keys out of the given metadata.
+
+        Args:
+            ext_info: The metadata dictionary to filter.
+
+        Returns:
+            A new dictionary without keys such as token, password and
+            authorization.
+        """
         sensitive_keys = {
             "token",
             "password",
@@ -56,6 +75,14 @@ class ConfluenceReader(Reader):
         return {key: value for key, value in ext_info.items() if key not in sensitive_keys}
 
     def _resolve_cred(self, ext_info: Optional[Dict]) -> (str, str, str):
+        """Resolve the Confluence credentials from ext_info or the environment.
+
+        Args:
+            ext_info: Optional dict that may hold site_url, username and token.
+
+        Returns:
+            A tuple of (site_url, username, token).
+        """
         import os
         site_url = (ext_info or {}).get("site_url") or os.environ.get("CONFLUENCE_URL")
         username = (ext_info or {}).get("username") or os.environ.get("CONFLUENCE_USERNAME")
@@ -65,6 +92,15 @@ class ConfluenceReader(Reader):
         return site_url, username, token
 
     def _html_to_text(self, html: str) -> str:
+        """Convert HTML page content into normalized plain text.
+
+        Args:
+            html: The raw HTML string of the Confluence page.
+
+        Returns:
+            The extracted text with script/style blocks removed and blank
+            lines stripped.
+        """
         try:
             from bs4 import BeautifulSoup  # type: ignore
         except Exception:
