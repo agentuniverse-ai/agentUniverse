@@ -25,7 +25,14 @@ class GoogleSearchTool(Tool):
     serper_api_key: Optional[str] = Field(default_factory=lambda: get_from_env("SERPER_API_KEY"))
 
     def execute(self, input: str):
-        # get top10 results from Google search.
+        """Run a Google search and return the top results.
+
+        Args:
+            input (str): The search query.
+
+        Returns:
+            str: The top-10 Google search results returned by the Serper API.
+        """
         search_api = GoogleSerperAPIWrapper(serper_api_key=self.serper_api_key, k=10, gl="us", hl="en", type="search")
         res = search_api.run(query=input)
         return res
