@@ -7,7 +7,10 @@ from agentuniverse.agent.action.knowledge.reader.cloud.confluence_reader import 
 
 
 class TestConfluenceReader(unittest.TestCase):
+    """Tests for the ConfluenceReader._public_metadata helper."""
+
     def test_public_metadata_filters_token_fields(self):
+        """_public_metadata drops secret token/password style fields."""
         metadata = ConfluenceReader._public_metadata({
             "token": "secret",
             "password": "secret-2",
@@ -18,6 +21,7 @@ class TestConfluenceReader(unittest.TestCase):
         self.assertEqual(metadata, {"site_url": "https://example.atlassian.net"})
 
     def test_public_metadata_keeps_non_secret_fields(self):
+        """_public_metadata keeps ordinary non-secret fields untouched."""
         metadata = ConfluenceReader._public_metadata({
             "space": "ENG",
             "label": "design",
