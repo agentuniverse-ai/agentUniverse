@@ -10,6 +10,7 @@ from agentuniverse.agent.template.agent_template import AgentTemplate
 
 
 class DemoAgentTemplate(AgentTemplate):
+    """Demo agent template echoing a single ``input`` key to a demo output."""
 
     def input_keys(self) -> list[str]:
         """Return the input keys of the Agent."""
@@ -20,13 +21,43 @@ class DemoAgentTemplate(AgentTemplate):
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Put the request input under the ``input`` agent key.
+
+        Falls back to the template topic when the request carries no input.
+
+        Args:
+            input_object: The agent's input object.
+            agent_input: The dict of agent input parameters.
+
+        Returns:
+            dict: The agent input dict enriched with the ``input`` key.
+        """
         agent_input['input'] = input_object.get_data('input') or self.topic
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Return the raw agent result unchanged.
+
+        Args:
+            agent_result: The dict produced by the agent execution.
+
+        Returns:
+            dict: The same agent result dict.
+        """
         return agent_result
 
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
+        """Run the demo template and return a placeholder output.
+
+        Replace this body with the real template logic when extending the demo.
+
+        Args:
+            input_object: The agent's input object.
+            agent_input: The dict of agent input parameters.
+
+        Returns:
+            dict: The execution result, e.g. ``{'output': 'demo output.'}``.
+        """
         result = {'output': 'demo output.'}
         # Please fill out your template codes. The following is a sample of a peer template.
         # #================= sample ====================#
