@@ -5,6 +5,11 @@ from .service_manager import ServiceManager
 class ServiceNotFoundError(Exception):
     """An exception when service code is not in service manager."""
     def __init__(self, service_code: str):
+        """Initialize the exception with the code of the missing service.
+
+        Args:
+            service_code (str): The code of the service that was not found.
+        """
         super().__init__(f"Service {service_code} not found.")
         self.service_code = service_code
 
