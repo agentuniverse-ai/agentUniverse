@@ -113,6 +113,7 @@ class ConversationMessage(Message):
 
     @classmethod
     def check_and_convert_message(cls, messages, session_id: str = None):
+        """Check the given messages and convert them into instances of this class when needed."""
         if len(messages) == 0:
             return []
         message = messages[0]
