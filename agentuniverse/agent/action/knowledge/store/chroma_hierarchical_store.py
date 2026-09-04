@@ -107,6 +107,12 @@ class ChromaHierarchicalStore(ChromaStore):
 
     def _initialize_by_component_configer(self,
                                           chroma_store_configer: ComponentConfiger) -> 'DocProcessor':
+        """Initialize the store from the ComponentConfiger object.
+
+        Args:
+            chroma_store_configer (ComponentConfiger): A configer contains
+                the store configuration, from which the search depth is read.
+        """
         super()._initialize_by_component_configer(chroma_store_configer)
         if hasattr(chroma_store_configer, "search_depth"):
             self.search_depth = chroma_store_configer.search_depth
