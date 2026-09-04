@@ -25,6 +25,8 @@ class FrameworkContextManager:
 
     @property
     def context_dict(self) -> dict:
+        """Return the current task-level context dict, initializing it to an empty dict when unset.
+        """
         if not self.__context_dict.get(None):
             self.__context_dict.set({})
         return self.__context_dict.get({})
@@ -116,9 +118,17 @@ class FrameworkContextManager:
         return context_tokens
 
     def clear_all_contexts(self):
+        """Reset the current context dict so that all context variables are cleared.
+        """
         self.__context_dict.set({})
 
     def set_log_context(self, context_key: str, context_value: Any):
+        """Merge the given key-value pair into the LOG_CONTEXT dict of the current context.
+
+        Args:
+            context_key(str): The log context key.
+            context_value(Any): The log context value.
+        """
         current_context = self.get_context("LOG_CONTEXT")
         log_context = current_context.copy() if isinstance(current_context, dict) else {}
         log_context[context_key] = context_value
