@@ -122,6 +122,8 @@ class AzureOpenAIEmbedding(Embedding):
 
 
     def _initialize_clients(self) -> None:
+        """Initialize clients.
+        """
         if not self.azure_api_key:
             raise Exception("AZURE_OPENAI_API_KEY is missing")
         if not self.resource_name:
