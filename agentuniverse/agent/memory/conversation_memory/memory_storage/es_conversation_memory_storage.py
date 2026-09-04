@@ -231,6 +231,12 @@ class ElasticsearchMemoryStorage(MemoryStorage):
         return messages
 
     def _client(self):
+        """Create and return an HTTPX client bound to the Elasticsearch URL.
+
+        Returns:
+            httpx.Client: An HTTP client configured with retries and, when set,
+                the Elasticsearch basic-auth credentials.
+        """
         transport = httpx.HTTPTransport(retries=3)
         if self.user and self.password:
             return httpx.Client(
@@ -250,6 +256,12 @@ class DefaultMemoryConverter:
     """The default memory converter for ElasticsearchMemoryStorage."""
 
     def __init__(self, index_name: str, **kwargs: Any):
+        """Initialize the converter with the target Elasticsearch index name.
+
+        Args:
+            index_name (str): The name of the Elasticsearch index to write to.
+            **kwargs: Additional arguments forwarded to the parent initializer.
+        """
         super().__init__(**kwargs)
         self.index_name = index_name
 
