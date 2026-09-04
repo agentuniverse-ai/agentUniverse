@@ -25,6 +25,14 @@ else:
 
 
 def _get_tavily_client_class():
+    """Return the TavilyClient class if the tavily-python package is installed.
+
+    Raises:
+        ImportError: If the `tavily-python` package is not installed.
+
+    Returns:
+        type: The TavilyClient class.
+    """
     if TavilyClient is None:
         raise ImportError(
             "`tavily-python` not installed. Please install using `pip install tavily-python`"
