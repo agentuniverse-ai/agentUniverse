@@ -19,9 +19,11 @@ class TranslationAgentTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Start the AgentUniverse runtime with the sample app config before each test."""
         AgentUniverse().start(config_path='../../config/config.toml')
 
     def test_translation_agent_long(self):
+        """Run the translation_by_token agent over the long sample text and persist its output."""
         instance: Agent = AgentManager().get_instance_obj('translation_by_token_agent')
         with open('translation_data/long_text.txt', 'r') as f:
             data = f.read()
