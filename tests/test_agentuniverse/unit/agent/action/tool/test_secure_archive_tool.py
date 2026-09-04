@@ -20,16 +20,20 @@ YAML_PATH = os.path.join(os.path.dirname(archive_module.__file__), "secure_archi
 
 
 class SecureArchiveToolTest(unittest.TestCase):
+    """Unit tests for SecureArchiveTool create/list/info/extract operations in a temp directory."""
     def setUp(self):
+        """Create a temp directory, a SecureArchiveTool scoped to it, and two sample files."""
         self.directory = tempfile.TemporaryDirectory()
         self.tool = SecureArchiveTool(base_dir=self.directory.name)
         self.write("a.txt", b"alpha")
         self.write("nested/b.txt", b"beta")
 
     def tearDown(self):
+        """Remove the temporary working directory."""
         self.directory.cleanup()
 
     def write(self, name, data):
+        """Write bytes to the given relative path inside the temp directory, creating parent dirs."""
         path = os.path.join(self.directory.name, name)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as output:
@@ -37,6 +41,7 @@ class SecureArchiveToolTest(unittest.TestCase):
         return path
 
     def test_zip_round_trip(self):
+        """Verify creating, listing, and extracting a zip archive round-trips its contents."""
         created = self.tool.execute(mode="create", file_path="bundle.zip", input_paths=["a.txt", "nested"])
         self.assertEqual(created["status"], "success")
         self.assertEqual(created["entry_count"], 2)
@@ -48,6 +53,7 @@ class SecureArchiveToolTest(unittest.TestCase):
             self.assertEqual(stream.read(), b"beta")
 
     def test_tar_gz_round_trip(self):
+        """Verify creating, inspecting, and extracting a tar.gz archive round-trips its contents."""
         result = self.tool.execute(mode="create", file_path="bundle.tar.gz", input_paths=["nested"])
         self.assertEqual(result["status"], "success")
         info = self.tool.execute(mode="info", file_path="bundle.tar.gz")
@@ -57,12 +63,14 @@ class SecureArchiveToolTest(unittest.TestCase):
         self.assertEqual(extracted["entry_count"], 1)
 
     def test_selective_extract(self):
+        """Verify extract extracts only the members explicitly requested."""
         self.tool.execute(mode="create", file_path="bundle.zip", input_paths=["a.txt", "nested/b.txt"])
         result = self.tool.execute(mode="extract", file_path="bundle.zip", output_dir="out", members=["nested/b.txt"])
         self.assertEqual(len(result["output_paths"]), 1)
         self.assertFalse(os.path.exists(os.path.join(self.directory.name, "out/a.txt")))
 
     def test_extracts_zip_member_with_backslashes(self):
+        """Verify zip members with backslashes are normalized and extracted safely."""
         with zipfile.ZipFile(os.path.join(self.directory.name, "windows.zip"), "w") as archive:
             archive.writestr("nested\\file.txt", b"payload")
 
@@ -80,6 +88,7 @@ class SecureArchiveToolTest(unittest.TestCase):
             self.assertEqual(stream.read(), b"payload")
 
     def test_extracts_tar_member_with_backslashes(self):
+        """Verify tar members with backslashes are normalized and extracted safely."""
         payload = b"payload"
         with tarfile.open(os.path.join(self.directory.name, "windows.tar"), "w") as archive:
             info = tarfile.TarInfo("nested\\file.txt")
@@ -92,11 +101,13 @@ class SecureArchiveToolTest(unittest.TestCase):
             self.assertEqual(stream.read(), payload)
 
     def test_create_refuses_overwrite(self):
+        """Verify create refuses to overwrite an existing archive unless overwrite=true."""
         self.tool.execute(mode="create", file_path="bundle.zip", input_paths=["a.txt"])
         result = self.tool.execute(mode="create", file_path="bundle.zip", input_paths=["nested/b.txt"])
         self.assertIn("overwrite=true", result["error"])
 
     def test_extract_preflights_destinations(self):
+        """Verify extract preflights every destination and refuses to overwrite existing files."""
         self.tool.execute(mode="create", file_path="bundle.zip", input_paths=["a.txt", "nested/b.txt"])
         self.write("out/nested/b.txt", b"existing")
         result = self.tool.execute(mode="extract", file_path="bundle.zip", output_dir="out")
@@ -104,12 +115,14 @@ class SecureArchiveToolTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.directory.name, "out/a.txt")))
 
     def test_rejects_zip_slip(self):
+        """Verify zip members escaping the output directory are rejected as unsafe."""
         with zipfile.ZipFile(os.path.join(self.directory.name, "evil.zip"), "w") as archive:
             archive.writestr("../escape.txt", "bad")
         result = self.tool.execute(mode="list", file_path="evil.zip")
         self.assertIn("unsafe archive member", result["error"])
 
     def test_rejects_zip_symlink(self):
+        """Verify zip members that are symlinks are rejected."""
         info = zipfile.ZipInfo("link")
         info.create_system = 3
         info.external_attr = (stat.S_IFLNK | 0o777) << 16
@@ -119,6 +132,7 @@ class SecureArchiveToolTest(unittest.TestCase):
         self.assertIn("symlink", result["error"])
 
     def test_rejects_duplicate_members(self):
+        """Verify archives with duplicate member names are rejected."""
         with zipfile.ZipFile(os.path.join(self.directory.name, "duplicate.zip"), "w") as archive:
             archive.writestr("same.txt", "one")
             archive.writestr("same.txt", "two")
@@ -126,6 +140,7 @@ class SecureArchiveToolTest(unittest.TestCase):
         self.assertIn("duplicate", result["error"])
 
     def test_rejects_compression_bomb_ratio(self):
+        """Verify archives exceeding max_compression_ratio are rejected."""
         with zipfile.ZipFile(os.path.join(self.directory.name, "ratio.zip"), "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("large.txt", "x" * 100_000)
         self.tool.max_compression_ratio = 2
@@ -133,6 +148,7 @@ class SecureArchiveToolTest(unittest.TestCase):
         self.assertIn("max_compression_ratio", result["error"])
 
     def test_rejects_too_many_entries(self):
+        """Verify archives with more entries than max_entries are rejected."""
         with zipfile.ZipFile(os.path.join(self.directory.name, "many.zip"), "w") as archive:
             archive.writestr("one", "1")
             archive.writestr("two", "2")
@@ -141,6 +157,7 @@ class SecureArchiveToolTest(unittest.TestCase):
         self.assertIn("max_entries", result["error"])
 
     def test_input_and_output_path_escape(self):
+        """Verify input and output paths escaping the allowed directory are rejected."""
         result = self.tool.execute(mode="create", file_path="../bundle.zip", input_paths=["a.txt"])
         self.assertIn("escapes the allowed directory", result["error"])
         self.tool.execute(mode="create", file_path="bundle.zip", input_paths=["a.txt"])
@@ -148,10 +165,12 @@ class SecureArchiveToolTest(unittest.TestCase):
         self.assertIn("escapes the allowed directory", result["error"])
 
     def test_invalid_extension(self):
+        """Verify an unsupported archive extension is reported as an error."""
         result = self.tool.execute(mode="info", file_path="bundle.rar")
         self.assertIn(".zip", result["error"])
 
     def test_generated_size_limit_preserves_destination(self):
+        """Verify hitting max_write_bytes aborts create without touching the destination file."""
         self.write("bundle.zip", b"existing")
         self.tool.max_write_bytes = 1
         result = self.tool.execute(mode="create", file_path="bundle.zip", input_paths=["a.txt"], overwrite=True)
@@ -160,13 +179,16 @@ class SecureArchiveToolTest(unittest.TestCase):
             self.assertEqual(stream.read(), b"existing")
 
     def test_missing_member(self):
+        """Verify requesting a member absent from the archive reports an error."""
         self.tool.execute(mode="create", file_path="bundle.zip", input_paths=["a.txt"])
         result = self.tool.execute(mode="extract", file_path="bundle.zip", output_dir="out", members=["missing.txt"])
         self.assertIn("not found", result["error"])
 
 
 class SecureArchiveRegistrationTest(unittest.TestCase):
+    """Unit tests for registering the shipped secure_archive_tool.yaml as a tool component."""
     def setUp(self):
+        """Load the shipped yaml config and snapshot the current app configer state."""
         self.config = Configer(path=os.path.abspath(YAML_PATH)).load()
         try:
             self.previous = ApplicationConfigManager().app_configer
@@ -174,14 +196,17 @@ class SecureArchiveRegistrationTest(unittest.TestCase):
             self.previous = None
 
     def tearDown(self):
+        """Restore the app configer snapshot taken in setUp."""
         ApplicationConfigManager().app_configer = self.previous
 
     def test_schema(self):
+        """Verify the shipped yaml resolves to a tool component exposing the SecureArchiveTool class."""
         component = ComponentConfiger().load_by_configer(self.config)
         self.assertEqual(component.get_component_config_type(), ComponentEnum.TOOL.value)
         self.assertEqual(component.metadata_class, "SecureArchiveTool")
 
     def test_manager(self):
+        """Verify the SecureArchiveTool is resolvable and correctly configured via ToolManager."""
         configer = ToolConfiger().load_by_configer(self.config)
         app = AppConfiger()
         app.tool_configer_map = {configer.name: configer}
