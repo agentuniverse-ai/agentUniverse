@@ -15,12 +15,24 @@ from agentuniverse.agent.action.tool.common_tool.tool_input_utils import parse_s
 
 
 class WriteFileTool(Tool):
+    """Tool that writes text content to a file inside the configured base directory.
+    """
     base_dir: str = "."
 
     def execute(self,
                 file_path: str | ToolInput,
                 content: str = '',
                 append: bool = False) -> str:
+        """Write the given content to the target file, optionally appending, and return a JSON status string.
+
+        Args:
+            file_path(str | ToolInput): The file path, or a ToolInput holding it.
+            content(str): The text content to write.
+            append(bool): Whether to append to the file instead of overwriting.
+
+        Returns:
+            str: A JSON string with the write result and status.
+        """
         if isinstance(file_path, ToolInput):
             params = file_path.to_dict()
             content = params.get('content', content)
