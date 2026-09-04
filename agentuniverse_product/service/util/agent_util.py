@@ -479,6 +479,15 @@ def validate_and_assemble_agent_input(agent_id: str, session_id: str, input: str
 
 
 def get_chat_history_str(messages: List[dict]) -> str:
+    """Convert a list of chat history messages into a human-readable string.
+
+    Args:
+        messages (List[dict]): The list of chat messages, each a dict with
+            'type' (system/human/ai) and 'content' keys.
+
+    Returns:
+        str: The formatted chat history string.
+    """
     string_messages = []
     for m in messages:
         if m.get('type') == 'system':
