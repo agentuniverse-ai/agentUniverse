@@ -17,5 +17,6 @@ class EmbeddingManager(ComponentManagerBase[Embedding]):
     """A singleton manager class of the embedding."""
 
     def __init__(self):
+        """Initialize the embedding manager."""
         super().__init__(ComponentEnum.EMBEDDING)
 
