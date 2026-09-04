@@ -33,29 +33,35 @@ class TestPowerPointValidation(unittest.TestCase):
     """Input, configuration, path, and atomic-write boundaries."""
 
     def setUp(self) -> None:
+        """Set up a temporary directory and a PowerPointTool instance backed by it."""
         self.temp_dir_context = tempfile.TemporaryDirectory()
         self.base_dir = self.temp_dir_context.name
         self.tool = PowerPointTool(base_dir=self.base_dir)
 
     def tearDown(self) -> None:
+        """Clean up the temporary directory created in setUp."""
         self.temp_dir_context.cleanup()
 
     def test_invalid_mode_is_structured_error(self) -> None:
+        """Verify an unsupported mode is reported as a structured validation error."""
         result = self.tool.execute(mode="delete", file_path="deck.pptx")
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["error_type"], "validation_error")
         self.assertIn("invalid mode", result["error"])
 
     def test_rejects_non_pptx_extension(self) -> None:
+        """Verify a file path without the .pptx extension is rejected."""
         result = self.tool.execute(mode="info", file_path="deck.ppt")
         self.assertIn(".pptx extension", result["error"])
 
     def test_rejects_parent_path_escape(self) -> None:
+        """Verify a file path escaping the allowed base directory is rejected."""
         result = self.tool.execute(mode="info", file_path="../deck.pptx")
         self.assertEqual(result["error_type"], "validation_error")
         self.assertIn("escapes the allowed directory", result["error"])
 
     def test_rejects_symlink_escape(self) -> None:
+        """Verify a path resolving through a symlink out of the base directory is rejected."""
         with tempfile.TemporaryDirectory() as outside:
             outside_file = os.path.join(outside, "outside.pptx")
             with open(outside_file, "wb") as output:
@@ -68,22 +74,26 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("escapes the allowed directory", result["error"])
 
     def test_rejects_invalid_config_limit(self) -> None:
+        """Verify a non-positive integer configuration limit is rejected."""
         self.tool.max_slides = 0
         result = self.tool.execute(mode="info", file_path="deck.pptx")
         self.assertIn("max_slides must be a positive integer", result["error"])
 
     def test_rejects_boolean_config_limit(self) -> None:
+        """Verify a boolean value is rejected for an integer configuration limit."""
         self.tool.max_text_chars = True
         result = self.tool.execute(mode="info", file_path="deck.pptx")
         self.assertIn("max_text_chars must be a positive integer", result["error"])
 
     def test_rejects_invalid_pptx_archive(self) -> None:
+        """Verify a file that is not a PPTX ZIP archive is rejected in info mode."""
         with open(os.path.join(self.base_dir, "invalid.pptx"), "wb") as output:
             output.write(b"not-a-zip")
         result = self.tool.execute(mode="info", file_path="invalid.pptx")
         self.assertIn("not a valid PPTX ZIP archive", result["error"])
 
     def test_rejects_archive_expansion_over_limit(self) -> None:
+        """Verify an archive that expands beyond max_uncompressed_bytes is rejected."""
         archive_path = os.path.join(self.base_dir, "oversized.pptx")
         with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("ppt/slides/slide1.xml", "x" * 100)
@@ -92,6 +102,7 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("max_uncompressed_bytes", result["error"])
 
     def test_rejects_archive_entry_count_over_limit(self) -> None:
+        """Verify an archive with more entries than max_archive_entries is rejected."""
         archive_path = os.path.join(self.base_dir, "many-entries.pptx")
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("one", "1")
@@ -101,6 +112,7 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("max_archive_entries", result["error"])
 
     def test_rejects_file_size_over_read_limit_before_parsing(self) -> None:
+        """Verify a file larger than max_read_bytes is rejected before parsing."""
         presentation_path = os.path.join(self.base_dir, "oversized.pptx")
         with open(presentation_path, "wb") as output:
             output.write(b"PK" + b"x" * 30)
@@ -112,6 +124,7 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("max_read_bytes", result["error"])
 
     def test_rejects_invalid_template_archive(self) -> None:
+        """Verify an invalid template_path is rejected and the destination file is not created."""
         with open(os.path.join(self.base_dir, "template.pptx"), "wb") as output:
             output.write(b"not-a-template")
 
@@ -127,6 +140,7 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.base_dir, "deck.pptx")))
 
     def test_create_requires_non_empty_slides(self) -> None:
+        """Verify create mode rejects an empty slides list."""
         result = self.tool.execute(
             mode="create",
             file_path="deck.pptx",
@@ -135,6 +149,7 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("slides must be a non-empty list", result["error"])
 
     def test_rejects_unknown_slide_field(self) -> None:
+        """Verify create mode rejects slide dictionaries with unknown fields."""
         result = self.tool.execute(
             mode="create",
             file_path="deck.pptx",
@@ -143,6 +158,7 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("unknown fields: script", result["error"])
 
     def test_rejects_invalid_bullet_level(self) -> None:
+        """Verify a bullet with an out-of-range level is rejected."""
         result = self.tool.execute(
             mode="create",
             file_path="deck.pptx",
@@ -156,6 +172,7 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("integer from 0 to 8", result["error"])
 
     def test_rejects_table_column_overflow(self) -> None:
+        """Verify a table wider than max_table_columns is rejected."""
         self.tool.max_table_columns = 2
         result = self.tool.execute(
             mode="create",
@@ -165,6 +182,7 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("max_table_columns", result["error"])
 
     def test_rejects_text_budget_overflow(self) -> None:
+        """Verify slide text exceeding max_text_chars is rejected."""
         self.tool.max_text_chars = 5
         result = self.tool.execute(
             mode="create",
@@ -174,6 +192,7 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("exceeding max_text_chars", result["error"])
 
     def test_missing_dependency_has_install_hint(self) -> None:
+        """Verify a missing python-pptx dependency yields a dependency_error with an install hint."""
         with patch.object(
             self.tool,
             "_load_pptx",
@@ -188,14 +207,17 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertIn("pip install python-pptx", result["error"])
 
     def test_atomic_save_preserves_destination_when_size_limit_fails(self) -> None:
+        """Verify _atomic_save leaves the destination untouched when the written file exceeds max_write_bytes."""
         destination = os.path.join(self.base_dir, "deck.pptx")
         original = b"existing-presentation"
         with open(destination, "wb") as output:
             output.write(original)
 
         class OversizedPresentation:
+            """Fake presentation whose save writes a payload larger than the configured write limit."""
             @staticmethod
             def save(path):
+                """Write a 32-byte payload to the given destination path."""
                 with open(path, "wb") as output:
                     output.write(b"x" * 32)
 
@@ -208,14 +230,17 @@ class TestPowerPointValidation(unittest.TestCase):
         self.assertEqual(leftovers, [])
 
     def test_atomic_save_preserves_destination_when_expansion_limit_fails(self) -> None:
+        """Verify _atomic_save leaves the destination untouched when the archive expands beyond max_uncompressed_bytes."""
         destination = os.path.join(self.base_dir, "deck.pptx")
         original = b"existing-presentation"
         with open(destination, "wb") as output:
             output.write(original)
 
         class ExpandingPresentation:
+            """Fake presentation whose save writes a ZIP archive that expands beyond the configured uncompressed limit."""
             @staticmethod
             def save(path):
+                """Write a ZIP archive containing a 64-byte slide entry to the given destination path."""
                 with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
                     archive.writestr("ppt/slides/slide1.xml", "x" * 64)
 
@@ -233,14 +258,17 @@ class TestPowerPointOperations(unittest.TestCase):
     """Real, deterministic PPTX round trips without network access."""
 
     def setUp(self) -> None:
+        """Set up a temporary directory and a PowerPointTool instance backed by it."""
         self.temp_dir_context = tempfile.TemporaryDirectory()
         self.base_dir = self.temp_dir_context.name
         self.tool = PowerPointTool(base_dir=self.base_dir)
 
     def tearDown(self) -> None:
+        """Clean up the temporary directory created in setUp."""
         self.temp_dir_context.cleanup()
 
     def _create_deck(self, file_path: str = "deck.pptx"):
+        """Create a two-slide deck through the tool and return the execute result dict."""
         return self.tool.execute(
             mode="create",
             file_path=file_path,
@@ -267,6 +295,7 @@ class TestPowerPointOperations(unittest.TestCase):
         )
 
     def test_create_read_and_info_round_trip(self) -> None:
+        """Verify a created deck can be read back with slides, tables and notes intact and info summarizes it."""
         created = self._create_deck()
         self.assertEqual(created["status"], "success")
         self.assertEqual(created["slide_count"], 2)
@@ -289,6 +318,7 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertTrue(info["slides"][0]["has_notes"])
 
     def test_append_preserves_existing_slides(self) -> None:
+        """Verify append adds new slides while preserving the existing ones."""
         self._create_deck()
         appended = self.tool.execute(
             mode="append",
@@ -303,6 +333,7 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertEqual(read["slides"][2]["title"], "Next Steps")
 
     def test_create_refuses_overwrite_and_preserves_file(self) -> None:
+        """Verify create mode refuses to overwrite an existing file and leaves it byte-identical."""
         self._create_deck()
         deck_path = os.path.join(self.base_dir, "deck.pptx")
         with open(deck_path, "rb") as original_file:
@@ -318,6 +349,7 @@ class TestPowerPointOperations(unittest.TestCase):
             self.assertEqual(unchanged_file.read(), original)
 
     def test_create_can_overwrite_explicitly(self) -> None:
+        """Verify create mode with overwrite=True replaces the existing file."""
         self._create_deck()
         result = self.tool.execute(
             mode="create",
@@ -330,6 +362,7 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertEqual(result["slide_count"], 1)
 
     def test_template_preserves_template_slides(self) -> None:
+        """Verify creating from a template keeps template slides before the generated ones."""
         self.tool.execute(
             mode="create",
             file_path="template.pptx",
@@ -350,6 +383,7 @@ class TestPowerPointOperations(unittest.TestCase):
         )
 
     def test_read_truncates_to_context_budget(self) -> None:
+        """Verify read truncates emitted text to max_text_chars and flags the result as truncated."""
         self.tool.execute(
             mode="create",
             file_path="deck.pptx",
@@ -366,6 +400,7 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertLessEqual(emitted, 8)
 
     def test_append_rejects_result_over_slide_limit(self) -> None:
+        """Verify append is rejected when the result would exceed max_slides."""
         self._create_deck()
         self.tool.max_slides = 2
         result = self.tool.execute(
@@ -376,6 +411,7 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertIn("exceeding max_slides", result["error"])
 
     def test_unicode_ragged_table_and_explicit_layout_round_trip(self) -> None:
+        """Verify unicode text, ragged table rows and an explicit layout survive a create/read round trip."""
         created = self.tool.execute(
             mode="create",
             file_path="unicode.pptx",
@@ -399,6 +435,7 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertEqual(read["slides"][0]["notes"], "演讲人备注 ✓")
 
     def test_blank_layout_fallback_title_round_trip(self) -> None:
+        """Verify a blank-layout slide keeps its semantic title on read/info without emitting it as body text."""
         created = self.tool.execute(
             mode="create",
             file_path="blank-layout.pptx",
@@ -413,6 +450,7 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertEqual(info["slides"][0]["title"], "Semantic fallback title")
 
     def test_create_uses_write_limit_not_read_limit(self) -> None:
+        """Verify create mode enforces max_write_bytes rather than max_read_bytes."""
         self.tool.max_read_bytes = 1
         self.tool.max_write_bytes = 2 * 1024 * 1024
 
@@ -426,6 +464,7 @@ class TestPowerPointOperations(unittest.TestCase):
         self.assertGreater(created["file_size"], self.tool.max_read_bytes)
 
     def test_append_write_failure_preserves_original_presentation(self) -> None:
+        """Verify a failed append leaves the original deck byte-identical."""
         self._create_deck()
         deck_path = os.path.join(self.base_dir, "deck.pptx")
         with open(deck_path, "rb") as original_file:
@@ -444,6 +483,7 @@ class TestPowerPointOperations(unittest.TestCase):
             self.assertEqual(unchanged_file.read(), original)
 
     def test_template_slide_count_is_checked_before_destination_write(self) -> None:
+        """Verify the template-plus-requested slide count is validated before the destination is written."""
         self.tool.execute(
             mode="create",
             file_path="template.pptx",
@@ -467,6 +507,7 @@ class TestPowerPointOperations(unittest.TestCase):
     def test_read_caps_slide_count(self) -> None:
         # More slides than max_slides; read still succeeds but the archive
         # guard rejects the file before parsing.
+        """Verify reading a deck with more slides than max_slides is rejected by the archive guard."""
         many_slides = [{"title": f"slide {i}"} for i in range(5)]
         self.tool.execute(mode="create", file_path="many.pptx", slides=many_slides)
         self.tool.max_slides = 2
@@ -478,6 +519,7 @@ class TestPowerPointOperations(unittest.TestCase):
         # A slide with a body plus a table carries multiple shapes; the read
         # must stop at max_shapes_per_slide instead of walking every shape and
         # expanding every table cell into the result.
+        """Verify read stops walking shapes at max_shapes_per_slide and reports truncation without table rows."""
         self.tool.execute(
             mode="create",
             file_path="shapes.pptx",
@@ -493,6 +535,7 @@ class TestPowerPointOperations(unittest.TestCase):
 
     def test_read_caps_table_rows(self) -> None:
         # A table with more rows than max_table_rows; read must stop early.
+        """Verify read caps table rows at max_table_rows and flags the result as truncated."""
         big_rows = [[f"r{i}c0", f"r{i}c1"] for i in range(40)]
         self.tool.execute(
             mode="create",
@@ -508,6 +551,7 @@ class TestPowerPointOperations(unittest.TestCase):
 
     def test_read_caps_table_columns(self) -> None:
         # A wide table; read must stop at max_table_columns per row.
+        """Verify read caps table columns at max_table_columns per row and flags the result as truncated."""
         wide_row = [str(i) for i in range(15)]
         self.tool.execute(
             mode="create",
@@ -526,6 +570,7 @@ class TestPowerPointOperations(unittest.TestCase):
         # Once max_text_chars is consumed, the read must stop traversing rather
         # than continuing to walk every remaining slide/shape and padding the
         # result with empty strings.
+        """Verify read stops traversing once max_text_chars is exhausted instead of padding the result."""
         slides = [{"title": f"title-{i}", "bullets": [f"body text line {i}"]} for i in range(15)]
         self.tool.execute(mode="create", file_path="mixed.pptx", slides=slides)
         self.tool.max_text_chars = 30
@@ -545,6 +590,7 @@ class TestPowerPointRegistration(unittest.TestCase):
     """Load the shipped YAML through the real component pipeline."""
 
     def setUp(self) -> None:
+        """Load the powerpoint_tool.yaml config and stash the current application configer so it can be restored."""
         self.configer = Configer(path=os.path.abspath(YAML_PATH)).load()
         try:
             self.previous_app_configer = ApplicationConfigManager().app_configer
@@ -552,9 +598,11 @@ class TestPowerPointRegistration(unittest.TestCase):
             self.previous_app_configer = None
 
     def tearDown(self) -> None:
+        """Restore the application configer saved in setUp."""
         ApplicationConfigManager().app_configer = self.previous_app_configer
 
     def test_yaml_resolves_to_tool_component(self) -> None:
+        """Verify the yaml loads as a TOOL component pointing at the PowerPointTool module and class."""
         component = ComponentConfiger().load_by_configer(self.configer)
         self.assertEqual(
             component.get_component_config_type(),
@@ -567,6 +615,7 @@ class TestPowerPointRegistration(unittest.TestCase):
         self.assertEqual(component.metadata_class, "PowerPointTool")
 
     def test_tool_manager_resolves_configured_tool(self) -> None:
+        """Verify ToolManager instantiates the configured PowerPointTool with the expected defaults."""
         tool_configer = ToolConfiger().load_by_configer(self.configer)
         app_configer = AppConfiger()
         app_configer.tool_configer_map = {tool_configer.name: tool_configer}
