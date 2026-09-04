@@ -121,6 +121,8 @@ class ContextSegment(BaseModel):
     _content_hash: Optional[str] = None
 
     def __init__(self, **data):
+        """Initialize the context model.
+        """
         super().__init__(**data)
         self._content_hash = self._calculate_content_hash()
 
