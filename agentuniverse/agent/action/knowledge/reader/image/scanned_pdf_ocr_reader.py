@@ -19,6 +19,18 @@ class ScannedPdfOCRReader(Reader):
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
+        """Extract text from a scanned PDF, preferring pypdf extraction and falling back to page-level OCR, returning a single Document.
+
+        Args:
+            file(Union[str, Path]): Path of the pdf file.
+            ext_info(Optional[Dict]): Extra metadata merged into the document.
+
+        Returns:
+            List[Document]: A one-element list with the extracted text.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
         print(f"debugging: ScannedPdfOCRReader start load file={file}")
         if isinstance(file, str):
             file = Path(file)
@@ -58,6 +70,14 @@ class ScannedPdfOCRReader(Reader):
         return [Document(text=text_all, metadata=metadata)]
 
     def _count_pdf_pages(self, file: Path) -> int:
+        """Return the number of pages of the pdf file, or 0 when the file can not be parsed.
+
+        Args:
+            file(Path): Path of the pdf file.
+
+        Returns:
+            int: The page count.
+        """
         try:
             import pypdf  # type: ignore
             with open(file, "rb") as fp:
@@ -68,6 +88,18 @@ class ScannedPdfOCRReader(Reader):
 
     def _ocr_pdf_page(self, file: Path, page_index: int) -> (str, str):
         # Convert PDF page to image
+        """OCR a single pdf page by rendering it to an image and running PaddleOCR, pytesseract or easyocr.
+
+        Args:
+            file(Path): Path of the pdf file.
+            page_index(int): The zero-based page index.
+
+        Returns:
+            tuple: The recognized text and the engine name used.
+
+        Raises:
+            ImportError: If pdf2image is not installed.
+        """
         try:
             from pdf2image import convert_from_path  # type: ignore
         except Exception:
