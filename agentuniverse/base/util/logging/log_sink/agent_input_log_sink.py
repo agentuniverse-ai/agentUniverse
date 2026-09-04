@@ -13,12 +13,27 @@ from agentuniverse.base.util.monitor.monitor import Monitor
 
 
 class AgentInputLogSink(BaseFileLogSink):
+    """Log sink that records the agent invocation input to a file log."""
+
     log_type: LogTypeEnum = LogTypeEnum.agent_input
 
     def process_record(self, record):
+        """Rewrite the record message with the generated agent input log.
+
+        Args:
+            record: The log record dict being processed.
+        """
         record["message"] = self.generate_log(
             agent_input=record['extra'].get('agent_input')
         )
 
     def generate_log(self, agent_input: Union[str, dict]) -> str:
+        """Build the agent input log message.
+
+        Args:
+            agent_input: The agent input, either a plain string or a dict.
+
+        Returns:
+            str: The invocation chain prefix followed by the agent input text.
+        """
         return Monitor.get_invocation_chain_str() + f" Agent input is {agent_input}"
