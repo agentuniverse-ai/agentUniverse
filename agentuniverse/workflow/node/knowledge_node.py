@@ -17,6 +17,8 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 
 class KnowledgeNodeData(NodeData):
+    """NodeData subclass holding the knowledge node input configuration.
+    """
     inputs: Optional[KnowledgeNodeInputParams] = None
 
 
@@ -26,10 +28,26 @@ class KnowledgeNode(Node):
     _data_cls = KnowledgeNodeData
 
     def __init__(self, **kwargs):
+        """Initialize the knowledge node and set its type to the knowledge node enum.
+
+        Args:
+            **kwargs: Field values for the node.
+        """
         super().__init__(**kwargs)
         self.type = NodeEnum.KNOWLEDGE
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        """Query the configured knowledge instances with the resolved input parameters and concatenate the retrieved document texts.
+
+        Args:
+            workflow_output(WorkflowOutput): The workflow execution output.
+
+        Returns:
+            NodeOutput: The node output holding the retrieved knowledge text.
+
+        Raises:
+            ValueError: If a referenced knowledge is not registered.
+        """
         inputs: KnowledgeNodeInputParams = self._data.inputs
 
         param_map = {
