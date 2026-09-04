@@ -40,7 +40,7 @@ class ComponentEnum(Enum):
     CONTEXT_ROUTER = "CONTEXT_ROUTER"
 
     @staticmethod
-    def to_value_list():
+    def to_value_list() -> list:
         """Return the value list of the enumeration."""
         return [item.value for item in ComponentEnum]
 
