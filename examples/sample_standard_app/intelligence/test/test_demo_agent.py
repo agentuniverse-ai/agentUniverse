@@ -22,7 +22,7 @@ class DemoAgentTest(unittest.TestCase):
     def setUp(self) -> None:
         AgentUniverse().start(config_path='../../config/config.toml')
 
-    def read_output(self, output_stream: queue.Queue):
+    def read_output(self, output_stream: queue.Queue) -> None:
         while True:
             try:
                 res = output_stream.get()
@@ -32,7 +32,7 @@ class DemoAgentTest(unittest.TestCase):
             except queue.Empty:
                 break
 
-    def test_demo_agent_stream(self):
+    def test_demo_agent_stream(self) -> None:
         output_stream = queue.Queue(10)
         instance: Agent = AgentManager().get_instance_obj('demo_agent')
         Thread(target=self.read_output, args=(output_stream,)).start()
