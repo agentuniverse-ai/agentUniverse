@@ -42,6 +42,8 @@ class LLM(ComponentBase):
     """
 
     class Config:
+        """Pydantic configuration allowing arbitrary attribute types."""
+
         arbitrary_types_allowed = True
 
     client: Any = None
@@ -222,6 +224,14 @@ class LLM(ComponentBase):
             raise e
 
     def create_copy(self):
+        """Create a copy of the llm instance.
+
+        The copy deep-copies ``ext_info`` when set and shares the
+        client, async_client and langchain_instance references.
+
+        Returns:
+            LLM: The copied llm instance.
+        """
         copied = self.model_copy()
         if self.ext_info is not None:
             copied.ext_info = deepcopy(self.ext_info)
