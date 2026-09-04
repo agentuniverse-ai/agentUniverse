@@ -35,11 +35,11 @@ class RecursiveCharacterTextSplitter(DocProcessor):
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> \
             List[Document]:
         """Split documents recursively using character separators.
-        
+
         Args:
             origin_docs: List of documents to be split.
             query: Optional query object (not used in this processor).
-            
+
         Returns:
             List of split document chunks.
         """
@@ -51,10 +51,10 @@ class RecursiveCharacterTextSplitter(DocProcessor):
     def _initialize_by_component_configer(self,
                                          doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
         """Initialize splitter parameters from configuration.
-        
+
         Args:
             doc_processor_configer: Configuration object containing splitter parameters.
-            
+
         Returns:
             Initialized document processor instance.
         """
