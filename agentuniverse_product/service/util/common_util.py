@@ -15,6 +15,11 @@ def dict_does_not_contain_keys(d: dict, keys: list) -> bool:
 
 
 def get_core_path():
+    """Resolve the platform core directory path when it exists.
+
+    Returns:
+        Path or None: The core path, or None when no core directory is found.
+    """
     if os.path.exists(os.path.join('..', 'core')):
         return Path(os.path.join('..', 'core'))
     elif os.path.exists(os.path.join('..', '..', 'app', 'core')):
@@ -23,6 +28,11 @@ def get_core_path():
 
 
 def get_resources_path():
+    """Resolve the platform resources directory path.
+
+    Returns:
+        Path: The resources directory path.
+    """
     if os.path.exists(os.path.join('..', '..', 'platform', 'difizen', 'resources')):
         return Path(os.path.join('..', '..', 'platform', 'difizen', 'resources'))
     elif os.path.exists(os.path.join('..', 'resources')):
