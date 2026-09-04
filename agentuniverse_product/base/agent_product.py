@@ -21,6 +21,7 @@ class AgentProduct(Product):
 
     @property
     def instance(self) -> Agent:
+        """Return the concrete Agent instance bound to this product."""
         return self._instance
 
     def get_instance_code(self) -> str:
