@@ -11,6 +11,8 @@ from functools import lru_cache
 
 
 class LLMModelEnum(Enum):
+    """Llm Model Enum.
+    """
     QWEN = "qwen"
     DEEPSEEK = "deepseek"
     OPENAI = "openai"
