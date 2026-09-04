@@ -15,6 +15,12 @@ from agentuniverse.base.agentuniverse import AgentUniverse
 AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 def chat():
+    """Run the translation agent on the bundled long text and save the result.
+
+    Reads the source text from ``translation_data/long_text.txt``, translates it
+    with the ``translation_by_token_agent`` instance and writes the result to
+    ``translation_data/long_text_result.txt``, printing it to stdout.
+    """
     instance: Agent = AgentManager().get_instance_obj('translation_by_token_agent')
     with open('translation_data/long_text.txt', 'r') as f:
         data = f.read()
