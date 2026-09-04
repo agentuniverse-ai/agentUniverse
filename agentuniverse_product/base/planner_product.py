@@ -20,6 +20,7 @@ class PlannerProduct(Product):
 
     @property
     def instance(self) -> Planner:
+        """Return the concrete Planner instance bound to this product."""
         return self._instance
 
     def initialize_by_component_configer(self,
