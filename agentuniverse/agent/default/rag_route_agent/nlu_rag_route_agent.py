@@ -52,6 +52,8 @@ class NluRagRouteAgent(RagAgentTemplate):
         return LLMManager().get_instance_obj(llm_name)
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'NluRagRouteAgent':
+        """Initialize this component from a component configer and return itself.
+        """
         super().initialize_by_component_configer(component_configer)
         self.prompt_version = self.agent_model.profile.get('prompt_version', 'nlu_rag_route_prompt.cn')
         return self
