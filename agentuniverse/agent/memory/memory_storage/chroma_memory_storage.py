@@ -227,4 +227,6 @@ class ChromaMemoryStorage(MemoryStorage):
 
     @staticmethod
     def is_nested_list(variable: List) -> bool:
+        """Return whether the given value is a nested list structure.
+        """
         return isinstance(variable, list) and len(variable) > 0 and isinstance(variable[0], list)
