@@ -9,7 +9,7 @@ import re
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 
 
-def get_current_context_archive():
+def get_current_context_archive() -> dict:
     """Get (and lazily initialize) the current context archive.
 
         The archive is stored in FrameworkContextManager under the key
@@ -34,7 +34,7 @@ def get_current_context_archive():
     return context_archive
 
 
-def update_context_archive(name, data, description):
+def update_context_archive(name, data, description) -> None:
     """Update (or insert) a record in the current context archive.
 
         This method is a convenience wrapper to store arbitrary structured data
