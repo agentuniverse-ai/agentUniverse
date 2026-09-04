@@ -16,6 +16,11 @@ class ServerApplication:
 
     @classmethod
     def start(cls):
+        """Start the agentUniverse core and the web server.
+
+        Bootstraps AgentUniverse, then starts the web server (HTTP and,
+        if configured, gRPC) that serves the application services.
+        """
         AgentUniverse().start()
         start_web_server()
 
