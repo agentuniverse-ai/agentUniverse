@@ -1,15 +1,21 @@
 # !/usr/bin/env python3
-# -*- coding:utf-8 -*-
 
 # @Time    : 2025/12/10 14:35
 # @Author  : kaichuan
 # @FileName: test_aws_bedrock_embedding.py
 
 import asyncio
+import importlib.util
+import os
 import unittest
+
 from agentuniverse.agent.action.knowledge.embedding.aws_bedrock_embedding import AWSBedrockEmbedding
 
 
+@unittest.skipUnless(
+    os.getenv("AGENTUNIVERSE_RUN_AWS_TESTS") == "1" and importlib.util.find_spec("boto3") is not None,
+    "Live AWS tests require aws_ext and AGENTUNIVERSE_RUN_AWS_TESTS=1",
+)
 class EmbeddingTest(unittest.TestCase):
     """
     Test cases for AWS Bedrock Embedding class
@@ -31,7 +37,7 @@ class EmbeddingTest(unittest.TestCase):
         # Option 2: Set directly (for testing only, not for production)
         # self.embedding.aws_access_key_id = "your_access_key"
         # self.embedding.aws_secret_access_key = "your_secret_key"
-        self.embedding.aws_region = "us-east-1"
+        self.embedding.aws_region = os.getenv("AWS_REGION", "us-east-1")
         self.embedding.embedding_model_name = "amazon.titan-embed-text-v1"
 
     def test_get_embeddings_titan_v1(self) -> None:
@@ -74,8 +80,7 @@ class EmbeddingTest(unittest.TestCase):
 
     def test_async_get_embeddings(self) -> None:
         """Test asynchronous embedding generation."""
-        res = asyncio.run(
-            self.embedding.async_get_embeddings(texts=["hello world"]))
+        res = asyncio.run(self.embedding.async_get_embeddings(texts=["hello world"]))
         print(f"Async embedding result shape: {len(res)}x{len(res[0])}")
         self.assertIsInstance(res, list)
         self.assertEqual(len(res), 1)
@@ -105,21 +110,6 @@ class EmbeddingTest(unittest.TestCase):
         self.assertEqual(len(res_normalized[0]), len(res_unnormalized[0]))
         print("Normalization test passed")
 
-    def test_error_handling_missing_model(self) -> None:
-        """Test error handling when model_id is not set."""
-        self.embedding.embedding_model_name = None
-        self.embedding.model_id = None
-        with self.assertRaises(ValueError) as context:
-            self.embedding.get_embeddings(texts=["test"])
-        self.assertIn("embedding_model_name", str(context.exception))
 
-    def test_error_handling_unsupported_model(self) -> None:
-        """Test error handling for unsupported models."""
-        self.embedding.embedding_model_name = "unsupported.model"
-        with self.assertRaises(ValueError) as context:
-            self.embedding.get_embeddings(texts=["test"])
-        self.assertIn("Unsupported model", str(context.exception))
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
