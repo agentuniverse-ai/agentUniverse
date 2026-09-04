@@ -21,6 +21,8 @@ ZHIPU_MAX_CONTEXT_LENGTH = {
 
 
 class ZhiPuOfficialLLMChannel(LLMChannel):
+    """Zhi pu official llm channel.
+    """
     channel_api_base: Optional[str] = "https://open.bigmodel.cn/api/paas/v4/"
 
     def max_context_length(self) -> int:
