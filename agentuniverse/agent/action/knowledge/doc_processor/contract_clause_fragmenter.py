@@ -42,6 +42,8 @@ class ClauseNode:
     position: int = 0
 
     def __post_init__(self):
+        """Initialize the dataclass fields, defaulting children_ids to an empty list when it is None.
+        """
         if self.children_ids is None:
             self.children_ids = []
 
@@ -69,6 +71,11 @@ class ContractClauseFragmenter(DocProcessor):
     skip_on_error: bool = True
 
     def __init__(self, **data):
+        """Initialize the fragmenter and populate the default clause-detection regex patterns when none were provided.
+
+        Args:
+            **data: Field values for the fragmenter.
+        """
         super().__init__(**data)
         if self.clause_patterns is None:
             self.clause_patterns = [
