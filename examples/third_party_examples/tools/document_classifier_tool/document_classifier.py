@@ -62,6 +62,10 @@ class DocumentClassifier(DocProcessor):
     confidence_key: str = "classification_confidence"
     
     class Config:
+        """Pydantic模型配置
+
+        允许模型字段使用任意类型，以支持文档对象等自定义类型字段。
+        """
         arbitrary_types_allowed = True
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> List[Document]:
