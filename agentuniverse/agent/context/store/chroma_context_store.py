@@ -103,10 +103,25 @@ class ChromaContextStore(ContextStore):
                 if hasattr(llm, 'get_embeddings'):
                     # Custom wrapper for LLM embeddings
                     class LLMEmbeddingFunction:
+                        """Minimal chroma embedding function that embeds each text through a wrapped LLM instance.
+                        """
                         def __init__(self, llm_instance):
+                            """Wrap the given LLM instance so it can embed texts for chroma.
+
+                            Args:
+                                llm_instance: The LLM instance exposing get_embeddings.
+                            """
                             self.llm = llm_instance
 
                         def __call__(self, texts: List[str]) -> List[List[float]]:
+                            """Embed a list of texts by calling get_embeddings on each one.
+
+                            Args:
+                                texts(List[str]): The texts to embed.
+
+                            Returns:
+                                List[List[float]]: The embeddings of the input texts.
+                            """
                             return [self.llm.get_embeddings(text) for text in texts]
 
                     self._embedding_function = LLMEmbeddingFunction(llm)
