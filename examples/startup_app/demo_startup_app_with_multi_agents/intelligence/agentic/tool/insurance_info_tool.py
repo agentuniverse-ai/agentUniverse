@@ -11,7 +11,17 @@ from demo_startup_app_with_multi_agents.intelligence.utils.constant.prod_descrip
 
 
 class InsuranceInfoTool(Tool):
+    """A tool that returns the description of the given insurance product."""
+
     def execute(self, ins_name: str):
+        """Return the description matching the given insurance product name.
+
+        Args:
+            ins_name: The insurance product name (e.g. '保险产品A').
+
+        Returns:
+            The description of the matching product, defaulting to product B.
+        """
         if ins_name == '保险产品A':
             return PROD_A_DESCRIPTION
         if ins_name == '保险产品B':
