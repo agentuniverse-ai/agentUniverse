@@ -12,8 +12,21 @@ from agentuniverse.agent.action.tool.common_tool.run_command_tool import get_com
 
 
 class CommandStatusTool(Tool):
+    """Tool that returns the status message of a previously launched command thread."""
+
     @staticmethod
     def _normalize_thread_id(thread_id):
+        """Normalize a thread id value into an int.
+
+        Args:
+            thread_id: The raw thread id.
+
+        Returns:
+            int: The normalized thread id.
+
+        Raises:
+            ValueError: If the value is not an integer-like value.
+        """
         if isinstance(thread_id, bool):
             raise ValueError("thread_id must be an integer")
         if isinstance(thread_id, int):
@@ -23,6 +36,14 @@ class CommandStatusTool(Tool):
         raise ValueError("thread_id must be an integer")
 
     def execute(self, thread_id: int | ToolInput) -> str:
+        """Return the status message of the command with the given thread id as a JSON string.
+
+        Args:
+            thread_id(int | ToolInput): The thread id, or a ToolInput holding it.
+
+        Returns:
+            str: A JSON string with the command status.
+        """
         if isinstance(thread_id, ToolInput):
             thread_id = thread_id.get_data("thread_id")
         try:
