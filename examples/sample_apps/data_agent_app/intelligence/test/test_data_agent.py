@@ -16,9 +16,11 @@ class DataAgentTest(unittest.TestCase):
     """Test cases for the data agent"""
 
     def setUp(self) -> None:
+        """Start the agent universe with the app configuration before each test."""
         AgentUniverse().start(config_path='../../config/config.toml')
 
     def test_data_agent(self):
+        """Run the data agent against the configured query set."""
         instance: Agent = AgentManager().get_instance_obj('data_agent')
         instance.run(queryset_path='', turn=2)
 
