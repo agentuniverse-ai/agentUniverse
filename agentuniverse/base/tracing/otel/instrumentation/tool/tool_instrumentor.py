@@ -88,7 +88,7 @@ class ToolSpanManager:
         init_new_token_usage()
         return self.span
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Cleanup span and context."""
         add_current_token_usage_to_parent()
         if self.span:
@@ -207,7 +207,7 @@ class ToolInstrumentor(BaseInstrumentor):
         self._original_tool_wrapper_sync = None
         self._original_tool_wrapper_async = None
 
-    def instrumentation_dependencies(self):
+    def instrumentation_dependencies(self) -> list:
         return []
 
     def _instrument(self, **kwargs):
