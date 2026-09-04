@@ -8,6 +8,8 @@
 
 
 def show_au_start_banner():
+    """Print the agentUniverse ASCII start banner to stdout.
+    """
     python_art_text = f"""
 ╔═════════════════════════════════════════════════════════╗
 ║   █ █ █▀▀ █   █▀▀ █▀█ █▄█ █▀▀   ▀█▀ █▀█                 ║
@@ -23,6 +25,12 @@ def show_au_start_banner():
 
 
 def print_gradient_text(text, colors_range):
+    """Print text where each character is colored by interpolating over the given 256-color palette.
+
+    Args:
+        text: The text to print.
+        colors_range: List of xterm 256 color codes used for the gradient.
+    """
     length = len(text)
     result = []
 
