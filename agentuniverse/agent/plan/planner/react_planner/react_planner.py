@@ -78,6 +78,15 @@ class ReActPlanner(Planner):
 
     @staticmethod
     def get_run_config(agent_model: AgentModel, input_object: InputObject) -> RunnableConfig:
+        """Build the RunnableConfig with stream-output and invoke callbacks.
+
+        Args:
+            agent_model (AgentModel): The agent model whose info and profile drive the callbacks.
+            input_object (InputObject): The user input carrying the optional output stream.
+
+        Returns:
+            RunnableConfig: Config with stream-output and invoke callbacks registered.
+        """
         config = RunnableConfig()
         callbacks = []
         output_stream = input_object.get_data('output_stream')
@@ -89,6 +98,14 @@ class ReActPlanner(Planner):
 
     @staticmethod
     def acquire_tools(action) -> list[LangchainTool]:
+        """Resolve the action's tools, knowledge and agents into LangChain tools.
+
+        Args:
+            action: The action dict listing the tool, knowledge and agent names.
+
+        Returns:
+            list[LangchainTool]: The LangChain tool list built from the resolved instances.
+        """
         tool_names: list = action.get('tool') or list()
         lc_tools: list[LangchainTool] = list()
         for tool_name in tool_names:
