@@ -19,6 +19,8 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 
 class AgentNodeData(NodeData):
+    """NodeData subclass holding the agent node input configuration.
+    """
     inputs: AgentNodeInputParams
 
 
@@ -28,10 +30,26 @@ class AgentNode(Node):
     _data_cls = AgentNodeData
 
     def __init__(self, **kwargs):
+        """Initialize the agent node and set its type to the agent node enum.
+
+        Args:
+            **kwargs: Field values for the node.
+        """
         super().__init__(**kwargs)
         self.type = NodeEnum.AGENT
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        """Run the referenced agent with the resolved input parameters and map its output dict back to the declared output parameters.
+
+        Args:
+            workflow_output(WorkflowOutput): The workflow execution output.
+
+        Returns:
+            NodeOutput: The node output holding the mapped agent results.
+
+        Raises:
+            ValueError: If the referenced agent is not registered.
+        """
         inputs: AgentNodeInputParams = self._data.inputs
 
         param_map = {
