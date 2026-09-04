@@ -34,13 +34,16 @@ class TestGetInstanceObjStrict(unittest.TestCase):
     """Unit tests for the ``strict`` flag on get_instance_obj."""
 
     def setUp(self) -> None:
+        """Set up a fresh store component manager for each test."""
         self.mgr = ComponentManagerBase(ComponentEnum.STORE)
 
     def test_default_returns_none_when_unregistered(self) -> None:
+        """A missing component still resolves to ``None`` by default."""
         # Default behaviour is unchanged: a missing component resolves to None.
         self.assertIsNone(self.mgr.get_instance_obj("missing", appname="test_app"))
 
     def test_strict_raises_value_error_naming_component(self) -> None:
+        """Strict mode turns the silent ``None`` into a ``ValueError`` naming the component."""
         # strict=True turns the silent None into an actionable error that names
         # both the component code and its type, instead of letting the caller
         # blow up later with 'NoneType' object has no attribute 'query'.
@@ -51,6 +54,7 @@ class TestGetInstanceObjStrict(unittest.TestCase):
         self.assertIn(ComponentEnum.STORE.value, msg)
 
     def test_strict_returns_copy_when_registered(self) -> None:
+        """Strict mode keeps the happy path: a registered component comes back as a copy."""
         # strict must not change the happy path: a registered component is
         # still returned (as an independent copy when new_instance=True).
         copy_sentinel = object()
@@ -62,6 +66,7 @@ class TestGetInstanceObjStrict(unittest.TestCase):
         self.assertIs(result, copy_sentinel)
 
     def test_strict_returns_raw_instance_when_new_instance_false(self) -> None:
+        """The registered instance itself is returned when ``new_instance`` is False."""
         dummy = MagicMock()
         self.mgr._instance_obj_map["test_app.store.my_store"] = dummy
         result = self.mgr.get_instance_obj(
@@ -74,6 +79,7 @@ class TestKnowledgeRegistrationErrors(unittest.TestCase):
     store instead of a cryptic AttributeError."""
 
     def test_query_knowledge_raises_clear_error_for_unregistered_store(self) -> None:
+        """End-to-end check that ``query_knowledge`` reports a descriptive error."""
         knowledge = Knowledge(
             name="guard_knowledge",
             stores=["definitely_unregistered_store"],
@@ -108,6 +114,7 @@ class TestStrictLookupWithChannelFusion(unittest.TestCase):
     """
 
     def test_strict_lookup_runs_alongside_channel_aware_fusion(self) -> None:
+        """Strict store lookup must coexist with channel-aware RRF fusion recall."""
         from agentuniverse.agent.action.knowledge.doc_processor.\
             reciprocal_rank_fusion_processor import ReciprocalRankFusionProcessor
         from agentuniverse.agent.action.knowledge.knowledge import \
@@ -115,10 +122,14 @@ class TestStrictLookupWithChannelFusion(unittest.TestCase):
         from agentuniverse.agent.action.knowledge.store.document import Document
 
         class _FakeStore:
+            """Minimal in-memory store stub backed by the given documents."""
+
             def __init__(self, docs):
+                """Store the source documents for later queries."""
                 self._docs = docs
 
             def query(self, query):
+                """Return one Document per stored document, copying text and metadata."""
                 return [Document(text=d.text, metadata=dict(d.metadata or {}))
                         for d in self._docs]
 
