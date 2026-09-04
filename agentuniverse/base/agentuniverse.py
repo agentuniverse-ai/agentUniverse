@@ -42,6 +42,8 @@ class AgentUniverse(object):
        system variables management, etc."""
 
     def __init__(self):
+        """Initialize the agentUniverse framework object: create the component and config containers and the system default package lists.
+        """
         self.__application_container = ApplicationComponentManager()
         self.__config_container: ApplicationConfigManager = ApplicationConfigManager()
         self.__system_default_agent_package = ['agentuniverse.agent.default']
@@ -388,6 +390,12 @@ class AgentUniverse(object):
         return cls(configer) if configer else cls()
 
     def _add_to_sys_path(self, root_path, sub_dirs):
+        """Append every existing sub directory under root_path to sys.path.
+
+        Args:
+            root_path: The project root path.
+            sub_dirs: List of relative sub directory names to add.
+        """
         for sub_dir in sub_dirs:
             app_path = root_path / sub_dir
             if app_path.exists():
