@@ -9,12 +9,15 @@ from agentuniverse.agent.action.knowledge.reader.file.sevenzip_reader import Sev
 class TestSevenZipReaderBasic(unittest.TestCase):
     """SevenZipReader 基础功能测试"""
     def setUp(self):
+        """Create a fresh SevenZipReader instance and a temporary directory per test."""
         self.reader = SevenZipReader()
         self.temp_dir = tempfile.mkdtemp()
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     def create_test_files(self):
+        """Create sample txt/py/json/yaml files in the temp dir and return their paths."""
         test_txt_path = os.path.join(self.temp_dir, "test.txt")
         with open(test_txt_path, 'w', encoding='utf-8') as f:
             f.write("这是一个测试文本文件，用于验证 7Z 读取器功能。")
@@ -33,6 +36,7 @@ class TestSevenZipReaderBasic(unittest.TestCase):
             f.write("""app:\n  name: "7Z Test Application"\n  debug: true\ndatabase:\n  host: "localhost"\n  port: 5432""")
         return [test_txt_path, test_py_path, test_json_path, test_yaml_path]
     def create_test_7z(self, files=None, password=None):
+        """Create a .7z archive of the given files; skip if py7zr is unavailable."""
         try:
             import py7zr
         except ImportError:
@@ -53,6 +57,7 @@ class TestSevenZipReaderBasic(unittest.TestCase):
             self.skipTest(f"Failed to create 7Z archive: {e}")
         return test_7z_path
     def test_load_data_success(self):
+        """All created files are extracted as documents from the archive."""
         try:
             import py7zr
         except ImportError:
@@ -66,6 +71,7 @@ class TestSevenZipReaderBasic(unittest.TestCase):
         self.assertIn('test.py', file_names)
         self.assertIn('config.json', file_names)
     def test_load_data_with_custom_metadata(self):
+        """Custom ext_info metadata is attached to every extracted document."""
         try:
             import py7zr
         except ImportError:
@@ -79,10 +85,12 @@ class TestSevenZipReaderBasic(unittest.TestCase):
         self.assertEqual(doc.metadata['version'], '2.0.0')
         self.assertEqual(doc.metadata['compression_format'], '7Z')
     def test_load_data_file_not_found(self):
+        """Loading a missing archive raises FileNotFoundError."""
         non_existent_file = os.path.join(self.temp_dir, "non_existent.7z")
         with self.assertRaises(FileNotFoundError):
             self.reader._load_data(non_existent_file)
     def test_metadata_structure(self):
+        """Extracted documents carry the expected archive metadata fields."""
         try:
             import py7zr
         except ImportError:
@@ -96,6 +104,7 @@ class TestSevenZipReaderBasic(unittest.TestCase):
             self.assertIn(field, doc.metadata)
         self.assertEqual(doc.metadata['archive_depth'], 0)
     def test_content_extraction_accuracy(self):
+        """Document text exactly matches the archived file content."""
         try:
             import py7zr
         except ImportError:
@@ -112,12 +121,15 @@ class TestSevenZipReaderBasic(unittest.TestCase):
 class TestSevenZipReaderComplexScenarios(unittest.TestCase):
     """SevenZipReader 复杂场景测试"""
     def setUp(self):
+        """Create a fresh SevenZipReader instance and a temporary directory per test."""
         self.reader = SevenZipReader()
         self.temp_dir = tempfile.mkdtemp()
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     def create_complex_project_structure(self):
+        """Build a realistic multi-directory project tree and return its path."""
         project_dir = os.path.join(self.temp_dir, "complex_project")
         os.makedirs(project_dir, exist_ok=True)
         directories = ["src/utils", "src/models", "tests/unit", "tests/integration", "docs/api", "docs/tutorials", "config/environments", "data/raw", "data/processed", "logs/applications"]
@@ -149,6 +161,7 @@ class TestSevenZipReaderComplexScenarios(unittest.TestCase):
             f.write("""id,username,email,department\n1,alice,alice@example.com,Engineering\n2,bob,bob@example.com,Marketing\n3,charlie,charlie@example.com,Sales""")
         return project_dir
     def create_nested_7z_structure(self):
+        """Create nested 7z archives and return the outermost archive path."""
         try:
             import py7zr
         except ImportError:
@@ -195,6 +208,7 @@ class TestSevenZipReaderComplexScenarios(unittest.TestCase):
             self.skipTest(f"Failed to create final nested 7Z: {e}")
         return final_7z
     def test_complex_project_structure(self):
+        """A full project archive is read back preserving file types and names."""
         try:
             import py7zr
         except ImportError:
@@ -217,6 +231,7 @@ class TestSevenZipReaderComplexScenarios(unittest.TestCase):
         self.assertIn('development.yaml', file_names)
         self.assertIn('sample_data.json', file_names)
     def test_nested_7z_archives(self):
+        """Nested 7z archives are expanded across multiple depth levels."""
         try:
             import py7zr
         except ImportError:
@@ -229,6 +244,7 @@ class TestSevenZipReaderComplexScenarios(unittest.TestCase):
         deep_files = [doc for doc in documents if doc.metadata.get('archive_depth', 0) > 1]
         self.assertGreater(len(deep_files), 0)
     def test_multiple_file_types_and_encodings(self):
+        """Archives mixing many file types and encodings are fully extracted."""
         try:
             import py7zr
         except ImportError:
@@ -268,12 +284,15 @@ class TestSevenZipReaderComplexScenarios(unittest.TestCase):
 class TestSevenZipReaderSizeLimits(unittest.TestCase):
     """SevenZipReader 大小限制测试"""
     def setUp(self):
+        """Create a fresh SevenZipReader instance and a temporary directory per test."""
         self.reader = SevenZipReader()
         self.temp_dir = tempfile.mkdtemp()
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     def test_max_file_size_limit(self):
+        """Entries above max_file_size are dropped from the results."""
         try:
             import py7zr
         except ImportError:
@@ -292,6 +311,7 @@ class TestSevenZipReaderSizeLimits(unittest.TestCase):
         self.assertIsInstance(documents, list)
         self.assertLessEqual(len(documents), 1)
     def test_max_total_size_limit(self):
+        """Reading stops once max_total_size is exceeded."""
         try:
             import py7zr
         except ImportError:
@@ -315,6 +335,7 @@ class TestSevenZipReaderSizeLimits(unittest.TestCase):
         self.assertIsInstance(documents, list)
         self.assertLess(len(documents), len(files))
     def test_max_files_limit(self):
+        """At most max_files entries are returned."""
         try:
             import py7zr
         except ImportError:
@@ -335,6 +356,7 @@ class TestSevenZipReaderSizeLimits(unittest.TestCase):
         documents = self.reader._load_data(sevenzip_path, max_files=10)
         self.assertLessEqual(len(documents), 10)
     def test_compression_ratio_detection(self):
+        """Highly compressible entries trip the compression-ratio guard."""
         try:
             import py7zr
         except ImportError:
@@ -360,12 +382,15 @@ class TestSevenZipReaderSizeLimits(unittest.TestCase):
 class TestSevenZipReaderRealWorldScenarios(unittest.TestCase):
     """SevenZipReader 真实世界场景测试"""
     def setUp(self):
+        """Create a fresh SevenZipReader instance and a temporary directory per test."""
         self.reader = SevenZipReader()
         self.temp_dir = tempfile.mkdtemp()
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     def create_software_distribution_package(self):
+        """Build a software distribution layout and return its path."""
         dist_dir = os.path.join(self.temp_dir, "myapp_v2.0.0")
         os.makedirs(dist_dir, exist_ok=True)
         os.makedirs(os.path.join(dist_dir, "bin"), exist_ok=True)
@@ -387,6 +412,7 @@ class TestSevenZipReaderRealWorldScenarios(unittest.TestCase):
             f.write("""#!/usr/bin/env python3\n\"\"\"\nMyApp 基础使用示例\n\"\"\"\n\nimport sys\nimport os\n\n# 添加 lib 目录到路径\nsys.path.append(os.path.join(os.path.dirname(__file__), '../lib'))\n\nfrom core import ApplicationCore\n\ndef main():\n    # 基础配置\n    config = {\n        'application': {\n            'name': '示例应用',\n            'debug': True\n        },\n        'database': {\n            'host': 'localhost',\n            'port': 5432,\n            'name': 'example_db'\n        }\n    }\n    \n    # 创建应用实例\n    app = ApplicationCore(config)\n    \n    # 初始化应用\n    app.initialize()\n    \n    # 运行应用\n    app.run()\n\nif __name__ == "__main__":\n    main()""")
         return dist_dir
     def test_software_distribution_package(self):
+        """A distribution archive yields its install/docs/config/core files."""
         try:
             import py7zr
         except ImportError:
@@ -407,6 +433,7 @@ class TestSevenZipReaderRealWorldScenarios(unittest.TestCase):
         core_docs = [d for d in documents if d.metadata.get('file_name') == 'core.py']
         self.assertGreater(len(core_docs), 0)
     def test_documentation_archive_with_metadata(self):
+        """ext_info metadata is present on every document of a docs archive."""
         try:
             import py7zr
         except ImportError:
@@ -442,12 +469,15 @@ class TestSevenZipReaderRealWorldScenarios(unittest.TestCase):
 class TestSevenZipReaderEdgeCases(unittest.TestCase):
     """SevenZipReader 边界情况测试"""
     def setUp(self):
+        """Create a fresh SevenZipReader instance and a temporary directory per test."""
         self.reader = SevenZipReader()
         self.temp_dir = tempfile.mkdtemp()
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     def test_empty_7z_archive(self):
+        """An empty archive produces no documents."""
         try:
             import py7zr
         except ImportError:
@@ -462,6 +492,7 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
         self.assertIsInstance(documents, list)
         self.assertEqual(len(documents), 0)
     def test_special_characters_in_filenames(self):
+        """Filenames with spaces, dots, Chinese, and emoji are preserved."""
         try:
             import py7zr
         except ImportError:
@@ -491,6 +522,7 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
         for original_name in special_files.keys():
             self.assertIn(original_name, extracted_names)
     def test_deep_directory_structure(self):
+        """Deeply nested directories keep their archive_path metadata."""
         try:
             import py7zr
         except ImportError:
@@ -520,6 +552,7 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
         deep_doc = deep_files[0]
         self.assertIn('level_07', deep_doc.metadata.get('archive_path', ''))
     def test_path_handling_with_different_types(self):
+        """str and pathlib.Path inputs load identically."""
         try:
             import py7zr
         except ImportError:
@@ -540,6 +573,7 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
             self.assertEqual(docs_str[0].text, docs_path[0].text)
             self.assertEqual(docs_str[0].metadata['file_name'], docs_path[0].metadata['file_name'])
     def test_mixed_text_encodings_and_formats(self):
+        """UTF-8 files (with/without BOM, emoji) decode to non-empty text."""
         try:
             import py7zr
         except ImportError:
@@ -568,12 +602,15 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
 class TestSevenZipReaderPerformance(unittest.TestCase):
     """SevenZipReader 性能测试"""
     def setUp(self):
+        """Create a fresh SevenZipReader instance and a temporary directory per test."""
         self.reader = SevenZipReader()
         self.temp_dir = tempfile.mkdtemp()
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     def test_large_number_of_small_files(self):
+        """Many small files load within the allowed time budget."""
         try:
             import py7zr
         except ImportError:
@@ -598,6 +635,7 @@ class TestSevenZipReaderPerformance(unittest.TestCase):
         self.assertLess(elapsed_time, 30, f"处理 {file_count} 个文件耗时 {elapsed_time:.2f} 秒，超过性能要求")
         print(f"\n性能测试: 处理 {len(documents)}/{file_count} 个文件耗时 {elapsed_time:.2f} 秒")
     def test_reader_cache_efficiency(self):
+        """Repeated loads reuse the reader cache without growing it."""
         try:
             import py7zr
         except ImportError:
