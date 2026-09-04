@@ -17,6 +17,8 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 
 class ToolNodeData(NodeData):
+    """NodeData subclass holding the tool node input configuration.
+    """
     inputs: Optional[ToolNodeInputParams] = None
 
 
@@ -25,10 +27,27 @@ class ToolNode(Node):
     _data_cls = ToolNodeData
 
     def __init__(self, **kwargs):
+        """Initialize the tool node and set its type to the tool node enum.
+
+        Args:
+            **kwargs: Field values for the node.
+        """
         super().__init__(**kwargs)
         self.type = NodeEnum.TOOL
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        """Run the referenced tool with the resolved input parameters and map its output to the declared output parameters.
+
+        Args:
+            workflow_output(WorkflowOutput): The workflow execution output.
+
+        Returns:
+            NodeOutput: The node output holding the tool result.
+
+        Raises:
+            ValueError: If the referenced tool is not registered.
+            TypeError: If the tool output type is not supported.
+        """
         inputs: ToolNodeInputParams = self._data.inputs
         tool_params: List[NodeInfoParams] = inputs.tool_param
         tool_id = None
