@@ -105,6 +105,72 @@ SEARCHAPI_API_KEY="xxxxxx"
 ```
 
 
+### 1.4 OpenAlex Search
+
+`OpenAlexSearchTool` searches scholarly works through the OpenAlex Works API.
+It uses the existing `requests` dependency. Basic keyless access is available;
+an optional `OPENALEX_API_KEY` enables authenticated access. See the current
+[authentication and limits](https://help.openalex.org/api/authentication/).
+
+The [sample component YAML](../../../../../../examples/sample_standard_app/intelligence/agentic/tool/buildin/openalex_search_tool.yaml)
+registers `openalex_search_tool` in the sample standard application. For a custom
+application, place a configuration with the following metadata in its tool directory:
+
+```yaml
+name: 'openalex_search_tool'
+description: 'Search scholarly works in OpenAlex and return structured metadata.'
+tool_type: 'api'
+input_keys: ['query']
+timeout: 15.0
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.openalex_search_tool'
+  class: 'OpenAlexSearchTool'
+```
+
+Direct use without application startup:
+
+```python
+from agentuniverse.agent.action.tool.common_tool.openalex_search_tool import OpenAlexSearchTool
+
+tool = OpenAlexSearchTool()
+result = tool.execute(
+    query='retrieval augmented generation',
+    max_results=5,
+    from_publication_date='2023-01-01',
+    open_access_only=True,
+)
+```
+
+- `query`: Required nonempty keywords or a [Boolean expression](https://help.openalex.org/api/searching/). Searches titles, abstracts, and indexed full text where available. Encoded request URLs are limited to 4,000 bytes by this tool.
+- `max_results`: Results per page, 1-20; default 5. This is the tool's limit, not the API's maximum.
+- `page`: One-based, default 1. `page * max_results` must not exceed 10,000. Follow `next_page` while keeping the other arguments unchanged; `null` means no further page is available within this tool's basic-paging window. Cursor pagination is not implemented.
+- `sort` / `order`: `relevance_score` (default), `publication_date`, or `cited_by_count`; `desc` (default) or `asc`. Sorting happens on the server before pagination.
+- `from_publication_date` / `to_publication_date`: Optional inclusive `YYYY-MM-DD` bounds. Either may be used alone; reversed ranges and invalid dates are rejected.
+- `open_access_only`: Boolean, default `false`; when true, adds `is_oa:true` to the API filter.
+- `timeout`: Component setting, positive finite seconds; default 15. It is not a tool-call argument.
+
+Results contain the search context, `total_results`, `returned_results`, `next_page`,
+and `works`. Each work includes its OpenAlex ID, DOI URL, title, author IDs/names/ORCIDs,
+publication date/year, type, language, citation count, venue, open-access status/links,
+and reconstructed abstract. Missing text is `""`, missing authors are `[]`, and unknown
+numeric/open-access values are `null`. Abstracts use at most the first 1,000 word
+positions and 4,000 characters; authors are limited to the first 20 entries provided
+by the API. `abstract_truncated` and `authors_truncated` report these tool-side limits.
+
+Invalid arguments raise `ValueError` before HTTP access. Network, HTTP, API, and
+malformed-response failures return `error.type`, `error.message`, and `error.status_code`,
+with empty `works` and unknown (`null`) `total_results`. HTTP 429 means callers should
+retry later. Each call makes one request, without automatic retries or full-text downloads.
+The optional key is sent in the `Authorization` header, not the URL; redirects are not followed.
+Queries leave the application for OpenAlex, so do not include confidential information.
+Treat returned text as external research data, not instructions.
+
+API references: [filtering](https://help.openalex.org/api/filtering/),
+[sorting](https://help.openalex.org/api/sorting/),
+[paging](https://help.openalex.org/api/paging/), and
+[work metadata](https://help.openalex.org/data/works/attributes/).
+
 ## 2. Code Tool
 
 ### 2.1 PythonRepl
