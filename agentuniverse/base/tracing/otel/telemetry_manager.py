@@ -77,6 +77,11 @@ class TelemetryManager:
 
     @staticmethod
     def force_flush(timeout_ms: int = 5_000) -> None:
+        """Flush and shut down the globally configured trace and meter providers.
+
+        Args:
+            timeout_ms: Timeout in milliseconds to wait for the flush.
+        """
         tracer_provider = trace.get_tracer_provider()
         if hasattr(tracer_provider, "force_flush"):
             tracer_provider.force_flush(timeout_millis=timeout_ms)
@@ -93,6 +98,15 @@ class TelemetryManager:
     def _build_tracer_provider(
         self, otel_conf: Dict[str, Any], resource: Resource
     ) -> TracerProvider:
+        """Build a tracer provider from the config and attach span processors.
+
+        Args:
+            otel_conf: The OpenTelemetry configuration dict.
+            resource: The OpenTelemetry resource to attach.
+
+        Returns:
+            The configured tracer provider instance.
+        """
         provider_cls = self._import_class(
             otel_conf.get(
                 "provider_class", "opentelemetry.sdk.trace.TracerProvider"
@@ -159,6 +173,15 @@ class TelemetryManager:
     def _setup_metrics(
         self, otel_conf: Dict[str, Any], resource: Resource
     ) -> Optional[MeterProvider]:
+        """Build and register a meter provider from the metric reader configs.
+
+        Args:
+            otel_conf: The OpenTelemetry configuration dict.
+            resource: The OpenTelemetry resource to attach.
+
+        Returns:
+            The configured MeterProvider, or None when metrics are disabled.
+        """
         readers_conf: List[Dict[str, Any]] = otel_conf.get("metric_readers", [])
         if not readers_conf:
             return None  # metrics disabled
@@ -191,6 +214,11 @@ class TelemetryManager:
 
     # -------- Instrumentation -------------------------------------------
     def _instrument(self, inst_paths: List[str]) -> None:
+        """Instantiate and run ``instrument()`` on each configured instrumentation.
+
+        Args:
+            inst_paths: Class paths of the instrumentations to enable.
+        """
         for inst_path in inst_paths:
             inst_cls = self._import_class(inst_path)
             if hasattr(inst_cls, "instrument"):
