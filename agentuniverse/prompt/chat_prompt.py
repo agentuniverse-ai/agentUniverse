@@ -28,9 +28,16 @@ image_extensions = (
 
 
 class ChatPrompt(Prompt):
+    """Chat prompt model holding a list of chat messages and converting them into langchain prompt templates.
+    """
     messages: List[Message] = []
 
     def as_langchain(self) -> ChatPromptTemplate:
+        """Convert the chat messages into a langchain ChatPromptTemplate.
+
+        Returns:
+            ChatPromptTemplate: The langchain prompt template.
+        """
         return ChatPromptTemplate.from_messages(Message.as_langchain_list(self.messages))
 
     def build_prompt(self, agent_prompt_model: AgentPromptModel, prompt_assemble_order: list[str]) -> 'ChatPrompt':
