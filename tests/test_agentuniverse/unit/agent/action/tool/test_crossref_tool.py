@@ -53,6 +53,7 @@ SAMPLE_WORK = {
 
 
 def response_mock(*, json_data=None):
+    """Build a mock requests response whose json() returns json_data."""
     response = Mock()
     response.json.return_value = json_data
     response.raise_for_status.return_value = None
@@ -60,11 +61,14 @@ def response_mock(*, json_data=None):
 
 
 class CrossrefToolTest(unittest.TestCase):
+    """Unit tests for the CrossrefTool wrapper around the Crossref REST API."""
     def setUp(self) -> None:
+        """Instantiate a CrossrefTool with a developer email before each test."""
         self.tool = CrossrefTool(email="developer@example.com")
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_search_returns_structured_metadata(self, mock_get: Mock) -> None:
+        """Verify search returns structured metadata and issues a well-formed API request."""
         mock_get.return_value = response_mock(
             json_data={
                 "status": "ok",
@@ -142,6 +146,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_doi_lookup_normalizes_url_and_returns_one_work(self, mock_get: Mock) -> None:
+        """Verify a DOI URL query is normalized into a single-work lookup request."""
         mock_get.return_value = response_mock(
             json_data={
                 "status": "ok",
@@ -173,6 +178,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_search_maps_paging_sorting_and_date_filters(self, mock_get: Mock) -> None:
+        """Verify paging, sorting, and publication-date filters map onto API params."""
         mock_get.return_value = response_mock(
             json_data={
                 "status": "ok",
@@ -205,6 +211,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_search_supports_one_sided_date_filter(self, mock_get: Mock) -> None:
+        """Verify a one-sided until_pub_date filter is sent as a single filter value."""
         mock_get.return_value = response_mock(
             json_data={
                 "status": "ok",
@@ -219,6 +226,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_search_uses_cursor_for_deep_pagination(self, mock_get: Mock) -> None:
+        """Verify deep pagination uses the cursor param and forwards next_cursor."""
         mock_get.return_value = response_mock(
             json_data={
                 "status": "ok",
@@ -242,6 +250,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_empty_search_returns_no_works(self, mock_get: Mock) -> None:
+        """Verify a search with no matches returns zero works without errors."""
         mock_get.return_value = response_mock(
             json_data={
                 "status": "ok",
@@ -257,6 +266,7 @@ class CrossrefToolTest(unittest.TestCase):
         self.assertEqual(result["works"], [])
 
     def test_invalid_input(self) -> None:
+        """Verify invalid query/mode/paging/date inputs raise descriptive ValueError messages."""
         with self.assertRaisesRegex(ValueError, "query must not be empty"):
             self.tool.execute(query="  ")
         with self.assertRaisesRegex(ValueError, "mode must be one of"):
@@ -287,6 +297,7 @@ class CrossrefToolTest(unittest.TestCase):
             self.tool.execute(query="not-a-doi", mode="doi")
 
     def test_missing_metadata_returns_empty_values(self) -> None:
+        """Verify _parse_work fills missing work fields with empty defaults."""
         work = CrossrefTool._parse_work({"DOI": "10.1000/minimal"})
 
         self.assertEqual(work["doi"], "10.1000/minimal")
@@ -313,6 +324,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_timeout_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify a request timeout surfaces as a structured request_timeout error."""
         mock_get.side_effect = requests.Timeout("timed out")
 
         result = self.tool.execute(query="AI medicine")
@@ -322,6 +334,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_error_response_preserves_search_context(self, mock_get: Mock) -> None:
+        """Verify structured errors still preserve the search context such as paging and filters."""
         mock_get.side_effect = requests.Timeout("timed out")
 
         result = self.tool.execute(
@@ -341,6 +354,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_http_error_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify an HTTP error surfaces as a structured http_error including the status code."""
         response = Mock(status_code=429)
         mock_get.side_effect = requests.HTTPError(response=response)
 
@@ -351,6 +365,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_connection_error_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify a connection error surfaces as a structured request_error."""
         mock_get.side_effect = requests.ConnectionError("connection failed")
 
         result = self.tool.execute(query="AI medicine")
@@ -360,6 +375,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_api_error_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify an API-level error message surfaces as a structured api_error."""
         mock_get.return_value = response_mock(
             json_data={
                 "status": "failed",
@@ -375,6 +391,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_invalid_json_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify an undecodable JSON body surfaces as a structured invalid_response error."""
         response = response_mock()
         response.json.side_effect = requests.JSONDecodeError("invalid JSON", "", 0)
         mock_get.return_value = response
@@ -386,6 +403,7 @@ class CrossrefToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_invalid_message_shape_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify a malformed work-list payload surfaces as a structured invalid_response error."""
         mock_get.return_value = response_mock(
             json_data={
                 "status": "ok",
@@ -400,6 +418,7 @@ class CrossrefToolTest(unittest.TestCase):
         self.assertIn("invalid search items", result["error"]["message"])
 
     def test_shipped_config_exposes_modes_and_metadata(self) -> None:
+        """Verify the shipped YAML config documents modes, metadata fields, and limits."""
         config_path = (
             Path(__file__).resolve().parents[6]
             / "examples"
