@@ -16,18 +16,38 @@ from agentuniverse.prompt.prompt import Prompt
 
 
 class InsuranceAgent(Agent):
+    """Agent instance that answers insurance questions using tool results."""
 
     def input_keys(self) -> list[str]:
+        """Return the input keys accepted by this agent."""
         return ['input']
 
     def output_keys(self) -> list[str]:
+        """Return the output keys produced by this agent."""
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Copy the user input into the agent input dict.
+
+        Args:
+            input_object (InputObject): the user-supplied input object.
+            agent_input (dict): the agent input dict being populated.
+
+        Returns:
+            dict: the populated agent input dict.
+        """
         agent_input['input'] = input_object.get_data('input')
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Expose the output key on the final agent result.
+
+        Args:
+            agent_result (dict): the raw result produced by execution.
+
+        Returns:
+            dict: the result dict including an 'output' key.
+        """
         return {**agent_result, 'output': agent_result['output']}
 
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
