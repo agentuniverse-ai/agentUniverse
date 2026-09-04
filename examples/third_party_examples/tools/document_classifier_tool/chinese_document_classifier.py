@@ -48,6 +48,14 @@ class ChineseDocumentClassifier(DocumentClassifier):
     ]
     
     def __init__(self, **kwargs):
+        """初始化中文文档分类器
+
+        调用父类初始化，并在停用词为空时载入默认中文停用词，
+        启用jieba时初始化jieba分词器。
+
+        Args:
+            **kwargs: 传递给父类 DocumentClassifier 的配置参数。
+        """
         super().__init__(**kwargs)
         # 初始化停用词
         if not self.stop_words:
