@@ -11,6 +11,11 @@ from functools import lru_cache
 
 
 class LLMModelEnum(Enum):
+    """Enum of supported LLM model names used for API key resolution.
+
+    Each member maps a model name to the value used to look up the
+    corresponding environment variable in :func:`YamlFuncExtension.load_api_key`.
+    """
     QWEN = "qwen"
     DEEPSEEK = "deepseek"
     OPENAI = "openai"
