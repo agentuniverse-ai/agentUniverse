@@ -48,10 +48,10 @@ class ComponentBase(BaseModel):
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'ComponentBase':
         pass
 
-    def is_default_object(self):
+    def is_default_object(self) -> bool:
         return self.default_symbol
 
-    def create_copy(self):
+    def create_copy(self) -> 'ComponentBase':
         try:
             return self.model_copy(deep=True)
         except:
