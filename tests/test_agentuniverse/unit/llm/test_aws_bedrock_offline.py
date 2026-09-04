@@ -7,7 +7,7 @@ import socket
 import sys
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 import tomli
@@ -48,15 +48,15 @@ def test_llm_call(llm, use_async):
 
 @pytest.mark.parametrize("use_async", [False, True])
 def test_llm_stream(llm, use_async):
-    llm._client.converse_stream.return_value = {
-        "stream": iter(
-            [
-                {"contentBlockDelta": {"delta": {"text": "one"}}},
-                {"contentBlockDelta": {"delta": {"text": "two"}}},
-                {"messageStop": {}},
-            ]
-        )
-    }
+    stream = MagicMock(spec=["__iter__", "close"])
+    stream.__iter__.return_value = iter(
+        [
+            {"contentBlockDelta": {"delta": {"text": "one"}}},
+            {"contentBlockDelta": {"delta": {"text": "two"}}},
+            {"messageStop": {}},
+        ]
+    )
+    llm._client.converse_stream.return_value = {"stream": stream}
 
     async def collect():
         return [chunk.text async for chunk in await llm._acall([], streaming=True)]
