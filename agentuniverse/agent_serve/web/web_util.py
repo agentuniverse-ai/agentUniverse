@@ -21,14 +21,24 @@ from ...base.annotation.singleton import singleton
 
 @singleton
 class FlaskServerManager:
+    """Singleton that keeps the shared web server settings.
+
+    Currently holds the timeout used for synchronous agent service calls.
+    """
     _sync_service_timeout = 30
 
     @property
     def sync_service_timeout(self):
+        """Return the current synchronous service timeout in seconds."""
         return self._sync_service_timeout
 
     @sync_service_timeout.setter
     def sync_service_timeout(self, timeout):
+        """Set the synchronous service timeout in seconds.
+
+        Args:
+            timeout: The new timeout value in seconds.
+        """
         self._sync_service_timeout = timeout
 
 
@@ -36,6 +46,15 @@ def request_param(func):
     """An annotation used to parse the flask request params."""
 
     def wrapper(*args, **kwargs):
+        """Parse the flask request params and invoke the wrapped function.
+
+        Args:
+            *args: Positional arguments forwarded to the wrapped function.
+            **kwargs: Keyword arguments forwarded to the wrapped function.
+
+        Returns:
+            The result of calling the wrapped function with the parsed params.
+        """
         if request.method == "GET":
             req_data = request.args.to_dict()
         # Get the post params from body according to different content type.
@@ -101,6 +120,18 @@ def agent_run_queue(agent_id, **kwargs):
 
 
 async def async_agent_run_queue(agent_id, **kwargs):
+    """Run an agent asynchronously and signal the output stream when done.
+
+    Executes the agent run in a worker thread, forwarding the result back to
+    the caller, and pushes an EOF marker into the output stream if provided.
+
+    Args:
+        agent_id: The agent id to run.
+        **kwargs: Arbitrary keyword arguments passed to the agent run.
+
+    Returns:
+        The agent execution result.
+    """
     stream: asyncio.Queue = kwargs.get('output_stream')
     try:
         agent: Agent = await asyncio.to_thread(AgentManager().get_instance_obj, agent_id)
