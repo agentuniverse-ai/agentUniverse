@@ -21,6 +21,8 @@ from agentuniverse.prompt.prompt import Prompt
 
 
 class RagAgentCaseTemplate(RagAgentTemplate):
+    """A RAG agent template that grounds answers with a web search and memory."""
+
     def execute_query(self, input: str):
         """
         Args:
@@ -43,6 +45,18 @@ class RagAgentCaseTemplate(RagAgentTemplate):
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
                            **kwargs) -> dict:
+        """Run the customized RAG flow: tool grounding, memory handling, and the LLM chain.
+
+        Args:
+            input_object: The input object carrying the output stream.
+            agent_input: The agent input dict, updated with background and memory.
+            memory: The memory used to store and summarize the conversation.
+            llm: The LLM instance used to build the chain.
+            prompt: The prompt template used to build the chain.
+
+        Returns:
+            The agent input dict enriched with the answer under 'output'.
+        """
         # invoke tool
         knowledge_res: str = self.execute_query(agent_input.get('input'))
         agent_input['background'] = knowledge_res
