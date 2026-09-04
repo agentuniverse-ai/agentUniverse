@@ -20,6 +20,8 @@ class WebPdfReader(Reader):
     """
 
     def _load_data(self, web_pdf_url: str) -> List[Document]:
+        """Load data.
+        """
         if web_pdf_url is None:
             return []
         try:
