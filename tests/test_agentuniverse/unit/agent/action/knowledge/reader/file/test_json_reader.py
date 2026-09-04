@@ -10,8 +10,10 @@ from agentuniverse.agent.action.knowledge.reader.file.json_reader import JsonRea
 
 
 class TestJsonReader(unittest.TestCase):
+    """Unit tests for JsonReader covering objects, arrays, and error cases."""
 
     def setUp(self):
+        """Create a fresh JsonReader, temp dir, and sample JSON files for each test."""
         self.reader = JsonReader()
         self.temp_dir = tempfile.TemporaryDirectory()
 
@@ -75,6 +77,7 @@ class TestJsonReader(unittest.TestCase):
             f.write('{"invalid": json syntax}')
 
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         self.temp_dir.cleanup()
 
     def test_load_json_object(self):
