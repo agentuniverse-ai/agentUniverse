@@ -50,9 +50,15 @@ class Memory(ComponentBase):
     context_manager_name: Optional[str] = None  # NEW: Link to ContextManager (Phase 2)
 
     class Config:
+        """Pydantic model configuration allowing extra attributes on memory instances."""
         extra = Extra.allow
 
     def __init__(self, **kwargs):
+        """Initialize the memory with its component type preset.
+
+        Args:
+            **kwargs: Memory attributes forwarded to the parent component base.
+        """
         super().__init__(component_type=ComponentEnum.MEMORY, **kwargs)
 
     def as_langchain(self) -> BaseMemory:
@@ -227,6 +233,15 @@ class Memory(ComponentBase):
         return copied_obj
 
     def summarize_memory(self, **kwargs) -> str:
+        """Summarize the stored memory through the configured summarize agent.
+
+        Args:
+            **kwargs: Lookup parameters such as ``session_id`` / ``agent_id``,
+                plus any extra arguments accepted by the underlying retrieval.
+
+        Returns:
+            The summarized content string produced by the summarize agent.
+        """
         kwargs['prune'] = False
         messages = self.get(**kwargs)
         summarize_messages = self.get(session_id=kwargs.get('session_id'), agent_id=kwargs.get('agent_id'),
@@ -275,6 +290,11 @@ class Memory(ComponentBase):
         return self
 
     def create_copy(self):
+        """Create a copy of this memory instance for per-agent isolation.
+
+        Returns:
+            A copied memory whose ``memory_storages`` list is also duplicated.
+        """
         copied = self.model_copy()
         if self.memory_storages is not None:
             copied.memory_storages = self.memory_storages.copy()
