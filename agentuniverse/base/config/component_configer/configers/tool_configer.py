@@ -33,10 +33,20 @@ class ToolConfiger(ComponentConfiger):
 
     @property
     def tool_type(self) -> Optional[str]:
+        """Return the tool type of the tool configuration.
+
+        Returns:
+            Optional[str]: The tool type.
+        """
         return self.__tool_type
 
     @property
     def input_keys(self) -> Optional[List]:
+        """Return the input keys declared in the tool configuration.
+
+        Returns:
+            Optional[List]: The input keys.
+        """
         return self.__input_keys
 
     def load(self) -> 'ToolConfiger':
