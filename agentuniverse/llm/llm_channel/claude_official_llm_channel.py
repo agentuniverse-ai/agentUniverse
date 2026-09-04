@@ -20,6 +20,8 @@ CLAUDE_MAX_CONTEXT_LENGTH = {
 
 
 class ClaudeOfficialLLMChannel(LLMChannel):
+    """Claude official llm channel.
+    """
     channel_api_base: Optional[str] = "https://api.anthropic.com/v1/"
 
     def max_context_length(self) -> int:
