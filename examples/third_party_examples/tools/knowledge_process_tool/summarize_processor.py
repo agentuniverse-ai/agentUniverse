@@ -38,6 +38,15 @@ class SummarizeDocs(DocProcessor):
     summary_metadata_key: str = "is_summary"
 
     def _process_docs(self, origin_docs: List[Document], query: Query | None = None) -> List[Document]:
+        """Summarize the retrieved documents through the configured LLM and return the summary (plus originals when requested).
+
+        Args:
+            origin_docs(List[Document]): The documents to summarize.
+            query(Query | None): Unused, kept for interface compatibility.
+
+        Returns:
+            List[Document]: The summary document, plus the original documents when return_only_summary is False.
+        """
         if not origin_docs:
             return origin_docs
 
@@ -58,6 +67,14 @@ class SummarizeDocs(DocProcessor):
         return [summary_doc] + origin_docs
 
     def _initialize_by_component_configer(self, doc_processor_configer: ComponentConfiger) -> "DocProcessor":
+        """Initialize the processor fields from the doc processor configer.
+
+        Args:
+            doc_processor_configer(ComponentConfiger): The configer containing the settings.
+
+        Returns:
+            DocProcessor: The initialized processor instance.
+        """
         super()._initialize_by_component_configer(doc_processor_configer)
         if hasattr(doc_processor_configer, "llm"):
             self.llm = str(doc_processor_configer.llm)
