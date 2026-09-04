@@ -21,6 +21,18 @@ class ImageOCRReader(Reader):
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
+        """OCR an image file and return a single Document holding the recognized text.
+
+        Args:
+            file(Union[str, Path]): Path of the image file.
+            ext_info(Optional[Dict]): Extra metadata merged into the document.
+
+        Returns:
+            List[Document]: A one-element list with the recognized text.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
         print(f"debugging: ImageOCRReader start load file={file}")
         if isinstance(file, str):
             file = Path(file)
@@ -37,6 +49,17 @@ class ImageOCRReader(Reader):
 
     def _ocr(self, file: Path) -> (str, str):
         # Try PaddleOCR
+        """Recognize text from an image file, trying PaddleOCR, pytesseract and easyocr in that order.
+
+        Args:
+            file(Path): Path of the image file.
+
+        Returns:
+            tuple: The recognized text and the name of the engine used.
+
+        Raises:
+            ImportError: If no OCR engine is installed.
+        """
         try:
             from paddleocr import PaddleOCR  # type: ignore
             print("debugging: ImageOCRReader using PaddleOCR")
