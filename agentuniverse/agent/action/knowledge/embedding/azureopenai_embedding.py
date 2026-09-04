@@ -122,6 +122,14 @@ class AzureOpenAIEmbedding(Embedding):
 
 
     def _initialize_clients(self) -> None:
+        """Initialize the sync and async Azure OpenAI clients if not yet created.
+
+        Validates the Azure OpenAI configuration, then instantiates the sync
+        and async clients when they are missing.
+
+        Raises:
+            Exception: If any required Azure OpenAI configuration is missing.
+        """
         if not self.azure_api_key:
             raise Exception("AZURE_OPENAI_API_KEY is missing")
         if not self.resource_name:
