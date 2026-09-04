@@ -105,6 +105,15 @@ class ImageReader(Reader):
                 "PIL is required. Install with: pip install Pillow") from e
 
         def parse_metadata(image: ImageFile) -> Dict[str, Any]:
+            """Build a metadata dictionary describing the given image.
+
+            Args:
+                image: The opened PIL image to extract metadata from.
+
+            Returns:
+                Metadata including the source file name, image format, size,
+                channel count and color mode, merged with ext_info when provided.
+            """
             width, height = image.size
             channels = len(image.getbands())
             mode = image.mode
