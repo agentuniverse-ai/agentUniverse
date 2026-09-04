@@ -23,6 +23,8 @@ from tests.test_agentuniverse_extension.mock.logger.mock_log_client import LogCl
 
 @patch('agentuniverse.logger.sls_sink.LogClient', new=LogClient)
 def test_sls_log():
+    """Test that sls log.
+    """
     sls_sender = SlsSender(LoggingConfig.sls_project,
                            LoggingConfig.sls_log_store,
                            LoggingConfig.sls_endpoint,
@@ -34,6 +36,8 @@ def test_sls_log():
     sls_sink = SlsSink(sls_sender)
 
     class Message:
+        """Message.
+        """
         pass
 
     message = Message()
