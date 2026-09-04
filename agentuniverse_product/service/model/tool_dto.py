@@ -11,6 +11,16 @@ from pydantic import BaseModel, Field
 
 
 class ToolDTO(BaseModel):
+    """Data transfer object for a tool.
+
+    Attributes:
+        id: Tool ID.
+        nickname: Tool nickname.
+        avatar: Tool avatar path.
+        description: Tool description.
+        parameters: Tool parameter names.
+        openapi_schema: OpenAPI schema for the tool.
+    """
     id: str = Field(description="ID")
     nickname: Optional[str] = Field(description="tool nickname", default="")
     avatar: Optional[str] = Field(description="tool avatar path", default="")
