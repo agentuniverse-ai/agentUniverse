@@ -26,6 +26,8 @@ INSTRUMENTOR_VERSION = "0.1.0"
 
 # Metric names
 class MetricNames:
+    """Constant metric names recorded by the tool instrumentation.
+    """
     TOOL_CALLS_TOTAL = "tool_calls_total"
     TOOL_ERRORS_TOTAL = "tool_errors_total"
     TOOL_CALL_DURATION = "tool_call_duration"
@@ -39,6 +41,8 @@ class MetricNames:
 # Span attribute names
 class SpanAttributes:
     # Tool-specific attributes
+    """Constant span attribute names used by the tool instrumentation.
+    """
     SPAN_KIND = "au.span.kind"
     TOOL_NAME = "au.tool.name"
     TOOL_INPUT = "au.tool.input"
@@ -64,6 +68,8 @@ class SpanAttributes:
 
 # Label names for metrics
 class MetricLabels:
+    """Constant metric label names used by the tool instrumentation.
+    """
     TOOL_NAME = "au_tool_name"
     STATUS = "au_tool_status"
     CALLER_NAME = "au_trace_caller_name"
