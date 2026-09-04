@@ -179,6 +179,19 @@ class ChromaStore(Store):
 
     def _initialize_by_component_configer(self,
                                           chroma_store_configer: ComponentConfiger) -> 'DocProcessor':
+        """Initialize the chroma store by the given component configer.
+
+        Applies the chroma-specific settings (collection name, persist path,
+        embedding model and similarity top-k) on top of the base store
+        configuration.
+
+        Args:
+            chroma_store_configer (ComponentConfiger): The configer containing
+                the chroma store attributes.
+
+        Returns:
+            ChromaStore: The initialized chroma store instance.
+        """
         super()._initialize_by_component_configer(chroma_store_configer)
         if hasattr(chroma_store_configer, "collection_name"):
             self.collection_name = chroma_store_configer.collection_name
