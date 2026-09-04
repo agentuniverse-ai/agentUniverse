@@ -44,6 +44,7 @@ class TestXlsxReader:
         ]
         
         def mock_cell(row, column):
+            """Return the mocked cell value at the given 1-based row/column."""
             return mock_cells[row-1][column-1]
         
         mock_worksheet.cell = mock_cell
@@ -82,6 +83,7 @@ class TestXlsxReader:
         mock_sheet2.cell.return_value = MagicMock(value='Data2')
         
         def mock_getitem(sheet_name):
+            """Return the mocked worksheet for a given sheet name."""
             if sheet_name == 'Sheet1':
                 return mock_sheet1
             elif sheet_name == 'Sheet2':
