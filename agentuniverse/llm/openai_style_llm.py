@@ -222,6 +222,8 @@ class OpenAIStyleLLM(LLM):
                 yield llm_output
 
     def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'LLM':
+        """Initialize this component from a component configer and return itself.
+        """
         if 'api_base' in component_configer.configer.value:
             api_base = component_configer.configer.value.get('api_base')
             self.api_base = process_yaml_func(api_base, component_configer.yaml_func_instance)
