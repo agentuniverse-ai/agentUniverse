@@ -26,10 +26,10 @@ class GitHubSearchMode(Enum):
 
 class GitHubTool(Tool):
     """GitHub工具类
-    
+
     提供GitHub仓库、用户、问题和代码的搜索功能
     支持通过GitHub API获取仓库信息、用户信息、问题列表和代码片段
-    
+
     Attributes:
         api_key: GitHub API密钥，从环境变量GITHUB_API_KEY获取
         base_url: GitHub API基础URL
@@ -58,9 +58,9 @@ class GitHubTool(Tool):
         """发送HTTP请求"""
         try:
             response = requests.get(
-                url, 
-                headers=self._get_headers(), 
-                params=params, 
+                url,
+                headers=self._get_headers(),
+                params=params,
                 timeout=self.timeout
             )
             response.raise_for_status()
@@ -83,12 +83,12 @@ class GitHubTool(Tool):
     @retry(3, 1.0)
     def search_repositories(self, query: str, sort: str = "stars", order: str = "desc") -> List[Dict[str, Any]]:
         """搜索GitHub仓库
-        
+
         Args:
             query: 搜索查询字符串
             sort: 排序方式 (stars, forks, help-wanted-issues, updated)
             order: 排序顺序 (desc, asc)
-            
+
         Returns:
             仓库信息列表
         """
@@ -99,11 +99,11 @@ class GitHubTool(Tool):
             "order": order,
             "per_page": min(self.max_results, 100)
         }
-        
+
         result = self._make_request(url, params)
         if "error" in result:
             return [result]
-        
+
         repositories = []
         for item in result.get("items", []):
             repo_info = {
@@ -124,18 +124,18 @@ class GitHubTool(Tool):
                 "topics": item.get("topics", [])
             }
             repositories.append(repo_info)
-        
+
         return repositories
 
     @retry(3, 1.0)
     def search_users(self, query: str, sort: str = "followers", order: str = "desc") -> List[Dict[str, Any]]:
         """搜索GitHub用户
-        
+
         Args:
             query: 搜索查询字符串
             sort: 排序方式 (followers, repositories, joined)
             order: 排序顺序 (desc, asc)
-            
+
         Returns:
             用户信息列表
         """
@@ -146,11 +146,11 @@ class GitHubTool(Tool):
             "order": order,
             "per_page": min(self.max_results, 100)
         }
-        
+
         result = self._make_request(url, params)
         if "error" in result:
             return [result]
-        
+
         users = []
         for item in result.get("items", []):
             user_info = {
@@ -162,18 +162,18 @@ class GitHubTool(Tool):
                 "site_admin": item["site_admin"]
             }
             users.append(user_info)
-        
+
         return users
 
     @retry(3, 1.0)
     def search_issues(self, query: str, sort: str = "created", order: str = "desc") -> List[Dict[str, Any]]:
         """搜索GitHub问题
-        
+
         Args:
             query: 搜索查询字符串
             sort: 排序方式 (created, updated, comments)
             order: 排序顺序 (desc, asc)
-            
+
         Returns:
             问题信息列表
         """
@@ -184,11 +184,11 @@ class GitHubTool(Tool):
             "order": order,
             "per_page": min(self.max_results, 100)
         }
-        
+
         result = self._make_request(url, params)
         if "error" in result:
             return [result]
-        
+
         issues = []
         for item in result.get("items", []):
             issue_info = {
@@ -210,18 +210,18 @@ class GitHubTool(Tool):
                 }
             }
             issues.append(issue_info)
-        
+
         return issues
 
     @retry(3, 1.0)
     def search_code(self, query: str, sort: str = "indexed", order: str = "desc") -> List[Dict[str, Any]]:
         """搜索GitHub代码
-        
+
         Args:
             query: 搜索查询字符串
             sort: 排序方式 (indexed)
             order: 排序顺序 (desc, asc)
-            
+
         Returns:
             代码片段列表
         """
@@ -232,11 +232,11 @@ class GitHubTool(Tool):
             "order": order,
             "per_page": min(self.max_results, 100)
         }
-        
+
         result = self._make_request(url, params)
         if "error" in result:
             return [result]
-        
+
         code_results = []
         for item in result.get("items", []):
             code_info = {
@@ -251,25 +251,25 @@ class GitHubTool(Tool):
                 "score": item["score"]
             }
             code_results.append(code_info)
-        
+
         return code_results
 
     def get_repository_info(self, owner: str, repo: str) -> Dict[str, Any]:
         """获取特定仓库的详细信息
-        
+
         Args:
             owner: 仓库所有者
             repo: 仓库名称
-            
+
         Returns:
             仓库详细信息
         """
         url = f"{self.base_url}/repos/{owner}/{repo}"
         result = self._make_request(url)
-        
+
         if "error" in result:
             return result
-        
+
         return {
             "name": result["name"],
             "full_name": result["full_name"],
@@ -293,15 +293,15 @@ class GitHubTool(Tool):
             }
         }
 
-    def execute(self, 
-                mode: str, 
-                query: str = None, 
-                owner: str = None, 
+    def execute(self,
+                mode: str,
+                query: str = None,
+                owner: str = None,
                 repo: str = None,
                 sort: str = None,
                 order: str = "desc") -> List[Dict[str, Any]] | Dict[str, Any]:
         """执行GitHub搜索
-        
+
         Args:
             mode: 搜索模式 (repository, user, issue, code, repo_info)
             query: 搜索查询字符串
@@ -309,7 +309,7 @@ class GitHubTool(Tool):
             repo: 仓库名称（用于repo_info模式）
             sort: 排序方式
             order: 排序顺序
-            
+
         Returns:
             搜索结果或错误信息
         """
@@ -317,26 +317,26 @@ class GitHubTool(Tool):
             if not query:
                 return [{"error": "Query parameter is required for repository search"}]
             return self.search_repositories(query, sort or "stars", order)
-        
+
         elif mode == GitHubSearchMode.USER.value:
             if not query:
                 return [{"error": "Query parameter is required for user search"}]
             return self.search_users(query, sort or "followers", order)
-        
+
         elif mode == GitHubSearchMode.ISSUE.value:
             if not query:
                 return [{"error": "Query parameter is required for issue search"}]
             return self.search_issues(query, sort or "created", order)
-        
+
         elif mode == GitHubSearchMode.CODE.value:
             if not query:
                 return [{"error": "Query parameter is required for code search"}]
             return self.search_code(query, sort or "indexed", order)
-        
+
         elif mode == "repo_info":
             if not owner or not repo:
                 return {"error": "Owner and repo parameters are required for repository info"}
             return self.get_repository_info(owner, repo)
-        
+
         else:
             return [{"error": f"Invalid mode: {mode}. Must be one of {[m.value for m in GitHubSearchMode]} or 'repo_info'"}]
