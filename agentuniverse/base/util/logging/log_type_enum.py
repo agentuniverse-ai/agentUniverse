@@ -9,6 +9,7 @@ from enum import Enum
 
 
 class LogTypeEnum(str, Enum):
+    """The enumeration of the supported log types."""
     default = 'default'
     sls = 'sls'
     flask_request = 'flask_request'
