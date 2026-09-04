@@ -27,6 +27,7 @@ _YAML_PATH = os.path.join(os.path.dirname(cbc_module.__file__),
 
 
 def _run(docs, **kwargs):
+    """Run a ContextBudgetCompressor with the given kwargs over the docs."""
     return ContextBudgetCompressor(**kwargs).process_docs(
         [Document(text=d) if isinstance(d, str) else d for d in docs])
 
@@ -35,40 +36,49 @@ class TestContextBudgetSelection(unittest.TestCase):
     """Cumulative budget selection and boundary truncation."""
 
     def test_empty_input_returns_empty(self) -> None:
+        """Empty input yields an empty output list."""
         self.assertEqual(_run([], budget=10, counter="char"), [])
 
     def test_non_positive_budget_returns_empty(self) -> None:
+        """Zero or negative budgets yield an empty output list."""
         self.assertEqual(_run(["abc"], budget=0, counter="char"), [])
         self.assertEqual(_run(["abc"], budget=-5, counter="char"), [])
 
     def test_keeps_whole_docs_within_budget(self) -> None:
+        """Docs that fit within the budget are kept whole."""
         out = _run(["aa", "bb", "cc"], budget=4, counter="char", truncate=False)
         self.assertEqual([d.text for d in out], ["aa", "bb"])
 
     def test_stops_at_first_overflow_without_truncate(self) -> None:
+        """Selection stops at the first doc that overflows the budget."""
         out = _run(["aa", "bb", "cc"], budget=4, counter="char", truncate=False)
         self.assertEqual(len(out), 2)
 
     def test_truncates_boundary_doc_to_fit(self) -> None:
+        """The boundary doc is truncated and marked when truncate is enabled."""
         out = _run(["aaa", "bbbb"], budget=5, counter="char", truncate=True)
         self.assertEqual([d.text for d in out], ["aaa", "bb"])
         self.assertTrue(out[1].metadata.get("truncated"))
 
     def test_single_doc_exceeding_budget_is_truncated(self) -> None:
+        """A single oversized doc is truncated to the budget when allowed."""
         out = _run(["abcdefghij"], budget=3, counter="char", truncate=True)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0].text, "abc")
         self.assertTrue(out[0].metadata.get("truncated"))
 
     def test_single_doc_exceeding_budget_without_truncate_is_empty(self) -> None:
+        """An oversized doc yields no output when truncation is disabled."""
         out = _run(["abcdefghij"], budget=3, counter="char", truncate=False)
         self.assertEqual(out, [])
 
     def test_input_order_preserved(self) -> None:
+        """Output docs preserve the input order."""
         out = _run(["xx", "yy", "zz"], budget=6, counter="char", truncate=False)
         self.assertEqual([d.text for d in out], ["xx", "yy", "zz"])
 
     def test_truncated_doc_preserves_id_and_metadata(self) -> None:
+        """Truncation keeps the original doc id and existing metadata."""
         original = Document(text="bbbb", metadata={"source": "readme.md"})
         out = ContextBudgetCompressor(budget=3, counter="char").process_docs(
             [original])
@@ -82,24 +92,29 @@ class TestContextBudgetCounters(unittest.TestCase):
     """The counter choice changes how size is measured."""
 
     def test_char_counter_counts_characters(self) -> None:
+        """The char counter measures size in characters."""
         proc = ContextBudgetCompressor(budget=5, counter="char")
         self.assertEqual(proc._count("hello"), 5)
 
     def test_word_counter_truncates_by_words(self) -> None:
+        """Truncation with the word counter cuts at word boundaries."""
         out = _run(["one two three four"], budget=3, counter="word",
                    truncate=True)
         self.assertEqual(out[0].text, "one two three")
 
     def test_word_counter_counts_words(self) -> None:
+        """The word counter measures size in whitespace-separated words."""
         proc = ContextBudgetCompressor(counter="word")
         self.assertEqual(proc._count("a b c"), 3)
 
     def test_estimate_counter_uses_chars_div_four(self) -> None:
+        """The estimate counter approximates tokens as chars divided by four."""
         proc = ContextBudgetCompressor(counter="estimate")
         self.assertEqual(proc._count("x" * 12), 3)   # 12 // 4
         self.assertEqual(proc._count(""), 1)         # at least 1
 
     def test_tiktoken_counter_counts_real_tokens(self) -> None:
+        """The tiktoken counter reports real token counts when available."""
         try:
             import tiktoken
             enc = tiktoken.get_encoding("cl100k_base")
@@ -110,6 +125,7 @@ class TestContextBudgetCounters(unittest.TestCase):
         self.assertEqual(proc._count(text), len(enc.encode(text)))
 
     def test_tiktoken_counter_truncates_by_tokens(self) -> None:
+        """Truncation with the tiktoken counter cuts at token boundaries."""
         try:
             import tiktoken
             enc = tiktoken.get_encoding("cl100k_base")
@@ -134,12 +150,15 @@ class TestContextBudgetTiktokenCache(unittest.TestCase):
     _PROBE = "def __init__(self):"
 
     def setUp(self) -> None:
+        """Clear the module-level tiktoken encoder cache before each test."""
         cbc_module._TIKTOKEN_ENCODERS.clear()
 
     def tearDown(self) -> None:
+        """Clear the module-level tiktoken encoder cache after each test."""
         cbc_module._TIKTOKEN_ENCODERS.clear()
 
     def test_each_instance_uses_its_configured_encoding(self) -> None:
+        """Each instance counts tokens with its own configured encoding."""
         import tiktoken
         cl100k = ContextBudgetCompressor(counter="tiktoken",
                                          tiktoken_encoding="cl100k_base")
@@ -159,6 +178,7 @@ class TestContextBudgetTiktokenCache(unittest.TestCase):
             cbc_module._TIKTOKEN_ENCODERS["p50k_base"])
 
     def test_invalid_encoding_raises_configuration_error(self) -> None:
+        """An unknown tiktoken encoding name raises a ValueError on count."""
         proc = ContextBudgetCompressor(
             counter="tiktoken", tiktoken_encoding="not_a_real_encoding")
         with self.assertRaises(ValueError) as ctx:
@@ -166,6 +186,7 @@ class TestContextBudgetTiktokenCache(unittest.TestCase):
         self.assertIn("not_a_real_encoding", str(ctx.exception))
 
     def test_invalid_encoding_before_valid_does_not_poison(self) -> None:
+        """A prior invalid encoding must not affect a later valid instance."""
         # The core regression: an invalid encoding on one instance must not
         # silently push a later valid instance onto the estimate counter.
         bad = ContextBudgetCompressor(
@@ -183,6 +204,7 @@ class TestContextBudgetTiktokenCache(unittest.TestCase):
             len(tiktoken.get_encoding("cl100k_base").encode(self._PROBE)))
 
     def test_missing_dependency_degrades_instead_of_raising(self) -> None:
+        """A missing tiktoken dependency degrades to the estimate counter."""
         # A missing optional dependency must degrade to the estimate counter,
         # in contrast with an invalid encoding (which raises). Setting a
         # sys.modules key to None makes `import tiktoken` raise ImportError.
@@ -198,11 +220,13 @@ class TestContextBudgetConfig(unittest.TestCase):
     """Initialization and configuration."""
 
     def test_invalid_counter_raises(self) -> None:
+        """An unknown counter name raises a ValueError during init."""
         configer = SimpleNamespace(name="cbc", description="d", counter="bytes")
         with self.assertRaises(ValueError):
             ContextBudgetCompressor()._initialize_by_component_configer(configer)
 
     def test_attributes_loaded_from_configer(self) -> None:
+        """Component config values populate the compressor attributes."""
         configer = SimpleNamespace(
             name="cbc", description="d",
             budget=128, counter="word", truncate=False,
@@ -218,6 +242,7 @@ class TestContextBudgetRegistration(unittest.TestCase):
     """The shipped yaml resolves through the real framework loader."""
 
     def test_yaml_resolves_to_doc_processor_type(self) -> None:
+        """The shipped yaml registers as a DOC_PROCESSOR component type."""
         configer = Configer(path=os.path.abspath(_YAML_PATH)).load()
         component_configer = ComponentConfiger().load_by_configer(configer)
         self.assertEqual(
@@ -225,6 +250,7 @@ class TestContextBudgetRegistration(unittest.TestCase):
             ComponentEnum.DOC_PROCESSOR.value)
 
     def test_yaml_exposes_module_and_class(self) -> None:
+        """The shipped yaml points at the ContextBudgetCompressor class."""
         configer = Configer(path=os.path.abspath(_YAML_PATH)).load()
         component_configer = ComponentConfiger().load_by_configer(configer)
         self.assertEqual(
@@ -239,13 +265,17 @@ class TestContextBudgetThroughKnowledgePipeline(unittest.TestCase):
     """The compressor runs as a real post_processor through query_knowledge."""
 
     def test_compresses_in_the_pipeline(self) -> None:
+        """The compressor runs as a post_processor in query_knowledge."""
         from agentuniverse.agent.action.knowledge import knowledge as \
             knowledge_module
         from agentuniverse.agent.action.knowledge.knowledge import Knowledge
         import agentuniverse.base.annotation.trace as trace_module
 
         class _FakeStore:
+            """Store double returning fixed documents for a query."""
+
             def query(self, query):
+                """Return three canned documents of 4/3/2 chars."""
                 return [Document(text="aaaa"),
                         Document(text="bbb"),
                         Document(text="cc")]
