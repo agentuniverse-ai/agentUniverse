@@ -58,11 +58,17 @@ def _tool_from_yaml(path: str) -> PythonREPLTool:
 
 
 class PythonREPLToolTest(unittest.TestCase):
+    """Pythonrepltooltest.
+    """
     def setUp(self):
+        """Set up the test fixture before each test.
+        """
         self.tool = PythonREPLTool()
 
     def test_disabled_by_default(self):
         # By default the tool must refuse to execute code (issue #570).
+        """Test that disabled by default.
+        """
         result = self.tool.execute("print('pwned')")
 
         self.assertIsInstance(result, str)
@@ -70,6 +76,8 @@ class PythonREPLToolTest(unittest.TestCase):
         self.assertIn("disabled", result.lower())
 
     def test_opt_in_executes(self):
+        """Test that opt in executes.
+        """
         self.tool.allow_code_execution = True
         result = self.tool.execute("print(2 ** 10)")
 
@@ -83,6 +91,8 @@ class PythonREPLToolConfigTest(unittest.TestCase):
 
     def test_default_config_is_disabled(self):
         # A yaml without allow_code_execution must leave the tool disabled.
+        """Test that default config is disabled.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "python_repl_tool.yaml")
             with open(path, "w", encoding="utf-8") as f:
@@ -106,6 +116,8 @@ class PythonREPLToolConfigTest(unittest.TestCase):
         self.assertIn("disabled", result.lower())
 
     def test_config_opt_in_executes(self):
+        """Test that config opt in executes.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "python_repl_tool.yaml")
             with open(path, "w", encoding="utf-8") as f:
@@ -132,6 +144,8 @@ class PythonREPLToolConfigTest(unittest.TestCase):
         # Regression guard: the shipped built-in python_runner yamls must keep
         # the policy explicit by opting in, so the demos keep working instead of
         # silently returning the disabled error.
+        """Test that builtin demo yamls opt in.
+        """
         self.assertTrue(_OPT_IN_BUILTIN_YAMLS, "expected at least one built-in yaml to be checked")
         for path in _OPT_IN_BUILTIN_YAMLS:
             with self.subTest(yaml=path):
