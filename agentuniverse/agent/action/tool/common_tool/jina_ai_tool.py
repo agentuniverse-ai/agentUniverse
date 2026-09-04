@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2025/2/22 10:00
-# @Author  : wangyapei 
+# @Author  : wangyapei
 # @FileName: jina_ai_tool.py
 
 from typing import Optional, Dict
@@ -24,10 +24,10 @@ class JinaAITool(Tool):
     """The demo jina ai tool.
 
     Use jina.ai's API for webpage read, search and fact check.
-    
+
     Note: the api key is not required for webpage read, but required for search and check_fact
           api_key can be found in https://jina.ai/.
-    
+
     """
 
     mode: str = "read"
@@ -49,7 +49,7 @@ class JinaAITool(Tool):
                 ):
         if not input:
             return None
-        
+
         # Update optional configurations
         if mode:
             self.mode = mode
@@ -81,12 +81,12 @@ class JinaAITool(Tool):
     def _make_api_request(self, url: str, timeout: int, error_prefix: str) -> Optional[dict]:
         """
         Unified method for handling API requests
-        
+
         Args:
             url: The URL to request
             timeout: Request timeout in seconds
             error_prefix: Error message prefix
-            
+
         Returns:
             Optional[dict]: Response data, returns None if failed
         """
@@ -105,9 +105,9 @@ class JinaAITool(Tool):
                 if content.get("code") != 200:
                     logger.warning(f"Jina AI request to {url} failed with code {content.get('code')}")
                     return None
-                    
+
                 return content
-                
+
             except requests.HTTPError as e:
                 response = e.response
                 status_code = response.status_code if response is not None else None
@@ -131,24 +131,24 @@ class JinaAITool(Tool):
     def read_url(self, url: str) -> str:
         """
         Read URL and return full webpage content
-        
+
         Args:
             url: URL to read
-            
+
         Returns:
             str: Webpage content or error message
         """
         full_url = f"{jina_read_url}{url}"
-        
+
         content = self._make_api_request(full_url, self.timeout, "Error reading URL")
         if isinstance(content, str):  # Error message
             return content
         if not content:
-            return None     
-        
+            return None
+
         data = content.get("data", {})
         content_text = data.get("content", "").strip()
-        
+
         if self.remove_image:
             content_text = self._remove_images(content_text)
         # Remove blank lines
@@ -181,15 +181,15 @@ class JinaAITool(Tool):
         ]
         """
         full_url = f"{jina_search_url}{query}"
-        
+
         content = self._make_api_request(full_url, self.timeout, "Error executing search")
-        if isinstance(content, str): 
+        if isinstance(content, str):
             return content
         if not content:
             return None
-            
+
         return str(content.get("data"))
-    
+
     def check_fact(self, query: str) -> str:
         """
         Execute check fact query and return json string
@@ -219,7 +219,7 @@ class JinaAITool(Tool):
         full_url = f"{jina_check_fact_url}{query}"
         # check_fact is very slow, so we set a longer timeout
         content = self._make_api_request(full_url, self.timeout * 3, "Error executing check fact")
-        if isinstance(content, str): 
+        if isinstance(content, str):
             return content
         if not content:
             return None
@@ -228,24 +228,24 @@ class JinaAITool(Tool):
     def _remove_images(self, content: str) -> str:
         """
         Remove image descriptions from content
-        
+
         Args:
             content: Text content containing image descriptions
-            
+
         Returns:
             str: Content with image descriptions removed
         """
         return "\n".join(
-            line for line in content.split("\n") 
+            line for line in content.split("\n")
             if not line.startswith("![Image")
         ).rstrip()
 
     def _get_headers(self) -> Dict[str, str]:
         """
         Get request headers with API key and other configurations
-        
+
         Returns:
-            Dict[str, str]: Headers dictionary containing Accept, X-Engine, X-Retain-Images 
+            Dict[str, str]: Headers dictionary containing Accept, X-Engine, X-Retain-Images
             and optionally Authorization if API key is provided
         """
         headers = {
@@ -262,10 +262,10 @@ class JinaAITool(Tool):
     def _truncate_content(self, content: str) -> str:
         """
         Truncate content to the maximum allowed length.
-        
+
         Args:
             content: Original content text
-            
+
         Returns:
             str: Truncated content with ellipsis if exceeds max length, otherwise original content
         """
