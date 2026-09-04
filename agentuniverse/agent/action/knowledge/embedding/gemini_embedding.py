@@ -67,6 +67,12 @@ class GeminiEmbedding(Embedding):
             gemini_embedding: GeminiEmbedding  # Add an instance of GeminiEmbedding
 
             def __init__(self, gemini_embedding: GeminiEmbedding, **kwargs):
+                """Initialize the langchain embedding wrapper around the given gemini embedding.
+
+                Args:
+                    gemini_embedding(GeminiEmbedding): The gemini embedding to wrap.
+                    **kwargs: Extra keyword arguments passed to the parent class.
+                """
                 super().__init__(**kwargs)  # Initialize the parent class
                 self.gemini_embedding = gemini_embedding  # Store the GeminiEmbedding instance
 
@@ -82,6 +88,14 @@ class GeminiEmbedding(Embedding):
 
 
     def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> 'Embedding':
+        """Initialize the embedding fields from the component configer and build the genai client when an api key is available.
+
+        Args:
+            embedding_configer(ComponentConfiger): The configer containing the settings.
+
+        Returns:
+            Embedding: The initialized embedding instance.
+        """
         super()._initialize_by_component_configer(embedding_configer)
         if hasattr(embedding_configer, "gemini_api_key"):
             self.gemini_api_key = embedding_configer.gemini_api_key
