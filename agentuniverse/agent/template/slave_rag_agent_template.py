@@ -23,14 +23,30 @@ from agentuniverse.base.context.context_archive_utils import get_current_context
 
 class SlaveRagAgentTemplate(AgentTemplate):
 
+    """RAG agent template used as a slave (sub) agent, resolving prompt params and context archive placeholders before invoking the configured prompt.
+    """
     def input_keys(self) -> list[str]:
         return ['prompt_name', 'prompt_params']
 
     def output_keys(self) -> list[str]:
+        """Return the output keys produced by this template.
+
+        Returns:
+            list[str]: The list of output keys.
+        """
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
 
+        """Copy prompt_name and prompt_params from the input object, resolve context archive placeholders and expose every prompt param back into the input object.
+
+        Args:
+            input_object(InputObject): The user input object.
+            agent_input(dict): The agent input dictionary to be filled.
+
+        Returns:
+            dict: The updated agent input.
+        """
         agent_input['prompt_name'] = input_object.get_data('prompt_name')
         agent_input['prompt_params'] = input_object.get_data('prompt_params')
         context_archive = get_current_context_archive()
@@ -55,9 +71,29 @@ class SlaveRagAgentTemplate(AgentTemplate):
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
+        """Return the agent result enriched with its output value.
+
+        Args:
+            agent_result(dict): The raw agent result.
+
+        Returns:
+            dict: The agent result with the output key present.
+        """
         return {**agent_result, 'output': agent_result['output']}
 
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
+        """Build the chat prompt from the profile and the configured prompt version, prepending the expert framework and optional image URLs when present.
+
+        Args:
+            agent_input(dict): The agent input containing prompt_name and prompt params.
+            **kwargs: Extra keyword arguments accepted for interface compatibility.
+
+        Returns:
+            ChatPrompt: The built chat prompt.
+
+        Raises:
+            Exception: If neither a prompt version nor an inline prompt model is available.
+        """
         expert_framework = agent_input.pop('expert_framework', '') or ''
 
         profile: dict = self.agent_model.profile
