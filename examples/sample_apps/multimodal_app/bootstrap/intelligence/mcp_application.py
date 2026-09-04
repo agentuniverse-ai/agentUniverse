@@ -16,6 +16,11 @@ class ServerApplication:
 
     @classmethod
     def start(cls):
+        """Start the multimodal MCP server application.
+
+        Bootstraps the AgentUniverse runtime in core mode and starts the MCP
+        (Model Context Protocol) server manager to expose agents over MCP.
+        """
         AgentUniverse().start(core_mode=True)
         MCPServerManager().start_server()
 
