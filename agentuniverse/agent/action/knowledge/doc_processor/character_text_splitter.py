@@ -18,10 +18,10 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 class CharacterTextSplitter(DocProcessor):
     """Character-based text splitter for document processing.
-    
+
     This class splits documents into smaller chunks based on character separators,
     with configurable chunk size and overlap parameters.
-    
+
     Attributes:
         chunk_size: The size of each text chunk.
         chunk_overlap: The number of characters to overlap between chunks.
@@ -46,11 +46,11 @@ class CharacterTextSplitter(DocProcessor):
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> \
             List[Document]:
         """Process documents by splitting them into smaller chunks.
-        
+
         Args:
             origin_docs: List of original documents to be processed.
             query: Optional query object that may influence the processing.
-            
+
         Returns:
             List[Document]: List of processed document chunks.
         """
@@ -62,10 +62,10 @@ class CharacterTextSplitter(DocProcessor):
     def _initialize_by_component_configer(self,
                                          doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
         """Initialize the splitter using configuration from a ComponentConfiger.
-        
+
         Args:
             doc_processor_configer: Configuration object containing splitter parameters.
-            
+
         Returns:
             DocProcessor: The initialized document processor instance.
         """
