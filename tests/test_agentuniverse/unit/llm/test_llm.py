@@ -18,9 +18,11 @@ class LLMTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Create a DefaultOpenAILLM instance under test."""
         self.llm = DefaultOpenAILLM(model_name='gpt-4o')
 
     def test_call(self) -> None:
+        """Verify a synchronous non-streaming call returns an LLM result."""
         messages = [
             {
                 "role": "user",
@@ -31,6 +33,7 @@ class LLMTest(unittest.TestCase):
         print(output.__str__())
 
     def test_acall(self) -> None:
+        """Verify an asynchronous non-streaming call returns an LLM result."""
         messages = [
             {
                 "role": "user",
@@ -41,6 +44,7 @@ class LLMTest(unittest.TestCase):
         print(output.__str__())
 
     def test_call_stream(self):
+        """Verify a synchronous streaming call yields response chunks."""
         messages = [
             {
                 "role": "user",
@@ -53,6 +57,7 @@ class LLMTest(unittest.TestCase):
 
     #
     def test_acall_stream(self):
+        """Verify the async streaming path through the call_stream helper."""
         messages = [
             {
                 "role": "user",
@@ -63,18 +68,24 @@ class LLMTest(unittest.TestCase):
 
     #
     async def call_stream(self, messages: list):
+        """Consume and print chunks from an asynchronous streaming call.
 
+        Args:
+            messages: The chat messages to send to the LLM.
+        """
         async for chunk in await self.llm.acall(messages=messages, streaming=True):
             print(chunk, end='')
         print()
 
     def test_as_langchain(self):
+        """Verify the LLM can be wrapped for use in a langchain chain."""
         langchain_llm = self.llm.as_langchain()
         llm_chain = ConversationChain(llm=langchain_llm)
         res = llm_chain.predict(input='hello')
         print(res)
 
     def test_gpt_4o_image(self):
+        """Verify a multimodal call with an image URL runs successfully."""
         response = self.llm.call(
             messages=[
                 {"role": "system",
