@@ -9,5 +9,6 @@ class ServiceManager(ComponentManagerBase[Service]):
     """A singleton manager class of the service."""
 
     def __init__(self):
+        """Initialize the ServiceManager with the service component type."""
         super().__init__(ComponentEnum.SERVICE)
 
