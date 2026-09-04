@@ -134,4 +134,10 @@ class LoggingConfig(object):
 
 
 def init_log_config(config_path: Optional[str] = None):
+    """Initialize the log config with the given config file.
+
+    Args:
+        config_path(str): the path of the toml log config file; if it is None
+            or cannot be loaded, the default log config is used.
+    """
     LoggingConfig(config_path)
