@@ -45,7 +45,7 @@ class AgentPromptModel(BaseModel):
 
             Args:
                 attribute_name (str): The name of the attribute.
-                
+
             Returns:
                 str: The message type of the attribute(system/human/ai).
         """
