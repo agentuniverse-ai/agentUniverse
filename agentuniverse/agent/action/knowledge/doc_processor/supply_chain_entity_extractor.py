@@ -82,6 +82,11 @@ class SupplyChainEntityExtractor(DocProcessor):
     skip_on_error: bool = True
 
     def __init__(self, **data):
+        """Initialize the SupplyChainEntityExtractor.
+
+        Args:
+            **data: Arbitrary keyword arguments passed to the parent class.
+        """
         super().__init__(**data)
         if self.entity_types is None:
             self.entity_types = [
