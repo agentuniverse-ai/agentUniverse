@@ -30,20 +30,24 @@ def _encode_docs(docs_obj) -> str:
 
 
 class YuqueReaderTest(unittest.TestCase):
+    """Unit tests for YuqueReader robustness with a stubbed HTTP layer."""
 
     def _reader(self) -> YuqueReader:
+        """Build a YuqueReader whose session is replaced by a MagicMock."""
         reader = YuqueReader(cookies=None)
         reader.session = MagicMock()
         return reader
 
     @staticmethod
     def _title_response(title: str = "Book") -> MagicMock:
+        """Build a mocked book response carrying the given HTML title."""
         resp = MagicMock()
         resp.raise_for_status.return_value = None
         resp.text = f"<html><head><title>{title}</title></head></html>"
         return resp
 
     def test_fetch_page_markdown_returns_empty_on_non_json(self) -> None:
+        """A non-JSON page body makes _fetch_page_markdown log and return ''."""
         reader = self._reader()
         resp = MagicMock()
         resp.status_code = 200
@@ -56,6 +60,7 @@ class YuqueReaderTest(unittest.TestCase):
                             for m in cm.output))
 
     def test_fetch_page_markdown_returns_empty_on_non_200(self) -> None:
+        """A non-200 page status makes _fetch_page_markdown log and return ''."""
         reader = self._reader()
         resp = MagicMock()
         resp.status_code = 500
@@ -64,6 +69,7 @@ class YuqueReaderTest(unittest.TestCase):
             self.assertEqual(reader._fetch_page_markdown("123", "abc"), "")
 
     def test_fetch_page_markdown_returns_empty_on_non_dict_json(self) -> None:
+        """A non-dict JSON body is logged and skipped instead of crashing."""
         # A valid JSON list/string used to crash at .get('data'); it now logs
         # and is skipped like other unusable bodies.
         reader = self._reader()
@@ -75,6 +81,7 @@ class YuqueReaderTest(unittest.TestCase):
             self.assertEqual(reader._fetch_page_markdown("123", "abc"), "")
 
     def test_fetch_page_markdown_extracts_sourcecode(self) -> None:
+        """_fetch_page_markdown returns the sourcecode from a valid page body."""
         reader = self._reader()
         resp = MagicMock()
         resp.status_code = 200
@@ -83,6 +90,7 @@ class YuqueReaderTest(unittest.TestCase):
         self.assertIn("# Hello world", reader._fetch_page_markdown("1", "s"))
 
     def test_load_data_raises_when_book_key_missing(self) -> None:
+        """_load_data raises RuntimeError when the payload has no book key."""
         reader = self._reader()
         book_resp = MagicMock()
         book_resp.raise_for_status.return_value = None
@@ -93,6 +101,7 @@ class YuqueReaderTest(unittest.TestCase):
         self.assertIn("yuque.com/x/y", str(ctx.exception))
 
     def test_load_data_raises_when_book_not_dict(self) -> None:
+        """_load_data raises RuntimeError when the book payload is not a dict."""
         reader = self._reader()
         book_resp = MagicMock()
         book_resp.raise_for_status.return_value = None
@@ -102,6 +111,7 @@ class YuqueReaderTest(unittest.TestCase):
             reader._load_data("https://www.yuque.com/x/y")
 
     def test_load_data_raises_when_book_id_missing(self) -> None:
+        """_load_data raises RuntimeError when the book payload has no id."""
         reader = self._reader()
         book_resp = MagicMock()
         book_resp.raise_for_status.return_value = None
@@ -112,6 +122,7 @@ class YuqueReaderTest(unittest.TestCase):
         self.assertIn("no id", str(ctx.exception))
 
     def test_load_data_raises_on_non_dict_payload(self) -> None:
+        """_load_data raises RuntimeError when the whole payload is not a dict."""
         reader = self._reader()
         book_resp = MagicMock()
         book_resp.raise_for_status.return_value = None
@@ -121,6 +132,7 @@ class YuqueReaderTest(unittest.TestCase):
             reader._load_data("https://www.yuque.com/x/y")
 
     def test_load_data_skips_toc_entry_missing_url(self) -> None:
+        """A toc entry without a url is logged and skipped, not page-fetched."""
         # A toc entry with the right title but no 'url' is logged and skipped
         # rather than passed to the page fetch as None.
         reader = self._reader()
@@ -135,6 +147,7 @@ class YuqueReaderTest(unittest.TestCase):
         self.assertTrue(any("missing 'url'" in m for m in cm.output))
 
     def test_load_data_returns_documents_on_happy_path(self) -> None:
+        """_load_data returns documents with title metadata on a valid flow."""
         reader = self._reader()
         book_resp = MagicMock()
         book_resp.raise_for_status.return_value = None
