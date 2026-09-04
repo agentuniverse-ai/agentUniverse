@@ -34,12 +34,16 @@ class NodeEnum(Enum):
 
 
 class NodeStatusEnum(Enum):
+    """Status enum for workflow node execution.
+    """
     RUNNING = 'running'
     SUCCEEDED = 'succeeded'
     FAILED = 'failed'
 
 
 class ConditionComparisonEnum(Enum):
+    """Enumeration of the comparison operators supported by condition branches.
+    """
     EQUAL = 'equal'
     NOT_EQUAL = 'not_equal'
     BLANK = 'blank'
