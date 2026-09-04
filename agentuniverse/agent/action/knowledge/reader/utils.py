@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import BinaryIO, Iterable, Sequence, Union
 
 # Candidate encodings to try when automatic detection libraries are not available.
+# Note: latin-1 is intentionally omitted. It decodes any byte sequence without
+# raising UnicodeDecodeError, so including it would short-circuit detection and
+# misreport unrelated encodings (e.g. UTF-16) as latin-1.
 _FALLBACK_ENCODINGS: Sequence[str] = (
     "utf-8",
     "utf-8-sig",
@@ -12,7 +15,6 @@ _FALLBACK_ENCODINGS: Sequence[str] = (
     "gbk",
     "big5",
     "shift_jis",
-    "latin-1",
 )
 
 
