@@ -118,6 +118,8 @@ class ContextBudgetCompressor(DocProcessor):
     # Counting / truncation
     # ------------------------------------------------------------------ #
     def _count(self, text: str) -> int:
+        """Count.
+        """
         if self.counter == "char":
             return len(text)
         if self.counter == "word":
