@@ -118,10 +118,16 @@ async def _default_llm_wrapper_async(func, *args, **kwargs):
     else:
         # streaming
         async def gen_iterator():
-            async for chunk in result:
-                yield chunk
-            # add llm invocation info to monitor
-            Monitor.pop_invocation_chain()
+            try:
+                async for chunk in result:
+                    yield chunk
+            finally:
+                try:
+                    close = getattr(result, 'aclose', None)
+                    if close is not None:
+                        await close()
+                finally:
+                    Monitor.pop_invocation_chain()
 
         return gen_iterator()
 
