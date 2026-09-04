@@ -2,6 +2,7 @@ from agentuniverse.agent.output_object import OutputObject
 
 
 def test_output_object_copies_constructor_params():
+    """Verify OutputObject copies constructor params to isolate external changes."""
     params = {"output": "original"}
     output_object = OutputObject(params)
 
@@ -11,6 +12,7 @@ def test_output_object_copies_constructor_params():
 
 
 def test_to_dict_returns_an_independent_mapping():
+    """Verify to_dict returns a mapping independent from the OutputObject data."""
     output_object = OutputObject({"output": "original"})
 
     exported = output_object.to_dict()
