@@ -9,6 +9,7 @@ class RequestToolTest(unittest.TestCase):
     """Test cases for RequestTool synchronous execution."""
 
     def test_execute_accepts_lowercase_method(self) -> None:
+        """Verify execute() accepts a lowercase 'get' method and forwards the parsed URL to the requests wrapper."""
         requests_wrapper = SimpleNamespace(
             get=Mock(return_value='response body')
         )
@@ -30,6 +31,7 @@ class RequestToolAsyncTest(unittest.IsolatedAsyncioTestCase):
     """Test cases for RequestTool asynchronous execution."""
 
     async def test_async_get_uses_async_requests_wrapper(self) -> None:
+        """Verify async_execute() with GET awaits the wrapper's aget() method."""
         requests_wrapper = SimpleNamespace(
             aget=AsyncMock(return_value='response body')
         )
@@ -47,6 +49,7 @@ class RequestToolAsyncTest(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_async_post_parses_json_input(self) -> None:
+        """Verify async_execute() with POST parses JSON input and forwards url/data to apost()."""
         requests_wrapper = SimpleNamespace(
             apost=AsyncMock(return_value={'created': True})
         )
@@ -68,6 +71,7 @@ class RequestToolAsyncTest(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_async_execute_rejects_unsupported_method(self) -> None:
+        """Verify async_execute() raises ValueError for an unsupported method."""
         tool = RequestTool(
             method='PATCH',
             json_parser=False
@@ -78,6 +82,7 @@ class RequestToolAsyncTest(unittest.IsolatedAsyncioTestCase):
             await tool.async_execute('https://example.com/resource')
 
     async def test_async_execute_accepts_lowercase_method(self) -> None:
+        """Verify async_execute() accepts a lowercase 'post' method."""
         requests_wrapper = SimpleNamespace(
             apost=AsyncMock(return_value={'created': True})
         )
