@@ -80,6 +80,11 @@ class AcademicPaperFragmenter(DocProcessor):
     skip_on_error: bool = True
 
     def __init__(self, **data):
+        """Initialize the AcademicPaperFragmenter.
+
+        Args:
+            **data: Arbitrary keyword arguments passed to the parent class.
+        """
         super().__init__(**data)
         if self.section_patterns is None:
             self.section_patterns = {
