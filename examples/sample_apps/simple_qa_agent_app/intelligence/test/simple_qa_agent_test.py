@@ -22,7 +22,7 @@ from agentuniverse.base.agentuniverse import AgentUniverse
 from agentuniverse.agent.agent_manager import AgentManager
 
 
-def test_simple_qa_agent():
+def test_simple_qa_agent() -> None:
     """
     Test the Simple Q&A Agent with example questions.
     用示例问题测试简单问答智能体。
@@ -87,7 +87,7 @@ def test_simple_qa_agent():
     print()
 
 
-def test_interactive_mode():
+def test_interactive_mode() -> None:
     """
     Interactive mode for testing the agent with custom questions.
     用于使用自定义问题测试智能体的交互模式。
