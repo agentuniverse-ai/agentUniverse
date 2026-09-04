@@ -108,6 +108,15 @@ class AgentUniverseService(agentuniverse_service_pb2_grpc.AgentUniverseService):
 
 
 def set_grpc_config(configer):
+    """Extract the grpc config from the given configer into the module GRPC_CONFIG.
+
+    Reads the ``GRPC`` section of the configer value and populates the module-level
+    ``GRPC_CONFIG`` dict with the ``server_port`` (default 50051) and ``max_workers``
+    (default 10) used when the grpc server is started.
+
+    Args:
+        configer: The application configer whose value contains the ``GRPC`` section.
+    """
     GRPC_CONFIG["server_port"] = configer.value.get('GRPC', {}).get('server_port', 50051)
     GRPC_CONFIG["max_workers"] = configer.value.get('GRPC', {}).get('max_workers', 10)
 
