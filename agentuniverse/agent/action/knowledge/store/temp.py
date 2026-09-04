@@ -12,6 +12,14 @@ import math
 
 # 构建倒排索引
 def build_inverted_index(corpus):
+    """Build an inverted index mapping every jieba token of the corpus to the document indices containing it.
+
+    Args:
+        corpus: Iterable of documents to index.
+
+    Returns:
+        The inverted index dict.
+    """
     inverted_index = defaultdict(list)
     for idx, document in enumerate(corpus):
         words = jieba.lcut(document)
@@ -22,6 +30,19 @@ def build_inverted_index(corpus):
 
 # 计算 BM25
 def compute_bm25(query, doc_id, corpus, inverted_index, k1=1.5, b=0.75):
+    """Compute the BM25 score of a query term against a document using the given inverted index.
+
+    Args:
+        query: The query text.
+        doc_id: Index of the document to score.
+        corpus: The document corpus.
+        inverted_index: The inverted index built by build_inverted_index.
+        k1(float): BM25 term-frequency saturation parameter.
+        b(float): BM25 length normalization parameter.
+
+    Returns:
+        float: The computed BM25 score.
+    """
     query_words = jieba.lcut(query)
     doc_words = jieba.lcut(corpus[doc_id])
     doc_length = len(doc_words)
