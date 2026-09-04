@@ -9,6 +9,15 @@ from agentuniverse.prompt.chat_prompt import ChatPrompt
 
 
 def convert_prompt_to_message(agent_input: dict, prompt: ChatPrompt) -> list:
+    """Convert a ChatPrompt into a list of role/content message dicts.
+
+    Args:
+        agent_input: Input dict used to format human/user message content.
+        prompt: The chat prompt whose messages are converted.
+
+    Returns:
+        list: Message dicts with 'role' ('system' or 'user') and 'content' keys.
+    """
     messages = prompt.messages
     prompt_list = []
     for message in messages:
@@ -21,6 +30,15 @@ def convert_prompt_to_message(agent_input: dict, prompt: ChatPrompt) -> list:
 
 
 def get_prompt_str(agent_input: dict, prompt: ChatPrompt) -> str:
+    """Render a ChatPrompt's messages into a single readable text block.
+
+    Args:
+        agent_input: Input dict used to format human/user message content.
+        prompt: The chat prompt whose messages are rendered.
+
+    Returns:
+        str: Each message prefixed with 'System prompt:' or 'User prompt:'.
+    """
     messages = prompt.messages
     prompt_str = ''
     for message in messages:
