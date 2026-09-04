@@ -46,6 +46,7 @@ SAMPLE_PAPER = {
 
 
 def response_mock(*, json_data=None):
+    """Build a mock requests response whose json() returns json_data."""
     response = Mock()
     response.json.return_value = json_data
     response.raise_for_status.return_value = None
@@ -53,11 +54,14 @@ def response_mock(*, json_data=None):
 
 
 class SemanticScholarToolTest(unittest.TestCase):
+    """Unit tests for the SemanticScholarTool wrapper around the Semantic Scholar Graph API."""
     def setUp(self) -> None:
+        """Instantiate the tool with a test API key before each test."""
         self.tool = SemanticScholarTool(api_key="test-api-key")
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_search_returns_structured_metadata(self, mock_get: Mock) -> None:
+        """Verify search returns structured metadata and issues a well-formed API request."""
         mock_get.return_value = response_mock(json_data={"total": 42, "offset": 0, "next": 1, "data": [SAMPLE_PAPER]})
 
         result = self.tool.execute(query="AI medicine", max_results=3)
@@ -107,6 +111,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_search_maps_paging_and_filters(self, mock_get: Mock) -> None:
+        """Verify paging and filter parameters are validated, normalized, and forwarded to the API."""
         mock_get.return_value = response_mock(
             json_data={"total": 200, "offset": 10, "next": 12, "data": [SAMPLE_PAPER]}
         )
@@ -145,6 +150,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_search_maps_publication_date_filter(self, mock_get: Mock) -> None:
+        """Verify the publication_date_or_year filter is forwarded to the API params."""
         mock_get.return_value = response_mock(json_data={"total": 0, "data": []})
 
         result = self.tool.execute(
@@ -160,6 +166,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_paper_lookup_normalizes_doi_url(self, mock_get: Mock) -> None:
+        """Verify a DOI URL query is normalized into a paper lookup request."""
         mock_get.return_value = response_mock(json_data=SAMPLE_PAPER)
 
         result = self.tool.execute(
@@ -179,6 +186,7 @@ class SemanticScholarToolTest(unittest.TestCase):
         )
 
     def test_paper_identifier_normalization(self) -> None:
+        """Verify _normalize_paper_id canonicalizes each supported identifier prefix."""
         self.assertEqual(
             self.tool._normalize_paper_id("https://arxiv.org/abs/2106.15928"),
             "ARXIV:2106.15928",
@@ -197,6 +205,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_citations_returns_relationship_metadata(self, mock_get: Mock) -> None:
+        """Verify citations mode returns papers with citing-context relationship metadata."""
         mock_get.return_value = response_mock(
             json_data={
                 "offset": 2,
@@ -243,6 +252,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_references_uses_cited_paper(self, mock_get: Mock) -> None:
+        """Verify references mode reads the citedPaper relationship of each result."""
         mock_get.return_value = response_mock(
             json_data={
                 "offset": 0,
@@ -267,6 +277,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_relation_without_paper_keeps_relationship_metadata(self, mock_get: Mock) -> None:
+        """Verify relationship metadata is retained when the citing/cited paper is missing."""
         mock_get.return_value = response_mock(
             json_data={
                 "data": [
@@ -290,6 +301,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.post")
     def test_batch_lookup_normalizes_ids_and_reports_missing_papers(self, mock_post: Mock) -> None:
+        """Verify batch lookup normalizes ids and reports papers the API could not resolve."""
         mock_post.return_value = response_mock(json_data=[SAMPLE_PAPER, None])
 
         result = self.tool.execute(
@@ -317,6 +329,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.post")
     def test_maximum_batch_output_is_compact_and_bounded(self, mock_post: Mock) -> None:
+        """Verify batch output at the maximum size stays compact and within the byte budget."""
         paper_ids = [f"CorpusId:{index}" for index in range(1, self.tool.MAX_BATCH_RESULTS + 1)]
         oversized_paper = {
             **SAMPLE_PAPER,
@@ -339,6 +352,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.post")
     def test_oversized_utf8_batch_returns_bounded_error(self, mock_post: Mock) -> None:
+        """Verify oversized UTF-8 batch output returns a bounded output_limit_exceeded error."""
         paper_ids = [f"CorpusId:{index}" for index in range(1, self.tool.MAX_BATCH_RESULTS + 1)]
         mock_post.return_value = response_mock(
             json_data=[
@@ -360,6 +374,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.post")
     def test_invalid_batch_shape_returns_structured_error(self, mock_post: Mock) -> None:
+        """Verify a malformed batch response yields a structured invalid_response error."""
         mock_post.return_value = response_mock(json_data=[SAMPLE_PAPER])
 
         result = self.tool.execute(
@@ -375,6 +390,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_request_without_api_key_omits_header(self, mock_get: Mock) -> None:
+        """Verify requests without an API key omit the x-api-key header."""
         mock_get.return_value = response_mock(json_data={"total": 0, "data": []})
         tool = SemanticScholarTool(api_key=None)
 
@@ -383,6 +399,7 @@ class SemanticScholarToolTest(unittest.TestCase):
         self.assertNotIn("x-api-key", mock_get.call_args.kwargs["headers"])
 
     def test_invalid_input(self) -> None:
+        """Verify invalid query/mode/limit inputs raise descriptive ValueError messages."""
         with self.assertRaisesRegex(ValueError, "query must not be empty"):
             self.tool.execute(query="  ")
         with self.assertRaisesRegex(ValueError, "mode must be one of"):
@@ -397,6 +414,7 @@ class SemanticScholarToolTest(unittest.TestCase):
             self.tool.execute(query="doi:not-a-doi", mode="paper")
 
     def test_invalid_paging_filters_and_batch_input(self) -> None:
+        """Verify invalid paging, filter, and batch inputs raise descriptive ValueError messages."""
         with self.assertRaisesRegex(ValueError, "page must be an integer"):
             self.tool.execute(query="AI", page=0)
         with self.assertRaisesRegex(ValueError, "page must be an integer"):
@@ -434,6 +452,7 @@ class SemanticScholarToolTest(unittest.TestCase):
             self.tool.execute(query=[f"URL:https://example.com/{'x' * 300}"], mode="batch")
 
     def test_missing_metadata_returns_empty_values(self) -> None:
+        """Verify _parse_paper fills missing paper fields with empty defaults."""
         paper = SemanticScholarTool._parse_paper({"paperId": "abc"})
 
         self.assertEqual(paper["paper_id"], "abc")
@@ -449,6 +468,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_timeout_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify a request timeout surfaces as a structured request_timeout error."""
         mock_get.side_effect = requests.Timeout("timed out")
 
         result = self.tool.execute(query="AI medicine")
@@ -458,6 +478,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_error_response_preserves_search_context(self, mock_get: Mock) -> None:
+        """Verify structured errors still preserve the search context such as page and filters."""
         mock_get.side_effect = requests.Timeout("timed out")
 
         result = self.tool.execute(
@@ -478,6 +499,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_http_error_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify an HTTP error surfaces as a structured http_error including the status code."""
         response = Mock(status_code=429)
         mock_get.side_effect = requests.HTTPError(response=response)
 
@@ -489,6 +511,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_connection_error_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify a connection error surfaces as a structured request_error."""
         mock_get.side_effect = requests.ConnectionError("connection failed")
 
         result = self.tool.execute(query="AI medicine")
@@ -498,6 +521,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_api_error_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify an API-level error message surfaces as a structured api_error."""
         mock_get.return_value = response_mock(json_data={"error": "Unknown paper id"})
 
         result = self.tool.execute(query="PMID:19872477", mode="paper")
@@ -507,6 +531,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_invalid_json_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify an undecodable JSON body surfaces as a structured invalid_response error."""
         response = response_mock()
         response.json.side_effect = requests.JSONDecodeError("invalid JSON", "", 0)
         mock_get.return_value = response
@@ -518,6 +543,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_invalid_search_shape_returns_structured_error(self, mock_get: Mock) -> None:
+        """Verify a malformed search payload surfaces as a structured invalid_response error."""
         mock_get.return_value = response_mock(json_data={"total": 1, "data": "not-a-list"})
 
         result = self.tool.execute(query="AI medicine")
@@ -526,6 +552,7 @@ class SemanticScholarToolTest(unittest.TestCase):
         self.assertIn("invalid search data", result["error"]["message"])
 
     def test_shipped_config_exposes_modes_identifiers_and_metadata(self) -> None:
+        """Verify the shipped YAML config documents modes, identifiers, and metadata fields."""
         config_path = (
             Path(__file__).resolve().parents[6]
             / "examples"
@@ -593,6 +620,7 @@ class SemanticScholarToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
     def test_shipped_config_initializes_tool(self, mock_get: Mock) -> None:
+        """Verify the shipped YAML config can initialize a working SemanticScholarTool."""
         config_path = (
             Path(__file__).resolve().parents[6]
             / "examples"
