@@ -13,6 +13,11 @@ AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 
 def chat_with_images():
+    """Run the multimodal agent on image prompts and print the answers.
+
+    Sends an image-description request followed by a poem request bound to the
+    same session, printing the agent's textual responses.
+    """
     instance: Agent = AgentManager().get_instance_obj('multimodal_agent')
     output_object = instance.run(input="图中描绘的是什么景象?", session_id='test_image', image_urls=[
         'https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20241022/emyrja/dog_and_girl.jpeg'])
@@ -26,6 +31,11 @@ def chat_with_images():
 
 
 def chat_with_audio():
+    """Run the multimodal agent on an audio prompt and print the answer.
+
+    Sends an audio task request bound to the test session and prints the
+    agent's textual result.
+    """
     instance: Agent = AgentManager().get_instance_obj('multimodal_agent')
     output_object = instance.run(input='帮我完成音频里的任务内容？', session_id='test_audio',
                                  audio_url='https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20240916/kvkadk/%E6%8E%A8%E8%8D%90%E4%B9%A6.wav')
