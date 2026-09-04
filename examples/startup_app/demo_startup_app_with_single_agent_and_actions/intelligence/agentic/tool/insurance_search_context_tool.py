@@ -19,6 +19,16 @@ class MockAPI:
 
     def post(self, url, headers, data):
         # mock response
+        """Send a mock post request and return a MockResponse carrying the canned knowledge results.
+
+        Args:
+            url: The target url (unused by the mock).
+            headers: The request headers.
+            data: The serialized request payload.
+
+        Returns:
+            MockResponse: The mock http response.
+        """
         mock_response = {
             "result": {
                 "recallResultTuples": [
@@ -45,9 +55,19 @@ class MockResponse:
     """Mock API http response."""
 
     def __init__(self, json_data):
+        """Store the given json data on the response object.
+
+        Args:
+            json_data: The payload returned by json().
+        """
         self.json_data = json_data
 
     def json(self):
+        """Return the stored json payload.
+
+        Returns:
+            The json data passed at construction.
+        """
         return self.json_data
 
 
@@ -59,6 +79,15 @@ class SearchContextTool(Tool):
     """
 
     def execute(self, input: str, top_k: int = 2):
+        """Search the insurance knowledge context and assemble the recalled entries into a natural-language context string.
+
+        Args:
+            input(str): The search question.
+            top_k(int): Maximum number of recalled entries to include.
+
+        Returns:
+            str: The assembled search context.
+        """
         question = input
         try:
             headers = {
