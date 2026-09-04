@@ -59,6 +59,8 @@ class WorkflowAgent(Agent):
         return workflow_output.workflow_end_params
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'WorkflowAgent':
+        """Initialize this component from a component configer and return itself.
+        """
         super().initialize_by_component_configer(component_configer)
         self.workflow_id = (self.agent_model.profile.get('workflow_id')
                             or self.agent_model.plan.get('planner', {}).get('workflow_id'))
