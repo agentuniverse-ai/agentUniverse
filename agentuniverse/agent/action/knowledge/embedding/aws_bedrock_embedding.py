@@ -210,7 +210,7 @@ class AWSBedrockEmbedding(Embedding):
         except ImportError:
             raise ImportError(
                 "boto3 is required for AWS Bedrock embeddings. "
-                "Install it with: pip install boto3"
+                "Install it with: pip install 'agentUniverse[aws_ext]'"
             )
 
         # Create boto3 session with credentials if provided
