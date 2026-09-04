@@ -58,6 +58,12 @@ class AgentUniverseServiceServicer(object):
 
 
 def add_AgentUniverseServiceServicer_to_server(servicer, server):
+    """Register the servicer's RPC handlers on the given gRPC server.
+
+    Args:
+        servicer: The AgentUniverseServiceServicer implementation.
+        server: The gRPC server to register the handlers on.
+    """
     rpc_method_handlers = {
             'service_run': grpc.unary_unary_rpc_method_handler(
                     servicer.service_run,
@@ -96,6 +102,16 @@ class AgentUniverseService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
+        """Invoke the service_run RPC through the experimental unary-unary API.
+
+        Args:
+            request: The request object to send.
+            target: The server address of the unary-unary call.
+            Remaining arguments are standard experimental gRPC call options.
+
+        Returns:
+            The result of the experimental unary-unary call.
+        """
         return grpc.experimental.unary_unary(request, target, '/agentuniverse.AgentUniverseService/service_run',
             agentuniverse__service__pb2.AgentServiceRequest.SerializeToString,
             agentuniverse__service__pb2.AgentServiceResponse.FromString,
@@ -113,6 +129,16 @@ class AgentUniverseService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
+        """Invoke the service_run_async RPC through the experimental unary-unary API.
+
+        Args:
+            request: The request object to send.
+            target: The server address of the unary-unary call.
+            Remaining arguments are standard experimental gRPC call options.
+
+        Returns:
+            The result of the experimental unary-unary call.
+        """
         return grpc.experimental.unary_unary(request, target, '/agentuniverse.AgentUniverseService/service_run_async',
             agentuniverse__service__pb2.AgentServiceRequest.SerializeToString,
             agentuniverse__service__pb2.AgentServiceResponse.FromString,
@@ -130,6 +156,16 @@ class AgentUniverseService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
+        """Invoke the service_run_result RPC through the experimental unary-unary API.
+
+        Args:
+            request: The request object to send.
+            target: The server address of the unary-unary call.
+            Remaining arguments are standard experimental gRPC call options.
+
+        Returns:
+            The result of the experimental unary-unary call.
+        """
         return grpc.experimental.unary_unary(request, target, '/agentuniverse.AgentUniverseService/service_run_result',
             agentuniverse__service__pb2.AgentResultRequest.SerializeToString,
             agentuniverse__service__pb2.AgentServiceResponse.FromString,
