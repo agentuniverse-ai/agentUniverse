@@ -18,6 +18,8 @@ class ProductApplication:
 
     @classmethod
     def start(cls):
+        """Start the application server.
+        """
         AgentUniverse().start(core_mode=True)
         AgentUniverseProduct().start()
 
