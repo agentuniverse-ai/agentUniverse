@@ -18,14 +18,18 @@ YAML_PATH = os.path.join(os.path.dirname(word_module.__file__), "word_document_t
 
 
 class WordDocumentToolTest(unittest.TestCase):
+    """Unit tests for the create/append/read/info modes of WordDocumentTool."""
     def setUp(self):
+        """Set up a temporary directory and a WordDocumentTool instance backed by it."""
         self.directory = tempfile.TemporaryDirectory()
         self.tool = WordDocumentTool(base_dir=self.directory.name)
 
     def tearDown(self):
+        """Clean up the temporary directory created in setUp."""
         self.directory.cleanup()
 
     def blocks(self):
+        """Return a representative list of document blocks covering heading, paragraph, bullet, table and page break."""
         return [
             {"type": "heading", "text": "Report", "level": 1},
             {"type": "paragraph", "text": "Quarterly results"},
@@ -35,6 +39,7 @@ class WordDocumentToolTest(unittest.TestCase):
         ]
 
     def test_round_trip(self):
+        """Verify a created document can be read back and info summarizes its metadata and tables."""
         created = self.tool.execute(
             mode="create", file_path="report.docx", blocks=self.blocks(), metadata={"title": "Q2", "author": "aU"}
         )
@@ -47,6 +52,7 @@ class WordDocumentToolTest(unittest.TestCase):
         self.assertEqual(info["table_count"], 1)
 
     def test_append(self):
+        """Verify append mode adds blocks to the existing document after the earlier ones."""
         self.tool.execute(mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "first"}])
         result = self.tool.execute(
             mode="append", file_path="report.docx", blocks=[{"type": "paragraph", "text": "second"}]
@@ -56,6 +62,7 @@ class WordDocumentToolTest(unittest.TestCase):
         self.assertEqual([p["text"] for p in read["paragraphs"]], ["first", "second"])
 
     def test_template(self):
+        """Verify creating from a template keeps the template content before the generated blocks."""
         self.tool.execute(mode="create", file_path="template.docx", blocks=[{"type": "heading", "text": "Template"}])
         result = self.tool.execute(
             mode="create",
@@ -68,6 +75,7 @@ class WordDocumentToolTest(unittest.TestCase):
         self.assertEqual([p["text"] for p in read["paragraphs"]], ["Template", "Generated"])
 
     def test_refuses_overwrite(self):
+        """Verify create mode refuses to overwrite an existing file unless overwrite is set."""
         self.tool.execute(mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "first"}])
         result = self.tool.execute(
             mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "second"}]
@@ -75,6 +83,7 @@ class WordDocumentToolTest(unittest.TestCase):
         self.assertIn("overwrite=true", result["error"])
 
     def test_explicit_overwrite(self):
+        """Verify create mode with overwrite=True replaces the existing file."""
         self.tool.execute(mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "first"}])
         result = self.tool.execute(
             mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "second"}], overwrite=True
@@ -82,26 +91,31 @@ class WordDocumentToolTest(unittest.TestCase):
         self.assertEqual(result["status"], "success")
 
     def test_path_escape(self):
+        """Verify a file path escaping the allowed directory is rejected."""
         result = self.tool.execute(mode="info", file_path="../report.docx")
         self.assertIn("escapes the allowed directory", result["error"])
 
     def test_extension(self):
+        """Verify a file path without the .docx extension is rejected."""
         result = self.tool.execute(mode="info", file_path="report.txt")
         self.assertIn(".docx extension", result["error"])
 
     def test_unknown_block_field(self):
+        """Verify a block with unknown fields is rejected."""
         result = self.tool.execute(
             mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "x", "code": "bad"}]
         )
         self.assertIn("unknown fields", result["error"])
 
     def test_invalid_heading_level(self):
+        """Verify a heading with an out-of-range level is rejected."""
         result = self.tool.execute(
             mode="create", file_path="report.docx", blocks=[{"type": "heading", "text": "x", "level": 0}]
         )
         self.assertIn("between 1 and 9", result["error"])
 
     def test_text_budget(self):
+        """Verify create mode rejects text exceeding max_text_chars."""
         self.tool.max_text_chars = 3
         result = self.tool.execute(
             mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "long"}]
@@ -109,18 +123,21 @@ class WordDocumentToolTest(unittest.TestCase):
         self.assertIn("max_text_chars", result["error"])
 
     def test_read_truncates(self):
+        """Verify read mode truncates text to max_text_chars and flags the result as truncated."""
         self.tool.execute(mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "long text"}])
         self.tool.max_text_chars = 4
         result = self.tool.execute(mode="read", file_path="report.docx")
         self.assertTrue(result["truncated"])
 
     def test_rejects_invalid_docx_archive(self):
+        """Verify a file that is not a DOCX ZIP archive is rejected in info mode."""
         with open(os.path.join(self.directory.name, "bad.docx"), "wb") as output:
             output.write(b"not-a-zip")
         result = self.tool.execute(mode="info", file_path="bad.docx")
         self.assertIn("not a valid DOCX archive", result["error"])
 
     def test_rejects_archive_expansion_over_limit(self):
+        """Verify an archive that expands beyond max_uncompressed_bytes is rejected."""
         path = os.path.join(self.directory.name, "large.docx")
         with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("word/document.xml", "x" * 100)
@@ -129,6 +146,7 @@ class WordDocumentToolTest(unittest.TestCase):
         self.assertIn("max_uncompressed_bytes", result["error"])
 
     def test_generated_document_uses_write_not_read_limit(self):
+        """Verify create mode enforces max_write_bytes rather than max_read_bytes."""
         self.tool.max_read_bytes = 1
         self.tool.max_write_bytes = 1024 * 1024
         result = self.tool.execute(
@@ -137,6 +155,7 @@ class WordDocumentToolTest(unittest.TestCase):
         self.assertEqual(result["status"], "success")
 
     def test_missing_dependency_hint(self):
+        """Verify a missing python-docx dependency yields an error with an install hint."""
         with patch.object(self.tool, "_document_class", side_effect=ImportError("missing")):
             result = self.tool.execute(
                 mode="create", file_path="report.docx", blocks=[{"type": "paragraph", "text": "x"}]
@@ -148,6 +167,7 @@ class WordDocumentToolTest(unittest.TestCase):
     def test_read_caps_paragraph_count(self):
         # A crafted DOCX packs in more paragraphs than max_blocks allows. The
         # read path must stop at max_blocks instead of walking all of them.
+        """Verify read stops at max_blocks for paragraphs and flags the result as truncated."""
         many = [{"type": "paragraph", "text": f"p{i}"} for i in range(50)]
         self.tool.execute(mode="create", file_path="big.docx", blocks=many)
         self.tool.max_blocks = 5
@@ -158,6 +178,7 @@ class WordDocumentToolTest(unittest.TestCase):
 
     def test_read_caps_table_count(self):
         # More tables than max_blocks allows; traversal must stop early.
+        """Verify read stops at max_blocks for tables and flags the result as truncated."""
         many_tables = [{"type": "table", "rows": [[f"r{i}c0", f"r{i}c1"]]} for i in range(30)]
         self.tool.execute(mode="create", file_path="tables.docx", blocks=many_tables)
         self.tool.max_blocks = 3
@@ -168,6 +189,7 @@ class WordDocumentToolTest(unittest.TestCase):
 
     def test_read_caps_rows_per_table(self):
         # A table with many rows; the read must stop at max_table_rows.
+        """Verify read caps table rows at max_table_rows."""
         big_rows = [[str(i), str(i + 1)] for i in range(60)]
         self.tool.execute(
             mode="create",
@@ -185,6 +207,7 @@ class WordDocumentToolTest(unittest.TestCase):
         # Create a wide-but-valid table, then lower max_table_columns for the
         # read. The read must stop at the (lower) configured column cap instead
         # of returning every column the document actually carries.
+        """Verify read caps table columns at max_table_columns per row."""
         wide_row = [str(i) for i in range(20)]
         self.tool.execute(
             mode="create",
@@ -203,6 +226,7 @@ class WordDocumentToolTest(unittest.TestCase):
         # Once max_text_chars is consumed, the read must stop traversing rather
         # than continuing to walk every remaining paragraph/table and filling
         # the result with empty strings.
+        """Verify read stops traversing once max_text_chars is exhausted instead of padding the result."""
         paragraphs = [{"type": "paragraph", "text": f"line-{i}-text"} for i in range(40)]
         big_table = [{"type": "table", "rows": [[f"cell-{i}-0", f"cell-{i}-1"] for i in range(40)]}]
         self.tool.execute(mode="create", file_path="mixed.docx", blocks=paragraphs + big_table)
@@ -217,7 +241,9 @@ class WordDocumentToolTest(unittest.TestCase):
 
 
 class WordDocumentRegistrationTest(unittest.TestCase):
+    """Tests that the word_document_tool.yaml configuration registers a WordDocumentTool component."""
     def setUp(self):
+        """Load the word_document_tool.yaml config and stash the current application configer so it can be restored."""
         self.config = Configer(path=os.path.abspath(YAML_PATH)).load()
         try:
             self.previous = ApplicationConfigManager().app_configer
@@ -225,14 +251,17 @@ class WordDocumentRegistrationTest(unittest.TestCase):
             self.previous = None
 
     def tearDown(self):
+        """Restore the application configer saved in setUp."""
         ApplicationConfigManager().app_configer = self.previous
 
     def test_schema(self):
+        """Verify the yaml loads as a TOOL component whose metadata class is WordDocumentTool."""
         component = ComponentConfiger().load_by_configer(self.config)
         self.assertEqual(component.get_component_config_type(), ComponentEnum.TOOL.value)
         self.assertEqual(component.metadata_class, "WordDocumentTool")
 
     def test_manager(self):
+        """Verify ToolManager instantiates a WordDocumentTool from the yaml config with the expected input keys."""
         configer = ToolConfiger().load_by_configer(self.config)
         app = AppConfiger()
         app.tool_configer_map = {configer.name: configer}
