@@ -459,6 +459,7 @@ class TestFAISSStore(unittest.TestCase):
         errors = []
 
         def query_worker():
+            """Run a sequence of queries against the store and record result sizes."""
             try:
                 for i in range(10):
                     query = Query(embeddings=[[0.1 + i * 0.01, 0.2, 0.3, 0.4]])
@@ -469,6 +470,7 @@ class TestFAISSStore(unittest.TestCase):
                 errors.append(str(e))
 
         def insert_worker():
+            """Insert a sequence of documents into the store and record failures."""
             try:
                 for i in range(5):
                     doc = Document(
