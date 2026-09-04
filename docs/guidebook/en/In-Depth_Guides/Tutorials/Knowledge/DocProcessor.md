@@ -171,6 +171,111 @@ metadata:
 ```
 This component requires configuring DASHSCOPE_API_KEY in the environment variables.
 
+### [JinaReranker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/jina_reranker.yaml)
+
+This component uses the Jina AI Reranker API to reorder recalled documents by their relevance to `Query.query_str`. It writes the returned score to each document's `metadata.relevance_score`.
+
+The component definition file is as follows:
+```yaml
+name: 'jina_reranker'
+description: 'reranker use jina api'
+model_name: 'jina-reranker-v2-base-multilingual'
+top_n: 10
+request_timeout: 30
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.jina_reranker'
+  class: 'JinaReranker'
+```
+- model_name: The Jina reranker model used by the request.
+- top_n: The maximum number of documents returned by Jina.
+- request_timeout: The request timeout in seconds; it must be a positive number.
+
+Set `JINA_API_KEY` in the environment before using this component. An optional `api_key` component property can override the environment value. Because the query and document text are sent to Jina's remote API, redact sensitive content before this processor when required by your data policy.
+
+### [ReciprocalRankFusionProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/reciprocal_rank_fusion_processor.yaml)
+
+This component fuses ranked results from multiple recall channels with Reciprocal Rank Fusion (RRF). For a document ranked at position `rank` in a channel, it adds `1 / (k + rank)` to the document's score. It does not use the stores' raw scores, so differently scaled retrieval scores can be combined safely.
+
+The component definition file is as follows:
+```yaml
+name: 'reciprocal_rank_fusion_processor'
+description: 'Fuse multi-store recall results with Reciprocal Rank Fusion'
+channel_key: 'recall_channel'
+dedup_key: 'id'
+k: 60
+top_n: null
+score_field: 'relevance_score'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.reciprocal_rank_fusion_processor'
+  class: 'ReciprocalRankFusionProcessor'
+```
+- channel_key: Metadata key that identifies the recall channel. `Knowledge` automatically stamps store codes under `recall_channel` when a channel-aware post-processor is configured.
+- dedup_key: Identity used to merge the same document across channels: `id`, `text`, or a metadata field. A missing custom metadata value falls back to the document ID.
+- k: Rank constant in the RRF formula. A larger value reduces the difference between adjacent ranks.
+- top_n: Maximum number of fused documents to return; `null` keeps all unique documents.
+- score_field: Metadata key used to store the fused score.
+
+Repeated copies of a document in one channel count only once. If no document carries `channel_key`, the input is treated as one ranked channel. Ties are deterministic.
+
+### [ThresholdFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/threshold_filter.yaml)
+
+This component filters recalled documents by score, text length, top-k rank, or percentile. Each configured filter is evaluated against the original input, and their results are combined with `AND` or `OR`.
+
+The component definition file is as follows:
+```yaml
+name: 'threshold_filter'
+description: 'Filter documents by configurable score, length, top-k, or percentile rules'
+filters:
+  - type: 'score'
+    min_score: 0.5
+  - type: 'length'
+    min_length: 50
+logic_operator: 'AND'
+score_field: 'relevance_score'
+default_score: 0.0
+preserve_order: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.threshold_filter'
+  class: 'ThresholdFilter'
+```
+- filters: Rules of type `score`, `length`, `topk`, or `percentile`. Score and length bounds are inclusive; `topk` uses `k`, and `percentile` uses a value in `[0, 1]`.
+- logic_operator: `AND` keeps documents selected by every rule; `OR` keeps documents selected by at least one rule.
+- score_field: Metadata key read by score-based, top-k, and percentile rules.
+- default_score: Score used when a document does not contain `score_field`.
+- preserve_order: Restores selected documents to their original input order. Set it to `false` when top-k or percentile results should remain score-sorted.
+
+### [SemanticDeduplicator](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/semantic_deduplicator.yaml)
+
+This component removes repeated or semantically similar documents. Exact duplicate text is removed first with a deterministic content hash. When embeddings are enabled, the remaining documents are compared with cosine similarity.
+
+The component definition file is as follows:
+```yaml
+name: 'semantic_deduplicator'
+description: 'Remove semantically similar documents using embeddings'
+similarity_threshold: 0.95
+exact_match_threshold: 1.0
+merge_strategy: 'keep_first'
+use_embeddings: true
+embedding_name: 'default_embedding'
+preserve_metadata: true
+skip_on_error: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.semantic_deduplicator'
+  class: 'SemanticDeduplicator'
+```
+- similarity_threshold: Cosine-similarity threshold at or above which documents are treated as semantic duplicates.
+- merge_strategy: `keep_first`, `keep_best`, or `merge`. `keep_best` prefers richer metadata; `merge` combines non-conflicting metadata and keyword lists.
+- use_embeddings: Whether to run semantic deduplication after exact-text deduplication.
+- embedding_name: Registered embedding component used to compute document embeddings. If it is missing, only exact-text deduplication is performed.
+- preserve_metadata: Whether the `merge` strategy combines metadata from duplicate documents.
+- skip_on_error: Returns the exact-deduplicated result when embedding lookup or calculation fails; set it to `false` to propagate the error.
+
+`exact_match_threshold` is retained in the component configuration for compatibility; the current exact-match stage always compares exact text hashes.
+
 ### [HierarchicalRegexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/hierarchical_regex_text_splitter.py)
 
 This component splits the original text into multiple hierarchical levels using specified regex rules, forming a tree-like document structure. Users need to create a custom definition file, with an example as follows:
@@ -309,3 +414,30 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+## Composing Post-Retrieval Processors
+
+`Knowledge` runs the configured `post_processors` sequentially, so each processor receives the output of the previous one. A practical multi-store pipeline is:
+
+```yaml
+post_processors:
+  - sensitive_data_redactor
+  - reciprocal_rank_fusion_processor
+  - jina_reranker
+  - threshold_filter
+  - semantic_deduplicator
+  - context_budget_compressor
+```
+
+The order reflects the responsibility of each stage:
+
+1. `SensitiveDataRedactor` optionally removes sensitive text before any remote API call.
+2. `ReciprocalRankFusionProcessor` merges duplicate results across stores and establishes a fused ranking.
+3. `JinaReranker` reranks the fused candidate set against the query.
+4. `ThresholdFilter` removes weak or unsuitable candidates using the latest score.
+5. `SemanticDeduplicator` removes residual near-duplicates.
+6. `ContextBudgetCompressor` applies the cumulative context budget after selection.
+
+Score ownership matters when processors are chained. RRF writes `relevance_score` by default, and Jina later overwrites that field with its reranker score. To retain both, configure RRF with `score_field: 'rrf_score'`; then point each downstream score filter at either `relevance_score` or `rrf_score` deliberately. When `preserve_order` is `true`, `ThresholdFilter` restores input order even for top-k and percentile rules.
+
+For a local pipeline, omit `jina_reranker` and filter on the RRF score. `MMRProcessor` can be added after filtering for diversity-aware selection. `SummarizationProcessor` is normally a final shape-changing stage because it replaces the list with one summary document.
