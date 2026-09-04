@@ -18,6 +18,15 @@ class RenderedWebPageReader(Reader):
     """
 
     def _load_data(self, url: str, ext_info: Optional[Dict] = None) -> List[Document]:
+        """Render the page and return its extracted main text as a Document.
+
+        Args:
+            url (str): The URL of the dynamic web page to load.
+            ext_info (Optional[Dict]): Extra metadata merged into the document metadata.
+
+        Returns:
+            List[Document]: A single-element list holding the extracted page text.
+        """
         print(f"debugging: RenderedWebPageReader start load url={url}")
         if not isinstance(url, str) or not url:
             raise ValueError("RenderedWebPageReader._load_data requires a non-empty url string")
@@ -37,6 +46,14 @@ class RenderedWebPageReader(Reader):
         return [Document(text=text, metadata=metadata)]
 
     def _render_and_get_html(self, url: str) -> str:
+        """Render the given URL with headless Playwright and return the page HTML.
+
+        Args:
+            url (str): The URL of the web page to render.
+
+        Returns:
+            str: The fully rendered HTML content of the page.
+        """
         try:
             from playwright.sync_api import sync_playwright  # type: ignore
         except Exception as e:
