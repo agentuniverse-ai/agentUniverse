@@ -13,6 +13,11 @@ AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 
 def chat(question: str):
+    """Run the discussion group agent on the given question.
+
+    Args:
+        question: The topic question to feed to the discussion group agent.
+    """
     instance: Agent = AgentManager().get_instance_obj('discussion_group_agent')
     instance.run(input=question)
 
