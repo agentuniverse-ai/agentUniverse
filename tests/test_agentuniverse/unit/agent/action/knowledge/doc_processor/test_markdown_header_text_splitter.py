@@ -29,12 +29,15 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
     """Pure splitting logic."""
 
     def setUp(self) -> None:
+        """Create a default MarkdownHeaderTextSplitter for the tests."""
         self.splitter = MarkdownHeaderTextSplitter()
 
     def _run(self, text: str):
+        """Process one doc with the given markdown text through the splitter."""
         return self.splitter.process_docs([Document(text=text)])
 
     def test_splits_by_headers_with_hierarchy(self) -> None:
+        """Headers of increasing level nest into a header_path hierarchy."""
         out = self._run("# Title\nintro\n## Section\nbody\n")
         paths = [(d.metadata["header_path"], d.text) for d in out]
         self.assertEqual(paths, [
@@ -43,6 +46,7 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
         ])
 
     def test_header_level_reset(self) -> None:
+        """A top-level header resets the accumulated header path."""
         out = self._run("# A\na\n## B\nb\n# C\nc\n")
         self.assertEqual([(d.metadata["header_path"], d.text) for d in out], [
             ("A", "a"),
@@ -51,6 +55,7 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
         ])
 
     def test_sibling_header_replaces_same_level(self) -> None:
+        """A same-level sibling header replaces the previous heading."""
         out = self._run("# A\n## B\nb\n## C\nc\n")
         self.assertEqual([(d.metadata["header_path"], d.text) for d in out], [
             ("A > B", "b"),
@@ -58,6 +63,7 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
         ])
 
     def test_preamble_kept_by_default(self) -> None:
+        """Text before the first header becomes a preamble section by default."""
         out = self._run("preamble line\n# A\nbody\n")
         self.assertEqual([(d.metadata["header_path"], d.text) for d in out], [
             ("", "preamble line"),
@@ -65,6 +71,7 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
         ])
 
     def test_preamble_dropped_when_configured(self) -> None:
+        """keep_preamble=False drops the pre-header preamble section."""
         splitter = MarkdownHeaderTextSplitter(keep_preamble=False)
         out = splitter.process_docs([Document(text="preamble\n# A\nbody\n")])
         self.assertEqual([(d.metadata["header_path"], d.text) for d in out], [
@@ -72,6 +79,7 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
         ])
 
     def test_max_header_level_limits_splitting(self) -> None:
+        """Headers deeper than max_header_level are treated as content."""
         # With max_header_level=1, '## Sub' is content, not a header.
         splitter = MarkdownHeaderTextSplitter(max_header_level=1)
         out = splitter.process_docs([Document(text="# A\na\n## Sub\nsub\n")])
@@ -80,12 +88,14 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
         ])
 
     def test_closed_atx_headers_recognized(self) -> None:
+        """Closed ATX headers (trailing hashes) are still recognized."""
         out = self._run("## Title ##\nbody\n")
         self.assertEqual([(d.metadata["header_path"], d.text) for d in out], [
             ("Title", "body"),
         ])
 
     def test_non_header_hash_lines_are_content(self) -> None:
+        """Hash lines lacking ATX syntax (no space/7+ hashes) stay content."""
         # No space after '#', or 7+ hashes → not an ATX header.
         out = self._run("#NoSpace\n####### seven hashes\n# Real\nbody\n")
         self.assertEqual([(d.metadata["header_path"], d.text) for d in out], [
@@ -94,6 +104,7 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
         ])
 
     def test_empty_and_no_header_input(self) -> None:
+        """Empty text yields nothing; headerless text yields one section."""
         self.assertEqual(self.splitter.process_docs([Document(text="")]), [])
         # Content but no headers → a single preamble section.
         out = self._run("just plain text\nno headers here")
@@ -101,12 +112,14 @@ class TestMarkdownHeaderSplit(unittest.TestCase):
         self.assertEqual(out[0].metadata["header_path"], "")
 
     def test_existing_metadata_preserved(self) -> None:
+        """Original document metadata survives splitting."""
         out = self.splitter.process_docs([
             Document(text="# A\nbody", metadata={"source": "readme.md"})])
         self.assertEqual(out[0].metadata["source"], "readme.md")
         self.assertEqual(out[0].metadata["header_path"], "A")
 
     def test_header_path_key_omitted_when_none(self) -> None:
+        """header_path_key=None leaves the header path out of metadata."""
         splitter = MarkdownHeaderTextSplitter(header_path_key=None)
         out = splitter.process_docs([Document(text="# A\nbody")])
         self.assertNotIn("header_path", out[0].metadata)
@@ -118,24 +131,29 @@ class TestMarkdownHeaderSplitCodeFences(unittest.TestCase):
     """Fenced code blocks must not be mistaken for header structure."""
 
     def setUp(self) -> None:
+        """Create a default MarkdownHeaderTextSplitter for the tests."""
         self.splitter = MarkdownHeaderTextSplitter()
 
     def _run(self, text: str):
+        """Process one doc with the given markdown text through the splitter."""
         return self.splitter.process_docs([Document(text=text)])
 
     def test_backtick_fence_hides_hash_line(self) -> None:
+        """Hash lines inside a backtick fence are not treated as headers."""
         out = self._run("# Real\nintro\n```python\n# Not a header\nprint(1)\n```\n")
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0].metadata["header_path"], "Real")
         self.assertIn("# Not a header", out[0].text)
 
     def test_tilde_fence_hides_hash_line(self) -> None:
+        """Hash lines inside a tilde fence are not treated as headers."""
         out = self._run("# Real\nintro\n~~~\n# Not a header\nprint(1)\n~~~\n")
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0].metadata["header_path"], "Real")
         self.assertIn("# Not a header", out[0].text)
 
     def test_header_recognized_after_closed_fence(self) -> None:
+        """A header after a closed fence starts a new section."""
         out = self._run("```python\n# code comment\n```\n# After\nbody\n")
         self.assertEqual([(d.metadata["header_path"], d.text) for d in out], [
             ("", "```python\n# code comment\n```"),
@@ -143,12 +161,14 @@ class TestMarkdownHeaderSplitCodeFences(unittest.TestCase):
         ])
 
     def test_tilde_does_not_close_backtick_fence(self) -> None:
+        """A tilde run inside a backtick fence does not close the fence."""
         out = self._run("# Real\n```\n# x\n~~~\n# y\n```\n")
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0].metadata["header_path"], "Real")
         self.assertIn("# y", out[0].text)
 
     def test_shorter_fence_run_does_not_close(self) -> None:
+        """A shorter fence run cannot close an opened longer fence."""
         # A four-backtick fence is closed only by four or more backticks.
         out = self._run("# Real\n````\n# a\n```\n# b\n````\n")
         self.assertEqual(len(out), 1)
@@ -156,6 +176,7 @@ class TestMarkdownHeaderSplitCodeFences(unittest.TestCase):
         self.assertIn("# b", out[0].text)
 
     def test_unclosed_fence_suppresses_headers_to_end(self) -> None:
+        """An unclosed fence suppresses header recognition to the end."""
         out = self._run("# Real\n```python\n# still code\n# more code\n")
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0].metadata["header_path"], "Real")
@@ -165,6 +186,7 @@ class TestMarkdownHeaderSplitterRegistration(unittest.TestCase):
     """The shipped yaml resolves through the real framework loader."""
 
     def test_yaml_resolves_to_doc_processor_type(self) -> None:
+        """The shipped yaml registers as a DOC_PROCESSOR component type."""
         configer = Configer(path=os.path.abspath(_YAML_PATH)).load()
         component_configer = ComponentConfiger().load_by_configer(configer)
         self.assertEqual(
@@ -173,6 +195,7 @@ class TestMarkdownHeaderSplitterRegistration(unittest.TestCase):
         )
 
     def test_yaml_exposes_module_and_class(self) -> None:
+        """The shipped yaml points at the MarkdownHeaderTextSplitter class."""
         configer = Configer(path=os.path.abspath(_YAML_PATH)).load()
         component_configer = ComponentConfiger().load_by_configer(configer)
         self.assertEqual(
