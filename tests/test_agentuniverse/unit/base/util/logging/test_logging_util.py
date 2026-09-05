@@ -20,6 +20,8 @@ test_context = {"LOG_CONTEXT": {"REQUEST_ID": "1111-2222-3333",
 
 
 def test_logging_util():
+    """Test that logging util.
+    """
     LoggingConfig.log_path = "./.test_log_dir"
 
     init_loggers()
