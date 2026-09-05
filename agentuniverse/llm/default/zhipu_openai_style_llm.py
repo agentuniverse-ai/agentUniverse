@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/9/6 16:00
-# @Author  : wangyapei 
+# @Author  : wangyapei
 # @FileName: zhipu_openai_style_llm.py
 
 from typing import Optional, Any, Union, Iterator, AsyncIterator
