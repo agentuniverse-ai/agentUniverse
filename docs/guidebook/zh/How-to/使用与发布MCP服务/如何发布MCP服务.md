@@ -32,6 +32,6 @@ if __name__ == "__main__":
 启动后您可以通过下列地址访问：
 - `http://0.0.0.0:8890/default_mcp_server/sse`
 
-完整的MCP服务发布用例您可以在[标准样例工程](/examples/sample_standard_app)中查看, 您可以使用[mcp_application.py](/examples/sample_standard_app/bootstrap/intelligence/mcp_application.py)进行MCP服务启动, 在该样例中我们将[mock_search_tool工具](/examples/sample_standard_app/intelligence/agentic/tool/custom/mock_search_tool.yaml)发布为了default_mcp_server。
+完整的MCP服务发布用例您可以在[标准样例工程](../../../../../examples/sample_standard_app)中查看, 您可以使用[mcp_application.py](../../../../../examples/sample_standard_app/bootstrap/intelligence/mcp_application.py)进行MCP服务启动, 在该样例中我们将[mock_search_tool工具](../../../../../examples/sample_standard_app/intelligence/agentic/tool/custom/mock_search_tool.yaml)发布为了default_mcp_server。
 
-您可以进一步指定所发布的MCP服务端口、host地址、通信类型等，更详细的内容请参考文档[MCP_Server](/docs/guidebook/zh/In-Depth_Guides/技术组件/服务化/MCP_Server.md)。
+您可以进一步指定所发布的MCP服务端口、host地址、通信类型等，更详细的内容请参考文档[MCP_Server](../../In-Depth_Guides/技术组件/服务化/MCP_Server.md)。
