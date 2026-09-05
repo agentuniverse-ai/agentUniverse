@@ -22,8 +22,8 @@ class EmbeddingTest(unittest.TestCase):
     def test_get_embeddings(self) -> None:
         res = self.embedding.get_embeddings(texts=["hello world"])
         print(res)
-        self.assertIsNotNone(res)  
-        self.assertIsInstance(res, list)  
+        self.assertIsNotNone(res)
+        self.assertIsInstance(res, list)
         self.assertGreater(len(res), 0)
 
     def test_async_get_embeddings(self) -> None:
