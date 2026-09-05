@@ -16,6 +16,8 @@ from ..configer import Configer
 class CustomKeyConfiger(Configer):
     """Use to manage user secret key."""
     def __init__(self, config_path: str = None):
+        """Initialize this instance.
+        """
         self._Configer__value = {}
         super().__init__(config_path)
         if config_path:
