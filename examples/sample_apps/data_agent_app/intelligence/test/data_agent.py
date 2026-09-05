@@ -13,6 +13,8 @@ AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 
 def data_process(queryset_path: str, turn: int, **kwargs):
+    """Process the dataset with the given arguments and return the result.
+    """
     instance: Agent = AgentManager().get_instance_obj('data_agent')
     instance.run(queryset_path=queryset_path, turn=turn, **kwargs)
 
