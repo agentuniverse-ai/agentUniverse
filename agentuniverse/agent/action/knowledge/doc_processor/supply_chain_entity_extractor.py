@@ -8,6 +8,7 @@
 
 import json
 import logging
+import re
 from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -15,10 +16,18 @@ from datetime import datetime
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
-from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+from agentuniverse.llm.llm_manager import LLMManager
 
 logger = logging.getLogger(__name__)
+
+_ENGLISH_ORGANIZATION = r"[A-Z][A-Za-z0-9&'-]{1,30}(?:[ \t]+[A-Z][A-Za-z0-9&'-]{1,30}){0,3}"
+_LEGAL_SUFFIX = r"(?:[ \t]+(?:Inc|Ltd|Corp|Co)\.?)?"
+_ATTRIBUTE_SENTENCE_PREFIX = re.compile(
+    r"\s*(?:annual\s+)?(?:revenue|营收|营业收入)\s*[:\uff1a]",
+    re.IGNORECASE,
+)
+_SENTENCE_BOUNDARIES = ".!?\u3002\uff01\uff1f\n"
 
 
 @dataclass
@@ -305,35 +314,35 @@ Return results in JSON format:
         """
         entities = []
 
-        # Comprehensive pattern-based entity extraction for all 8 entity types
-        # Use strict patterns that match specific entity formats
-        # Separate case-sensitive patterns (company names) from case-insensitive (verbs)
+        # Role-bearing names are evaluated before generic legal company names.
         case_sensitive_patterns = {
             'supplier': [
-                # Company name patterns - capture full name INCLUDING suffix
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+Supplier)\b',  # "ABC Supplier"
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Components|Materials))\b',  # "ABC Components", "DEF Materials"
-                r'\b([A-Z][A-Za-z]+公司)\b',  # "ABC公司"
+                rf'\b({_ENGLISH_ORGANIZATION}\s+(?:Supplier|Components|Materials){_LEGAL_SUFFIX})\b\.?',
+                r'((?:[A-Za-z0-9][A-Za-z0-9&-]{1,30}|[\u4e00-\u9fff]{2,20})公司)',
             ],
             'manufacturer': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Manufacturing|Factory))\b',  # "XYZ Manufacturing"
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+Manufacturer)\b',
+                rf'\b({_ENGLISH_ORGANIZATION}\s+(?:Manufacturing|Factory|Manufacturer){_LEGAL_SUFFIX})\b\.?',
+                r'((?:[A-Za-z0-9][A-Za-z0-9&-]{1,30}|[\u4e00-\u9fff]{2,20})制造商)',
             ],
             'distributor': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Distributor|Distribution))\b',
+                rf'\b({_ENGLISH_ORGANIZATION}\s+(?:Distributor|Distributors|Distribution){_LEGAL_SUFFIX})\b\.?',
             ],
             'warehouse': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Warehouse|Storage))\b',
-                r'\b([A-Z][A-Za-z\u4e00-\u9fa5]{2,15}\s*仓库)\b',
+                rf'\b({_ENGLISH_ORGANIZATION}\s+(?:Warehouse|Storage){_LEGAL_SUFFIX})\b\.?',
+                r'([A-Za-z0-9\u4e00-\u9fff]{2,20}仓库)',
             ],
             'retailer': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Store|Retail|Shop|Market))\b',
+                rf'\b({_ENGLISH_ORGANIZATION}\s+(?:Store|Retail|Shop|Market){_LEGAL_SUFFIX})\b\.?',
             ],
             'logistics_provider': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Logistics|Shipping|Transport|Freight))\b',
+                rf'\b({_ENGLISH_ORGANIZATION}\s+(?:Logistics|Shipping|Transport|Freight){_LEGAL_SUFFIX})\b\.?',
+            ],
+            'product': [
+                r'(?:供应|提供|制造(?!商)|生产|存储|储存|存放)'
+                r'([\u4e00-\u9fff]{0,12}(?:零部件|组件|原材料|成品|产品))',
             ],
             'customer': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Inc\.|Ltd\.|Corp\.|Co\.))\b',
+                rf'\b({_ENGLISH_ORGANIZATION}[ \t]+(?:Inc|Ltd|Corp|Co))\b\.?',
             ],
         }
 
@@ -348,7 +357,6 @@ Return results in JSON format:
             ],
             'distributor': [
                 r'distributed\s+by\s+\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Za-z]{2,15}){0,2})\b',
-                r'regional\s+(distributors?)\b',
             ],
             'warehouse': [
                 r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Za-z]{2,15}){0,3})\s+distribution\s+center\b',
@@ -369,7 +377,7 @@ Return results in JSON format:
             'product': [
                 r'product[s]?:\s*\b([A-Z][A-Za-z0-9]{2,15}(?:\s+[A-Za-z0-9\-]{2,15}){0,3})\b',
                 r'产品:\s*\b([A-Z一-龥][A-Za-z一-龥0-9]{2,15}(?:\s+[A-Za-z一-龥0-9\-]{2,15}){0,2})\b',
-                r'(?:produces?|manufactures?)\s+\b([A-Z][A-Za-z0-9]{2,15}(?:\s+[A-Za-z0-9\-]{2,15}){0,3})\b',
+                r'(?:produces?|manufactures?)\s+\b([A-Z][A-Za-z0-9]{2,15}(?:[ \t]+[A-Za-z0-9\-]{2,15}){0,3})\b',
                 r'item[s]?:\s*\b([A-Z][A-Za-z0-9]{2,15}(?:\s+[A-Za-z0-9\-]{2,15}){0,3})\b',
             ],
             'customer': [
@@ -381,55 +389,78 @@ Return results in JSON format:
             ],
         }
 
-        import re
+        entities.extend(self._extract_pattern_entities(text, case_sensitive_patterns))
+        entities.extend(
+            self._extract_pattern_entities(
+                text,
+                case_insensitive_patterns,
+                flags=re.IGNORECASE,
+            )
+        )
 
-        # Process case-sensitive patterns (no re.IGNORECASE)
-        for entity_type, pattern_list in case_sensitive_patterns.items():
-            for pattern in pattern_list:
-                matches = re.finditer(pattern, text)
-                for match in matches:
-                    name = match.group(1).strip()
-                    if len(name) >= 3 and not name.lower() in ['the', 'and', 'for', 'from', 'with', 'are', 'was', 'not']:
-                        name = name.rstrip('.,;:')
-
-
-                        entities.append(Entity(
-                            name=name,
-                            entity_type=entity_type,
-                            confidence=0.75  # Pattern-based extraction has moderate confidence
-                        ))
-
-        # Process case-insensitive patterns (with re.IGNORECASE)
-        for entity_type, pattern_list in case_insensitive_patterns.items():
-            for pattern in pattern_list:
-                matches = re.finditer(pattern, text, re.IGNORECASE)
-                for match in matches:
-                    name = match.group(1).strip()
-                    if len(name) >= 3 and not name.lower() in ['the', 'and', 'for', 'from', 'with', 'are', 'was', 'not', 'provides', 'supplies']:
-                        name = name.rstrip('.,;:')
-
-                        entities.append(Entity(
-                            name=name,
-                            entity_type=entity_type,
-                            confidence=0.75
-                        ))
-
-        # Deduplicate by name (keep first occurrence with highest confidence)
+        # Prefer role-bearing names over the generic customer classification.
+        specialized_names = {
+            self._normalize_entity_name(entity.name)
+            for entity in entities
+            if entity.entity_type != 'customer'
+        }
         seen = {}
         for entity in entities:
-            if entity.name not in seen or entity.confidence > seen[entity.name].confidence:
-                seen[entity.name] = entity
+            normalized_name = self._normalize_entity_name(entity.name)
+            if entity.entity_type == 'customer' and normalized_name in specialized_names:
+                continue
+            key = (normalized_name, entity.entity_type)
+            if key not in seen or entity.confidence > seen[key].confidence:
+                seen[key] = entity
 
         unique_entities = list(seen.values())
 
         # Extract attributes for entities if enabled
         if self.extract_attributes:
+            entity_names = [entity.name for entity in unique_entities]
             for entity in unique_entities:
-                entity.attributes = self._extract_entity_attributes(entity.name, text)
+                entity.attributes = self._extract_entity_attributes(entity.name, text, entity_names)
 
         return unique_entities
 
-    def _extract_entity_attributes(self, entity_name: str, text: str) -> Dict[str, Any]:
+    @classmethod
+    def _extract_pattern_entities(
+        cls,
+        text: str,
+        patterns: dict[str, list[str]],
+        flags: int = 0,
+    ) -> list[Entity]:
+        """Extract valid entity names from a group of role-specific patterns."""
+        entities = []
+        for entity_type, pattern_list in patterns.items():
+            for pattern in pattern_list:
+                for match in re.finditer(pattern, text, flags):
+                    name = match.group(1).strip().rstrip('.,;:')
+                    if cls._is_valid_entity_name(name):
+                        entities.append(
+                            Entity(
+                                name=name,
+                                entity_type=entity_type,
+                                confidence=0.75,
+                            )
+                        )
+        return entities
+
+    @staticmethod
+    def _normalize_entity_name(name: str) -> str:
+        """Normalize an entity name for deterministic deduplication."""
+        return ' '.join(name.rstrip('.,;:').split()).casefold()
+
+    @classmethod
+    def _is_valid_entity_name(cls, name: str) -> bool:
+        """Reject stop words while allowing two-character Chinese names."""
+        normalized_name = cls._normalize_entity_name(name)
+        minimum_length = 2 if re.search(r'[\u4e00-\u9fff]', name) else 3
+        stop_words = {'the', 'and', 'for', 'from', 'with', 'are', 'was', 'not', 'provides', 'supplies'}
+        return len(normalized_name) >= minimum_length and normalized_name not in stop_words
+
+    def _extract_entity_attributes(self, entity_name: str, text: str,
+                                   entity_names: list[str] | None = None) -> Dict[str, Any]:
         """Extract attributes for an entity from the text.
 
         Args:
@@ -439,41 +470,70 @@ Return results in JSON format:
         Returns:
             Dictionary of extracted attributes.
         """
+        contexts = self._entity_attribute_contexts(entity_name, text, entity_names or [entity_name])
         attributes = {}
-        import re
-
-        # Escape entity name for regex
-        safe_name = re.escape(entity_name)
-
-        # Location extraction patterns
-        location_patterns = [
-            rf'{safe_name}.*?(?:located in|based in|in)\s+([A-Z][a-z]+(?:,\s*[A-Z][a-z]+)*)',
-            rf'(?:located in|based in|in)\s+([A-Z][a-z]+(?:,\s*[A-Z][a-z]+)*?).*?{safe_name}',
-        ]
-        for pattern in location_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                attributes['location'] = match.group(1).strip()
-                break
-
-        # Founded year extraction
-        founded_pattern = rf'{safe_name}.*?founded\s+(\d{{4}})'
-        match = re.search(founded_pattern, text, re.IGNORECASE)
-        if match:
-            attributes['founded'] = match.group(1)
-
-        # Revenue extraction
-        revenue_patterns = [
-            rf'{safe_name}.*?revenue[:\s]+\$(\d+(?:\.\d+)?[MBK]?)',
-            rf'revenue[:\s]+\$(\d+(?:\.\d+)?[MBK]?).*?{safe_name}',
-        ]
-        for pattern in revenue_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                attributes['revenue'] = f"${match.group(1)}"
-                break
+        attribute_patterns = {
+            'location': re.compile(
+                r'(?:located|based|headquartered)\s+in\s+'
+                r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)*)',
+                re.IGNORECASE,
+            ),
+            'founded': re.compile(r'\bfounded(?:\s+in)?\s+(\d{4})', re.IGNORECASE),
+            'revenue': re.compile(r'\brevenue\s*[:\uff1a]?\s*\$(\d+(?:\.\d+)?[MBK]?)', re.IGNORECASE),
+        }
+        for context in contexts:
+            for key, pattern in attribute_patterns.items():
+                if key in attributes:
+                    continue
+                match = pattern.search(context)
+                if match:
+                    attributes[key] = f"${match.group(1)}" if key == 'revenue' else match.group(1).strip()
 
         return attributes
+
+    def _entity_attribute_contexts(self, entity_name: str, text: str,
+                                   entity_names: list[str]) -> list[str]:
+        """Return entity-local sentence fragments and labeled follow-up clauses."""
+        contexts = []
+        for entity_match in re.finditer(re.escape(entity_name), text, re.IGNORECASE):
+            search_from = entity_match.end()
+            if text[search_from:search_from + 1] == '.':
+                search_from += 1
+            start = max(text.rfind(boundary, 0, entity_match.start()) for boundary in _SENTENCE_BOUNDARIES) + 1
+            following_boundaries = [
+                position for boundary in _SENTENCE_BOUNDARIES
+                if (position := text.find(boundary, search_from)) >= 0
+            ]
+            end = min(following_boundaries) + 1 if following_boundaries else len(text)
+
+            other_after = False
+            for other_name in entity_names:
+                if self._normalize_entity_name(other_name) == self._normalize_entity_name(entity_name):
+                    continue
+                for other_match in re.finditer(re.escape(other_name), text[start:end], re.IGNORECASE):
+                    absolute_start = start + other_match.start()
+                    absolute_end = start + other_match.end()
+                    if absolute_end <= entity_match.start():
+                        start = max(start, absolute_end)
+                    elif absolute_start >= entity_match.end():
+                        end = min(end, absolute_start)
+                        other_after = True
+                        break
+
+            context = text[start:end]
+            if not other_after:
+                remaining_text = text[end:]
+                attribute_prefix = _ATTRIBUTE_SENTENCE_PREFIX.match(remaining_text)
+                if attribute_prefix:
+                    following_boundaries = [
+                        position for boundary in _SENTENCE_BOUNDARIES
+                        if (position := remaining_text.find(boundary, attribute_prefix.end())) >= 0
+                    ]
+                    next_end = min(following_boundaries) + 1 if following_boundaries else len(remaining_text)
+                    context += remaining_text[:next_end]
+            contexts.append(context)
+
+        return contexts
 
     def _extract_relationships_with_llm(self, text: str, entities: List[Entity]) -> List[Relationship]:
         """Extract relationships using LLM.
@@ -589,8 +649,6 @@ Return results in JSON format:
         entity_names = {e.name for e in entities}
         entity_map = {e.name: e for e in entities}
 
-        import re
-
         # Define relationship patterns with specific verbs
         relationship_patterns = {
             'supplies': [
@@ -599,11 +657,13 @@ Return results in JSON format:
                 r'{entity2}\s+receives?\s+.{{0,30}}\s+(?:from\s+)?{entity1}',
                 r'{entity2}\s+(?:sources?|sourced)\s+.{{0,30}}\s+from\s+{entity1}',
                 r'{entity1}\s+provides?\s+.{{0,50}}\s+(?:to\s+)?{entity2}',
+                r'{entity1}\s*(?:向|给)\s*{entity2}[^\u3002\uff01\uff1f\n]{{0,30}}?(?:供应|提供)',
             ],
             'manufactures': [
                 r'{entity1}\s+(?:manufactures?|produces?|makes?)\s+.{{0,30}}\s+{entity2}',
                 r'{entity2}\s+(?:manufactured|produced|made)\s+.{{0,20}}\s+(?:by\s+)?{entity1}',
                 r'{entity1}\s+production\s+of\s+{entity2}',
+                r'{entity1}\s*(?:制造|生产|组装)\s*{entity2}',
             ],
             'distributes': [
                 r'{entity1}\s+distributes?\s+.{{0,30}}\s+(?:to\s+)?{entity2}',
@@ -614,6 +674,7 @@ Return results in JSON format:
                 r'{entity1}\s+stores?\s+{entity2}',
                 r'{entity2}\s+stored\s+(?:at|in)\s+{entity1}',
                 r'{entity1}\s+inventory\s+(?:of|includes)\s+{entity2}',
+                r'{entity1}\s*(?:存储|储存|存放)\s*{entity2}',
             ],
             'ships_to': [
                 r'{entity1}\s+ships?\s+.{{0,30}}\s+(?:to\s+)?{entity2}',
@@ -664,9 +725,7 @@ Return results in JSON format:
                 if e1.name == e2.name or (e1.name, e2.name) in found_pairs:
                     continue
 
-                # Check if both entities appear in same sentence (proximity heuristic)
-                pattern = f"{re.escape(e1.name)}.{{0,150}}{re.escape(e2.name)}"
-                if re.search(pattern, text, re.IGNORECASE):
+                if self._entities_share_sentence(text, e1.name, e2.name):
                     # Infer relationship type based on entity types
                     rel_type = self._infer_relationship_type(e1.entity_type, e2.entity_type)
 
@@ -687,6 +746,15 @@ Return results in JSON format:
                 unique_relationships.append(rel)
 
         return unique_relationships
+
+    @staticmethod
+    def _entities_share_sentence(text: str, first_name: str, second_name: str) -> bool:
+        """Return whether two entities occur in order within one sentence."""
+        pattern = f"{re.escape(first_name)}.{{0,150}}{re.escape(second_name)}"
+        return any(
+            re.search(pattern, sentence, re.IGNORECASE)
+            for sentence in re.split(r'[.!?\u3002\uff01\uff1f\n]+', text)
+        )
 
     def _infer_relationship_type(self, source_type: str, target_type: str) -> str:
         """Infer relationship type based on entity types.
