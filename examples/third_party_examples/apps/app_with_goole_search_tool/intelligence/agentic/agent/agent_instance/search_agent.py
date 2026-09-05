@@ -16,4 +16,8 @@ class SearchAgent(AgentTemplate):
     """
     
     def __init__(self, **kwargs):
+        """Initialize the SearchAgent.
+
+        Forwards all keyword arguments to the parent AgentTemplate.
+        """
         super().__init__(**kwargs)
