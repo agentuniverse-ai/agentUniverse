@@ -58,16 +58,16 @@ class EpubReader(Reader):
         }
 
         chapter_count = 0
-        
+
         # Process each item in the book
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapter_count += 1
-                
+
                 # Extract text content from HTML
                 content = item.get_content().decode('utf-8', errors='ignore')
                 text_content = self._extract_text_from_html(content)
-                
+
                 if text_content.strip():  # Only add non-empty chapters
                     metadata = book_metadata.copy()
                     metadata.update({
@@ -76,20 +76,20 @@ class EpubReader(Reader):
                         "chapter_number": chapter_count,
                         "word_count": len(text_content.split())
                     })
-                    
+
                     if ext_info is not None:
                         metadata.update(ext_info)
-                    
+
                     document_list.append(Document(text=text_content, metadata=metadata))
 
         return document_list
 
     def _extract_text_from_html(self, html_content: str) -> str:
         """Extract plain text from HTML content.
-        
+
         Args:
             html_content: HTML string content
-            
+
         Returns:
             str: Extracted plain text
         """
@@ -98,40 +98,40 @@ class EpubReader(Reader):
         except ImportError:
             #if BeautifulSoup is not available
             return self._extract_text_with_regex(html_content)
-        
+
         soup = BeautifulSoup(html_content, 'html.parser')
-        
+
         # Remove script and style elements
         for script in soup(["script", "style"]):
             script.decompose()
-        
+
         # Get text and clean up whitespace
         text = soup.get_text()
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
         text = ' '.join(chunk for chunk in chunks if chunk)
-        
+
         return text
 
     def _extract_text_with_regex(self, html_content: str) -> str:
         """Fallback method to extract text using regex when BeautifulSoup is not available.
-        
+
         Args:
             html_content: HTML string content
-            
+
         Returns:
             str: Extracted plain text
         """
         text = re.sub(r'<[^>]+>', '', html_content)
-    
+
         text = text.replace('&amp;', '&')
         text = text.replace('&lt;', '<')
         text = text.replace('&gt;', '>')
         text = text.replace('&quot;', '"')
         text = text.replace('&#39;', "'")
         text = text.replace('&nbsp;', ' ')
-    
+
         text = re.sub(r'\s+', ' ', text)
         text = text.strip()
-        
+
         return text
