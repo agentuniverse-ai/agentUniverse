@@ -41,9 +41,9 @@ class EmbeddingTest(unittest.TestCase):
         langchain_embedding = self.embedding.as_langchain()
         res = langchain_embedding.embed_documents(texts=["hello world"])
         print(res)
-        self.assertIsInstance(res, list)  
-        self.assertEqual(len(res), 1)  
-        self.assertIsInstance(res[0], list)  
+        self.assertIsInstance(res, list)
+        self.assertEqual(len(res), 1)
+        self.assertIsInstance(res[0], list)
         self.assertEqual(len(res[0]), 1536)
 
 if __name__ == '__main__':
