@@ -38,6 +38,8 @@ class SessionORM(Base):
 @singleton
 class SessionLibrary:
 
+    """Sessionlibrary.
+    """
     @staticmethod
     def get_db_session():
         """Get the database session."""
