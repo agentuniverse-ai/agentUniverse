@@ -36,10 +36,10 @@ class HierarchicalRegexTextSplitter(DocProcessor):
 
     def _hierarchical_split_single_doc(self, doc: Document) -> List[Document]:
         """Splits a single document into hierarchical structure using regex patterns.
-        
+
         Args:
             doc: Document to be split hierarchically.
-            
+
         Returns:
             List of hierarchically structured documents.
         """
@@ -113,11 +113,11 @@ class HierarchicalRegexTextSplitter(DocProcessor):
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> \
             List[Document]:
         """Processes documents by splitting them into hierarchical structure.
-        
+
         Args:
             origin_docs: List of documents to be processed.
             query: Optional query object (not used in this processor).
-            
+
         Returns:
             List of hierarchically structured documents.
         """
@@ -135,10 +135,10 @@ class HierarchicalRegexTextSplitter(DocProcessor):
     def _initialize_by_component_configer(self,
                                          doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
         """Initializes the splitter with configuration parameters.
-        
+
         Args:
             doc_processor_configer: Configuration object containing splitter parameters.
-            
+
         Returns:
             Initialized document processor instance.
         """
