@@ -108,6 +108,8 @@ class AgentUniverseService(agentuniverse_service_pb2_grpc.AgentUniverseService):
 
 
 def set_grpc_config(configer):
+    """Apply the grpc server configuration from the configer.
+    """
     GRPC_CONFIG["server_port"] = configer.value.get('GRPC', {}).get('server_port', 50051)
     GRPC_CONFIG["max_workers"] = configer.value.get('GRPC', {}).get('max_workers', 10)
 
