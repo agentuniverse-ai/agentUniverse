@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/14 12:08
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: application_component_manager.py
 from agentuniverse.agent.action.knowledge.knowledge_manager import KnowledgeManager
