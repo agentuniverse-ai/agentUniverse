@@ -134,4 +134,6 @@ class LoggingConfig(object):
 
 
 def init_log_config(config_path: Optional[str] = None):
+    """Initialize the logging configuration.
+    """
     LoggingConfig(config_path)
