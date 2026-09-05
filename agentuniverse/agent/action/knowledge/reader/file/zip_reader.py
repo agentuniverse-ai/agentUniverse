@@ -47,7 +47,7 @@ class ZipReader(Reader):
     max_files: int = 4096
     max_compression_ratio: int = 100
     stream_chunk_size: int = 1024 * 1024
-        
+
     def _get_reader(self, suffix: str) -> Reader:
         if suffix not in self._readers:
             if suffix in CODE_FILE_EXTENSIONS:
@@ -63,7 +63,7 @@ class ZipReader(Reader):
             raise TypeError("file must be path-like")
         if not file.exists():
             raise FileNotFoundError(f"Zip file not found: {file}")
-        
+
         self._total_size = 0
         self._file_count = 0
         self._readers = {}
@@ -77,7 +77,7 @@ class ZipReader(Reader):
             ".xlsx": XlsxReader,
             ".epub": EpubReader,
         }
-        
+
         ext_meta = dict(ext_info or {})
         with zipfile.ZipFile(file) as archive:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -110,7 +110,7 @@ class ZipReader(Reader):
             suffix = member_path.suffix.lower()
             current_stack = path_stack + [member_path.as_posix()]
             metadata = self._build_metadata(archive_path, current_stack, depth, ext_meta)
-            
+
             if suffix == ".zip":
                 documents.extend(
                     self._handle_nested_zip(
@@ -147,7 +147,7 @@ class ZipReader(Reader):
     ) -> List[Document]:
         if depth + 1 > self.max_depth:
             raise ValueError("Zip nesting depth exceeded")
-        
+
         data = None
         try:
             with archive.open(info) as raw:
@@ -262,18 +262,18 @@ class ZipReader(Reader):
     def _enforce_limits(self, info: zipfile.ZipInfo) -> None:
         size = info.file_size
         compressed_size = info.compress_size
-        
+
         if size > self.max_file_size:
             raise ValueError(f"Zip entry exceeds maximum size: {info.filename}")
         if self._total_size + size > self.max_total_size:
             raise ValueError("Zip archive exceeds maximum total size")
         if self._file_count + 1 > self.max_files:
             raise ValueError("Zip archive exceeds maximum file count")
-        
+
         if compressed_size > 0:
             compression_ratio = size / compressed_size
             if compression_ratio > self.max_compression_ratio:
                 raise ValueError(f"Zip entry has suspicious compression ratio: {info.filename}")
-        
+
         self._total_size += size
         self._file_count += 1
