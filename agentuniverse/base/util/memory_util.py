@@ -38,6 +38,8 @@ def generate_messages(memories: list) -> List[Message]:
 
 
 def generate_memories(chat_messages: BaseChatMessageHistory) -> list:
+    """Generate and return memories for the given inputs.
+    """
     return [
         {"content": message.content, "type": 'ai' if message.type == 'AIMessageChunk' else message.type}
         for message in chat_messages.messages
