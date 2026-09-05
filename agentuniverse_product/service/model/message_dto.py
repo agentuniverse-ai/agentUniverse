@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 
 class MessageDTO(BaseModel):
+    """DTO model describing a message.
+    """
     id: int = Field(description="ID")
     session_id: str = Field(description="Session ID")
     content: Optional[str] = Field(description="message content", default="")
