@@ -58,7 +58,7 @@ def update_nested_yaml_value(config_path: str, updates: dict) -> None:
 
 def write_yaml_file(file_path, config_data) -> None:
     """Writes the dictionary to a YAML file with the specified file path.
-    
+
     Args:
         file_path (str): The path to the YAML file.
         config_data (dict): The dictionary to write to the YAML file.
