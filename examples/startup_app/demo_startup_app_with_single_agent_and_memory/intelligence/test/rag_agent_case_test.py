@@ -19,6 +19,12 @@ AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 
 def chat(question: str, session_id: str):
+    """Run a chat request against the rag agent case.
+
+    Args:
+        question: The user question to ask the agent.
+        session_id: The session id used to keep the conversation context.
+    """
     FrameworkContextManager().set_context('trace_id',uuid.uuid4().hex)
     instance: Agent = AgentManager().get_instance_obj('rag_agent_case')
     output_object: OutputObject = instance.run(input=question, session_id=session_id)
