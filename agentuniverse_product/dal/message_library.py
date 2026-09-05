@@ -35,6 +35,8 @@ class MessageORM(Base):
 
 @singleton
 class MessageLibrary:
+    """Messagelibrary.
+    """
     @staticmethod
     def get_db_session():
         """Get the database session."""
