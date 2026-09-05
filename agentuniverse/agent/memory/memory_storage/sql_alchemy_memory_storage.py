@@ -82,6 +82,8 @@ class DefaultMemoryConverter(BaseMemoryConverter):
     """The default memory converter for SqlAlchemyMemory."""
 
     def __init__(self, table_name: str, **kwargs: Any):
+        """Initialize the sql alchemy memory storage.
+        """
         super().__init__(**kwargs)
         self.model_class = create_memory_model(table_name, declarative_base())
 
