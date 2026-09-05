@@ -62,7 +62,7 @@ In the resource configuration file, uncomment the `env` section and replace `val
 
 #### Method 2
 
-Please refer to the description at the beginning of the configuration file: [Quick Start Guide](../../../Get_Start/3.Quick_Guide_to_Build_Single_Agent.md)
+Please refer to the description at the beginning of the configuration file: [Quick Start Guide](../../../en/Get_Start/3.Quick_Guide_to_Build_Single_Agent.md)
 
 ## 2. Building Resources
 
@@ -80,7 +80,7 @@ Verify that all resources have been correctly deployed:
 kubectl get all -n agent-namespace
 ```
 
-![Resource Deployment Status](../../../../_picture/k8s_resource.png)
+![Resource Deployment Status](../../../../guidebook/_picture/k8s_resource.png)
 
 ## 4. Accessing agentUniverse Services from Inside the Cluster
 
@@ -98,7 +98,7 @@ kubectl exec -it [Pod Name] -n agent-namespace -- curl http://agentuniverse-serv
 kubectl exec -it agentuniverse-deployment-55cfd778d-g7d9d -n agent-namespace -- curl http://agentuniverse-service:9999/echo
 ```
 
-![Connectivity Test](../../../../_picture/k8s_hello.png)
+![Connectivity Test](../../../../guidebook/_picture/k8s_hello.png)
 
 #### 4.1.2 Q&A Test
 
@@ -106,4 +106,4 @@ kubectl exec -it agentuniverse-deployment-55cfd778d-g7d9d -n agent-namespace -- 
 kubectl exec -it agentuniverse-deployment-55cfd778d-g7d9d -n agent-namespace -- curl -X POST -H "Content-Type: application/json" -d '{"service_id":"demo_service","params":{"input":"(18+3-5)/2*4=?"}}' http://agentuniverse-service:9999/service_run
 ```
 
-![Q&A Test](../../../../_picture/k8s_question.png)
+![Q&A Test](../../../../guidebook/_picture/k8s_question.png)
