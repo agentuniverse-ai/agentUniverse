@@ -3,7 +3,7 @@
 agentUniverse provides standard work environment images for the containerized deployment of agentUniverse projects. This document will explain how to deploy your own project using such images. You can find the full tag list on  [this site](https://cr.console.aliyun.com/repository/cn-hangzhou/agent_universe/agent_universe/images). If you want to package an image based on your own project, please refer to [Project Image Packaging](./Project_Image_Packaging.md).
 
 ## Preparations
-1.  Build your own project according to the standard directory structure of agentUniverse, referring to the [Application_Engineering_Structure_Explanation](../../../Get_Start/1.Application_Project_Structure_and_Explanation.md). For ease of explanation, this document assumes the project name and project directory are `sample_standard_app`.
+1.  Build your own project according to the standard directory structure of agentUniverse, referring to the [Application_Engineering_Structure_Explanation](../../../en/Get_Start/1.Application_Project_Structure_and_Explanation.md). For ease of explanation, this document assumes the project name and project directory are `sample_standard_app`.
 2.   Obtain the required version of the AagentUniverse image.
 ```shell
 docker pull registry.cn-hangzhou.aliyuncs.com/agent_universe/agent_universe:0.0.14b1_centos8
