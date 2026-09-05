@@ -34,13 +34,13 @@ class CommandStatusToolTest(unittest.TestCase):
         result_json = self.run_tool.execute(tool_input)
         result = json.loads(result_json)
         thread_id = result['thread_id']
-        
+
         status_input = ToolInput({
             'thread_id': thread_id
         })
         status_json = self.status_tool.execute(status_input)
         status_result = json.loads(status_json)
-        
+
         self.assertEqual(status_result['thread_id'], thread_id)
         self.assertEqual(status_result['status'], CommandStatus.COMPLETED.value)
         self.assertIn('Hello World', status_result['stdout'])
@@ -55,17 +55,17 @@ class CommandStatusToolTest(unittest.TestCase):
         result_json = self.run_tool.execute(tool_input)
         result = json.loads(result_json)
         thread_id = result['thread_id']
-        
+
         status_input = ToolInput({
             'thread_id': thread_id
         })
         status_json = self.status_tool.execute(status_input)
-        status_result = json.loads(status_json)        
-        
+        status_result = json.loads(status_json)
+
         time.sleep(3)
         status_json = self.status_tool.execute(status_input)
         status_result = json.loads(status_json)
-        
+
         self.assertEqual(status_result['status'], CommandStatus.COMPLETED.value)
         self.assertIn('Long running command finished', status_result['stdout'])
         self.assertEqual(status_result['exit_code'], 0)
@@ -76,7 +76,7 @@ class CommandStatusToolTest(unittest.TestCase):
         })
         status_json = self.status_tool.execute(status_input)
         status_result = json.loads(status_json)
-        
+
         self.assertIn('error', status_result)
         self.assertEqual(status_result['status'], 'not_found')
 
