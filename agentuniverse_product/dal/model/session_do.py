@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 
 class SessionDO(BaseModel):
+    """Sessiondo.
+    """
     id: Optional[int] = Field(description="ID", default=None)
     session_id: str = Field(description="Session id")
     agent_id: str = Field(description="Agent id.")
