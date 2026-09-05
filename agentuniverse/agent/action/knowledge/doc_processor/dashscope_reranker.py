@@ -24,10 +24,10 @@ MODEL_NAME_MAP = {
 
 class DashscopeReranker(DocProcessor):
     """Document reranker using Dashscope's TextReRank API.
-    
+
     This processor reranks documents based on their relevance to a query
     using Dashscope's text reranking models.
-    
+
     Attributes:
         model_name: The name of the reranking model to use.
         top_n: Maximum number of documents to return after reranking.
@@ -38,14 +38,14 @@ class DashscopeReranker(DocProcessor):
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> \
             List[Document]:
         """Rerank documents based on their relevance to the query.
-        
+
         Args:
             origin_docs: List of documents to be reranked.
             query: Query object containing the search query string.
-            
+
         Returns:
             List[Document]: Reranked documents sorted by relevance score.
-            
+
         Raises:
             Exception: If query is missing or API call fails.
         """
@@ -81,10 +81,10 @@ class DashscopeReranker(DocProcessor):
     def _initialize_by_component_configer(self,
                                          doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
         """Initialize reranker parameters from component configuration.
-        
+
         Args:
             doc_processor_configer: Configuration object containing reranker parameters.
-            
+
         Returns:
             DocProcessor: The initialized document processor instance.
         """
