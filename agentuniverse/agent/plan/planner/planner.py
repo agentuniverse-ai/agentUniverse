@@ -191,6 +191,8 @@ class Planner(ComponentBase):
                      chat_history,
                      input_object: InputObject):
 
+        """Invoke the langchain runnable and return the result.
+        """
         if not input_object.get_data('output_stream'):
             res = chain.invoke(input=planner_input, config={"configurable": {"session_id": "unused"}})
             return res
