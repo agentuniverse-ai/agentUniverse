@@ -20,52 +20,52 @@ class WriteFileToolTest(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.tool = WriteFileTool(base_dir=self.temp_dir)
-        
+
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
-    
+
     def test_write_new_file(self):
         file_path = os.path.join(self.temp_dir, 'test_new.txt')
         content = "This is a test file content"
-        
+
         tool_input = ToolInput({
             'file_path': file_path,
             'content': content
         })
-        
+
         result_json = self.tool.execute(tool_input)
         result = json.loads(result_json)
-        
+
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['file_path'], os.path.realpath(file_path))
         self.assertTrue(os.path.exists(file_path))
-        
+
         with open(file_path, 'r') as f:
             self.assertEqual(f.read(), content)
-    
+
     def test_append_to_file(self):
         file_path = os.path.join(self.temp_dir, 'test_append.txt')
-        
+
         initial_content = "Initial content\n"
         tool_input = ToolInput({
             'file_path': file_path,
             'content': initial_content
         })
         self.tool.execute(tool_input)
-        
+
         append_content = "Appended content"
         tool_input = ToolInput({
             'file_path': file_path,
             'content': append_content,
             'append': True
         })
-        
+
         result_json = self.tool.execute(tool_input)
         result = json.loads(result_json)
-        
+
         self.assertEqual(result['status'], 'success')
         self.assertEqual(result['append_mode'], True)
-        
+
         with open(file_path, 'r') as f:
             self.assertEqual(f.read(), initial_content + append_content)
 
@@ -125,22 +125,22 @@ class WriteFileToolTest(unittest.TestCase):
         self.assertIn('append numeric value must be 0 or 1', result['error'])
         with open(file_path, 'r', encoding='utf-8') as f:
             self.assertEqual(f.read(), 'old content')
-    
+
     def test_create_directory_structure(self):
         file_path = os.path.join(self.temp_dir, 'nested/dir/structure/test.txt')
         content = "Test content in nested directory"
-        
+
         tool_input = ToolInput({
             'file_path': file_path,
             'content': content
         })
-        
+
         result_json = self.tool.execute(tool_input)
         result = json.loads(result_json)
-        
+
         self.assertEqual(result['status'], 'success')
         self.assertTrue(os.path.exists(file_path))
-        
+
         self.assertTrue(os.path.isdir(os.path.join(self.temp_dir, 'nested/dir/structure')))
 
     def test_write_relative_path_under_base_dir(self):
