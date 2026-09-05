@@ -479,6 +479,8 @@ def validate_and_assemble_agent_input(agent_id: str, session_id: str, input: str
 
 
 def get_chat_history_str(messages: List[dict]) -> str:
+    """Build and return the chat history string from the given inputs.
+    """
     string_messages = []
     for m in messages:
         if m.get('type') == 'system':
