@@ -14,9 +14,9 @@ class MockOutPut:
         self.__output = output
 
     def to_json_str(self) -> str:
-        try:  
-            return json.dumps(self.__output, ensure_ascii=False)  
-        except (TypeError, ValueError) as e:  
+        try:
+            return json.dumps(self.__output, ensure_ascii=False)
+        except (TypeError, ValueError) as e:
             raise ValueError(f"Failed to serialize output to JSON: {e}")
 
 
