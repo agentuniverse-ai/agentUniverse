@@ -16,4 +16,6 @@ class ProductManager(ComponentManagerBase[Product]):
     """A singleton manager class of the product."""
 
     def __init__(self):
+        """Initialize this instance.
+        """
         super().__init__(ComponentEnum.PRODUCT)
