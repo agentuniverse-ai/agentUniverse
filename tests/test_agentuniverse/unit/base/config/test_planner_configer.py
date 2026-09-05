@@ -5,6 +5,8 @@ from agentuniverse.base.config.configer import Configer
 
 
 def test_load_by_configer_preserves_planner_keys():
+    """Test that load by configer preserves planner keys.
+    """
     configer = Configer()
     configer.value = {
         "name": "custom_planner",
