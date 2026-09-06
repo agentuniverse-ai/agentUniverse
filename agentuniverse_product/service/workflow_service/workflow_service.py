@@ -78,8 +78,10 @@ class WorkflowService:
             setattr(workflow, key, value)
 
         if updated_fields:
-            graph_config = updated_fields.pop('graph_config', None)
-            updated_fields['graph'] = graph_config
+            # only persist the graph when the update actually carries one,
+            # otherwise the None default would wipe the stored graph
+            if 'graph_config' in updated_fields:
+                updated_fields['graph'] = updated_fields.pop('graph_config')
             update_nested_yaml_value(workflow.component_config_path, updated_fields)
         return workflow_dto.id
 
