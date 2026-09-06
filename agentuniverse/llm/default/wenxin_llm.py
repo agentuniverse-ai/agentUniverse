@@ -21,8 +21,8 @@ from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.llm.wenxin_langchain_instance import WenXinLangChainInstance
 
 TokenModelList = [
-    'ernie-4.5-turbo-32k'
-    'ernie-4.5-8k-preview'
+    'ernie-4.5-turbo-32k',
+    'ernie-4.5-8k-preview',
     'ernie-4.0-8k',
     'ernie-3.5-8k',
     'ernie-speed-8k',
