@@ -90,8 +90,8 @@ class ClaudeLLM(LLM):
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
-        self.client = self._new_async_client()
-        chat_completion = await self.client.messages.create(
+        self.async_client = self._new_async_client()
+        chat_completion = await self.async_client.messages.create(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
             temperature=kwargs.pop('temperature', self.temperature),
