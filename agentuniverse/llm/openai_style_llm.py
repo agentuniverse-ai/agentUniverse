@@ -20,6 +20,27 @@ from agentuniverse.base.util.system_util import process_yaml_func
 from agentuniverse.llm.llm import LLM, LLMOutput
 from agentuniverse.llm.openai_style_langchain_instance import LangchainOpenAIStyleInstance
 
+OPENAI_MAX_CONTEXT_LENGTH = {
+    "gpt-3.5-turbo": 4096,
+    "gpt-3.5-turbo-0301": 4096,
+    "gpt-3.5-turbo-0613": 4096,
+    "gpt-3.5-turbo-16k": 16384,
+    "gpt-3.5-turbo-16k-0613": 16384,
+    "gpt-35-turbo": 4096,
+    "gpt-35-turbo-16k": 16384,
+    "gpt-3.5-turbo-1106": 16384,
+    "gpt-3.5-turbo-0125": 16384,
+    "gpt-4-0314": 8192,
+    "gpt-4": 8192,
+    "gpt-4-32k": 32768,
+    "gpt-4-32k-0613": 32768,
+    "gpt-4-0613": 8192,
+    "gpt-4-1106-preview": 128000,
+    "gpt-4-turbo": 128000,
+    "gpt-4o": 128000,
+    "gpt-4o-2024-05-13": 128000,
+}
+
 
 class OpenAIStyleLLM(LLM):
     """This is a wrapper around the OpenAI API that implements a chat interface for the LLM.
@@ -266,3 +287,4 @@ class OpenAIStyleLLM(LLM):
         """Return the maximum length of the context."""
         if super().max_context_length():
             return super().max_context_length()
+        return OPENAI_MAX_CONTEXT_LENGTH.get(self.model_name, 4096)
