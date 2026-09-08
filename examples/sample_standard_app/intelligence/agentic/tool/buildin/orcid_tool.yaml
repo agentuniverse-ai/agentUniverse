@@ -1,0 +1,33 @@
+name: 'orcid_tool'
+description: |
+  Search public ORCID researcher records and retrieve author profiles or scholarly works.
+
+  Input parameters:
+    - query (required): Search expression in search mode, or an ORCID iD/URL in
+      person and works modes.
+    - mode (optional): One of search, person, or works. Defaults to search.
+    - max_results (optional): Results per page in search and works modes, from 1
+      to 20. Defaults to 5. Person mode always returns one record.
+    - page (optional): One-based page number for search and works modes. Defaults
+      to 1; the computed offset must remain below 10000. Person mode always uses
+      page 1.
+
+  Search results include ORCID iD, names, email and institution metadata made
+  public by the researcher. Person mode includes biography, keywords, countries,
+  researcher URLs, and external identifiers. Works mode returns bounded work
+  summaries with title, journal, publication date, type, external identifiers,
+  source, visibility, and record URL. Private ORCID data is never available.
+  Because ORCID's works endpoint does not provide server-side pagination, works
+  mode applies local pagination after downloading all public work summaries.
+  Its response reports pagination as local and api_fetched_results as the number
+  of summaries fetched from ORCID; page only limits the results returned to the
+  caller and does not reduce the ORCID response size.
+
+  Public records require no credentials. ORCID_ACCESS_TOKEN may optionally hold
+  a bearer token. Network and API response failures use a structured error field.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.orcid_tool'
+  class: 'OrcidTool'

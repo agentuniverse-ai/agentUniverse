@@ -105,6 +105,55 @@ SEARCHAPI_API_KEY="xxxxxx"
 ```
 
 
+### 1.4 ORCID Researcher and Works Lookup
+
+The ORCID tool searches public researcher records and retrieves a public person
+profile or the work summaries attached to a validated ORCID iD. Public records
+can be queried without credentials.
+
+```yaml
+name: 'orcid_tool'
+description: 'Search ORCID researchers and retrieve public profiles or works.'
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.orcid_tool'
+  class: 'OrcidTool'
+```
+
+Example calls:
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj('orcid_tool')
+researchers = tool.run(query='family-name:Carberry', mode='search', max_results=5)
+profile = tool.run(query='0000-0002-1825-0097', mode='person')
+works = tool.run(query='0000-0002-1825-0097', mode='works', max_results=10, page=1)
+```
+
+`query` is an ORCID search expression in `search` mode and an ORCID iD or ORCID
+URL in `person` and `works` modes. In search and works modes, `max_results`
+accepts 1 to 20 and `page` starts at 1; the computed offset must stay below
+10000. Person mode always returns one record with page 1. Search returns public names,
+emails, and institution names. Person mode also returns biography, keywords,
+countries, researcher URLs, and external identifiers. Works mode returns bounded
+summaries containing titles, journals, dates, types, external identifiers,
+sources, visibility, and record URLs. It does not download publications.
+
+ORCID's works endpoint does not support server-side pagination. Consequently,
+`page` in works mode is local pagination: the tool retrieves all public work
+summaries first and then returns the requested slice. A works response includes
+`pagination: "local"` and `api_fetched_results`, which records how many summaries
+were received from ORCID. Changing `page` does not reduce the API response size.
+
+Only data that an ORCID record holder has made public can be returned. An
+optional bearer token can be set in `ORCID_ACCESS_TOKEN`. Timeouts, HTTP errors,
+connection failures, invalid JSON, and malformed responses are returned through
+a structured `error` field without exposing that token.
+
+
 ## 2. Code Tool
 
 ### 2.1 PythonRepl
