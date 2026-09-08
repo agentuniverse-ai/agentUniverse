@@ -1,0 +1,25 @@
+name: 'open_library_tool'
+description: |
+  Search Open Library for books and return normalized public metadata. No API key is required.
+
+  Input parameters:
+    - query (required): Keywords, title, author name, or ISBN to search for.
+    - search_field (optional): One of keyword, title, author, or isbn. Defaults to keyword.
+    - max_results (optional): Results per page, from 1 to 20. Defaults to 5.
+    - page (optional): One-based result page. Defaults to 1. The computed offset
+      must remain below 10000.
+    - from_year (optional): Inclusive earliest first-publication year.
+    - until_year (optional): Inclusive latest first-publication year.
+    - language (optional): ISO 639-2 three-letter language code, such as eng or zho.
+
+  Results may include the work key, title, subtitle, authors, author keys, ISBNs,
+  publishers, languages, first publication year, publication years, edition count,
+  subjects, ebook access, cover URL, and Open Library work URL. Repeated metadata
+  fields are capped at 20 values. Network and response failures are returned in
+  a structured error field.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.open_library_tool'
+  class: 'OpenLibraryTool'

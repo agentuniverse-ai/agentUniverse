@@ -105,6 +105,60 @@ SEARCHAPI_API_KEY="xxxxxx"
 ```
 
 
+### 1.4 Open Library Book Search
+
+The Open Library tool searches public book metadata by keyword, title, author,
+or ISBN. It supports server-side pagination, first-publication year ranges, and
+language filters without requiring an API key.
+
+```yaml
+name: 'open_library_tool'
+description: 'Search Open Library for books and return normalized public metadata.'
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.open_library_tool'
+  class: 'OpenLibraryTool'
+```
+
+Example calls:
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj('open_library_tool')
+
+books = tool.run(
+    query='artificial intelligence',
+    search_field='keyword',
+    max_results=5,
+    page=1,
+    from_year=2020,
+    until_year=2025,
+    language='eng',
+)
+
+by_isbn = tool.run(query='9780261102217', search_field='isbn')
+```
+
+`search_field` accepts `keyword`, `title`, `author`, or `isbn`. ISBN input may
+contain spaces or hyphens and must have a valid ISBN-10 or ISBN-13 checksum.
+`max_results` accepts 1 to 20, `page` starts at 1, and the computed offset must
+remain below 10000. `from_year` and `until_year` are inclusive and may be used
+independently. `language` must be an ISO 639-2 three-letter code such as `eng`
+or `zho`. Search fields and filters are sent to Open Library for server-side
+evaluation.
+
+Each result may contain a work key, title, subtitle, authors, author keys,
+ISBNs, publishers, languages, first publication year, publication years,
+edition count, subjects, ebook access, cover URL, and Open Library work URL.
+Repeated metadata fields are capped at 20 values to keep Agent responses
+bounded. The tool retrieves metadata only and does not download book content.
+Timeouts, HTTP errors, connection failures, invalid JSON, and malformed
+responses are returned in a structured `error` field.
+
+
 ## 2. Code Tool
 
 ### 2.1 PythonRepl
