@@ -105,6 +105,23 @@ SEARCHAPI_API_KEY="xxxxxx"
 ```
 
 
+### 1.4 GitLab Project and Issue Search
+
+The GitLab tool searches public projects, retrieves project details, and searches project issues through the GitLab REST API. It supports `projects`, `project`, and `issues` modes, pagination, server-side sorting, issue state, and labels. Set `GITLAB_TOKEN` when private-project access or higher API limits are needed.
+
+```yaml
+name: 'gitlab_tool'
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.gitlab_tool'
+  class: 'GitLabTool'
+```
+
+Example: `tool.run(query='agentUniverse', mode='projects', max_results=5)` or `tool.run(query='group/project', mode='issues', issue_search='authentication', state='opened', labels='bug')`. Project queries accept a numeric ID or URL-encoded path. `issue_search` searches issue titles and descriptions within the selected project. Paginated responses expose GitLab's `X-Total` header as `total_results` when available. Results contain normalized project/issue metadata; API and network failures use a structured `error` field.
+
+
 ## 2. Code Tool
 
 ### 2.1 PythonRepl

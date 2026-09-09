@@ -1,0 +1,18 @@
+name: 'gitlab_tool'
+description: |
+  Search public GitLab projects, retrieve project details, and search project issues.
+  Modes are projects, project, and issues. Projects mode supports search, pagination,
+  sorting, and ordering. Project mode accepts a numeric project ID or URL-encoded path.
+  Issues mode supports text search, pagination, state (opened, closed, all), sorting,
+  ordering, and comma-separated labels. Pass issue_search to search issue titles
+  and descriptions within the selected project. Results include normalized project
+  or issue metadata. Paginated responses expose GitLab's X-Total header as
+  total_results when the server provides it.
+  Public GitLab data requires no credentials; optionally set GITLAB_TOKEN for private
+  projects or higher API limits. Errors are returned in a structured error field.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.gitlab_tool'
+  class: 'GitLabTool'
