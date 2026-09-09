@@ -88,7 +88,7 @@ class TestXlsxReader:
                 return mock_sheet2
             return None
         
-        mock_workbook.__getitem__ = mock_getitem
+        mock_workbook.__getitem__.side_effect = mock_getitem
         mock_load_workbook.return_value = mock_workbook
 
         result = self.reader._load_data('test.xlsx')
