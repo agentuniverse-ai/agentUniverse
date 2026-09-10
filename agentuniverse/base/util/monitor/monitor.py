@@ -232,20 +232,20 @@ class Monitor(BaseModel):
 
     @staticmethod
     def add_token_usage(cur_token_usage: dict):
-        """Add the token usage to the framework context."""
+        """Merge token usage, retaining absent keys and newer non-addable values."""
         if cur_token_usage is None:
             return
         trace_id = AuTraceManager().get_trace_id()
         if trace_id is not None:
             old_token_usage: dict = FrameworkContextManager().get_context(trace_id + '_token_usage')
             if old_token_usage is not None:
-                result_usage = {}
+                result_usage = old_token_usage.copy()
                 for key, value in cur_token_usage.items():
                     try:
                         result_usage[key] = old_token_usage[key] + value if key in old_token_usage else value
-                    except:
-                        # not addable value
-                        pass
+                    except TypeError:
+                        logger.debug("Token usage key {!r} is not additive; keeping newer value", key)
+                        result_usage[key] = value
                 FrameworkContextManager().set_context(trace_id + '_token_usage', result_usage)
 
     @staticmethod
