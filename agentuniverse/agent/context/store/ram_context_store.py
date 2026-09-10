@@ -7,13 +7,27 @@
 """In-memory context store with LRU eviction."""
 
 from collections import OrderedDict
+from functools import wraps
+from threading import RLock
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import time
 import re
 
+from pydantic import PrivateAttr
+
 from agentuniverse.agent.context.context_store import ContextStore
 from agentuniverse.agent.context.context_model import ContextSegment, ContextType, ContextPriority
+
+
+def _synchronized(method):
+    """Keep each storage operation, including access tracking, under one lock."""
+    @wraps(method)
+    def locked(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return locked
 
 
 class RamContextStore(ContextStore):
@@ -24,14 +38,23 @@ class RamContextStore(ContextStore):
     - LRU eviction when max_segments exceeded
     - Keyword-based search
     - TTL-based automatic pruning
-    - Thread-safe operations (future: add locks if needed)
+    - Thread-safe storage operations, access tracking, and metric snapshots
 
     Storage Structure:
     - _storage: Dict[session_id, OrderedDict[segment_id, ContextSegment]]
     - OrderedDict maintains insertion order for LRU
+
+    Concurrency:
+    - Operations on one store are serialized by a reentrant lock, including
+      multi-session batch_add. Sequences of separate calls are not transactions.
+    - Returned segments are live references, as before. Callers must synchronize
+      external mutations and must not change configuration during operations.
+    - Deep copies have independent storage, metrics, and locks. Explicit shallow
+      copies share storage and its lock. This is not a process-shared store.
     """
 
     storage_tier: str = "hot"
+    _lock = PrivateAttr(default_factory=RLock)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -41,6 +64,16 @@ class RamContextStore(ContextStore):
         if self.enable_metrics:
             self.initialize_metrics()
 
+    def __deepcopy__(self, memo=None):
+        """Copy a consistent snapshot without trying to deepcopy the RLock."""
+        with self._lock:
+            if memo is None:
+                memo = {}
+            # Preserve deep-copy isolation instead of the base's shallow fallback.
+            memo.setdefault(id(self._lock), RLock())
+            return super().__deepcopy__(memo)
+
+    @_synchronized
     def add(self, segments: List[ContextSegment], **kwargs) -> None:
         """Store context segments with LRU eviction.
 
@@ -80,6 +113,7 @@ class RamContextStore(ContextStore):
             self._metrics["add_count"] += 1
             self._metrics["total_add_time_ms"] += elapsed_ms
 
+    @_synchronized
     def get(
         self,
         session_id: str,
@@ -137,6 +171,7 @@ class RamContextStore(ContextStore):
 
         return segments[:limit]
 
+    @_synchronized
     def search(
         self,
         query: str,
@@ -147,6 +182,8 @@ class RamContextStore(ContextStore):
         """Keyword-based search for relevant context.
 
         Simple implementation using keyword matching.
+        Priority and decay only rank segments that match the query; priority
+        alone does not qualify an unrelated segment for retrieval.
         Future enhancement: BM25, TF-IDF, or embedding-based search.
 
         Args:
@@ -201,6 +238,7 @@ class RamContextStore(ContextStore):
 
         return top_segments
 
+    @_synchronized
     def delete(
         self,
         session_id: str,
@@ -234,6 +272,7 @@ class RamContextStore(ContextStore):
         if self.enable_metrics:
             self._metrics["delete_count"] += 1
 
+    @_synchronized
     def prune(self, session_id: str, **kwargs) -> int:
         """Prune expired/low-priority segments.
 
@@ -275,6 +314,7 @@ class RamContextStore(ContextStore):
 
         return len(to_prune)
 
+    @_synchronized
     def get_by_ids(
         self,
         session_id: str,
@@ -305,6 +345,7 @@ class RamContextStore(ContextStore):
 
         return segments
 
+    @_synchronized
     def count(self, session_id: str, **kwargs) -> int:
         """Count total segments for session (O(1) operation).
 
@@ -320,6 +361,7 @@ class RamContextStore(ContextStore):
 
         return len(self._storage[session_id])
 
+    @_synchronized
     def get_all_sessions(self) -> List[str]:
         """Get list of all session IDs in storage.
 
@@ -328,9 +370,25 @@ class RamContextStore(ContextStore):
         """
         return list(self._storage.keys())
 
+    @_synchronized
     def clear_all(self) -> None:
         """Clear all storage (use with caution)."""
         self._storage.clear()
+
+    @_synchronized
+    def batch_add(self, segments_by_session: dict[str, list[ContextSegment]], **kwargs) -> None:
+        """Add a multi-session batch without interleaving other store operations."""
+        super().batch_add(segments_by_session, **kwargs)
+
+    @_synchronized
+    def initialize_metrics(self) -> None:
+        """Reset metrics without interleaving storage operations."""
+        super().initialize_metrics()
+
+    @_synchronized
+    def get_metrics(self) -> dict[str, Any]:
+        """Return a consistent metrics snapshot independent of future updates."""
+        return super().get_metrics()
 
     # Private helper methods
 
@@ -380,7 +438,7 @@ class RamContextStore(ContextStore):
         - Exact phrase match: 10.0
         - Content term match: 2.0 per term
         - Keyword match: 5.0 per keyword
-        - Priority bonus: CRITICAL=2.0, HIGH=1.5, MEDIUM=1.0, LOW=0.5
+        - Priority bonus for matches only: CRITICAL=2.0, HIGH=1.5, MEDIUM=1.0, LOW=0.5
         - Decay factor: multiply by decay score
 
         Args:
@@ -408,6 +466,9 @@ class RamContextStore(ContextStore):
         segment_keywords = set(k.lower() for k in segment.metadata.keywords)
         matching_keywords = query_terms & segment_keywords
         score += len(matching_keywords) * 5.0
+
+        if score == 0.0:
+            return 0.0
 
         # Priority bonus
         priority_bonus = {
