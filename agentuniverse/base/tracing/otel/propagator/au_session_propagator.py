@@ -12,6 +12,7 @@
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: sofa_tracer_propagator.py
+import logging
 import typing
 
 from opentelemetry import trace
@@ -23,6 +24,8 @@ from agentuniverse.base.tracing.au_trace_manager import set_session_id, \
     get_session_id
 from agentuniverse.base.tracing.otel.consts import SESSION_ID_KEY, \
     HTTP_HEADER_SESSION_ID_KEY, SPAN_SESSION_ID_KEY
+
+logger = logging.getLogger(__name__)
 
 
 class AUSessionPropagator(textmap.TextMapPropagator):
@@ -65,8 +68,10 @@ class AUSessionPropagator(textmap.TextMapPropagator):
                 span = trace.get_current_span(context)
                 try:
                     span.set_attribute(SPAN_SESSION_ID_KEY, _value[0])
-                except:
-                    pass
+                except Exception:
+                    # Propagation failures must not interrupt the request.
+                    logger.debug("Failed to set session ID span attribute",
+                                 exc_info=True)
                 break
         return context
 
