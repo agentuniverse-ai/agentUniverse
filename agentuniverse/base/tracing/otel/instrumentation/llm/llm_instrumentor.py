@@ -16,6 +16,7 @@ import base64
 import datetime
 import decimal
 import json
+import logging
 import time
 import traceback
 from typing import Any, Dict, Optional, AsyncGenerator, Generator
@@ -34,6 +35,8 @@ from .consts import (
     INSTRUMENTOR_NAME, INSTRUMENTOR_VERSION,
     MetricNames, SpanAttributes, MetricLabels
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _fallback(o):
@@ -95,8 +98,10 @@ class LLMSpanManager:
                     get_current_token_usage(self.span.context.span_id),
                     self.span.parent.span_id
                 )
-            except:
-                pass
+            except Exception:
+                # Tracing failures must not interrupt LLM cleanup.
+                logger.debug("Failed to propagate token usage to parent span",
+                             exc_info=True)
             self.span.end()
             self.span = None
         if self.token and self.auto_cleanup:
