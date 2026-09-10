@@ -448,14 +448,10 @@ class FinancialIndicatorExtractor(DocProcessor):
                 try:
                     # Extract the percentage value (might be in group 1 or 2)
                     change_percent_str = None
-                    for i in range(1, match.lastindex + 1 if match.lastindex else 1):
-                        try:
-                            val = match.group(i)
-                            if val and re.match(r'^[0-9,.]+$', val):
-                                change_percent_str = val
-                                break
-                        except:
-                            continue
+                    for val in match.groups():
+                        if val and re.match(r'^[0-9,.]+$', val):
+                            change_percent_str = val
+                            break
 
                     if not change_percent_str:
                         continue
