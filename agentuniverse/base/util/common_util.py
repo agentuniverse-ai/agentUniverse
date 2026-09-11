@@ -175,14 +175,15 @@ def _parse_json(
     return parser(json_str)
 
 
-def parse_and_check_json_markdown(text: str, expected_keys: List[str]) -> dict:
+def parse_and_check_json_markdown(text: str, expected_keys: List[str] | None) -> dict:
     """
     Parse a JSON string from a Markdown string and check that it
     contains the expected keys.
 
     Args:
         text: The Markdown string.
-        expected_keys: The expected keys in the JSON string.
+        expected_keys: The expected keys in the JSON string. ``None`` means
+            that the caller does not require any input fields.
 
     Returns:
         The parsed JSON object as a Python dictionary.
@@ -191,7 +192,7 @@ def parse_and_check_json_markdown(text: str, expected_keys: List[str]) -> dict:
         json_obj = parse_json_markdown(text)
     except json.JSONDecodeError as e:
         raise Exception(f"Got invalid JSON object. Error: {e}")
-    for key in expected_keys:
+    for key in expected_keys or []:
         if key not in json_obj:
             raise Exception(
                 f"Got invalid return object. Expected key `{key}` "
