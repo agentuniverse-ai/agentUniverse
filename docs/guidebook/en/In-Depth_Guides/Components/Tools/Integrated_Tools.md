@@ -331,3 +331,33 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## 5. World Bank Indicators Tool
+
+`WorldBankIndicatorsTool` retrieves public World Development Indicators without
+an API key. It supports a bounded country time-series query, country metadata,
+and a browsable indicator catalogue. The tool intentionally limits a request
+to five ISO-3 country codes, 20 years, and 50 results per page, so a historical
+data query cannot overwhelm an agent context.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.world_bank_indicators_tool import (
+    WorldBankIndicatorsTool,
+)
+
+tool = WorldBankIndicatorsTool()
+result = tool.execute(
+    mode="series",
+    country="CHN,USA",
+    indicator="gdp_growth",
+    start_year=2020,
+    end_year=2024,
+)
+```
+
+For `series`, provide an official World Bank indicator code (for example
+`NY.GDP.MKTP.KD.ZG`) or one of the built-in aliases: `gdp_growth`,
+`gdp_current_usd`, `inflation`, `unemployment`, `population`,
+`life_expectancy`, `co2_emissions`, or `trade_percent_gdp`. Use `catalog` to
+browse additional indicator codes. Network and API failures are returned as a
+structured `error` value; invalid parameters fail before a network request.

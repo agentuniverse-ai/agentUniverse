@@ -1,0 +1,65 @@
+name: world_bank_indicators_tool
+description: "Query World Bank World Development Indicators without an API key. Use series for country time-series values, country for country metadata, or catalog to browse indicator definitions."
+tool_type: api
+input_keys:
+  - mode
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.world_bank_indicators_tool
+  class: WorldBankIndicatorsTool
+args_model:
+  mode:
+    type: string
+    description: "Operation mode: series, country, or catalog."
+    required: true
+  country:
+    type: string
+    description: "One ISO-3 code or up to five comma-separated codes, e.g. CHN or CHN,USA. Required for series and country."
+    required: false
+  indicator:
+    type: string
+    description: "World Bank indicator code or alias. Common aliases include gdp_growth, inflation, unemployment, population, and life_expectancy. Required for series."
+    required: false
+  start_year:
+    type: integer
+    description: "Inclusive start year. The maximum query range is 20 years."
+    required: false
+  end_year:
+    type: integer
+    description: "Inclusive end year. If omitted, start_year is treated as a single-year query."
+    required: false
+  max_results:
+    type: integer
+    description: "Results per page, from 1 to 50."
+    required: false
+    default: 10
+  page:
+    type: integer
+    description: "One-based API page, from 1 to 1000."
+    required: false
+    default: 1
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [series, country, catalog]
+    country:
+      type: string
+    indicator:
+      type: string
+    start_year:
+      type: integer
+    end_year:
+      type: integer
+    max_results:
+      type: integer
+      minimum: 1
+      maximum: 50
+      default: 10
+    page:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      default: 1
+  required: [mode]
