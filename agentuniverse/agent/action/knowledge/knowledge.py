@@ -107,7 +107,7 @@ class Knowledge(ComponentBase):
         else:
             raise Exception("No file to load.")
         url_pattern = re.compile(
-            r'^(https?:\/\/)?'
+            r'^(https?:\/\/)'      # scheme is required for remote urls
             r'((([a-zA-Z0-9]{1,256}\.[a-zA-Z0-9]{1,6})|'
             r'(\d{1,3}\.){3}\d{1,3})'
             r'(:\d{1,5})?)'
@@ -115,10 +115,10 @@ class Knowledge(ComponentBase):
             r'(\?[a-zA-Z0-9@:%._\+~#&//=]*)?$'
         )
 
-        if url_pattern.match(source_path):
-            source_type = "url"
-        elif os.path.isfile(source_path):
+        if os.path.isfile(source_path):
             source_type = os.path.splitext(source_path)[1][1:]
+        elif url_pattern.match(source_path):
+            source_type = "url"
         else:
             raise Exception(f"Knowledge load data error: Unknown source type:{source_path}")
         if source_type in self.readers:
