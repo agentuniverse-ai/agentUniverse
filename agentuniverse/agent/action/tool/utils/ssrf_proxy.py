@@ -22,8 +22,14 @@ def make_request(method, url, **kwargs):
     kwargs.setdefault("timeout", 20)
     if SSRF_PROXY_ALL_URL:
         kwargs["proxy"] = SSRF_PROXY_ALL_URL
-    elif proxies:
-        kwargs["proxies"] = proxies
+        return httpx.request(method=method, url=url, **kwargs)
+    if proxies:
+        # httpx removed the `proxies=` argument in 0.28, so per-scheme proxies
+        # are configured by mounting one transport per scheme instead.
+        transports = {scheme: httpx.HTTPTransport(proxy=proxy)
+                      for scheme, proxy in proxies.items()}
+        with httpx.Client(mounts=transports) as client:
+            return client.request(method=method, url=url, **kwargs)
     return httpx.request(method=method, url=url, **kwargs)
 
 
