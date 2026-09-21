@@ -83,7 +83,7 @@ class ReActPlanner(Planner):
         output_stream = input_object.get_data('output_stream')
         callbacks.append(StreamOutPutCallbackHandler(output_stream, agent_info=agent_model.info))
         callbacks.append(InvokeCallbackHandler(source=agent_model.info.get('name'),
-                                               llm_name=agent_model.profile.get('llm_model').get('name')))
+                                               llm_name=(agent_model.profile or {}).get('llm_model', {}).get('name')))
         config.setdefault("callbacks", callbacks)
         return config
 

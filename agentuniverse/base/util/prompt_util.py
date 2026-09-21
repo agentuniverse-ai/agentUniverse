@@ -141,7 +141,7 @@ def process_llm_token(agent_llm: LLM, lc_prompt_template, profile: dict, planner
         planner_input (dict): The planner input.
         var_to_process (str): The variable needs to be processed in the prompt, the default is 'background'
     """
-    llm_model: dict = profile.get('llm_model')
+    llm_model: dict = profile.get('llm_model') or dict()
 
     # get the prompt processor configuration
     prompt_processor: dict = llm_model.get('prompt_processor') or dict()
