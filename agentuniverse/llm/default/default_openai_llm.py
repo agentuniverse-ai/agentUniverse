@@ -74,4 +74,6 @@ class DefaultOpenAILLM(OpenAIStyleLLM):
 
           The total length of input tokens and generated tokens is limited by the openai model's context length.
           """
+        if self._max_context_length:
+            return self._max_context_length
         return OPENAI_MAX_CONTEXT_LENGTH.get(self.model_name, 4096)
