@@ -29,9 +29,11 @@ class PeerWorkPattern(WorkPattern):
         expressing_result = dict()
         reviewing_result = dict()
 
-        retry_count = work_pattern_input.get('retry_count')
+        retry_count = work_pattern_input.get('retry_count') or 2
         jump_step = work_pattern_input.get('jump_step')
         eval_threshold = work_pattern_input.get('eval_threshold')
+        if eval_threshold is None:
+            eval_threshold = 60
 
         for _ in range(retry_count):
             peer_round_results = {}
@@ -65,9 +67,11 @@ class PeerWorkPattern(WorkPattern):
         expressing_result = dict()
         reviewing_result = dict()
 
-        retry_count = work_pattern_input.get('retry_count')
+        retry_count = work_pattern_input.get('retry_count') or 2
         jump_step = work_pattern_input.get('jump_step')
         eval_threshold = work_pattern_input.get('eval_threshold')
+        if eval_threshold is None:
+            eval_threshold = 60
 
         for _ in range(retry_count):
             peer_round_results = {}
