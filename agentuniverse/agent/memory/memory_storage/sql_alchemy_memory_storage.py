@@ -229,13 +229,6 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             if source:
                 source_col = getattr(model_class, 'source')
                 conditions.append(source_col == source)
-            if kwargs.get('type'):
-                if isinstance(kwargs['type'], list):
-                    types = kwargs['type']
-                if not isinstance(kwargs['type'], str):
-                    types = [kwargs['type']]
-                type_col = getattr(model_class, 'type')
-                conditions.append(conditions.append(type_col.in_(types)))
 
             # build the query with dynamic conditions
             query = session.query(self.memory_converter.model_class)
@@ -246,9 +239,17 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             # Execute the query and fetch the results
             records = query.all()
 
-            records = records[-top_k:]
-
             messages = []
             for record in records:
                 messages.append(self.memory_converter.from_sql_model(record))
-            return messages
+
+            # The message type is stored inside the serialized message payload
+            # rather than in a column of this table, so filter the deserialized
+            # messages instead of adding a condition to the query.
+            if kwargs.get('type'):
+                types = kwargs['type']
+                if not isinstance(types, (list, tuple, set)):
+                    types = [types]
+                messages = [message for message in messages if message.type in types]
+
+            return messages[-top_k:]
