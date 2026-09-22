@@ -26,7 +26,7 @@ def _async_runner_thread_target(coro: Coroutine[Any, Any, T], result_queue: Queu
     try:
         result = asyncio.run(coro)
         result_queue.put(result)
-    except Exception as e:
+    except (Exception, asyncio.CancelledError) as e:
         result_queue.put(e)
 
 
@@ -55,6 +55,7 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
     Raises:
         TypeError: If the provided 'coro' argument is not a coroutine.
         TimeoutError: If the timeout is reached before the coroutine completes.
+        asyncio.CancelledError: If the coroutine is cancelled.
         Any Exception: Any exception raised by the coroutine during its execution
                        will be re-raised in the calling thread.
     """
@@ -77,7 +78,7 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
     finally:
         worker_thread.join(timeout=1.0)
 
-    if isinstance(result, Exception):
+    if isinstance(result, (Exception, asyncio.CancelledError)):
         raise result
     else:
         return result
