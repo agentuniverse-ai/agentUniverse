@@ -27,7 +27,7 @@ Counting is explicit and honestly named via ``counter``:
   approximation of tokens suitable for budgeting.
 * ``"tiktoken"`` — real BPE token count via ``tiktoken`` (encoding configurable)
   when that package is installed; falls back to the estimate with a warning if
-  it is not.
+  it is not. Special-token spellings in documents are counted as ordinary text.
 * ``"char"`` — exact character count.
 * ``"word"`` — exact whitespace word count.
 
@@ -125,7 +125,7 @@ class ContextBudgetCompressor(DocProcessor):
         if self.counter == "tiktoken":
             encoder = _tiktoken_encoder(self.tiktoken_encoding)
             if encoder is not None:
-                return len(encoder.encode(text))
+                return len(encoder.encode(text, disallowed_special=()))
             logger.warning(
                 "tiktoken is not available; counting with the chars/4 estimate "
                 "instead. Install tiktoken or set counter to 'estimate'/'char'/"
@@ -144,7 +144,8 @@ class ContextBudgetCompressor(DocProcessor):
         if self.counter == "tiktoken":
             encoder = _tiktoken_encoder(self.tiktoken_encoding)
             if encoder is not None:
-                return encoder.decode(encoder.encode(text)[:remaining])
+                tokens = encoder.encode(text, disallowed_special=())
+                return encoder.decode(tokens[:remaining])
         # "estimate" (and the tiktoken-unavailable fallback): ~4 chars per unit.
         return text[:remaining * 4]
 
