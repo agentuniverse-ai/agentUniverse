@@ -48,6 +48,8 @@ def detect_file_encoding(source: Union[str, Path, BinaryIO, bytes, bytearray],
     for encoding in fallback_encodings:
         try:
             sample.decode(encoding)
+            if encoding == "utf-8" and sample.startswith(b"\xef\xbb\xbf"):
+                return "utf-8-sig"
             return encoding
         except UnicodeDecodeError:
             continue
