@@ -6,6 +6,8 @@
 # @FileName: test_phase2_integration.py
 """Integration tests for Phase 2: Multi-tier storage, compression, and routing."""
 
+import logging
+
 import pytest
 from datetime import datetime, timedelta
 
@@ -19,6 +21,8 @@ from agentuniverse.agent.context.context_model import (
     ContextType,
     ContextPriority,
 )
+from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
+from agentuniverse.base.config.application_configer.app_configer import AppConfiger
 
 
 class TestPhase2Integration:
@@ -432,9 +436,57 @@ class TestPhase2Integration:
         assert not any('session_b' in s.content for s in session_a_segments)
         assert not any('session_c' in s.content for s in session_a_segments)
 
+    def test_compression_failure_is_logged(self, context_manager, caplog):
+        """A failing compressor must be reported instead of being swallowed."""
+        session_id = "test_session_compressor_failure"
+
+        class _BrokenCompressor:
+            """Compressor stand in that always fails."""
+
+            def compress(self, segments, target_tokens, **kwargs):
+                raise RuntimeError("compressor exploded")
+
+        context_manager._compressor = _BrokenCompressor()
+        # A small window keeps the budget check reachable: the task configs
+        # would otherwise allocate several thousand tokens.
+        context_manager.create_context_window(
+            session_id, max_tokens=1000, reserved_tokens=200
+        )
+
+        for i in range(30):
+            context_manager.add_context(
+                session_id,
+                f"Message {i} with a deliberately verbose body that fills the "
+                f"context budget quickly. " * 4,
+                ContextType.CONVERSATION,
+                ContextPriority.MEDIUM
+            )
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("compression failed" in message.lower() for message in messages)
+        # The manager degrades gracefully instead of propagating the failure.
+        assert len(context_manager.get_context(session_id)) > 0
+
 
 class TestMemoryIntegration:
     """Integration tests for Memory class with ContextManager."""
+
+    @classmethod
+    def setup_class(cls):
+        # The memory fallback resolves storages through the component
+        # manager, which reads the application name from the global
+        # ApplicationConfigManager. Install a minimal configer so these
+        # tests do not depend on a full application bootstrap.
+        try:
+            cls._previous_app_configer = ApplicationConfigManager().app_configer
+        except ValueError:
+            cls._previous_app_configer = None
+        ApplicationConfigManager().app_configer = AppConfiger()
+
+    @classmethod
+    def teardown_class(cls):
+        if cls._previous_app_configer is not None:
+            ApplicationConfigManager().app_configer = cls._previous_app_configer
 
     def test_memory_budget_aware_retrieval(self):
         """Test that Memory uses budget-aware retrieval when linked to ContextManager."""
