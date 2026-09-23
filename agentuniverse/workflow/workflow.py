@@ -57,6 +57,7 @@ class Workflow(ComponentBase):
         Returns:
             Workflow: the Workflow object
         """
+        super().initialize_by_component_configer(component_configer)
         if component_configer.id:
             self.id = component_configer.id
         if component_configer.name:
