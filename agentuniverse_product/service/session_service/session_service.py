@@ -45,8 +45,6 @@ class SessionService:
         if session_id is None:
             raise ValueError("session_id is required parameter.")
         session_id = SessionLibrary().delete_session(session_id)
-        if session_id:
-            MessageLibrary().delete_messages(session_id)
         return session_id or ''
 
     @staticmethod
