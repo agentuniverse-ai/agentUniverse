@@ -74,9 +74,7 @@ class SessionService:
         if session_do is None:
             return session_do
         # newest top k messages
-        message_do_list: List[MessageDO] = MessageLibrary().get_messages(session_do.session_id)
-        if top_k:
-            message_do_list = message_do_list[-top_k:]
+        message_do_list: List[MessageDO] = MessageLibrary().get_messages(session_do.session_id, top_k=top_k)
         return SessionService().convert_to_session_dto([session_do], {session_do.session_id: message_do_list})[0]
 
     @staticmethod
