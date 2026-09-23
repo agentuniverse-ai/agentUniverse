@@ -173,6 +173,21 @@ class KnowledgeService:
         Returns:
             bool: True if the file is uploaded successfully, False otherwise.
         """
+        if (not isinstance(knowledge_id, str) or not knowledge_id
+                or '/' in knowledge_id or '\\' in knowledge_id
+                or knowledge_id in {'.', '..'} or '\x00' in knowledge_id):
+            raise ValueError("Invalid knowledge_id.")
+        knowledge = KnowledgeManager().get_instance_obj(
+            component_instance_name=knowledge_id, new_instance=False
+        )
+        if knowledge is None:
+            raise ValueError("The knowledge instance corresponding to the knowledge_id cannot be found.")
+        filename = getattr(file, 'filename', None)
+        if (not isinstance(filename, str) or not filename
+                or filename in {'.', '..'} or '/' in filename or '\\' in filename
+                or '\x00' in filename or ':' in filename):
+            raise ValueError("Invalid knowledge filename.")
+
         path = get_core_path()
 
         upload_file_path = get_resources_path()
@@ -181,7 +196,7 @@ class KnowledgeService:
             if not os.path.exists(upload_file_path):
                 os.makedirs(upload_file_path, exist_ok=True)
 
-            file_location = os.path.join(upload_file_path, file.filename)
+            file_location = os.path.join(upload_file_path, filename)
 
             with open(file_location, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
@@ -194,8 +209,6 @@ class KnowledgeService:
             else str(os.path.join("..", "..", "intelligence",
                                   "agentic", "knowledge", "store", f"{knowledge_id}_store.yaml"))
         knowledge_store_name = f"{knowledge_id}_chroma_store"
-
-        knowledge = KnowledgeManager().get_instance_obj(component_instance_name=knowledge_id, new_instance=False)
 
         try:
             # If the store YAML file does not exist, create and register the store, and update the knowledge YAML.
