@@ -104,6 +104,7 @@ class AgentService:
         """
         if agent_id is None or session_id is None:
             raise ValueError("Agent id or session id cannot be None.")
+        SessionService().validate_agent_session(agent_id, session_id)
         agent: Agent = AgentManager().get_instance_obj(agent_id, new_instance=False)
         if agent is None:
             raise ValueError("The agent instance corresponding to the agent id cannot be found.")
@@ -146,6 +147,7 @@ class AgentService:
         Returns:
             Iterator: Response.
         """
+        SessionService().validate_agent_session(agent_id, session_id)
         agent_input_dict = validate_and_assemble_agent_input(agent_id, session_id, input,
                                                              AgentService().get_agent_chat_history(session_id))
 
@@ -212,6 +214,7 @@ class AgentService:
         Returns:
             AsyncIterator: Response.
         """
+        SessionService().validate_agent_session(agent_id, session_id)
         agent_input_dict = validate_and_assemble_agent_input(agent_id, session_id, input,
                                                              AgentService().get_agent_chat_history(session_id))
 
@@ -326,6 +329,7 @@ class AgentService:
     def add_agent_chat_history(agent_id: str, session_id: str,
                                input: str, output: str, cur_time: datetime) -> Tuple[str, int]:
         """Add agent chat history to session and message db tables."""
+        SessionService().validate_agent_session(agent_id, session_id)
         content = json.dumps([{'type': 'human', 'content': input}, {'type': 'ai', 'content': output}],
                              ensure_ascii=False)
         session_id = SessionService.update_session(session_id, agent_id, cur_time)
