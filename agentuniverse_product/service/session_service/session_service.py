@@ -21,6 +21,15 @@ class SessionService:
     """Session Service for aU-product."""
 
     @staticmethod
+    def validate_agent_session(agent_id: str, session_id: str) -> None:
+        """Require an existing session owned by the requested agent."""
+        if not agent_id or not session_id:
+            raise ValueError("Agent id and session id are required.")
+        session = SessionLibrary().get_session_detail(session_id)
+        if session is None or session.agent_id != agent_id:
+            raise ValueError("Session does not belong to the agent.")
+
+    @staticmethod
     def create_session(agent_id: str) -> str:
         """Create a new session for a given agent id."""
         if agent_id is None:

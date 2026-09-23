@@ -13,7 +13,6 @@ from sqlalchemy.orm import declarative_base
 from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.database.sqldb_wrapper_manager import SQLDBWrapperManager
 from agentuniverse_product.dal.model.session_do import SessionDO
-from agentuniverse.base.util.logging.logging_util import LOGGER
 
 SESSION_TABLE_NAME = 'session'
 Base = declarative_base()
@@ -53,20 +52,17 @@ class SessionLibrary:
             return session_orm.session_id
 
     def update_session(self, session_do: SessionDO) -> str:
-        """Update an existing session to the database."""
-        try:
-            with self.get_db_session() as db_session:
-                session_orm = db_session.query(SessionORM).filter(
-                    SessionORM.session_id == session_do.session_id).first()
-                if session_orm:
-                    update_data = session_do.model_dump(exclude_unset=True)
-                    for key, value in update_data.items():
-                        setattr(session_orm, key, value)
-                    db_session.commit()
-                    return session_orm.session_id
-        except Exception as e:
-            LOGGER.error("session library update failed, exception: {}", e)
-            db_session.rollback()
+        """Update the timestamp only when the session still belongs to its agent."""
+        with self.get_db_session() as db_session:
+            updated = db_session.query(SessionORM).filter(
+                SessionORM.session_id == session_do.session_id,
+                SessionORM.agent_id == session_do.agent_id,
+            ).update({SessionORM.gmt_modified: session_do.gmt_modified}, synchronize_session=False)
+            if updated != 1:
+                db_session.rollback()
+                raise ValueError("Session does not belong to the agent or does not exist.")
+            db_session.commit()
+            return session_do.session_id
 
     def delete_session(self, session_id: str) -> str | None:
         """Delete a session from the database  using the provided `session_id`."""
