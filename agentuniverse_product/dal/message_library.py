@@ -70,6 +70,19 @@ class MessageLibrary:
                     res.append(self.__message_orm_to_do(message_orm))
             return res
 
+    def get_messages_for_sessions(self, session_ids: list[str]) -> dict[str, list[MessageDO]]:
+        """Fetch messages for a session page in one query, preserving each history's order."""
+        grouped = {session_id: [] for session_id in session_ids}
+        if not grouped:
+            return grouped
+        with self.get_db_session() as db_session:
+            message_orm_list = db_session.query(MessageORM).filter(
+                MessageORM.session_id.in_(grouped)).order_by(
+                    asc(MessageORM.session_id), asc(MessageORM.gmt_modified), asc(MessageORM.id)).all()
+            for message_orm in message_orm_list:
+                grouped[message_orm.session_id].append(self.__message_orm_to_do(message_orm))
+        return grouped
+
     @staticmethod
     def __message_orm_to_do(message_orm: MessageORM) -> MessageDO:
         """Convert a MessageORM object to a MessageDO object."""
