@@ -15,6 +15,10 @@ from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 
+class _RarLimitError(ValueError):
+    """Extraction limit violation that must not be skipped as a bad entry."""
+
+
 class RarReader(Reader):
     """
     RAR (.rar) archive reader.
@@ -105,20 +109,21 @@ class RarReader(Reader):
         base_metadata: Dict,
         archive_root: str,
         parent_path: str = "",
+        budget: Optional[Dict[str, int]] = None,
     ) -> List[Document]:
         """Process a RAR archive recursively."""
         import rarfile
 
         documents = []
-        total_extracted = 0
-        file_count = 0
+        if budget is None:
+            budget = {"bytes": 0, "files": 0}
 
         try:
             with rarfile.RarFile(str(rar_path), 'r') as rar:
                 entries = rar.infolist()
 
                 for entry in entries:
-                    if file_count >= max_files:
+                    if budget["files"] >= max_files:
                         break
 
                     if entry.is_dir():
@@ -133,40 +138,52 @@ class RarReader(Reader):
                     if compressed_size > 0:
                         ratio = uncompressed_size / compressed_size
                         if ratio > max_compression_ratio:
-                            raise ValueError(
+                            raise _RarLimitError(
                                 f"Rar entry has suspicious compression ratio: {entry.filename}"
                             )
+                    elif uncompressed_size > 0:
+                        raise _RarLimitError(f"Rar entry has invalid compressed size: {entry.filename}")
 
                     if uncompressed_size > max_file_size:
                         continue
 
-                    if total_extracted + uncompressed_size > max_total_size:
+                    if budget["bytes"] + uncompressed_size > max_total_size:
                         break
 
-                    extract_dir = os.path.join(temp_dir, f"extract_{file_count}")
-                    os.makedirs(extract_dir, exist_ok=True)
+                    extract_dir = tempfile.mkdtemp(prefix="rar_entry_", dir=temp_dir)
 
                     try:
-                        rar.extract(entry, extract_dir)
-                        extracted_path = Path(extract_dir) / entry.filename
-                        total_extracted += uncompressed_size
-                        file_count += 1
+                        # Stream into our own path rather than asking unrar to
+                        # materialize archive-controlled names or links.
+                        extracted_name = PureWindowsPath(PurePosixPath(entry.filename).name).name
+                        extracted_path = Path(extract_dir) / extracted_name
+                        actual_size = 0
+                        with rar.open(entry) as source, extracted_path.open("wb") as target:
+                            while chunk := source.read(1024 * 1024):
+                                actual_size += len(chunk)
+                                if (actual_size > max_file_size or
+                                        budget["bytes"] + actual_size > max_total_size):
+                                    raise _RarLimitError(f"Rar entry exceeds extraction limit: {entry.filename}")
+                                target.write(chunk)
+                        budget["bytes"] += actual_size
+                        budget["files"] += 1
 
                         full_path = os.path.join(parent_path, entry.filename) if parent_path else entry.filename
 
                         if extracted_path.suffix.lower() == '.rar' and current_depth < max_depth:
                             nested_docs = self._process_rar(
                                 rar_path=extracted_path,
-                                temp_dir=temp_dir,
+                                temp_dir=extract_dir,
                                 current_depth=current_depth + 1,
                                 max_depth=max_depth,
                                 max_file_size=max_file_size,
-                                max_total_size=max_total_size - total_extracted,
-                                max_files=max_files - file_count,
+                                max_total_size=max_total_size,
+                                max_files=max_files,
                                 max_compression_ratio=max_compression_ratio,
                                 base_metadata=base_metadata,
                                 archive_root=archive_root,
                                 parent_path=full_path,
+                                budget=budget,
                             )
                             documents.extend(nested_docs)
                         else:
@@ -180,7 +197,9 @@ class RarReader(Reader):
                             if doc:
                                 documents.extend(doc)
 
-                    except Exception as e:
+                    except _RarLimitError:
+                        raise
+                    except Exception:
                         continue
 
         except rarfile.Error as e:
