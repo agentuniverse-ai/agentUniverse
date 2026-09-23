@@ -53,7 +53,7 @@ class FrameworkContextManager:
         if var_name not in self.context_dict:
             with self.__dict_edit_lock:
                 if var_name not in self.context_dict:
-                    self.context_dict[var_name] = ContextVar(var_name)
+                    self.__context_dict.set({**self.context_dict, var_name: ContextVar(var_name)})
         return self.context_dict[var_name].set(var_value)
 
     def get_context(self,
@@ -82,7 +82,9 @@ class FrameworkContextManager:
         if self.is_context_exist(var_name):
             with self.__dict_edit_lock:
                 if force:
-                    del self.context_dict[var_name]
+                    updated = self.context_dict.copy()
+                    del updated[var_name]
+                    self.__context_dict.set(updated)
                 else:
                     self.context_dict[var_name].set(None)
 
