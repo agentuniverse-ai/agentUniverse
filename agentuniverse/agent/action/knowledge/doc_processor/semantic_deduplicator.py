@@ -8,7 +8,7 @@
 
 import hashlib
 import logging
-from typing import List, Optional, Set, Dict, Tuple
+from typing import List, Optional, Dict, Tuple
 from datetime import datetime
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -92,7 +92,7 @@ class SemanticDeduplicator(DocProcessor):
             Tuple of (unique documents, hash map of duplicates).
         """
         hash_map: Dict[str, List[Document]] = {}
-        seen_hashes: Set[str] = set()
+        hash_to_index: Dict[str, int] = {}
         unique_docs: List[Document] = []
 
         for doc in docs:
@@ -103,21 +103,19 @@ class SemanticDeduplicator(DocProcessor):
                     hash_map[content_hash] = []
                 hash_map[content_hash].append(doc)
 
-                if content_hash not in seen_hashes:
-                    seen_hashes.add(content_hash)
+                if content_hash not in hash_to_index:
+                    hash_to_index[content_hash] = len(unique_docs)
                     unique_docs.append(doc)
                 else:
                     # Handle duplicate based on merge strategy
                     if self.merge_strategy == 'keep_best':
                         # Replace if current doc is "better" (e.g., has more metadata)
-                        existing_idx = next(i for i, d in enumerate(unique_docs)
-                                          if self._compute_hash(d.text) == content_hash)
+                        existing_idx = hash_to_index[content_hash]
                         if self._is_better_doc(doc, unique_docs[existing_idx]):
                             unique_docs[existing_idx] = doc
                     elif self.merge_strategy == 'merge':
                         # Merge metadata from duplicate
-                        existing_idx = next(i for i, d in enumerate(unique_docs)
-                                          if self._compute_hash(d.text) == content_hash)
+                        existing_idx = hash_to_index[content_hash]
                         unique_docs[existing_idx] = self._merge_docs(unique_docs[existing_idx], doc)
             except Exception as e:
                 logger.error(f"Failed to process document {doc.id}: {e}")
