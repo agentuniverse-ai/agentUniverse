@@ -53,12 +53,23 @@ class ContextCompressor(ComponentBase):
     metrics calculation and segment evaluation.
 
     Attributes:
+        name: Instance name of the compressor, also used to derive the names
+            of the sub components
+        description: Human readable description of the strategy
         compression_ratio: Target compression ratio (0.0-1.0)
         preserve_critical: Whether to preserve CRITICAL priority segments
         max_compression_time_ms: Maximum time allowed for compression
     """
 
     component_type: ComponentEnum = ComponentEnum.CONTEXT_COMPRESSOR
+
+    # ``ComponentBase.get_instance_code`` (used by the component managers) and
+    # the compressors that derive sub component names from ``self.name`` both
+    # read this attribute.  Pydantic silently drops unknown keyword arguments,
+    # so without declaring the field ``Cls(name="x")`` appears to work while
+    # ``self.name`` raises AttributeError.
+    name: Optional[str] = Field(default=None, description="Instance name of the compressor")
+    description: Optional[str] = Field(default=None, description="Description of the compressor")
 
     compression_ratio: float = Field(
         default=0.5,

@@ -14,6 +14,7 @@ The ContextManager is responsible for:
 - Task-adaptive configuration
 """
 
+import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 
@@ -26,6 +27,8 @@ from agentuniverse.agent.context.context_model import (
     ContextPriority,
 )
 from agentuniverse.agent.context.context_store import ContextStore
+
+logger = logging.getLogger(__name__)
 
 
 class ContextManager(ComponentBase):
@@ -45,6 +48,13 @@ class ContextManager(ComponentBase):
     """
 
     component_type: ComponentEnum = ComponentEnum.CONTEXT_MANAGER
+
+    # ``self.name`` builds the compressor/router instance names below and is
+    # also read by ``ComponentBase.get_instance_code``.  Pydantic drops
+    # unknown keyword arguments, so ``ContextManager(name=...)`` appeared to
+    # work while ``self.name`` raised AttributeError.
+    name: Optional[str] = None
+    description: Optional[str] = None
 
     hot_store_name: str = "ram_context_store"
     warm_store_name: Optional[str] = None
@@ -115,6 +125,34 @@ class ContextManager(ComponentBase):
         """Initialize from YAML configuration."""
         super().initialize_by_component_configer(component_configer)
 
+        # ``ComponentBase`` only honours ``default_symbol``, so copy the scalar
+        # settings this manager publishes itself.  Without them a yaml loaded
+        # manager kept its constructor defaults and ``compressor_name`` from
+        # examples/context_engineering/default_context_manager.yaml was
+        # silently ignored.
+        name = getattr(component_configer, "name", None)
+        if name:
+            self.name = name
+        description = getattr(component_configer, "description", None)
+        if description:
+            self.description = description
+
+        for key in (
+            "llm_name",
+            "compressor_name",
+            "router_name",
+            "hot_store_name",
+            "warm_store_name",
+            "cold_store_name",
+            "enable_compression",
+            "default_max_tokens",
+            "default_reserved_tokens",
+            "task_configs",
+        ):
+            value = getattr(component_configer, key, None)
+            if value is not None:
+                setattr(self, key, value)
+
         # Initialize storage backends
         if self.hot_store_name:
             from agentuniverse.agent.context.context_store_manager import ContextStoreManager
@@ -139,7 +177,7 @@ class ContextManager(ComponentBase):
             # For now, use AdaptiveCompressor as default
             # In production, would load from component manager
             self._compressor = AdaptiveCompressor(
-                name=f"{self.name}_compressor",
+                name=f"{self.name or 'context_manager'}_compressor",
                 llm_name=self.llm_name,
                 compression_ratio=0.6,  # Target 40% reduction
                 enable_hybrid=True
@@ -151,7 +189,7 @@ class ContextManager(ComponentBase):
         if self.router_name:
             from agentuniverse.agent.context.router.context_router import ContextRouter
             self._router = ContextRouter(
-                name=f"{self.name}_router",
+                name=f"{self.name or 'context_manager'}_router",
                 enable_warm_tier=(self._warm_store is not None),
                 enable_cold_tier=(self._cold_store is not None)
             )
@@ -451,9 +489,16 @@ class ContextManager(ComponentBase):
 
                 return  # Compression successful
 
-            except Exception as e:
-                # Compression failed, fall back to simple eviction
-                pass
+            except Exception as exc:
+                # Compression failed (for example because the configured
+                # compressor could not reach its LLM).  Degrade to the priority
+                # based eviction below, but report the failure instead of
+                # swallowing it silently.
+                logger.warning(
+                    "Context compression failed for session %s, falling back to "
+                    "priority based eviction: %s",
+                    window.session_id, exc, exc_info=True,
+                )
 
         # Strategy 3: Fallback - Simple eviction by priority and decay
         segments = self._hot_store.get(window.session_id)

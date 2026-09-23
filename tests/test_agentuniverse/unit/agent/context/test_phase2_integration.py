@@ -6,6 +6,8 @@
 # @FileName: test_phase2_integration.py
 """Integration tests for Phase 2: Multi-tier storage, compression, and routing."""
 
+import logging
+
 import pytest
 from datetime import datetime, timedelta
 
@@ -431,6 +433,37 @@ class TestPhase2Integration:
         session_a_segments = context_manager.get_context('session_a')
         assert not any('session_b' in s.content for s in session_a_segments)
         assert not any('session_c' in s.content for s in session_a_segments)
+
+    def test_compression_failure_is_logged(self, context_manager, caplog):
+        """A failing compressor must be reported instead of being swallowed."""
+        session_id = "test_session_compressor_failure"
+
+        class _BrokenCompressor:
+            """Compressor stand in that always fails."""
+
+            def compress(self, segments, target_tokens, **kwargs):
+                raise RuntimeError("compressor exploded")
+
+        context_manager._compressor = _BrokenCompressor()
+        # A small window keeps the budget check reachable: the task configs
+        # would otherwise allocate several thousand tokens.
+        context_manager.create_context_window(
+            session_id, max_tokens=1000, reserved_tokens=200
+        )
+
+        for i in range(30):
+            context_manager.add_context(
+                session_id,
+                f"Message {i} with a deliberately verbose body that fills the "
+                f"context budget quickly. " * 4,
+                ContextType.CONVERSATION,
+                ContextPriority.MEDIUM
+            )
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("compression failed" in message.lower() for message in messages)
+        # The manager degrades gracefully instead of propagating the failure.
+        assert len(context_manager.get_context(session_id)) > 0
 
 
 class TestMemoryIntegration:

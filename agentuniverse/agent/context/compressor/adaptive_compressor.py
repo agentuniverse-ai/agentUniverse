@@ -18,6 +18,7 @@ Strategy Selection Rules:
 - Mixed content → Hybrid approach
 """
 
+import logging
 import time
 from typing import List, Optional, Dict, Any
 from enum import Enum
@@ -31,6 +32,19 @@ from agentuniverse.agent.context.context_model import (
     ContextPriority,
     ContextType,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _load_llm(name: str):
+    """Resolve an LLM component by name.
+
+    This stays a module level hook so that applications (and tests) can swap
+    the lookup out without importing ``agentuniverse.llm.llm_manager``, which
+    pulls in optional dependencies that building a compressor does not need.
+    """
+    from agentuniverse.llm.llm_manager import LLMManager
+    return LLMManager().get_instance_obj(name)
 
 
 class CompressionStrategy(str, Enum):
@@ -61,6 +75,7 @@ class AdaptiveCompressor(ContextCompressor):
         truncate_weight: Weight for truncate strategy (speed)
         selective_weight: Weight for selective strategy (balance)
         summarize_weight: Weight for summarize strategy (quality)
+        llm_name: Name of the LLM used by the summarize strategy
     """
 
     time_critical_threshold_ms: float = 500.0
@@ -69,38 +84,128 @@ class AdaptiveCompressor(ContextCompressor):
     truncate_weight: float = 1.0
     selective_weight: float = 1.0
     summarize_weight: float = 1.0
+    llm_name: str = "default_llm"
 
     def __init__(self, **kwargs):
         """Initialize adaptive compressor."""
         super().__init__(**kwargs)
+        # Build the strategy delegates eagerly so that a directly constructed
+        # AdaptiveCompressor is usable right away: ContextManager wires the
+        # compressor with a plain constructor call, and leaving the delegates
+        # as ``None`` turned every summarize/hybrid run into an
+        # ``AttributeError: 'NoneType' object has no attribute 'compress'``.
         self._truncate_compressor = None
         self._selective_compressor = None
         self._summarize_compressor = None
+        self._build_sub_compressors()
+
+    def _build_sub_compressors(self) -> None:
+        """(Re)create the strategy delegates used by ``_execute_strategy``.
+
+        The imports live here instead of at module scope so that importing
+        ``adaptive_compressor`` stays cheap and free of circular imports.
+
+        The LLM used by the summarize strategy is attached separately by
+        ``_wire_summarize_llm``; a compressor that is built directly in code
+        therefore keeps the SELECTIVE fallback until an LLM is wired in.
+        """
+        from agentuniverse.agent.context.compressor.truncate_compressor import TruncateCompressor
+        from agentuniverse.agent.context.compressor.selective_compressor import SelectiveCompressor
+        from agentuniverse.agent.context.compressor.summarize_compressor import SummarizeCompressor
+
+        # ``name`` is optional on the base component, so fall back to a stable
+        # prefix instead of generating names such as "None_truncate".
+        base_name = self.name or "adaptive_compressor"
+
+        self._truncate_compressor = TruncateCompressor(
+            name=f"{base_name}_truncate",
+            compression_ratio=self.compression_ratio
+        )
+
+        self._selective_compressor = SelectiveCompressor(
+            name=f"{base_name}_selective",
+            compression_ratio=self.compression_ratio
+        )
+
+        self._summarize_compressor = SummarizeCompressor(
+            name=f"{base_name}_summarize",
+            compression_ratio=self.compression_ratio,
+            llm_name=self.llm_name
+        )
+
+    def _wire_summarize_llm(self) -> None:
+        """Attach an LLM instance to the summarize delegate.
+
+        AdaptiveCompressor owns the summarize strategy, so it is the component
+        responsible for its LLM.  Without this wiring a quality critical run
+        selects SUMMARIZE and then fails with
+        ``RuntimeError: LLM not initialized for summarization``.
+
+        The lookup is best effort on purpose: a missing or invalid LLM only
+        means the summarize strategy is not runnable, which
+        ``_resolve_runnable_strategy`` turns into a SELECTIVE fallback.  A
+        compressor that cannot summarize is still far better than one that
+        raises while the context window overflows.
+        """
+        if self._summarize_compressor is None:
+            return
+
+        self._summarize_compressor.llm_name = self.llm_name
+        try:
+            self._summarize_compressor._llm = _load_llm(self.llm_name)
+        except Exception as exc:
+            logger.warning(
+                "Adaptive compressor could not initialise the summarize LLM '%s': %s; "
+                "summarize and hybrid strategies will fall back to selective",
+                self.llm_name, exc,
+            )
 
     def initialize_by_component_configer(self, component_configer) -> 'AdaptiveCompressor':
         """Initialize from YAML configuration."""
         super().initialize_by_component_configer(component_configer)
 
-        # Initialize sub-compressors
-        from agentuniverse.agent.context.compressor.truncate_compressor import TruncateCompressor
-        from agentuniverse.agent.context.compressor.selective_compressor import SelectiveCompressor
-        from agentuniverse.agent.context.compressor.summarize_compressor import SummarizeCompressor
+        # ``ComponentBase`` does not copy scalar yaml keys onto the component,
+        # so read them here.  Every lookup stays optional: a yaml may legally
+        # omit any of these keys (the shipped example omits ``llm_name``) and
+        # the compressor must keep its constructor values in that case.
+        name = getattr(component_configer, "name", None)
+        if name:
+            self.name = name
+        description = getattr(component_configer, "description", None)
+        if description:
+            self.description = description
 
-        self._truncate_compressor = TruncateCompressor(
-            name=f"{self.name}_truncate",
-            compression_ratio=self.compression_ratio
-        )
+        compression_ratio = getattr(component_configer, "compression_ratio", None)
+        if compression_ratio is not None:
+            self.compression_ratio = compression_ratio
 
-        self._selective_compressor = SelectiveCompressor(
-            name=f"{self.name}_selective",
-            compression_ratio=self.compression_ratio
-        )
+        enable_hybrid = getattr(component_configer, "enable_hybrid", None)
+        if enable_hybrid is not None:
+            self.enable_hybrid = enable_hybrid
 
-        self._summarize_compressor = SummarizeCompressor(
-            name=f"{self.name}_summarize",
-            compression_ratio=self.compression_ratio,
-            llm_name=kwargs.get("llm_name", "default_llm")
-        )
+        # The yaml publishes the quality target as ``min_quality_threshold``
+        # while the compressor stores it as ``quality_threshold``.
+        min_quality_threshold = getattr(component_configer, "min_quality_threshold", None)
+        if min_quality_threshold is not None:
+            self.quality_threshold = min_quality_threshold
+
+        llm_name = getattr(component_configer, "llm_name", None)
+        if llm_name:
+            self.llm_name = llm_name
+
+        # ``strategy_weights`` maps strategy names onto score weights.  Unknown
+        # keys (for example ``hybrid``, which has no weight field of its own)
+        # are ignored on purpose.
+        weights = getattr(component_configer, "strategy_weights", None) or {}
+        if isinstance(weights, dict):
+            self.truncate_weight = float(weights.get("truncate", self.truncate_weight))
+            self.selective_weight = float(weights.get("selective", self.selective_weight))
+            self.summarize_weight = float(weights.get("summarize", self.summarize_weight))
+
+        # Rebuild with the freshly loaded settings and attach the LLM used by
+        # the summarize strategy.
+        self._build_sub_compressors()
+        self._wire_summarize_llm()
 
         return self
 
@@ -150,9 +255,14 @@ class AdaptiveCompressor(ContextCompressor):
         # Check for forced strategy
         force_strategy = kwargs.get("force_strategy")
         if force_strategy:
-            return self._execute_strategy(
+            # The strategy is still validated for runnability inside
+            # ``_execute_strategy``, so forcing SUMMARIZE without an LLM
+            # degrades to SELECTIVE instead of raising.
+            compressed, metrics = self._execute_strategy(
                 force_strategy, segments, target_tokens, kwargs
             )
+            metrics.compression_time_ms = (time.time() - start_time) * 1000
+            return compressed, metrics
 
         # Step 1: Analyze segment characteristics
         analysis = self._analyze_segments(segments, target_tokens)
@@ -171,9 +281,10 @@ class AdaptiveCompressor(ContextCompressor):
             selected_strategy, segments, target_tokens, kwargs
         )
 
-        # Update metrics with selection info
+        # Update metrics with selection info.  ``strategy_used`` is filled in
+        # by ``_execute_strategy`` because that is the component which knows
+        # whether the selected strategy was runnable or had to fall back.
         elapsed_ms = (time.time() - start_time) * 1000
-        metrics.strategy_used = f"adaptive_{selected_strategy.value}"
         metrics.compression_time_ms = elapsed_ms
 
         return compressed, metrics
@@ -327,6 +438,56 @@ class AdaptiveCompressor(ContextCompressor):
         selected = max(scores, key=scores.get)
         return selected
 
+    def _is_summarize_runnable(self) -> bool:
+        """Return True when the LLM backed summarize delegate can execute."""
+        return (
+            self._summarize_compressor is not None
+            and getattr(self._summarize_compressor, "_llm", None) is not None
+        )
+
+    def _requires_summarize(self, segments: List[ContextSegment]) -> bool:
+        """Return True when the hybrid delegate would call summarize.
+
+        ``_hybrid_compress`` only summarizes BACKGROUND/REFERENCE segments
+        that are not high priority, so a hybrid run over other segment types
+        stays safe even when no LLM is available.
+        """
+        for seg in segments:
+            if seg.priority in (ContextPriority.CRITICAL, ContextPriority.HIGH):
+                continue
+            if seg.type in (ContextType.BACKGROUND, ContextType.REFERENCE):
+                return True
+        return False
+
+    def _resolve_runnable_strategy(
+        self,
+        strategy: CompressionStrategy,
+        segments: List[ContextSegment]
+    ) -> tuple[CompressionStrategy, bool]:
+        """Map a selected strategy onto one that can actually execute.
+
+        Args:
+            strategy: Strategy chosen by ``_select_strategy`` or forced by the
+                caller
+            segments: Segments that will be compressed
+
+        Returns:
+            Tuple of (runnable strategy, whether a fallback was applied).  The
+            LLM backed strategies are downgraded to SELECTIVE when their LLM
+            dependency is unavailable, which keeps ``compress`` usable instead
+            of raising AttributeError/RuntimeError on a partially wired
+            compressor.
+        """
+        if strategy == CompressionStrategy.SUMMARIZE and not self._is_summarize_runnable():
+            return CompressionStrategy.SELECTIVE, True
+
+        if (strategy == CompressionStrategy.HYBRID
+                and self._requires_summarize(segments)
+                and not self._is_summarize_runnable()):
+            return CompressionStrategy.SELECTIVE, True
+
+        return strategy, False
+
     def _execute_strategy(
         self,
         strategy: CompressionStrategy,
@@ -336,8 +497,15 @@ class AdaptiveCompressor(ContextCompressor):
     ) -> tuple[List[ContextSegment], CompressionMetrics]:
         """Execute selected compression strategy.
 
+        The requested strategy is validated against the state of the sub
+        compressors first: an LLM backed strategy whose LLM is missing is
+        downgraded to SELECTIVE, and ``CompressionMetrics.strategy_used``
+        records the substitution with a ``_fallback`` suffix so callers can
+        still tell what really ran.
+
         Args:
-            strategy: Strategy to execute
+            strategy: Strategy to execute (a ``CompressionStrategy`` or its
+                string value)
             segments: Segments to compress
             target_tokens: Target token count
             kwargs: Additional parameters
@@ -345,21 +513,31 @@ class AdaptiveCompressor(ContextCompressor):
         Returns:
             Tuple of (compressed_segments, compression_metrics)
         """
-        if strategy == CompressionStrategy.TRUNCATE:
-            return self._truncate_compressor.compress(segments, target_tokens, **kwargs)
+        if isinstance(strategy, str):
+            strategy = CompressionStrategy(strategy)
 
-        elif strategy == CompressionStrategy.SELECTIVE:
-            return self._selective_compressor.compress(segments, target_tokens, **kwargs)
+        effective, fallback = self._resolve_runnable_strategy(strategy, segments)
 
-        elif strategy == CompressionStrategy.SUMMARIZE:
-            return self._summarize_compressor.compress(segments, target_tokens, **kwargs)
-
-        elif strategy == CompressionStrategy.HYBRID:
-            return self._hybrid_compress(segments, target_tokens, kwargs)
-
+        if effective == CompressionStrategy.TRUNCATE:
+            compressed, metrics = self._truncate_compressor.compress(
+                segments, target_tokens, **kwargs
+            )
+        elif effective == CompressionStrategy.SUMMARIZE:
+            compressed, metrics = self._summarize_compressor.compress(
+                segments, target_tokens, **kwargs
+            )
+        elif effective == CompressionStrategy.HYBRID:
+            compressed, metrics = self._hybrid_compress(segments, target_tokens, kwargs)
         else:
-            # Fallback to selective
-            return self._selective_compressor.compress(segments, target_tokens, **kwargs)
+            # SELECTIVE is the safe default: it never needs an LLM.
+            compressed, metrics = self._selective_compressor.compress(
+                segments, target_tokens, **kwargs
+            )
+
+        metrics.strategy_used = (
+            f"adaptive_{effective.value}{'_fallback' if fallback else ''}"
+        )
+        return compressed, metrics
 
     def _hybrid_compress(
         self,
@@ -456,7 +634,17 @@ class AdaptiveCompressor(ContextCompressor):
         Returns:
             Information loss estimate
         """
-        # Use selective compressor's estimation as default
-        return self._selective_compressor.estimate_information_loss(
-            original_segments, compressed_segments, **kwargs
-        )
+        # Delegate to the selective compressor (always built by
+        # ``_build_sub_compressors``); fall back to a token based estimate when
+        # a caller removed the delegates, so a heuristic call never turns into
+        # an AttributeError.
+        if self._selective_compressor is not None:
+            return self._selective_compressor.estimate_information_loss(
+                original_segments, compressed_segments, **kwargs
+            )
+
+        original_tokens = self.calculate_total_tokens(original_segments)
+        if original_tokens <= 0:
+            return 0.0
+        compressed_tokens = self.calculate_total_tokens(compressed_segments)
+        return max(0.0, min(1.0, 1.0 - (compressed_tokens / original_tokens)))
