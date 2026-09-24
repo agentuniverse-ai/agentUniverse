@@ -8,9 +8,12 @@
 from contextvars import ContextVar, Token
 import threading
 import copy
+import logging
 from typing import Dict, Any
 
 from agentuniverse.base.annotation.singleton import singleton
+
+logger = logging.getLogger(__name__)
 
 
 @singleton
@@ -98,14 +101,26 @@ class FrameworkContextManager:
         self.context_dict[var_name].reset(token)
 
     def get_all_contexts(self) -> Dict[str, Any]:
-        """Get all context variables and their values."""
+        """Get all context variables and their values as a snapshot.
+
+        Prefer ``copy.deepcopy`` per value. If deepcopy fails, fall back to
+        ``copy.copy`` (never the live reference). Shallow fallback isolates
+        only the top-level container; nested mutables may still be shared.
+        """
         context_values = {}
         with self.__dict_edit_lock:
             for var_name in self.context_dict.keys():
+                value = self.get_context(var_name)
                 try:
-                    context_values[var_name] = copy.deepcopy(self.get_context(var_name))
-                except:
-                    context_values[var_name] = self.get_context(var_name)
+                    context_values[var_name] = copy.deepcopy(value)
+                except Exception as e:
+                    # Broad catch: context values are arbitrary; deepcopy may fail.
+                    logger.warning(
+                        "deepcopy of context %r failed (%s); using shallow copy",
+                        var_name,
+                        e,
+                    )
+                    context_values[var_name] = copy.copy(value)
         return context_values
 
     def set_all_contexts(self, context_values: Dict[str, Any]) -> Dict[str, Token]:
