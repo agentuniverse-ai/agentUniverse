@@ -101,11 +101,11 @@ class FrameworkContextManager:
         self.context_dict[var_name].reset(token)
 
     def get_all_contexts(self) -> Dict[str, Any]:
-        """Get all context variables and their values.
+        """Get all context variables and their values as a snapshot.
 
-        Prefer a deep copy of each value so the returned snapshot is isolated
-        from the live context. If deepcopy fails for a value, fall back to a
-        shallow ``copy.copy`` (never the live reference) and log a warning.
+        Prefer ``copy.deepcopy`` per value. If deepcopy fails, fall back to
+        ``copy.copy`` (never the live reference). Shallow fallback isolates
+        only the top-level container; nested mutables may still be shared.
         """
         context_values = {}
         with self.__dict_edit_lock:
@@ -113,7 +113,8 @@ class FrameworkContextManager:
                 value = self.get_context(var_name)
                 try:
                     context_values[var_name] = copy.deepcopy(value)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
+                    # Broad catch: context values are arbitrary; deepcopy may fail.
                     logger.warning(
                         "deepcopy of context %r failed (%s); using shallow copy",
                         var_name,
