@@ -5,6 +5,8 @@
 # @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_base.py
+import copy
+import logging
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -12,6 +14,8 @@ from pydantic import BaseModel, ConfigDict
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+
+logger = logging.getLogger(__name__)
 
 
 class ComponentBase(BaseModel):
@@ -52,7 +56,16 @@ class ComponentBase(BaseModel):
         return self.default_symbol
 
     def create_copy(self):
+        """Return an isolated copy of this component instance.
+
+        Prefer pydantic deep ``model_copy``. If that fails, fall back to
+        ``copy.deepcopy`` so callers still receive an independent instance
+        (never a shallow alias that shares mutable sub-objects).
+        """
         try:
             return self.model_copy(deep=True)
-        except Exception:
-            return self.model_copy()
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "deep model_copy failed (%s); using deepcopy fallback", e
+            )
+            return copy.deepcopy(self)
