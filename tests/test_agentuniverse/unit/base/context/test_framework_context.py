@@ -110,10 +110,6 @@ def test_log_context_isolated_across_copied_contexts():
     context_manager.clear_all_contexts()
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-s"])
-
-
 class _UnDeepCopyableDict(dict):
     """Dict subclass that rejects deepcopy but still supports shallow copy."""
 
@@ -142,6 +138,9 @@ def test_get_all_contexts_fallback_uses_shallow_copy_not_live_reference():
 
     Regression for #1190: previously the original reference was returned, so
     ``snapshot[key].update(...)`` silently corrupted the live context.
+
+    Note: shallow fallback isolates the top-level container only; nested
+    mutables may still be shared with the live context.
     """
     context_manager.clear_all_contexts()
     live_usage = _UnDeepCopyableDict(tokens=0)
@@ -157,3 +156,7 @@ def test_get_all_contexts_fallback_uses_shallow_copy_not_live_reference():
     assert dict(snapshot["token_usage"]) == {"tokens": 42}
 
     context_manager.clear_all_contexts()
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-s"])
