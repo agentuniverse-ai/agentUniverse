@@ -112,3 +112,48 @@ def test_log_context_isolated_across_copied_contexts():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-s"])
+
+
+class _UnDeepCopyableDict(dict):
+    """Dict subclass that rejects deepcopy but still supports shallow copy."""
+
+    def __deepcopy__(self, memo):
+        raise RuntimeError("simulated deepcopy failure")
+
+
+def test_get_all_contexts_snapshot_isolates_mutable_values():
+    """Mutating a deep-copied snapshot must not affect the live context."""
+    context_manager.clear_all_contexts()
+    live_usage = {"tokens": 0}
+    context_manager.set_context("token_usage", live_usage)
+
+    snapshot = context_manager.get_all_contexts()
+    assert "token_usage" in snapshot
+    assert snapshot["token_usage"] is not live_usage
+
+    snapshot["token_usage"].update({"tokens": 99, "extra": True})
+    assert context_manager.get_context("token_usage") == {"tokens": 0}
+
+    context_manager.clear_all_contexts()
+
+
+def test_get_all_contexts_fallback_uses_shallow_copy_not_live_reference():
+    """When deepcopy fails, fall back to copy.copy — never the live reference.
+
+    Regression for #1190: previously the original reference was returned, so
+    ``snapshot[key].update(...)`` silently corrupted the live context.
+    """
+    context_manager.clear_all_contexts()
+    live_usage = _UnDeepCopyableDict(tokens=0)
+    context_manager.set_context("token_usage", live_usage)
+
+    snapshot = context_manager.get_all_contexts()
+    assert "token_usage" in snapshot
+    assert snapshot["token_usage"] is not live_usage
+    assert isinstance(snapshot["token_usage"], _UnDeepCopyableDict)
+
+    snapshot["token_usage"].update({"tokens": 42})
+    assert dict(context_manager.get_context("token_usage")) == {"tokens": 0}
+    assert dict(snapshot["token_usage"]) == {"tokens": 42}
+
+    context_manager.clear_all_contexts()
