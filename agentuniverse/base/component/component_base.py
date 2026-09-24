@@ -58,13 +58,14 @@ class ComponentBase(BaseModel):
     def create_copy(self):
         """Return an isolated copy of this component instance.
 
-        Prefer pydantic deep ``model_copy``. If that fails, fall back to
-        ``copy.deepcopy`` so callers still receive an independent instance
-        (never a shallow alias that shares mutable sub-objects).
+        Prefer pydantic ``model_copy(deep=True)``. If that fails, fall back
+        to ``copy.deepcopy`` (never a shallow alias). If both fail, the
+        exception propagates — there is no shallow fallback.
         """
         try:
             return self.model_copy(deep=True)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
+            # Broad catch: deep model_copy can fail for varied field types.
             logger.warning(
                 "deep model_copy failed (%s); using deepcopy fallback", e
             )

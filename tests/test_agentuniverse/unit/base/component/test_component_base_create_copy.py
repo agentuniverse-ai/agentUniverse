@@ -68,6 +68,23 @@ class TestComponentBaseCreateCopyIsolation(unittest.TestCase):
         self.assertEqual(component.tags, ["alpha"])
         self.assertEqual(copied.tags, ["alpha", "gamma"])
 
+    def test_create_copy_propagates_when_both_deep_paths_fail(self):
+        """Both deep paths failing must raise (no silent shallow return)."""
+        component = self._make_component()
+
+        def fail_deep_model_copy(self, *args, **kwargs):
+            if kwargs.get("deep", False):
+                raise RuntimeError("simulated deep model_copy failure")
+            return ComponentBase.model_copy(self, *args, **kwargs)
+
+        with patch.object(ComponentBase, "model_copy", fail_deep_model_copy):
+            with patch(
+                "agentuniverse.base.component.component_base.copy.deepcopy",
+                side_effect=TypeError("simulated deepcopy failure"),
+            ):
+                with self.assertRaises(TypeError):
+                    component.create_copy()
+
 
 if __name__ == "__main__":
     unittest.main()
