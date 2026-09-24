@@ -171,7 +171,10 @@ class FAISSStore(Store):
 
     def _save_index_and_metadata(self):
         """Save FAISS index and metadata to disk."""
-        if self.faiss_index and self.index_path:
+        # An index that was rebuilt to be empty is still a valid index and has to
+        # replace the previous file, otherwise the vectors of deleted documents would
+        # remain on disk after the last document of the store was removed.
+        if self.faiss_index is not None and self.index_path:
             try:
                 # Ensure directory exists
                 Path(self.index_path).parent.mkdir(parents=True, exist_ok=True)
@@ -282,23 +285,59 @@ class FAISSStore(Store):
             logger.exception("Error during FAISS search")
             return []
 
-    def insert_document(self, documents: List[Document], **kwargs):  # noqa: C901
+    def insert_document(self, documents: List[Document], **kwargs):
         """Insert documents into the FAISS index.
+
+        Documents that are already tracked in ``document_store`` are ignored;
+        use ``upsert_document``/``update_document`` to replace them.
 
         Args:
             documents (List[Document]): The documents to be inserted.
             **kwargs: Arbitrary keyword arguments.
         """
+        self._index_documents(documents, skip_existing=True)
+
+    def _index_documents(  # noqa: C901
+        self,
+        documents: List[Document],
+        skip_existing: bool = True,
+        persist: bool = True,
+    ) -> int:
+        """Embed the given documents and append them to the FAISS index.
+
+        This is the single add path used by ``insert_document`` (regular inserts made
+        by callers) and by ``_rebuild_index`` (re-indexing after a deletion). The two
+        callers only differ in ``skip_existing``:
+
+        * a regular insert has to ignore documents that are already tracked in
+          ``document_store``, otherwise the same vector would be appended twice and the
+          existing position of the document would be overwritten;
+        * a rebuild has to re-add exactly the documents that are tracked in
+          ``document_store``, because the index they used to live in has been dropped
+          and its id mappings have been cleared. Rebuilding through ``insert_document``
+          used to skip all of them, which left the store without a usable index.
+
+        Args:
+            documents (List[Document]): The documents to be indexed.
+            skip_existing (bool): Whether documents whose id is already present in
+                ``document_store`` should be ignored. Defaults to True.
+            persist (bool): Whether the resulting index and metadata should be written
+                to disk. Defaults to True; ``_rebuild_index`` saves once, after the
+                whole index has been rebuilt.
+
+        Returns:
+            int: The number of documents that were actually added to the index.
+        """
         if not documents:
-            return
+            return 0
 
         # Prepare embeddings and documents
         embeddings_to_add = []
         docs_to_add = []
 
         for document in documents:
-            # Skip if document already exists
-            if document.id in self.document_store:
+            # Skip documents that are already stored (this is the regular insert path)
+            if skip_existing and document.id in self.document_store:
                 continue
 
             embedding = document.embedding
@@ -319,24 +358,28 @@ class FAISSStore(Store):
             docs_to_add.append(document)
 
         if not embeddings_to_add:
-            return
+            return 0
 
-        # Initialize index if needed
+        # Create the index if the store does not have one yet: this is either the
+        # first insert into an empty store or the rebuild of an index that was just
+        # dropped.
         if self.faiss_index is None:
             dimension = len(embeddings_to_add[0])
             self.faiss_index = self._create_faiss_index(dimension)
 
-            # Train index if needed (for IVF indexes)
-            if hasattr(self.faiss_index, "is_trained") and not self.faiss_index.is_trained:
-                nlist = self.index_config.get("nlist", 100)
-                if len(embeddings_to_add) < nlist:
-                    warning_msg = (
-                        f"Not enough vectors ({len(embeddings_to_add)}) to train IVF index "
-                        f"properly (need at least {nlist})"
-                    )
-                    logger.warning(warning_msg)
-                train_vectors = np.array(embeddings_to_add, dtype=np.float32)
-                self.faiss_index.train(train_vectors)
+        # Train index if needed (for IVF indexes). The check runs on every add and
+        # not only right after the index was created, because a rebuild may reuse an
+        # index that was created (but never trained) while the store was empty.
+        if hasattr(self.faiss_index, "is_trained") and not self.faiss_index.is_trained:
+            nlist = self.index_config.get("nlist", 100)
+            if len(embeddings_to_add) < nlist:
+                warning_msg = (
+                    f"Not enough vectors ({len(embeddings_to_add)}) to train IVF index "
+                    f"properly (need at least {nlist})"
+                )
+                logger.warning(warning_msg)
+            train_vectors = np.array(embeddings_to_add, dtype=np.float32)
+            self.faiss_index.train(train_vectors)
 
         # Convert embeddings to numpy array
         embeddings_array = np.array(embeddings_to_add, dtype=np.float32)
@@ -344,7 +387,9 @@ class FAISSStore(Store):
         # Add to FAISS index
         self.faiss_index.add(embeddings_array)
 
-        # Update metadata
+        # Update metadata. Positions are derived from the current index size so a
+        # rebuild (which starts again at position 0) keeps ``id_to_index`` and
+        # ``index_to_id`` aligned with the vectors that FAISS actually holds.
         for i, document in enumerate(docs_to_add):
             index_pos = self._next_index + i
             self.document_store[document.id] = document
@@ -353,8 +398,10 @@ class FAISSStore(Store):
 
         self._next_index += len(docs_to_add)
 
-        # Save to disk
-        self._save_index_and_metadata()
+        if persist:
+            self._save_index_and_metadata()
+
+        return len(docs_to_add)
 
     def upsert_document(self, documents: List[Document], **kwargs):
         """Upsert documents into the FAISS index."""
@@ -388,32 +435,78 @@ class FAISSStore(Store):
         without the deleted document.
         """
         if document_id not in self.document_store:
+            # Nothing to delete: there is no point in throwing away the current index
+            # and its mappings for an unknown id.
             return
 
-        # Remove from metadata
+        # Remove the document from the in-memory store first, then re-index whatever is
+        # left. Rebuilding is what actually makes the deleted vector disappear while
+        # keeping the remaining documents searchable.
         del self.document_store[document_id]
-        if document_id in self.id_to_index:
-            del self.id_to_index[document_id]
+        self._rebuild_index()
 
-        # Rebuild index_to_id mapping
-        self.index_to_id = {v: k for k, v in self.id_to_index.items()}
+    def _rebuild_index(self):
+        """Rebuild the FAISS index from the documents that are still stored.
 
-        # For simplicity, we rebuild the entire index
-        # In production, you might want to use a more efficient approach
-        if self.document_store:
-            documents = list(self.document_store.values())
-            self._reset_faiss_index()
-            self.insert_document(documents)
-        else:
-            self._reset_faiss_index()
+        FAISS cannot remove a single vector from an existing index, so a deletion is
+        applied by dropping the index together with the id mappings that point into it,
+        and by re-indexing every document that is left in ``document_store``. The index
+        is created up front from the resolved dimension so that a store which was
+        emptied still ends up with a valid, empty index and keeps an index file on disk
+        that no longer holds the vectors of the deleted documents.
+        """
+        dimension = self._resolve_index_dimension()
+        # ``persist=False``: the intermediate empty state is not a usable one, so it is
+        # never written to disk. A single save happens at the end, once the index has
+        # been rebuilt.
+        self._reset_faiss_index(persist=False)
 
-    def _reset_faiss_index(self):
-        """Reset the FAISS index to empty state."""
+        if dimension:
+            self.faiss_index = self._create_faiss_index(dimension)
+
+        documents = list(self.document_store.values())
+        if documents:
+            # These documents are still tracked in ``document_store``, but their vectors
+            # have to be added back into the freshly created index, hence
+            # ``skip_existing=False``.
+            self._index_documents(documents, skip_existing=False, persist=False)
+
+        self._save_index_and_metadata()
+
+    def _resolve_index_dimension(self) -> Optional[int]:
+        """Resolve the embedding dimension to (re)create the index with.
+
+        The dimension of the first stored document that carries an embedding wins, so a
+        rebuild stays aligned with the vectors that were originally inserted instead of
+        trusting the configured default. Only when the store is empty (for example
+        right after its last document was deleted) does ``index_config['dimension']``
+        apply. ``None`` means that the dimension is unknown, in which case no index can
+        be created yet.
+        """
+        for document in self.document_store.values():
+            embedding = document.embedding
+            if embedding and len(embedding) > 0:
+                return len(embedding)
+
+        configured_dimension = (self.index_config or {}).get("dimension")
+        return configured_dimension if configured_dimension else None
+
+    def _reset_faiss_index(self, persist: bool = True):
+        """Reset the FAISS index and the id mappings to an empty state.
+
+        Args:
+            persist (bool): Whether the emptied state should be written to disk.
+                Defaults to True. ``_rebuild_index`` passes False because it saves the
+                fully rebuilt index itself, and an intermediate "metadata without
+                index" state on disk would make a reload look like a store whose index
+                was lost.
+        """
         self.faiss_index = None
         self.id_to_index = {}
         self.index_to_id = {}
         self._next_index = 0
-        self._save_index_and_metadata()
+        if persist:
+            self._save_index_and_metadata()
 
     def get_document_count(self) -> int:
         """Get the total number of documents in the store."""

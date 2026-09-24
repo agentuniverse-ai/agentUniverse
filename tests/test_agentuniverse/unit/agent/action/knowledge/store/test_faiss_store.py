@@ -557,6 +557,199 @@ class TestFAISSStore(unittest.TestCase):
                 query = Query(embeddings=[doc.embedding])
                 results = store.query(query)
                 self.assertGreater(len(results), 0, f"Document {doc_id} should be queryable")
+                # A non-empty result list is not enough here: the queried document has to
+                # be the top hit, otherwise the index still holds stale vectors for it.
+                self.assertEqual(results[0].id, doc_id, f"Document {doc_id} should be the top hit")
+
+    def test_delete_document_keeps_remaining_documents_indexed(self):
+        """Deleting one document must keep the remaining ones in the index.
+
+        Regression test: the rebuild triggered by ``delete_document`` used to go through
+        ``insert_document``, which skipped every document that was still tracked in the
+        store. The index therefore ended up empty (``faiss_index`` was None) while
+        ``document_store`` kept reporting the surviving documents, and every query
+        returned [] until an unrelated insert recreated a partial index.
+        """
+        store = self.create_store()
+        store._new_client()
+        store.insert_document(self.test_documents[:3])
+
+        store.delete_document("doc1")
+
+        # The index has to survive the deletion and only hold the remaining vectors.
+        self.assertIsNotNone(store.faiss_index, "the index must be rebuilt, not dropped")
+        self.assertEqual(store.faiss_index.ntotal, 2)
+        self.assertEqual(set(store.list_document_ids()), {"doc2", "doc3"})
+
+        # id_to_index/index_to_id have to describe exactly the vectors FAISS holds.
+        self.assertEqual(set(store.id_to_index.keys()), set(store.document_store.keys()))
+        self.assertEqual(store.index_to_id, {v: k for k, v in store.id_to_index.items()})
+        for doc_id, position in store.id_to_index.items():
+            self.assertEqual(store.index_to_id[position], doc_id)
+            self.assertLess(position, store.faiss_index.ntotal)
+
+        # Every remaining document must be the top hit of a query with its own embedding.
+        for doc_id in ("doc2", "doc3"):
+            embedding = store.get_document_by_id(doc_id).embedding
+            results = store.query(Query(embeddings=[embedding]))
+            self.assertEqual(len(results), 2, f"both remaining documents should be returned for {doc_id}")
+            self.assertEqual(results[0].id, doc_id, f"{doc_id} should be the top hit for its own embedding")
+
+    def test_query_after_delete_returns_next_closest_document(self):
+        """A deleted document must not be returned, not even as a stale hit."""
+        store = self.create_store()
+        store._new_client()
+        store.insert_document(self.test_documents[:4])
+
+        # doc1 is the exact match of this query, doc4 is the runner up.
+        query_embedding = [0.1, 0.2, 0.3, 0.4]
+        self.assertEqual(store.query(Query(embeddings=[query_embedding]))[0].id, "doc1")
+
+        store.delete_document("doc1")
+
+        results = store.query(Query(embeddings=[query_embedding]))
+        self.assertEqual([doc.id for doc in results], ["doc4", "doc2", "doc3"])
+
+    def test_delete_unknown_document_keeps_index_untouched(self):
+        """Deleting an unknown id is a safe no-op, also when it is repeated."""
+        store = self.create_store()
+        store._new_client()
+        store.insert_document(self.test_documents[:3])
+
+        index_before = store.faiss_index
+        id_to_index_before = dict(store.id_to_index)
+        index_to_id_before = dict(store.index_to_id)
+        next_index_before = store._next_index
+
+        store.delete_document("does_not_exist")
+        store.delete_document("does_not_exist")
+
+        self.assertIs(store.faiss_index, index_before, "an unknown id must not rebuild the index")
+        self.assertEqual(store.faiss_index.ntotal, 3)
+        self.assertEqual(store.id_to_index, id_to_index_before)
+        self.assertEqual(store.index_to_id, index_to_id_before)
+        self.assertEqual(store._next_index, next_index_before)
+        self.assertEqual(store.get_document_count(), 3)
+
+    def test_delete_last_document_leaves_empty_index(self):
+        """Deleting the last document has to leave a valid, empty index behind."""
+        store = self.create_store()
+        store._new_client()
+        store.insert_document(self.test_documents[:2])
+
+        store.delete_document("doc1")
+        self.assertEqual(store.faiss_index.ntotal, 1)
+
+        store.delete_document("doc2")
+
+        self.assertEqual(store.get_document_count(), 0)
+        self.assertEqual(store.id_to_index, {})
+        self.assertEqual(store.index_to_id, {})
+        self.assertEqual(store._next_index, 0)
+        self.assertIsNotNone(store.faiss_index, "an emptied store keeps an empty index")
+        self.assertEqual(store.faiss_index.ntotal, 0)
+        self.assertEqual(store.query(Query(embeddings=[[0.1, 0.2, 0.3, 0.4]])), [])
+
+        # The emptied index has to be persisted as well.
+        reloaded = self.create_store()
+        reloaded._new_client()
+        self.assertEqual(reloaded.get_document_count(), 0)
+        self.assertEqual(reloaded.id_to_index, {})
+        self.assertEqual(reloaded.query(Query(embeddings=[[0.1, 0.2, 0.3, 0.4]])), [])
+
+    def test_rebuilt_index_survives_reload(self):
+        """A rebuilt index has to be persisted together with its id mappings."""
+        store = self.create_store()
+        store._new_client()
+        store.insert_document(self.test_documents[:4])
+
+        store.delete_document("doc2")
+        self.assertEqual(store.faiss_index.ntotal, 3)
+
+        reloaded = self.create_store()
+        reloaded._new_client()
+
+        self.assertEqual(reloaded.get_document_count(), 3)
+        self.assertEqual(set(reloaded.list_document_ids()), {"doc1", "doc3", "doc4"})
+        self.assertEqual(set(reloaded.id_to_index.keys()), {"doc1", "doc3", "doc4"})
+        self.assertEqual(reloaded.faiss_index.ntotal, 3)
+
+        for doc_id in ("doc1", "doc3", "doc4"):
+            embedding = reloaded.get_document_by_id(doc_id).embedding
+            results = reloaded.query(Query(embeddings=[embedding], similarity_top_k=1))
+            self.assertEqual([doc.id for doc in results], [doc_id])
+
+    def test_upsert_after_delete_keeps_previous_documents_searchable(self):
+        """Upserting after a deletion has to keep the stored documents indexed."""
+        store = self.create_store()
+        store._new_client()
+        store.insert_document(self.test_documents[:3])
+
+        store.delete_document("doc1")
+        store.upsert_document(
+            [Document(id="doc_new", text="Document added after a deletion", embedding=[0.2, 0.4, 0.6, 0.8])]
+        )
+
+        self.assertEqual(store.get_document_count(), 3)
+        self.assertEqual(store.faiss_index.ntotal, 3)
+        for doc_id in ("doc2", "doc3", "doc_new"):
+            embedding = store.get_document_by_id(doc_id).embedding
+            results = store.query(Query(embeddings=[embedding], similarity_top_k=1))
+            self.assertEqual([doc.id for doc in results], [doc_id])
+
+        # Inserting into a store that was emptied by deletions must work as well.
+        for doc_id in ("doc2", "doc3", "doc_new"):
+            store.delete_document(doc_id)
+        self.assertEqual(store.faiss_index.ntotal, 0)
+
+        store.insert_document(self.test_documents[:2])
+        self.assertEqual(store.faiss_index.ntotal, 2)
+        for doc_id in ("doc1", "doc2"):
+            embedding = store.get_document_by_id(doc_id).embedding
+            results = store.query(Query(embeddings=[embedding], similarity_top_k=1))
+            self.assertEqual([doc.id for doc in results], [doc_id])
+
+    def test_delete_rebuild_across_index_types(self):
+        """The rebuild performed by a deletion must work for L2 based index types."""
+        index_configs = [
+            {"index_type": "IndexFlatL2"},
+            {"index_type": "IndexHNSWFlat", "M": 8, "efConstruction": 40, "efSearch": 20},
+            {"index_type": "IndexIVFFlat", "nlist": 2, "nprobe": 2},
+        ]
+
+        for config in index_configs:
+            with self.subTest(index_type=config["index_type"]):
+                store = self.create_store(**config)
+                store._new_client()
+                store.insert_document(self.test_documents[:3])
+
+                store.delete_document("doc2")
+
+                self.assertEqual(store.faiss_index.ntotal, 2)
+                self.assertEqual(set(store.id_to_index.keys()), {"doc1", "doc3"})
+                self.assertEqual(store.index_to_id, {v: k for k, v in store.id_to_index.items()})
+                for doc_id in ("doc1", "doc3"):
+                    embedding = store.get_document_by_id(doc_id).embedding
+                    results = store.query(Query(embeddings=[embedding], similarity_top_k=1))
+                    self.assertEqual([doc.id for doc in results], [doc_id])
+
+    def test_delete_rebuild_with_inner_product_index(self):
+        """Inner product indexes have to be rebuilt by a deletion as well."""
+        store = self.create_store(index_type="IndexFlatIP")
+        store._new_client()
+        store.insert_document(self.test_documents[:3])
+
+        store.delete_document("doc2")
+
+        self.assertEqual(store.faiss_index.ntotal, 2)
+        self.assertEqual(set(store.id_to_index.keys()), {"doc1", "doc3"})
+        self.assertEqual(store.index_to_id, {v: k for k, v in store.id_to_index.items()})
+
+        # Inner product ranks by vector norm rather than distance, so only the absence
+        # of the deleted document is asserted here.
+        result_ids = [doc.id for doc in store.query(Query(embeddings=[self.test_documents[0].embedding]))]
+        self.assertNotIn("doc2", result_ids)
+        self.assertEqual(set(result_ids), {"doc1", "doc3"})
 
 
 if __name__ == "__main__":
