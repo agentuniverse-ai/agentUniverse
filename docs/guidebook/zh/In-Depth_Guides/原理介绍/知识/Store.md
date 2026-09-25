@@ -93,6 +93,8 @@ results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metada
 
 支持 `cosine`、`l2`、`inner_product`。元数据过滤仅允许使用 `filter_tag_fields` 中声明的字段；组件会验证标识符并转义 RediSearch TAG 查询值。
 
+Upsert 和更新操作会替换文档元数据。替换后的元数据不再包含某个索引字段时，也会删除该字段原有的 TAG 值，后续查询不再匹配旧值。文档写入与 TAG 删除在同一个 Redis 事务中执行，保留其他 hash 字段及已有键的 TTL。
+
 ## PGVectorStore
 
 `PGVectorStore` 提供基于 PostgreSQL/pgvector 的同步与异步 CRUD、余弦/L2/内积检索、JSONB 包含过滤、可选的自动向量化、维度校验、自动建表和可选 HNSW 索引。安装 `store_ext` extra，并将 `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` 复制到应用配置目录。连接地址可以写在本地配置的 `connection_url` 中，或通过 `PGVECTOR_CONNECTION_URL` 提供；请勿提交数据库凭据。

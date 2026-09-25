@@ -369,15 +369,24 @@ class RedisVectorStore(Store):
                 mapping[f"meta_{field}"] = str(value).lower() if isinstance(value, bool) else str(value)
         return mapping
 
+    def _queue_upsert(self, pipeline: Any, document: Document, vector: list[float]) -> None:
+        """Replace indexed metadata alongside the document in a transaction."""
+        mapping = self._mapping(document, vector)
+        key = f"{self.key_prefix}{document.id}"
+        missing_fields = [f"meta_{field}" for field in self.filter_tag_fields if f"meta_{field}" not in mapping]
+        if missing_fields:
+            pipeline.hdel(key, *missing_fields)
+        pipeline.hset(key, mapping=mapping)
+
     def upsert_document(self, documents: list[Document], **kwargs: Any) -> None:
         if not documents:
             return
         vectors = self._vectors_for_documents(documents)
         self._ensure_index(len(vectors[0]))
         connection = self._ensure_client()
-        pipeline = connection.pipeline(transaction=False)
+        pipeline = connection.pipeline(transaction=True)
         for document, vector in zip(documents, vectors, strict=True):
-            pipeline.hset(f"{self.key_prefix}{document.id}", mapping=self._mapping(document, vector))
+            self._queue_upsert(pipeline, document, vector)
         pipeline.execute()
 
     async def async_upsert_document(self, documents: list[Document], **kwargs: Any) -> None:
@@ -386,9 +395,9 @@ class RedisVectorStore(Store):
         vectors = self._vectors_for_documents(documents)
         await self._async_ensure_index(len(vectors[0]))
         connection = await self._ensure_async_client()
-        async with connection.pipeline(transaction=False) as pipeline:
+        async with connection.pipeline(transaction=True) as pipeline:
             for document, vector in zip(documents, vectors, strict=True):
-                pipeline.hset(f"{self.key_prefix}{document.id}", mapping=self._mapping(document, vector))
+                self._queue_upsert(pipeline, document, vector)
             await pipeline.execute()
 
     def insert_document(self, documents: list[Document], **kwargs: Any) -> None:
