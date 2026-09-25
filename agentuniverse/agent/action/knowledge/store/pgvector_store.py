@@ -92,7 +92,8 @@ class PGVectorStore(Store):
         psycopg, register_vector, _ = self._dependencies()
         self.client = psycopg.connect(self._url(), autocommit=True)
         # pgvector adapters query the vector type, so the extension must exist first.
-        self.client.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        if self.create_table:
+            self.client.execute("CREATE EXTENSION IF NOT EXISTS vector")
         register_vector(self.client)
         if self.create_table and self.dimensions:
             self._ensure_table(self.dimensions)
@@ -102,7 +103,8 @@ class PGVectorStore(Store):
         psycopg, _, register_vector_async = self._dependencies()
         self.async_client = await psycopg.AsyncConnection.connect(self._url(), autocommit=True)
         # Async registration has the same ordering requirement as sync registration.
-        await self.async_client.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        if self.create_table:
+            await self.async_client.execute("CREATE EXTENSION IF NOT EXISTS vector")
         await register_vector_async(self.async_client)
         if self.create_table and self.dimensions:
             await self._async_ensure_table(self.dimensions)
@@ -131,13 +133,19 @@ class PGVectorStore(Store):
         return statements
 
     def _ensure_table(self, dimensions: int) -> None:
+        statements = self._table_sql(dimensions)
+        if not self.create_table:
+            return
         connection = self._ensure_client()
-        for statement in self._table_sql(dimensions):
+        for statement in statements:
             connection.execute(statement)
 
     async def _async_ensure_table(self, dimensions: int) -> None:
+        statements = self._table_sql(dimensions)
+        if not self.create_table:
+            return
         connection = await self._ensure_async_client()
-        for statement in self._table_sql(dimensions):
+        for statement in statements:
             await connection.execute(statement)
 
     def _embedding_for_query(self, query: Query) -> list[float]:

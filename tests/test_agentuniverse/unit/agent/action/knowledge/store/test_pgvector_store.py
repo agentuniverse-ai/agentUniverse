@@ -1,6 +1,6 @@
 import json
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.pgvector_store import PGVectorStore
@@ -51,9 +51,46 @@ class PGVectorStoreTest(unittest.TestCase):
             self.assertIs(conn, connection)
             self.assertEqual(connection.calls[0][0], "CREATE EXTENSION IF NOT EXISTS vector")
 
-        store = PGVectorStore(connection_url="postgresql://test", create_table=False)
+        store = PGVectorStore(connection_url="postgresql://test")
         with patch.object(store, "_dependencies", return_value=(psycopg, register, Mock())):
             self.assertIs(store._new_client(), connection)
+
+    def test_new_client_without_creation_only_registers_existing_extension(self):
+        connection = FakeConnection()
+        psycopg = Mock()
+        psycopg.connect.return_value = connection
+        register = Mock()
+        store = PGVectorStore(connection_url="postgresql://test", create_table=False, dimensions=2)
+        with patch.object(store, "_dependencies", return_value=(psycopg, register, Mock())):
+            self.assertIs(store._new_client(), connection)
+        register.assert_called_once_with(connection)
+        self.assertEqual(connection.calls, [])
+
+    def test_query_without_creation_only_selects(self):
+        connection = FakeConnection(rows=[("one", "text", {}, [1.0, 0.0], 0.0)])
+        store = PGVectorStore(client=connection, create_table=False)
+        result = store.query(Query(embeddings=[[1.0, 0.0]]))
+        self.assertEqual([doc.id for doc in result], ["one"])
+        self.assertEqual(store.dimensions, 2)
+        self.assertEqual(len(connection.calls), 1)
+        self.assertTrue(connection.calls[0][0].startswith("SELECT"))
+
+    def test_upsert_without_creation_only_writes_documents(self):
+        connection = FakeConnection()
+        store = PGVectorStore(client=connection, create_table=False)
+        store.upsert_document([Document(id="one", text="text", embedding=[1.0, 0.0])])
+        self.assertEqual(len(connection.cursor_obj.batches), 1)
+        self.assertTrue(connection.cursor_obj.batches[0][0].startswith("INSERT"))
+        self.assertEqual(connection.calls, [])
+
+    def test_disabled_creation_preserves_config_validation(self):
+        for config in ({"table_name": "docs; DROP TABLE users"}, {"distance": "invalid"}):
+            with self.subTest(config=config):
+                connection = FakeConnection()
+                store = PGVectorStore(client=connection, create_table=False, **config)
+                with self.assertRaises(ValueError):
+                    store.query(Query(embeddings=[[1.0, 0.0]]))
+                self.assertEqual(connection.calls, [])
 
     def test_invalid_top_k_fails_before_database_access(self):
         connection = FakeConnection()
@@ -167,6 +204,63 @@ class PGVectorStoreTest(unittest.TestCase):
         component = ComponentConfiger().load_by_configer(config)
         self.assertEqual(component.get_component_config_type(), ComponentEnum.STORE.value)
         self.assertEqual(component.metadata_class, "PGVectorStore")
+
+
+class AsyncPGVectorStoreTest(unittest.IsolatedAsyncioTestCase):
+    async def test_new_client_respects_creation_flag_before_registering(self):
+        for create_table in (False, True):
+            with self.subTest(create_table=create_table):
+                connection = Mock()
+                connection.execute = AsyncMock()
+                psycopg = Mock()
+                psycopg.AsyncConnection.connect = AsyncMock(return_value=connection)
+
+                async def register(conn, expected_connection=connection, should_create=create_table):
+                    self.assertIs(conn, expected_connection)
+                    if should_create:
+                        expected_connection.execute.assert_awaited_once_with("CREATE EXTENSION IF NOT EXISTS vector")
+                    else:
+                        expected_connection.execute.assert_not_awaited()
+
+                register_mock = AsyncMock(side_effect=register)
+                store = PGVectorStore(connection_url="postgresql://test", create_table=create_table)
+                with patch.object(store, "_dependencies", return_value=(psycopg, Mock(), register_mock)):
+                    self.assertIs(await store._new_async_client(), connection)
+                register_mock.assert_awaited_once_with(connection)
+
+    async def test_query_without_creation_only_selects(self):
+        cursor = Mock()
+        cursor.fetchall = AsyncMock(return_value=[("one", "text", {}, [1.0, 0.0], 0.0)])
+        connection = Mock()
+        connection.execute = AsyncMock(return_value=cursor)
+        store = PGVectorStore(async_client=connection, create_table=False)
+        result = await store.async_query(Query(embeddings=[[1.0, 0.0]]))
+        self.assertEqual([doc.id for doc in result], ["one"])
+        self.assertEqual(store.dimensions, 2)
+        connection.execute.assert_awaited_once()
+        self.assertTrue(connection.execute.call_args.args[0].startswith("SELECT"))
+
+    async def test_upsert_without_creation_only_writes_documents(self):
+        cursor = AsyncMock()
+        cursor.__aenter__.return_value = cursor
+        connection = Mock()
+        connection.cursor.return_value = cursor
+        connection.execute = AsyncMock()
+        store = PGVectorStore(async_client=connection, create_table=False)
+        await store.async_upsert_document([Document(id="one", text="text", embedding=[1.0, 0.0])])
+        cursor.executemany.assert_awaited_once()
+        self.assertTrue(cursor.executemany.call_args.args[0].startswith("INSERT"))
+        connection.execute.assert_not_awaited()
+
+    async def test_disabled_creation_preserves_config_validation(self):
+        for config in ({"table_name": "docs; DROP TABLE users"}, {"distance": "invalid"}):
+            with self.subTest(config=config):
+                connection = Mock()
+                connection.execute = AsyncMock()
+                store = PGVectorStore(async_client=connection, create_table=False, **config)
+                with self.assertRaises(ValueError):
+                    await store.async_query(Query(embeddings=[[1.0, 0.0]]))
+                connection.execute.assert_not_awaited()
 
 
 if __name__ == "__main__":
