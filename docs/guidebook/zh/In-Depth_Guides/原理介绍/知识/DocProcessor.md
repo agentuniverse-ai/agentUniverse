@@ -310,3 +310,5 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+使用 `counter: tiktoken` 截断时，会保留原文的有效 Unicode 前缀并重新核对 token 数量。若 token 边界位于 UTF-8 字符内部，不会生成替换字符；如果重新编码后仍超出剩余预算，会继续缩短前缀。没有完整字符能放入预算时，省略该边界文档。

@@ -309,3 +309,5 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+With `counter: tiktoken`, truncation keeps a valid Unicode prefix and rechecks its token count. A token ending inside a UTF-8 character is not decoded into a replacement character; the prefix may be shortened further if re-encoding exceeds the remaining budget. If no complete character fits, the boundary document is omitted.

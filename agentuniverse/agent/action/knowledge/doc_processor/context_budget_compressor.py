@@ -144,7 +144,14 @@ class ContextBudgetCompressor(DocProcessor):
         if self.counter == "tiktoken":
             encoder = _tiktoken_encoder(self.tiktoken_encoding)
             if encoder is not None:
-                return encoder.decode(encoder.encode(text)[:remaining])
+                # A token may end inside a UTF-8 character. Drop that partial
+                # character, then recheck: the shorter prefix can tokenize
+                # differently and still exceed the remaining budget.
+                prefix = encoder.decode(encoder.encode(text)[:remaining],
+                                        errors="ignore")
+                while prefix and len(encoder.encode(prefix)) > remaining:
+                    prefix = prefix[:-1]
+                return prefix
         # "estimate" (and the tiktoken-unavailable fallback): ~4 chars per unit.
         return text[:remaining * 4]
 
