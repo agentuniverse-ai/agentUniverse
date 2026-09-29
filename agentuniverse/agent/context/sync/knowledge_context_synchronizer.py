@@ -184,18 +184,26 @@ class KnowledgeContextSynchronizer:
                 )
             )
 
-            self.context_manager.add_context(
+            # ContextManager.add_context builds and stores its own
+            # ContextSegment with a freshly generated id, so the object created
+            # above is never persisted as-is. Only the returned instance
+            # identifies a real stored segment; recording segment.id here would
+            # put ids in _knowledge_context_map that match nothing and silently
+            # turn later invalidation and conflict lookups into no-ops.
+            stored_segment = self.context_manager.add_context(
                 session_id,
                 segment.content,
                 segment.type,
                 segment.priority,
-                metadata=segment.metadata.model_dump()
+                metadata=segment.metadata,
+                agent_id=segment.agent_id,
+                task_id=segment.task_id,
             )
 
-            new_segment_ids.append(segment.id)
+            new_segment_ids.append(stored_segment.id)
             result.segments_added += 1
 
-        # Update mapping
+        # Update the mapping with the ids that really exist in storage
         self._knowledge_context_map[knowledge_id] = new_segment_ids
 
         result.details["knowledge_id"] = knowledge_id
@@ -255,15 +263,60 @@ class KnowledgeContextSynchronizer:
         result.conflicts_resolved = len(existing_segments)
         result.segments_updated = len(resolved_segments)
 
-        # Update context with resolved segments
+        # Segments that are already persisted keep their identity: the conflict
+        # strategy may have mutated them in place, and re-adding them through
+        # add_context would mint a duplicate with a brand new id while orphaning
+        # the id tracked in _knowledge_context_map. Only genuinely new segments
+        # go through add_context, and for those the returned id is the one that
+        # must be tracked.
+        persisted_ids = {seg.id for seg in existing_segments}
+        resolved_segment_ids: List[str] = []
         for segment in resolved_segments:
-            self.context_manager.add_context(
+            if segment.id in persisted_ids:
+                resolved_segment_ids.append(segment.id)
+                continue
+
+            stored_segment = self.context_manager.add_context(
                 session_id,
                 segment.content,
                 segment.type,
                 segment.priority,
-                metadata=segment.metadata.model_dump()
+                metadata=segment.metadata,
+                parent_id=segment.parent_id,
+                related_ids=list(segment.related_ids),
+                agent_id=segment.agent_id,
+                task_id=segment.task_id,
             )
+            resolved_segment_ids.append(stored_segment.id)
+
+        # Strategies that replace previous knowledge must also demote what they
+        # leave behind, otherwise stale content keeps competing with its
+        # replacement at full priority (NEWEST_WINS promises "replace old with
+        # new"; CRITICAL_PRESERVED promises to replace everything but the
+        # CRITICAL segments).
+        if conflict_strategy == ConflictResolutionStrategy.NEWEST_WINS:
+            superseded_ids = list(old_segment_ids)
+        elif conflict_strategy == ConflictResolutionStrategy.CRITICAL_PRESERVED:
+            superseded_ids = [
+                seg_id for seg_id in old_segment_ids
+                if seg_id not in resolved_segment_ids
+            ]
+        else:
+            superseded_ids = []
+
+        if superseded_ids:
+            result.segments_invalidated = self._invalidate_segments(
+                session_id, superseded_ids
+            )
+            superseded_set = set(superseded_ids)
+            resolved_segment_ids = [
+                seg_id for seg_id in resolved_segment_ids
+                if seg_id not in superseded_set
+            ]
+
+        # The knowledge -> segment mapping must always point at segments that
+        # really live in storage.
+        self._knowledge_context_map[knowledge_id] = resolved_segment_ids
 
         return result
 
@@ -320,7 +373,12 @@ class KnowledgeContextSynchronizer:
                     content=doc,
                     tokens=len(doc.split()),
                     session_id=session_id,
-                    metadata=ContextMetadata(created_at=datetime.now())
+                    # Carry the knowledge_id so the replacement segment stays
+                    # traceable back to the knowledge it came from.
+                    metadata=ContextMetadata(
+                        created_at=datetime.now(),
+                        custom={"knowledge_id": knowledge_id}
+                    )
                 )
                 for doc in new_documents
             ]
@@ -343,9 +401,14 @@ class KnowledgeContextSynchronizer:
                         content=doc,
                         tokens=len(doc.split()),
                         session_id=session_id,
+                        # Keep both the version marker and the knowledge_id so
+                        # the new version stays traceable.
                         metadata=ContextMetadata(
                             created_at=datetime.now(),
-                            custom={"version": "new"}
+                            custom={
+                                "version": "new",
+                                "knowledge_id": knowledge_id,
+                            }
                         )
                     )
                 )
@@ -361,7 +424,11 @@ class KnowledgeContextSynchronizer:
                     content=doc,
                     tokens=len(doc.split()),
                     session_id=session_id,
-                    metadata=ContextMetadata(created_at=datetime.now())
+                    # Merged-in content is still owned by this knowledge.
+                    metadata=ContextMetadata(
+                        created_at=datetime.now(),
+                        custom={"knowledge_id": knowledge_id}
+                    )
                 )
                 for doc in new_documents
             ]
