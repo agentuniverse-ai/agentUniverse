@@ -19,6 +19,7 @@ from agentuniverse.agent.action.knowledge.reader.file.rar_reader import RarReade
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
 from agentuniverse.agent.action.knowledge.reader.file.zip_reader import ZipReader
 from agentuniverse.agent.action.knowledge.reader.file.sevenzip_reader import SevenZipReader
+from agentuniverse.agent.action.knowledge.reader.file.tar_reader import TarReader
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 
@@ -35,6 +36,11 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".rar": RarReader,
     ".zip": ZipReader,
     ".7z": SevenZipReader,
+    ".tar": TarReader,
+    ".tgz": TarReader,
+    ".tar.gz": TarReader,
+    ".tar.bz2": TarReader,
+    ".tar.xz": TarReader,
 }
 
 
@@ -53,8 +59,23 @@ class FileReader(Reader):
     def _load_data(self, file_paths: List[Path], ext_info: Optional[Dict] = None) -> List[Document]:
         document_list = []
         for file_path in file_paths:
-            file_suffix = file_path.suffix.lower()
+            file_suffix = self._resolve_suffix(file_path)
             if file_suffix in self.file_readers.keys():
                 file_reader = self.file_readers[file_suffix]()
                 document_list.extend(file_reader.load_data(file=file_path, ext_info=ext_info))
         return document_list
+
+    def _resolve_suffix(self, file_path: Path) -> str:
+        """Resolve the reader key for a file, honouring compound archive suffixes.
+
+        ``Path.suffix`` only returns the final component, so ``bundle.tar.gz``
+        would otherwise resolve to ``.gz`` and silently match no reader. A
+        registered compound suffix (``.tar.gz``) takes priority; every other
+        file keeps the previous single-extension behaviour.
+        """
+        suffixes = file_path.suffixes
+        if len(suffixes) >= 2:
+            compound = "".join(suffixes[-2:]).lower()
+            if compound in self.file_readers:
+                return compound
+        return file_path.suffix.lower()

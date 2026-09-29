@@ -1,0 +1,6 @@
+name: 'default_tar_reader'
+description: 'TAR archive reader for knowledge base'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.tar_reader'
+  class: 'TarReader'

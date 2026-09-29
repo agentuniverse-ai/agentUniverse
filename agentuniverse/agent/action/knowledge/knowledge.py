@@ -8,6 +8,7 @@ import asyncio
 import os
 import re
 import traceback
+from pathlib import Path
 from copy import deepcopy
 from typing import Optional, Dict, List, Any
 from concurrent.futures import wait, ALL_COMPLETED
@@ -100,6 +101,23 @@ class Knowledge(ComponentBase):
             thread_name_prefix="Knowledge query"
         )
 
+    @staticmethod
+    def _resolve_file_source_type(source_path: str) -> str:
+        """Resolve a local file path to the reader key used by ReaderManager.
+
+        ``os.path.splitext`` only strips the final extension, so
+        ``bundle.tar.gz`` would resolve to ``gz`` and never reach the
+        registered ``default_tar_reader``. A compound suffix that is registered
+        as a default reader (e.g. ``tar.gz``) takes priority; otherwise the
+        previous single-extension behaviour is preserved.
+        """
+        suffixes = [suffix[1:].lower() for suffix in Path(source_path).suffixes]
+        if len(suffixes) >= 2:
+            compound = ".".join(suffixes[-2:])
+            if compound in ReaderManager.DEFAULT_READER:
+                return compound
+        return suffixes[-1] if suffixes else ""
+
     def _load_data(self, *args: Any, **kwargs: Any) -> List[Document]:
         # check if source is a local file or remote url
         if kwargs.get("source_path"):
@@ -118,7 +136,7 @@ class Knowledge(ComponentBase):
         if url_pattern.match(source_path):
             source_type = "url"
         elif os.path.isfile(source_path):
-            source_type = os.path.splitext(source_path)[1][1:]
+            source_type = self._resolve_file_source_type(source_path)
         else:
             raise Exception(f"Knowledge load data error: Unknown source type:{source_path}")
         if source_type in self.readers:

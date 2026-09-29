@@ -24,6 +24,13 @@ Note - Additional remarks regarding the version.
 ***************************************************
 
 # Version Update History
+## [Unreleased]
+### Added
+- Added a `default_tar_reader` knowledge reader for `.tar`/`.tar.gz`/`.tgz` archives built on the standard library `tarfile` module, so compressed TAR sources can be ingested without an optional native dependency.
+- The TAR reader mirrors the ZIP/RAR/7z readers: nested archives, per-type sub-readers and the same security limits (`max_file_size`, `max_total_size`, `max_files`, `max_depth`, `max_compression_ratio`).
+### Fixed
+- `FileReader` and `Knowledge` now resolve compound archive suffixes (`bundle.tar.gz`) before falling back to the final extension, so compressed TAR sources reach `default_tar_reader` instead of resolving to `gz`.
+
 ## [0.0.19] - 2025-11-17
 ### Added
 - Added AWS Bedrock model support
