@@ -11,7 +11,7 @@ import shutil
 import time
 import pytest
 
-from agentuniverse.base.util.logging.logging_config import LoggingConfig
+from agentuniverse.base.util.logging import logging_util
 from agentuniverse.base.util.logging.logging_util import LOGGER, init_loggers, LOG_FILE_PREFIX
 from agentuniverse.base.context.framework_context import FrameworkContext
 
@@ -19,11 +19,16 @@ test_context = {"LOG_CONTEXT": {"REQUEST_ID": "1111-2222-3333",
                                 "AGENT_ID": "TEST_AGENT"}}
 
 
-def test_logging_util():
-    LoggingConfig.log_path = "./.test_log_dir"
+def test_logging_util(tmp_path, monkeypatch):
+    # Without a log config file ``init_loggers()`` now resets every class level
+    # setting to its documented default, so ``log_path`` is no longer carried
+    # over from a previous call.  Point the project root at a temporary
+    # directory to assert the documented default location instead of seeding
+    # ``LoggingConfig.log_path`` by hand.
+    monkeypatch.setattr(logging_util, "get_project_root_path", lambda: tmp_path)
 
     init_loggers()
-    test_log_path = LoggingConfig.log_path
+    test_log_path = tmp_path / logging_util.LOG_SUB_DIR
     with FrameworkContext(test_context):
         test_logger = LOGGER
         test_logger.info("test info log")

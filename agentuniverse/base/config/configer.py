@@ -97,12 +97,25 @@ class Configer(object):
         self.__value = value
 
     def load_by_path(self, path: str) -> 'Configer':
-        """Load the configuration file by the given path
+        """Load the configuration file by the given path.
+
         Args:
             path(str): the path of the configuration file
         Returns:
             Configer: the Configer object
+        Raises:
+            ValueError: if ``path`` is not a non-empty string or does not use
+                one of the supported file formats (``.toml``/``.yaml``).
         """
+        # Guard against a missing path before touching string methods.  A
+        # ``None`` path used to reach ``path.split`` and blow up with an
+        # opaque ``AttributeError: 'NoneType' object has no attribute 'split'``
+        # which hides the real problem from the caller.
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError(
+                "The configuration file path must be a non-empty string, "
+                f"got: {path!r}")
+
         # Check the file format.
         file_format = path.split('.')[-1]
         if file_format not in self.__SUPPORTED_FILE_FORMATS:
