@@ -10,7 +10,9 @@ from agentuniverse.agent.action.tool.common_tool.github_tool import GitHubTool
 
 
 class GitHubToolTest(unittest.TestCase):
+    """Unit tests for GitHubTool request handling."""
     def test_make_request_handles_http_error_without_response(self):
+        """Verify an HTTPError without an attached response is reported as an error containing the original message."""
         tool = GitHubTool(api_key=None)
 
         with patch(

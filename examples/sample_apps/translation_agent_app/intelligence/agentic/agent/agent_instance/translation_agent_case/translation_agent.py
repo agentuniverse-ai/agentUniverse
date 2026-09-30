@@ -14,21 +14,62 @@ from agentuniverse.prompt.prompt_model import AgentPromptModel
 
 
 class TranslationAgent(RagAgentTemplate):
+    """RAG agent template subclass that translates text based on the execute_type and country profile settings.
+    """
     def input_keys(self) -> list[str]:
+        """Return the input keys declared in the agent profile.
+
+        Returns:
+            list[str]: The configured input keys.
+        """
         return self.agent_model.profile.get('input_keys')
 
     def output_keys(self) -> list[str]:
+        """Return the output keys declared in the agent profile.
+
+        Returns:
+            list[str]: The configured output keys.
+        """
         return self.agent_model.profile.get('output_keys')
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Copy every data field of the input object into the agent input.
+
+        Args:
+            input_object(InputObject): The user input object.
+            agent_input(dict): The agent input dictionary to be filled.
+
+        Returns:
+            dict: The updated agent input.
+        """
         for key in input_object.to_dict():
             agent_input[key] = input_object.get_data(key)
         return agent_input
 
     def parse_result(self, planner_result: dict) -> dict:
+        """Return the agent result unchanged.
+
+        Args:
+            planner_result(dict): The raw agent result.
+
+        Returns:
+            dict: The agent result.
+        """
         return planner_result
 
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
+        """Build the chat prompt, selecting a prompt version based on the translation type and the target country when relevant.
+
+        Args:
+            agent_input(dict): The agent input containing translation hints.
+            **kwargs: Extra keyword arguments accepted for interface compatibility.
+
+        Returns:
+            ChatPrompt: The built chat prompt.
+
+        Raises:
+            Exception: If neither a prompt version nor an inline prompt model is available.
+        """
         profile: dict = self.agent_model.profile
         profile_prompt_model: AgentPromptModel = AgentPromptModel(introduction=profile.get('introduction'),
                                                                   target=profile.get('target'),

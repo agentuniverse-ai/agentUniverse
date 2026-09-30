@@ -44,6 +44,7 @@ class TranslationAgent(Agent):
         return self.agent_model.profile.get('output_keys')
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Copy every value of the input object except the output stream into the agent input. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. Returns: dict: The populated agent input."""
         for key in input_object.to_dict():
             if key == 'output_stream':
                 continue
@@ -51,9 +52,11 @@ class TranslationAgent(Agent):
         return agent_input
 
     def parse_result(self, planner_result: dict) -> dict:
+        """Return the planner result unchanged. Args: planner_result (dict): The agent result. Returns: dict: The same result."""
         return planner_result
 
     def execute_agents(self, input_object: InputObject, planner_input: dict) -> dict:
+        """Run the translation work, reflection and improve agents in sequence, streaming the intermediate outputs. Args: input_object (InputObject): The agent input object. planner_input (dict): The planner input. Returns: dict: The final translation result."""
         work_agent = 'translation_work_agent'
         reflection_agent = 'translation_reflection_agent'
         improve_agent = 'translation_improve_agent'
@@ -78,11 +81,13 @@ class TranslationAgent(Agent):
 
     @staticmethod
     def execute_agent(agent_name: str, agent_input: dict):
+        """Run the registered agent with the given input and return its result. Args: agent_name (str): The registered agent name. agent_input (dict): The agent input. Returns: The agent output object."""
         agent: Agent = AgentManager().get_instance_obj(agent_name)
         result = agent.run(**agent_input)
         return result
 
     def execute(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Translate the source text: one pass when it fits the LLM window, otherwise chunked multi-pass translation. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. Returns: dict: The translation result."""
         llm_name = self.agent_model.profile.get('llm_model').get('name')
         llm: LLM = LLMManager().get_instance_obj(llm_name)
         source_text = agent_input.get('source_text')

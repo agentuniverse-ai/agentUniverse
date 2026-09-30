@@ -17,11 +17,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 
 class JsonFileOps(object):
+    """Operations over .jsonl files such as checking that a file exists."""
     def __init__(self):
+        """Initialize the JsonFileOps utility object."""
         return
 
     @classmethod
     def is_file_exist(cls, file_path):
+        """Check whether file_path is an existing file with a .jsonl extension. Raises: Exception when the extension is not .jsonl. Args: file_path: The path to check. Returns: bool: True when the file exists."""
         file_name, ext = os.path.splitext(file_path)
         if ext.lower() != '.jsonl':
             raise Exception('Unsupported file extension')
@@ -29,13 +32,16 @@ class JsonFileOps(object):
 
 
 class JsonFileReader(object):
+    """Reads JSON objects from a .jsonl file, one JSON object per line."""
     def __init__(self, file_path: str):
+        """Open the .jsonl file at file_path for reading when it exists. Args: file_path (str): Path of the .jsonl file to read."""
         self.file_handler = None
         self.file_name = file_path
         if JsonFileOps.is_file_exist(file_path):
             self.file_handler = open(file_path, 'r', encoding='utf-8')
 
     def read_json_obj(self):
+        """Read and parse the next line of the file as a JSON object. Returns: The parsed object, None at end of file, or an empty dict when the line cannot be parsed (the parse error is logged)."""
         if not self.file_handler:
             raise Exception(f"None json file to read: {self.file_name}")
         json_line = self.file_handler.readline()
@@ -60,7 +66,9 @@ class JsonFileReader(object):
 
 
 class JsonFileWriter(object):
+    """Writes JSON objects to a .jsonl output file, one JSON object per line."""
     def __init__(self, output_file_name: str, extension='jsonl', directory=DATA_DIR):
+        """Open the output .jsonl file at directory/output_file_name.extension for writing, creating the directory when needed. Args: output_file_name (str): Base name of the output file. extension (str): File extension, defaults to jsonl. directory (str): Output directory, defaults to DATA_DIR."""
         self.outfile_path = directory + output_file_name + '.' + extension
         directory = os.path.dirname(self.outfile_path)
         if not os.path.exists(directory):

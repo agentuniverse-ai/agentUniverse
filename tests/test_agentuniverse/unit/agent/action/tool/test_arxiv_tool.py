@@ -15,6 +15,8 @@ from agentuniverse.agent.action.tool.tool import ToolInput
 
 
 class FakeArxivClient:
+    """Fakearxivclient.
+    """
     pass
 
 
@@ -24,9 +26,13 @@ class ArxivToolTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Set up the test fixture before each test.
+        """
         self.tool = ArxivTool()
 
     def test_search_papers(self) -> None:
+        """Test that search papers.
+        """
         tool_input = ToolInput({
             'input': 'machine learning',
             'mode': SearchMode.SEARCH.value
@@ -41,6 +47,8 @@ class ArxivToolTest(unittest.TestCase):
         mock_search.assert_called_once_with(self.tool, "machine learning")
 
     def test_get_paper_detail(self) -> None:
+        """Test that get paper detail.
+        """
         tool_input = ToolInput({
             'input': '1605.08386v1',
             'mode': SearchMode.DETAIL.value
@@ -55,6 +63,8 @@ class ArxivToolTest(unittest.TestCase):
         mock_detail.assert_called_once_with(self.tool, "1605.08386v1")
 
     def test_invalid_mode(self) -> None:
+        """Test that invalid mode.
+        """
         tool_input = ToolInput({
             'input': 'test',
             'mode': 'invalid_mode'

@@ -50,6 +50,11 @@ class JsonFileReader(object):
             return None
 
     def read_json_obj_list(self):
+        """Read all remaining JSON objects from the file until EOF.
+
+        Returns:
+            List of the parsed JSON objects read from the file.
+        """
         obj_list = []
         while True:
             obj = self.read_json_obj()
@@ -61,6 +66,13 @@ class JsonFileReader(object):
 
 class JsonFileWriter(object):
     def __init__(self, output_file_name: str, extension='jsonl', directory=DATA_DIR):
+        """Create the output JSON Lines file directory/output_file_name.extension.
+
+        Args:
+            output_file_name (str): Base name of the output file.
+            extension (str): Extension appended to the output file name (default 'jsonl').
+            directory (str): Directory in which the output file is created.
+        """
         self.outfile_path = directory + output_file_name + '.' + extension
         directory = os.path.dirname(self.outfile_path)
         if not os.path.exists(directory):
@@ -68,6 +80,11 @@ class JsonFileWriter(object):
         self.outfile_handler = open(self.outfile_path, 'w', encoding='utf-8')
 
     def write_json_obj(self, json_obj: dict):
+        """Write one JSON object to the output file as a single line.
+
+        Args:
+            json_obj (dict): The JSON object to serialize and write.
+        """
         try:
             # confirm that it's a json string and then write.
             json_line = json.dumps(json_obj, ensure_ascii=False)
@@ -78,14 +95,30 @@ class JsonFileWriter(object):
         return
 
     def write_json_obj_list(self, json_obj_list: list):
+        """Write each JSON object in json_obj_list to the output file.
+
+        Args:
+            json_obj_list (list): List of JSON objects to write, one per line.
+        """
         for i in range(0, len(json_obj_list)):
             self.write_json_obj(json_obj_list[i])
         return
 
     def write_json_query_answer(self, query: str, answer: str):
+        """Write a query/answer pair as one JSON line with 'query' and 'answer' keys.
+
+        Args:
+            query (str): The query text.
+            answer (str): The answer text.
+        """
         json_obj = {"query": query, "answer": answer}
         self.write_json_obj(json_obj)
 
     def write_json_query_answer_list(self, query_answer_list: list):
+        """Write each (query, answer) pair to the output file as one JSON line.
+
+        Args:
+            query_answer_list (list): List of (query, answer) pairs to write.
+        """
         for i in range(0, len(query_answer_list)):
             self.write_json_query_answer(query_answer_list[i][0], query_answer_list[i][1])

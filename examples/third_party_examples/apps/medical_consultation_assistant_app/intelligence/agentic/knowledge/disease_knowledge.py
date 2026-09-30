@@ -13,7 +13,18 @@ from agentuniverse.agent.action.knowledge.store.document import Document
 
 
 class DiseaseKnowledge(Knowledge):
+    """A Knowledge that renders retrieved documents for the LLM."""
+
     def to_llm(self, retrieved_docs: List[Document]) -> Any:
+        """Serialize retrieved documents into a single LLM-friendly string.
+
+        Args:
+            retrieved_docs (List[Document]): Documents retrieved for a query.
+
+        Returns:
+            Any: One text block per document — a JSON snippet with the text
+            and source file name — joined by a separator line.
+        """
 
         retrieved_texts = [json.dumps({
             "text": doc.text,

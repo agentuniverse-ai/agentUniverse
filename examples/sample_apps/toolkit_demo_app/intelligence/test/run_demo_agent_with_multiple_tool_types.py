@@ -13,6 +13,8 @@ absolute_path = os.path.abspath(file_path)
 
 
 def chat(question: str):
+    """Run a chat conversation with the agent and print the response.
+    """
     instance: Agent = AgentManager().get_instance_obj('demo_agent_with_multiple_tool_types')
     instance.run(input=question)
 
