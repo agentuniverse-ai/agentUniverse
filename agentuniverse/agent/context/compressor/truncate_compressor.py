@@ -67,7 +67,7 @@ class TruncateCompressor(ContextCompressor):
         Raises:
             ValueError: If target_tokens <= 0 or segments is empty
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         if not segments:
             raise ValueError("Cannot compress empty segment list")
@@ -93,7 +93,7 @@ class TruncateCompressor(ContextCompressor):
             compressed = self._truncate_segments(
                 critical_segments, target_tokens, preserve_all=True
             )
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             metrics = self.create_metrics(
                 original_segments, compressed, elapsed_ms, "truncate"
             )
@@ -104,7 +104,7 @@ class TruncateCompressor(ContextCompressor):
 
         if not other_segments or available_tokens <= 0:
             # Only CRITICAL segments fit
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             metrics = self.create_metrics(
                 original_segments, critical_segments, elapsed_ms, "truncate"
             )
@@ -118,7 +118,7 @@ class TruncateCompressor(ContextCompressor):
         # Step 5: Combine results
         result = critical_segments + compressed_other
 
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
         metrics = self.create_metrics(
             original_segments, result, elapsed_ms, "truncate",
             segments_compressed=len(compressed_other)

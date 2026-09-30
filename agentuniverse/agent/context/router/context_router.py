@@ -170,7 +170,7 @@ class ContextRouter(ComponentBase):
 
         # Check for recency hint
         max_age_hours = kwargs.get("max_age_hours")
-        if max_age_hours and max_age_hours <= 24:
+        if max_age_hours is not None and max_age_hours <= 24:
             # Recent context likely in hot/warm
             return [t for t in tiers if t in ["hot", "warm"]]
 
@@ -271,7 +271,7 @@ class ContextRouter(ComponentBase):
             List of context types to prioritize
         """
         rule = self.get_routing_rule(task_type)
-        return rule.priority_types
+        return rule.priority_types.copy()
 
     def optimize_search_order(
         self,

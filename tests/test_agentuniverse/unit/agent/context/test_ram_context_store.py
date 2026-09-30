@@ -85,7 +85,7 @@ class TestRamContextStore:
         store.add(sample_segments, session_id="session_1")
 
         # Get all segments
-        segments = store.get("session_id"="session_1")
+        segments = store.get(session_id="session_1")
         assert len(segments) == 4
 
     def test_get_with_type_filter(self, store, sample_segments):

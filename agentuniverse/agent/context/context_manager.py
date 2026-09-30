@@ -179,8 +179,16 @@ class ContextManager(ComponentBase):
         # Get task-specific configuration
         task_config = self.task_configs.get(task_type or "dialogue", {})
 
-        max_tokens = kwargs.get("max_tokens") or task_config.get("max_tokens", self.default_max_tokens)
-        reserved_tokens = kwargs.get("reserved_tokens") or task_config.get("reserved_tokens", self.default_reserved_tokens)
+        max_tokens = (
+            kwargs["max_tokens"]
+            if kwargs.get("max_tokens") is not None
+            else task_config.get("max_tokens", self.default_max_tokens)
+        )
+        reserved_tokens = (
+            kwargs["reserved_tokens"]
+            if kwargs.get("reserved_tokens") is not None
+            else task_config.get("reserved_tokens", self.default_reserved_tokens)
+        )
 
         # Calculate component budgets based on task ratios
         input_budget = max_tokens - reserved_tokens
@@ -240,9 +248,23 @@ class ContextManager(ComponentBase):
         # Count tokens for new content
         tokens = self._count_tokens(content)
 
+        input_budget = window.calculate_input_tokens()
+        if tokens > input_budget:
+            raise ValueError(
+                f"Context segment requires {tokens} tokens, but only "
+                f"{input_budget} are available in an empty context window."
+            )
+
         # Proactive budget check - make room BEFORE adding
         if window.total_tokens + tokens > window.calculate_input_tokens():
             self._make_room(window, tokens)
+
+        if window.calculate_available_tokens() < tokens:
+            raise ValueError(
+                f"Context segment requires {tokens} tokens, but only "
+                f"{window.calculate_available_tokens()} are available after "
+                "context compression and eviction."
+            )
 
         # Create segment
         segment = ContextSegment(
@@ -297,10 +319,7 @@ class ContextManager(ComponentBase):
             **kwargs
         )
 
-        # Mark as accessed for LRU tracking
-        for segment in segments:
-            segment.mark_accessed()
-
+        # Storage backends own access tracking and persistence.
         return segments
 
     def search_context(
@@ -331,10 +350,7 @@ class ContextManager(ComponentBase):
             **kwargs
         )
 
-        # Mark as accessed
-        for segment in results:
-            segment.mark_accessed()
-
+        # Storage backends own access tracking and persistence.
         return results
 
     def get_context_window(self, session_id: str) -> Optional[ContextWindow]:
@@ -426,7 +442,7 @@ class ContextManager(ComponentBase):
                 return  # Nothing to compress
 
             # Calculate target tokens for compression
-            target_tokens = window.calculate_input_tokens()
+            target_tokens = window.calculate_input_tokens() - needed_tokens
 
             try:
                 # Use compressor to intelligently compress segments
@@ -449,7 +465,8 @@ class ContextManager(ComponentBase):
                 # Log compression metrics (optional - for debugging/monitoring)
                 # print(f"Compression: {metrics.compression_ratio:.2%}, Loss: {metrics.information_loss_estimate:.2%}")
 
-                return  # Compression successful
+                if window.calculate_available_tokens() >= needed_tokens:
+                    return  # Compression created enough room
 
             except Exception as e:
                 # Compression failed, fall back to simple eviction
@@ -457,6 +474,7 @@ class ContextManager(ComponentBase):
 
         # Strategy 3: Fallback - Simple eviction by priority and decay
         segments = self._hot_store.get(window.session_id)
+        tokens_to_free = needed_tokens - window.calculate_available_tokens()
 
         # Sort by: priority (lower first), decay score (lower first), last_accessed (older first)
         def eviction_key(seg):
@@ -489,7 +507,10 @@ class ContextManager(ComponentBase):
             if freed_tokens >= tokens_to_free:
                 break
 
-        if to_remove:
+        # Evict atomically only when the selected candidates can create all
+        # required room. Partial eviction followed by a failed insertion would
+        # unnecessarily discard valid context.
+        if to_remove and freed_tokens >= tokens_to_free:
             self.delete_context(window.session_id, segment_ids=to_remove)
 
     def _count_tokens(self, content: str) -> int:
@@ -505,7 +526,14 @@ class ContextManager(ComponentBase):
             return self._llm.get_num_tokens(content)
 
         # Fallback: rough estimation (1 token ≈ 4 characters)
-        return len(content) // 4
+        if not content:
+            return 0
+
+        # Fallback heuristic: roughly four ASCII characters per token, while
+        # CJK and other non-ASCII characters commonly consume at least one.
+        ascii_chars = sum(1 for char in content if char.isascii())
+        non_ascii_chars = len(content) - ascii_chars
+        return ((ascii_chars + 3) // 4) + non_ascii_chars
 
     def get_budget_utilization(self, session_id: str) -> Dict[str, Any]:
         """Get detailed budget utilization metrics.

@@ -207,7 +207,7 @@ class ChromaContextStore(ContextStore):
         Returns:
             List of matching segments
         """
-        if not self._collection:
+        if limit <= 0 or not self._collection:
             return []
 
         # Build where clause for filtering
@@ -270,6 +270,8 @@ class ChromaContextStore(ContextStore):
         Returns:
             List of matching segments ranked by semantic similarity
         """
+        if not isinstance(query, str) or not query.strip():
+            return []
         if not self._collection:
             return []
 
@@ -461,9 +463,9 @@ class ChromaContextStore(ContextStore):
         try:
             results = self._collection.get(
                 where={"session_id": session_id},
-                limit=1  # We only need count, not data
+                include=[]
             )
-            return self._collection.count()
+            return len(results.get("ids", []))
         except Exception:
             return 0
 
