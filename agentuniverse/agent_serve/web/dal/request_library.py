@@ -21,7 +21,6 @@ from agentuniverse.database.sqldb_wrapper import SQLDBWrapper
 from agentuniverse.database.sqldb_wrapper_manager import SQLDBWrapperManager
 
 REQUEST_TABLE_NAME = 'request_task'
-Base = declarative_base()
 
 
 @singleton
@@ -29,24 +28,28 @@ class RequestLibrary:
     def __init__(self, configer: Configer = None):
         """Init the database connection. Use uri in config file or use sqlite
         as default database."""
-        system_db_uri = None
-        if Configer:
-            system_db_uri = configer.get('DB', {}).get('system_db_uri')
-            if not system_db_uri:
-                system_db_uri = configer.get('DB', {}).get('mysql_uri')
+        db_config = configer.get('DB', {}) if configer is not None else {}
+        system_db_uri = db_config.get('system_db_uri')
+        if not system_db_uri:
+            system_db_uri = db_config.get('mysql_uri')
         if system_db_uri and system_db_uri.strip():
             pass
         else:
             db_path = get_project_root_path() / 'intelligence' / 'db' / 'agent_universe.db'
             db_path.parent.mkdir(parents=True, exist_ok=True)
             system_db_uri = f'sqlite:///{db_path}'
-        self.update_interval = configer.get('DB', {}).get('update_interval', 5)
+        self.update_interval = db_config.get('update_interval', 5)
         # define system table name
-        request_table_name = configer.get('DB', {}).get('request_table_name',
-                                                        REQUEST_TABLE_NAME)
+        request_table_name = db_config.get('request_table_name',
+                                           REQUEST_TABLE_NAME)
         self.request_table_name = request_table_name
 
-        class RequestORM(Base):
+        # a per-instance declarative base: re-constructing RequestLibrary
+        # (e.g. with a different table name) must not collide with the
+        # table definitions registered by a previous instance
+        self.orm_base = declarative_base()
+
+        class RequestORM(self.orm_base):
             """SQLAlchemy ORM Model for RequestDO."""
             __tablename__ = request_table_name
             id = Column(Integer, primary_key=True, autoincrement=True)
@@ -77,7 +80,7 @@ class RequestLibrary:
     def __init_request_table(self):
         with self.sqldb_wrapper.sql_database._engine.connect() as conn:
             if not conn.dialect.has_table(conn, self.request_table_name):
-                Base.metadata.create_all(
+                self.orm_base.metadata.create_all(
                     self.sqldb_wrapper.sql_database._engine)
 
     def get_session(self):
