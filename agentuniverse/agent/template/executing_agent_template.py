@@ -135,7 +135,7 @@ class ExecutingAgentTemplate(AgentTemplate):
                       }, "type": "executing"})
 
         # add executing agent log info.
-        logger_info = f"\nExecuting agent execution result is :\n"
+        logger_info = "\nExecuting agent execution result is :\n"
         if agent_result.get('executing_result'):
             for index, one_exec_res in enumerate(agent_result.get('executing_result')):
                 one_exec_log_info = f"[{index + 1}] input: {one_exec_res['input']}\n"

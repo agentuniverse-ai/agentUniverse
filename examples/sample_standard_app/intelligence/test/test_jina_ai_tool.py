@@ -30,7 +30,7 @@ class JinaAIToolTest(unittest.TestCase):
 
         print("\n-------------search---------------")
         print(jina_ai_tool.run(input=f"When was Jina AI founded?",api_key=self.api_key,mode="search"))
-        
+
         print("\n-------------check fact---------------")
         print(jina_ai_tool.run(input=f"In 2012, President Barack Hussein Obama repealed the Smith-Mundt act, which had been in place in 1948. The law prevented the government from putting its propaganda on TV and Radio.",api_key=self.api_key,mode="check_fact"))
         '''

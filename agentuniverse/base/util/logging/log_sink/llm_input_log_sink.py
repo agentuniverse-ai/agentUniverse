@@ -22,4 +22,4 @@ class LLMInputLogSink(BaseFileLogSink):
         )
 
     def generate_log(self, llm_input: Union[str, dict]) -> str:
-        return Monitor.get_invocation_chain_str() + f" LLM get an input."
+        return Monitor.get_invocation_chain_str() + " LLM get an input."

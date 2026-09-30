@@ -169,7 +169,7 @@ def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng'):
     image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     if image is None:
         raise ValueError("Cannot load image, please check the path")
-    
+
     # Convert image to 3-channel BGR if it's not already
     if len(image.shape) == 2:
         # If the image is grayscale, convert to BGR
@@ -177,10 +177,10 @@ def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng'):
     elif len(image.shape) == 3 and image.shape[2] == 4:
         # If the image has an alpha channel, convert BGRA to BGR
         image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-    
+
     # Enhance the image
     enhanced = enhance_image(image)
-    
+
     if use_east:
         try:
             # Use the original color image for EAST detection (usually yields better results)
@@ -197,7 +197,7 @@ def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng'):
         pil_img = Image.fromarray(enhanced)
         config = "--oem 3 --psm 6"
         raw_text = pytesseract.image_to_string(pil_img, lang=lang, config=config)
-    
+
     final_text = clean_extracted_text(raw_text)
     return final_text
 
