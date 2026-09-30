@@ -19,6 +19,22 @@ class NotionReader(Reader):
     """
 
     def _load_data(self, page_or_db_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
+        """Load a Notion page or database as a list of documents.
+
+        Args:
+            page_or_db_id: The Notion page or database id to read.
+            ext_info: Optional extra info that may carry the Notion token.
+
+        Returns:
+            A list with a single Document whose text is the concatenated page
+            or database content and whose metadata records the source and id.
+
+        Raises:
+            ValueError: If no page or database id is given.
+            EnvironmentError: If no NOTION_TOKEN is available.
+            ImportError: If the notion-client package is not installed.
+            RuntimeError: If the Notion id can be neither read as page nor database.
+        """
         print(f"debugging: NotionReader start load id={page_or_db_id}")
         if not page_or_db_id:
             raise ValueError("NotionReader requires a Notion page or database id")
@@ -64,6 +80,15 @@ class NotionReader(Reader):
 
     @staticmethod
     def _public_metadata(ext_info: Dict) -> Dict:
+        """Filter out sensitive auth entries from extra info metadata.
+
+        Args:
+            ext_info: The raw extra info mapping to filter.
+
+        Returns:
+            A new dict containing only entries whose keys are not considered
+            sensitive (e.g. token/auth related).
+        """
         sensitive_keys = {
             "NOTION_TOKEN",
             "notion_token",
@@ -74,6 +99,16 @@ class NotionReader(Reader):
         return {key: value for key, value in ext_info.items() if key not in sensitive_keys}
 
     def _export_page(self, client, page_id: str) -> List[str]:
+        """Export every text block of a Notion page.
+
+        Args:
+            client: The initialized Notion API client.
+            page_id: The Notion page id whose blocks are read.
+
+        Returns:
+            The list of non-empty text pieces converted from the page blocks,
+            following pagination until all children are collected.
+        """
         blocks: List[str] = []
         cursor = None
         while True:
@@ -88,6 +123,15 @@ class NotionReader(Reader):
         return blocks
 
     def _block_to_text(self, block: Dict) -> str:
+        """Convert a Notion block dict into plain text.
+
+        Args:
+            block: A raw Notion block object.
+
+        Returns:
+            The concatenated rich text for textual block types, ``[table omitted]``
+            for tables, ``[image]`` for images, or an empty string otherwise.
+        """
         t = block.get("type")
         data = block.get(t, {}) if t else {}
         def rich_text_to_str(items: List[Dict]) -> str:

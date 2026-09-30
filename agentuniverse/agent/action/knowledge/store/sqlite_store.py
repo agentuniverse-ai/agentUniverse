@@ -22,6 +22,9 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 
 class SQLiteStore(Store):
+    """Knowledge store that persists documents and an inverted term index in a
+    SQLite database and ranks query results with BM25.
+    """
     db_path: str = 'sqlite_store.db'
     conn: Optional[sqlite3.Connection] = None
     k1: float = 1.5
@@ -30,10 +33,12 @@ class SQLiteStore(Store):
     similarity_top_k: int = 10
 
     def _new_client(self):
+        """Open a sqlite3 connection to db_path and create the tables when missing."""
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._create_tables()
 
     def _create_tables(self):
+        """Create the documents and inverted_index tables when they do not exist."""
         with self.conn:
             self.conn.execute('''
                 CREATE TABLE IF NOT EXISTS documents (
@@ -53,6 +58,9 @@ class SQLiteStore(Store):
 
     def _initialize_by_component_configer(self,
                                           sqlite_store_configer: ComponentConfiger) -> 'DocProcessor':
+        """Apply db_path, k1, b, keyword_extractor and similarity_top_k from the
+        given component configer.
+        """
         super()._initialize_by_component_configer(sqlite_store_configer)
         if hasattr(sqlite_store_configer, "db_path"):
             self.db_path = sqlite_store_configer.db_path
@@ -68,6 +76,11 @@ class SQLiteStore(Store):
 
 
     def _get_all_docs_count(self) -> int:
+        """Return the total number of stored documents.
+
+        Returns:
+            int: Number of rows in the documents table.
+        """
         with self.conn:
             cursor = self.conn.cursor()
             cursor.execute('SELECT COUNT(*) FROM documents')
@@ -76,6 +89,11 @@ class SQLiteStore(Store):
         return count
 
     def _get_all_docs_words_count(self) -> int:
+        """Return the sum of the stored document word counts.
+
+        Returns:
+            int: Total word count, 0 when no documents are stored.
+        """
         with self.conn:
             cursor = self.conn.cursor()
             cursor.execute('SELECT SUM(word_count) FROM documents')

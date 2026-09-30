@@ -202,6 +202,7 @@ class ZipReader(Reader):
         info: zipfile.ZipInfo,
         temp_dir: Path,
     ) -> Path:
+        """Write the archive member into a uniquely named temporary file and return its path. Args: archive (zipfile.ZipFile): The archive. info (zipfile.ZipInfo): The member. temp_dir (Path): Temporary directory. Returns: Path: The temporary file path."""
         name = PurePosixPath(info.filename).name
         if not name:
             name = uuid.uuid4().hex
@@ -212,6 +213,7 @@ class ZipReader(Reader):
         return file_path
 
     def _merge_metadata(self, document: Document, metadata: Dict) -> Document:
+        """Merge the member metadata into the document, keeping the file_name/file_path keys. Args: document (Document): The document. metadata (Dict): The member metadata. Returns: Document: The document with merged metadata."""
         if document.metadata is None:
             document.metadata = {}
         for key in ["file_name", "file_path"]:
@@ -221,6 +223,7 @@ class ZipReader(Reader):
         return document
 
     def _normalize_member(self, member: str) -> Optional[PurePosixPath]:
+        """Normalize a member name to a safe relative PurePosixPath, rejecting absolute paths and traversal segments. Args: member (str): The raw member name. Returns: Optional[PurePosixPath]: The normalized path, or None when unsafe."""
         if not member:
             return None
         normalized = PurePosixPath(member)
@@ -238,6 +241,7 @@ class ZipReader(Reader):
         depth: int,
         ext_meta: Dict,
     ) -> Dict:
+        """Build the metadata dict for an archive member, including archive root/path/depth and the optional extra metadata. Args: archive_path (Path): The archive path. path_stack (List[str]): Member path stack. depth (int): Nesting depth. ext_meta (Dict): Extra metadata. Returns: Dict: The member metadata."""
         metadata = {
             "archive_root": archive_path.name,
             "archive_path": "/".join(path_stack),
@@ -250,6 +254,7 @@ class ZipReader(Reader):
         return metadata
 
     def _read_text(self, stream: io.BufferedReader) -> str:
+        """Read the whole stream as UTF-8 text with ignored errors. Args: stream (io.BufferedReader): The source stream. Returns: str: The decoded text."""
         text_chunks: List[str] = []
         reader = io.TextIOWrapper(stream, encoding="utf-8", errors="ignore")
         while True:
@@ -260,6 +265,7 @@ class ZipReader(Reader):
         return "".join(text_chunks)
 
     def _enforce_limits(self, info: zipfile.ZipInfo) -> None:
+        """Enforce the per-file/total sizes, file count and compression ratio limits for the member. Raises: ValueError when a limit is exceeded. Args: info (zipfile.ZipInfo): The member info."""
         size = info.file_size
         compressed_size = info.compress_size
         

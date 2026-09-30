@@ -31,6 +31,15 @@ except ImportError:
 
 
 def _require_dependency(dependency, package_name: str):
+    """Raise an ImportError when the given optional dependency is not available.
+
+    Args:
+        dependency: The imported module or None.
+        package_name(str): The pip package name used in the error message.
+
+    Raises:
+        ImportError: If the dependency is None.
+    """
     if dependency is None:
         raise ImportError(
             f"{package_name} is required for readimage_tool. "
@@ -151,6 +160,12 @@ def clean_extracted_text(text):
     return text.strip()
 
 def save_text_to_file(text, output_file='extracted_text.txt'):
+    """Write the given text to a file and print the output path.
+
+    Args:
+        text: The text content to write.
+        output_file: The destination file path.
+    """
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(text)
     print(f"Text content saved to {output_file}")

@@ -72,6 +72,12 @@ class QueueWrapper:
     """Minimal wrapper for synchronous queue to monitor first token time."""
 
     def __init__(self, original_queue: queue.Queue, callback_on_first_put):
+        """Wrap a synchronous queue and record the time of the first put.
+
+        Args:
+            original_queue: The queue being wrapped.
+            callback_on_first_put: Callback receiving the first put timestamp.
+        """
         self._queue = original_queue
         self._first_put_time = None
         self._callback = callback_on_first_put
@@ -93,6 +99,7 @@ class QueueWrapper:
 
     # Delegate all other methods to the original queue
     def __getattr__(self, name):
+        """Delegate unknown attribute access to the wrapped queue."""
         return getattr(self._queue, name)
 
 
@@ -100,6 +107,12 @@ class AsyncQueueWrapper:
     """Wrapper for asynchronous queue to monitor first token time."""
 
     def __init__(self, original_queue: asyncio.Queue, callback_on_first_put):
+        """Wrap an asynchronous queue and record the time of the first put.
+
+        Args:
+            original_queue: The queue being wrapped.
+            callback_on_first_put: Callback receiving the first put timestamp.
+        """
         self._queue = original_queue
         self._first_put_time = None
         self._callback = callback_on_first_put
@@ -120,6 +133,7 @@ class AsyncQueueWrapper:
 
     # Delegate all other methods to the original queue
     def __getattr__(self, name):
+        """Delegate unknown attribute access to the wrapped queue."""
         return getattr(self._queue, name)
 
 
@@ -127,6 +141,7 @@ class AgentSpanManager:
     """Manager for Agent span lifecycle."""
 
     def __init__(self, tracer: trace.Tracer, span_name: str):
+        """Create a span manager bound to the given tracer and span name."""
         self.tracer = tracer
         self.span_name = span_name
         self.span: Optional[Span] = None
@@ -155,6 +170,11 @@ class AgentSpanManager:
             self.token = None
 
     def __enter__(self) -> Span:
+        """Start a new span and attach it to the current context.
+
+        Returns:
+            Span: The started span.
+        """
         return self.start_span()
 
     def __exit__(self, exc_type, exc_val, exc_tb):

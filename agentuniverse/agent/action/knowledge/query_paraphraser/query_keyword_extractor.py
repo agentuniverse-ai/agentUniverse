@@ -18,6 +18,8 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 
 class QueryKeywordExtractor(QueryParaphraser):
+    """Query paraphraser that expands query keywords by running the configured keyword-extractor doc processor over the query text.
+    """
     keyword_extractor: Optional[str] = "jieba_keyword_extractor"
 
     def query_paraphrase(self, origin_query: Query) -> Query:
@@ -33,6 +35,14 @@ class QueryKeywordExtractor(QueryParaphraser):
 
     def _initialize_by_component_configer(self,
                                          query_paraphraser_configer: ComponentConfiger) -> 'QueryParaphraser':
+        """Initialize the query paraphraser from a component configer.
+
+        Args:
+            query_paraphraser_configer(ComponentConfiger): The configer containing the settings.
+
+        Returns:
+            QueryParaphraser: The initialized paraphraser instance.
+        """
         super()._initialize_by_component_configer(query_paraphraser_configer)
         if hasattr(query_paraphraser_configer, "keyword_extractor"):
             self.keyword_extractor = query_paraphraser_configer.keyword_extractor

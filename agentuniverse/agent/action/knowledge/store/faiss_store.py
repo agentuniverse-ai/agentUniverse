@@ -67,6 +67,8 @@ class FAISSStore(Store):
     _next_index: int = 0
 
     def __init__(self, **kwargs):
+        """Initialize the faiss store.
+        """
         super().__init__(**kwargs)
         self.document_store = {}
         self.id_to_index = {}

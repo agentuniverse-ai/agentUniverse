@@ -115,6 +115,17 @@ class QdrantMemoryStorage(MemoryStorage):
         return Filter(must=must_conditions)
 
     def delete(self, session_id: str = None, agent_id: str = None, **kwargs) -> None:
+        """Delete messages from the Qdrant collection.
+        
+        Builds a filter from the optional session_id, agent_id and 'type'
+        keyword arguments and deletes the matching points. Does nothing when no
+        filter field is provided.
+        
+        Args:
+            session_id: The session id to filter by.
+            agent_id: The agent id to filter by.
+            **kwargs: May carry a 'type' filter value.
+        """
         client = self._ensure_client()
         filt = self._build_filter(session_id=session_id, agent_id=agent_id, source=None, type_value=kwargs.get("type"))
         if not filt:

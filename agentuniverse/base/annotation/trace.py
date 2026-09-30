@@ -43,14 +43,17 @@ def _get_input(func, *args, **kwargs) -> dict:
 
 class InvocationChainContext:
     def __init__(self, source, node_type):
+        """Store the invocation node's ``source`` and ``node_type``."""
         self.source = source
         self.node_type = node_type
 
     def __enter__(self):
+        """Initialize the monitor invocation chain and append this node to it."""
         Monitor.init_invocation_chain()
         Monitor.add_invocation_chain({'source': self.source, 'type': self.node_type})
 
     def __exit__(self, *args):
+        """Pop the current node from the monitor invocation chain."""
         Monitor.pop_invocation_chain()
 
 
@@ -294,6 +297,11 @@ def _process_tool(source, tool_input, start_info, pair_id):
 
 def _get_tool_info(func, *args, **kwargs):
 
+    """Collect tool invocation metadata for tracing.
+
+    Returns:
+        tuple: (tool instance, source name, bound input dict, start_info, pair_id).
+    """
     tool_input = _get_input(func, *args, **kwargs)
     source = func.__qualname__
     start_info = get_caller_info()
@@ -307,6 +315,11 @@ def _get_tool_info(func, *args, **kwargs):
 
 
 async def _default_tool_wrapper_async(func, *args, **kwargs):
+    """Async wrapper that traces a tool invocation.
+
+    Pushes a ``tool`` invocation chain context, records the tool input and its
+    result, and returns the execution result.
+    """
     # Extract tool input from arguments
     tool_instance, source, tool_input, start_info, pair_id = _get_tool_info(
         func, *args, **kwargs)
@@ -317,6 +330,11 @@ async def _default_tool_wrapper_async(func, *args, **kwargs):
 
 
 def _default_tool_wrapper_sync(func, *args, **kwargs):
+    """Sync wrapper that traces a tool invocation.
+
+    Pushes a ``tool`` invocation chain context, records the tool input and its
+    result, and returns the execution result.
+    """
     # Extract tool input from arguments
     tool_instance, source, tool_input, start_info, pair_id = _get_tool_info(
         func, *args, **kwargs)
@@ -386,6 +404,12 @@ def _handle_knowledge_result(start_info, source, result, pair_id):
 
 
 def _get_knowledge_info(func, *args, **kwargs):
+    """Collect knowledge invocation metadata for tracing.
+
+    Returns:
+        tuple: (knowledge instance, source name, bound input dict, start_info,
+        pair_id).
+    """
     knowledge_input = _get_input(func, *args, **kwargs)
     source = func.__qualname__
     start_info = get_caller_info()
@@ -399,6 +423,11 @@ def _get_knowledge_info(func, *args, **kwargs):
 
 
 async def _default_knowledge_wrapper_async(func, *args, **kwargs):
+    """Async wrapper that traces a knowledge invocation.
+
+    Pushes a ``knowledge`` invocation chain context, records the knowledge input
+    and its result, and returns the execution result.
+    """
     # Get knowledge input from arguments
     knowledge_instance, source, knowledge_input, start_info, pair_id = _get_knowledge_info(
         func, *args, **kwargs)
@@ -411,6 +440,11 @@ async def _default_knowledge_wrapper_async(func, *args, **kwargs):
 
 
 def _default_knowledge_wrapper_sync(func, *args, **kwargs):
+    """Sync wrapper that traces a knowledge invocation.
+
+    Pushes a ``knowledge`` invocation chain context, records the knowledge input
+    and its result, and returns the execution result.
+    """
     # Get knowledge input from arguments
     knowledge_instance, source, knowledge_input, start_info, pair_id = _get_knowledge_info(
         func, *args, **kwargs)

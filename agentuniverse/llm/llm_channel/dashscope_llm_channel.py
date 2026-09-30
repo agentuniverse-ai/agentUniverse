@@ -12,8 +12,22 @@ from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 
 
 class DashscopeLLMChannel(LLMChannel):
+    """LLM channel for the Alibaba Dashscope platform.
+
+    Attributes:
+        channel_api_base (Optional[str]): Base url of the dashscope api.
+    """
+
     channel_api_base: Optional[str] = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'DashscopeLLMChannel':
+        """Initialize the channel from the component configer.
+
+        Args:
+            component_configer (ComponentConfiger): The component configer instance.
+
+        Returns:
+            DashscopeLLMChannel: The initialized channel instance.
+        """
         super()._initialize_by_component_configer(component_configer)
         return self

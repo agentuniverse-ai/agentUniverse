@@ -15,6 +15,7 @@ from agentuniverse.llm.ollama_langchain_instance import OllamaLangchainInstance
 
 
 class OllamaLLM(LLM):
+    """Ollama-backed LLM wrapper that calls a local Ollama server through the ollama client, with streaming enabled by default."""
     base_url: Optional[str] = Field(
         default_factory=lambda: get_from_env("OLLAMA_BASE_URL") if get_from_env(
             "OLLAMA_BASE_URL") else "http://localhost:11434")
@@ -23,6 +24,7 @@ class OllamaLLM(LLM):
     streaming: bool = True
 
     def _new_client(self):
+        """Return the cached synchronous ollama client, creating one bound to base_url when needed. Returns: Any: The ollama Client."""
         if self.client:
             return self.client
         from ollama import Client
@@ -31,6 +33,7 @@ class OllamaLLM(LLM):
         )
 
     def _new_async_client(self):
+        """Return the cached asynchronous ollama client, creating one bound to base_url when needed. Returns: Any: The ollama AsyncClient."""
         if self.async_client:
             return self.async_client
         from ollama import AsyncClient
@@ -39,6 +42,7 @@ class OllamaLLM(LLM):
         )
 
     def _options(self):
+        """Build the ollama Options from the current model settings (context length, max tokens, temperature, timeout and extended info). Returns: Any: The ollama Options."""
         return Options(**{
             "num_ctx": self.max_context_length(),
             "num_predict": self.max_tokens,
@@ -48,6 +52,7 @@ class OllamaLLM(LLM):
         })
 
     def _call(self, messages, stop=None, **kwargs) -> Union[LLMOutput, Iterator[LLMOutput]]:
+        """Call the Ollama chat endpoint for the messages. When streaming is on the streamed responses are returned, otherwise a single LLMOutput is built. Args: messages: The chat messages. stop: Optional stop words. **kwargs: Extra call options. Returns: Union[LLMOutput, Iterator[LLMOutput]]: The model result."""
         should_stream = kwargs.pop("stream", self.streaming)
         client = self._new_client()
         options = self._options()

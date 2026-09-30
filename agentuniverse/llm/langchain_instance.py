@@ -109,6 +109,7 @@ class LangchainOpenAI(ChatOpenAI):
     @staticmethod
     async def as_langchain_achunk(stream_iterator: AsyncIterator, run_manager=None) \
             -> AsyncIterator[ChatGenerationChunk]:
+        """Return a langchain async generator that yields chunks of the underlying stream."""
         default_chunk_class = AIMessageChunk
         async for llm_result in stream_iterator:
             chunk = llm_result.raw

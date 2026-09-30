@@ -37,6 +37,11 @@ class SessionORM(Base):
 
 @singleton
 class SessionLibrary:
+    """Provides database access for chat sessions.
+
+    Adds, updates, deletes and queries sessions stored in the `session` table,
+    converting between SessionORM and SessionDO objects.
+    """
 
     @staticmethod
     def get_db_session():

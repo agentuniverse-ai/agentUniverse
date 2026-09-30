@@ -68,5 +68,7 @@ class QWenOpenAIStyleLLM(OpenAIStyleLLM):
         return QWen_Max_CONTEXT_LENGTH.get(self.model_name, 8000)
 
     def get_num_tokens(self, text: str) -> int:
+        """Get num tokens.
+        """
         tokenizer = get_tokenizer(self.model_name)
         return len(tokenizer.encode(text))

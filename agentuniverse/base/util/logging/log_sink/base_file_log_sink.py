@@ -15,6 +15,11 @@ from agentuniverse.base.util.logging.logging_util import _get_log_file_path
 
 
 class BaseFileLogSink(LogSink):
+    """A log sink that writes matching records to a rotated log file.
+
+    Records are routed to the file configured through file_prefix with the
+    rotation, retention and compression settings of the sink.
+    """
 
     file_prefix: str = None
     log_rotation: str = LoggingConfig.log_rotation
@@ -22,15 +27,32 @@ class BaseFileLogSink(LogSink):
     compression: str = None
 
     def process_record(self, record):
+        """Process a single log record; must be implemented by subclasses.
+
+        Args:
+            record: The loguru record to process.
+        """
         raise NotImplementedError("Subclasses must implement process_record.")
 
     def filter(self, record):
+        """Accept only records whose log type matches this sink.
+
+        Records that match are forwarded to process_record before being
+        accepted by the sink.
+
+        Args:
+            record: The loguru record to inspect.
+
+        Returns:
+            bool: True if the record belongs to this sink's log type.
+        """
         if not record['extra'].get('log_type') == self.log_type:
             return False
         self.process_record(record)
         return True
 
     def register_sink(self):
+        """Register this sink with loguru unless it is already registered."""
         if self.sink_id == -1:
             self.sink_id = logger.add(
                 sink=_get_log_file_path(self.file_prefix),
@@ -46,6 +68,14 @@ class BaseFileLogSink(LogSink):
 
     def _initialize_by_component_configer(self,
                                           log_sink_configer: ComponentConfiger) -> 'LogSink':
+        """Apply the file related options from the given component configer.
+
+        Args:
+            log_sink_configer(ComponentConfiger): The configer holding the sink options.
+
+        Returns:
+            LogSink: This sink instance after applying the configuration.
+        """
         if hasattr(log_sink_configer, "file_prefix"):
             self.file_prefix = log_sink_configer.file_prefix
         if hasattr(log_sink_configer, "log_rotation"):

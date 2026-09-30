@@ -42,10 +42,20 @@ CODE_FILE_EXTENSIONS = {
 
 
 class CodeReader(Reader):
+    """Reader that loads source-code files into Documents with language metadata."""
 
     def _load_data(self,
                    file: Union[str, Path],
                    ext_info: Optional[Dict] = None) -> List[Document]:
+        """Load a code file and wrap its content into a Document.
+
+        Args:
+            file (Union[str, Path]): Path to the code file to read.
+            ext_info (Optional[Dict]): Extra metadata merged into the document metadata.
+
+        Returns:
+            List[Document]: A single-element list holding the file content.
+        """
         if isinstance(file, str):
             file = Path(file)
         if isinstance(file, Path):

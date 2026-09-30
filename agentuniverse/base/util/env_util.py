@@ -10,5 +10,7 @@ import os
 
 
 def get_from_env(env_key: str) -> str:
+    """Return the environment variable value for the given key.
+    """
     if env_key in os.environ and os.environ[env_key]:
         return os.environ[env_key]

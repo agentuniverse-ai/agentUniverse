@@ -21,6 +21,7 @@ class Document(BaseModel):
         embedding (List[float]): Embedding data associated with the document
     """
     class Config:
+        """Pydantic model configuration for this document model, allowing arbitrary types."""
         arbitrary_types_allowed = True
 
     id: str = None
@@ -31,6 +32,14 @@ class Document(BaseModel):
 
     @model_validator(mode='before')
     def create_id(cls, values):
+        """Generate the document id from its text when no id was supplied.
+
+        Args:
+            values: The input values being validated.
+
+        Returns:
+            The values dict with a deterministic uuid5 id filled in.
+        """
         text: str = values.get('text', '')
         if not values.get('id'):
             values['id'] = str(uuid.uuid5(uuid.NAMESPACE_URL, text))

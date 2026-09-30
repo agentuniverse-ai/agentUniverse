@@ -10,7 +10,18 @@ from agentuniverse.base.util.logging.log_sink.flask_response_log_sink import Fla
 
 
 class CustomFlaskResponseSink(FlaskResponseLogSink):
+    """Custom flask response log sink that formats the response and its duration into a log string.
+    """
     def generate_log(self, flask_response, elapsed_time) -> str:
+        """Format the flask response and elapsed time into a log string.
+
+        Args:
+            flask_response: The flask response object or string.
+            elapsed_time: The response elapsed time in seconds.
+
+        Returns:
+            str: The formatted response log string.
+        """
         if isinstance(flask_response, str):
             response_str = (f"Response: {flask_response} "
                             f"Duration: {elapsed_time:.3f}s")
