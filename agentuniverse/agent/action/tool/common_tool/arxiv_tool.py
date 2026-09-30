@@ -15,8 +15,8 @@ from agentuniverse.base.annotation.retry import retry
 
 
 class SearchMode(Enum):
-    SEARCH = "search"   
-    DETAIL = "detail"  
+    SEARCH = "search"
+    DETAIL = "detail"
 
 
 @dataclass
@@ -30,7 +30,7 @@ class PaperSummary:
 
 
 class ArxivTool(Tool):
-    
+
     sch_engine: Optional[Any] = None
     MAX_QUERY_LENGTH: int = Field(default=300, description="查询字符串最大长度")
 
@@ -54,16 +54,16 @@ class ArxivTool(Tool):
         query = input
         return (self.find_papers_by_str(query) if mode == SearchMode.SEARCH.value
                 else self.retrieve_full_paper_text(query))
-        
+
     def _process_query(self, query: str) -> str:
         if len(query) <= self.MAX_QUERY_LENGTH:
             return query
-        
+
         words: List[str] = query.split()
         processed_words: List[str] = []
         current_length: int = 0
         for word in words:
-            word_length = len(word) + 1 
+            word_length = len(word) + 1
             if current_length + word_length <= self.MAX_QUERY_LENGTH:
                 processed_words.append(word)
                 current_length += word_length
@@ -74,12 +74,12 @@ class ArxivTool(Tool):
     @retry(3, 1.0)
     def find_papers_by_str(self, query) -> str:
         processed_query = self._process_query(query)
-        result_num:int = 10   
+        result_num:int = 10
         try:
             import arxiv
         except ImportError:
             raise ImportError("arxiv is required. Install with: pip install arxiv")
-    
+
         search = arxiv.Search(
             query="abs:" + processed_query,
             max_results=result_num,
@@ -106,8 +106,8 @@ class ArxivTool(Tool):
             raise ImportError("arxiv is required. Install with: pip install arxiv")
         search = arxiv.Search(id_list=[paper_id])
         paper = next(self.sch_engine.results(search))
-        paper.download_pdf(filename="downloaded-paper.pdf") 
-        
+        paper.download_pdf(filename="downloaded-paper.pdf")
+
         try:
             import pypdf
         except ImportError:
