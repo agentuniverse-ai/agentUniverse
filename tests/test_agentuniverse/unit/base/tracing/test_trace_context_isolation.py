@@ -12,7 +12,11 @@ from agentuniverse.base.annotation.trace import (
     _default_agent_wrapper_sync,
     _default_llm_wrapper_sync,
 )
+from agentuniverse.base.context.framework_context_manager import (
+    FrameworkContextManager,
+)
 from agentuniverse.base.tracing.au_trace_context import AuTraceContext
+from agentuniverse.base.tracing.au_trace_manager import AuTraceManager
 from agentuniverse.base.util.monitor.monitor import Monitor
 
 TRACE_A = "a" * 32
@@ -29,12 +33,20 @@ def _current_trace_id():
     return f"{ctx.trace_id:032x}" if ctx.is_valid else None
 
 
+def _purge_framework_context():
+    manager = FrameworkContextManager()
+    for key in list(manager.context_dict.keys()):
+        manager.del_context(key, force=True)
+
+
 @pytest.fixture(autouse=True)
 def _clean_otel_context():
-    """Start and end every test from a pristine OTel context."""
+    """Start and end every test from a pristine OTel and framework context."""
     otel_context.attach(otel_context.Context())
+    _purge_framework_context()
     yield
     otel_context.attach(otel_context.Context())
+    _purge_framework_context()
 
 
 def _patch_memory_module(monkeypatch):
@@ -134,3 +146,77 @@ class TestTraceContextIsolation:
             assert (
                 len(Monitor.get_invocation_chain()) == baseline
             ), "aborting the stream left the llm node on the invocation chain"
+
+    def test_invocation_chain_keys_cleared_between_requests(self, monkeypatch):
+        _patch_memory_module(monkeypatch)
+
+        def fake_agent_run(**kwargs):
+            return "ok"
+
+        for i in range(3):
+            AuTraceManager().trace_context.set_trace_id(f"{i + 1:032x}")
+            assert _default_agent_wrapper_sync(fake_agent_run) == "ok"
+
+        chain_keys = [key for key in FrameworkContextManager().context_dict
+                      if "invocation_chain" in key]
+        assert chain_keys == [], (
+            "every traced request left its invocation chain entry in the "
+            "thread level framework context; pooled server threads grow "
+            "without bound"
+        )
+
+    def test_session_id_generated_in_run_does_not_leak_to_next_request(
+            self, monkeypatch):
+        _patch_memory_module(monkeypatch)
+
+        def request_without_session(**kwargs):
+            # mimic ConversationMemoryModule.add_trace_info: persist a
+            # generated session id into the thread level framework context
+            manager = FrameworkContextManager()
+            if manager.get_context("session_id") is None:
+                manager.set_context("session_id", f"session-{kwargs['n']}")
+            return manager.get_context("session_id")
+
+        first = _default_agent_wrapper_sync(request_without_session, n=1)
+        second = _default_agent_wrapper_sync(request_without_session, n=2)
+        assert first == "session-1"
+        assert second == "session-2", (
+            "the second request reused the first request's session id from "
+            "the thread level framework context"
+        )
+
+    def test_preexisting_session_context_is_preserved(self, monkeypatch):
+        _patch_memory_module(monkeypatch)
+        manager = FrameworkContextManager()
+        manager.set_context("session_id", "conversation-scope-session")
+
+        def request_with_sticky_write(**kwargs):
+            manager.set_context("session_id", "request-session")
+            return "ok"
+
+        assert _default_agent_wrapper_sync(request_with_sticky_write) == "ok"
+        assert manager.get_context("session_id") == "conversation-scope-session"
+
+    def test_nested_agent_runs_keep_outer_chain_until_outer_finishes(
+            self, monkeypatch):
+        _patch_memory_module(monkeypatch)
+
+        def inner_run(**kwargs):
+            return "inner"
+
+        outer_chain_len_after_inner = {}
+
+        def outer_run(**kwargs):
+            _default_agent_wrapper_sync(inner_run)
+            outer_chain_len_after_inner["value"] = len(
+                Monitor.get_invocation_chain())
+            return "outer"
+
+        assert _default_agent_wrapper_sync(outer_run) == "outer"
+        assert outer_chain_len_after_inner["value"] >= 1, (
+            "the inner agent run cleared the outer run's invocation chain "
+            "before the outer run finished"
+        )
+        chain_keys = [key for key in FrameworkContextManager().context_dict
+                      if "invocation_chain" in key]
+        assert chain_keys == []
