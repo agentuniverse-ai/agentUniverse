@@ -145,7 +145,7 @@ class RedisContextStore(ContextStore):
         Returns:
             List of matching segments
         """
-        if not self._redis:
+        if limit <= 0 or not self._redis:
             return []
 
         key = self._make_session_key(session_id)
@@ -195,6 +195,9 @@ class RedisContextStore(ContextStore):
         Returns:
             List of matching segments ranked by relevance
         """
+        if not isinstance(query, str) or not query.strip():
+            return []
+
         # Get all segments and do in-memory search
         # For production, consider Redis full-text search module
         segments = self.get(session_id, limit=1000)
@@ -218,7 +221,10 @@ class RedisContextStore(ContextStore):
                 if term in content_lower:
                     score += 2.0
 
-            # Priority bonus
+            if score <= 0:
+                continue
+
+            # Priority only ranks segments that matched the query.
             priority_bonus = {
                 ContextPriority.CRITICAL: 10.0,
                 ContextPriority.HIGH: 5.0,
@@ -230,9 +236,7 @@ class RedisContextStore(ContextStore):
 
             # Decay factor
             score *= segment.calculate_decay()
-
-            if score > 0:
-                scored.append((segment, score))
+            scored.append((segment, score))
 
         # Sort by score and return top_k
         scored.sort(key=lambda x: x[1], reverse=True)

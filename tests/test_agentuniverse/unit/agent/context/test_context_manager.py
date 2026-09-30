@@ -63,6 +63,16 @@ class TestContextManager:
         assert window.reserved_tokens == 1000
         assert window.total_tokens == 0
 
+    def test_create_context_window_allows_zero_reserved_tokens(self, manager):
+        """An explicit zero reserve should override task and manager defaults."""
+        window = manager.create_context_window(
+            session_id="session_1",
+            reserved_tokens=0,
+        )
+
+        assert window.reserved_tokens == 0
+        assert window.calculate_input_tokens() == window.max_tokens
+
     def test_create_context_window_code_generation(self, manager):
         """Test creating context window for code generation task."""
         window = manager.create_context_window(
@@ -118,6 +128,94 @@ class TestContextManager:
         window = manager.get_context_window("session_2")
         assert window is not None
         assert window.session_id == "session_2"
+
+    def test_fallback_token_count_handles_short_and_non_ascii_text(self, manager):
+        """Fallback estimates must never treat non-empty context as free."""
+        manager._llm = None
+
+        assert manager._count_tokens("a") == 1
+        assert manager._count_tokens("hello") == 2
+        assert manager._count_tokens("你好") == 2
+
+    def test_rejects_segment_larger_than_empty_window(self, manager):
+        """A single segment must not silently overflow an empty window."""
+        window = manager.create_context_window(
+            "session_1", max_tokens=10, reserved_tokens=2
+        )
+
+        with pytest.raises(ValueError, match="requires .* tokens.* available"):
+            manager.add_context(
+                "session_1",
+                "A" * 100,
+                ContextType.BACKGROUND,
+                ContextPriority.HIGH,
+            )
+
+        assert window.total_tokens == 0
+        assert window.segment_ids == []
+        assert manager._hot_store.count("session_1") == 0
+
+    def test_rejects_segment_when_critical_context_blocks_eviction(self, manager):
+        """Insertion must fail atomically when only critical context remains."""
+        window = manager.create_context_window(
+            "session_1", max_tokens=20, reserved_tokens=4
+        )
+        critical = manager.add_context(
+            "session_1",
+            "A" * 48,
+            ContextType.SYSTEM,
+            ContextPriority.CRITICAL,
+        )
+
+        with pytest.raises(ValueError, match="requires .* tokens.* available"):
+            manager.add_context(
+                "session_1",
+                "B" * 32,
+                ContextType.BACKGROUND,
+                ContextPriority.HIGH,
+            )
+
+        assert window.total_tokens == critical.tokens
+        assert window.segment_ids == [critical.id]
+        assert [segment.id for segment in manager.get_context("session_1")] == [critical.id]
+
+    def test_failed_insertion_does_not_partially_evict_context(self, manager):
+        """Insufficient eviction candidates must remain intact on failure."""
+        window = manager.create_context_window(
+            "session_1", max_tokens=20, reserved_tokens=4
+        )
+        critical = manager.add_context(
+            "session_1", "A" * 48, ContextType.SYSTEM, ContextPriority.CRITICAL
+        )
+        low = manager.add_context(
+            "session_1", "B" * 8, ContextType.BACKGROUND, ContextPriority.LOW
+        )
+
+        with pytest.raises(ValueError, match="requires .* tokens.* available"):
+            manager.add_context(
+                "session_1", "C" * 32, ContextType.TASK, ContextPriority.HIGH
+            )
+
+        assert window.total_tokens == critical.tokens + low.tokens
+        assert set(window.segment_ids) == {critical.id, low.id}
+        assert {segment.id for segment in manager.get_context("session_1")} == {
+            critical.id,
+            low.id,
+        }
+
+    def test_get_context_records_one_access(self, manager):
+        """One manager read should be recorded once by the backing store."""
+        segment = manager.add_context(
+            "session_1",
+            "System prompt",
+            ContextType.SYSTEM,
+            ContextPriority.CRITICAL,
+        )
+
+        result = manager.get_context("session_1")
+
+        assert result == [segment]
+        assert segment.metadata.access_count == 1
 
     def test_get_context_all(self, manager):
         """Test retrieving all context for a session."""

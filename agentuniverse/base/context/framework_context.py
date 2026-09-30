@@ -26,10 +26,14 @@ class FrameworkContext:
 
     def __enter__(self):
         """Preserve the prior context and set a new one."""
+        # A FrameworkContext instance may be reused. Do not let values captured
+        # by an earlier entry leak into a later restoration.
+        self.old_state = {}
         for key, value in self.context.items():
             if FrameworkContextManager().is_context_exist(key):
                 self.old_state[key] = FrameworkContextManager().get_context(key)
             FrameworkContextManager().set_context(key, value)
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         """Clear the current context and revert to the prior context."""

@@ -138,6 +138,8 @@ class ContextSegment(BaseModel):
         Returns:
             bool: True if content changed
         """
+        if new_tokens < 0:
+            raise ValueError("new_tokens must be non-negative")
         new_hash = hashlib.md5(new_content.encode('utf-8')).hexdigest()
 
         if new_hash != self._content_hash:
@@ -210,6 +212,8 @@ class ContextWindow(BaseModel):
             segment_tokens: Number of tokens to add/remove
             operation: "add" or "remove"
         """
+        if segment_tokens < 0:
+            raise ValueError("segment_tokens must be non-negative")
         if operation == "add":
             self.total_tokens += segment_tokens
         elif operation == "remove":
