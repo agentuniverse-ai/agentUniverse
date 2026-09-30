@@ -95,7 +95,7 @@ class Memory(ComponentBase):
         return []
 
     def prune(self, memories: List[Message]) -> List[Message]:
-        if not memories:
+        if not memories or self.max_tokens <= 0:
             return []
         new_memories = memories[:]
 
@@ -168,7 +168,7 @@ class Memory(ComponentBase):
                     messages = []
                     for seg in segments:
                         # Parse role from metadata if available
-                        role = seg.metadata.extra_data.get('role', 'assistant') if hasattr(seg.metadata, 'extra_data') else 'assistant'
+                        role = seg.metadata.custom.get('role', 'assistant')
                         messages.append(Message(
                             content=seg.content,
                             type=role

@@ -23,6 +23,13 @@ from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStora
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
+def _decode_additional_args(value: Any) -> dict:
+    """Normalize Chroma metadata serialized by old and new clients."""
+    if isinstance(value, str):
+        return json.loads(value) if value else {}
+    return value or {}
+
+
 class ChromaConversationMemoryStorage(MemoryStorage):
     """The chroma memory storage class.
 
@@ -169,7 +176,7 @@ class ChromaConversationMemoryStorage(MemoryStorage):
                     {'target_type': ConversationMessageSourceType.AGENT.value}
                 ]
             }
-            if kwargs['memory_types'] and len(kwargs["memory_types"]) > 0:
+            if kwargs.get('memory_types'):
                 condition = {
                     "$or": [
                         condition,
@@ -191,7 +198,6 @@ class ChromaConversationMemoryStorage(MemoryStorage):
 
         if len(filters["$and"]) < 2:
             filters = filters["$and"][0] if len(filters["$and"]) == 1 else {}
-        input = None
         if input:
             embedding = []
             if self.embedding_model:
@@ -241,7 +247,7 @@ class ChromaConversationMemoryStorage(MemoryStorage):
                         target_type=metadatas[0][i].get('target_type', '') if metadatas[0] else '',
                         trace_id=metadatas[0][i].get('trace_id', '') if metadatas[0] else '',
                         type=metadatas[0][i].get('type', '') if metadatas[0] else '',
-                        additional_args=json.loads(metadatas[0][i].get('additional_args', "{}"))
+                        additional_args=_decode_additional_args(metadatas[0][i].get('additional_args'))
                     )
                     for i in range(len(result['ids'][0]))
                 ]
@@ -261,7 +267,7 @@ class ChromaConversationMemoryStorage(MemoryStorage):
                         content=documents[i],
                         metadata=metadatas[i] if metadatas[i] else None,
                         type=metadatas[i].get('type', '') if metadatas[i] else '',
-                        additional_args=json.loads(metadatas[i].get('additional_args', "{}"))
+                        additional_args=_decode_additional_args(metadatas[i].get('additional_args'))
                     )
                     for i in range(len(result['ids']))
                 ]

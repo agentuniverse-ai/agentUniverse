@@ -55,18 +55,22 @@ class ChromaMemoryStorage(MemoryStorage):
 
     def _init_collection(self) -> Any:
         """Initialize the ChromaDB collection."""
-        if self.persist_path.startswith('http') or self.persist_path.startswith('https'):
+        if self.persist_path and (
+            self.persist_path.startswith('http') or self.persist_path.startswith('https')
+        ):
             parsed_url = urlparse(self.persist_path)
             settings = Settings(
                 chroma_api_impl="chromadb.api.fastapi.FastAPI",
                 chroma_server_host=parsed_url.hostname,
                 chroma_server_http_port=str(parsed_url.port)
             )
-        else:
+        elif self.persist_path:
             settings = Settings(
                 is_persistent=True,
                 persist_directory=self.persist_path
             )
+        else:
+            settings = Settings()
         client = chromadb.Client(settings)
         self._collection = client.get_or_create_collection(name=self.collection_name)
         return client

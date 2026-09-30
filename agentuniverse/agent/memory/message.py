@@ -57,7 +57,8 @@ class Message(BaseModel):
 
     def to_dict(self) -> dict:
         """Convert the agentUniverse(aU) message class to the dict."""
-        return {"type": self.type, "content": self.content, "metadata": self.metadata, "source": self.source}
+        return {"id": self.id, "type": self.type, "content": self.content,
+                "metadata": self.metadata, "source": self.source}
 
     @staticmethod
     def from_dict(message_dict: dict) -> 'Message':
