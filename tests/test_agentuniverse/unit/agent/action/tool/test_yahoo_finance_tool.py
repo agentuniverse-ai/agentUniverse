@@ -47,9 +47,11 @@ class TestFormatters(unittest.TestCase):
     """Pure formatting helpers — no network, no yfinance."""
 
     def setUp(self) -> None:
+        """Instantiate a bare YahooFinanceTool for formatting-helper tests."""
         self.tool = YahooFinanceTool()
 
     def test_format_quote_with_data(self) -> None:
+        """Verify _format_quote renders symbol, price, currency, compact market cap, and volume."""
         quote = {
             "regularMarketPrice": 150.0,
             "regularMarketChange": 1.25,
@@ -68,15 +70,18 @@ class TestFormatters(unittest.TestCase):
         self.assertIn("55,000,000", out)
 
     def test_format_quote_skips_missing_fields(self) -> None:
+        """Verify _format_quote omits fields that are absent from the quote dict."""
         out = self.tool._format_quote("XYZ", {"regularMarketPrice": 12.3})
         self.assertIn("regularMarketPrice", out)
         self.assertNotIn("fiftyTwoWeekHigh", out)
 
     def test_format_quote_empty(self) -> None:
+        """Verify _format_quote reports an empty quote gracefully."""
         out = self.tool._format_quote("XYZ", {})
         self.assertIn("no quote data", out)
 
     def test_format_history_with_rows(self) -> None:
+        """Verify _format_history renders rows newest-first with headers and formatted numbers."""
         rows = [
             {"date": "2024-01-02", "open": 100.0, "high": 102.0,
              "low": 99.0, "close": 101.0, "volume": 1000},
@@ -95,10 +100,12 @@ class TestFormatters(unittest.TestCase):
         self.assertIn("1,000", out)
 
     def test_format_history_empty(self) -> None:
+        """Verify _format_history reports missing historical data gracefully."""
         out = self.tool._format_history("AAPL", [])
         self.assertIn("no historical data", out)
 
     def test_format_info_with_data(self) -> None:
+        """Verify _format_info renders known company info fields."""
         info = {
             "longName": "Apple Inc.",
             "sector": "Technology",
@@ -111,12 +118,14 @@ class TestFormatters(unittest.TestCase):
         self.assertIn("2.50T", out)
 
     def test_format_info_empty(self) -> None:
+        """Verify _format_info reports missing company info gracefully."""
         out = self.tool._format_info("AAPL", {})
         self.assertIn("no company info", out)
 
     def test_format_info_drops_unstable_extra_fields(self) -> None:
         # Unknown / unstable ticker.info keys must NOT leak into the output —
         # the info payload is curated to keep the agent context compact.
+        """Verify _format_info never leaks unknown or unstable ticker.info keys."""
         info = {
             "longName": "Apple Inc.",
             "marketCap": 2_500_000_000_000,
@@ -132,6 +141,7 @@ class TestFormatters(unittest.TestCase):
 
     def test_format_info_only_emits_known_fields(self) -> None:
         # Every emitted key must be a member of the curated info_fields list.
+        """Verify every key _format_info emits is a member of the curated info_fields list."""
         info = {
             "longName": "Apple Inc.",
             "sector": "Technology",
@@ -149,6 +159,7 @@ class TestFormatters(unittest.TestCase):
     def test_format_info_caps_long_business_summary(self) -> None:
         # longBusinessSummary is a curated field but still an unbounded
         # free-text description, so it must be truncated to the configured cap.
+        """Verify _format_info truncates an overlong longBusinessSummary to the configured cap."""
         long_summary = "Apple designs and sells consumer electronics. " * 60
         self.assertGreater(len(long_summary), self.tool.max_business_summary_chars)
         info = {"longName": "Apple Inc.", "longBusinessSummary": long_summary}
@@ -165,6 +176,7 @@ class TestFormatters(unittest.TestCase):
             self.fail("longBusinessSummary line not emitted")
 
     def test_format_info_respects_custom_summary_cap(self) -> None:
+        """Verify _format_info honors a custom max_business_summary_chars value."""
         long_summary = "x" * 500
         tool = YahooFinanceTool()
         tool.max_business_summary_chars = 50
@@ -178,6 +190,7 @@ class TestFormatters(unittest.TestCase):
         self.assertTrue(body.endswith("…"))
 
     def test_compact_number_suffixes(self) -> None:
+        """Verify _compact_number abbreviates large magnitudes with K/M/B/T suffixes."""
         self.assertEqual(self.tool._compact_number(2.5e12), "2.50T")
         self.assertEqual(self.tool._compact_number(3.4e9), "3.40B")
         self.assertEqual(self.tool._compact_number(5.6e6), "5.60M")
@@ -185,6 +198,7 @@ class TestFormatters(unittest.TestCase):
         self.assertEqual(self.tool._compact_number(123.4), "123.40")
 
     def test_normalize_symbol(self) -> None:
+        """Verify _normalize_symbol uppercases and strips symbols and maps blanks to empty strings."""
         self.assertEqual(self.tool._normalize_symbol("aapl"), "AAPL")
         self.assertEqual(self.tool._normalize_symbol("  aapl  "), "AAPL")
         self.assertEqual(self.tool._normalize_symbol(None), "")
@@ -195,14 +209,17 @@ class TestExecute(unittest.TestCase):
     """execute() wiring with the network layer stubbed out."""
 
     def setUp(self) -> None:
+        """Instantiate a YahooFinanceTool whose network layer each test stubs."""
         self.tool = YahooFinanceTool()
 
     def _mock_ticker(self, info: dict) -> Mock:
+        """Build a Mock ticker whose info attribute holds the given dict."""
         ticker = Mock()
         ticker.info = info
         return ticker
 
     def test_execute_quote_via_mock_ticker(self) -> None:
+        """Verify execute() in quote mode formats data from a mocked ticker."""
         info = {"regularMarketPrice": 150.0, "currency": "USD"}
         ticker = self._mock_ticker(info)
         with patch.object(self.tool, "_get_ticker", return_value=ticker):
@@ -211,6 +228,7 @@ class TestExecute(unittest.TestCase):
         self.assertIn("150.00", out)
 
     def test_execute_info_via_mock_ticker(self) -> None:
+        """Verify execute() in info mode formats data from a mocked ticker."""
         info = {"longName": "Apple Inc.", "sector": "Technology"}
         ticker = self._mock_ticker(info)
         with patch.object(self.tool, "_get_ticker", return_value=ticker):
@@ -221,19 +239,25 @@ class TestExecute(unittest.TestCase):
     def test_execute_history_via_mocked_fetch(self) -> None:
         # A minimal DataFrame-like stub so the real _fetch_history runs
         # end-to-end (reset_index → rename(lower) → to_dict) without pandas.
+        """Verify execute() in history mode renders mocked history rows newest-first."""
         class _FakeHistory:
+            """Minimal pandas.DataFrame-like stub that supports the history methods the tool calls."""
             empty = False
 
             def __init__(self, records):
+                """Store the record list later returned by to_dict()."""
                 self._records = records
 
             def reset_index(self):
+                """Return self as a no-op reset_index()."""
                 return self
 
             def rename(self, columns=None):
+                """Return self as a no-op rename()."""
                 return self
 
             def to_dict(self, orient="records"):
+                """Return the stored records as a list of dicts."""
                 return list(self._records)
 
         records = [
@@ -253,21 +277,26 @@ class TestExecute(unittest.TestCase):
         self.assertLess(out.index("2024-01-02"), out.index("2024-01-01"))
 
     def test_execute_symbol_uppercased_before_fetch(self) -> None:
+        """Verify execute() uppercases the symbol before fetching the ticker."""
         ticker = self._mock_ticker({"regularMarketPrice": 1.0})
         with patch.object(self.tool, "_get_ticker", return_value=ticker) as m:
             self.tool.execute(mode="quote", symbol="aapl")
         m.assert_called_once_with("AAPL")
 
     def test_execute_invalid_mode(self) -> None:
+        """Verify execute() reports an invalid mode without contacting the network."""
         out = self.tool.execute(mode="frobnicate", symbol="AAPL")
         self.assertIn("invalid mode", out)
 
     def test_execute_missing_symbol(self) -> None:
+        """Verify execute() reports a missing required symbol."""
         out = self.tool.execute(mode="quote", symbol="")
         self.assertIn("required", out)
 
     def test_execute_missing_yfinance_reports_install_hint(self) -> None:
+        """Verify execute() surfaces an install hint when yfinance is unavailable."""
         def _no_yfinance(_symbol):
+            """Simulate yfinance being unavailable by raising ImportError."""
             raise ImportError("yfinance")
         with patch.object(self.tool, "_get_ticker", side_effect=_no_yfinance):
             out = self.tool.execute(mode="quote", symbol="AAPL")
@@ -275,7 +304,9 @@ class TestExecute(unittest.TestCase):
         self.assertIn("pip install", out)
 
     def test_execute_surfaces_fetch_errors(self) -> None:
+        """Verify execute() surfaces underlying fetch errors in its output."""
         def _boom(_symbol):
+            """Simulate a fetch failure by raising RuntimeError."""
             raise RuntimeError("network down")
         with patch.object(self.tool, "_get_ticker", side_effect=_boom):
             out = self.tool.execute(mode="quote", symbol="AAPL")
@@ -295,6 +326,7 @@ class TestRegistration(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Load the shipped yaml config and snapshot the current app configer state."""
         self._configer = Configer(path=os.path.abspath(YAML_PATH)).load()
         # Snapshot the global ApplicationConfigManager state. The registration
         # tests below install their own AppConfiger to drive the real
@@ -308,9 +340,11 @@ class TestRegistration(unittest.TestCase):
             self._prev_app_configer = None
 
     def tearDown(self) -> None:
+        """Restore the app configer snapshot taken in setUp."""
         ApplicationConfigManager().app_configer = self._prev_app_configer
 
     def test_yaml_resolves_to_tool_component_type(self) -> None:
+        """Verify the shipped yaml resolves to the tool component type."""
         component_configer = ComponentConfiger().load_by_configer(self._configer)
         self.assertEqual(
             component_configer.get_component_config_type(),
@@ -318,12 +352,14 @@ class TestRegistration(unittest.TestCase):
         )
 
     def test_yaml_exposes_module_and_class(self) -> None:
+        """Verify the shipped yaml exposes the YahooFinanceTool module and class."""
         component_configer = ComponentConfiger().load_by_configer(self._configer)
         self.assertEqual(component_configer.metadata_module,
                          "agentuniverse.agent.action.tool.common_tool.yahoo_finance_tool")
         self.assertEqual(component_configer.metadata_class, "YahooFinanceTool")
 
     def test_tool_is_resolvable_through_tool_manager(self) -> None:
+        """Verify the shipped tool is resolvable and correctly configured via ToolManager."""
         tool_configer = ToolConfiger().load_by_configer(self._configer)
         app_configer = AppConfiger()
         app_configer.tool_configer_map = {tool_configer.name: tool_configer}
@@ -339,6 +375,7 @@ class TestRegistration(unittest.TestCase):
                          ["quote", "history", "info"])
 
     def test_registered_tool_executes_without_network(self) -> None:
+        """Verify the registered tool executes a quote without any network access."""
         tool_configer = ToolConfiger().load_by_configer(self._configer)
         app_configer = AppConfiger()
         app_configer.tool_configer_map = {tool_configer.name: tool_configer}

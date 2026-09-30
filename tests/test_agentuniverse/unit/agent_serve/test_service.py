@@ -17,6 +17,8 @@ from tests.test_agentuniverse.mock.agent_serve.mock_agent import MockAgent
 @patch('agentuniverse.agent_serve.service.Agent', new=MockAgent)
 @patch('agentuniverse.agent_serve.service.ApplicationConfigManager', new=MockApplicationConfigManager)
 def test_service():
+    """Test that service.
+    """
     agent = MockAgent({"test_result": "ok"})
     service_configer = ServiceConfiger()
     service_configer._ServiceConfiger__name = "test_service"

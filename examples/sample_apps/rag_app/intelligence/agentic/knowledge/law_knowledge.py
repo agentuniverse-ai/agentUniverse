@@ -13,7 +13,18 @@ from agentuniverse.agent.action.knowledge.store.document import Document
 
 
 class LawKnowledge(Knowledge):
+    """Knowledge subclass that formats retrieved legal documents for LLM consumption."""
+
     def to_llm(self, retrieved_docs: List[Document]) -> Any:
+        """Serialize the retrieved documents into a single text block for the LLM.
+
+        Args:
+            retrieved_docs (List[Document]): The documents retrieved from the store.
+
+        Returns:
+            Any: A string joining each document's JSON payload (text and source
+                file name) with separator lines.
+        """
 
         retrieved_texts = [json.dumps({
             "text": doc.text,
