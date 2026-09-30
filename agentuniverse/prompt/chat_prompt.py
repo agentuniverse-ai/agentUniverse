@@ -56,8 +56,12 @@ class ChatPrompt(Prompt):
         result = []
         placeholder_pattern = re.compile(r'\{(.*?)}')
         for message in self.messages:
-            matches = placeholder_pattern.findall(message.content)
-            result.extend(matches)
+            content_parts = message.content if isinstance(message.content, list) else [message.content]
+            for part in content_parts:
+                if isinstance(part, dict):
+                    part = part.get('text')
+                if isinstance(part, str):
+                    result.extend(placeholder_pattern.findall(part))
         return result
 
     def generate_image_prompt(self, image_urls: list[str]) -> None:

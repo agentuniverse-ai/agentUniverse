@@ -29,6 +29,8 @@ class EndNode(Node):
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
         inputs: EndNodeInputParams = self._data.inputs
+        if inputs is None or inputs.prompt is None:
+            raise ValueError("End node prompt configuration is required.")
         prompt: NodeInfoParams = inputs.prompt
         if isinstance(prompt.value, dict):
             prompt_val = prompt.value.get('content', '')
@@ -38,7 +40,7 @@ class EndNode(Node):
         # Extract variables from the prompt template
         template_variables = re.findall(r'\{\{(.*?)\}\}', prompt_val)
         # Resolve the input parameters
-        end_node_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
+        end_node_input_params = self._resolve_input_params(inputs.input_param or [], workflow_output)
 
         # Replace variables in the prompt
         try:
@@ -51,6 +53,8 @@ class EndNode(Node):
             raise ValueError(f"Error processing template variables: {e}")
 
         output_params: List[NodeOutputParams] = self._data.outputs
+        if not output_params:
+            raise ValueError("End node output configuration is required.")
         output_param: NodeOutputParams = output_params[0]
         output_param.value = prompt_val
 

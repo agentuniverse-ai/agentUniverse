@@ -104,7 +104,7 @@ class FrameworkContextManager:
             for var_name in self.context_dict.keys():
                 try:
                     context_values[var_name] = copy.deepcopy(self.get_context(var_name))
-                except:
+                except Exception:
                     context_values[var_name] = self.get_context(var_name)
         return context_values
 

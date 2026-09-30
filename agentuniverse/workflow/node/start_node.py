@@ -25,6 +25,8 @@ class StartNode(Node):
         start_params: dict = workflow_output.workflow_start_params
         start_val = start_params.get('input', '')
         output_params: List[NodeOutputParams] = self._data.outputs
+        if not output_params:
+            raise ValueError("Start node output configuration is required.")
         output_params[0].value = start_val
         workflow_output.workflow_parameters[self.id] = output_params
         return NodeOutput(node_id=self.id, status=NodeStatusEnum.SUCCEEDED, result=output_params)
