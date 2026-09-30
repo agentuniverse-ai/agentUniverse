@@ -26,6 +26,14 @@ def stream_output(output_stream: Queue, data: dict):
 
 
 def _replace_new_line(match: re.Match[str]) -> str:
+    """Escape newlines, carriage returns, tabs and quotes inside the matched value so it stays on one JSON line.
+
+    Args:
+        match(re.Match): The regex match covering the quoted value.
+
+    Returns:
+        str: The reconstructed value with escaped characters.
+    """
     value = match.group(2)
     value = re.sub(r"\n", r"\\n", value)
     value = re.sub(r"\r", r"\\r", value)
@@ -166,6 +174,15 @@ def _parse_json(
         json_str: str, *, parser: Callable[[str], Any] = parse_partial_json
 ) -> dict:
     # Strip whitespace and newlines from the start and end
+    """Parse a json string after stripping surrounding whitespace/backticks and escaping embedded newlines.
+
+    Args:
+        json_str(str): The json string to parse.
+        parser: Callable used to parse the cleaned json string.
+
+    Returns:
+        dict: The parsed json object.
+    """
     json_str = json_str.strip().strip("`")
 
     # handle newlines and other special characters inside the returned value

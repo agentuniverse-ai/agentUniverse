@@ -67,6 +67,14 @@ _BUILTIN_PATTERNS: Dict[str, str] = {
 # 13-16 digit run is not treated as a credit card and 999.999.999.999 is not
 # treated as an IP. Entities without an entry here have no extra check.
 def _luhn_ok(match: "re.Match") -> bool:
+    """Return True when the matched digit run passes the Luhn checksum.
+
+    Args:
+        match(re.Match): A credit-card shaped match.
+
+    Returns:
+        bool: True for a valid Luhn number, False otherwise.
+    """
     digits = match.group(0)
     total, parity = 0, len(digits) % 2
     for i, ch in enumerate(digits):
@@ -80,6 +88,14 @@ def _luhn_ok(match: "re.Match") -> bool:
 
 
 def _ipv4_ok(match: "re.Match") -> bool:
+    """Return True when every matched IPv4 octet is within 0-255.
+
+    Args:
+        match(re.Match): An IPv4-shaped match.
+
+    Returns:
+        bool: True when all octets are in range.
+    """
     return all(0 <= int(part) <= 255 for part in match.group(0).split("."))
 
 
@@ -88,12 +104,28 @@ _CN_ID_CHECK_CODES = "10X98765432"
 
 
 def _china_id_card_ok(match: "re.Match") -> bool:
+    """Return True when the matched China resident id passes its weighted check digit.
+
+    Args:
+        match(re.Match): An 18-digit resident-id-shaped match.
+
+    Returns:
+        bool: True for a structurally valid id card number.
+    """
     digits = match.group(0).upper()
     total = sum(int(digits[i]) * _CN_ID_WEIGHTS[i] for i in range(17))
     return _CN_ID_CHECK_CODES[total % 11] == digits[17]
 
 
 def _us_ssn_ok(match: "re.Match") -> bool:
+    """Return True when the matched US SSN obeys the area, group and serial rules.
+
+    Args:
+        match(re.Match): An SSN-shaped match like 123-45-6789.
+
+    Returns:
+        bool: True for an admissible SSN.
+    """
     area, group, serial = match.group(0).split("-")
     area_num = int(area)
     if area_num == 0 or area_num == 666 or 900 <= area_num <= 999:
@@ -157,6 +189,15 @@ class SensitiveDataRedactor(DocProcessor):
                     count = 0
 
                     def _repl(m, validator=validator):
+                        """Replace the match with the redaction text when its validator passes, otherwise keep the original text.
+
+                        Args:
+                            m(re.Match): The regex match under inspection.
+                            validator: The semantic validator to run on the match.
+
+                        Returns:
+                            str: The replacement text or the unchanged original match.
+                        """
                         nonlocal count
                         if validator(m):
                             count += 1

@@ -135,6 +135,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
 
         @retry_decorator
         def _completion_with_retry(**kwargs: Any) -> Any:
+            """Run the synchronous channel completion call wrapped by the retry decorator. Args: **kwargs: Call parameters. Returns: Any: The channel result."""
             return self.llm_channel.call(**kwargs)
 
         return _completion_with_retry(**kwargs)
@@ -153,6 +154,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
 
         @retry_decorator
         async def _completion_with_retry(**kwargs: Any) -> Any:
+            """Run the synchronous channel completion call wrapped by the retry decorator. Args: **kwargs: Call parameters. Returns: Any: The channel result."""
             # Use OpenAI's async api https://github.com/openai/openai-python#async-api
             return await llm.llm.acall(**kwargs)
 
@@ -200,6 +202,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
             run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> AsyncIterator[ChatGenerationChunk]:
+        """Asynchronously stream the channel response and yield one ChatGenerationChunk per received chunk. Args: messages (List[BaseMessage]): The chat messages. stop (Optional[List[str]]): Optional stop words. run_manager: Optional async run manager. **kwargs: Extra options. Yields: ChatGenerationChunk: The streamed chunks."""
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
 
@@ -229,6 +232,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
             yield cg_chunk
 
     def _create_chat_result(self, response: Union[dict, BaseModel]) -> ChatResult:
+        """Build the ChatResult from a channel response by converting each choice message. Args: response (Union[dict, BaseModel]): The channel response. Returns: ChatResult: The converted result."""
         generations = []
         if not isinstance(response, dict):
             response = response.dict()
@@ -254,6 +258,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
     def _convert_delta_to_message_chunk(
             _dict: Mapping[str, Any], default_class: Type[BaseMessageChunk]
     ) -> BaseMessageChunk:
+        """Convert an OpenAI-style delta dict into a BaseMessageChunk of the given default class. Args: _dict (Mapping[str, Any]): The delta dict. default_class (Type[BaseMessageChunk]): The fallback chunk class. Returns: BaseMessageChunk: The converted chunk."""
         role = _dict.get("role")
         content = _dict.get("content") or ""
         additional_kwargs: Dict = {}

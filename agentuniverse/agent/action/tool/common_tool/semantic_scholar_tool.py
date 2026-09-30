@@ -478,6 +478,7 @@ class SemanticScholarTool(Tool):
         min_citation_count: Optional[int],
         open_access_only: bool,
     ) -> Dict[str, Any]:
+        """Normalize the search filter arguments and reject conflicting or invalid filter values."""
         normalized_year = cls._normalize_year_filter(year)
         normalized_date = cls._normalize_date_filter(publication_date_or_year)
         if normalized_year and normalized_date:
@@ -499,6 +500,14 @@ class SemanticScholarTool(Tool):
 
     @staticmethod
     def _search_request_filters(filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Map normalized context filters to Semantic Scholar API query parameter names.
+
+        Args:
+            filters: Normalized filters from _normalize_search_filters.
+
+        Returns:
+            Dict of API query parameters containing only the active filters.
+        """
         params = {}
         mappings = (
             ("year", "year"),
@@ -526,6 +535,13 @@ class SemanticScholarTool(Tool):
         parameter_name: str,
         allowed: Optional[tuple[str, ...]] = None,
     ) -> List[str]:
+        """Split and validate a string or list of filter values into a canonical, de-duplicated list.
+
+        Args:
+            value: Raw filter value: a string, a list of strings, or None.
+            parameter_name: Filter name used in validation error messages.
+            allowed: Optional tuple of supported values whose canonical case is matched.
+        """
         if value is None:
             return []
         if isinstance(value, str):
@@ -552,6 +568,14 @@ class SemanticScholarTool(Tool):
 
     @staticmethod
     def _normalize_year_filter(value: Optional[str]) -> str:
+        """Normalize and validate a year filter and return its trimmed form.
+
+        Args:
+            value: Year filter in YYYY, YYYY-YYYY, YYYY-, or -YYYY form, or None.
+
+        Returns:
+            Trimmed year filter, or an empty string when value is None.
+        """
         if value is None:
             return ""
         normalized = value.strip() if isinstance(value, str) else ""
@@ -567,6 +591,14 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _normalize_date_filter(cls, value: Optional[str]) -> str:
+        """Normalize and validate a publication date or date-range filter.
+
+        Args:
+            value: Date filter as YYYY, YYYY-MM, YYYY-MM-DD, or a colon-delimited inclusive range, or None.
+
+        Returns:
+            Trimmed date filter string, or an empty string when value is None.
+        """
         if value is None:
             return ""
         normalized = value.strip() if isinstance(value, str) else ""
@@ -587,6 +619,15 @@ class SemanticScholarTool(Tool):
 
     @staticmethod
     def _date_boundary(value: str, end: bool) -> date:
+        """Resolve a partial date string into an inclusive boundary date.
+
+        Args:
+            value: Date string in YYYY, YYYY-MM, or YYYY-MM-DD form.
+            end: Whether the boundary ends a range; missing month and day are filled to their maximum.
+
+        Returns:
+            Resolved boundary date.
+        """
         match = re.fullmatch(r"(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?", value)
         if not match:
             raise ValueError("publication dates must use YYYY, YYYY-MM, or YYYY-MM-DD")
@@ -604,6 +645,14 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _normalize_paper_id(cls, value: str) -> str:
+        """Normalize a paper identifier or paper URL into a canonical identifier form.
+
+        Args:
+            value: Raw identifier or URL supplied by the caller.
+
+        Returns:
+            Canonical identifier such as DOI:10.xxxx or a lowercase paper ID hash.
+        """
         paper_id = value.strip()
         paper_id = re.sub(
             r"^https?://(?:www\.)?semanticscholar\.org/paper/(?:[^/]+/)?",
@@ -655,15 +704,25 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _validate_identifier_length(cls, paper_id: str) -> None:
+        """Reject paper identifiers longer than the configured maximum length."""
         if len(paper_id) > cls.MAX_PAPER_IDENTIFIER_LENGTH:
             raise ValueError(f"paper identifier must not exceed {cls.MAX_PAPER_IDENTIFIER_LENGTH} characters")
 
     @staticmethod
     def _is_doi(value: str) -> bool:
+        """Report whether a string resembles a DOI: starts with 10., contains a slash, and has no whitespace."""
         return value.startswith("10.") and "/" in value and not any(character.isspace() for character in value)
 
     @classmethod
     def _parse_paper(cls, paper: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert a raw Semantic Scholar paper object into a normalized result dictionary.
+
+        Args:
+            paper: Raw paper object returned by the API.
+
+        Returns:
+            Normalized paper dictionary with compact snake_case keys.
+        """
         return {
             "paper_id": cls._string_value(paper.get("paperId")),
             "corpus_id": cls._integer_value(paper.get("corpusId")),
@@ -685,6 +744,14 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _parse_batch_paper(cls, paper: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert a raw batch paper object into a compact normalized result dictionary.
+
+        Args:
+            paper: Raw batch paper object returned by the API.
+
+        Returns:
+            Compact normalized paper dictionary with length-bounded fields.
+        """
         return {
             "paper_id": cls._bounded_string(paper.get("paperId"), 64),
             "title": cls._bounded_string(paper.get("title"), cls.MAX_BATCH_TITLE_LENGTH),
@@ -696,6 +763,15 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _parse_relation(cls, item: Dict[str, Any], relation: str) -> Dict[str, Any]:
+        """Convert a citation or reference item into a normalized paper dictionary with relation metadata.
+
+        Args:
+            item: Raw relation item returned by the API.
+            relation: Relation type: citations or references, which selects the paper key.
+
+        Returns:
+            Normalized paper dictionary enriched with contexts, intents, and is_influential.
+        """
         paper_key = "citingPaper" if relation == "citations" else "citedPaper"
         raw_paper = item.get(paper_key)
         paper = cls._parse_paper(raw_paper if isinstance(raw_paper, dict) else {})

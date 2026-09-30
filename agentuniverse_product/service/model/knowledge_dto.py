@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 
 class KnowledgeDTO(BaseModel):
+    """DTO model describing a knowledge.
+    """
     id: Optional[str] = Field(description="ID", default="")
     nickname: Optional[str] = Field(description="knowledge nickname", default="")
     description: Optional[str] = Field(description="knowledge description", default="")

@@ -52,6 +52,14 @@ class DashscopeEmbedding(Embedding):
                        the respective error code and message.
         """
         def post(post_params):
+            """Send a synchronous request to the DashScope embedding endpoint with the given parameters.
+
+            Args:
+                post_params(dict): The request payload.
+
+            Returns:
+                dict: The parsed json response.
+            """
             response = requests.post(
                 url=DASHSCOPE_EMBEDDING_URL,
                 headers={
@@ -116,6 +124,14 @@ class DashscopeEmbedding(Embedding):
                        the respective error code and message.
         """
         async def async_post(post_params):
+            """Send an asynchronous request to the DashScope embedding endpoint with the given parameters.
+
+            Args:
+                post_params(dict): The request payload.
+
+            Returns:
+                dict: The parsed json response.
+            """
             async with aiohttp.ClientSession() as session:
                 async with await session.post(
                         url=DASHSCOPE_EMBEDDING_URL,

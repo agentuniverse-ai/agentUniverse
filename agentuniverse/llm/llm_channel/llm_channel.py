@@ -25,6 +25,11 @@ from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
 
 
 class LLMChannel(ComponentBase):
+    """Base class for LLM channels wrapping an OpenAI-compatible model service.
+
+    Class attributes declare the channel connection settings, model capability
+    flags and the client instances used to call the model.
+    """
     channel_name: Optional[str] = None
     channel_api_key: Optional[str] = None
     channel_api_base: Optional[str] = None
@@ -47,6 +52,14 @@ class LLMChannel(ComponentBase):
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'LLMChannel':
 
+        """Initialize the channel from its component configer.
+
+        Copies the channel and model capability settings onto the instance and
+        ensures ext_params request stream_options with usage included.
+
+        Returns:
+        LLMChannel: the initialized channel.
+        """
         super()._initialize_by_component_configer(component_configer)
         if hasattr(component_configer, "channel_name"):
             self.channel_name = component_configer.channel_name
@@ -90,10 +103,22 @@ class LLMChannel(ComponentBase):
 
     @property
     def channel_model_config(self):
+        """The model request configuration of this channel.
+
+        Returns:
+        Optional[dict]: the raw model config dict, or None when not set.
+        """
         return self._channel_model_config
 
     @channel_model_config.setter
     def channel_model_config(self, config: dict):
+        """Set the model request configuration, applying model capability limits.
+
+        Args:
+        config: model config dict; streaming is disabled when unsupported, max_tokens
+        and max_context_length are clamped by the model support values, ext_params/
+        ext_headers are merged, and remaining keys are stored as instance attributes.
+        """
         self._channel_model_config = config
         if config:
             for key, value in config.items():
@@ -127,6 +152,14 @@ class LLMChannel(ComponentBase):
         return await self._acall(*args, **kwargs)
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
+        """Execute a chat completion synchronously against the model.
+
+        Args:
+        messages: the conversation messages to send; kwargs: extra request options.
+
+        Returns:
+        LLMOutput, or an Iterator of LLMOutput when streaming is enabled.
+        """
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.channel_model_config.get('streaming')
         if 'stream' in kwargs:
             streaming = kwargs.pop('stream')
@@ -163,6 +196,14 @@ class LLMChannel(ComponentBase):
         return self.generate_stream_result(chat_completion)
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
+        """Execute a chat completion asynchronously against the model.
+
+        Args:
+        messages: the conversation messages to send; kwargs: extra request options.
+
+        Returns:
+        LLMOutput, or an AsyncIterator of LLMOutput when streaming is enabled.
+        """
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.channel_model_config.get('streaming')
         if 'stream' in kwargs:
             streaming = kwargs.pop('stream')
@@ -218,6 +259,11 @@ class LLMChannel(ComponentBase):
         return len(encoding.encode(text))
 
     def max_context_length(self) -> int:
+        """The configured maximum context length of this channel.
+
+        Returns:
+        the max_context_length value of the channel model config.
+        """
         return self.channel_model_config.get('max_context_length')
 
     def _new_client(self):

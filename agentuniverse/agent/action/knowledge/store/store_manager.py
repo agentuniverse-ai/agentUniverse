@@ -17,4 +17,9 @@ class StoreManager(ComponentManagerBase[Store]):
     """A singleton manager class of the reader."""
 
     def __init__(self):
+        """Initialize the store manager.
+
+        Binds the manager to the STORE component type so that store
+        components can be registered and fetched by name.
+        """
         super().__init__(ComponentEnum.STORE)

@@ -95,6 +95,12 @@ class DefaultMemoryConverter(BaseMemoryConverter):
     """The default memory converter for SqlAlchemyMemory."""
 
     def __init__(self, table_name: str, **kwargs: Any):
+        """Initialize a default memory converter for the given table name by creating its SQLAlchemy model class.
+
+        Args:
+            table_name(str): The database table name to back the memory model.
+            **kwargs: Extra keyword arguments passed to the parent model.
+        """
         super().__init__(**kwargs)
         self.model_class = create_memory_model(table_name, declarative_base())
 
@@ -163,6 +169,8 @@ class SqliteMemoryStorage(MemoryStorage):
     }
 
     def _new_client(self):
+        """Create the SQLAlchemy engine and session maker from sqldb_path and initialize the database tables.
+        """
         self.engine = create_engine(self.sqldb_path, echo=False)
         self.session = sessionmaker(bind=self.engine)
         self._init_db()
@@ -190,6 +198,8 @@ class SqliteMemoryStorage(MemoryStorage):
         return self
 
     def _init_db(self) -> None:
+        """Create the memory table when it does not exist yet.
+        """
         self._create_table_if_not_exists()
 
     def _create_table_if_not_exists(self) -> None:

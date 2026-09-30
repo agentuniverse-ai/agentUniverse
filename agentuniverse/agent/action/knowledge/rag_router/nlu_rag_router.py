@@ -19,6 +19,8 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 
 class NluRagRouter(RagRouter):
+    """RAG router that delegates store selection to an NLU routing agent and returns query-store pairs limited by store_amount.
+    """
     llm: Optional[dict] = None
     agent_name: str = 'nlu_rag_route_agent'
     store_amount: int = 1
@@ -26,6 +28,15 @@ class NluRagRouter(RagRouter):
     def _rag_route(self, query: Query, store_list: List[str]) \
             -> List[Tuple[Query, str]]:
 
+        """Select the target stores by asking the configured NLU routing agent and filtering its output against the store list.
+
+        Args:
+            query(Query): The knowledge query.
+            store_list(List[str]): Candidate store names.
+
+        Returns:
+            List[Tuple[Query, str]]: The query paired with each selected store name.
+        """
         agent = AgentManager().get_instance_obj(self.agent_name)
         if self.llm:
             agent.agent_model.profile['llm_model'] = self.llm
@@ -46,6 +57,14 @@ class NluRagRouter(RagRouter):
 
     def _initialize_by_component_configer(self,
                                           rag_router_config: ComponentConfiger) -> 'RagRouter':
+        """Initialize the router fields from the rag router configer.
+
+        Args:
+            rag_router_config(ComponentConfiger): The configer containing the router settings.
+
+        Returns:
+            RagRouter: The initialized router instance.
+        """
         super()._initialize_by_component_configer(rag_router_config)
         if hasattr(rag_router_config, "llm"):
             self.llm = rag_router_config.llm

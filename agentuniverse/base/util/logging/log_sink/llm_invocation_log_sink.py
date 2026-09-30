@@ -13,9 +13,16 @@ from agentuniverse.base.util.monitor.monitor import Monitor
 
 
 class LLMInvocationLogSink(BaseFileLogSink):
+    """Log sink that records LLM invocation summaries to a file log."""
+
     log_type: LogTypeEnum = LogTypeEnum.llm_invocation
 
     def process_record(self, record):
+        """Rewrite the record message with the generated LLM invocation log.
+
+        Args:
+            record: The log record dict being processed.
+        """
         record["message"] = self.generate_log(
             used_token=record['extra'].get('used_token'),
             cost_time=record['extra'].get('cost_time'),
@@ -23,6 +30,16 @@ class LLMInvocationLogSink(BaseFileLogSink):
         )
 
     def generate_log(self, used_token: int, cost_time: float, llm_output:  Union[str, dict]) -> str:
+        """Build the LLM invocation log message.
+
+        Args:
+            used_token: The number of tokens consumed by the invocation.
+            cost_time: The invocation elapsed time in seconds.
+            llm_output: The LLM output, either a plain string or a dict.
+
+        Returns:
+            str: The invocation chain prefix followed by the invocation details.
+        """
         log_str = f" LLM cost {cost_time:.2f} seconds"
         if used_token:
             log_str += f", token usage: {used_token}"

@@ -21,7 +21,11 @@ from ...base.util.logging.logging_util import LOGGER
 
 # Patch original flask request so it can be dumped by loguru.
 class SerializableRequest:
+    """Plain-data snapshot of a Flask request: method, path, args, form and headers.
+    Installed as the pickle representation of the werkzeug LocalProxy so requests can be serialized, e.g. dumped by loguru.
+    """
     def __init__(self, method, path, args, form, headers):
+        """Store the request fields carried by this serializable snapshot."""
         self.method = method
         self.path = path
         self.args = args
@@ -29,10 +33,14 @@ class SerializableRequest:
         self.headers = headers
 
     def __repr__(self):
+        """Return a compact string identifying the snapshot by method and path."""
         return f"<SerializableRequest method={self.method} path={self.path}>"
 
 
 def localproxy_reduce_ex(self, protocol):
+    """Reduction function installed as LocalProxy.__reduce_ex__ so request proxies can be pickled.
+    Rebuilds the proxy as a SerializableRequest populated from its current request object.
+    """
     real_obj = self._get_current_object()
     return (
         SerializableRequest,
@@ -45,6 +53,13 @@ LocalProxy.__reduce_ex__ = localproxy_reduce_ex
 
 # log stream response
 def timed_generator(generator, start_time, context_prefix):
+    """Wrap a stream generator and emit a 'Stream finished' log with the elapsed time when the stream ends.
+
+    Args:
+    generator: Underlying generator streamed to the client.
+    start_time: time.time() value captured when the request started.
+    context_prefix: Logging context prefix attached to the record.
+    """
     try:
         for data in generator:
             yield data
@@ -65,6 +80,7 @@ app.json.ensure_ascii = False
 
 @app.before_request
 def before():
+    """Flask before_request hook that logs the incoming request and stores its start time on flask.g."""
     logger.bind(
         log_type=LogTypeEnum.flask_request,
         flask_request=request,
@@ -75,6 +91,7 @@ def before():
 
 @app.after_request
 def after_request(response):
+    """Flask after_request hook that logs the completed response with its elapsed time, skipping text/event-stream responses."""
     if not response.mimetype == "text/event-stream":
         logger.bind(
             log_type=LogTypeEnum.flask_response,
@@ -94,11 +111,13 @@ def teardown_resource(exception):
 
 @app.route("/echo")
 def echo():
+    """Return the welcome message served at the /echo endpoint."""
     return 'Welcome to agentUniverse!!!'
 
 
 @app.route("/liveness")
 def liveness():
+    """Liveness health check endpoint returning a standard success response."""
     return make_standard_response(success=True,
                                   result="liveness health check pass!")
 

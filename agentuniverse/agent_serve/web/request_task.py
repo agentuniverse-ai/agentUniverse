@@ -76,6 +76,14 @@ class RequestTask:
         self.async_task = None
 
     def update_request_do(self, force: bool = False):
+        """Persist the current request to the database.
+
+        The request is updated only when the configured update interval has
+        elapsed since the last update, or when force is set to True.
+
+        Args:
+            force(bool): Whether to skip the interval check and update anyway.
+        """
         current_time = time.time()
         if_update = current_time - self.last_update_time >= RequestLibrary().update_interval
 
@@ -180,6 +188,14 @@ class RequestTask:
             yield "data:" + json.dumps({"error": {"error_msg": str(e)}}) + "\n\n "
 
     async def async_receive_steps(self) -> AsyncIterator[str]:
+        """Yield the stream data by getting data from the async queue.
+
+        Runs the task to its async queue, emits each process chunk as an SSE
+        data frame, and finally yields the awaited task result.
+
+        Yields:
+            AsyncIterator[str]: SSE data frames of process output and result.
+        """
         self.next_state(TaskStateEnum.RUNNING)
         first_chunk = True
         start_time = time.time()
@@ -281,6 +297,14 @@ class RequestTask:
         return self.receive_steps()
 
     def user_stream_run(self):
+        """Run the service in a separate thread and yield the user stream.
+
+        Starts the wrapped function in a background thread and returns the
+        user-facing stream generator of raw output frames.
+
+        Returns:
+            Generator: the user stream produced by user_receive_steps.
+        """
         self.kwargs['output_stream'] = self.queue
         self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func),
                                             kwargs=self.kwargs)
@@ -288,6 +312,14 @@ class RequestTask:
         return self.user_receive_steps()
 
     async def async_stream_run(self) -> AsyncIterator[str]:
+        """Run the service in async mode and yield the result stream.
+
+        Creates the async task on the current event loop and forwards every
+        frame produced by async_receive_steps to the caller.
+
+        Yields:
+            AsyncIterator[str]: process chunks of the running async service.
+        """
         self.kwargs['output_stream'] = self.async_queue
         loop = asyncio.get_event_loop()
         self.async_task = loop.create_task(self.func(**self.kwargs))
@@ -341,6 +373,14 @@ class RequestTask:
             break
 
     def add_request_do(self):
+        """Create the request data object and persist it when saving is on.
+
+        Extracts the query from the known keyword arguments and builds a
+        RequestDO initialized in the INIT state.
+
+        Returns:
+            RequestDO: the newly created request data object.
+        """
         query_keys = ['question', 'query_content', 'query', 'request', 'input']
         query = next((self.kwargs[key] for key in query_keys if
                       self.kwargs.get(key) is not None),

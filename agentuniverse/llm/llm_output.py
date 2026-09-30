@@ -33,15 +33,30 @@ FINISH_REASON_TYPE = Literal[
 
 
 class FunctionCall(BaseModel):
+    """Immutable record of a tool/function call produced by an LLM, holding the function name and its arguments."""
     name: str
     arguments: Dict[str, Any] = Field(default_factory=dict)
 
     class Config:
+        """Pydantic model configuration: forbid mutation and freeze the model."""
         allow_mutation = False
         frozen = True
 
 
 def prune_none(obj):
+    """Recursively remove ``None`` values from a nested dict/list structure.
+
+    Dict entries and list items whose value is ``None`` are dropped, and
+    nested dicts and lists are pruned the same way. Any other object is
+    returned unchanged.
+
+    Args:
+        obj: A dict, list, or any other object.
+
+    Returns:
+        The pruned structure, or ``obj`` itself when it is neither a
+        dict nor a list.
+    """
     if isinstance(obj, dict):
         return {k: prune_none(v) for k, v in obj.items() if v is not None}
 
@@ -51,6 +66,7 @@ def prune_none(obj):
 
 
 class TokenUsage(BaseModel):
+    """Aggregated token usage counters for an LLM interaction, split by input/output modality and cached tokens."""
     # ======== Basic fields. ========
     # Input
     text_in: int = 0
@@ -67,6 +83,7 @@ class TokenUsage(BaseModel):
 
     @property
     def prompt_tokens(self) -> int:
+        """Total number of prompt (input) tokens including cached input."""
         return self.text_in + self.image_in + self.audio_in + self.cached_in
 
     @property
@@ -82,14 +99,17 @@ class TokenUsage(BaseModel):
 
     @property
     def cached_tokens(self) -> int:
+        """Total number of cached tokens across input and output."""
         return self.cached_in + self.cached_out
 
     @property
     def reasoning_tokens(self) -> int:
+        """Number of reasoning (output) tokens."""
         return self.reasoning_out
 
     @property
     def total_tokens(self) -> int:
+        """Total number of tokens, prompt plus completion."""
         return self.prompt_tokens + self.completion_tokens
 
     # ======== Entry point for parsing ========
