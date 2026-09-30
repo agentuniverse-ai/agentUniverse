@@ -123,10 +123,14 @@ class HierarchicalRegexTextSplitter(DocProcessor):
         """
         # merge all documents first
         merged_docs = origin_docs
-        if self.merge_first and len(origin_docs) > 0:
-            for _doc in origin_docs[1:]:
-                origin_docs[0].text += "\n" + _doc.text
-            merged_docs = [origin_docs[0]]
+        if self.merge_first and origin_docs:
+            first = origin_docs[0]
+            merged_docs = [Document(
+                text="\n".join((doc.text or "") for doc in origin_docs),
+                metadata=dict(first.metadata or {}),
+                embedding=list(first.embedding),
+                keywords=set(first.keywords),
+            )]
         hierarchical_docs = []
         for _doc in merged_docs:
             hierarchical_docs.extend(self._hierarchical_split_single_doc(_doc))

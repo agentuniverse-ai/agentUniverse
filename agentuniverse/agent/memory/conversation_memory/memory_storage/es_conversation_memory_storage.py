@@ -107,6 +107,8 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             session_id (str): The session id of the memory to delete.
             agent_id (str): The agent id of the memory to delete.
         """
+        if session_id is None and agent_id is None and trace_id is None:
+            return
         url = f'{self.es_url}/{self.index_name}/_delete_by_query'
         query = {
             "query": {
@@ -143,6 +145,8 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             agent_id (str): The agent id of the memory to add.
         """
         message_list = ConversationMessage.check_and_convert_message(message_list, session_id)
+        if not message_list:
+            return
         actions = []
         for message in message_list:
             action = self.memory_converter.to_es_action(message, session_id=session_id, agent_id=agent_id, **kwargs)
@@ -277,6 +281,7 @@ class DefaultMemoryConverter:
 
     def to_es_action(self, message: ConversationMessage, session_id: str = None, agent_id: str = None, **kwargs) -> str:
         """Convert a message to an Elasticsearch action (index operation)."""
+        metadata = message.metadata or {}
         document = {
             "session_id": session_id,
             "content": message.content,
@@ -286,11 +291,11 @@ class DefaultMemoryConverter:
             "target": message.target,
             "target_type": message.target_type,
             "type": message.type,
-            "prefix": message.metadata.get("prefix"),
-            "timestamp": message.metadata.get("timestamp", datetime.datetime.now()).isoformat(),
-            "params": message.metadata.get("params"),
-            "pair_id": message.metadata.get("pair_id"),
-            "additional_args": message.metadata.get("additional_args")
+            "prefix": metadata.get("prefix"),
+            "timestamp": metadata.get("timestamp", datetime.datetime.now()).isoformat(),
+            "params": metadata.get("params"),
+            "pair_id": metadata.get("pair_id"),
+            "additional_args": metadata.get("additional_args")
 
         }
         index_info = {

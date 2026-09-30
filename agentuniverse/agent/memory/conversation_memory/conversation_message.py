@@ -36,7 +36,7 @@ class ConversationMessage(Message):
         content (Optional[str]): Message content.
         metadata (Optional[dict]): The metadata of the message.
     """
-    id: Optional[str | int] = uuid.uuid4().hex
+    id: Optional[str | int] = Field(default_factory=lambda: uuid.uuid4().hex)
     trace_id: Optional[str] = None
     conversation_id: Optional[str] = None
     source: Optional[str] = None

@@ -65,6 +65,7 @@ class RecursiveCharacterTextSplitter(DocProcessor):
             self.chunk_overlap = doc_processor_configer.chunk_overlap
         if hasattr(doc_processor_configer, "separators"):
             self.separators = doc_processor_configer.separators
+        self.__splitter = None
         return self
 
 
