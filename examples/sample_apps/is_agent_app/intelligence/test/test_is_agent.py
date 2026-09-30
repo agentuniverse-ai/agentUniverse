@@ -19,13 +19,13 @@ class TestISAgent(unittest.TestCase):
     """Test cases for IS agent."""
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """Set up test environment."""
         # Initialize AgentUniverse
         # Path is relative to where the test is run from (is_agent_app/)
         AgentUniverse().start(config_path='config/config.toml')
 
-    def test_is_agent_basic(self):
+    def test_is_agent_basic(self) -> None:
         """Test basic IS agent execution."""
         agent: Agent = AgentManager().get_instance_obj('demo_is_agent')
         self.assertIsNotNone(agent)
@@ -42,7 +42,7 @@ class TestISAgent(unittest.TestCase):
         self.assertTrue(len(output) > 0)
         print(f"\n=== Test Basic IS Agent ===\n{output}\n")
 
-    def test_is_agent_code_implementation(self):
+    def test_is_agent_code_implementation(self) -> None:
         """Test IS agent for code implementation task."""
         agent: Agent = AgentManager().get_instance_obj('demo_is_agent')
         self.assertIsNotNone(agent)
@@ -59,7 +59,7 @@ class TestISAgent(unittest.TestCase):
         self.assertTrue(len(output) > 0)
         print(f"\n=== Test Code Implementation ===\n{output}\n")
 
-    def test_is_agent_with_supervision(self):
+    def test_is_agent_with_supervision(self) -> None:
         """Test IS agent with multiple checkpoints and supervision."""
         agent: Agent = AgentManager().get_instance_obj('demo_is_agent')
         self.assertIsNotNone(agent)

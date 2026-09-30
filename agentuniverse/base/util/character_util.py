@@ -7,7 +7,7 @@
 # @FileName: character_util.py
 
 
-def show_au_start_banner():
+def show_au_start_banner() -> None:
     python_art_text = f"""
 ╔═════════════════════════════════════════════════════════╗
 ║   █ █ █▀▀ █   █▀▀ █▀█ █▄█ █▀▀   ▀█▀ █▀█                 ║
@@ -22,7 +22,7 @@ def show_au_start_banner():
     print_gradient_text(python_art_text, blue_colors)
 
 
-def print_gradient_text(text, colors_range):
+def print_gradient_text(text, colors_range) -> None:
     length = len(text)
     result = []
 

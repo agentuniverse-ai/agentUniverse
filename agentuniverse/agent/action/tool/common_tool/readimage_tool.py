@@ -51,7 +51,7 @@ def enhance_image(image):
     filtered = cv2.bilateralFilter(enhanced, 9, 75, 75)
     return filtered
 
-def detect_text_regions(image, east_model='frozen_east_text_detection.pb', min_confidence=0.5, width=320, height=320):
+def detect_text_regions(image, east_model='frozen_east_text_detection.pb', min_confidence=0.5, width=320, height=320) -> list:
     """
     Detect text regions in the image using the EAST text detection model.
     Returns a list of image regions (as numpy arrays) corresponding to text areas.
@@ -126,7 +126,7 @@ def detect_text_regions(image, east_model='frozen_east_text_detection.pb', min_c
             regions.append(region)
     return regions
 
-def ocr_on_regions(regions, lang='chi_sim+eng'):
+def ocr_on_regions(regions, lang='chi_sim+eng') -> str:
     """
     Perform OCR on each text region separately and concatenate the results.
     """
@@ -143,19 +143,19 @@ def ocr_on_regions(regions, lang='chi_sim+eng'):
         texts.append(text)
     return "\n".join(texts)
 
-def clean_extracted_text(text):
+def clean_extracted_text(text) -> str:
     """
     Clean the OCR output text by removing extra whitespace.
     """
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-def save_text_to_file(text, output_file='extracted_text.txt'):
+def save_text_to_file(text, output_file='extracted_text.txt') -> None:
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(text)
     print(f"Text content saved to {output_file}")
 
-def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng'):
+def extract_text_from_image(image_path, use_east=True, lang='chi_sim+eng') -> str:
     """
     Extract text from an image:
       - First, enhance the image.

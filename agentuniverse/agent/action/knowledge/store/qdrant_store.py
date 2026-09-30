@@ -133,7 +133,7 @@ class QdrantStore(Store):
             vector = document.embedding
             if (not vector or len(vector) == 0) and self.embedding_model:
                 vector = EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([document.text])[0]
-            if not vector or len(vector) == 0:
+            if not vector:
                 continue
 
             self._ensure_collection(dim=len(vector))

@@ -68,35 +68,35 @@ class Store(ComponentBase):
         """Asynchronously query documents."""
         raise NotImplementedError
 
-    def insert_document(self, documents: List[Document], **kwargs):
+    def insert_document(self, documents: List[Document], **kwargs) -> None:
         """Insert documents into the store."""
         raise NotImplementedError
 
-    async def async_insert_document(self, documents: List[Document], **kwargs):
+    async def async_insert_document(self, documents: List[Document], **kwargs) -> None:
         """Asynchronously insert documents into the store."""
         raise NotImplementedError
 
-    def delete_document(self, document_id: str, **kwargs):
+    def delete_document(self, document_id: str, **kwargs) -> None:
         """Delete the specific document by the document id."""
         raise NotImplementedError
 
-    async def async_delete_document(self, document_id: str, **kwargs):
+    async def async_delete_document(self, document_id: str, **kwargs) -> None:
         """Asynchronously delete the specific document by the document id."""
         raise NotImplementedError
 
-    def upsert_document(self, documents: List[Document], **kwargs):
+    def upsert_document(self, documents: List[Document], **kwargs) -> None:
         """Upsert document into the store."""
         raise NotImplementedError
 
-    async def async_upsert_document(self, documents: List[Document], **kwargs):
+    async def async_upsert_document(self, documents: List[Document], **kwargs) -> None:
         """Asynchronously upsert documents into the store."""
         raise NotImplementedError
 
-    def update_document(self, documents: List[Document], **kwargs):
+    def update_document(self, documents: List[Document], **kwargs) -> None:
         """Update document into the store."""
         raise NotImplementedError
 
-    async def async_update_document(self, documents: List[Document], **kwargs):
+    async def async_update_document(self, documents: List[Document], **kwargs) -> None:
         """Asynchronously update documents into the store."""
         raise NotImplementedError
 

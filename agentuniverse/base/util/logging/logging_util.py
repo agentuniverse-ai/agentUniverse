@@ -225,7 +225,7 @@ def add_sink(sink, log_level: Optional[LOG_LEVEL] = None) -> bool:
     return False
 
 
-def is_in_coroutine_context():
+def is_in_coroutine_context() -> bool:
     try:
         asyncio.current_task()
         return True
@@ -233,7 +233,7 @@ def is_in_coroutine_context():
         return False
 
 
-def init_loggers(config_path: Optional[str] = None):
+def init_loggers(config_path: Optional[str] = None) -> None:
     """Parse config and initialize all loggers and handlers.
 
     Args:

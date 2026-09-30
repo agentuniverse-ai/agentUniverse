@@ -31,7 +31,7 @@ class ThreadWithReturnValue(Thread):
         self.error = None
         self._context_pack = ContextCoordinator.save_context()
 
-    def run(self):
+    def run(self) -> None:
         """Run the target func and save result in _return."""
         if self.target is not None:
             # set the context values in the thread
@@ -71,7 +71,7 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
         future = ContextAwareFuture()
         future._context_pack = context_pack
 
-        def context_wrapper():
+        def context_wrapper() -> None:
             otel_token = None
             try:
                 otel_token = ContextCoordinator.recover_context(context_pack)
