@@ -83,11 +83,11 @@ class LLMSpanManager:
         init_new_token_usage()
         return self.span
 
-    def defer_cleanup(self):
+    def defer_cleanup(self) -> None:
         """Defer automatic cleanup - caller must call cleanup() manually."""
         self.auto_cleanup = False
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Manually cleanup span and context."""
         if self.span:
             try:
@@ -346,7 +346,7 @@ class LLMInstrumentor(BaseInstrumentor):
         self._original_llm_wrapper_sync = None
         self._original_llm_wrapper_async = None
 
-    def instrumentation_dependencies(self):
+    def instrumentation_dependencies(self) -> list:
         return []
 
     def _instrument(self, **kwargs):

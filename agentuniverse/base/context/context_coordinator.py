@@ -101,7 +101,7 @@ class ContextCoordinator:
         return None
 
     @classmethod
-    def end_context(cls):
+    def end_context(cls) -> None:
         """Clear all active contexts and close resources safely.
 
                 This method resets framework variables, clears tracing state, and

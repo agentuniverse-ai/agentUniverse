@@ -24,7 +24,7 @@ from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_he
 )
 
 
-def demo_prompt_generation():
+def demo_prompt_generation() -> None:
     """Demo prompt generation functionality."""
     print("Prompt Generator Demo")
     print("=" * 50)
@@ -42,7 +42,7 @@ def demo_prompt_generation():
     demo_supported_types()
 
 
-def demo_react_agent_prompt():
+def demo_react_agent_prompt() -> None:
     """Demo ReAct agent prompt generation."""
     print("\nDemo 1: ReAct Agent Prompt Generation")
     print("-" * 40)
@@ -78,7 +78,7 @@ def demo_react_agent_prompt():
         print(f"Error generating ReAct prompt: {str(e)}")
 
 
-def demo_rag_agent_prompt():
+def demo_rag_agent_prompt() -> None:
     """Demo RAG agent prompt generation."""
     print("\nDemo 2: RAG Agent Prompt Generation")
     print("-" * 40)
@@ -114,7 +114,7 @@ def demo_rag_agent_prompt():
         print(f"Error generating RAG prompt: {str(e)}")
 
 
-def demo_custom_scenario():
+def demo_custom_scenario() -> None:
     """Demo custom scenario prompt generation."""
     print("\nDemo 3: Custom Scenario Prompt Generation")
     print("-" * 40)
@@ -150,7 +150,7 @@ def demo_custom_scenario():
         print(f"Error generating Planning prompt: {str(e)}")
 
 
-def demo_supported_types():
+def demo_supported_types() -> None:
     """Demo supported agent types listing."""
     print("\nDemo 4: Supported Agent Types")
     print("-" * 40)
@@ -168,7 +168,7 @@ def demo_supported_types():
         print(f"Error listing agent types: {str(e)}")
 
 
-def main():
+def main() -> None:
     """Main function to run all demos."""
     try:
         demo_prompt_generation()

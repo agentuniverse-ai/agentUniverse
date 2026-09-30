@@ -278,7 +278,7 @@ class ContextCompressor(ComponentBase):
         Returns:
             True if compression is valid, False otherwise
         """
-        if len(segments) == 0:
+        if not segments:
             return False
 
         if metrics.compressed_tokens > target_tokens:

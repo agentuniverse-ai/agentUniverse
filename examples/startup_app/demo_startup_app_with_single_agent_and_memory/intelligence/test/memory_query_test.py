@@ -8,14 +8,14 @@ from agentuniverse.base.agentuniverse import AgentUniverse
 AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 
-def test_query_memory(s_id: str):
+def test_query_memory(s_id: str) -> None:
     memory_instance: Memory = MemoryManager().get_instance_obj('global_conversation_memory')
     messages: List[Message] = memory_instance.get(session_id=s_id, top_k=500, type=['input', 'output'])
     for message in messages:
         # print(message.trace_id)
         print(f"{message.metadata.get('timestamp')} {message.metadata.get('prefix')}: {message.content}")
 
-def test_query_memory_with_trace_id(s_id: str):
+def test_query_memory_with_trace_id(s_id: str) -> None:
     memory_instance: Memory = MemoryManager().get_instance_obj('global_conversation_memory')
     messages: List[Message] = memory_instance.get(session_id=s_id, trace_id="39fbcb33aca8427cb59c37d6f39adc10",
                                                   type=['input', 'output'])

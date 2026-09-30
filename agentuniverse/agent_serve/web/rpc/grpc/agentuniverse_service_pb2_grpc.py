@@ -37,27 +37,27 @@ class AgentUniverseServiceServicer(object):
     """RPC 服务定义
     """
 
-    def service_run(self, request, context):
+    def service_run(self, request, context) -> None:
         """方法定义
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def service_run_async(self, request, context):
+    def service_run_async(self, request, context) -> None:
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def service_run_result(self, request, context):
+    def service_run_result(self, request, context) -> None:
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_AgentUniverseServiceServicer_to_server(servicer, server):
+def add_AgentUniverseServiceServicer_to_server(servicer, server) -> None:
     rpc_method_handlers = {
             'service_run': grpc.unary_unary_rpc_method_handler(
                     servicer.service_run,

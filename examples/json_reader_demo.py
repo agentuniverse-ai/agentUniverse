@@ -18,7 +18,7 @@ from pathlib import Path
 from agentuniverse.agent.action.knowledge.reader.file.json_reader import JsonReader
 
 
-def demo_basic_usage():
+def demo_basic_usage() -> None:
     """Basic usage of JsonReader"""
     print("=" * 60)
     print("Demo 1: Basic JSON Object Loading")
@@ -55,7 +55,7 @@ def demo_basic_usage():
         Path(temp_path).unlink()
 
 
-def demo_array_loading():
+def demo_array_loading() -> None:
     """Loading JSON array"""
     print("\n" + "=" * 60)
     print("Demo 2: JSON Array Loading")
@@ -84,7 +84,7 @@ def demo_array_loading():
         Path(temp_path).unlink()
 
 
-def demo_with_metadata():
+def demo_with_metadata() -> None:
     """Loading with custom metadata"""
     print("\n" + "=" * 60)
     print("Demo 3: Loading with Custom Metadata")
@@ -124,7 +124,7 @@ def demo_with_metadata():
         Path(temp_path).unlink()
 
 
-def demo_unicode_support():
+def demo_unicode_support() -> None:
     """Demonstrating Unicode support"""
     print("\n" + "=" * 60)
     print("Demo 4: Unicode Support (中文支持)")
@@ -157,7 +157,7 @@ def demo_unicode_support():
         Path(temp_path).unlink()
 
 
-def demo_error_handling():
+def demo_error_handling() -> None:
     """Demonstrating error handling"""
     print("\n" + "=" * 60)
     print("Demo 5: Error Handling")

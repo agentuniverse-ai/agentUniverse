@@ -142,7 +142,7 @@ class PeerAgentTemplate(AgentTemplate):
 
         peer_memory.add(message_list, **agent_input)
 
-    def build_expert_framework(self, input_object: InputObject):
+    def build_expert_framework(self, input_object: InputObject) -> None:
         """Build expert framework from the expert framework tool selector or raw dictionary context.
 
         Args:

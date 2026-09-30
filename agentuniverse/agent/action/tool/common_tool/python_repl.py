@@ -59,7 +59,7 @@ class PythonREPLTool(Tool):
         if len(matches) == 0:
             pattern = re.compile(r"```py(.*?)``", re.DOTALL)
             matches = pattern.findall(input)
-        if len(matches) == 0:
+        if not matches:
             return self.client.run(input)
         res = self.client.run(matches[0])
         if res == "" or res is None:
