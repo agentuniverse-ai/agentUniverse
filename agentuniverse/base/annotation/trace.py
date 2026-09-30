@@ -11,6 +11,8 @@ import inspect
 import uuid
 from functools import wraps
 
+from opentelemetry import context as otel_context
+
 from agentuniverse.agent.memory.conversation_memory.conversation_memory_module import \
     ConversationMemoryModule
 from agentuniverse.base.config.application_configer.application_config_manager import \
@@ -118,10 +120,13 @@ async def _default_llm_wrapper_async(func, *args, **kwargs):
     else:
         # streaming
         async def gen_iterator():
-            async for chunk in result:
-                yield chunk
-            # add llm invocation info to monitor
-            Monitor.pop_invocation_chain()
+            try:
+                async for chunk in result:
+                    yield chunk
+            finally:
+                # add llm invocation info to monitor
+                # runs also when the consumer aborts the stream early
+                Monitor.pop_invocation_chain()
 
         return gen_iterator()
 
@@ -141,9 +146,13 @@ def _default_llm_wrapper_sync(func, *args, **kwargs):
     else:
         # streaming
         def gen_iterator():
-            for chunk in result:
-                yield chunk
-            Monitor.pop_invocation_chain()
+            try:
+                for chunk in result:
+                    yield chunk
+            finally:
+                # add llm invocation info to monitor
+                # runs also when the consumer aborts the stream early
+                Monitor.pop_invocation_chain()
 
         return gen_iterator()
 
@@ -198,36 +207,49 @@ def _get_agent_info(func, *args, **kwargs):
 async def _default_agent_wrapper_async(func, *args, **kwargs):
     agent_instance, source, agent_input, start_info, pair_id = _get_agent_info(
         func, *args, **kwargs)
-    with InvocationChainContext(source=source, node_type='agent'):
-        kwargs['memory_source_info'] = start_info
-        ConversationMemoryModule().add_agent_input_info(start_info,
-                                                        agent_instance,
-                                                        agent_input,
-                                                        pair_id)
-        result = await func(*args, **kwargs)
-        ConversationMemoryModule().add_agent_result_info(agent_instance,
-                                                         result,
-                                                         start_info,
-                                                         pair_id)
-        return result
+    # Agent.run may attach an OTel context derived from a caller-supplied
+    # trace_id. Restore the previous context afterwards so server threads do
+    # not carry one request's trace into the next request.
+    saved_otel_context = otel_context.get_current()
+    try:
+        with InvocationChainContext(source=source, node_type='agent'):
+            kwargs['memory_source_info'] = start_info
+            ConversationMemoryModule().add_agent_input_info(start_info,
+                                                            agent_instance,
+                                                            agent_input,
+                                                            pair_id)
+            result = await func(*args, **kwargs)
+            ConversationMemoryModule().add_agent_result_info(agent_instance,
+                                                             result,
+                                                             start_info,
+                                                             pair_id)
+            return result
+    finally:
+        otel_context.attach(saved_otel_context)
 
 
 def _default_agent_wrapper_sync(func, *args, **kwargs):
     # get agent input from arguments
     agent_instance, source, agent_input, start_info, pair_id = _get_agent_info(
         func, *args, **kwargs)
-    with InvocationChainContext(source=source, node_type='agent'):
-        kwargs['memory_source_info'] = start_info
-        ConversationMemoryModule().add_agent_input_info(start_info,
-                                                        agent_instance,
-                                                        agent_input,
-                                                        pair_id)
-        result = func(*args, **kwargs)
-        ConversationMemoryModule().add_agent_result_info(agent_instance,
-                                                         result,
-                                                         start_info,
-                                                         pair_id)
-        return result
+    # See _default_agent_wrapper_async: restore the OTel context that was
+    # current before this traced agent run.
+    saved_otel_context = otel_context.get_current()
+    try:
+        with InvocationChainContext(source=source, node_type='agent'):
+            kwargs['memory_source_info'] = start_info
+            ConversationMemoryModule().add_agent_input_info(start_info,
+                                                            agent_instance,
+                                                            agent_input,
+                                                            pair_id)
+            result = func(*args, **kwargs)
+            ConversationMemoryModule().add_agent_result_info(agent_instance,
+                                                             result,
+                                                             start_info,
+                                                             pair_id)
+            return result
+    finally:
+        otel_context.attach(saved_otel_context)
 
 
 _agent_wrapper_async = _default_agent_wrapper_async
