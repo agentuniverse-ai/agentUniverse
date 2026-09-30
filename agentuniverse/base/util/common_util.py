@@ -191,6 +191,10 @@ def parse_and_check_json_markdown(text: str, expected_keys: List[str]) -> dict:
         json_obj = parse_json_markdown(text)
     except json.JSONDecodeError as e:
         raise Exception(f"Got invalid JSON object. Error: {e}")
+    if not isinstance(json_obj, dict):
+        raise ValueError(
+            f"Expected a JSON object, but got {json_obj!r}"
+        )
     for key in expected_keys:
         if key not in json_obj:
             raise Exception(

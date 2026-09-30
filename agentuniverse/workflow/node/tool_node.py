@@ -30,7 +30,9 @@ class ToolNode(Node):
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
         inputs: ToolNodeInputParams = self._data.inputs
-        tool_params: List[NodeInfoParams] = inputs.tool_param
+        if inputs is None:
+            raise ValueError("Tool node input configuration is required.")
+        tool_params: List[NodeInfoParams] = inputs.tool_param or []
         tool_id = None
         for tool_param in tool_params:
             if tool_param.name == 'id':
@@ -42,12 +44,13 @@ class ToolNode(Node):
         if tool is None:
             raise ValueError("No tool with id {} was found.".format(tool_id))
 
-        tool_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
+        tool_input_params = self._resolve_input_params(inputs.input_param or [], workflow_output)
         tool_output = tool.run(**tool_input_params)
-        output_params: List[NodeOutputParams] = self._data.outputs
+        output_params: List[NodeOutputParams] = self._data.outputs or []
 
         if isinstance(tool_output, str):
-            output_params[0].value = tool_output
+            if output_params:
+                output_params[0].value = tool_output
         elif isinstance(tool_output, dict):
             for output_param in output_params:
                 output_param.value = tool_output.get(output_param.name, None)

@@ -74,10 +74,11 @@ class ISWorkPattern(WorkPattern):
 
             # Check if correction is needed
             needs_correction = supervision_result.get('needs_correction', False)
+            correction_applied = False
 
             if needs_correction and execution_context['corrections_made'] < max_corrections:
                 # Execute correction
-                correction_result = self._invoke_correction(
+                self._invoke_correction(
                     input_object,
                     supervision_result,
                     checkpoint_result,
@@ -86,13 +87,14 @@ class ISWorkPattern(WorkPattern):
                     execution_context
                 )
                 execution_context['corrections_made'] += 1
+                correction_applied = True
 
             # Store checkpoint history
             execution_context['checkpoint_history'].append({
                 'checkpoint': checkpoint_idx,
                 'implementation': implementation_result,
                 'supervision': supervision_result,
-                'corrected': needs_correction
+                'corrected': correction_applied
             })
 
             is_results.append(checkpoint_result)
@@ -148,10 +150,11 @@ class ISWorkPattern(WorkPattern):
 
             # Check if correction is needed
             needs_correction = supervision_result.get('needs_correction', False)
+            correction_applied = False
 
             if needs_correction and execution_context['corrections_made'] < max_corrections:
                 # Execute correction
-                correction_result = await self._async_invoke_correction(
+                await self._async_invoke_correction(
                     input_object,
                     supervision_result,
                     checkpoint_result,
@@ -160,13 +163,14 @@ class ISWorkPattern(WorkPattern):
                     execution_context
                 )
                 execution_context['corrections_made'] += 1
+                correction_applied = True
 
             # Store checkpoint history
             execution_context['checkpoint_history'].append({
                 'checkpoint': checkpoint_idx,
                 'implementation': implementation_result,
                 'supervision': supervision_result,
-                'corrected': needs_correction
+                'corrected': correction_applied
             })
 
             is_results.append(checkpoint_result)
@@ -188,7 +192,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             implementation_result = self.implementation.run(**checkpoint_input)
-            checkpoint_result['implementation_result'] = implementation_result.to_dict()
+        checkpoint_result['implementation_result'] = implementation_result.to_dict()
         input_object.add_data('implementation_result', implementation_result)
         return implementation_result.to_dict()
 
@@ -207,7 +211,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             implementation_result = await self.implementation.async_run(**checkpoint_input)
-            checkpoint_result['implementation_result'] = implementation_result.to_dict()
+        checkpoint_result['implementation_result'] = implementation_result.to_dict()
         input_object.add_data('implementation_result', implementation_result)
         return implementation_result.to_dict()
 
@@ -223,7 +227,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             supervision_result = self.supervision.run(**supervision_input)
-            checkpoint_result['supervision_result'] = supervision_result.to_dict()
+        checkpoint_result['supervision_result'] = supervision_result.to_dict()
         input_object.add_data('supervision_result', supervision_result)
         return supervision_result.to_dict()
 
@@ -239,7 +243,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             supervision_result = await self.supervision.async_run(**supervision_input)
-            checkpoint_result['supervision_result'] = supervision_result.to_dict()
+        checkpoint_result['supervision_result'] = supervision_result.to_dict()
         input_object.add_data('supervision_result', supervision_result)
         return supervision_result.to_dict()
 
@@ -259,7 +263,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             correction_result = self.implementation.run(**correction_input)
-            checkpoint_result['correction_result'] = correction_result.to_dict()
+        checkpoint_result['correction_result'] = correction_result.to_dict()
         return correction_result.to_dict()
 
     async def _async_invoke_correction(self, input_object: InputObject, supervision_result: dict,
@@ -278,7 +282,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             correction_result = await self.implementation.async_run(**correction_input)
-            checkpoint_result['correction_result'] = correction_result.to_dict()
+        checkpoint_result['correction_result'] = correction_result.to_dict()
         return correction_result.to_dict()
 
     def _validate_work_pattern_members(self):
