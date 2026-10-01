@@ -19,6 +19,7 @@ from langchain_core.outputs import GenerationChunk, ChatGenerationChunk, LLMResu
 
 from agentuniverse.agent.memory.conversation_memory.conversation_memory_module import ConversationMemoryModule
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
+from agentuniverse.base.util.common_util import stream_output as safe_stream_output
 
 
 class StreamOutPutCallbackHandler(BaseCallbackHandler):
@@ -44,7 +45,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
     def on_agent_action(
             self, action: AgentAction, color: Optional[str] = None, **kwargs: Any
     ) -> Any:
-        self.queueStream.put_nowait({
+        safe_stream_output(self.queueStream, {
             "type": "ReAct",
             "data": {
                 "output": "\nThought:" + action.log,
@@ -86,7 +87,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
             **kwargs: Any,
     ) -> Any:
         # add token chunk to the queue.
-        self.queueStream.put_nowait({
+        safe_stream_output(self.queueStream, {
             "type": "token",
             "data": {
                 "chunk": chunk.text,
@@ -104,7 +105,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
     ) -> None:
         """If not the final action, print out observation."""
         if observation_prefix is not None:
-            self.queueStream.put_nowait({
+            safe_stream_output(self.queueStream, {
                 "type": "ReAct",
                 "data": {
                     "output": '\n' + observation_prefix + output,
@@ -112,7 +113,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
                 }
             })
         else:
-            self.queueStream.put_nowait({
+            safe_stream_output(self.queueStream, {
                 "type": "ReAct",
                 "data": {
                     "output": '\n Observation:' + output,
@@ -144,7 +145,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
             self, finish: AgentFinish, color: Optional[str] = None, **kwargs: Any
     ) -> None:
         """Run on agent end."""
-        self.queueStream.put_nowait({
+        safe_stream_output(self.queueStream, {
             "type": "ReAct",
             "data": {
                 "output": '\nThought:' + finish.output,
