@@ -23,6 +23,8 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "txt": "default_txt_reader",
         "md": "default_markdown_reader",
         "markdown": "default_markdown_reader",
+        "html": "default_html_file_reader",
+        "htm": "default_html_file_reader",
         "csv": "default_csv_reader",
         "json": "default_json_reader",
         "rar": "default_rar_reader",
