@@ -1,0 +1,27 @@
+name: 'default_audio_transcription_reader'
+description: 'default audio transcription reader: local Whisper (faster-whisper) transcription of wav/mp3/m4a/flac/ogg files into knowledge documents, fully offline'
+
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.audio_transcription_reader'
+  class: 'AudioTranscriptionReader'
+
+# --- Model ---
+# faster-whisper model size or local model path: tiny / base / small /
+# medium / large-v3 ... Models are cached class-wide per
+# (model_size, device, compute_type) and loaded lazily on first use.
+# Install the optional dependency with:
+#   pip install 'agentuniverse[audio_ext]'
+model_size: 'base'
+# Language hint; null enables automatic detection.
+language: null
+# Device string ('cpu', 'cuda', ...); '' lets faster-whisper decide.
+device: ''
+# faster-whisper compute type ('default', 'int8', 'float16', ...).
+compute_type: 'default'
+
+# --- Safety bounds (validated at init) ---
+# Enforced via stat() before reading a path / bounded read for streams.
+max_file_bytes: 209715200
+# Checked from container metadata before any segment is transcribed.
+max_duration_seconds: 14400.0
