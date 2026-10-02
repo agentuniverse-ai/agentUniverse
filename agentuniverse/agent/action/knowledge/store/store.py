@@ -101,5 +101,23 @@ class Store(ComponentBase):
         raise NotImplementedError
 
     def create_copy(self):
-        # TODO: Store copy need to solve thread lock problem
-        return self
+        """Return an isolated copy of this store (fixes #1183).
+
+        Follows the ``LLM.create_copy`` precedent: a shallow ``model_copy``
+        gives every ``get_instance_obj(..., new_instance=True)`` caller its
+        own instance identity, so per-runtime field assignments on one copy
+        never leak into the registered component or sibling copies.
+
+        The live ``client`` / ``async_client`` objects are deliberately kept
+        as *shared references*: they are created post-fork and may hold
+        connections and thread locks — deep-copying them is either impossible
+        or would silently duplicate expensive connection resources (the
+        concern noted by the former TODO). Sharing the connection while
+        isolating the wrapper matches how the framework already copies LLM
+        components.
+        """
+        copied = self.model_copy()
+        # Shared references (live post-fork connection objects).
+        copied.client = self.client
+        copied.async_client = self.async_client
+        return copied
