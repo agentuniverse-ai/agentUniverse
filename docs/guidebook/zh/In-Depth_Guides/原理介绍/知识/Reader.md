@@ -56,3 +56,4 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml)：读取本地Docx文件中的文本内容
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml)：读取本地Markdown文件中的文本内容
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml)：读取 RAR 压缩文件（.rar）中的文本内容。
+- [default_eml_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/eml_reader.yaml)：使用标准库解析器读取 RFC 822 / MIME 邮件文件（.eml），无需任何额外依赖：净化后的 Subject/From/To/Cc/Date/Message-ID 头写入 metadata；正文优先取 text/plain，纯 HTML 邮件回退为去标签后的文本；附件只记录名称、绝不解码其内容。安全上限（`max_file_bytes`、`max_parts`）在解析前拒绝超大邮件与 MIME 分片炸弹。

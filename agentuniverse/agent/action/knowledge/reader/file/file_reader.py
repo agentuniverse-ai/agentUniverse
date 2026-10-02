@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Type, List, Optional
 
 from agentuniverse.agent.action.knowledge.reader.file.docx_reader import DocxReader
+from agentuniverse.agent.action.knowledge.reader.file.eml_reader import EmlReader
 from agentuniverse.agent.action.knowledge.reader.file.epub_reader import EpubReader
 from agentuniverse.agent.action.knowledge.reader.file.markdown_reader import MarkdownReader
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
@@ -32,6 +33,7 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".md": MarkdownReader,
     ".markdown": MarkdownReader,
     ".csv": CSVReader,
+    ".eml": EmlReader,
     ".rar": RarReader,
     ".zip": ZipReader,
     ".7z": SevenZipReader,
