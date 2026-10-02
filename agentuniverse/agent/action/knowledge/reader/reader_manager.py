@@ -28,6 +28,7 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "rar": "default_rar_reader",
         "zip": "default_zip_reader",
         "sevenzip": "default_sevenzip_reader",
+        "eml": "default_eml_reader",
         # extended defaults for web & images
         "url": "default_web_page_reader",
         "png": "default_image_ocr_reader",
