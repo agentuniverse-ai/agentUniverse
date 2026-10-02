@@ -53,6 +53,7 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml)：读取本地Pptx文件中的文本内容
 - [default_txt_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/txt_reader.yaml)：读取txt文件中的文本内容
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml)：读取ZIP压缩包文件，支持嵌套ZIP结构和多种文件格式
+- [default_html_file_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/html_file_reader.yaml)：读取**本地** HTML 文件（.html/.htm）——保存的网页、报表导出、爬取快照——基于 BeautifulSoup 提取可见文本，剥离 `<script>`/`<style>`/`<noscript>`/`<template>` 与注释，全程无任何网络访问（与抓取 URL 的 `default_web_page_reader` 互补）。`<title>` 与 description `<meta>` 写入 metadata（标题可选前置进正文）；`max_file_bytes` 与 `max_text_chars` 上限防止病态导出文件冲垮下游切分与嵌入。
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml)：读取本地Docx文件中的文本内容
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml)：读取本地Markdown文件中的文本内容
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml)：读取 RAR 压缩文件（.rar）中的文本内容。
