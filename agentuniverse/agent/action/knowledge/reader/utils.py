@@ -1,8 +1,11 @@
 """Utility helpers for reader implementations."""
+
 from __future__ import annotations
 
+import codecs
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import BinaryIO, Iterable, Sequence, Union
+from typing import BinaryIO
 
 # Candidate encodings to try when automatic detection libraries are not available.
 _FALLBACK_ENCODINGS: Sequence[str] = (
@@ -16,17 +19,16 @@ _FALLBACK_ENCODINGS: Sequence[str] = (
 )
 
 
-def _read_sample_bytes(source: Union[str, Path, BinaryIO, bytes, bytearray],
-                       sample_size: int) -> bytes:
+def _read_sample_bytes(source: str | Path | BinaryIO | bytes | bytearray, sample_size: int) -> bytes:
     """Read a byte sample from the given file path or binary handle."""
-    if isinstance(source, (bytes, bytearray)):
+    if isinstance(source, bytes | bytearray):
         return bytes(source[:sample_size])
-    if isinstance(source, (str, Path)):
+    if isinstance(source, str | Path):
         path = Path(source)
         with path.open("rb") as handle:
             return handle.read(sample_size)
 
-    # File-like object – preserve the original pointer
+    # File-like object - preserve the original pointer
     handle = source
     current_pos = handle.tell()
     try:
@@ -36,21 +38,29 @@ def _read_sample_bytes(source: Union[str, Path, BinaryIO, bytes, bytearray],
     return data if data is not None else b""
 
 
-def detect_file_encoding(source: Union[str, Path, BinaryIO, bytes, bytearray],
-                         sample_size: int = 32 * 1024,
-                         fallback_encodings: Iterable[str] = _FALLBACK_ENCODINGS) -> str:
-    """Best-effort detection of the text encoding for the given file."""
-    sample = _read_sample_bytes(source, sample_size)
+def detect_file_encoding(
+    source: str | Path | BinaryIO | bytes | bytearray,
+    sample_size: int = 32 * 1024,
+    fallback_encodings: Iterable[str] = _FALLBACK_ENCODINGS,
+) -> str:
+    """Best-effort detection without treating a sample boundary as end-of-file."""
+    # Read one extra byte to distinguish a truncated sample from complete input.
+    sample = _read_sample_bytes(source, sample_size + 1)
+    complete = len(sample) <= sample_size
+    sample = sample[:sample_size]
     if not sample:
         return "utf-8"
 
     # First try decoding with a curated list of encodings
     for encoding in fallback_encodings:
         try:
-            sample.decode(encoding)
-            return encoding
+            # Buffer a trailing partial character only when more input exists.
+            decoder = codecs.getincrementaldecoder(encoding)()
+            decoder.decode(sample, final=complete)
         except UnicodeDecodeError:
             continue
+        else:
+            return encoding
 
     # If the curated list fails, fall back to charset_normalizer if available
     try:  # pragma: no cover - optional dependency
