@@ -309,3 +309,37 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [TemporalDecayFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/temporal_decay_filter.yaml)
+
+This component filters recalled documents by an exponential temporal-decay (freshness) score, addressing the *filtering / temporal relevance* direction of issue #248. Knowledge bases often mix fresh and stale content — today's news beside decade-old analyses — and equally relevant hits of very different ages are not equally useful. Each document is scored with a classic half-life decay
+
+`score = exp(-ln(2) * age_days / half_life_days)`
+
+so a document exactly `half_life_days` old scores 0.5, twice the half-life 0.25, and so on. Documents scoring below `min_score`, or older than the hard cap `max_age_days`, are dropped; surviving documents carry the score in `metadata[decay_score_key]` so downstream rerankers / fusion processors can combine freshness with relevance.
+
+Timestamps are read from `metadata[timestamp_key]` and accepted in the shapes real pipelines produce: epoch seconds, epoch milliseconds, ISO 8601 strings (with or without `Z` / offset, date-only allowed), and `datetime` objects (naive values are treated as UTC). Future-dated timestamps (clock skew) clamp to a full score of 1.0. Documents with a missing or unparsable timestamp are kept or dropped per `missing_timestamp`. It is complementary to `ThresholdFilter`: that component applies static predicates, while this one derives the score from time.
+
+The component definition file is as follows:
+```yaml
+name: 'temporal_decay_filter'
+description: 'filter recalled documents by exponential temporal decay'
+timestamp_key: 'timestamp'   # metadata field holding the timestamp
+half_life_days: 30.0         # age (days) at which the score equals 0.5
+min_score: 0.1               # drop documents scoring below this
+max_age_days: null           # optional hard age cap; null disables
+decay_score_key: 'decay_score'  # metadata key for the score; '' disables
+missing_timestamp: 'keep'    # keep | drop
+reference_time: null         # fixed eval instant (epoch seconds); null = now
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.temporal_decay_filter'
+  class: 'TemporalDecayFilter'
+```
+- timestamp_key: Metadata field holding each document's timestamp. Epoch seconds/milliseconds, ISO 8601 strings and `datetime` objects are accepted; unparsable values are treated as missing.
+- half_life_days: Age in days at which the decay score equals 0.5. Must be positive.
+- min_score: Decay score below which a document is dropped; must be in (0, 1].
+- max_age_days: Optional hard age cap — older documents are always dropped regardless of the decay score. `null` disables the cap.
+- decay_score_key: Metadata key the computed score is written to; an empty value disables score stamping.
+- missing_timestamp: `keep` passes documents without a usable timestamp through untouched; `drop` removes them.
+- reference_time: Optional fixed evaluation instant (epoch seconds) for deterministic, replayable pipelines; defaults to the current time.

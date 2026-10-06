@@ -1,0 +1,35 @@
+name: 'temporal_decay_filter'
+description: 'filter recalled documents by exponential temporal decay (half-life based freshness scoring)'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.temporal_decay_filter'
+  class: 'TemporalDecayFilter'
+
+# Metadata field holding each document's timestamp.
+# Accepted shapes: epoch seconds, epoch milliseconds, ISO 8601 string
+# (e.g. '2026-01-02T03:04:05Z', date-only allowed), or a datetime object.
+timestamp_key: 'timestamp'
+
+# Decay curve: score = exp(-ln(2) * age_days / half_life_days).
+# A document exactly half_life_days old scores 0.5, twice that 0.25, etc.
+half_life_days: 30.0
+
+# Documents with a decay score below this threshold are dropped.
+# Must be in (0, 1].
+min_score: 0.1
+
+# Optional hard age cap: documents older than this are always dropped,
+# regardless of the decay score. null disables the cap.
+max_age_days: null   # e.g. 365.0
+
+# Metadata key the computed decay score is written to; '' disables stamping.
+decay_score_key: 'decay_score'
+
+# What to do with documents that have no (or an unparsable) timestamp.
+# 'keep' passes them through untouched; 'drop' removes them.
+missing_timestamp: 'keep'
+
+# Fixed evaluation instant as epoch seconds; null means "now at load time".
+# Set it for deterministic, replayable pipelines.
+reference_time: null

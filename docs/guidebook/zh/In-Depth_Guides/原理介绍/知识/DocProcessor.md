@@ -310,3 +310,37 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [TemporalDecayFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/temporal_decay_filter.yaml)
+
+该组件按指数时间衰减（新鲜度）分值过滤召回文档，对应 issue #248 的*过滤 / 时效性*方向。知识库中常常新旧内容混杂——今天的新闻紧挨着十年前的分析——而同样相关的命中，年龄差异很大时价值并不相同。该组件用经典的半衰期衰减为每篇文档打分：
+
+`score = exp(-ln(2) * age_days / half_life_days)`
+
+即恰好 `half_life_days` 天前的文档得 0.5，两个半衰期前得 0.25，依此类推。分值低于 `min_score`、或超过硬性年龄上限 `max_age_days` 的文档被丢弃；保留下来的文档会把分值写入 `metadata[decay_score_key]`，供下游 reranker / 融合处理器把新鲜度与相关性结合。
+
+时间戳从 `metadata[timestamp_key]` 读取，支持真实管线常见的形态：epoch 秒、epoch 毫秒、ISO 8601 字符串（带或不带 `Z` / 时区偏移，允许仅日期）以及 `datetime` 对象（无时区视为 UTC）。未来时间戳（时钟偏移）按满分 1.0 处理。时间戳缺失或无法解析的文档按 `missing_timestamp` 配置决定保留或丢弃。它与 `ThresholdFilter` 互补：后者做静态谓词过滤，本组件的分值由时间推导。
+
+组件定义文件如下：
+```yaml
+name: 'temporal_decay_filter'
+description: '按指数时间衰减过滤召回文档'
+timestamp_key: 'timestamp'   # 存放时间戳的 metadata 字段
+half_life_days: 30.0         # 分值衰减到 0.5 的天数
+min_score: 0.1               # 低于该分值的文档被丢弃
+max_age_days: null           # 可选的硬性年龄上限；null 表示不启用
+decay_score_key: 'decay_score'  # 分值写入的 metadata 键；'' 表示不写入
+missing_timestamp: 'keep'    # keep | drop
+reference_time: null         # 固定的评估时刻（epoch 秒）；null 表示当前时间
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.temporal_decay_filter'
+  class: 'TemporalDecayFilter'
+```
+- timestamp_key：存放每篇文档时间戳的 metadata 字段。支持 epoch 秒/毫秒、ISO 8601 字符串和 `datetime` 对象；无法解析的值按缺失处理。
+- half_life_days：衰减分值等于 0.5 时的文档年龄（天），必须为正。
+- min_score：低于该衰减分值的文档被丢弃；取值范围 (0, 1]。
+- max_age_days：可选的硬性年龄上限——超过该年龄的文档无论衰减分值多少一律丢弃；`null` 表示不启用。
+- decay_score_key：计算出的分值写入的 metadata 键；为空则不写入。
+- missing_timestamp：`keep` 表示无有效时间戳的文档原样透传；`drop` 表示移除。
+- reference_time：可选的固定评估时刻（epoch 秒），用于可复现的确定性管线；默认使用当前时间。
