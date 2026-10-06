@@ -331,3 +331,71 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## CSVQueryTool
+
+`CSVQueryTool` runs SQL-like queries over CSV *text* without a database. It
+parses the CSV with the standard-library `csv` module (quoted fields,
+embedded commas and newlines all work), then applies a small query pipeline:
+`select` projection, `where` filtering, `order_by` sorting, `limit`
+truncation and simple aggregation (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`).
+The tool has zero third-party dependencies.
+
+The built-in component configuration is
+[`csv_query_tool.yaml`](../../../../../../agentuniverse/agent/action/tool/common_tool/csv_query_tool.yaml):
+
+```yaml
+name: csv_query_tool
+description: Run SQL-like queries (select / where / order_by / limit / COUNT / SUM / AVG / MIN / MAX)
+  over CSV text without a database. Zero dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.csv_query_tool
+  class: CSVQueryTool
+input_keys: [csv_text]
+max_input_chars: 1000000
+max_rows: 100000
+```
+
+Query some CSV text:
+
+```python
+from agentuniverse.agent.action.tool.common_tool.csv_query_tool import CSVQueryTool
+
+tool = CSVQueryTool()
+result = tool.execute(
+    csv_text="name,city,age,salary\n"
+             "Alice,Beijing,30,8000\n"
+             "Bob,Shanghai,25,6500\n"
+             "Carol,Beijing,35,12000\n",
+    select="name, salary",
+    where="city = 'Beijing' AND age > 31",
+    order_by="salary DESC",
+    limit=10,
+)
+# {'columns': ['name', 'salary'], 'rows': [['Carol', '12000']], 'row_count': 1}
+
+aggregate = tool.execute(
+    csv_text="name,city,age,salary\nAlice,Beijing,30,8000\nBob,Shanghai,25,6500\n",
+    select="COUNT(*), AVG(salary)",
+)
+# {'columns': ['COUNT(*)', 'AVG(salary)'], 'rows': [[2, 7250.0]], 'row_count': 1}
+```
+
+Supported where operators are `=`, `!=` (or `<>`), `>`, `<`, `>=`, `<=`,
+`LIKE` / `NOT LIKE` (`%` and `_` wildcards, case-insensitive) and `IN` /
+`NOT IN` (parenthesised value list). Multiple conditions may be joined with
+`AND` or passed as a list. Comparisons are type-aware: when both sides parse
+as numbers the comparison is numeric (so `10 > 9` is true), otherwise it is
+lexicographic. Cell values are returned exactly as they appear in the CSV.
+
+Aggregates cannot be mixed with plain columns (there is no GROUP BY);
+`COUNT(column)` skips empty cells, `SUM` / `AVG` / `MIN` / `MAX` ignore
+non-numeric cells and return `None` when nothing can be aggregated.
+
+Invalid input never raises: the tool returns `{"error": "<message>"}` with a
+reason the agent can act on, e.g. `unknown column 'nickname' in select.`.
+`max_input_chars` and `max_rows` bound the accepted payload size; duplicate
+header names and rows longer than the header are rejected, while short rows
+are padded with empty cells.

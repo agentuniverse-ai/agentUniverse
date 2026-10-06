@@ -1,0 +1,72 @@
+name: csv_query_tool
+description: Run SQL-like queries (select / where / order_by / limit / COUNT / SUM / AVG / MIN / MAX) over CSV text without a database. Zero dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.csv_query_tool
+  class: CSVQueryTool
+input_keys:
+  - csv_text
+max_input_chars: 1000000
+max_rows: 100000
+args_model:
+  csv_text:
+    type: string
+    description: The raw CSV content; the first record is the header row.
+    required: true
+  select:
+    type: string
+    description: Columns or aggregate expressions to return, e.g. "name, age" or "COUNT(*), AVG(salary)". Defaults to all columns.
+    required: false
+    default: "*"
+  where:
+    type: string
+    description: Filter conditions joined by AND, e.g. "age > 30 AND city IN ('Beijing', 'Shanghai')". Operators =, !=, >, <, >=, <=, LIKE, NOT LIKE, IN, NOT IN.
+    required: false
+  order_by:
+    type: string
+    description: Sort keys with optional direction, e.g. "age DESC, name ASC".
+    required: false
+  limit:
+    type: integer
+    description: Maximum number of rows to return.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    csv_text:
+      type: string
+      description: The raw CSV content; the first record is the header row.
+    select:
+      anyOf:
+        - type: string
+          description: Comma separated columns or aggregate expressions.
+        - type: array
+          items:
+            type: string
+          description: List of columns or aggregate expressions.
+      description: Columns or aggregate expressions to return.
+    where:
+      anyOf:
+        - type: string
+          description: Conditions joined by AND.
+        - type: array
+          items:
+            type: string
+          description: AND-combined filter conditions.
+      description: Filter conditions for the rows to keep.
+    order_by:
+      anyOf:
+        - type: string
+          description: Comma separated sort keys.
+        - type: array
+          items:
+            type: string
+          description: Sort keys with optional ASC/DESC direction.
+      description: Sort specification, e.g. "age DESC, name ASC".
+    limit:
+      type: integer
+      minimum: 0
+      description: Maximum number of rows to return.
+  required: ["csv_text"]
+  additionalProperties: false
