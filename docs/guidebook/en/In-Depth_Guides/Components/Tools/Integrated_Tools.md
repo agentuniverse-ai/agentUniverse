@@ -331,3 +331,41 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## NumberFormatterTool
+
+`NumberFormatterTool` formats numbers for human readers: `format` (thousands separators, fixed decimal places, prefix/suffix, currency symbol), `file_size` (bytes to `B/KB/MB/GB/TB/PB` with a binary 1024 or decimal 1000 step), `duration` (seconds to a weeks/days/hours/minutes/seconds combination in compact `1d 2h 3m` or verbose `1 day, 2 hours` style), `percentage` (fraction to `12.3%`), and `scientific` (scientific notation with mantissa and exponent). Pure Python, zero third-party dependencies.
+
+Register a component pointing at `agentuniverse.agent.action.tool.common_tool.number_formatter_tool.NumberFormatterTool`, then call `execute(mode=..., value=..., ...)`:
+
+```python
+from agentuniverse.agent.action.tool.common_tool.number_formatter_tool import NumberFormatterTool
+
+tool = NumberFormatterTool()
+tool.execute(mode="format", value=1234567.891, decimals=2)                          # 1,234,567.89
+tool.execute(mode="format", value=-95.5, decimals=1, currency="cny")                # -¥95.5
+tool.execute(mode="format", value=1234.5, prefix="Total: ", suffix=" due")          # Total: 1,234.5 due
+tool.execute(mode="file_size", value=1536)                                          # 1.5 KB (binary)
+tool.execute(mode="file_size", value=1500, system="decimal")                        # 1.5 KB (decimal)
+tool.execute(mode="file_size", value=1024**3, unit="MB")                            # 1,024 MB
+tool.execute(mode="duration", value=90061)                                          # 1d 1h 1m 1s
+tool.execute(mode="duration", value=90061, style="verbose")                         # 1 day, 1 hour, 1 minute, 1 second
+tool.execute(mode="percentage", value=0.1234)                                       # 12.3%
+tool.execute(mode="scientific", value=1234567, decimals=2)                          # 1.23e+06
+```
+
+```yaml
+name: number_formatter_tool
+description: Format numbers for human readers (separators, currency, sizes, durations, percentages, scientific notation).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.number_formatter_tool
+  class: NumberFormatterTool
+input_keys: [mode, value]
+max_abs_value: 1000000000000000000
+max_decimals: 15
+```
+- max_abs_value: Largest absolute input magnitude accepted by any mode; larger inputs return a `validation_error` (default 10^18).
+- max_decimals: Largest `decimals` value accepted by any mode (default 15, the useful precision of a float).
+- `value` accepts a number or a numeric string (thousands-separator commas and whitespace tolerated). Every result is a structured dict with a `status` field; errors are returned, never raised, so agents can branch on the response.
