@@ -310,3 +310,41 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [SourceCredibilityScorer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/source_credibility_scorer.yaml)
+
+该组件按来源可信度为召回文档打分并过滤，对应 issue #248 的*过滤 / 来源可信*方向。召回质量不只关乎主题相关性：从个人博客、社交媒体或内容农场抓取的内容出错风险更高，在医疗、金融、法律等受监管场景中，把它们与权威机构来源无标识地混在一起是合规隐患。该组件为每篇文档附加一个 [0, 1] 的可信度分值，并可选地丢弃可信度不足的来源，让下游 reranker / 生成阶段不仅衡量证据"有多切题"，也能衡量"有多可信"。
+
+来源从 `metadata[source_key]` 读取，可以是完整 URL、裸域名（`cdc.gov`）或来源标签（`official`、`news`、`rumor`）。URL 会先归一化为小写裸域名再查表。打分按优先级依次解析：
+
+1. 自定义 `credibility_map` —— 先精确匹配（对 `wikipedia.org` 的覆盖同样作用于 `en.wikipedia.org`），再匹配通配符模式（`*.gov`、`*.edu.*`），更长的模式优先；
+2. 内置精确域名表（百科、通讯社、技术文档、论坛/社交媒体等）；
+3. 内置来源标签表（`official` 0.9、`blog` 0.4、`rumor` 0.1 等）；
+4. 内置域名后缀表（`.gov` 0.95、`.edu` 0.9、`.org` 0.75 等；含 `.edu.cn` 等多级后缀）；
+5. 未识别来源使用 `default_score`（0.5）。
+
+内置分值是粗粒度先验，并非对具体站点的裁决；请结合业务领域通过 `credibility_map` 校准。命中的规则会记录在 `metadata[score_key + '_matched']` 中，便于解释。
+
+组件定义文件如下：
+```yaml
+name: 'source_credibility_scorer'
+description: '按来源可信度为召回文档打分并过滤'
+source_key: 'source'        # 存放 URL / 域名 / 标签的 metadata 字段
+credibility_map:            # 自定义覆盖，优先查表
+  {}
+  # 如 {'*.gov': 0.98, 'mycompany.com': 0.95, 'shady.io': 0.1}
+min_score: 0.0              # 低于该分值的文档被丢弃；0 表示全部保留
+score_key: 'credibility_score'  # 分值写入的 metadata 键；'' 表示不写入
+default_score: 0.5          # 未识别来源的分值
+keep_no_source: true        # 是否保留没有来源 metadata 的文档
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.source_credibility_scorer'
+  class: 'SourceCredibilityScorer'
+```
+- source_key：存放文档来源的 metadata 字段。完整 URL 会归一化为小写裸域名（去除协议、端口、凭据、路径、查询与锚点）。
+- credibility_map：优先于内置表的自定义 `{模式: 分值}`。模式可以是精确域名、通配符域名（`*.gov`、`*.edu.*`）或来源标签；分值必须在 [0, 1] 内。
+- min_score：低于该阈值的文档被丢弃。保持为 `0` 则不过滤，仅附加分值。
+- score_key：可信度分值写入的 metadata 键；为空则不写入。命中的规则存于 `<score_key>_matched`。
+- default_score：任何表中都未匹配到的来源的分值。
+- keep_no_source：为 `true` 时保留无来源 metadata 的文档（不打分）；为 `false` 时丢弃。

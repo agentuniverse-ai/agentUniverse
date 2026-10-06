@@ -309,3 +309,41 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [SourceCredibilityScorer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/source_credibility_scorer.yaml)
+
+This component scores and filters recalled documents by the credibility of their source, addressing the *filtering / source trust* direction of issue #248. Recall quality is not only about topical relevance: content scraped from personal blogs, social media or content farms carries a higher risk of being wrong, and in regulated scenarios (medical, financial, legal) mixing it with institutional sources without any signal is a liability. The scorer attaches a credibility value in [0, 1] to every document, optionally dropping sources that are not trusted enough, so downstream rerankers / generation stages can weigh *how trustworthy* a piece of evidence is, not just how on-topic.
+
+The source is read from `metadata[source_key]` and may be a full URL, a bare domain (`cdc.gov`) or a source label (`official`, `news`, `rumor`). URLs are normalized to their lowercase bare domain before lookup. Scoring resolves in priority order:
+
+1. custom `credibility_map` — exact entries first (an override for `wikipedia.org` also governs `en.wikipedia.org`), then wildcard patterns (`*.gov`, `*.edu.*`), longest pattern winning;
+2. built-in exact-domain table (encyclopedias, news wires, technical references, forums/social media, …);
+3. built-in source-label table (`official` 0.9, `blog` 0.4, `rumor` 0.1, …);
+4. built-in domain-suffix table (`.gov` 0.95, `.edu` 0.9, `.org` 0.75, …; multi-label suffixes like `.edu.cn` included);
+5. `default_score` (0.5) for everything unrecognized.
+
+The built-in scores are coarse priors, not verdicts about individual sites; refine them through `credibility_map` for your domain. The matched rule is recorded in `metadata[score_key + '_matched']` for explainability.
+
+The component definition file is as follows:
+```yaml
+name: 'source_credibility_scorer'
+description: 'score and filter recalled documents by source credibility'
+source_key: 'source'        # metadata field holding URL / domain / label
+credibility_map:            # custom overrides, checked first
+  {}
+  # e.g. {'*.gov': 0.98, 'mycompany.com': 0.95, 'shady.io': 0.1}
+min_score: 0.0              # drop documents below this score; 0 keeps all
+score_key: 'credibility_score'  # metadata key for the score; '' disables
+default_score: 0.5          # score for unrecognized sources
+keep_no_source: true        # keep documents that carry no source metadata
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.source_credibility_scorer'
+  class: 'SourceCredibilityScorer'
+```
+- source_key: Metadata field holding the document's source. Full URLs are reduced to their bare lowercase domain (scheme, port, credentials, path, query and fragment stripped).
+- credibility_map: Custom `{pattern: score}` overrides checked before the built-in tables. Patterns may be exact domains, wildcard domains (`*.gov`, `*.edu.*`) or source labels; scores must lie in [0, 1].
+- min_score: Documents scoring below this threshold are dropped. Leave at `0` to keep everything and only attach scores.
+- score_key: Metadata key the credibility score is written to; an empty value disables stamping. The matching rule is stored under `<score_key>_matched`.
+- default_score: Score assigned to sources not found in any table.
+- keep_no_source: `true` keeps documents without source metadata (unstamped); `false` drops them.
