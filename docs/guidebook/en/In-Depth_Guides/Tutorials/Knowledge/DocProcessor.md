@@ -309,3 +309,25 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [RstTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/rst_text_splitter.yaml)
+
+`RstTextSplitter` splits reStructuredText documents into one chunk per section title, recording the section hierarchy (e.g. `"Usage > CLI"`) as metadata on every chunk so a retrieved chunk can be traced back to its source section. It is the right splitter for Python docstrings rendered as reST, Sphinx project docs, PEP-style documents, and any `.rst` knowledge source, and is a sibling of `MarkdownHeaderTextSplitter` and `LatexTextSplitter` addressing issue #258.
+
+Pure Python with no third-party dependency. A conservative line scanner reproduces docutils' title rules: underline (`====`, `----`, `~~~~`) and overline+underline adornments are both recognised, the first adornment character seen is level 1 and every new character opens one level deeper (a reused character keeps its level), a title must be preceded by a blank line, and the adornment run must be at least as long as the title — so an e-mail signature `--` or a lone transition line never splits a paragraph. Titles inside literal blocks (`::` + indented text) and comment/directive blocks (`..`) are treated as content. Copy `rst_text_splitter.yaml` into your application configuration directory and resolve the built-in `rst_text_splitter` component to use it.
+
+The component definition file is as follows:
+```yaml
+name: 'rst_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.rst_text_splitter'
+  class: 'RstTextSplitter'
+description: 'Split reStructuredText documents into one chunk per section title, preserving each section hierarchy as metadata.'
+section_path_key: 'section_path'
+max_depth: null
+keep_preamble: true
+```
+- section_path_key: Metadata key under which each chunk's section path is recorded; set to `null` to omit the field.
+- max_depth: Deepest section level to split on (level 1 is the document's first adornment style). Titles deeper than this stay ordinary content of their parent section; `null` splits on every level.
+- keep_preamble: When `true` (default), text before the first section title is emitted as a chunk with an empty section path; when `false` it is dropped.

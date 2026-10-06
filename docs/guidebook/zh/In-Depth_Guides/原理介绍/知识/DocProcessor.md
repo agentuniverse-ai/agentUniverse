@@ -310,3 +310,25 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
  - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [RstTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/rst_text_splitter.yaml)
+
+`RstTextSplitter` 按 reStructuredText 标题结构将文档切分为一个标题一个 chunk，并把标题层级（如 `"Usage > CLI"`）记录在每个 chunk 的 metadata 中，便于召回后回溯来源章节。它适用于以 reST 编写的 Python docstring、Sphinx 项目文档、PEP 风格文档以及任意 `.rst` 知识源，是与 `MarkdownHeaderTextSplitter`、`LatexTextSplitter` 同族的组件，对应 issue #258。
+
+纯 Python 实现，无第三方依赖。保守的逐行扫描器复刻 docutils 的标题规则：同时识别下划线（`====`、`----`、`~~~~`）与上划线+下划线两种装饰样式；第一个出现的装饰字符为第 1 层，之后每个新字符加深一层，复用已有字符则保持原层级；标题前必须有空白行，且装饰线长度不小于标题文本——因此邮件签名 `--` 或孤立的分隔线不会把段落切开。字面块（`::` 后缩进内容）与注释/指令块（`..`）中的“标题”会被视为普通内容。将 `rst_text_splitter.yaml` 拷贝到应用配置目录并解析内置 `rst_text_splitter` 组件即可使用。
+
+组件定义文件如下：
+```yaml
+name: 'rst_text_splitter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.rst_text_splitter'
+  class: 'RstTextSplitter'
+description: '按 reStructuredText 标题结构切分文档，并将标题层级记录为 metadata。'
+section_path_key: 'section_path'
+max_depth: null
+keep_preamble: true
+```
+- section_path_key: 记录每个 chunk 标题层级的 metadata 键；设为 `null` 表示不写入该字段。
+- max_depth: 参与切分的最深标题层级（第 1 层是文档第一个出现的装饰样式）。更深的标题保留为父章节的普通内容；`null` 表示切分所有层级。
+- keep_preamble: 为 `true`（默认）时，第一个标题之前的文本作为一个空层级的 chunk 输出；为 `false` 时丢弃。
