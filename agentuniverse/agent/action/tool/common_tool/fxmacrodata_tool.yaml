@@ -1,0 +1,73 @@
+name: fxmacrodata_tool
+description: FXMacroData macro data tool - an indicator's release history (CPI, policy rate, payrolls, GDP), upcoming releases, the indicator list per currency, and daily FX rates for 22 currencies. Recent USD data, the USD calendar and every catalogue work without a key; set FXMACRODATA_API_KEY for other currencies, full history and FX rates.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.fxmacrodata_tool
+  class: FXMacroDataTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: history (release history of one indicator), calendar (upcoming releases), catalogue (indicator list), or fx (daily FX rates).
+    required: true
+  currency:
+    type: string
+    description: Three-letter currency code such as USD. Required for history, calendar and catalogue.
+    required: false
+  indicator:
+    type: string
+    description: Indicator slug such as inflation or policy_rate. Required for history; optional filter for calendar.
+    required: false
+  base:
+    type: string
+    description: Base currency for fx, such as EUR.
+    required: false
+  quote:
+    type: string
+    description: Quote currency for fx, such as USD.
+    required: false
+  start_date:
+    type: string
+    description: Optional start date, YYYY-MM-DD (history and fx).
+    required: false
+  end_date:
+    type: string
+    description: Optional end date, YYYY-MM-DD (history and fx).
+    required: false
+  limit:
+    type: integer
+    description: Rows to return, 1 to 100 (default 20).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["history", "calendar", "catalogue", "fx"]
+      description: Lookup mode.
+    currency:
+      type: string
+      description: Three-letter currency code.
+    indicator:
+      type: string
+      description: Indicator slug.
+    base:
+      type: string
+      description: Base currency (fx mode).
+    quote:
+      type: string
+      description: Quote currency (fx mode).
+    start_date:
+      type: string
+      description: Start date, YYYY-MM-DD.
+    end_date:
+      type: string
+      description: End date, YYYY-MM-DD.
+    limit:
+      type: integer
+      minimum: 1
+      maximum: 100
+      description: Rows to return.
+  required: ["mode"]
