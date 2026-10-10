@@ -55,7 +55,7 @@ class OllamaLLMChannel(LLMChannel):
         })
 
     def _call(self, messages, stop=None, **kwargs) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        should_stream = kwargs.pop("stream", self.streaming)
+        should_stream = kwargs.pop("stream", kwargs.pop("streaming", self.streaming))
         client = self._new_client()
         options = self._options()
         options.setdefault("stop", stop)
@@ -68,7 +68,7 @@ class OllamaLLMChannel(LLMChannel):
 
     async def _acall(self, messages, stop=None, **kwargs) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         client = self._new_async_client()
-        should_stream = kwargs.pop("stream", self.streaming)
+        should_stream = kwargs.pop("stream", kwargs.pop("streaming", self.streaming))
         options = self._options()
         options.setdefault("stop", stop)
         res = await client.chat(model=self.channel_model_name, messages=messages, options=options, stream=should_stream)
