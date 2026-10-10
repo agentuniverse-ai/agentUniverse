@@ -11,7 +11,7 @@ aws_region: 'us-east-1'
 model_id: 'amazon.titan-embed-text-v1'
 normalize: true
 
-# Optional: For Titan v2, specify dimensions (256, 384, or 1024)
+# Optional: For Titan v2, specify dimensions (256, 512, or 1024)
 # dimensions: 1024
 
 metadata:
