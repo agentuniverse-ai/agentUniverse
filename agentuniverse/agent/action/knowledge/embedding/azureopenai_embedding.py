@@ -102,7 +102,23 @@ class AzureOpenAIEmbedding(Embedding):
         self._initialize_clients()
 
         from langchain_community.embeddings.azure_openai import AzureOpenAIEmbeddings
-        return AzureOpenAIEmbeddings(openai_api_key=self.azure_api_key, client=self.client.embeddings, async_client=self.async_client.embeddings, azure_endpoint=f"https://{self.resource_name}.openai.azure.com/")
+        model_kwargs = {}
+        if self.embedding_dims is not None:
+            model_kwargs["dimensions"] = self.embedding_dims
+        configuration = {}
+        if self.embedding_model_name is not None:
+            # The native Azure client uses the model as the deployment name.
+            configuration["model"] = self.embedding_model_name
+            configuration["azure_deployment"] = self.embedding_model_name
+        return AzureOpenAIEmbeddings(
+            openai_api_key=self.azure_api_key,
+            client=self.client.embeddings,
+            async_client=self.async_client.embeddings,
+            azure_endpoint=f"https://{self.resource_name}.openai.azure.com",
+            openai_api_version=self.azure_api_version,
+            model_kwargs=model_kwargs,
+            **configuration,
+        )
 
 
     def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> 'Embedding':
