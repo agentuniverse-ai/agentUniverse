@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
+import asyncio
+
 from typing import List, Any
 
 from langchain_core.embeddings import Embeddings as LCEmbeddings
@@ -52,9 +54,10 @@ class GeminiEmbedding(Embedding):
 
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Asynchronously get embeddings for a list of texts using the Gemini API."""
-        # This implementation is synchronous because the Gemini API does not currently offer an official asynchronous client for embedding.
-        # Consider implementing async batching or utilizing a ThreadPoolExecutor to wrap the synchronous call for better concurrency.
-        return self.get_embeddings(texts, **kwargs)
+        # Keep synchronous/custom clients and their result/error contract while
+        # moving blocking initialization and SDK I/O off the event-loop thread.
+        # Cancelling the await does not stop an already running SDK call.
+        return await asyncio.to_thread(self.get_embeddings, texts, **kwargs)
 
     def as_langchain(self) -> LCEmbeddings:
         """Convert to a Langchain Embedding class."""
