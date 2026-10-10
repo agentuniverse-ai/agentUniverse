@@ -110,6 +110,17 @@ result = synchronizer.sync_knowledge_to_context(
 print(f"✅ 更新了知识，失效了 {result.segments_invalidated} 个旧片段")
 ```
 
+
+**会话隔离与失败重试**：同一个同步器按 `(session_id, knowledge_id)` 独立记录已成功应用的版本。
+相同知识仍会写入不同会话；只有目标会话中已成功同步的相同内容才会跳过。
+使用 `get_knowledge_version("user_manual", session_id="user_123")` 或
+`list_knowledge_versions(session_id="user_123")` 查询该会话；省略会话参数时返回每个知识 ID 的最新成功版本。
+
+请串行调用同步器。只有新片段全部写入且旧片段失效处理成功后，才更新版本和映射。
+失败时会删除本次已返回 ID 的新片段，回滚成功后可用相同参数重试；回滚失败会抛出异常并保留原始错误链，
+此时应先检查存储状态。该机制不是持久化原子事务：写入后未返回 ID 就报错、管理器的容量淘汰、
+旧片段失效处理的部分修改以及并发同步，不在回滚保证范围内。
+
 ---
 
 ### 步骤 3: 运行基准测试（可选，1 分钟）
