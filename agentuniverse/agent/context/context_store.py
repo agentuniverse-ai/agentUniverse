@@ -65,7 +65,7 @@ class ContextStore(ComponentBase):
         self,
         session_id: str,
         context_type: Optional[ContextType] = None,
-        limit: int = 100,
+        limit: int | None = 100,
         **kwargs
     ) -> List[ContextSegment]:
         """Retrieve segments with filtering.
@@ -73,7 +73,7 @@ class ContextStore(ComponentBase):
         Args:
             session_id: Session identifier
             context_type: Optional filter by context type
-            limit: Maximum number of segments to return
+            limit: Maximum number of segments to return; None retrieves all
             **kwargs: Additional filters (priority, time range, etc.)
 
         Returns:

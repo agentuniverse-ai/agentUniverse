@@ -409,7 +409,7 @@ class ContextManager(ComponentBase):
 
         if pruned > 0:
             # Recalculate window tokens after pruning
-            remaining = self._hot_store.get(window.session_id)
+            remaining = self._hot_store.get(window.session_id, limit=None)
             new_total = sum(seg.tokens for seg in remaining)
             window.total_tokens = new_total
             window.segment_ids = [seg.id for seg in remaining]
@@ -420,7 +420,9 @@ class ContextManager(ComponentBase):
 
         # Strategy 2: Intelligent compression (NEW in Phase 2)
         if self.enable_compression and self._compressor:
-            segments = self._hot_store.get(window.session_id)
+            # Compression replaces the whole session, so retrieve every segment
+            # rather than the store's default user-facing page of 100 items.
+            segments = self._hot_store.get(window.session_id, limit=None)
 
             if not segments:
                 return  # Nothing to compress
@@ -456,7 +458,7 @@ class ContextManager(ComponentBase):
                 pass
 
         # Strategy 3: Fallback - Simple eviction by priority and decay
-        segments = self._hot_store.get(window.session_id)
+        segments = self._hot_store.get(window.session_id, limit=None)
 
         # Sort by: priority (lower first), decay score (lower first), last_accessed (older first)
         def eviction_key(seg):
