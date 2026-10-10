@@ -47,12 +47,20 @@ class ContextStore(ComponentBase):
         }
 
     @abstractmethod
-    def add(self, segments: List[ContextSegment], **kwargs) -> None:
+    def add(self, segments: List[ContextSegment], **kwargs) -> list[ContextSegment] | None:
         """Store context segments.
 
         Args:
             segments: List of context segments to store
             **kwargs: Additional parameters (session_id, etc.)
+
+        Returns:
+            Segments evicted from the requested session by this write, including
+            their token costs. Stores without capacity eviction may continue
+            returning None. A bounded store should report session-local evictions
+            so its ContextManager can update that window without an extra read
+            that changes access tracking. Cross-session/global eviction requires
+            separate coordination and must not be included in this report.
 
         Raises:
             ValueError: If segments validation fails
