@@ -1,0 +1,11 @@
+name: 'default_azure_openai_llm'
+description: 'default azure openai llm'
+model_name: 'gpt-4o'
+api_base: '${AZURE_OPENAI_ENDPOINT}'
+api_key: '${AZURE_OPENAI_API_KEY}'
+api_version: '2024-08-01-preview'
+max_tokens: 1024
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.azure_openai_llm'
+  class: 'AzureOpenAIStyleLLM'
