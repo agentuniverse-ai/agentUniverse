@@ -1,0 +1,13 @@
+name: 'lancedb_store'
+description: 'LanceDB vector store'
+uri: './lancedb'
+table_name: 'agentuniverse'
+distance: 'COSINE'
+similarity_top_k: 10
+with_vectors: false
+# api_key: 'your-lancedb-cloud-api-key'
+# region: 'us-east-1'
+metadata:
+  type: 'STORE'
+  module: 'agentuniverse.agent.action.knowledge.store.lancedb_store'
+  class: 'LanceDBStore'
