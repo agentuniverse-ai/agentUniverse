@@ -380,7 +380,8 @@ class RamContextStore(ContextStore):
         - Exact phrase match: 10.0
         - Content term match: 2.0 per term
         - Keyword match: 5.0 per keyword
-        - Priority bonus: CRITICAL=2.0, HIGH=1.5, MEDIUM=1.0, LOW=0.5
+        - Priority bonus (only for segments that matched): CRITICAL=2.0, HIGH=1.5,
+          MEDIUM=1.0, LOW=0.5
         - Decay factor: multiply by decay score
 
         Args:
@@ -417,7 +418,11 @@ class RamContextStore(ContextStore):
             ContextPriority.LOW: 0.5,
             ContextPriority.EPHEMERAL: 0.2,
         }
-        score += priority_bonus.get(segment.priority, 1.0)
+        # The priority bonus is a tiebreaker between matching segments, not a match by
+        # itself: adding it unconditionally gives every segment a positive score, which
+        # defeats the `score > 0` filter in search_context().
+        if score > 0:
+            score += priority_bonus.get(segment.priority, 1.0)
 
         # Apply decay factor
         score *= max(0.1, segment.calculate_decay())
