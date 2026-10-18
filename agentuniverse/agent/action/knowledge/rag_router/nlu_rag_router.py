@@ -37,7 +37,8 @@ class NluRagRouter(RagRouter):
             store_info=json.dumps(store_info),
             store_amount=self.store_amount
         )
-        target_store_list = agent_result.output.split(",")
+        # Normalize response formatting before matching configured store names.
+        target_store_list = [name.strip() for name in agent_result.output.split(",")]
         if len(target_store_list) > self.store_amount:
             target_store_list = target_store_list[:self.store_amount]
         filtered_store_list = [_store for _store in target_store_list if _store in store_list]
