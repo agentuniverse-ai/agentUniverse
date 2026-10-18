@@ -1,0 +1,7 @@
+info:
+  name: 'secure_rag_workflow'
+  description: 'secure RAG closed-loop workflow (retrieve -> generate -> security review -> express)'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.secure_rag_work_pattern'
+  class: 'SecureRagWorkPattern'

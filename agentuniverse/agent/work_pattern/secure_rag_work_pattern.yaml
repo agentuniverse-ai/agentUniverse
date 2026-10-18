@@ -1,0 +1,6 @@
+name: 'secure_rag_work_pattern'
+description: 'secure RAG work pattern with safety review (retrieve -> generate -> security review -> express)'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.secure_rag_work_pattern'
+  class: 'SecureRagWorkPattern'
