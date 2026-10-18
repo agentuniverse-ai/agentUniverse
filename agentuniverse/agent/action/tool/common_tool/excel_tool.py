@@ -12,11 +12,19 @@ import asyncio
 from typing import Optional, List, Dict, Any, Union
 from enum import Enum
 from dataclasses import dataclass
+from datetime import date, datetime, time
 from pydantic import Field
 
 from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.annotation.retry import retry
 from agentuniverse.base.util.logging.logging_util import LOGGER
+
+
+def _serialize_excel_date(value: Any) -> str:
+    """Serialize Excel date/time values without masking unsupported types."""
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 class ExcelMode(Enum):
@@ -409,7 +417,8 @@ class ExcelTool(Tool):
                 - info: (no additional params)
 
         Returns:
-            JSON string with operation result
+            JSON string with operation result. Date and time cells are ISO 8601
+            strings; other cell values retain their JSON types.
         """
         # Validate mode
         if mode not in [m.value for m in ExcelMode]:
@@ -485,7 +494,7 @@ class ExcelTool(Tool):
             elif mode == ExcelMode.INFO.value:
                 result = self._get_excel_info(file_path)
 
-            return json.dumps(result, ensure_ascii=False, indent=2)
+            return json.dumps(result, ensure_ascii=False, indent=2, default=_serialize_excel_date)
 
         except Exception as e:
             LOGGER.error(f"Excel tool execution error: {str(e)}")
