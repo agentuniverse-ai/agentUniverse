@@ -5,12 +5,18 @@ from agentuniverse.llm.llm_output import LLMOutput
 
 
 class _StubLLM:
+    """ stubllm.
+    """
     @staticmethod
     def get_num_tokens(text: str) -> int:
+        """Return num tokens.
+        """
         return len(text)
 
 
 def test_get_llm_token_usage_preserves_llm_input():
+    """Test that get llm token usage preserves llm input.
+    """
     llm_input = {
         "kwargs": {
             "messages": [
