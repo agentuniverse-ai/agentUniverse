@@ -70,6 +70,16 @@ class OllamaLLM(LLM):
             return self.agenerate_result(res)
 
     def generate_result(self, data):
+        """Yield an ``LLMOutput`` for each chunk of a streamed ollama chat.
+
+        Args:
+            data: Iterable of raw ollama response chunks, each a dict
+                with a ``message`` field.
+
+        Yields:
+            LLMOutput: One per chunk, carrying the message content as
+            text and the raw chunk JSON as ``raw``.
+        """
         for line in data:
             yield LLMOutput(text=line.get("message").get('content'), raw=json.dumps(line))
 
