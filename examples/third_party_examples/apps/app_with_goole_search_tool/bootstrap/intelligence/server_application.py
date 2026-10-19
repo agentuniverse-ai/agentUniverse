@@ -17,6 +17,7 @@ class ServerApplication:
 
     @classmethod
     def start(cls):
+        """Bootstrap the AgentUniverse core and start the web server."""
         AgentUniverse().start()
         start_web_server()
 
