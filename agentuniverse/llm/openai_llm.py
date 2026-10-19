@@ -103,6 +103,8 @@ class OpenAILLM(LLM):
             **kwargs,
         )
         if not streaming:
+            if not chat_completion.choices:
+                raise ValueError("OpenAI completion returned no choices")
             text = chat_completion.choices[0].message.content
             return LLMOutput(text=text, raw=chat_completion.model_dump())
         return self.generate_stream_result(chat_completion)
@@ -125,6 +127,8 @@ class OpenAILLM(LLM):
             **kwargs,
         )
         if not streaming:
+            if not chat_completion.choices:
+                raise ValueError("OpenAI completion returned no choices")
             text = chat_completion.choices[0].message.content
             return LLMOutput(text=text, raw=chat_completion.model_dump())
         return self.agenerate_stream_result(chat_completion)
