@@ -3,7 +3,7 @@
 
 # @Time    : 2025/9/29
 # @FileName: notion_reader.py
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, ClassVar
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -17,6 +17,10 @@ class NotionReader(Reader):
     Environment:
         NOTION_TOKEN must be provided (or pass via ext_info)
     """
+
+    MAX_BLOCK_DEPTH: ClassVar[int] = 32
+    MAX_BLOCKS: ClassVar[int] = 10000
+    MAX_BLOCK_PAGES: ClassVar[int] = 1000
 
     def _load_data(self, page_or_db_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
         print(f"debugging: NotionReader start load id={page_or_db_id}")
@@ -74,17 +78,39 @@ class NotionReader(Reader):
         return {key: value for key, value in ext_info.items() if key not in sensitive_keys}
 
     def _export_page(self, client, page_id: str) -> List[str]:
+        """Export child blocks depth first, bounding nesting and API pagination.
+
+        Limits raise ValueError rather than returning a truncated page.
+        """
         blocks: List[str] = []
-        cursor = None
-        while True:
-            children = client.blocks.children.list(block_id=page_id, start_cursor=cursor)
-            for blk in children.get("results", []):
-                txt = self._block_to_text(blk)
-                if txt:
-                    blocks.append(txt)
-            if not children.get("has_more"):
-                break
-            cursor = children.get("next_cursor")
+        block_count = 0
+
+        def export_children(block_id: str, depth: int) -> None:
+            nonlocal block_count
+            if depth > self.MAX_BLOCK_DEPTH:
+                raise ValueError("Notion block depth limit exceeded")
+            cursor = None
+            seen_cursors = set()
+            for _ in range(self.MAX_BLOCK_PAGES):
+                children = client.blocks.children.list(block_id=block_id, start_cursor=cursor)
+                for blk in children.get("results", []):
+                    block_count += 1
+                    if block_count > self.MAX_BLOCKS:
+                        raise ValueError("Notion block count limit exceeded")
+                    txt = self._block_to_text(blk)
+                    if txt:
+                        blocks.append(txt)
+                    if blk.get("has_children") and blk.get("id"):
+                        export_children(blk["id"], depth + 1)
+                if not children.get("has_more"):
+                    return
+                cursor = children.get("next_cursor")
+                if not cursor or cursor in seen_cursors:
+                    raise ValueError("Notion returned a missing or repeated pagination cursor")
+                seen_cursors.add(cursor)
+            raise ValueError("Notion block pagination limit exceeded")
+
+        export_children(page_id, 0)
         return blocks
 
     def _block_to_text(self, block: Dict) -> str:
