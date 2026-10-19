@@ -163,7 +163,7 @@ class ThresholdFilter(DocProcessor):
         Returns:
             List[Document]: Top K documents by score.
         """
-        k = config.get("k", len(docs))
+        k = max(0, config.get("k", len(docs)))
 
         # Score each document
         scored_docs = [(doc, self._get_score(doc)) for doc in docs]
