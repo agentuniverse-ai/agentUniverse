@@ -5,7 +5,7 @@ import re
 import pytest
 from yaml import YAMLError, safe_dump
 
-from agentuniverse_product.service.util.plugin_util import parse_openapi_yaml_to_tool_bundle
+from agentuniverse_product.service.util.plugin_util import OpenAPIParseError, parse_openapi_yaml_to_tool_bundle
 
 
 @pytest.mark.parametrize(
@@ -60,15 +60,38 @@ def test_invalid_openapi_structure_reports_the_field(document, message):
         parse_openapi_yaml_to_tool_bundle(safe_dump(document))
 
 
-def test_malformed_yaml_preserves_the_parser_cause_and_location():
-    with pytest.raises(ValueError, match="Invalid OpenAPI YAML syntax") as raised:
-        parse_openapi_yaml_to_tool_bundle("servers:\n  - url: [\n")
+@pytest.mark.parametrize(
+    ("document", "line", "column"),
+    [
+        ("servers:\n  - url: ]\n", 2, 10),
+        ("servers:\n  - url: [\n", 3, 1),
+        ("servers:\n\t- url: https://example.com\n", 2, 1),
+    ],
+    ids=["unexpected-token", "unexpected-end", "invalid-indentation"],
+)
+def test_malformed_yaml_preserves_the_parser_cause_and_location(document, line, column):
+    with pytest.raises(OpenAPIParseError, match="Invalid OpenAPI YAML syntax") as raised:
+        parse_openapi_yaml_to_tool_bundle(document)
 
     cause = raised.value.__cause__
     assert isinstance(cause, YAMLError)
     assert str(cause) in str(raised.value)
-    assert "line" in str(raised.value)
-    assert "column" in str(raised.value)
+    assert str(raised.value).startswith(f"Invalid OpenAPI YAML syntax at line {line}, column {column}:")
+
+
+def test_yaml_error_without_a_location_preserves_the_parser_cause(monkeypatch):
+    cause = YAMLError("synthetic parser failure")
+
+    def fail_to_load(_document):
+        raise cause
+
+    monkeypatch.setattr("agentuniverse_product.service.util.plugin_util.safe_load", fail_to_load)
+
+    with pytest.raises(OpenAPIParseError) as raised:
+        parse_openapi_yaml_to_tool_bundle("servers: [{url: /api}]\npaths: {}\n")
+
+    assert str(raised.value) == "Invalid OpenAPI YAML syntax: synthetic parser failure"
+    assert raised.value.__cause__ is cause
 
 
 @pytest.mark.parametrize("document", ["", "# Empty document\n"])
@@ -87,34 +110,83 @@ def test_empty_paths_still_returns_no_tools():
 
 
 @pytest.mark.parametrize("server_url", ["https://api.example.com", "/api", "https://{tenant}.example.com"])
-def test_valid_openapi_preserves_tool_generation(server_url):
+def test_valid_openapi_round_trip_assembles_complete_tool_bundles(server_url):
+    """Parse a valid OpenAPI document into complete GET and POST tool bundles."""
+    server = {"url": server_url}
+    if "{tenant}" in server_url:
+        server["variables"] = {"tenant": {"default": "demo"}}
+
     document = {
-        "servers": [{"url": server_url}],
+        "openapi": "3.0.3",
+        "info": {"title": "Pet API", "version": "1.0.0"},
+        "servers": [server],
         "paths": {
             "/pets": {
-                "get": {"operationId": "listPets"},
+                "get": {
+                    "operationId": "listPets",
+                    "parameters": [
+                        {"name": "limit", "in": "query", "schema": {"type": "integer"}},
+                    ],
+                    "responses": {"200": {"description": "A list of pets"}},
+                },
                 "post": {
                     "requestBody": {
+                        "required": True,
                         "content": {
                             "application/json": {
                                 "schema": {"$ref": "#/components/schemas/Pet"},
                             }
                         }
-                    }
+                    },
+                    "responses": {"201": {"description": "Pet created"}},
                 },
             },
         },
-        "components": {"schemas": {"Pet": {"type": "object"}}},
+        "components": {
+            "schemas": {
+                "Pet": {
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {"name": {"type": "string"}},
+                },
+            },
+        },
     }
 
     tools = parse_openapi_yaml_to_tool_bundle(safe_dump(document))
 
-    assert len(tools) == 2
-    assert tools[0] == {
-        "path": "/pets",
-        "method": "get",
-        "operation": {"operationId": "listPets"},
-        "url": server_url + "/pets",
-    }
-    assert tools[1]["operation"]["operationId"] == "pets_post"
-    assert tools[1]["operation"]["requestBody"]["content"]["application/json"]["schema"] == {"type": "object"}
+    assert tools == [
+        {
+            "path": "/pets",
+            "method": "get",
+            "operation": {
+                "operationId": "listPets",
+                "parameters": [
+                    {"name": "limit", "in": "query", "schema": {"type": "integer"}},
+                ],
+                "responses": {"200": {"description": "A list of pets"}},
+            },
+            "url": server_url + "/pets",
+        },
+        {
+            "path": "/pets",
+            "method": "post",
+            "operation": {
+                "operationId": "pets_post",
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["name"],
+                                "properties": {"name": {"type": "string"}},
+                            },
+                        },
+                    },
+                },
+                "responses": {"201": {"description": "Pet created"}},
+            },
+            "url": server_url + "/pets",
+        },
+    ]

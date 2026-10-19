@@ -80,7 +80,12 @@ def _load_openapi_yaml(yaml: str) -> Mapping:
     try:
         openapi = safe_load(yaml)
     except YAMLError as error:
-        message = f'Invalid OpenAPI YAML syntax: {error}'
+        location = ''
+        problem_mark = getattr(error, 'problem_mark', None)
+        if problem_mark is not None:
+            # YAML marks are zero-based; show the user one-based line and column numbers.
+            location = f' at line {problem_mark.line + 1}, column {problem_mark.column + 1}'
+        message = f'Invalid OpenAPI YAML syntax{location}: {error}'
         raise OpenAPIParseError(message) from error
 
     if openapi is None:
