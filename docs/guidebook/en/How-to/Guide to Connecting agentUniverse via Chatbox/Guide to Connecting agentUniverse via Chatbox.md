@@ -12,7 +12,7 @@ Install one of the following tools:
   [Download Link](https://cherry-ai.com/download)
 
 ### 2. Prepare agentUniverse Project
-Refer to the aU [Quick Start](https://github.com/antgroup/agentUniverse/blob/master/README_zh.md) documentation to create an agentUniverse project and successfully launch the `demo_agent` sample application.
+Refer to the aU [Quick Start](https://github.com/agentuniverse-ai/agentUniverse/blob/master/README_zh.md) documentation to create an agentUniverse project and successfully launch the `demo_agent` sample application.
 
 ## II. Create OpenAI Protocol-Compliant Agent
 
