@@ -103,9 +103,10 @@ class QuestionDetector(DocProcessor):
        "..., right?" ending (the question mark is required for the English
        tag), or the Chinese markers 是不是 / 对吗 anywhere near the end
        (these are unambiguous without a question mark).
-    3. **polar** — it simply ends with ``?`` / ``？`` (a statement-shaped
-       sentence with question intonation: "She left?"), or a Chinese
-       statement ends with the particle 吗 ("你吃了吗。").
+    3. **polar** — its terminal punctuation run carries a question mark
+       (a statement-shaped sentence with question intonation: "She
+       left?", emphatic "She left?!"), or a Chinese statement ends with
+       the particle 吗 ("你吃了吗。").
 
     Each hit is ``{"text": str, "span": (start, end), "kind": "wh" |
     "polar" | "tagged", "opener": str | None}`` where ``span`` are
@@ -314,20 +315,25 @@ class QuestionDetector(DocProcessor):
 
     @staticmethod
     def _ends_with_question_mark(sentence: str) -> bool:
-        """Report whether the sentence terminates in a question mark.
+        """Report whether the sentence's terminal punctuation asks.
 
-        Called only on segmented sentences, whose terminal punctuation run
-        (plus closing quotes) is always at the very end, so a simple
-        right-strip of closing characters and a last-character check is
-        exact.
+        Called only on segmented sentences, whose terminal punctuation
+        run (plus closing quotes) is always a suffix, so stripping the
+        closing characters and inspecting that run as a whole is exact.
+        A question mark anywhere in the run counts — emphatic runs such
+        as "She left?!" or "你来了？！" ask just as much as run-final
+        "?", while "She left!" and "Great!!" stay declarative.
 
         Args:
             sentence: Sentence text.
 
         Returns:
-            bool: True when the sentence ends with ? or ？.
+            bool: True when the terminal run contains ? or ？.
         """
-        return sentence.rstrip(_CLOSING_CHARS)[-1:] in ("?", "？")
+        stripped = sentence.rstrip(_CLOSING_CHARS)
+        run = stripped.rstrip(_TERMINAL_CHARS)
+        terminal_run = stripped[len(run):]
+        return "?" in terminal_run or "？" in terminal_run
 
     @staticmethod
     def _ends_with_ma(sentence: str) -> bool:

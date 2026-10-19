@@ -492,6 +492,141 @@ class TestQuestionDetector(unittest.TestCase):
         self.assertEqual(first["question_count"], second["question_count"])
         self.assertEqual(first["question_ratio"], second["question_ratio"])
 
+    # ========== Adversarial regression tests ==========
+
+    def test_emphatic_question_exclamation_runs(self):
+        """A question mark anywhere in the terminal punctuation run asks:
+        'She left?!' and 'She left!?' are polar alike, English and
+        Chinese; exclamation-only runs stay declarative."""
+        for text in ("She left?!", "She left!?", "你来了？！",
+                     "你来了！？", "真的吗？！"):
+            doc = _doc(text)
+            result = self.detector.process_docs([doc], self.query)
+            hits = result[0].metadata["questions"]
+            self.assertEqual(len(hits), 1, text)
+            self.assertEqual(hits[0]["kind"], "polar", text)
+            self.assertIsNone(hits[0]["opener"], text)
+
+        for text in ("She left!", "Great!!", "太好了！", "走开！"):
+            doc = _doc(text)
+            result = self.detector.process_docs([doc], self.query)
+            self.assertEqual(result[0].metadata["question_count"], 0, text)
+
+    def test_all_openers_at_middle_and_unpunctuated_tail(self):
+        """Every opener is recognised as a middle sentence and as the
+        final sentence even when the terminal punctuation is missing."""
+        for opener in EN_OPENERS:
+            cap = opener.capitalize()
+            doc = _doc(f"He nodded. {cap} it work? She smiled.")
+            result = self.detector.process_docs([doc], self.query)
+            hits = result[0].metadata["questions"]
+            self.assertEqual(len(hits), 1, opener)
+            self.assertEqual(hits[0]["opener"], opener)
+            self.assertEqual(hits[0]["text"], f"{cap} it work?", opener)
+
+            doc = _doc(f"He nodded. She smiled. {cap} it work")
+            result = self.detector.process_docs([doc], self.query)
+            hits = result[0].metadata["questions"]
+            self.assertEqual(len(hits), 1, opener)
+            self.assertEqual(hits[0]["opener"], opener)
+            self.assertEqual(hits[0]["text"], f"{cap} it work", opener)
+
+    def test_polar_vs_wh_verb_form(self):
+        """'Does it work?' asks with an auxiliary (wh); 'It works?' is a
+        statement with rising intonation (polar, no opener)."""
+        doc = _doc("Does it work?")
+        hit = self.detector.process_docs([doc], self.query)[0] \
+            .metadata["questions"][0]
+        self.assertEqual(hit["kind"], "wh")
+        self.assertEqual(hit["opener"], "does")
+
+        doc = _doc("It works?")
+        hit = self.detector.process_docs([doc], self.query)[0] \
+            .metadata["questions"][0]
+        self.assertEqual(hit["kind"], "polar")
+        self.assertIsNone(hit["opener"])
+
+    def test_indirect_questions_not_matched(self):
+        """Embedded/indirect questions are reportage, not questions:
+        the interrogative word is not the first word, so none match."""
+        for text in ("I asked what it is.", "He knows where she went.",
+                     "Tell me why you care.", "I wonder if it works.",
+                     "She asked whether he came.",
+                     "She asked what time it is. I wonder why he left."):
+            doc = _doc(text)
+            result = self.detector.process_docs([doc], self.query)
+            self.assertEqual(result[0].metadata["question_count"], 0, text)
+
+    def test_ma_particle_versus_ba_particle(self):
+        """Sentence-final 吗 asks (even under 。 or none); 吧 does not —
+        but 吧 under a real question mark still asks, via polar."""
+        for text in ("你吃了吗。", "你吃了吗", "这是你的书吗？"):
+            doc = _doc(text)
+            result = self.detector.process_docs([doc], self.query)
+            hits = result[0].metadata["questions"]
+            self.assertEqual(len(hits), 1, text)
+            self.assertEqual(hits[0]["kind"], "polar", text)
+
+        for text in ("我们走吧。", "快来看看吧！", "好吧，我知道了。",
+                     "你说对吧。"):
+            doc = _doc(text)
+            result = self.detector.process_docs([doc], self.query)
+            self.assertEqual(result[0].metadata["question_count"], 0, text)
+
+        doc = _doc("你坐下吧？")
+        result = self.detector.process_docs([doc], self.query)
+        self.assertEqual(result[0].metadata["question_count"], 1)
+
+    def test_semicolon_joined_questions_single_hit(self):
+        """Semicolons are not sentence boundaries: two conceptually
+        distinct questions joined by ';' yield exactly one wh hit whose
+        span covers the whole sentence."""
+        doc = _doc("Is this true; is that false?")
+        result = self.detector.process_docs([doc], self.query)
+        meta = result[0].metadata
+        self.assertEqual(meta["question_count"], 1)
+        self.assertEqual(meta["question_ratio"], 1.0)
+        hit = meta["questions"][0]
+        self.assertEqual(hit["kind"], "wh")
+        self.assertEqual(hit["opener"], "is")
+        self.assertEqual(hit["text"], "Is this true; is that false?")
+
+    def test_hundred_sentence_corpus_against_reference(self):
+        """A deterministic 100-sentence corpus with independently known
+        labels: the count, the ratio and every hit's kind/text agree
+        with the reference classification (list capped at 50 by
+        default)."""
+        patterns = (
+            "What is item {i}?",             # wh
+            "Why does item {i} fail?",       # wh
+            "Item {i} works fine.",          # declarative
+            "She tested item {i}?",          # polar
+            "Item {i} is fixed, right?",     # tagged
+            "他检查了第{i}个。",               # declarative
+            "这是什么{i}？",                   # wh
+            "Item {i} was delayed.",         # declarative
+            "How did item {i} break?",       # wh
+            "Can item {i} be saved?",        # wh
+        )
+        kinds = ("wh", "wh", None, "polar", "tagged", None, "wh",
+                 None, "wh", "wh")
+        corpus = [patterns[i % 10].format(i=i) for i in range(100)]
+        expected = [(corpus[i], kinds[i % 10]) for i in range(100)
+                    if kinds[i % 10] is not None]
+        text = " ".join(corpus)
+
+        doc = _doc(text)
+        result = self.detector.process_docs([doc], self.query)
+        meta = result[0].metadata
+        self.assertEqual(meta["question_count"], len(expected))
+        self.assertAlmostEqual(meta["question_ratio"],
+                               len(expected) / 100.0)
+        self.assertEqual(len(meta["questions"]), 50)  # default cap
+        for hit, (exp_text, exp_kind) in zip(meta["questions"],
+                                             expected):
+            self.assertEqual(hit["text"], exp_text)
+            self.assertEqual(hit["kind"], exp_kind)
+
 
 if __name__ == '__main__':
     unittest.main()
