@@ -94,6 +94,18 @@ class TestFormatters(unittest.TestCase):
         # Volumes with thousands separators.
         self.assertIn("1,000", out)
 
+    def test_format_intraday_history_preserves_distinct_timestamps(self) -> None:
+        rows = [
+            {"datetime": "2024-01-02 10:30:00-05:00", "close": 102.0},
+            {"datetime": "2024-01-02 09:30:00-05:00", "close": 101.0},
+        ]
+
+        out = self.tool._format_history("AAPL", rows)
+
+        self.assertIn("2024-01-02 10:30:00-05:00", out)
+        self.assertIn("2024-01-02 09:30:00-05:00", out)
+        self.assertLess(out.index("10:30"), out.index("09:30"))
+
     def test_format_history_empty(self) -> None:
         out = self.tool._format_history("AAPL", [])
         self.assertIn("no historical data", out)
