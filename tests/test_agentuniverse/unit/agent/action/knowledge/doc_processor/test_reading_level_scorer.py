@@ -194,6 +194,32 @@ class TestReadingLevelScorer(unittest.TestCase):
         self.assertEqual(split("你好。世界！"),
                          ["你好。", "世界！"])
 
+    def test_sentence_splitting_conservative_edges(self):
+        """Documented conservative behaviors stay pinned: terminator runs
+        like '...' end one sentence; a period followed by a non-space
+        character (closing quote) does not split; 'etc.' mid-sentence
+        stays guarded (abbreviation/sentence-end ambiguity resolves to
+        no split); a lowercase single letter before a period DOES end a
+        sentence — only uppercase initials are guarded."""
+        split = ReadingLevelScorer._split_sentences
+        self.assertEqual(split("Wait... it continues here."),
+                         ["Wait...", " it continues here."])
+        self.assertEqual(len(split('He said "stop." Then left.')), 1)
+        self.assertEqual(len(split("Blah blah etc. More text here.")), 1)
+        self.assertEqual(len(split("point a. next point b.")), 2)
+
+    def test_non_cjk_non_latin_scripts_yield_no_words(self):
+        """Scripts outside the Latin/digit/CJK token classes produce zero
+        words, so formulas stay None and no CJK note is stamped (the
+        note path is scoped to CJK-heavy text)."""
+        level = self.scorer._analyze("Привет мир. Это тест.")
+        self.assertEqual(level["word_count"], 0)
+        self.assertEqual(level["sentence_count"], 2)
+        self.assertFalse(level["_non_latin"])
+        self.assertIsNone(level["flesch_reading_ease"])
+        self.assertIsNone(level["flesch_kincaid_grade"])
+        self.assertIsNone(level["gunning_fog"])
+
     # ========== CJK ratio tests ==========
 
     def test_cjk_ratio(self):
@@ -330,6 +356,15 @@ class TestReadingLevelScorer(unittest.TestCase):
         self.assertEqual(high["sentence_count"], 1)
         docs = self.scorer.process_docs([_doc(MIXED_HIGH)], self.query)
         self.assertIn("readability_note", docs[0].metadata)
+
+    def test_cjk_ratio_exactly_at_threshold_stays_latin(self):
+        """The skip condition is strictly '> 0.3': a ratio of exactly
+        0.3 (3 CJK of 10 letters) still takes the formula path."""
+        text = "abcdefg中中日"  # 7 latin letters + 3 CJK = 0.3 exactly
+        self.assertEqual(ReadingLevelScorer._cjk_ratio(text), 0.3)
+        level = self.scorer._analyze(text)
+        self.assertFalse(level["_non_latin"])
+        self.assertIsNotNone(level["flesch_reading_ease"])
 
     # ========== Empty / degenerate input tests ==========
 
