@@ -105,7 +105,9 @@ class ArxivTool(Tool):
         except ImportError:
             raise ImportError("arxiv is required. Install with: pip install arxiv")
         search = arxiv.Search(id_list=[paper_id])
-        paper = next(self.sch_engine.results(search))
+        paper = next(self.sch_engine.results(search), None)
+        if paper is None:
+            raise ValueError(f"No arXiv paper found for ID: {paper_id}")
         paper.download_pdf(filename="downloaded-paper.pdf") 
         
         try:
