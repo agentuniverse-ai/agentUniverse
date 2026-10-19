@@ -86,6 +86,14 @@ class LLMChannel(ComponentBase):
         return self
 
     def create_copy(self):
+        """Return the channel instance itself.
+
+        Channels store their configuration directly, so a copy is the
+        same instance rather than a new object.
+
+        Returns:
+            This ``LLMChannel`` instance.
+        """
         return self
 
     @property
