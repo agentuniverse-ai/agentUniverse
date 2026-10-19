@@ -11,6 +11,7 @@ import time
 from pydantic import Field
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.util.env_util import get_from_env
+from loguru import logger
 import html
 
 
@@ -34,6 +35,8 @@ class JinaAITool(Tool):
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("JINA_API_KEY"))
     max_read_content_length: int = Field(10000, description="Maximum content length in characters")
     remove_image: bool = Field(True, description="Remove image from content")
+    verify_tls: bool = Field(True, description="Verify TLS certificates on Jina API "
+                                               "requests. Disable only for a trusted self-signed endpoint.")
     headers: Dict[str, str] = None
     def execute(self,
                 input: str = None,
@@ -91,24 +94,26 @@ class JinaAITool(Tool):
         for attempt in range(retries):
             try:
                 response = requests.get(
-                    url, 
-                    headers=self._get_headers(), 
-                    verify=False, 
+                    url,
+                    headers=self._get_headers(),
+                    verify=self.verify_tls,
                     timeout=timeout
                 )
                 response.raise_for_status()
                 content = response.json()
 
                 if content.get("code") != 200:
-                    print(f"Request failed with status code {content.get('code')}")
+                    logger.warning(f"Jina AI request to {url} failed with code {content.get('code')}")
                     return None
                     
                 return content
                 
             except requests.HTTPError as e:
-                error_msg = (f"Access forbidden. Please check your API key and permissions. Error: {str(e)}" 
-                           if e.response.status_code == 403 
-                           else f"HTTP Error: {str(e)}")
+                response = e.response
+                status_code = response.status_code if response is not None else None
+                error_msg = (f"Access forbidden. Please check your API key and permissions. Error: {str(e)}"
+                             if status_code == 403
+                             else f"HTTP Error: {str(e)}")
                 if attempt < retries - 1:
                     time.sleep(2 ** attempt)
                     continue

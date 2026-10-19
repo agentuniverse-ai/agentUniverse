@@ -63,6 +63,9 @@ class WebsiteBs4Reader(Reader):
         if not url.startswith(('http://', 'https://')):
             raise ValueError("Invalid URL format")
 
+        self._visited = set()
+        self._urls_to_crawl = []
+
         # Update config from ext_info if provided
         if ext_info:
             if 'max_depth' in ext_info:

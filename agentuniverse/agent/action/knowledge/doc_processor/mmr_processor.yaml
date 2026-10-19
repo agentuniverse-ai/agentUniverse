@@ -1,0 +1,30 @@
+name: 'mmr_processor'
+description: 'Maximal Marginal Relevance re-ranking for recalled knowledge documents (diversity-aware selection), addressing the re-ranking direction of issue #248.'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.mmr_processor'
+  class: 'MMRProcessor'
+
+# --- Relevance / diversity trade-off ---
+# lambda_coef in [0.0, 1.0]: 1.0 = pure relevance ranking, 0.0 = maximise
+# diversity, 0.5 = balanced (default).
+lambda_coef: 0.5
+
+# --- Output size ---
+# Number of documents to keep after re-ranking. null keeps every document and
+# only re-orders them.
+top_n: null
+
+# --- Embeddings ---
+# Query / document embeddings are read from Query.embeddings and
+# Document.embedding when present. Set embedding_name to a registered embedding
+# component so any missing embeddings are computed on demand; leave null to rely
+# only on embeddings already carried by the query / documents.
+embedding_name: ''            # e.g. 'default_openai_embedding'
+
+# --- Optional score stamping ---
+# When set, each kept document's cosine relevance to the query is written under
+# this metadata key. Leave empty to avoid clobbering scores from earlier
+# processors such as ReciprocalRankFusionProcessor.
+score_key: ''

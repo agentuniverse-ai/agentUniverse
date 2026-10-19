@@ -8,7 +8,7 @@
 import os
 import tempfile
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import List, Union, Optional, Dict, Type, Set
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
@@ -124,7 +124,7 @@ class RarReader(Reader):
                     if entry.is_dir():
                         continue
 
-                    if '..' in entry.filename or entry.filename.startswith('/'):
+                    if self._is_unsafe_entry_name(entry.filename):
                         continue
 
                     compressed_size = entry.compress_size
@@ -187,6 +187,20 @@ class RarReader(Reader):
             raise ValueError(f"Failed to read RAR file: {str(e)}")
 
         return documents
+
+    @staticmethod
+    def _is_unsafe_entry_name(entry_name: str) -> bool:
+        """Return whether an archive entry can escape the extraction root."""
+        if not entry_name or entry_name == ".":
+            return True
+
+        posix_path = PurePosixPath(entry_name)
+        windows_path = PureWindowsPath(entry_name)
+        if posix_path.is_absolute() or windows_path.is_absolute():
+            return True
+        if ".." in posix_path.parts or ".." in windows_path.parts:
+            return True
+        return False
 
     def _process_file(
         self,

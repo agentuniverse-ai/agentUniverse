@@ -16,6 +16,8 @@ from typing import Dict, Optional
 from dataclasses import dataclass
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.common_tool.tool_input_utils import parse_strict_bool
+from loguru import logger
 
 
 class CommandStatus(Enum):
@@ -71,11 +73,62 @@ _command_results: Dict[int, CommandResult] = {}
 
 
 class RunCommandTool(Tool):
-    """
-    Tool for executing shell commands either synchronously or asynchronously.
+    """Tool for executing shell commands either synchronously or asynchronously.
+
+    .. warning::
+        **Security:** this tool runs **arbitrary shell commands on the host**
+        via ``subprocess`` with ``shell=True``. There is no sandboxing, command
+        allow-list, or resource limiting. A prompt injection that reaches this
+        tool escalates directly to arbitrary command execution and full host
+        compromise.
+
+        Because of that, the tool is **disabled by default**, mirroring
+        :class:`PythonREPLTool`. Set ``allow_command_execution: True`` to opt
+        in, and only do so in a fully trusted, isolated environment. Do not
+        equip an agent that processes untrusted input (documents, web pages,
+        chat messages) with this tool.
+
+    Attributes:
+        allow_command_execution (bool): Explicit opt-in flag. Defaults to
+            ``False`` so the tool refuses to execute commands until an
+            integrator acknowledges the risk above.
     """
 
-    def execute(self, command: str, cwd: str, blocking: bool = True) -> str:
+    allow_command_execution: bool = False
+
+    def execute(self, command: str | ToolInput, cwd: str = None, blocking: bool = True) -> str:
+        if isinstance(command, ToolInput):
+            params = command.to_dict()
+            cwd = params.get("cwd", cwd)
+            blocking = params.get("blocking", blocking)
+            command = params.get("command")
+        if not self.allow_command_execution:
+            logger.warning(
+                "RunCommandTool.execute is disabled (allow_command_execution=False). "
+                "It runs arbitrary shell commands via subprocess(shell=True) with no "
+                "sandboxing; set allow_command_execution=True to opt in only for "
+                "trusted environments.")
+            disabled = CommandResult(
+                thread_id=threading.get_ident(),
+                status=CommandStatus.ERROR,
+                stdout="",
+                stderr=("RunCommandTool is disabled by default because it executes "
+                        "arbitrary shell commands on the host without sandboxing. Set "
+                        "`allow_command_execution: True` to opt in, and only do so in a "
+                        "trusted, isolated environment."),
+                start_time=time.time(),
+            )
+            disabled.end_time = disabled.start_time
+            _command_results[disabled.thread_id] = disabled
+            return disabled.message
+        cwd = cwd or os.getcwd()
+        try:
+            blocking = parse_strict_bool(blocking, "blocking", default=True)
+        except ValueError as e:
+            return json.dumps({
+                "error": str(e),
+                "status": CommandStatus.ERROR.value
+            })
         return self._run_command(command, cwd, blocking)
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:
@@ -87,7 +140,12 @@ class RunCommandTool(Tool):
             start_time=time.time(),
         )
 
+        thread_started = threading.Event()
+
         def __run() -> None:
+            result.thread_id = threading.get_ident()
+            _command_results[result.thread_id] = result
+            thread_started.set()
             try:
                 process = subprocess.Popen(
                     command,
@@ -119,8 +177,7 @@ class RunCommandTool(Tool):
         else:
             thread = threading.Thread(target=__run)
             thread.start()
-            result.thread_id = thread.ident
-            _command_results[result.thread_id] = result
+            thread_started.wait()
 
         return result.message
 

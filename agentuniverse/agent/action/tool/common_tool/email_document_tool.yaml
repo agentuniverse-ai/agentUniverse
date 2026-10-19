@@ -1,0 +1,36 @@
+name: email_document_tool
+description: Create, read, inspect, and safely extract attachments from bounded RFC 5322 EML files.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.email_document_tool
+  class: EmailDocumentTool
+input_keys:
+  - mode
+  - file_path
+base_dir: .
+max_read_bytes: 26214400
+max_write_bytes: 26214400
+max_body_chars: 200000
+max_headers: 100
+max_attachments: 50
+max_attachment_bytes: 20971520
+max_total_attachment_bytes: 52428800
+args_model_schema:
+  type: object
+  properties:
+    mode: {type: string, enum: [create, read, info, extract]}
+    file_path: {type: string}
+    headers: {type: object}
+    text_body: {type: string}
+    html_body: {type: string}
+    attachments:
+      type: array
+      items: {type: string}
+    output_dir: {type: string}
+    attachment_names:
+      type: array
+      items: {type: string}
+    overwrite: {type: boolean, default: false}
+  required: [mode, file_path]
+  additionalProperties: false

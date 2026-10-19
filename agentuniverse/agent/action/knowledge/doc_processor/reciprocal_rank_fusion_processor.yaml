@@ -1,0 +1,36 @@
+name: 'reciprocal_rank_fusion_processor'
+description: 'Recall post-processor that fuses the ranked results of multiple retrieval channels via Reciprocal Rank Fusion, addressing the fusion direction of issue #248.'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.reciprocal_rank_fusion_processor'
+  class: 'ReciprocalRankFusionProcessor'
+
+# --- Channel detection ---
+# Metadata field that identifies which retrieval channel a document came from.
+# Knowledge.query_knowledge stamps each recalled document with the store code
+# under the key 'recall_channel', so fusing multi-store recall works out of the
+# box. When no document carries the field the whole input is treated as one
+# channel (degrades to single-channel position scoring), so this is safe to use
+# in a single-store pipeline too.
+channel_key: 'recall_channel'
+
+# --- De-duplication ---
+# Identity used to deduplicate the same document surfacing in several channels.
+# 'id' (default) uses the deterministic document id; 'text' compares raw
+# content; any other value is read from document.metadata. When the configured
+# metadata field is missing from a document, its unique id is used as a safe
+# fallback so such documents are not all collapsed together.
+dedup_key: 'id'
+
+# --- Fusion parameters ---
+# RRF smoothing constant. Larger values dampen the advantage of top ranks.
+# The conventional value from the original RRF paper is 60.
+k: 60
+
+# --- Output control ---
+# Maximum number of fused documents to return. null/empty returns all.
+top_n: null
+
+# Metadata key the fused score is written into on each returned document.
+score_field: 'relevance_score'

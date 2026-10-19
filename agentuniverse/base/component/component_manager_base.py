@@ -47,17 +47,40 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         self._instance_obj_map.pop(component_instance_name)
 
     def get_instance_obj(self, component_instance_name: str,
-                         appname: str = None, new_instance: bool = True) -> ComponentTypeVar:
-        """Return the component instance object."""
+                         appname: str = None, new_instance: bool = True,
+                         strict: bool = False) -> ComponentTypeVar:
+        """Return the component instance object.
+
+        Args:
+            component_instance_name: Registered name of the component instance.
+            appname: Application name; defaults to the current app's name.
+            new_instance: When True, return an independent copy so callers
+                cannot mutate the shared registered instance.
+            strict: When True, raise a :class:`ValueError` with a descriptive
+                message if the component is not registered, instead of
+                returning ``None``. Use this at user-facing entry points so a
+                missing component surfaces as an actionable error rather than a
+                cryptic ``AttributeError`` on the returned ``None`` (e.g.
+                ``'NoneType' object has no attribute 'query'``).
+        """
         if component_instance_name == "__default_instance__":
             return self.get_default_instance(new_instance)
         appname = appname or ApplicationConfigManager().app_configer.base_info_appname
         instance_code = f'{appname}.{self._component_type.value.lower()}.{component_instance_name}'
+        instance = self._instance_obj_map.get(instance_code)
+        if instance is None:
+            if strict:
+                raise ValueError(
+                    f"{self._component_type.value} component "
+                    f"'{component_instance_name}' is not registered (resolved "
+                    f"instance code '{instance_code}'). Ensure the corresponding "
+                    f"configuration is loaded before use — verify the component "
+                    f"config file and the application bootstrap order."
+                )
+            return None
         if new_instance:
-            instance = self._instance_obj_map.get(instance_code)
-            if instance:
-                return instance.create_copy()
-        return self._instance_obj_map.get(instance_code)
+            return instance.create_copy()
+        return instance
 
     def get_default_instance(self, new_instance: bool = False) -> ComponentTypeVar:
         """Return the default instance of component."""

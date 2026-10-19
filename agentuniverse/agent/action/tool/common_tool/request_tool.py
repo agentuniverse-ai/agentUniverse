@@ -25,8 +25,18 @@ class RequestTool(Tool):
 
     @staticmethod
     def _clean_url(url: str) -> str:
-        """Strips quotes from the url."""
-        return url.strip("\"'")
+        """Validate a URL value and strip surrounding whitespace/quotes."""
+        if not isinstance(url, str):
+            raise ValueError("url must be a non-empty string")
+        cleaned = url.strip().strip("\"'").strip()
+        if not cleaned:
+            raise ValueError("url must be a non-empty string")
+        return cleaned
+
+    def _normalized_method(self) -> str:
+        if not isinstance(self.method, str):
+            return ""
+        return self.method.strip().upper()
 
     def execute(self, input: str):
         input_params: str = input
@@ -54,29 +64,31 @@ class RequestTool(Tool):
 
     async def async_execute_by_method(self, url: str, data: dict = None, **kwargs):
         url = self._clean_url(url)
-        if self.method == 'GET':
+        method = self._normalized_method()
+        if method == 'GET':
             return await self.requests_wrapper.aget(url)
-        elif self.method == 'POST':
+        elif method == 'POST':
             return await self.requests_wrapper.apost(url, data=data)
-        elif self.method == 'PUT':
+        elif method == 'PUT':
             return await self.requests_wrapper.aput(url, data=data)
-        elif self.method == 'DELETE':
+        elif method == 'DELETE':
             return await self.requests_wrapper.adelete(url)
         else:
-            raise ValueError(f"Unsupported method: {self.method}")
+            raise ValueError(f"Unsupported method: {method or self.method}")
 
     def execute_by_method(self, url: str, data: dict = None, **kwargs):
         url = self._clean_url(url)
-        if self.method == 'GET':
+        method = self._normalized_method()
+        if method == 'GET':
             return self.requests_wrapper.get(url)
-        elif self.method == 'POST':
+        elif method == 'POST':
             return self.requests_wrapper.post(url, data=data)
-        elif self.method == 'PUT':
+        elif method == 'PUT':
             return self.requests_wrapper.put(url, data=data)
-        elif self.method == 'DELETE':
+        elif method == 'DELETE':
             return self.requests_wrapper.delete(url)
         else:
-            raise ValueError(f"Unsupported method: {self.method}")
+            raise ValueError(f"Unsupported method: {method or self.method}")
 
     def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'Tool':
         """

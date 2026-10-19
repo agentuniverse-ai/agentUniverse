@@ -64,7 +64,7 @@ class CSVReader(Reader):
                     if any(cell.strip() for cell in row):
                         while row and not row[-1].strip():
                             row.pop()
-                        csv_content.append(", ".join(filter(None, row)))
+                        csv_content.append(", ".join(row))
             finally:
                 if should_close:
                     text_stream.close()

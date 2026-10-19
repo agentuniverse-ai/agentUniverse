@@ -480,6 +480,19 @@ class TestZipReader(unittest.TestCase):
             path = doc.metadata.get("archive_path", "")
             self.assertNotIn("..", path)
 
+    def test_unsafe_members_are_skipped_not_normalized(self) -> None:
+        archive_path = Path(self.temp_dir.name) / "unsafe_members.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            archive.writestr("../outside.txt", "blocked")
+            archive.writestr("/absolute.txt", "blocked")
+            archive.writestr("safe/file.txt", "allowed")
+
+        docs = self.reader._load_data(archive_path)
+
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0].metadata["archive_path"], "safe/file.txt")
+        self.assertEqual(docs[0].text, "allowed")
+
     def test_hidden_and_system_files(self) -> None:
         archive_path = Path(self.temp_dir.name) / "hidden.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:

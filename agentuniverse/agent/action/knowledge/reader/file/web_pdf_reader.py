@@ -22,18 +22,26 @@ class WebPdfReader(Reader):
     def _load_data(self, web_pdf_url: str) -> List[Document]:
         if web_pdf_url is None:
             return []
-        response = requests.get(web_pdf_url)
-        if response.status_code == 200:
-            # download the pdf file and convert it into a memory file.
-            pdf_memory_file = BytesIO(response.content)
-            try:
-                from pdfminer.high_level import extract_text_to_fp
-            except ImportError:
-                raise ImportError(
-                    "pdfminer.six is required to read PDF files: `pip install pdfminer.six`"
-                )
-            # parse the pdf file and get the text content.
-            with BytesIO() as output_string:
-                extract_text_to_fp(pdf_memory_file, output_string, output_type='text', codec='utf-8')
-                text = output_string.getvalue().decode('utf-8')
-                return [Document(text=text, metadata={"source": web_pdf_url})]
+        try:
+            response = requests.get(web_pdf_url, timeout=20)
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            status_code = getattr(exc.response, "status_code", None)
+            status = f"HTTP {status_code}" if status_code is not None else "HTTP error"
+            raise RuntimeError(f"Failed to fetch PDF from {web_pdf_url}: {status}") from exc
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Failed to fetch PDF from {web_pdf_url}: {exc}") from exc
+
+        # download the pdf file and convert it into a memory file.
+        pdf_memory_file = BytesIO(response.content)
+        try:
+            from pdfminer.high_level import extract_text_to_fp
+        except ImportError:
+            raise ImportError(
+                "pdfminer.six is required to read PDF files: `pip install pdfminer.six`"
+            )
+        # parse the pdf file and get the text content.
+        with BytesIO() as output_string:
+            extract_text_to_fp(pdf_memory_file, output_string, output_type='text', codec='utf-8')
+            text = output_string.getvalue().decode('utf-8')
+            return [Document(text=text, metadata={"source": web_pdf_url})]

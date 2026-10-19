@@ -1,0 +1,48 @@
+name: yahoo_finance_tool
+description: Yahoo Finance market-data tool — fetch the latest quote, historical OHLCV bars, or the company profile for a stock / ETF / index symbol (e.g. 'AAPL', '600519.SS'). Requires the optional 'yfinance' package.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.yahoo_finance_tool
+  class: YahooFinanceTool
+input_keys:
+  - mode
+  - symbol
+args_model:
+  mode:
+    type: string
+    description: Query mode — quote (latest price + headline metrics), history (historical OHLCV bars), or info (curated company profile).
+    required: true
+  symbol:
+    type: string
+    description: Ticker symbol, e.g. 'AAPL', 'TSLA', '600519.SS'.
+    required: true
+  period:
+    type: string
+    description: History period (only used in history mode) — e.g. '1mo', '3mo', '6mo', '1y', '5y', 'max'.
+    required: false
+    default: '1mo'
+  interval:
+    type: string
+    description: History bar interval (only used in history mode) — e.g. '1d', '1wk', '1mo'.
+    required: false
+    default: '1d'
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["quote", "history", "info"]
+      description: Query mode.
+    symbol:
+      type: string
+      description: Ticker symbol.
+    period:
+      type: string
+      default: "1mo"
+      description: History period (history mode only).
+    interval:
+      type: string
+      default: "1d"
+      description: History bar interval (history mode only).
+  required: ["mode", "symbol"]
