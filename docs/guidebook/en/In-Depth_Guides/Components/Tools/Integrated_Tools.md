@@ -634,3 +634,48 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Context Escape Tool
+
+`ContextEscapeTool` prepares text for safe *embedding* into another
+format — the counterpart to matching/replacing tools such as
+RegexTool. It is built purely on the Python standard library
+(`json`, `re`, `string`) with zero network access, and every context
+pair round-trips exactly: `unescape(escape(x)) == x`, even when the
+input already contains pipes, quotes, backslash runs, escape markers,
+CJK or emoji.
+
+Seven contexts are supported: `markdown_table` (GFM table cells —
+pipes become `\|`, LF becomes a literal `<br>` marker, a bare CR
+becomes `<cr>` so CR/LF/CRLF all survive verbatim, and literal
+markers already in the input are themselves escaped, keeping the
+transform invertible); `csv` (RFC 4180 — the field is quoted with
+doubled embedded quotes when it contains a comma, quote, CR or LF);
+`shell_single` (POSIX `'...'` wrapping with the standard `'"'"'`
+idiom for embedded single quotes); `html_attr` (the full five-entity
+set `& < > " '`); `html_text` (only `& < >`); `json_string` (a
+complete `json.dumps` / `json.loads` string literal with an
+`ensure_ascii` option); and `regex` (`re.escape` plus its inverse
+over the documented escape subset).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.context_escape_tool import ContextEscapeTool
+
+tool = ContextEscapeTool()
+cell = tool.execute(mode="escape", context="markdown_table", text="a|b\nc")["result"]
+csv_field = tool.execute(mode="escape", context="csv", text='say "hi", ok')["result"]
+arg = tool.execute(mode="escape", context="shell_single", text="it's a 'test'")["result"]
+literal = tool.execute(mode="escape", context="json_string", text="héllo")["result"]
+```
+
+Inputs are validated strictly before any transformation: malformed
+parameters (wrong types, empty text, unknown mode or context,
+`ensure_ascii` outside the `json_string` context, text over 100,000
+characters) raise a `ValueError`. Errors that depend on the content
+being processed — a malformed markdown escape, an ill-formed CSV
+field, non-idiomatic shell quoting, input that is not a JSON string
+literal, or a regex escape `re.escape` never produces — are returned
+as a structured `error` payload (`{"type": ..., "message": ...}`)
+instead of raising. Escaping is about format safety, not security
+validation: an escaped HTML attribute value still needs whatever
+content-level validation the application applies.
