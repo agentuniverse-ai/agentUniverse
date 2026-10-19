@@ -83,7 +83,7 @@ class Tool(ComponentBase):
         """The callable method that runs the tool."""
         self.input_check(kwargs)
         if self.check_execute_signature_deprecated():
-            return await asyncio.to_thread(self.execute, ToolInput(kwargs))
+            return await self._async_execute(ToolInput(kwargs))
         return await self.async_execute(**kwargs)
 
     def input_check(self, kwargs: dict) -> None:
@@ -118,7 +118,7 @@ class Tool(ComponentBase):
             parse_result = self.parse_react_input(args[0])
             for key in self.input_keys or []:
                 tool_input.add_data(key, parse_result[key])
-            return await asyncio.to_thread(self.execute, tool_input)
+            return await self._async_execute(tool_input)
         try:
             parse_result = parse_and_check_json_markdown(args[0], self.input_keys)
         except Exception as e:
@@ -142,7 +142,19 @@ class Tool(ComponentBase):
 
     async def async_execute(self, **kwargs):
         """The callable method that runs the tool."""
-        return await asyncio.to_thread(self.execute, **kwargs)
+        return await self._async_execute(**kwargs)
+
+    async def _async_execute(self, *args, **kwargs):
+        """Execute sync or async tool implementations without leaking coroutines.
+
+        The default async path runs synchronous implementations in a worker
+        thread.  An ``async def execute`` implementation returns a coroutine
+        from that worker, so it must be awaited before returning to callers.
+        """
+        result = await asyncio.to_thread(self.execute, *args, **kwargs)
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     def as_langchain(self) -> LangchainTool:
         """Convert the agentUniverse(aU) tool class to the langchain tool class."""
