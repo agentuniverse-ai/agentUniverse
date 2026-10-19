@@ -364,6 +364,12 @@ class PubMedTool(Tool):
             if article_id.attrib.get("IdType") == "doi":
                 doi = cls._element_text(article_id)
                 break
+        if not doi:
+            for location_id in article.findall(".//MedlineCitation/Article/ELocationID"):
+                if location_id.attrib.get("EIdType") == "doi":
+                    doi = cls._element_text(location_id)
+                    if doi:
+                        break
 
         return {
             "pmid": pmid,
