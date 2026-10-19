@@ -634,3 +634,19 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Duration Tool
+
+`DurationTool` parses, formats and does arithmetic on durations, built purely on the Python standard library with zero network access. It complements `DateTimeTool` (calendar date arithmetic) by working on time spans only. `parse` mode accepts ISO-8601 durations (`PT1H30M`, `P1DT2H`, `P1Y2M3W4DT5H6M7S`, weeks `P2W`, fractional components such as `PT1.5H` with `.` or `,` as the decimal separator, optional leading `+`/`-`) and shorthand expressions (`1d 2h 3m`, `90m`, `1.5h`, `2 hours 15 minutes`, `500ms`, `1500us`; whitespace between components and between a number and its unit is optional) and returns the total seconds, exact microseconds, a canonical days/hours/minutes/seconds/milliseconds/microseconds breakdown, the normalized ISO-8601 form and a humanized string. Chinese units are accepted too: 天 (day), 时 / 小时 (hour), 分 / 分钟 (minute), 秒 / 秒钟 (second), 毫秒 and 微秒. `humanize` mode renders a number of seconds as `compact` (`26h 30m`, hours never folded into days), `long` (`1 day, 2:30:00` — days in words plus an `H:MM:SS` remainder clock, spelled-out units below a day) or `clock` (`26:30:00`) text. `between` mode measures the span between two ISO datetimes or dates — naive values are treated as being in the same unspecified zone and mixing naive with offset-aware values is an error. `add` mode adds or subtracts two duration strings of either style.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.duration_tool import DurationTool
+
+tool = DurationTool()
+parsed = tool.execute(mode="parse", duration="1d 2h 3m")
+text = tool.execute(mode="humanize", seconds=95400, format="long")["humanized"]  # "1 day, 2:30:00"
+span = tool.execute(mode="between", start="2026-01-01", end="2026-01-02")
+combined = tool.execute(mode="add", duration="PT1H30M", other="PT45M")["iso8601"]  # "PT2H15M"
+```
+
+Conversions are fixed and documented (deterministic): 1 year = 365 days, 1 month = 30 days, 1 week = 7 days; for calendar-accurate month/year arithmetic use `DateTimeTool`. All arithmetic is exact `decimal.Decimal` math quantized once, half-to-even, to whole microseconds. Inputs are validated strictly before any computation: malformed parameters (wrong types, unknown mode / format / operation, missing required arguments, non-bool `allow_negative`, non-finite or non-numeric `seconds`, strings over 1,000 characters) raise a `ValueError`. Errors that depend on the content being processed — unparseable durations (including unknown units with their 0-based position), negative durations or results without `allow_negative=true`, magnitude at or above the 10^12-second cap, invalid datetimes and mixed timezone awareness — are returned as a structured `error` payload (`{"type": ..., "message": ...}`) instead of raising. Every payload carries `total_seconds` (int when integral, else a 6-decimal float), the exact `total_microseconds`, canonical `parts` (which always describe the magnitude; the `negative` flag carries the sign), the normalized `iso8601` form and the `humanized` string.
