@@ -109,6 +109,19 @@ class NumberFormatterToolFileSizeTest(unittest.TestCase):
             self.tool.execute(mode="file_size", value=1024 * 1024)["formatted"],
             "1 MB")
 
+    def test_decimals_zero_keeps_integer_digits(self):
+        self.assertEqual(
+            self.tool.execute(mode="file_size", value=10, decimals=0)["formatted"],
+            "10 B")
+        self.assertEqual(
+            self.tool.execute(mode="file_size", value=100, decimals=0)["formatted"],
+            "100 B")
+        self.assertEqual(
+            self.tool.execute(
+                mode="file_size", value=10000, decimals=0, thousands_separator=True)[
+                    "formatted"],
+            "10 KB")
+
     def test_forced_unit(self):
         result = self.tool.execute(mode="file_size", value=1024**3, unit="MB")
         self.assertEqual(result["formatted"], "1,024 MB")

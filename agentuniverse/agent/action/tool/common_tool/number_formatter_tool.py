@@ -302,7 +302,11 @@ class NumberFormatterTool(Tool):
         rounded = round(scaled, places)
         text = f"{rounded:,.{places}f}" if thousands_separator \
             else f"{rounded:.{places}f}"
-        text = text.rstrip("0").rstrip(".")
+        # Strip trailing fractional zeros only when a decimal point is
+        # present; with places == 0 the text has none and the significant
+        # integer zeros must survive ("10 B", not "1 B").
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
         if text in ("", "-0"):
             text = "0"
         return {
