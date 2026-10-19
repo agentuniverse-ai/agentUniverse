@@ -309,3 +309,40 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [CooccurrenceRelationExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/cooccurrence_relation_extractor.yaml)
+
+This component extracts entity co-occurrence relations into document metadata, addressing the *knowledge extraction* direction of issue #258. Building a supply-chain or financial knowledge graph needs edges, not just nodes, and which entities are talked about *together* is often the strongest signal of a real-world relationship — one that can be measured without any model or network call. Each document is segmented into windows (sentences by default, or blank-line-separated paragraphs via `window: paragraph`), the distinct tracked terms present in every window are collected, and each unordered pair of co-present terms becomes a relation whose `count` is the number of windows the pair appeared in together. A pair found three times in three different sentences is a much stronger edge than a pair sharing one — the count carries that confidence for free.
+
+Tracked terms come from two sources that work alone or combined: `terms` lists the entity names to follow (matched case-insensitively with Latin word boundaries, so `Apple` matches neither `Pineapple` nor `Apples`, while CJK terms match without any spaces), and `alias_map` folds surface forms onto canonical names — `{"AAPL": "Apple", "苹果": "Apple"}` counts ticker, Chinese name and English name as one node. Alternatively, `auto_capitalized: true` auto-detects Latin capitalized sequences ("Boeing", "Goldman Sachs", dotted initials like "U.S. Army" stay whole), removing sentence-start noise through a stoplist (`The Boeing Company` trims to `Boeing Company`, a bare `We` is dropped), stripping trailing possessives (`Apple's` -> `Apple`) and never fusing names across a sentence-final period. Sentence segmentation itself is abbreviation-guarded: periods after `Inc.`, `Ltd.`, a single initial (`J.`) or between digits (`3.14`) do not end a sentence, and CJK terminators (`。！？`) always do. Inside one window a pair is counted at most once however often its members repeat, and terms never co-occur with themselves.
+
+Results are stamped into a copied metadata mapping — text, id and existing fields are untouched — as `metadata['relations']`, a list of `{source, target, count}` sorted by count descending then name pair and capped at `max_relations`, and `metadata['relation_graph']`, an adjacency map `{term: {other: count}}` covering every pair that passed `min_count` (raise it to keep only repeatedly co-occurring pairs). The whole pipeline is pure Python, offline and deterministic, which makes it complementary to the LLM-driven `SupplyChainEntityExtractor`: that component names relationship types via model calls, while this one measures unbiased co-occurrence structure at insertion time — a solid edge scaffold for later, costlier semantic labeling.
+
+The component definition file is as follows:
+```yaml
+name: 'cooccurrence_relation_extractor'
+description: 'extract entity co-occurrence relations (term pairs sharing a window) into document metadata'
+terms:                       # tracked entity names (canonical spellings)
+  - 'Apple'
+  - 'Samsung'
+  - 'Taiwan Semiconductor'
+alias_map:                   # surface form -> canonical folding
+  'AAPL': 'Apple'
+  'TSMC': 'Taiwan Semiconductor'
+auto_capitalized: false      # auto-detect Latin capitalized sequences
+window: 'sentence'           # sentence | paragraph
+max_relations: 50            # cap for metadata['relations']
+min_count: 1                 # keep pairs co-occurring at least this often
+stopwords: []                # extra stopwords for auto detection
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cooccurrence_relation_extractor'
+  class: 'CooccurrenceRelationExtractor'
+```
+- terms: Tracked entity names; each is canonical under its own spelling, matched case-insensitively with Latin-alphanumeric boundary guards. Case-variant duplicates fold onto the first spelling.
+- alias_map: Mapping of alias surface form to canonical term name. Aliases are matched like terms and counted under their canonical target; an alias takes precedence over a colliding `terms` entry, and also folds auto-detected surfaces.
+- auto_capitalized: When true, Latin capitalized sequences are detected as additional terms. Sentence-start noise is removed via the stoplist, trailing possessives and sentence-final periods are stripped, and dotted initials (`U.S. Army`) survive as one term.
+- window: Co-occurrence window — `sentence` (default; abbreviation-guarded segmentation on `.!?` and `。！？`) or `paragraph` (blank-line separated blocks).
+- max_relations: Maximum number of relations kept in `metadata['relations']`; must be >= 1. The `relation_graph` adjacency is never capped by this.
+- min_count: Minimum co-occurrence count for a pair to be kept anywhere; must be >= 1.
+- stopwords: Extra stop words appended to the built-in stoplist that trims auto-detected candidates; compared case-insensitively.

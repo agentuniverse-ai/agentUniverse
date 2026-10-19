@@ -310,3 +310,40 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [CooccurrenceRelationExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/cooccurrence_relation_extractor.yaml)
+
+该组件将实体共现关系抽取到文档 metadata 中，对应 issue #258 的*知识抽取*方向。构建供应链或金融知识图谱不仅需要节点，更需要边，而"哪些实体被放在一起谈论"往往正是真实世界关系最有力的信号——这一信号无需任何模型或网络调用即可度量。组件将每篇文档切分为窗口（默认为句子，也可通过 `window: paragraph` 按空行分段为段落），收集每个窗口中出现的不重复追踪词元，窗口内的每个无序词元对构成一条关系，其 `count` 为该对共同出现的窗口数。同一对在三个句子里出现三次，远比只共用一个句子的边可靠——计数天然携带了这种置信度。
+
+追踪词元来自可单独或组合使用的两个来源：`terms` 显式列出要追踪的实体名（大小写不敏感匹配并带拉丁词边界保护，`Apple` 不会匹配 `Pineapple` 或 `Apples`；CJK 词元无需空格即可匹配），`alias_map` 将表面形式折叠到规范名——`{"AAPL": "Apple", "苹果": "Apple"}` 把股票代码、中文名和英文名计入同一节点。另一种方式是 `auto_capitalized: true`，自动检测拉丁大写序列（"Boeing"、"Goldman Sachs"，带点缩写 "U.S. Army" 保持完整），通过停用词表消除句首噪声（`The Boeing Company` 修剪为 `Boeing Company`，孤立的 `We` 被丢弃），剥离尾部所有格（`Apple's` -> `Apple`），且绝不跨句末句点拼接名字。句子切分本身带缩写保护：`Inc.`、`Ltd.`、单字母缩写（`J.`）之后的句点以及数字之间的小数点（`3.14`）不结束句子，CJK 终止符（`。！？`）则总是结束句子。同一窗口内一对关系无论成员重复出现多少次都只计一次，词元也绝不与自身共现。
+
+结果写入复制后的 metadata 映射——text、id 及既有字段一概不动——包括 `metadata['relations']`：按计数降序、名称对升序排列并截断到 `max_relations` 条的 `{source, target, count}` 列表；以及 `metadata['relation_graph']`：覆盖所有通过 `min_count` 过滤的词元对的邻接映射 `{term: {other: count}}`（调高它可只保留反复共现的对）。整个流程纯 Python、离线且确定性，与依赖 LLM 的 `SupplyChainEntityExtractor` 互补：后者通过模型调用命名关系类型，本组件在写入时度量无偏的共现结构——为后续更昂贵的语义标注打好边脚手架。
+
+组件定义文件如下：
+```yaml
+name: 'cooccurrence_relation_extractor'
+description: 'extract entity co-occurrence relations (term pairs sharing a window) into document metadata'
+terms:                       # 追踪的实体名（规范拼写）
+  - 'Apple'
+  - 'Samsung'
+  - 'Taiwan Semiconductor'
+alias_map:                   # 表面形式 -> 规范名折叠
+  'AAPL': 'Apple'
+  'TSMC': 'Taiwan Semiconductor'
+auto_capitalized: false      # 自动检测拉丁大写序列
+window: 'sentence'           # sentence | paragraph
+max_relations: 50            # metadata['relations'] 的上限
+min_count: 1                 # 至少共现此次数的对才保留
+stopwords: []                # 自动检测的额外停用词
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cooccurrence_relation_extractor'
+  class: 'CooccurrenceRelationExtractor'
+```
+- terms：追踪的实体名，每个条目以自身拼写为规范名，大小写不敏感匹配并带拉丁字母数字边界保护。仅大小写不同的重复项折叠到首次拼写。
+- alias_map：别名表面形式到规范名的映射。别名的匹配方式与 terms 相同并计入其规范目标；别名优先于冲突的 terms 条目，同样折叠自动检测到的表面形式。
+- auto_capitalized：为真时将拉丁大写序列检测为额外词元。句首噪声经停用词表移除，尾部所有格与句末句点被剥离，带点缩写（`U.S. Army`）保持为一个词元。
+- window：共现窗口——`sentence`（默认；对 `.!?` 与 `。！？` 做带缩写保护的切分）或 `paragraph`（空行分隔的块）。
+- max_relations：`metadata['relations']` 保留的最大关系数，必须 >= 1；`relation_graph` 邻接不受此限制。
+- min_count：一对关系被保留所需的最低共现次数，必须 >= 1。
+- stopwords：追加到内置停用词表的额外停用词，用于修剪自动检测的候选词元；比较时忽略大小写。
