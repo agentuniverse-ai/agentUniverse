@@ -48,7 +48,8 @@ Everything is deterministic — no randomness, no time dependence, no
 network. Input validation is strict and happens before any work:
 malformed parameters (unknown mode, wrong ``text`` type, empty text,
 boolean flags passed as non-booleans, unknown ``number_format`` /
-``newline`` values, out-of-bounds ``n`` / ``start`` / ``pad``, text
+``newline`` values, out-of-bounds ``n`` / ``start`` / ``pad``,
+mode-specific options used with the wrong mode, text
 over the character or line caps) raise a ``ValueError`` mirroring the
 other common tools. Line operations themselves never fail on content,
 so no error payloads are needed.
@@ -177,6 +178,18 @@ class LineOpsTool(Tool):
             self._invalid(
                 f"mode must be one of: {', '.join(self.MODES)} (got {mode!r})"
             )
+        self._validate_option_modes(
+            mode,
+            natural=natural,
+            case_insensitive=case_insensitive,
+            reverse=reverse,
+            unique=unique,
+            drop_empty=drop_empty,
+            number_format=number_format,
+            start=start,
+            pad=pad,
+            n=n,
+        )
         clean_newline = self._validate_newline(newline)
         lines = self._split_lines(text)
         context: dict[str, Any] = {
@@ -227,6 +240,41 @@ class LineOpsTool(Tool):
     def _invalid(cls, message: str) -> None:
         """Raise the standard input-validation error."""
         raise ValueError(f"line_ops_tool: {message}")
+
+    # Options that only some modes understand, mapped to the modes
+    # that accept them; every other mode must omit them (None).
+    _OPTION_MODES: ClassVar[dict] = {
+        "natural": ("sort",),
+        "case_insensitive": ("sort",),
+        "reverse": ("sort",),
+        "unique": ("sort",),
+        "drop_empty": ("trim",),
+        "number_format": ("number",),
+        "start": ("number",),
+        "pad": ("number",),
+        "n": ("head", "tail"),
+    }
+
+    @classmethod
+    def _validate_option_modes(cls, mode: str, **options: Any) -> None:
+        """Reject mode-specific options passed with the wrong mode.
+
+        Silently ignoring ``natural`` in the ``trim`` mode (or a
+        mistyped ``natural=1`` there) would hide caller mistakes, so
+        an option that only some modes understand must be omitted
+        (``None``) everywhere else — mirroring the other common tools.
+        """
+        for name, value in options.items():
+            if value is None:
+                continue
+            allowed = cls._OPTION_MODES[name]
+            if mode not in allowed:
+                modes = "/".join(repr(m) for m in allowed)
+                noun = "modes" if len(allowed) > 1 else "mode"
+                cls._invalid(
+                    f"{name} is only valid in the {modes} {noun} "
+                    f"(got {name}={value!r} with mode={mode!r})"
+                )
 
     def _split_lines(self, text: Any) -> list[str]:
         """Validate ``text`` and split it into normalized lines.

@@ -473,6 +473,47 @@ class LineOpsToolTest(unittest.TestCase):
             with self.subTest(bad=bad):
                 self.assert_invalid(mode="number", text="a", pad=bad)
 
+    def test_invalid_mode_specific_options_in_wrong_mode(self) -> None:
+        # Options that only some modes understand are rejected when
+        # passed with any other mode — including mistyped values such
+        # as natural=1 in the trim mode, which used to be silently
+        # ignored (regression: mirrors the strict-validation claim).
+        cases = [
+            {"mode": "trim", "natural": True},
+            {"mode": "trim", "natural": 1},
+            {"mode": "unique", "case_insensitive": True},
+            {"mode": "reverse", "unique": True},
+            {"mode": "head", "drop_empty": True},
+            {"mode": "sort", "number_format": "dot"},
+            {"mode": "sort", "start": 1},
+            {"mode": "sort", "pad": 2},
+            {"mode": "trim", "n": 5},
+            {"mode": "number", "n": 5},
+            {"mode": "reverse", "n": 0},
+        ]
+        for kwargs in cases:
+            with self.subTest(**kwargs):
+                with self.assertRaises(ValueError) as ctx:
+                    self.tool.execute(text="a\nb", **kwargs)
+                self.assertIn("is only valid in the", str(ctx.exception))
+                self.assertIn(f"with mode={kwargs['mode']!r}", str(ctx.exception))
+
+    def test_valid_options_accepted_in_their_own_modes(self) -> None:
+        # The wrong-mode rejection must not overreach: each option
+        # still works in the mode that owns it.
+        self.tool.execute(mode="sort", text="a\nb", natural=True)
+        self.tool.execute(mode="sort", text="a\nb", case_insensitive=True)
+        self.tool.execute(mode="sort", text="a\nb", reverse=True)
+        self.tool.execute(mode="sort", text="a\nb", unique=True)
+        self.tool.execute(mode="trim", text="a\nb", drop_empty=True)
+        self.tool.execute(mode="number", text="a\nb", number_format="paren")
+        self.tool.execute(mode="number", text="a\nb", start=0)
+        self.tool.execute(mode="number", text="a\nb", pad=3)
+        self.tool.execute(mode="head", text="a\nb\nc", n=2)
+        self.tool.execute(mode="tail", text="a\nb\nc", n=2)
+        # newline stays valid in every mode.
+        self.tool.execute(mode="unique", text="a\na", newline="crlf")
+
     # ------------------------------------------------------------------ #
     # Determinism
     # ------------------------------------------------------------------ #

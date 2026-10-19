@@ -671,7 +671,8 @@ does not introduce an extra empty line, and the output is joined with
 `\n` by default or with `\r\n` when `newline="crlf"`. All operations
 are deterministic — no randomness, no time dependence. Inputs are
 validated strictly before any work: wrong `text` type, empty text,
-boolean options passed as non-booleans, unknown `format` / `newline`
+boolean options passed as non-booleans, mode-specific options used
+with the wrong mode, unknown `format` / `newline`
 values, out-of-bounds `n` / `start` / `pad`, and text over 1,000,000
 characters or 100,000 lines raise a `ValueError`. Every result carries
 the joined text plus the input and output line counts, and the
