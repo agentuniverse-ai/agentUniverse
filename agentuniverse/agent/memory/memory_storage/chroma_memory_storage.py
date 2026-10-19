@@ -227,4 +227,5 @@ class ChromaMemoryStorage(MemoryStorage):
 
     @staticmethod
     def is_nested_list(variable: List) -> bool:
+        """Check whether the variable is a non-empty list whose first item is a list."""
         return isinstance(variable, list) and len(variable) > 0 and isinstance(variable[0], list)
