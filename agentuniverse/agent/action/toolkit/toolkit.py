@@ -28,6 +28,11 @@ class Toolkit(ComponentBase):
     as_mcp_tool: Any = None
 
     def __init__(self, **kwargs):
+        """Initialize the toolkit with its component type set to toolkit.
+
+        Args:
+            **kwargs: Field values for the toolkit.
+        """
         super().__init__(component_type=ComponentEnum.TOOLKIT, **kwargs)
 
     @property
@@ -45,6 +50,11 @@ class Toolkit(ComponentBase):
 
     @property
     def func_call_list(self) -> list:
+        """Return the list of callable functions contained in the toolkit.
+
+        Raises:
+            NotImplementedError: Subclasses must implement this property.
+        """
         raise NotImplementedError
 
     def get_instance_code(self) -> str:
