@@ -1,8 +1,11 @@
 """Verify failure transport through actual threads and context-aware executors."""
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from threading import Event
 
+from opentelemetry import context as otel_context
 import pytest
 
 from agentuniverse.agent_serve.web.thread_with_result import (
@@ -106,3 +109,42 @@ def test_exception_returned_as_a_value_is_not_raised(kind, worker_context):
     with worker_result(kind, lambda: value) as (result, worker):
         assert result() is value
         assert worker.error is None
+
+
+@pytest.mark.parametrize('failure_type', [
+    asyncio.CancelledError, SystemExit, KeyboardInterrupt, BaseException,
+])
+def test_done_callback_failure_is_not_reported_as_target_failure(failure_type, worker_context):
+    """A successful target keeps its result/error state if a done callback exits."""
+    release = Event()
+    callback_failure = failure_type('done callback failure')
+    callbacks = []
+    context_key = otel_context.create_key('worker_callback_test')
+    parent_token = otel_context.attach(otel_context.set_value(context_key, 'parent'))
+
+    def target():
+        assert release.wait(timeout=2), 'target was not released'
+        return 'successful result'
+
+    def callback(future):
+        callbacks.append((future.result(), otel_context.get_value(context_key)))
+        raise callback_failure
+
+    try:
+        with ThreadPoolExecutorWithReturnValue(max_workers=1) as executor:
+            future = executor.submit(target)
+            try:
+                future.add_done_callback(callback)
+            finally:
+                release.set()
+            assert future.result(timeout=2) == 'successful result'
+            # Observe the same worker without installing another task context.
+            observer = ThreadPoolExecutor.submit(
+                executor, lambda: otel_context.get_value(context_key))
+            assert observer.result(timeout=2) is None
+    finally:
+        otel_context.detach(parent_token)
+    # shutdown(wait=True) ensures callback processing and the wrapper finished.
+    assert callbacks == [('successful result', 'parent')]
+    assert future.exception(timeout=0) is None
+    assert future.error is None

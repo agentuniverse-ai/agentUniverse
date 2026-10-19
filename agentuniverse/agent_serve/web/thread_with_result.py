@@ -83,13 +83,16 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
                 otel_token = ContextCoordinator.recover_context(context_pack)
 
                 result = fn(*args, **kwargs)
-                future.set_result(result)
 
             except BaseException as e:
                 # Match executor failure transport so the outer future
                 # does not remain pending after a target exits.
                 future.error = e
                 future.set_exception(e)
+
+            else:
+                # Completion callbacks are not part of the target's failure.
+                future.set_result(result)
 
             finally:
                 if otel_token:
