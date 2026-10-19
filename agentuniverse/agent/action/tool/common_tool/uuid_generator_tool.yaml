@@ -1,0 +1,76 @@
+name: uuid_generator_tool
+description: Generate, validate, and extract UUIDs using only the Python standard library. Zero external dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.uuid_generator_tool
+  class: UUIDGeneratorTool
+input_keys:
+  - mode
+version: 4
+namespace: dns
+name: agentuniverse
+count: 1
+format: string
+max_batch_size: 1000
+max_extract_chars: 100000
+args_model:
+  mode:
+    type: string
+    description: Operation mode — generate, generate_batch, validate, or extract.
+    required: true
+  version:
+    type: integer
+    description: UUID version (3, 4, or 5). Defaults to the tool-level value (4).
+    required: false
+  namespace:
+    type: string
+    description: Namespace key (dns/url/oid/x500) or a UUID string. Required for versions 3 and 5.
+    required: false
+  name:
+    type: string
+    description: Name used by versions 3 and 5.
+    required: false
+  count:
+    type: integer
+    description: Number of UUIDs for generate_batch.
+    required: false
+  format:
+    type: string
+    description: Output format — string, hex, or urn.
+    required: false
+  value:
+    type: string
+    description: Candidate UUID (validate) or text to scan (extract).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["generate", "generate_batch", "validate", "extract"]
+      description: UUID operation mode.
+    version:
+      type: integer
+      enum: [3, 4, 5]
+      description: UUID version.
+    namespace:
+      type: string
+      description: Namespace key or UUID string for versions 3 and 5.
+    name:
+      type: string
+      description: Name for versions 3 and 5.
+    count:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      description: Number of UUIDs for generate_batch.
+    format:
+      type: string
+      enum: ["string", "hex", "urn"]
+      description: Output format for generated UUIDs.
+    value:
+      type: string
+      description: Candidate UUID (validate) or text to scan (extract).
+  required: ["mode"]
+  additionalProperties: false
