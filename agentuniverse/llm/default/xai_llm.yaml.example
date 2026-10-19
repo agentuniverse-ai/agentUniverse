@@ -1,0 +1,13 @@
+name: 'default_xai_llm'
+description: 'default xai llm powered by the xAI Grok models'
+model_name: 'grok-4.7'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${XAI_API_KEY}'
+api_base: 'https://api.x.ai/v1'
+proxy: '${XAI_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.xai_llm'
+  class: 'XaiLLM'
