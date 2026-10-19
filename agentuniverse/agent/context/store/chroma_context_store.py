@@ -168,6 +168,8 @@ class ChromaContextStore(ContextStore):
                 "access_count": segment.metadata.access_count,
                 "relevance_score": segment.metadata.relevance_score,
                 "decay_rate": segment.metadata.decay_rate,
+                "context_metadata": segment.metadata.model_dump_json(),
+                "related_ids": json.dumps(segment.related_ids),
             }
 
             # Add optional fields
@@ -534,14 +536,19 @@ class ChromaContextStore(ContextStore):
         priority = ContextPriority(metadata["priority"])
         tokens = metadata["tokens"]
 
-        # Reconstruct ContextMetadata
-        ctx_metadata = ContextMetadata(
-            created_at=datetime.fromisoformat(metadata["created_at"]),
-            last_accessed=datetime.fromisoformat(metadata["last_accessed"]),
-            access_count=metadata["access_count"],
-            relevance_score=metadata["relevance_score"],
-            decay_rate=metadata["decay_rate"],
-        )
+        # Reconstruct rich metadata when available while retaining compatibility
+        # with documents written before full metadata serialization was added.
+        serialized_metadata = metadata.get("context_metadata")
+        if serialized_metadata:
+            ctx_metadata = ContextMetadata.model_validate_json(serialized_metadata)
+        else:
+            ctx_metadata = ContextMetadata(
+                created_at=datetime.fromisoformat(metadata["created_at"]),
+                last_accessed=datetime.fromisoformat(metadata["last_accessed"]),
+                access_count=metadata["access_count"],
+                relevance_score=metadata["relevance_score"],
+                decay_rate=metadata["decay_rate"],
+            )
 
         # Create segment
         segment = ContextSegment(
@@ -553,6 +560,7 @@ class ChromaContextStore(ContextStore):
             metadata=ctx_metadata,
             session_id=metadata["session_id"],
             parent_id=metadata.get("parent_id"),
+            related_ids=json.loads(metadata.get("related_ids", "[]")),
             task_id=metadata.get("task_id"),
             agent_id=metadata.get("agent_id"),
         )
