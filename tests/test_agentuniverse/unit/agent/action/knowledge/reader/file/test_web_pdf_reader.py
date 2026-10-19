@@ -10,15 +10,21 @@ from agentuniverse.agent.action.knowledge.reader.file.web_pdf_reader import WebP
 
 
 class NonOkResponse:
+    """Minimal requests.Response stand-in for a non-OK HTTP response."""
+
     status_code = 404
     content = b''
 
     def raise_for_status(self):
+        """Raise an HTTPError mirroring what requests would raise."""
         raise requests.HTTPError("404 Client Error", response=self)
 
 
 class TestWebPdfReader(unittest.TestCase):
+    """Unit tests for WebPdfReader error handling."""
+
     def test_non_ok_response_surfaces_fetch_error(self):
+        """A non-OK HTTP response surfaces as a descriptive RuntimeError."""
         reader = WebPdfReader()
         url = 'https://example.com/missing.pdf'
 
