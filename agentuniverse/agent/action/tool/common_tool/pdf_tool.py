@@ -34,6 +34,11 @@ class PDFTool(Tool):
         overwrite: bool = False,
         metadata: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        """Run a bounded PDF merge, split, rotate, extract, or info operation.
+
+        Validation and dependency failures are returned as structured error
+        dictionaries rather than raised to the tool caller.
+        """
         try:
             self._validate_config()
             operation = self._mode(mode)
