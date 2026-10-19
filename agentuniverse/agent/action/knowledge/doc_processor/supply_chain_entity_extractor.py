@@ -308,6 +308,11 @@ Return results in JSON format:
     def _extract_entities_with_patterns(self, text: str) -> List[Entity]:
         """Extract entities using pattern matching (fallback method).
 
+        Match entity names within individual lines. Configured entity types are
+        applied before name deduplication so a disabled role cannot hide an
+        allowed role for the same company. Attribute extraction may use nearby
+        lines in the original text.
+
         Args:
             text: Document text.
 
@@ -418,10 +423,13 @@ Return results in JSON format:
         import re
 
         # Process case-sensitive patterns (no re.IGNORECASE)
+        # Company names stay on one line; attribute extraction below may still
+        # inspect adjacent lines in the original document.
+        lines = text.splitlines()
         excluded_names = {'the', 'and', 'for', 'from', 'with', 'are', 'was', 'not'}
         for entity_type, pattern_list in case_sensitive_patterns.items():
             for pattern in pattern_list:
-                matches = re.finditer(pattern, text)
+                matches = (match for line in lines for match in re.finditer(pattern, line))
                 for match in matches:
                     name = match.group(1).strip()
                     if len(name) >= 3 and name.lower() not in excluded_names:
@@ -440,7 +448,7 @@ Return results in JSON format:
         }
         for entity_type, pattern_list in case_insensitive_patterns.items():
             for pattern in pattern_list:
-                matches = re.finditer(pattern, text, re.IGNORECASE)
+                matches = (match for line in lines for match in re.finditer(pattern, line, re.IGNORECASE))
                 for match in matches:
                     name = match.group(1).strip()
                     if len(name) >= 3 and name.lower() not in excluded_names:
@@ -455,6 +463,9 @@ Return results in JSON format:
         # Deduplicate by name (keep first occurrence with highest confidence)
         seen = {}
         for entity in entities:
+            # A disabled role must not win deduplication and hide an allowed one.
+            if entity.entity_type not in self.entity_types:
+                continue
             if entity.name not in seen or entity.confidence > seen[entity.name].confidence:
                 seen[entity.name] = entity
 
