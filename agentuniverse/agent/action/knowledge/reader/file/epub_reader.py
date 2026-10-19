@@ -12,11 +12,27 @@ from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 
+_HTML_BLOCK_TAGS = (
+    "address", "article", "aside", "blockquote", "br", "caption", "dd",
+    "details", "div", "dl", "dt", "fieldset", "figcaption", "figure",
+    "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header",
+    "hr", "li", "main", "nav", "ol", "p", "pre", "section", "summary",
+    "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul",
+)
+_HTML_BLOCK_PATTERN = re.compile(
+    r"</?(?:" + "|".join(_HTML_BLOCK_TAGS) + r")"
+    r'''(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>''',
+    re.IGNORECASE,
+)
+
+
 class EpubReader(Reader):
     """
     EPUB (.epub) file reader.
 
     Used to read and parse EPUB format e-books, supports chapter extraction and metadata parsing.
+    Block elements and explicit line breaks separate extracted text with spaces;
+    inline formatting preserves adjacent text within a word.
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
@@ -104,6 +120,11 @@ class EpubReader(Reader):
         # Remove script and style elements
         for script in soup(["script", "style"]):
             script.decompose()
+
+        # Separate blocks and explicit breaks, preserving inline word fragments.
+        for block in soup.find_all(_HTML_BLOCK_TAGS):
+            block.insert_before(" ")
+            block.insert_after(" ")
         
         # Get text and clean up whitespace
         text = soup.get_text()
@@ -122,7 +143,9 @@ class EpubReader(Reader):
         Returns:
             str: Extracted plain text
         """
-        text = re.sub(r'<[^>]+>', '', html_content)
+        # Add boundaries before stripping tags or decoding escaped literal markup.
+        text = _HTML_BLOCK_PATTERN.sub(' ', html_content)
+        text = re.sub(r'<[^>]+>', '', text)
     
         text = text.replace('&amp;', '&')
         text = text.replace('&lt;', '<')
