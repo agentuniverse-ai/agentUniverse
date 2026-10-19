@@ -191,9 +191,7 @@ class MCPSessionManager:
         return self.__exit_stack.get()
 
     async def clear_session(self):
-        await self.exit_stack.aclose()
-        self.__exit_stack.set(None)
-        self.__mcp_session_dict.set(None)
+        await self.safe_close_stack_async()
 
 
     def save_mcp_session(self) -> dict:
