@@ -377,7 +377,8 @@ class Knowledge(ComponentBase):
         return LangchainTool(
             name=self.name,
             description=self.description or '' + args_description,
-            func=self.async_langchain_query,
+            func=self.langchain_query,
+            coroutine=self.async_langchain_query,
         )
 
     def create_copy(self):
