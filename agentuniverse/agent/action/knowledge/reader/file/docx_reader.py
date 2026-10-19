@@ -29,7 +29,7 @@ class DocxReader(Reader):
             raise ImportError(
                 "docx2txt is required to read Microsoft Word files: "
                 "`pip install docx2txt`"
-            )
+            ) from None
 
         if isinstance(file, str):
             file = Path(file)

@@ -65,7 +65,7 @@ class RarReader(Reader):
             raise ImportError(
                 "rarfile is required to read RAR files: "
                 "`pip install rarfile`"
-            )
+            ) from None
 
         if isinstance(file, str):
             file = Path(file)
@@ -184,7 +184,7 @@ class RarReader(Reader):
                         continue
 
         except rarfile.Error as e:
-            raise ValueError(f"Failed to read RAR file: {str(e)}")
+            raise ValueError(f"Failed to read RAR file: {str(e)}") from e
 
         return documents
 

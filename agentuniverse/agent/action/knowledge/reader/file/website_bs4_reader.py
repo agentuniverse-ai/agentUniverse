@@ -86,9 +86,9 @@ class WebsiteBs4Reader(Reader):
             return documents
             
         except httpx.RequestError as e:
-            raise ConnectionError(f"Network connection failed: {str(e)}")
+            raise ConnectionError(f"Network connection failed: {str(e)}") from e
         except Exception as e:
-            raise RuntimeError(f"Content parsing failed: {str(e)}")
+            raise RuntimeError(f"Content parsing failed: {str(e)}") from e
 
     def _get_primary_domain(self, url: str) -> str:
         """Extract the existing two-label domain scope from the URL hostname.
