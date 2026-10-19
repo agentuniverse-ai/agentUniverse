@@ -240,8 +240,15 @@ class ContextManager(ComponentBase):
         # Count tokens for new content
         tokens = self._count_tokens(content)
 
+        input_budget = window.calculate_input_tokens()
+        if tokens > input_budget:
+            raise ValueError(
+                f"Context segment requires {tokens} tokens, exceeding the "
+                f"window input budget of {input_budget}"
+            )
+
         # Proactive budget check - make room BEFORE adding
-        if window.total_tokens + tokens > window.calculate_input_tokens():
+        if window.total_tokens + tokens > input_budget:
             self._make_room(window, tokens)
 
         # Create segment
