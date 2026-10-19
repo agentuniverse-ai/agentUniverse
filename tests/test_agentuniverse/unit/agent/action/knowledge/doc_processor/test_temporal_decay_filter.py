@@ -87,8 +87,10 @@ class TestTemporalDecayFilter(unittest.TestCase):
         for key, value in (
             ('half_life_days', 0),
             ('half_life_days', -5),
+            ('half_life_days', None),
             ('min_score', 0),
             ('min_score', 1.5),
+            ('min_score', None),
             ('max_age_days', -1),
             ('missing_timestamp', 'skip'),
             ('timestamp_key', ''),

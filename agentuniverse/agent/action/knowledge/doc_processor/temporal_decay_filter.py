@@ -287,12 +287,14 @@ class TemporalDecayFilter(DocProcessor):
 
         if hasattr(doc_processor_configer, "half_life_days"):
             self.half_life_days = doc_processor_configer.half_life_days
-            if self.half_life_days <= 0:
-                raise ValueError("half_life_days must be positive")
+            if self.half_life_days is None or self.half_life_days <= 0:
+                raise ValueError(
+                    "half_life_days must be a positive number, got "
+                    f"{self.half_life_days!r}")
 
         if hasattr(doc_processor_configer, "min_score"):
             self.min_score = doc_processor_configer.min_score
-            if not 0 < self.min_score <= 1:
+            if self.min_score is None or not 0 < self.min_score <= 1:
                 raise ValueError("min_score must be in (0, 1]")
 
         if hasattr(doc_processor_configer, "decay_score_key"):
