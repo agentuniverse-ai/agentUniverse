@@ -41,6 +41,7 @@ class SecureArchiveTool(Tool):
         overwrite: bool = False,
         compression: str = "deflated",
     ) -> dict[str, Any]:
+        """Run the requested archive operation (create, list, extract or info), converting raised errors into structured result dicts. Args: mode (str): The operation to run. file_path (str): The archive path. input_paths (list[str] | None): Input files/dirs for create. output_dir (str | None): Target directory for extract. members (list[str] | None): Member selection for extract. overwrite (bool): Whether to replace existing files. compression (str): Compression method for create. Returns: dict[str, Any]: A structured success or error result."""
         try:
             self._validate_config()
             operation = self._mode(mode)
@@ -61,9 +62,11 @@ class SecureArchiveTool(Tool):
 
     @staticmethod
     def _error(path: Any, kind: str, message: str) -> dict[str, Any]:
+        """Build a structured error result dict. Args: path (Any): The archive path involved. kind (str): The error type. message (str): The error message. Returns: dict[str, Any]: The error result."""
         return {"status": "error", "error_type": kind, "error": message, "file_path": path}
 
     def _validate_config(self) -> None:
+        """Validate the configured numeric limits and base_dir, raising ValueError when any of them is invalid."""
         for name in (
             "max_read_bytes",
             "max_write_bytes",
@@ -86,6 +89,7 @@ class SecureArchiveTool(Tool):
 
     @staticmethod
     def _mode(value: Any) -> str:
+        """Normalize and validate the operation mode. Raises: TypeError when mode is not a string; ValueError when it is not create, list, extract or info. Args: value (Any): The raw mode. Returns: str: The normalized mode."""
         if not isinstance(value, str):
             raise TypeError("mode must be a string")
         mode = value.strip().lower()
@@ -94,6 +98,7 @@ class SecureArchiveTool(Tool):
         return mode
 
     def _archive_path(self, value: Any) -> str:
+        """Validate that value is a non-empty path with a supported archive extension and resolve it safely against base_dir. Raises: ValueError on an invalid path. Args: value (Any): The raw path. Returns: str: The resolved archive path."""
         if not isinstance(value, str) or not value:
             raise ValueError("file_path must be a non-empty string")
         if not value.lower().endswith(self._FORMATS):
@@ -101,11 +106,13 @@ class SecureArchiveTool(Tool):
         return cast(str, resolve_safe_path(value, self.base_dir))
 
     def _directory(self, value: Any) -> str:
+        """Validate that value is a non-empty directory path and resolve it safely against base_dir. Raises: ValueError on an invalid path. Args: value (Any): The raw path. Returns: str: The resolved directory path."""
         if not isinstance(value, str) or not value:
             raise ValueError("output_dir must be a non-empty string")
         return cast(str, resolve_safe_path(value, self.base_dir))
 
     def _check_archive_file(self, path: str) -> None:
+        """Validate that the path exists and stays within the configured read byte limit. Raises: ValueError when the file is missing or too large. Args: path (str): The archive path."""
         if not os.path.isfile(path):
             raise ValueError(f"file_path does not exist: {path}")
         if os.path.getsize(path) > self.max_read_bytes:
@@ -113,10 +120,12 @@ class SecureArchiveTool(Tool):
 
     @staticmethod
     def _kind(path: str) -> str:
+        """Return the archive kind of the path based on its extension. Args: path (str): The archive path. Returns: str: zip or tar."""
         return "zip" if path.lower().endswith(".zip") else "tar"
 
     @staticmethod
     def _safe_member_name(raw: str) -> str:
+        """Normalize an archive member name and reject unsafe paths (absolute paths, drive prefixes, empty/dot segments). Raises: ValueError when the name is unsafe or invalid. Args: raw (str): The raw member name. Returns: str: The normalized member name."""
         if not isinstance(raw, str) or not raw or "\x00" in raw:
             raise ValueError("archive contains an invalid member name")
         normalized = raw.replace("\\", "/")
