@@ -23,9 +23,9 @@ service_name = "youtube"
 api_version = "v3"
 
 class Mode(Enum):
-    VIDEO_SEARCH = "search" 
+    VIDEO_SEARCH = "search"
     TRENDING_VIDEOS = "trending"
-    CHANNEL_INFO = "channel_info" 
+    CHANNEL_INFO = "channel_info"
 
 class YouTubeTool(Tool):
 
@@ -70,7 +70,7 @@ class YouTubeTool(Tool):
 
     @retry(3, 1.0)
     def _search_videos(self, query: str) -> List[Dict]:
-        try:         
+        try:
             search_response = self.service.search().list(
                 q=query,
                 part='id',
