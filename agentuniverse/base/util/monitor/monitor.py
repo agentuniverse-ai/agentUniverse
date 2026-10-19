@@ -297,7 +297,9 @@ class Monitor(BaseModel):
             # NOTE: use .get, not .pop — .pop mutates the caller's input dict,
             # silently removing `messages` so any later use (retry loops,
             # logging of the full input) finds it missing.
-            messages = llm_input.get('kwargs', {}).get('messages', None)
+            messages = llm_input.get('messages')
+            if messages is None:
+                messages = llm_input.get('kwargs', {}).get('messages')
 
             input_str = ''
             if messages is not None and isinstance(messages, list):
