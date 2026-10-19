@@ -310,3 +310,31 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [MojibakeDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/mojibake_detector.yaml)
+
+该组件把编码损坏文本（乱码/mojibake）的检测结果写入文档 metadata，对应 issue #258 的*预处理/分析*方向。爬虫和文件读取器采集的文档经常被用错误的编码解码：UTF-8 字节被当作 Latin-1 或 CP1252 读取时，中文变成“ä¸­æ”，“don’t”的弯引号变成“donâ€™t”；解码失败的字节序列塌缩成 U+FFFD 替换字符；有时文本根本未被解码，满篇 %E4%B8%AD 百分号转义或 &#x4E2D; HTML 实体。把这些文档灌入知识库会污染向量化和检索。检测器对每篇文档运行五个相互独立、纯结构化的信号：`replacement_char`（U+FFFD 计数）、`utf8_as_latin1`（UTF-8 多字节序列被 Latin-1 渲染的精确特征：Â/Ã、à-ï 或 ð-ô 引导字符后跟续字节范围字符）、`utf8_as_cp1252`（同样的结构，但续字符带有 CP1252 特有身份，如 â€™ â€œ â€¦）、`percent_encoding`（至少四个字符的百分号转义串）和 `html_entity`（数字字符引用与 &amp;amp; 之类的重复转义串）。对合法欧洲文本刻意保守：“São”“läuft”“året”合法包含 ã/ä/å，但字节结构模式要求*后一个*字符落在续字节范围内（Ã© 匹配，Ãa 不匹配），且 `utf8_as_latin1` 信号还要求至少两个命中才记录，孤立的歧义二元组不会标记文档。
+
+每个被记录的信号贡献一条 {kind, count, samples} 发现，附带前三个匹配的证据片段（各带十个字符上下文）及其位置区间。发现聚合为 `metadata[score_key]` = mojibake_score（加权命中数按每 1000 字符归一化——这是一个比率估计，七个字符的串里出现一个损坏引号与长文里出现一百个同样令人警惕）和 `metadata[verdict_key]` = mojibake_verdict：低于 `clean_below`（默认 0.5）为 `clean`，高于 `corrupted_above`（默认 5）为 `corrupted`，其间为 `suspect`。处理器绝不修改 text、id 及其他 metadata 字段——它是一个分析过程，与 TextNormalizer 互补：后者修复 unicode 形态问题，但无法区分损坏文本与健康文本。默认所有文档盖戳后原样通过，入库管道可据此隔离或路由；开启 `drop_corrupted: true` 后，verdict 为 `corrupted` 的文档从返回批次中移除（被移除的文档对象保留盖戳，持有原始列表的调用方能看到原因）。纯标准库、确定性且离线。
+
+组件定义文件如下：
+```yaml
+name: 'mojibake_detector'
+description: 'flag encoding-corrupted text (mojibake) into document metadata for quarantine decisions'
+clean_below: 0.5              # 低于该分数判定为 'clean'
+corrupted_above: 5.0          # 高于该分数判定为 'corrupted'
+drop_corrupted: false         # 为真时从批次中移除 corrupted 文档
+score_key: 'mojibake_score'   # 分数写入的 metadata 键；'' 表示不写入
+verdict_key: 'mojibake_verdict'    # verdict 写入的 metadata 键；'' 表示不写入
+findings_key: 'mojibake_findings'  # 发现列表写入的 metadata 键；'' 表示不写入
+disabled_signals: []          # 如 ['percent_encoding']，适用于 URL 密集语料
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.mojibake_detector'
+  class: 'MojibakeDetector'
+```
+- clean_below：低于该加权分数 verdict 为 `clean`。
+- corrupted_above：高于该加权分数 verdict 为 `corrupted`；两者之间为 `suspect`（边界含在内）。分数按每 1000 字符归一化。
+- drop_corrupted：为真时 verdict 为 `corrupted` 的文档从输出批次中移除；为假（默认）时所有文档盖戳并保留。
+- score_key / verdict_key / findings_key：分析结果写入的 metadata 键；为空则禁用对应写入。
+- disabled_signals：排除在分析之外的信号类型——`replacement_char`、`utf8_as_latin1`、`utf8_as_cp1252`、`percent_encoding`、`html_entity` 中的一个或多个；URL 密集语料中百分号转义属于预期，可借此关闭该信号。
