@@ -391,9 +391,10 @@ class ChromaContextStore(ContextStore):
                 to_remove.append(segment.id)
                 continue
 
-            # Remove if too old
+            # Remove if too old. Nonpositive TTL disables age pruning,
+            # matching ContextStore._is_expired().
             age_hours = (now - segment.metadata.created_at).total_seconds() / 3600
-            if age_hours > max_age_hours:
+            if max_age_hours is not None and max_age_hours > 0 and age_hours > max_age_hours:
                 to_remove.append(segment.id)
 
         if to_remove:
