@@ -634,3 +634,41 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Text Chunker Tool
+
+`TextChunkerTool` splits long texts into overlapping chunks for embedding,
+retrieval or map-reduce style processing, built purely on the Python
+standard library with zero network access. `char` mode slides a
+fixed-size character window (`chunk_size` characters per chunk,
+`overlap` characters shared between neighbours); `word` mode groups
+`chunk_size` consecutive whitespace-delimited words while preserving the
+original text spans, so inner spacing and line breaks survive; and
+`sentence` mode packs consecutive sentences under a `chunk_size`
+character budget with `overlap` sentences shared between neighbouring
+chunks. Sentences end at runs of `.`, `!`, `?` or `…` optionally
+followed by closing quotes or brackets — a plain regex model with no
+abbreviation handling, so `3.14` or `Dr.` split at the dot.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.text_chunker_tool import TextChunkerTool
+
+tool = TextChunkerTool()
+result = tool.execute(strategy="sentence", text=long_document,
+                      chunk_size=1000, overlap=1)
+for chunk in result["chunks"]:
+    print(chunk["index"], chunk["start"], chunk["end"], chunk["text"][:40])
+```
+
+Inputs are validated strictly before any computation: a non-string or
+empty `text`, text over 1,000,000 characters, an unknown `strategy`, a
+`chunk_size` below 1 or above the input cap, a negative `overlap`, an
+`overlap` not smaller than `chunk_size` in the char / word modes, or an
+input that would produce more than 10,000 chunks raise a `ValueError`.
+Every chunk reports its character offsets (`start` / `end`) in the
+original text plus `word_count` in word mode and `sentence_count` /
+`oversized` in sentence mode, so downstream steps can map findings back
+to source positions. A single sentence longer than the budget becomes
+its own chunk flagged `oversized` rather than being silently truncated.
+Chunking is deterministic — the same input and parameters always
+produce the same chunks.
