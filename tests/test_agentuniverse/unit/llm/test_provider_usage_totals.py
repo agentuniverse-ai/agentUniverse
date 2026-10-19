@@ -176,3 +176,42 @@ def test_non_mapping_details_still_use_reported_totals(details):
 
 def test_empty_usage_remains_zero():
     assert_totals(TokenUsage.from_openai({}), 0, 0)
+
+
+@pytest.mark.parametrize("prompt,completion", [(17, 0), (0, 7), (0, 0)])
+def test_monitor_retains_explicit_zero_provider_totals(prompt, completion):
+    from agentuniverse.base.util.monitor.monitor import Monitor
+
+    payload = CompletionUsage(
+        prompt_tokens=prompt, completion_tokens=completion,
+        total_tokens=prompt + completion,
+    )
+    reported = TokenUsage.from_openai(payload.model_dump())
+    output = LLMOutput(text="", usage=reported)
+
+    result = Monitor.get_llm_token_usage(None, None, output)
+
+    assert result["prompt_tokens"] == prompt
+    assert result["completion_tokens"] == completion
+    assert result["total_tokens"] == prompt + completion
+    assert output.usage is reported
+
+
+@pytest.mark.parametrize("usage", [None, TokenUsage()], ids=["absent", "empty"])
+def test_monitor_still_estimates_when_no_provider_totals_exist(usage):
+    from agentuniverse.base.util.monitor.monitor import Monitor
+
+    class CharacterCounter:
+        """Deterministic local tokenizer for the estimation path."""
+        @staticmethod
+        def get_num_tokens(text):
+            return len(text)
+
+    result = Monitor.get_llm_token_usage(
+        CharacterCounter(), {"messages": [{"role": "user", "content": "hello"}]},
+        LLMOutput(text="ok", usage=usage),
+    )
+
+    assert result["prompt_tokens"] == 11
+    assert result["completion_tokens"] == 2
+    assert result["total_tokens"] == 13
