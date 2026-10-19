@@ -14,6 +14,7 @@ system and Context system, enabling:
 4. Selective invalidation of outdated context
 """
 
+import json
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from enum import Enum
@@ -421,7 +422,9 @@ class KnowledgeContextSynchronizer:
             Hash string
         """
         import hashlib
-        content = "".join(documents)
+        content = json.dumps(
+            documents, ensure_ascii=False, separators=(",", ":")
+        )
         return hashlib.sha256(content.encode()).hexdigest()
 
     def get_knowledge_version(self, knowledge_id: str) -> Optional[KnowledgeVersion]:
