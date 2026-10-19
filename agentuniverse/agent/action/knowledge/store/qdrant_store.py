@@ -131,7 +131,7 @@ class QdrantStore(Store):
         points: List[PointStruct] = []
         for document in documents:
             vector = document.embedding
-            if (not vector or len(vector) == 0) and self.embedding_model:
+            if not vector and self.embedding_model:
                 vector = EmbeddingManager().get_instance_obj(self.embedding_model).get_embeddings([document.text])[0]
             if not vector or len(vector) == 0:
                 continue
