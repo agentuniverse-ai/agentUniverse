@@ -1,0 +1,55 @@
+name: feed_tool
+description: RSS/Atom feed reading tool — reads any public https feed URL. mode='headlines' returns the feed title plus item titles, links, dates and guids (limit, default 10, max 50); mode='item' returns the full record of one item selected by 1-based index or guid. DTDs and XML entities are rejected; responses are size- and redirect-bounded.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.feed_tool
+  class: FeedTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Reading mode — headlines (feed title + item titles/links/dates/guids, bounded by limit) or item (full record of one item selected by index or guid).
+    required: true
+  feed_url:
+    type: string
+    description: https URL of the RSS/Atom feed, e.g. 'https://example.com/feed.xml'. Credentials in the URL are rejected.
+    required: false
+  limit:
+    type: integer
+    description: Number of items returned in headlines mode, from 1 to 50.
+    required: false
+    default: 10
+  index:
+    type: integer
+    description: 1-based position of the item to return in item mode (as shown by headlines). Cannot be combined with guid.
+    required: false
+  guid:
+    type: string
+    description: guid (RSS) or id (Atom) of the item to return in item mode. Cannot be combined with index.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["headlines", "item"]
+      description: Reading mode.
+    feed_url:
+      type: string
+      description: https URL of the RSS/Atom feed.
+    limit:
+      type: integer
+      default: 10
+      minimum: 1
+      maximum: 50
+      description: Item count bound (headlines mode only).
+    index:
+      type: integer
+      minimum: 1
+      description: 1-based item position (item mode only).
+    guid:
+      type: string
+      description: Item guid / Atom id (item mode only).
+  required: ["mode"]
