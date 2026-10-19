@@ -310,3 +310,29 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ReadingLevelScorer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/reading_level_scorer.yaml)
+
+该组件将经典文本可读性指标写入文档 metadata，对应 issue #258 的*预处理/分析*方向。知识库的语料面向不同读者——写给所有人的安装说明、写给专家的监管文件、儿童故事、学术摘要——入库时若知道每篇文档的预期阅读等级，检索质量即可提升：智能体可以优先选择措辞贴合用户水平的答案，下游处理器也可以按难度分流材料。组件为每篇文档计算三个经典公式——Flesch 阅读容易度（`206.835 - 1.015*词数/句数 - 84.6*音节数/词数`，越高越易读）、Flesch-Kincaid 年级（`0.39*词数/句数 + 11.8*音节数/词数 - 15.59`，美国学制年级）和 Gunning-Fog 指数（`0.4*(词数/句数 + 100*难词数/词数)`，受教育年数；难词指音节数 >= 3 的词，句首以外的大写词元按专有名词排除，连字符复合词只有当某个部分单独达到 3 个音节时才计入）——并与 `word_count`、`sentence_count`、`syllable_count` 一起写入 `metadata[reading_level]`。
+
+分析流程刻意保守且零依赖。句子在 `.!?` 后跟空白或文本末尾处结束（因此 `3.14` 永远不会被切开），或在 CJK `。！？` 处结束；句点前片段是已知缩写（`Mr.`、`etc.`、`p.m.` 等）或单个大写首字母缩写时忽略该句点，连续终止符（`!!!`）只结束一个句子。音节采用标准启发式——元音组、词尾静音 `e`（`-le` 结尾如 `table` 保留）、`-ed` 静音（除非前面是 `t`/`d`）——对规则单词精确（`reading` = 2），对不规则词只是近似（`algorithm` 计 3 而非 4，`committee` 计 2）；这是所有纯标准库可读性实现的公认取舍。以非拉丁文本为主（CJK 字符占字母总数 > 30%）时音节公式不适用：三个公式置为 `null`，`metadata[readability_note]` 记录 `"syllable formulas apply to English text only"`，但句子/词数统计仍然写入。空白输入产生零计数与 `null` 公式，而不是虚构的分数。
+
+默认情况下组件只写入 metadata。设置 `min_grade` 和/或 `max_grade` 后启用过滤模式，丢弃 Flesch-Kincaid 年级超出闭区间的文档；无法计算年级的文档（空白或非拉丁文本）总是保留，因为不存在拒绝它的证据。该组件度量的是文本*读起来有多难*，与度量内容质量比例（信号 vs. 模板噪声）的 `TextQualityScorer`（#3500）是两回事：可读性公式是独立、经典的指标族，且在此以文档处理器的形式计算，指标随文档一同进入存储。整个流程纯 Python、确定且离线——相同输入永远产生相同 metadata。
+
+组件定义文件如下：
+```yaml
+name: 'reading_level_scorer'
+description: 'stamp Flesch, Flesch-Kincaid and Gunning-Fog readability metrics into document metadata'
+min_grade: null               # 可选的 Flesch-Kincaid 下界（过滤用）
+max_grade: null               # 可选的 Flesch-Kincaid 上界（过滤用）
+reading_level_key: 'reading_level'  # 指标写入的 metadata 键；'' 表示不写入
+note_key: 'readability_note'  # 非拉丁文本提示写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.reading_level_scorer'
+  class: 'ReadingLevelScorer'
+```
+- min_grade：可选的 Flesch-Kincaid 年级下界，低于该值的文档在过滤模式下被丢弃。`null`（默认）表示不设下界，即不做过滤。
+- max_grade：可选的 Flesch-Kincaid 年级上界，高于该值的文档在过滤模式下被丢弃。`null`（默认）表示不设上界。
+- reading_level_key：指标字典写入每篇文档的 metadata 键；为空则不写入。字典包含 `flesch_reading_ease`、`flesch_kincaid_grade`、`gunning_fog`（数值，不可计算时为 `null`）以及 `word_count` / `sentence_count` / `syllable_count`。
+- note_key：以非拉丁文本为主的文档写入提示的 metadata 键；为空则不写入。

@@ -309,3 +309,29 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ReadingLevelScorer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/reading_level_scorer.yaml)
+
+This component stamps classic text-readability metrics into document metadata, addressing the *pre-processing/analysis* direction of issue #258. Knowledge corpora mix audiences — installation notes for anyone, regulatory filings for specialists, children's stories, academic abstracts — and retrieval improves when the expected reading level of each document is known at insertion time: agents can prefer answers phrased at the user's level, and downstream processors can route material by difficulty. For every document the processor computes the three classic formulas — Flesch Reading Ease (`206.835 - 1.015*words/sentences - 84.6*syllables/words`, higher = easier), Flesch-Kincaid Grade (`0.39*words/sentences + 11.8*syllables/words - 15.59`, US school grade) and the Gunning-Fog index (`0.4*(words/sentences + 100*complex_words/words)`, years of education; a complex word has >= 3 syllables, with capitalized tokens outside sentence-initial position excluded as proper-noun-ish and hyphenated compounds counted only when one part alone is complex) — and writes them to `metadata[reading_level]` together with `word_count`, `sentence_count` and `syllable_count`.
+
+The analysis is deliberately conservative and dependency-free. Sentences end at `.!?` followed by whitespace or end of text (so `3.14` never splits) or at CJK `。！？`; a period is ignored when its preceding fragment is a known abbreviation (`Mr.`, `etc.`, `p.m.` ...) or a single uppercase initial, and terminator runs (`!!!`) end one sentence. Syllables use the standard heuristic — vowel groups, silent terminal `e` (kept for `-le` as in `table`), silent `-ed` unless it follows `t`/`d` — which is exact for regular words (`reading` = 2) but approximates irregular ones (`algorithm` counts 3 rather than 4, `committee` counts 2); an accepted trade-off of every stdlib readability implementation. For predominantly non-Latin text (CJK characters > 30% of letters) the syllable formulas do not apply: they are set to `null`, `metadata[readability_note]` records `"syllable formulas apply to English text only"`, and sentence/word statistics are still stamped. Blank input yields zero counts with `null` formulas rather than a fabricated score.
+
+By default the processor only stamps metadata. Setting `min_grade` and/or `max_grade` switches on a filter mode that drops documents whose Flesch-Kincaid grade falls outside the inclusive range; documents without a computable grade (blank or non-Latin text) are always kept, since no evidence exists to reject them. The component measures *how hard* a text is to read and is distinct from `TextQualityScorer` (#3500), which measures content quality ratios (signal vs. boilerplate): readability formulas are a separate, classic metric family, computed here as a doc processor so the metrics travel with the document into the store. Everything is pure Python, deterministic and offline — identical inputs always produce identical metadata.
+
+The component definition file is as follows:
+```yaml
+name: 'reading_level_scorer'
+description: 'stamp Flesch, Flesch-Kincaid and Gunning-Fog readability metrics into document metadata'
+min_grade: null               # optional lower Flesch-Kincaid bound for filtering
+max_grade: null               # optional upper Flesch-Kincaid bound for filtering
+reading_level_key: 'reading_level'  # metadata key for the metrics; '' disables
+note_key: 'readability_note'  # metadata key for the non-Latin note; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.reading_level_scorer'
+  class: 'ReadingLevelScorer'
+```
+- min_grade: Optional minimum Flesch-Kincaid grade; documents scoring below it are dropped in filter mode. `null` (default) disables the bound and with it filtering.
+- max_grade: Optional maximum Flesch-Kincaid grade; documents scoring above it are dropped in filter mode. `null` (default) disables the bound.
+- reading_level_key: Metadata key the metrics dictionary is written to on every document; an empty value disables stamping. The dictionary holds `flesch_reading_ease`, `flesch_kincaid_grade`, `gunning_fog` (numbers, or `null` when not computable) plus `word_count` / `sentence_count` / `syllable_count`.
+- note_key: Metadata key the note for predominantly non-Latin text is written to; an empty value disables the note.
