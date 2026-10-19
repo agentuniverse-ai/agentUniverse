@@ -1,0 +1,29 @@
+name: case_converter_tool
+description: "Case converter tool — pure Python stdlib, no network required. Unicode-aware case modes upper/lower/title (title keeps the small words a/an/the/of/and lowercase unless first or last) and sentence, plus identifier modes snake_case, kebab-case, camelCase, PascalCase, CONSTANT_CASE and URL slug (NFKD ascii-fold: Jose with an acute becomes jose). Multi-word input is split on spaces, underscores, dashes and camel humps, with acronym-safe splitting (HTTPServer -> http_server)."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.case_converter_tool
+  class: CaseConverterTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Case or style — upper, lower, title, sentence, snake, kebab, camel, pascal, constant or slug.
+    required: true
+  text:
+    type: string
+    description: The non-empty text to convert (at most 100,000 characters).
+    required: true
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["upper", "lower", "title", "sentence", "snake", "kebab", "camel", "pascal", "constant", "slug"]
+      description: Case or style to convert the text to.
+    text:
+      type: string
+      description: Text to convert.
+  required: ["mode", "text"]
