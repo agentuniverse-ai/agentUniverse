@@ -632,3 +632,75 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## QRCodeTool
+
+`QRCodeTool` provides bounded QR code generation and decoding for agent workflows with three modes: `generate`, `decode`, and `generate_base64`. Install the optional dependencies:
+
+```bash
+pip install "qrcode[pil]"
+# decoding additionally needs pyzbar and the native zbar library: pip install pyzbar
+```
+
+The built-in component configuration is
+[`qrcode_tool.yaml`](../../../../../../agentuniverse/agent/action/tool/common_tool/qrcode_tool.yaml):
+
+```yaml
+name: qrcode_tool
+description: Generate QR code images and decode existing QR codes from image files.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.qrcode_tool
+  class: QRCodeTool
+input_keys: [mode]
+base_dir: .
+max_input_chars: 2000
+default_size: 10
+default_border: 4
+error_correction: M
+```
+
+Generate a QR code to a file:
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj("qrcode_tool")
+result = tool.run(
+    mode="generate",
+    data="https://antgroup.com",
+    file_path="qrcodes/site.png",
+    box_size=10,
+    border=4,
+    error_correction="H",
+)
+```
+
+Generate a base64 string (handy when returning the image inline without writing a file):
+
+```python
+result = tool.run(mode="generate_base64", data="hello", output_format="PNG")
+print(result["image_base64"])
+```
+
+Decode an existing QR code image:
+
+```python
+result = tool.run(mode="decode", file_path="qrcodes/site.png")
+print(result["decoded"])
+```
+
+Parameters:
+
+- `mode`: required — `generate`, `decode`, or `generate_base64`.
+- `data`: required for `generate` and `generate_base64`; the text to encode, capped by `max_input_chars`.
+- `file_path`: required for `generate` (destination) and `decode` (source); confined to `base_dir` and must use a supported image extension (`.png`, `.bmp`, `.gif`, `.tiff`/`.tif`, `.jpeg`/`.jpg`).
+- `box_size` / `size`: pixels per QR module; `size` is an alias for `box_size`; defaults to `default_size`.
+- `border`: quiet-zone width in modules; defaults to `default_border`.
+- `error_correction`: correction level `L`/`M`/`Q`/`H`; defaults to the tool-level value.
+- `output_format`: `generate_base64` only; a Pillow image format, default `PNG`.
+- `overwrite`: `generate` only; allow replacing an existing image, default `false`.
+- `fill_color` / `back_color`: foreground and background colors, default `black` / `white`.
+
+`qrcode` and `Pillow` are loaded lazily, so importing the tool never fails. Every path is confined to `base_dir` after resolving symlinks; generation uses a same-directory temporary file followed by `os.replace`, so a failed write cannot corrupt an existing image. File size, input length, and module/border ranges are bounded. Decoding relies on the optional `pyzbar` package; when it is absent the tool returns a structured `dependency_error` with an install hint instead of silently returning an empty result.

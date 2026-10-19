@@ -1,0 +1,114 @@
+name: qrcode_tool
+description: Generate QR code images and decode existing QR codes from image files. Requires the optional qrcode and Pillow packages.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.qrcode_tool
+  class: QRCodeTool
+input_keys:
+  - mode
+base_dir: .
+max_input_chars: 2000
+default_size: 10
+default_border: 4
+error_correction: M
+box_size_min: 1
+box_size_max: 100
+border_min: 0
+border_max: 20
+max_read_bytes: 20971520
+max_write_bytes: 20971520
+args_model:
+  mode:
+    type: string
+    description: Operation mode — generate, decode, or generate_base64.
+    required: true
+  data:
+    type: string
+    description: Text to encode. Required for generate and generate_base64 modes.
+    required: false
+  file_path:
+    type: string
+    description: Image path underneath the configured base_dir. Required for generate (destination) and decode (source).
+    required: false
+  box_size:
+    type: integer
+    description: Pixels per QR module. Falls back to default_size when omitted.
+    required: false
+  size:
+    type: integer
+    description: Alias for box_size.
+    required: false
+  border:
+    type: integer
+    description: Quiet-zone width in modules. Falls back to default_border when omitted.
+    required: false
+  error_correction:
+    type: string
+    description: Error correction level — L, M, Q, or H. Falls back to the tool-level error_correction.
+    required: false
+  output_format:
+    type: string
+    description: Pillow image format for generate_base64 (e.g. PNG). Defaults to PNG.
+    required: false
+  overwrite:
+    type: boolean
+    description: Allow generate mode to replace an existing image.
+    required: false
+    default: false
+  fill_color:
+    type: string
+    description: Foreground (module) color.
+    required: false
+    default: black
+  back_color:
+    type: string
+    description: Background color.
+    required: false
+    default: white
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["generate", "decode", "generate_base64"]
+      description: QR code operation mode.
+    data:
+      type: string
+      description: Text to encode for generate modes.
+    file_path:
+      type: string
+      description: Image path underneath base_dir.
+    box_size:
+      type: integer
+      minimum: 1
+      maximum: 100
+      description: Pixels per QR module.
+    size:
+      type: integer
+      minimum: 1
+      maximum: 100
+      description: Alias for box_size.
+    border:
+      type: integer
+      minimum: 0
+      maximum: 20
+      description: Quiet-zone width in modules.
+    error_correction:
+      type: string
+      enum: ["L", "M", "Q", "H"]
+      description: Error correction level.
+    output_format:
+      type: string
+      description: Pillow image format for generate_base64.
+    overwrite:
+      type: boolean
+      default: false
+    fill_color:
+      type: string
+      default: black
+    back_color:
+      type: string
+      default: white
+  required: ["mode"]
+  additionalProperties: false
