@@ -104,7 +104,7 @@ class FrameworkContextManager:
             for var_name in self.context_dict.keys():
                 try:
                     context_values[var_name] = copy.deepcopy(self.get_context(var_name))
-                except:
+                except Exception:
                     context_values[var_name] = self.get_context(var_name)
         return context_values
 
@@ -119,11 +119,7 @@ class FrameworkContextManager:
         self.__context_dict.set({})
 
     def set_log_context(self, context_key: str, context_value: Any):
-        log_context = self.get_context("LOG_CONTEXT")
-        if not log_context:
-            log_context = {
-                context_key: context_value
-            }
-            self.set_context("LOG_CONTEXT", log_context)
-        else:
-            log_context[context_key] = context_value
+        current_context = self.get_context("LOG_CONTEXT")
+        log_context = current_context.copy() if isinstance(current_context, dict) else {}
+        log_context[context_key] = context_value
+        self.set_context("LOG_CONTEXT", log_context)

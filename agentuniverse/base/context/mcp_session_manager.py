@@ -329,6 +329,7 @@ class MCPSessionManager:
                 server_name,
                 url=kwargs["url"],
                 session_kwargs=kwargs.get("session_kwargs"),
+                exit_stack=exit_stack
             )
         else:
             raise ValueError(f"Unsupported transport: {transport}. Must be 'stdio' or 'sse'")
