@@ -26,12 +26,21 @@ from agentuniverse.base.tracing.otel.consts import SESSION_ID_KEY, \
 
 
 class AUSessionPropagator(textmap.TextMapPropagator):
+    """Propagates the current session id through supported carrier keys."""
+
     def inject(
         self,
         carrier: textmap.CarrierT,
         context: typing.Optional[Context] = None,
         setter: textmap.Setter[textmap.CarrierT] = textmap.default_setter,
     ) -> None:
+        """Inject the current session id into the carrier.
+
+        Args:
+            carrier: The carrier to inject into.
+            context: The context carrying the session id.
+            setter: The setter used to write the session id onto the carrier.
+        """
         session_id = get_session_id()
         key_list = [
             HTTP_HEADER_SESSION_ID_KEY,
@@ -49,7 +58,16 @@ class AUSessionPropagator(textmap.TextMapPropagator):
         context: typing.Optional[Context] = None,
         getter: textmap.Getter[textmap.CarrierT] = textmap.default_getter,
     ) -> Context:
+        """Extract the session id from the carrier into the given context.
 
+        Args:
+            carrier: The carrier to read the session id from.
+            context: The context to populate with the extracted session id.
+            getter: The getter used to read the session id from the carrier.
+
+        Returns:
+            The context enriched with the session id baggage.
+        """
         if context is None:
             context = Context()
 
@@ -72,6 +90,7 @@ class AUSessionPropagator(textmap.TextMapPropagator):
 
     @property
     def fields(self) -> typing.Set[str]:
+        """Return the header keys this propagator reads and writes."""
         return {
             HTTP_HEADER_SESSION_ID_KEY,
             SESSION_ID_KEY
