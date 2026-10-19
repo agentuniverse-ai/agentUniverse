@@ -55,7 +55,8 @@ class DoubaoEmbedding(Embedding):
             if self.embedding_dims not in SUPPORTED_DIMENSIONS:
                 raise ValueError(
                     f"Unsupported embedding dimension: {self.embedding_dims}. "
-                    f"Supported dimensions are: {', '.join(SUPPORTED_DIMENSIONS)}"
+                    "Supported dimensions are: "
+                    f"{', '.join(str(value) for value in sorted(SUPPORTED_DIMENSIONS))}"
                 )
             import numpy as np
             norm = float(np.linalg.norm(vec[:self.embedding_dims]))
