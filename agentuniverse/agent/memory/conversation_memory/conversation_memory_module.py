@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/11/21 16:55
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: conversation_memory_module.py
 
@@ -59,7 +59,6 @@ def generate_relation_str(source: str, target: str, source_type: str, target_typ
         return f"{source} 回答了 {target} 的问题"
     elif type == 'summary':
         return f"{source} 的摘要"
-    return None
 
 
 def generate_relation_str_en(source: str, target: str, source_type: str, target_type: str, type: str):
@@ -93,7 +92,6 @@ def generate_relation_str_en(source: str, target: str, source_type: str, target_
         return f"{target} answered {source}'s question"
     elif type == 'summary':
         return f"{source} summary"
-    return None
 
 
 def sync_to_sub_agent_memory(message: ConversationMessage, session_id: str, memory_name: str):

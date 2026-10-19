@@ -54,6 +54,7 @@ class SessionLibrary:
 
     def update_session(self, session_do: SessionDO) -> str:
         """Update an existing session to the database."""
+        db_session = None
         try:
             with self.get_db_session() as db_session:
                 session_orm = db_session.query(SessionORM).filter(
@@ -66,7 +67,8 @@ class SessionLibrary:
                     return session_orm.session_id
         except Exception as e:
             LOGGER.error("session library update failed, exception: {}", e)
-            db_session.rollback()
+            if db_session is not None:
+                db_session.rollback()
 
     def delete_session(self, session_id: str) -> str | None:
         """Delete a session from the database  using the provided `session_id`."""

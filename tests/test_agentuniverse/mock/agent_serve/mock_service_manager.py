@@ -18,10 +18,14 @@ class ServiceManager:
     """Mock class of agentuniverse.agent_serve.service.Service."""
 
     def __init__(self):
+        """Initialize the __init__ instance.
+        """
         self.__service_list: list = TEST_SERVICE_LIST
         self.__service_map: dict = TEST_SERVICE_MAP
 
     def get_instance_obj(self, service_code: str):
+        """Return instance obj.
+        """
         service_base = self.__service_map.get(service_code)
         if service_base is None:
             raise ValueError(f"Service {service_code} not found.")
