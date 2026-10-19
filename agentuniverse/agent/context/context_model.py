@@ -81,7 +81,10 @@ class ContextMetadata(BaseModel):
             return 0.0
 
         time_since_access = (datetime.now() - self.last_accessed).total_seconds() / 3600  # hours
-        decay_factor = max(0.0, 1.0 - (time_since_access * self.decay_rate / 24))  # 24 hours baseline
+        decay_factor = min(
+            1.0,
+            max(0.0, 1.0 - (time_since_access * self.decay_rate / 24)),
+        )  # 24 hours baseline
 
         return self.relevance_score * decay_factor
 
