@@ -148,6 +148,29 @@ class TestCSVQueryWhere(unittest.TestCase):
         )
         self.assertEqual([row[0] for row in result["rows"]], ["Bob", "Eve"])
 
+    def test_where_in_value_containing_comma(self) -> None:
+        """Quoted IN values may contain commas; both quote styles work."""
+        text = 'city,pop\n"San Jose, CA",1000\nNYC,8000\n'
+        result = self.tool.execute(
+            csv_text=text, where="city IN ('San Jose, CA')"
+        )
+        self.assertEqual([row[0] for row in result["rows"]], ["San Jose, CA"])
+        result = self.tool.execute(
+            csv_text=text, where='city IN ("San Jose, CA", NYC)'
+        )
+        self.assertEqual(
+            [row[0] for row in result["rows"]], ["San Jose, CA", "NYC"]
+        )
+
+    def test_where_in_empty_value_matches_empty_cell(self) -> None:
+        result = self.tool.execute(csv_text=CSV_TEXT, where="city IN ('', 'Shanghai')")
+        self.assertEqual([row[0] for row in result["rows"]], ["Bob", "Eve"])
+
+    def test_where_in_unterminated_quote(self) -> None:
+        result = self.tool.execute(csv_text=CSV_TEXT, where="city IN ('Beijing, NYC)")
+        self.assertIn("error", result)
+        self.assertIn("unterminated quoted value", result["error"])
+
     def test_where_multiple_conditions_and(self) -> None:
         result = self.tool.execute(
             csv_text=CSV_TEXT, where="city = Beijing AND age > 32"

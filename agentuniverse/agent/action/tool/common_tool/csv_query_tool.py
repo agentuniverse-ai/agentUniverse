@@ -378,10 +378,33 @@ class CSVQueryTool(Tool):
         inner = rest[1:-1].strip()
         if not inner:
             return []
-        parsed = list(csv.reader(io.StringIO(inner), skipinitialspace=True))
-        if len(parsed) != 1:
-            raise ValueError(f"cannot parse IN value list in '{original.strip()}'.")
-        return [CSVQueryTool._strip_quotes(value) for value in parsed[0]]
+        # Split on commas that are not inside a quoted value. Both quote
+        # styles must work: ``csv.reader`` only honours ``"`` fields, so a
+        # single-quoted value containing a comma ("'San Jose, CA'") would be
+        # silently split into garbage tokens and never match.
+        tokens: list[str] = []
+        current: list[str] = []
+        quote: str | None = None
+        for char in inner:
+            if quote is not None:
+                if char == quote:
+                    quote = None
+                current.append(char)
+            elif char in ("'", '"'):
+                quote = char
+                current.append(char)
+            elif char == ",":
+                tokens.append("".join(current))
+                current = []
+            else:
+                current.append(char)
+        if quote is not None:
+            raise ValueError(
+                f"cannot parse IN value list in '{original.strip()}': "
+                "unterminated quoted value."
+            )
+        tokens.append("".join(current))
+        return [CSVQueryTool._strip_quotes(value) for value in tokens]
 
     @staticmethod
     def _strip_quotes(value: str) -> str:
