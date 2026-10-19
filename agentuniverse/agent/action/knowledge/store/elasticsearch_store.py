@@ -10,6 +10,7 @@ redis_vector (#687) stores.
 # ruff: noqa: TRY003, TRY004
 
 import logging
+import os
 from typing import Any, ClassVar, List, Optional
 
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import \
@@ -28,8 +29,12 @@ class ElasticsearchStore(Store):
 
     Attributes:
         hosts: Comma-separated ES host URLs (e.g. ``"http://localhost:9200"``).
-        api_key: Optional ES API key (``"id:api_key"`` format).
-        username / password: Optional basic auth credentials.
+            Falls back to the ``ES_HOSTS`` environment variable, then
+            ``http://localhost:9200``.
+        api_key: Optional ES API key (``"id:api_key"`` format); falls back
+            to ``ES_API_KEY``.
+        username / password: Optional basic auth credentials; fall back to
+            ``ES_USERNAME`` / ``ES_PASSWORD``.
         index_name: ES index name.
         embedding_model: Name of a registered aU embedding component.
         dimensions: Vector dimension; inferred from first insert if unset.
@@ -40,7 +45,7 @@ class ElasticsearchStore(Store):
         vector_field: Name of the dense_vector field in the index.
     """
 
-    hosts: Optional[str] = "http://localhost:9200"
+    hosts: Optional[str] = None
     api_key: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
@@ -72,8 +77,10 @@ class ElasticsearchStore(Store):
         return self
 
     def _validate_config(self) -> None:
-        if not self.hosts or not isinstance(self.hosts, str):
-            raise ValueError("hosts must be a non-empty string")
+        if self.hosts is not None and (not isinstance(self.hosts, str)
+                                       or not self.hosts.strip()):
+            raise ValueError(
+                "hosts must be a non-empty string (or unset to use ES_HOSTS)")
         if not self.index_name or not isinstance(self.index_name, str):
             raise ValueError("index_name must be a non-empty string")
         self.similarity = (self.similarity or "cosine").lower()
@@ -101,13 +108,20 @@ class ElasticsearchStore(Store):
                 "elasticsearch is not installed. Install it with "
                 "'pip install elasticsearch'.") from exc
 
-        hosts = [h.strip() for h in self.hosts.split(",") if h.strip()]
+        # YAML values take precedence; empty environment strings are treated
+        # as unset so an exported-but-blank variable cannot break the config.
+        hosts_value = (self.hosts or os.getenv("ES_HOSTS")
+                       or "http://localhost:9200")
+        hosts = [h.strip() for h in hosts_value.split(",") if h.strip()]
         kwargs: dict = {"hosts": hosts, "verify_certs": self.verify_certs}
 
-        if self.api_key:
-            kwargs["api_key"] = self.api_key
-        elif self.username and self.password:
-            kwargs["basic_auth"] = (self.username, self.password)
+        api_key = self.api_key or os.getenv("ES_API_KEY")
+        username = self.username or os.getenv("ES_USERNAME")
+        password = self.password or os.getenv("ES_PASSWORD")
+        if api_key:
+            kwargs["api_key"] = api_key
+        elif username and password:
+            kwargs["basic_auth"] = (username, password)
 
         self.client = Elasticsearch(**kwargs)
         self._ensure_index()
@@ -118,12 +132,16 @@ class ElasticsearchStore(Store):
             self._new_client()
         return self.client
 
-    def _ensure_index(self) -> None:
+    def _ensure_index(self, dimensions: Optional[int] = None) -> None:
         client = self.client
         if client.indices.exists(index=self.index_name):
             return
 
-        dim = self.dimensions or 1536
+        dim = dimensions or self.dimensions
+        if not dim:
+            # Defer creation until the first insert infers the dimension;
+            # guessing here could create an index no vector can match.
+            return
         mapping = {
             "properties": {
                 "text": {"type": "text"},
@@ -172,6 +190,9 @@ class ElasticsearchStore(Store):
                 continue
             if expected_dim is None:
                 expected_dim = len(vector)
+                # The index may have been deferred until the dimension was
+                # inferable; create it now with the correct mapping.
+                self._ensure_index(expected_dim)
             elif len(vector) != expected_dim:
                 raise ValueError(
                     f"Document {doc.id!r} has a {len(vector)}-dim embedding "
@@ -214,7 +235,7 @@ class ElasticsearchStore(Store):
                     "k": top_k,
                     "num_candidates": min(top_k * 10, 10000),
                 },
-                source=["text"],
+                _source=["text"],
             )
         except Exception:
             logger.exception("Elasticsearch query failed")

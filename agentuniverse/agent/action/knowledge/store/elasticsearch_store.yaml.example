@@ -1,5 +1,7 @@
 name: elasticsearch_store
 description: Elasticsearch vector store for knowledge retrieval
+# hosts and credentials may be omitted to use the ES_HOSTS, ES_API_KEY,
+# ES_USERNAME, and ES_PASSWORD environment variables instead.
 hosts: 'http://localhost:9200'
 api_key: ''
 username: ''

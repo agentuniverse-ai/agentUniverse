@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 """Tests for ElasticsearchStore. All mock the ES client; no server required."""
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -28,6 +29,10 @@ class TestElasticsearchStoreConfig(unittest.TestCase):
     def test_empty_hosts_rejected(self):
         with self.assertRaises(ValueError):
             ElasticsearchStore(hosts="")._validate_config()
+
+    def test_unset_hosts_valid(self):
+        """hosts=None is allowed; it resolves via ES_HOSTS/default later."""
+        ElasticsearchStore(index_name="test")._validate_config()
 
     def test_invalid_similarity_rejected(self):
         with self.assertRaises(ValueError):
@@ -114,6 +119,69 @@ class TestElasticsearchStoreCRUD(unittest.TestCase):
         store = self._store()
         self.mock_client.get.return_value = {"found": False}
         self.assertIsNone(store.get_document_by_id("missing"))
+
+    def test_query_requests_source_filter(self):
+        """The kNN query must request only the text field via _source."""
+        store = self._store()
+        self.mock_client.indices.exists.return_value = True
+        self.mock_client.search.return_value = {"hits": {"hits": []}}
+        store.query(Query(embeddings=[[0.1, 0.2, 0.3]], similarity_top_k=5))
+        kwargs = self.mock_client.search.call_args.kwargs
+        self.assertEqual(kwargs["_source"], ["text"])
+
+    def test_insert_without_dimensions_defers_index_creation(self):
+        """Without configured dimensions the index is created from the first
+        inserted vector, not from a guessed default."""
+        store = ElasticsearchStore(hosts="http://localhost:9200",
+                                   index_name="deferred_idx")
+        store._new_client()
+        self.mock_client.indices.create.assert_not_called()
+        store.insert_document(
+            [Document(id="d1", text="a", embedding=[0.1, 0.2])])
+        self.mock_client.indices.create.assert_called_once()
+        mapping = self.mock_client.indices.create.call_args.kwargs["mappings"]
+        self.assertEqual(mapping["properties"]["embedding"]["dims"], 2)
+
+    def test_env_fallback_hosts_and_credentials(self):
+        fake_es = MagicMock(return_value=self.mock_client)
+        env = {"ES_HOSTS": "http://es-env:9200", "ES_API_KEY": "id:secret"}
+        with patch.dict("sys.modules",
+                        {"elasticsearch": MagicMock(Elasticsearch=fake_es)}), \
+                patch.dict(os.environ, env):
+            store = ElasticsearchStore(index_name="env_idx", dimensions=4)
+            store._new_client()
+        kwargs = fake_es.call_args.kwargs
+        self.assertEqual(kwargs["hosts"], ["http://es-env:9200"])
+        self.assertEqual(kwargs["api_key"], "id:secret")
+        self.assertNotIn("basic_auth", kwargs)
+
+    def test_env_empty_values_are_ignored(self):
+        """Exported-but-blank environment variables must not override YAML."""
+        fake_es = MagicMock(return_value=self.mock_client)
+        env = {"ES_HOSTS": "", "ES_API_KEY": "", "ES_USERNAME": "",
+               "ES_PASSWORD": ""}
+        with patch.dict("sys.modules",
+                        {"elasticsearch": MagicMock(Elasticsearch=fake_es)}), \
+                patch.dict(os.environ, env):
+            store = ElasticsearchStore(hosts="http://yaml-host:9200",
+                                       index_name="env_idx2", dimensions=4)
+            store._new_client()
+        kwargs = fake_es.call_args.kwargs
+        self.assertEqual(kwargs["hosts"], ["http://yaml-host:9200"])
+        self.assertNotIn("api_key", kwargs)
+        self.assertNotIn("basic_auth", kwargs)
+
+    def test_env_basic_auth_pair(self):
+        fake_es = MagicMock(return_value=self.mock_client)
+        env = {"ES_HOSTS": "http://es-env:9200", "ES_USERNAME": "u",
+               "ES_PASSWORD": "p"}
+        with patch.dict("sys.modules",
+                        {"elasticsearch": MagicMock(Elasticsearch=fake_es)}), \
+                patch.dict(os.environ, env):
+            store = ElasticsearchStore(index_name="env_idx3", dimensions=4)
+            store._new_client()
+        kwargs = fake_es.call_args.kwargs
+        self.assertEqual(kwargs["basic_auth"], ("u", "p"))
 
 
 if __name__ == "__main__":
