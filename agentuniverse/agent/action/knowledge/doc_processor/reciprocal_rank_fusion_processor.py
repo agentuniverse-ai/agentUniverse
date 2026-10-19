@@ -88,6 +88,8 @@ class ReciprocalRankFusionProcessor(DocProcessor):
             (descending), each carrying ``metadata[score_field]``. An empty
             input yields an empty list.
         """
+        if self.k < 0:
+            raise ValueError("k must be non-negative")
         if not origin_docs:
             return []
 

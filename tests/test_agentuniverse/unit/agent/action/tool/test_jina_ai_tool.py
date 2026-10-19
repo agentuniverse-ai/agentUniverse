@@ -17,12 +17,14 @@ class JinaAIToolTLSTest(unittest.TestCase):
     """TLS verification must be on by default, not hardcoded off."""
 
     def _mock_ok_response(self) -> MagicMock:
+        """Build a mock HTTP response that succeeds and returns an ok JSON payload."""
         resp = MagicMock()
         resp.raise_for_status.return_value = None
         resp.json.return_value = {"code": 200, "data": {"content": "ok"}}
         return resp
 
     def test_verify_tls_true_by_default(self) -> None:
+        """Verify TLS certificate verification is enabled by default on API requests."""
         tool = JinaAITool()
         self.assertTrue(tool.verify_tls)
         with patch.object(jina_module.requests, "get") as mock_get:
@@ -33,6 +35,7 @@ class JinaAIToolTLSTest(unittest.TestCase):
             self.assertIs(kwargs.get("verify"), True)
 
     def test_verify_tls_can_be_disabled_via_config(self) -> None:
+        """Verify TLS verification can be turned off through the tool config."""
         tool = JinaAITool(verify_tls=False)
         with patch.object(jina_module.requests, "get") as mock_get:
             mock_get.return_value = self._mock_ok_response()
@@ -41,6 +44,7 @@ class JinaAIToolTLSTest(unittest.TestCase):
             self.assertIs(kwargs.get("verify"), False)
 
     def test_non_200_logs_warning_without_writing_stdout(self) -> None:
+        """Verify a non-200 payload is logged and returns None without writing to stdout."""
         tool = JinaAITool()
         with patch.object(jina_module.requests, "get") as mock_get:
             resp = MagicMock()
@@ -55,6 +59,7 @@ class JinaAIToolTLSTest(unittest.TestCase):
         self.assertEqual(out.getvalue(), "")
 
     def test_make_api_request_handles_http_error_without_response(self) -> None:
+        """Verify an HTTP error without a response body yields an error message."""
         tool = JinaAITool()
         with (
             patch.object(
