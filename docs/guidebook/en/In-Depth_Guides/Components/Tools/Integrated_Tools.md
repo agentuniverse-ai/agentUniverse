@@ -2,6 +2,8 @@
 
 In the current agentUniverse's sample project, the following tools are integrated.
 
+HTTP-based API tools use the SSRF proxy helper for outbound requests. See [SSRF proxy environment variables](./SSRF_Proxy.md) for `SSRF_PROXY_*` configuration.
+
 ## 1. Search Tools
 
 ### 1.1 Google Search
