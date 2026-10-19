@@ -39,6 +39,8 @@ class ReaderManager(ComponentManagerBase[Reader]):
     }
 
     def __init__(self):
+        """Initialize the reader manager.
+        """
         super().__init__(ComponentEnum.READER)
 
     def get_file_default_reader(self,
