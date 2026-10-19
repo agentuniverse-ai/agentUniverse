@@ -9,7 +9,7 @@
 import os
 import tempfile
 import zipfile
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, Iterator, cast
 
 from agentuniverse.agent.action.tool.common_tool.file_path_utils import (
     resolve_safe_path,
@@ -292,19 +292,18 @@ class PowerPointTool(Tool):
             texts: list[str] = []
             tables: list[list[list[str]]] = []
             shape_count = 0
-            for shape in slide.shapes:
+            for shape in self._iter_read_shapes(slide.shapes):
+                if title_shape is not None and shape.shape_id == title_shape.shape_id:
+                    continue
                 if shape_count >= self.max_shapes_per_slide:
                     budget.mark_truncated()
                     break
+                shape_count += 1
                 if getattr(shape, "has_table", False):
-                    shape_count += 1
                     tables.append(self._read_table(shape.table, budget))
                     continue
                 if not getattr(shape, "has_text_frame", False):
                     continue
-                if title_shape is not None and shape.shape_id == title_shape.shape_id:
-                    continue
-                shape_count += 1
                 value = budget.consume_text(shape.text)[0]
                 if value:
                     texts.append(value)
@@ -342,6 +341,21 @@ class PowerPointTool(Tool):
             "max_table_rows": self.max_table_rows,
             "max_table_columns": self.max_table_columns,
         }
+
+    @staticmethod
+    def _iter_read_shapes(shapes: Any) -> Iterator[Any]:
+        """Walk group descendants in shape order without recursive calls."""
+        pending = [iter(shapes)]
+        while pending:
+            try:
+                shape = next(pending[-1])
+            except StopIteration:
+                pending.pop()
+                continue
+            yield shape
+            children = getattr(shape, "shapes", None)
+            if children is not None:
+                pending.append(iter(children))
 
     def _read_table(self, table: Any, budget: "_ReadBudget") -> list[list[str]]:
         rows: list[list[str]] = []
