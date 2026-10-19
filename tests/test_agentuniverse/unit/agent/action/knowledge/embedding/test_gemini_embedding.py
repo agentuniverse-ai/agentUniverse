@@ -16,6 +16,7 @@ class GeminiEmbeddingTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Create a GeminiEmbedding instance for the test methods."""
         self.embedding = GeminiEmbedding(embedding_model_name='text-embedding-004',
                                          embedding_dims=768,
                                          gemini_api_key='xxxxxxx')
@@ -24,18 +25,21 @@ class GeminiEmbeddingTest(unittest.TestCase):
         # os.environ['https_proxy'] = 'http://127.0.0.1:10808'
 
     def test_get_embeddings(self) -> None:
+        """Verify that get_embeddings returns one 768-dim vector per text."""
         res = self.embedding.get_embeddings(texts=["hello world", "agentUniverse"])
         print(res)
         self.assertEqual(len(res), 2)
         self.assertEqual(len(res[0]), 768)
 
     def test_async_get_embeddings(self) -> None:
+        """Verify that async_get_embeddings returns one 768-dim vector per text."""
         res = asyncio.run(self.embedding.async_get_embeddings(texts=["hello world", "agentUniverse"]))
         print(res)
         self.assertEqual(len(res), 2)
         self.assertEqual(len(res[0]), 768)
 
     def test_as_langchain(self) -> None:
+        """Verify that as_langchain produces a working langchain embedding wrapper."""
         langchain_embedding = self.embedding.as_langchain()
         res = langchain_embedding.embed_documents(texts=["hello world", "agentUniverse"])
         print(res)
