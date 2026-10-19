@@ -181,6 +181,50 @@ class CodeAstProcessor(DocProcessor):
         }
         return metrics
 
+    @staticmethod
+    def _nested_declarator(node: Any) -> Optional[Any]:
+        if not node.type.endswith("_declarator"):
+            return None
+        child = node.child_by_field_name("declarator")
+        if child is None and node.type in (
+                "reference_declarator", "parenthesized_declarator", "attributed_declarator",
+                "abstract_reference_declarator", "abstract_parenthesized_declarator"):
+            # These C++ wrappers leave their declarator child unlabelled.
+            child = next((part for part in node.named_children
+                          if part.type not in ("attribute_declaration", "ms_call_modifier")), None)
+        return child
+
+    def _declaration_name(self, node: Any, code_bytes: bytes) -> Optional[str]:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            name_node = node.child_by_field_name("declarator")
+            while name_node is not None:
+                child = self._nested_declarator(name_node)
+                if child is None:
+                    break
+                name_node = child
+        if name_node is None:
+            name_node = next((child for child in node.children if child.type == "identifier"), None)
+        if name_node is None:
+            return None
+
+        end_byte = name_node.end_byte
+        conversion = name_node
+        while conversion is not None and conversion.type == "qualified_identifier":
+            conversion = conversion.child_by_field_name("name")
+        if conversion is not None and conversion.type == "operator_cast":
+            # A conversion operator's grammar node includes parameters and
+            # qualifiers. Retain the conversion type, including pointer/reference
+            # declarators, but stop before the function's parameter list.
+            declarator = conversion.child_by_field_name("declarator")
+            while declarator is not None:
+                parameters = declarator.child_by_field_name("parameters")
+                if parameters is not None:
+                    end_byte = parameters.start_byte
+                    break
+                declarator = self._nested_declarator(declarator)
+        return code_bytes[name_node.start_byte:end_byte].decode("utf8").rstrip()
+
     def _generate_code_chunks(
             self,
             code: str,
@@ -200,16 +244,7 @@ class CodeAstProcessor(DocProcessor):
 
                 if end_line - start_line >= 3:
                     node_type = "class" if node.type in _CLASS_NODE_TYPES else "function"
-                    name = None
-
-                    name_node = node.child_by_field_name("name")
-                    if name_node is None:
-                        name_node = next(
-                            (child for child in node.children if child.type == "identifier"),
-                            None,
-                        )
-                    if name_node is not None:
-                        name = code_bytes[name_node.start_byte:name_node.end_byte].decode("utf8")
+                    name = self._declaration_name(node, code_bytes)
 
                     boundary: CodeBoundary = {
                         "start": start_line,

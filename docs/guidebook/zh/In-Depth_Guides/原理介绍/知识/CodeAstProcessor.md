@@ -16,4 +16,6 @@ documents = processor.process_docs([
 
 已识别的函数和方法节点均计入 `function_count`，并生成 `chunk_type: "function"`；已识别的类节点生成 `chunk_type: "class"`。声明名称取自语法树的 `name` 字段，并按 UTF-8 源码偏移读取。JavaScript 计算属性方法名保留源码表达式，例如 `["method"]`，不会执行该表达式。
 
+C++ 函数名称沿语法树的声明符链读取，支持指针、引用和括号声明符。限定名称及运算符名称保留源码写法，例如 `Demo::run`、`Demo::operator()`。转换运算符名称包含转换目标类型，去除函数参数与尾部限定符。名称查找不会扫描参数或函数体内的标识符。
+
 `max_depth` 仍限制输出 AST JSON 的深度，默认值为 8；它不会截断特征统计或声明发现。输出文档与声明边界仍保存在内存中。将 `max_depth` 设置得很大时，AST JSON 转换或 JSON 序列化仍可能达到递归上限。

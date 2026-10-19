@@ -274,3 +274,76 @@ def test_public_processing_switches_languages_without_mixing_method_metadata(tmp
         assert result["features"]["function_count"] == 1
         assert_named_chunks(docs, ["Demo", "run"], ["class", "function"])
         assert all(doc.metadata["language"] == language for doc in docs)
+
+
+@pytest.mark.parametrize(
+    "signature, expected_name",
+    [
+        ("int answer()", "answer"),
+        ("char *name()", "name"),
+        ("int &value()", "value"),
+        ("int Demo::value() const", "Demo::value"),
+        ("int Demo::operator+(int other) const", "Demo::operator+"),
+        ("Demo::~Demo()", "Demo::~Demo"),
+        ("int (*factory())(int)", "factory"),
+        ("auto value() -> int", "value"),
+        ("Demo::operator bool() const", "Demo::operator bool"),
+        ("Demo::operator const char *() const", "Demo::operator const char *"),
+        ("int Demo::operator()(int argument) const", "Demo::operator()"),
+        ("int (parenthesized)()", "parenthesized"),
+        ("int 处理()", "处理"),
+    ],
+    ids=["ordinary", "pointer", "reference", "qualified", "operator", "destructor",
+         "function-pointer-return", "trailing-return", "conversion", "pointer-conversion",
+         "call-operator", "parenthesized", "unicode"],
+)
+def test_cpp_declarator_names_survive_public_chunk_processing(tmp_path, signature, expected_name):
+    proc = chunking_processor(tmp_path, "cpp")
+    code = "// 中文\n" + signature + " {\n int x = 1;\n int y = 2;\n return {};\n}\n"
+    result, docs = process(proc, code, "cpp", {"source": "原文"})
+    # Grammar validity is checked independently of production chunk parsing.
+    assert not proc._parser.parse(code.encode("utf8")).root_node.has_error
+    assert result["features"]["function_count"] == 1
+    assert_named_chunks(docs, [expected_name], ["function"])
+    assert docs[1].metadata["source"] == "原文"
+    assert docs[1].metadata["start_line"] == 1
+    assert docs[1].metadata["end_line"] == 5
+    assert json.loads(docs[1].text)["code"] == code.split("\n", 1)[1].rstrip("\n")
+
+
+def test_cpp_inline_members_keep_names_without_parameter_or_body_identifiers(tmp_path):
+    proc = chunking_processor(tmp_path, "cpp")
+    code = """class Demo {
+public:
+ Demo(int unrelated_parameter) {
+  int unrelated_body = 1;
+  unrelated_body += 2;
+  unrelated_body += unrelated_parameter;
+ }
+ ~Demo() {
+  int unrelated_body = 1;
+  unrelated_body += 2;
+  unrelated_body += 3;
+ }
+ int run(int unrelated_parameter) {
+  int unrelated_body = 1;
+  unrelated_body += 2;
+  return unrelated_body + unrelated_parameter;
+ }
+ operator bool() const {
+  int unrelated_body = 1;
+  unrelated_body += 2;
+  return unrelated_body > 0;
+ }
+ int operator()(int unrelated_parameter) const {
+  int unrelated_body = 1;
+  unrelated_body += 2;
+  return unrelated_body + unrelated_parameter;
+ }
+};
+"""
+    result, docs = process(proc, code, "cpp")
+    assert not proc._parser.parse(code.encode("utf8")).root_node.has_error
+    assert result["features"]["function_count"] == 5
+    assert_named_chunks(docs, ["Demo", "~Demo", "run", "operator bool", "operator()"],
+                        ["function"] * 5)
