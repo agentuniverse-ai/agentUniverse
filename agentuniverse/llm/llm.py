@@ -66,6 +66,14 @@ class LLM(ComponentBase):
         super().__init__(component_type=ComponentEnum.LLM, **kwargs)
 
     def init_channel(self):
+        """Initialize the LLM channel instance from the ``channel`` setting.
+
+        Looks up the channel component registered under ``self.channel``,
+        stores it in ``_channel_instance``, and copies the current LLM
+        attributes into the channel's ``channel_model_config``. Does
+        nothing when no channel is configured, an instance is already
+        initialized, or the channel lookup fails.
+        """
         if self.channel and not self._channel_instance:
             llm_channel: LLMChannel = LLMChannelManager().get_instance_obj(
                 component_instance_name=self.channel)
