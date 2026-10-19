@@ -13,6 +13,7 @@ from .pdf_tool import PDFTool
 from .yahoo_finance_tool import YahooFinanceTool
 from .email_document_tool import EmailDocumentTool
 from .secure_archive_tool import SecureArchiveTool
+from .weather_tool import WeatherTool
 
 __all__ = [
     'GitHubTool',
@@ -22,4 +23,5 @@ __all__ = [
     'YahooFinanceTool',
     'EmailDocumentTool',
     'SecureArchiveTool',
+    'WeatherTool',
 ]
