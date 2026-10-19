@@ -5,6 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: store.py
+import inspect
 from typing import Any, List, Optional
 
 from agentuniverse.base.component.component_base import ComponentEnum
@@ -13,6 +14,18 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent_serve.web.post_fork_queue import add_post_fork
+
+
+def _is_coroutine_callable(func: Any) -> bool:
+    """Check if the given function or callable is a coroutine function."""
+    if not callable(func):
+        return False
+    if inspect.iscoroutinefunction(func):
+        return True
+    call_attr = getattr(func, "__call__", None)
+    if call_attr is not None and inspect.iscoroutinefunction(call_attr):
+        return True
+    return False
 
 
 class Store(ComponentBase):
@@ -52,12 +65,14 @@ class Store(ComponentBase):
         Returns:
             Store: A store instance.
         """
-        if store_configer.name:
+        if hasattr(store_configer, "name") and store_configer.name:
             self.name = store_configer.name
-        if store_configer.description:
+        if hasattr(store_configer, "description") and store_configer.description:
             self.description = store_configer.description
-        add_post_fork(self._new_client)
-        add_post_fork(self._new_async_client)
+        if not _is_coroutine_callable(self._new_client):
+            add_post_fork(self._new_client)
+        if not _is_coroutine_callable(self._new_async_client):
+            add_post_fork(self._new_async_client)
         return self
 
     def query(self, query: Query, **kwargs) -> List[Document]:
