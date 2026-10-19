@@ -421,42 +421,46 @@ class FinancialIndicatorExtractor(DocProcessor):
         """
         comparisons = []
 
-        # Enhanced comparison patterns for YoY and QoQ
-        comparison_patterns = [
-            # YoY patterns
-            (r'([0-9,.]+)%?\s+(?:YoY|year-over-year|year-on-year)', 'yoy'),
-            (r'(?:YoY|year-over-year|year-on-year)\s+(?:growth|increase|up|decline|decrease|down)\s+(?:of\s+)?([0-9,.]+)%?', 'yoy'),
-            (r'(?:growth|increase|up|rose)\s+([0-9,.]+)%?\s+(?:YoY|year-over-year|year-on-year)', 'yoy'),
-            (r'([a-zA-Z\s]+)\s+up\s+([0-9,.]+)%\s+year-over-year', 'yoy'),
-            (r'同比增长([0-9,.]+)%?', 'yoy'),
-
-            # QoQ patterns
-            (r'([0-9,.]+)%?\s+(?:QoQ|quarter-over-quarter|quarter-on-quarter)', 'qoq'),
-            (r'(?:QoQ|quarter-over-quarter|quarter-on-quarter)\s+(?:growth|increase|up|decline|decrease|down)\s+(?:of\s+)?([0-9,.]+)%?', 'qoq'),
-            (r'(?:growth|increase|up|rose)\s+([0-9,.]+)%?\s+(?:QoQ|quarter-over-quarter|quarter-on-quarter)', 'qoq'),
-            (r'环比增长([0-9,.]+)%?', 'qoq'),
-
-            # General comparison patterns (try to infer type from context)
-            (r'([0-9,.]+)%?\s+(?:increase|growth|up|higher)\s+(?:compared to|vs\.?|versus|over)', 'unknown'),
-            (r'(?:increased|grew|rose)\s+by\s+([0-9,.]+)%', 'unknown'),
-        ]
+        # Do not salvage a valid-looking suffix/prefix from malformed numbers.
+        value = (r'(?P<value>[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)'
+                 r'(?:\.\d+)?|\.\d+))(?![\d,]|\.\d)')
+        number_start = r'(?<![\w.,+-])'
+        direction = (r'growth|increased?|up|rose|grew|higher|improvement|'
+                     r'declined?|decreased?|down|fell|lower')
+        prefix = rf'\b(?P<direction>{direction})\s+(?:(?:of|by)\s+)?'
+        comparison_patterns = []
+        for period, chinese, comp_type in [
+            (r'YoY|year-over-year|year-on-year', '同比', 'yoy'),
+            (r'QoQ|quarter-over-quarter|quarter-on-quarter', '环比', 'qoq'),
+        ]:
+            comparison_patterns.extend([
+                (rf'{number_start}(?:{prefix})?{value}%?\s+(?:{period})\b', comp_type),
+                (rf'\b(?:{period})\s+{prefix}{value}%?', comp_type),
+                (rf'{chinese}(?P<direction>增长|增加|下降|减少|下跌)\s*{value}%?', comp_type),
+            ])
+        comparison_patterns.extend([
+            (rf'{number_start}{value}%?\s+(?P<direction>{direction})\s+(?:compared to|vs\.?|versus|over)\b', 'unknown'),
+            (rf'\b(?P<direction>{direction})\s+by\s+{value}%', 'unknown'),
+        ])
+        decreasing = {'decline', 'declined', 'decrease', 'decreased', 'down',
+                      'fell', 'lower', '下降', '减少', '下跌'}
+        seen_values = set()
 
         for pattern, comp_type in comparison_patterns:
             matches = re.finditer(pattern, text, re.IGNORECASE)
 
             for match in matches:
                 try:
-                    # Extract the percentage value (might be in group 1 or 2)
-                    change_percent_str = None
-                    for val in match.groups():
-                        if val and re.match(r'^[0-9,.]+$', val):
-                            change_percent_str = val
-                            break
-
-                    if not change_percent_str:
+                    change_percent_str = match.group('value')
+                    value_span = match.span('value')
+                    if value_span in seen_values:
                         continue
-
                     change_percent = float(change_percent_str.replace(',', ''))
+                    # An explicit sign wins; otherwise derive direction only
+                    # from this match, not from nearby unrelated metrics.
+                    if (not change_percent_str.startswith(('+', '-'))
+                            and (match.group('direction') or '').lower() in decreasing):
+                        change_percent = -change_percent
 
                     # Determine comparison type (use pattern's type if not unknown)
                     comparison_type = comp_type
@@ -480,13 +484,14 @@ class FinancialIndicatorExtractor(DocProcessor):
                         comparison_type=comparison_type
                     )
 
-                    comparisons.append(comparison)
+                    seen_values.add(value_span)
+                    comparisons.append((value_span[0], comparison))
 
                 except (ValueError, IndexError) as e:
                     logger.debug(f"Failed to parse comparison: {e}")
                     continue
 
-        return comparisons
+        return [comparison for _, comparison in sorted(comparisons, key=lambda item: item[0])]
 
     def _find_associated_metric(self, position: int, metrics: List[FinancialMetric]) -> Optional[str]:
         """Find the metric associated with a comparison.
