@@ -36,6 +36,48 @@ class TestFinancialEventAggregator(unittest.TestCase):
         # Should aggregate similar articles
         self.assertLessEqual(len(result), len(docs))
 
+    def test_chinese_reports_cluster_without_embeddings(self):
+        """Near-duplicate Chinese reports should cluster without spaces or embeddings."""
+        docs = [
+            Document(text="华星科技发布2026年第三季度财报，营收同比增长20%，净利润达5亿元。"),
+            Document(text="华星科技2026年第三季度财报发布：营收同比增长20%，净利润达5亿元。"),
+            Document(text="华星科技发布2026年第二季度财报，营收同比增长20%，净利润达5亿元。"),
+            Document(text="蓝海银行发布2026年第三季度财报，营收同比增长20%，净利润达5亿元。"),
+        ]
+
+        similarity = self.aggregator._compute_similarity_matrix(docs)
+        self.assertGreater(similarity[0, 1], self.aggregator.similarity_threshold)
+        self.assertLess(similarity[0, 2], self.aggregator.similarity_threshold)
+        self.assertLess(similarity[0, 3], self.aggregator.similarity_threshold)
+
+        result = self.aggregator.process_docs(docs)
+        self.assertEqual(sorted(doc.metadata['source_count'] for doc in result), [1, 1, 2])
+
+    def test_english_text_overlap_is_unchanged(self):
+        """English-only fallback keeps its existing whitespace-based score."""
+        docs = [
+            Document(text="Apple announces Q4 earnings."),
+            Document(text="Apple announces Q4 results."),
+        ]
+
+        similarity = self.aggregator._compute_similarity_matrix(docs)
+        self.assertAlmostEqual(similarity[0, 1], 0.6)
+
+    @patch('agentuniverse.agent.action.knowledge.doc_processor.financial_event_aggregator.EmbeddingManager')
+    def test_chinese_reports_cluster_when_embedding_fails(self, mock_embedding_manager):
+        """An unavailable embedding model should use the same Chinese fallback."""
+        mock_embedding_manager.return_value.get_instance_obj.side_effect = RuntimeError("model unavailable")
+        self.aggregator.use_embeddings = True
+        self.aggregator.embedding_name = 'unavailable_model'
+        docs = [
+            Document(text="华星科技发布2026年第三季度财报，营收同比增长20%，净利润达5亿元。"),
+            Document(text="华星科技2026年第三季度财报发布：营收同比增长20%，净利润达5亿元。"),
+        ]
+
+        result = self.aggregator.process_docs(docs)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].metadata['source_count'], 2)
+
     @patch('agentuniverse.agent.action.knowledge.doc_processor.financial_event_aggregator.EmbeddingManager')
     def test_similar_article_clustering(self, mock_embedding_manager):
         """Test clustering of similar articles."""
