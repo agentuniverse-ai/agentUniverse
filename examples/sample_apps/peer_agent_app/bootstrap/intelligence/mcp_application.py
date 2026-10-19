@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/4/8 20:58
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: mcp_application.py
 from agentuniverse.agent_serve.web.mcp.mcp_server_manager import MCPServerManager
