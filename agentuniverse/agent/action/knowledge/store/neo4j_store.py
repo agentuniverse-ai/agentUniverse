@@ -176,7 +176,7 @@ class Neo4jStore(Store):
         )
 
 
-    def insert_document(self, documents: List[Document], **kwargs: Any):
+    def insert_document(self, documents: List[Document], **kwargs: Any) -> None:
         session = self.driver.session()
         try:
             for doc in documents:
@@ -190,11 +190,11 @@ class Neo4jStore(Store):
             session.close()
 
 
-    def upsert_document(self, documents: List[Document], **kwargs):
+    def upsert_document(self, documents: List[Document], **kwargs) -> None:
 
         self.insert_document(documents, **kwargs)
 
-    def update_document(self, documents: List[Document], **kwargs):
+    def update_document(self, documents: List[Document], **kwargs) -> None:
         session = self.driver.session()
         try:
             for doc in documents:
