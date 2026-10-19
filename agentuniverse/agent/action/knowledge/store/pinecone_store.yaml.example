@@ -1,0 +1,15 @@
+name: pinecone_store
+description: Pinecone cloud-native vector store for knowledge retrieval
+api_key: ''
+environment: aws-us-east-1
+index_host: ''
+index_name: agentuniverse-documents
+embedding_model: openai_embedding
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+namespace: ''
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.pinecone_store
+  class: PineconeStore
