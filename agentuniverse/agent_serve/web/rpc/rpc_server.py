@@ -13,7 +13,7 @@ from ..request_task import RequestTask
 from ..web_util import service_run_queue
 
 
-def service_run(saved: bool, params: str, service_id: str):
+def service_run(saved: bool, params: str, service_id: str) -> dict:
     """Synchronous invocation of an agent service. Used in rpc implementation.
 
     Request Args:
@@ -43,7 +43,7 @@ def service_run(saved: bool, params: str, service_id: str):
     }
 
 
-def service_run_async(saved: bool, params: str, service_id: str):
+def service_run_async(saved: bool, params: str, service_id: str) -> dict:
     """Async invocation of an agent service, return the request id used to
     get result later. Used in rpc implementation.
 
@@ -74,7 +74,7 @@ def service_run_async(saved: bool, params: str, service_id: str):
     }
 
 
-def service_run_result(request_id: str):
+def service_run_result(request_id: str) -> dict:
     """Get the async service result.
 
     Request Args:
