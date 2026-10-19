@@ -156,6 +156,8 @@ class LLMChannel(ComponentBase):
             **kwargs,
         )
         if not streaming:
+            if not chat_completion.choices:
+                raise ValueError(f"LLM channel '{self.channel_name}' returned a completion with no choices")
             text = chat_completion.choices[0].message.content
             return LLMOutput(text=text, raw=chat_completion.model_dump(),
                              message=Message(content=chat_completion.choices[0].message.content,
@@ -192,6 +194,8 @@ class LLMChannel(ComponentBase):
             **kwargs,
         )
         if not streaming:
+            if not chat_completion.choices:
+                raise ValueError(f"LLM channel '{self.channel_name}' returned a completion with no choices")
             text = chat_completion.choices[0].message.content
             return LLMOutput(text=text, raw=chat_completion.model_dump(),
                              message=Message(content=chat_completion.choices[0].message.content,

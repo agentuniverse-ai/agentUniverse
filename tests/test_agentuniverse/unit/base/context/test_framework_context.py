@@ -7,18 +7,21 @@
 
 import asyncio
 import queue
-import time
 import threading
+import time
+from contextvars import copy_context
 
 import pytest
 
-from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 from agentuniverse.base.context.framework_context import FrameworkContext
+from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 
 context_manager: FrameworkContextManager = FrameworkContextManager()
 
 
 def add(q: queue.Queue):
+    """Add.
+    """
     with FrameworkContext({"add_value": 1}):
         for i in range(10):
             add_value = context_manager.get_context("add_value")
@@ -29,11 +32,15 @@ def add(q: queue.Queue):
 
 
 async def async_add(q: queue.Queue):
+    """Async add.
+    """
     await asyncio.get_event_loop().run_in_executor(None, add, q)
 
 
 @pytest.mark.asyncio
 async def test_context_thread_and_async_isolation():
+    """Test that context thread and async isolation.
+    """
     queue1 = queue.Queue()
     queue2 = queue.Queue()
     queue3 = queue.Queue()
@@ -53,6 +60,8 @@ async def test_context_thread_and_async_isolation():
 
 
 def test_set_all_contexts_returns_tokens_for_restoration():
+    """Test that set all contexts returns tokens for restoration.
+    """
     context_manager.clear_all_contexts()
     original_token = context_manager.set_context("request_id", "worker-value")
 
@@ -73,6 +82,31 @@ def test_set_all_contexts_returns_tokens_for_restoration():
     assert context_manager.get_context("temporary_key") is None
 
     context_manager.reset_context("request_id", original_token)
+    context_manager.clear_all_contexts()
+
+
+def test_log_context_isolated_across_copied_contexts():
+    """Test that log context isolated across copied contexts.
+    """
+    context_manager.clear_all_contexts()
+    context_manager.set_log_context("request_id", "parent")
+    child_context = copy_context()
+
+    def update_child_context():
+        """Update child context.
+        """
+        context_manager.set_log_context("worker_id", "child")
+        return context_manager.get_context("LOG_CONTEXT")
+
+    child_log_context = child_context.run(update_child_context)
+
+    assert child_log_context == {
+        "request_id": "parent",
+        "worker_id": "child",
+    }
+    assert context_manager.get_context("LOG_CONTEXT") == {
+        "request_id": "parent",
+    }
     context_manager.clear_all_contexts()
 
 

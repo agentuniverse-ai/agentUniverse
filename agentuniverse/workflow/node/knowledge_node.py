@@ -60,10 +60,12 @@ class KnowledgeNode(Node):
         if 'query' in knowledge_input_params:
             knowledge_input_params['query_str'] = knowledge_input_params.pop('query')
 
-        knowledge_res = ""
+        knowledge_res_list = []
         for knowledge in knowledge_list:
             document_texts = [document.text for document in knowledge.query_knowledge(**knowledge_input_params)]
-            knowledge_res += '\n'.join(document_texts)
+            if document_texts:
+                knowledge_res_list.append('\n'.join(document_texts))
+        knowledge_res = '\n'.join(knowledge_res_list)
         output_params: List[NodeOutputParams] = self._data.outputs
         output_params[0].value = knowledge_res
 
