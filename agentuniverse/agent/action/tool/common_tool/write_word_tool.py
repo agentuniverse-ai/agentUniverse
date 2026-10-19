@@ -7,6 +7,10 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 class WriteWordDocumentTool(Tool):
     def execute(self, file_path: str, content: str = "", append: bool = False) -> str:
+        """Write a paragraph to a new or existing Word document.
+
+        Returns a JSON string describing the write or a structured error.
+        """
         if not isinstance(content, str):
             return json.dumps(
                 {"error": "content must be a string", "file_path": file_path, "status": "error"}
