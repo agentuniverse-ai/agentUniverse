@@ -11,6 +11,13 @@ from pydantic import BaseModel, Field
 
 
 class PromptDTO(BaseModel):
+    """Data transfer object for a prompt.
+
+    Attributes:
+        introduction: Prompt introduction.
+        target: Prompt target.
+        instruction: Prompt instruction.
+    """
     introduction: Optional[str] = Field(description="prompt introduction", default="")
     target: Optional[str] = Field(description="prompt target", default="")
     instruction: Optional[str] = Field(description="prompt instruction", default="")
