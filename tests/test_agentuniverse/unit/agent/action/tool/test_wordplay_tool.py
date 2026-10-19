@@ -538,6 +538,151 @@ class WordplayToolTest(unittest.TestCase):
             self.assertTrue(word.isalpha(), word)
             self.assertTrue(3 <= len(word) <= 6, word)
 
+    # ------------------------------------------------------------------ #
+    # Adversarial regression tests
+    # ------------------------------------------------------------------ #
+
+    def test_max_text_chars_is_enforced(self) -> None:
+        """The documented max_text_chars attribute is live
+        configuration: overriding it on the instance tightens (or
+        loosens) the input limit for text and second_text alike."""
+        tool = WordplayTool()
+        tool.max_text_chars = 10
+        with self.assertRaises(ValueError) as ctx:
+            tool.execute(mode="letter_score", text="a" * 11)
+        self.assertIn("10-character limit", str(ctx.exception))
+        self.assertEqual(tool.execute(mode="letter_score",
+                                      text="a" * 10)["score"], 10)
+        with self.assertRaises(ValueError):
+            tool.execute(mode="check", text="abcdefghijk",
+                         second_text="abcdefghij", check="is_anagram")
+        # The default limit still applies to a fresh instance.
+        self.assertEqual(
+            self.tool.execute(mode="letter_score", text="a" * 2_000)["score"],
+            2_000,
+        )
+
+    def test_palindrome_edge_matrix(self) -> None:
+        """Single letters are trivially palindromes; combining marks
+        strip with their base ambiguity, astral letters compare as
+        single characters, emoji vanish, and German eszett casefolds
+        to 'ss'."""
+        result = self.tool.execute(mode="check", text="a",
+                                   check="is_palindrome")
+        self.assertTrue(result["palindrome"]["is_palindrome"])
+
+        # NFD "é" (e + U+0301): the combining mark is not a letter, so
+        # the cleaned text keeps only "e".
+        nfd = "e\u0301"
+        result = self.tool.execute(mode="check", text=nfd + "e",
+                                   check="is_palindrome")
+        self.assertEqual(result["palindrome"]["details"]["cleaned_text"],
+                         "ee")
+
+        # Astral-plane letters (Deseret) are single str characters and
+        # compare naturally; astral emoji are not letters and vanish.
+        result = self.tool.execute(
+            mode="check", text="𐐀𐐨𐐀", check="is_palindrome"
+        )
+        self.assertTrue(result["palindrome"]["is_palindrome"])
+        self.assertEqual(result["palindrome"]["details"]["cleaned_length"],
+                         3)
+        result = self.tool.execute(mode="check", text="a😀a",
+                                   check="is_palindrome")
+        self.assertEqual(result["palindrome"]["details"]["cleaned_text"],
+                         "aa")
+
+        # "aßa" -> "assa" under Unicode casefold.
+        result = self.tool.execute(mode="check", text="aßa",
+                                   check="is_palindrome")
+        self.assertTrue(result["palindrome"]["is_palindrome"])
+        self.assertEqual(result["palindrome"]["details"]["cleaned_text"],
+                         "assa")
+
+    def test_anagram_entirely_non_letter_inputs_error(self) -> None:
+        """Strings with no letters at all on either side return the
+        structured error payload, never a vacuous equal-multiset True."""
+        for first, second in (("!!!", "..."), ("123", "456"),
+                              ("123", "abc"), ("  ", "?!")):
+            with self.subTest(first=first, second=second):
+                result = self.tool.execute(
+                    mode="check", text=first, second_text=second,
+                    check="is_anagram",
+                )
+                self.assertEqual(
+                    result["anagram"]["error"]["type"],
+                    "empty_after_strip",
+                )
+                self.assertNotIn("is_anagram", result["anagram"])
+
+    def test_anagrams_of_against_independent_permutations(self) -> None:
+        """Every embedded-list anagram group is recomputed with an
+        independent itertools.permutations implementation over the
+        whole 499-word demo list and must match the tool exactly."""
+        import itertools
+
+        from agentuniverse.agent.action.tool.common_tool.wordplay_tool import (
+            _DEMO_WORDS,
+        )
+
+        for word in sorted(_DEMO_WORDS):
+            with self.subTest(word=word):
+                result = self.tool.execute(mode="anagrams_of", text=word)
+                independent = sorted(
+                    candidate
+                    for candidate in {
+                        "".join(p) for p in itertools.permutations(word)
+                    }
+                    if candidate in _DEMO_WORDS and candidate != word
+                )
+                self.assertEqual(result["anagrams"], independent)
+
+    def test_scrabble_table_matches_official_distribution(self) -> None:
+        """All 26 English tile values against the official distribution:
+        1 (aeioulnstr), 2 (dg), 3 (bcmp), 4 (fhvwy), 5 (k), 8 (jx),
+        10 (qz)."""
+        official = {
+            "a": 1, "b": 3, "c": 3, "d": 2, "e": 1, "f": 4, "g": 2,
+            "h": 4, "i": 1, "j": 8, "k": 5, "l": 1, "m": 3, "n": 1,
+            "o": 1, "p": 3, "q": 10, "r": 1, "s": 1, "t": 1, "u": 1,
+            "v": 4, "w": 4, "x": 8, "y": 4, "z": 10,
+        }
+        from agentuniverse.agent.action.tool.common_tool.wordplay_tool import (
+            SCRABBLE_VALUES,
+        )
+
+        self.assertEqual(SCRABBLE_VALUES, official)
+        self.assertEqual(len(SCRABBLE_VALUES), 26)
+        result = self.tool.execute(mode="letter_score",
+                                   text="abcdefghijklmnopqrstuvwxyz")
+        self.assertEqual(result["score"], sum(official.values()))
+
+    def test_palindrome_parts_even_odd_centers_and_ties(self) -> None:
+        """Even-length ('abba', 'aaaa') and odd-length ('aba') centers
+        both expand correctly, and on a length tie the first occurrence
+        wins while the distinct-substring set dedupes repeats."""
+        result = self.tool.execute(mode="palindrome_parts", text="abba")
+        self.assertEqual(result["longest"], "abba")
+        self.assertEqual(result["palindromes"], ["abba"])
+
+        result = self.tool.execute(mode="palindrome_parts", text="aaaa")
+        self.assertEqual(result["longest"], "aaaa")
+        self.assertEqual(result["palindromes"], ["aaaa", "aaa"])
+
+        result = self.tool.execute(mode="palindrome_parts", text="aba")
+        self.assertEqual(result["longest"], "aba")
+        self.assertEqual(result["palindromes"], ["aba"])
+
+        # Two disjoint 'abcba's around a non-palindromic separator:
+        # equal longest length -> the first occurrence is reported, and
+        # the substring list holds each distinct palindrome once.
+        text = "abcbadefabcba"
+        result = self.tool.execute(mode="palindrome_parts", text=text)
+        self.assertEqual(result["longest"], "abcba")
+        self.assertEqual(result["longest_length"], 5)
+        self.assertEqual(text.index(result["longest"]), 0)
+        self.assertEqual(result["palindromes"], ["abcba", "bcb"])
+
 
 if __name__ == "__main__":
     unittest.main()

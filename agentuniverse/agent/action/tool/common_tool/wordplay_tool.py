@@ -248,16 +248,15 @@ class WordplayTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"wordplay_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, text: Any) -> str:
+    def _validate_text(self, text: Any) -> str:
         """Validate the ``text`` / ``second_text`` input."""
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"text must be a non-empty string (got {text!r})")
+            self._invalid(f"text must be a non-empty string (got {text!r})")
         if not text:
-            cls._invalid("text must be a non-empty string (got '')")
-        if len(text) > 2_000:
-            cls._invalid(
-                f"text exceeds the {2_000:,}-character limit "
+            self._invalid("text must be a non-empty string (got '')")
+        if len(text) > self.max_text_chars:
+            self._invalid(
+                f"text exceeds the {self.max_text_chars:,}-character limit "
                 f"(got {len(text):,} characters)"
             )
         return text

@@ -678,7 +678,7 @@ score = tool.execute(mode="letter_score", text="kwyjibo")["score"]  # 26
 Inputs are validated strictly before any computation: malformed
 parameters (wrong types, empty text, unknown mode / check value, a
 non-boolean `strict`, a missing or malformed `second_text`, text over
-2,000 characters, or an `anagrams_of` input longer than 8 letters
+`max_text_chars` (2,000 by default) characters, or an `anagrams_of` input longer than 8 letters
 after the reduction) raise a `ValueError`. Errors that depend on the
 content being processed — a text that reduces to zero letters (e.g.
 `"!!!"`) or an `anagrams_of` input with no letters — return a
