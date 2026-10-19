@@ -214,6 +214,7 @@ class PubMedTool(Tool):
         maxdate: str = "",
         datetype: str = "pdat",
     ) -> Dict[str, Any]:
+        """Run a PubMed ESearch query and return the parsed result dict. Raises: _PubMedAPIError when the API reports an error. Args: query (str): The search query. max_results (int): Maximum number of results. retstart (int): Result offset for paging. sort (str): Sort option. mindate (str): Start date. maxdate (str): End date. datetype (str): Date field used for the range. Returns: Dict[str, Any]: The ESearch response data."""
         params = {
             **self._common_params(),
             "db": "pubmed",
@@ -253,6 +254,7 @@ class PubMedTool(Tool):
 
     @classmethod
     def _normalize_sort(cls, sort: str) -> str:
+        """Normalize and validate the sort option against SORT_OPTIONS. Raises: ValueError when the option is unknown. Args: sort (str): The raw sort value. Returns: str: The normalized sort value."""
         sort_key = sort.strip().lower().replace("-", "_").replace(" ", "_") if isinstance(sort, str) else ""
         normalized_sort = cls.SORT_OPTIONS.get(sort_key)
         if normalized_sort is None:
@@ -262,6 +264,7 @@ class PubMedTool(Tool):
 
     @classmethod
     def _normalize_datetype(cls, datetype: str) -> str:
+        """Normalize and validate the date type against DATE_TYPE_OPTIONS. Raises: ValueError when the option is unknown. Args: datetype (str): The raw date type. Returns: str: The normalized date type."""
         datetype_key = datetype.strip().lower().replace("-", "_").replace(" ", "_") if isinstance(datetype, str) else ""
         normalized_datetype = cls.DATE_TYPE_OPTIONS.get(datetype_key)
         if normalized_datetype is None:
@@ -271,6 +274,7 @@ class PubMedTool(Tool):
 
     @staticmethod
     def _normalize_date(value: Optional[str], field_name: str) -> str:
+        """Normalize a date value to YYYY[/MM[/DD]] form and validate it. Raises: ValueError when the value is not a valid date string. Args: value (Optional[str]): The raw date. field_name (str): Field name used in error messages. Returns: str: The normalized date."""
         if value is None:
             return ""
         if not isinstance(value, str) or not value.strip():
@@ -292,6 +296,7 @@ class PubMedTool(Tool):
 
     @staticmethod
     def _date_sort_value(value: str, upper_bound: bool = False) -> date:
+        """Convert a normalized date into a date object for sorting, using the earliest/latest day of the period when parts are missing. Args: value (str): The normalized date. upper_bound (bool): Whether to use upper bounds for missing parts. Returns: date: The sortable date."""
         if not value:
             return date.max if upper_bound else date.min
         parts = [int(part) for part in value.split("/")]
@@ -306,6 +311,7 @@ class PubMedTool(Tool):
         return date(year, month, day)
 
     def _fetch_articles(self, pmids: List[str]) -> List[Dict[str, Any]]:
+        """Fetch full article XML for the given PMIDs via EFetch and parse each PubmedArticle element. Raises: _PubMedAPIError on request or parse failure. Args: pmids (List[str]): The PMIDs to fetch. Returns: List[Dict[str, Any]]: The parsed articles."""
         response = requests.get(
             f"{self.base_url}/efetch.fcgi",
             params={
@@ -325,6 +331,7 @@ class PubMedTool(Tool):
         return [self._parse_article(article) for article in root.findall(".//PubmedArticle")]
 
     def _common_params(self) -> Dict[str, str]:
+        """Return the tool/email/api_key query parameters shared by all PubMed API requests. Returns: Dict[str, str]: The common parameters."""
         params = {"tool": self.ncbi_tool_name}
         if self.email:
             params["email"] = self.email
@@ -334,6 +341,7 @@ class PubMedTool(Tool):
 
     @classmethod
     def _parse_article(cls, article: ElementTree.Element) -> Dict[str, Any]:
+        """Parse a PubmedArticle XML element into a flat article dict (pmid, title, journal, authors, dates, abstract, etc.). Args: article (ElementTree.Element): The article element. Returns: Dict[str, Any]: The parsed article."""
         pmid = cls._element_text(article.find(".//MedlineCitation/PMID"))
         title = cls._element_text(article.find(".//Article/ArticleTitle"))
         journal = cls._element_text(article.find(".//Article/Journal/Title"))
