@@ -117,7 +117,8 @@ class SensitiveDataRedactor(DocProcessor):
     Attributes:
         entities: Built-in entity types to redact. Defaults to a high-precision
             set; add ``"phone"`` to enable phone redaction.
-        replacement: Text substituted for every match.
+        replacement: Literal text substituted for every match; backslashes and
+            group-reference syntax are not expanded.
         custom_patterns: Extra ``{"name": ..., "pattern": ...}`` regex entries
             for domain-specific identifiers.
         log_key: Metadata key under which a ``{entity: count}`` summary is
@@ -149,7 +150,7 @@ class SensitiveDataRedactor(DocProcessor):
             summary: Dict[str, int] = {}
             for name, pattern, validator in patterns:
                 if validator is None:
-                    text, count = pattern.subn(self.replacement, text)
+                    text, count = pattern.subn(lambda match: self.replacement, text)
                 else:
                     # Only redact matches that pass the semantic check; leave
                     # structurally invalid values (e.g. a non-Luhn digit run,
