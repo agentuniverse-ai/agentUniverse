@@ -37,9 +37,10 @@ class ReviewingAgentTemplate(AgentTemplate):
         output = parse_json_markdown(output)
 
         is_useful = output.get('is_useful')
-        if is_useful is None:
-            is_useful = False
-        is_useful = bool(is_useful)
+        if isinstance(is_useful, str):
+            is_useful = is_useful.strip().lower() in {"true", "1", "yes"}
+        else:
+            is_useful = bool(is_useful)
         if is_useful:
             score = 80
         else:
