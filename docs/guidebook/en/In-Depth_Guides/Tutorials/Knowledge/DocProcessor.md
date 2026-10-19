@@ -309,3 +309,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [StopwordRemover](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/stopword_remover.yaml)
+
+This component strips stopwords from document text before splitting and embedding, addressing the *pre-processing* direction of issue #258. Function words — *the*, *is*, *of*, 的, 了, 是 — carry almost no retrieval signal but a large share of every document's mass; left in place they dilute chunk embeddings and let boilerplate phrasing dominate similarity. Two script-specific passes run, gated by `languages`: an English word pass that scans the text into chunks with a single regular expression (a Latin word with at most one internal apostrophe — contractions such as *don't* stay whole — plus any punctuation glued to either side of it; runs of CJK ideographs; and any other non-whitespace run), drops word chunks whose lowercased core is a stopword, and re-joins the survivors with single spaces, normalizing whitespace runs between chunks to one space; and a Chinese character pass that deletes every CJK ideograph found in the stopword set, one character at a time — no word segmenter is needed, which keeps the component pure-stdlib, offline and deterministic, with only the removed characters themselves taken (whitespace they leave behind survives; leading/trailing leftovers are stripped). The component is deliberately distinct from its neighbours: `TextNormalizer` repairs unicode/whitespace defects but removes no vocabulary, and `KeywordExtractor` ranks top terms into metadata without rewriting text — this is the component that actually thins the text itself.
+
+The built-in inventories are compact by design — 120 English function words (articles, conjunctions, pronouns, be/do/have and modals, prepositions, a few quantifier adverbs) and 81 single CJK characters (particles, coverbs, pronouns, high-frequency adverbs) — chosen for precision over recall, so removal thins grammatical glue without changing what a document is about. `custom_stopwords` extends them with domain-specific entries, and `replace_builtin` swaps them out entirely; a custom entry only takes effect for the pass matching its script among the enabled languages. Every processed document is stamped (through a copied metadata mapping) with `metadata['stopword_removed_count']` and `metadata['stopword_ratio'] = removed / considered`, where `considered` counts — over the original text and restricted to the enabled languages — every Latin word chunk plus every CJK ideograph character, and `removed` counts the subset found in the stopword set; text with nothing to consider gets a ratio of 0.0. Documents are neither dropped nor reordered, a stopword-only document is kept with empty text and ratio 1.0, and `mode: 'tag'` stamps the same statistics while leaving the text byte-identical.
+
+The component definition file is as follows:
+```yaml
+name: 'stopword_remover'
+description: 'strip common function words (stopwords) from document text before splitting and embedding'
+languages: ['en', 'zh']        # passes to run: en = Latin word pass, zh = CJK char pass
+custom_stopwords: []           # extra stopwords merged into the built-ins
+replace_builtin: false         # true: custom_stopwords replaces the built-ins
+mode: 'remove'                 # remove | tag
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.stopword_remover'
+  class: 'StopwordRemover'
+```
+- languages: Language codes whose passes run — 'en' enables the Latin word pass, 'zh' the CJK character pass. Default `['en', 'zh']` handles mixed corpora in one go.
+- custom_stopwords: Optional extra stopwords merged into the active set; Latin entries are matched by the 'en' word pass, single CJK characters by the 'zh' character pass. Default (empty/None) keeps only the built-ins.
+- replace_builtin: When true, `custom_stopwords` replaces the built-in lists instead of extending them; requires a non-empty `custom_stopwords`.
+- mode: 'remove' (default) rewrites the text with stopwords deleted; 'tag' leaves the text untouched and only stamps the metadata statistics.
