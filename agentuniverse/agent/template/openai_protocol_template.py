@@ -28,6 +28,9 @@ from agentuniverse.prompt.prompt import Prompt
 
 class OpenAIProtocolTemplate(AgentTemplate):
 
+    """Agent template exposing an agent through the OpenAI chat completion protocol.
+    Converts OpenAI-format messages into agent input and rewraps the agent output as a chat.completion response.
+    """
     def run(self, **kwargs) -> OutputObject:
         """Agent instance running entry.
 
@@ -65,11 +68,19 @@ class OpenAIProtocolTemplate(AgentTemplate):
         return agent_input
 
     def openai_protocol_input_keys(self) -> list[str]:
+        """Return the input keys required by the OpenAI protocol (['messages', 'stream'])."""
         return [
             'messages', 'stream'
         ]
 
     def convert_message(self, messages: List[Dict]):
+        """Convert OpenAI-style message dicts into aU Message instances, flattening list content into text and collecting image urls.
+
+        Args:
+        messages: OpenAI-format messages to convert.
+        Returns:
+        Tuple of the converted Message list and the collected image url list.
+        """
         image_urls = []
         for message in messages:
             content = message.get('content')
@@ -89,6 +100,13 @@ class OpenAIProtocolTemplate(AgentTemplate):
 
 
     def parse_openai_protocol_output(self, output_object: OutputObject) -> OutputObject:
+        """Wrap the agent output into an OpenAI-style non-streaming chat.completion response.
+
+        Args:
+        output_object: Agent output holding the answer text.
+        Returns:
+        OutputObject: The chat.completion response.
+        """
         res = {
             "object": "chat.completion",
             "id": FrameworkContextManager().get_context('trace_id'),
@@ -111,6 +129,12 @@ class OpenAIProtocolTemplate(AgentTemplate):
         return OutputObject(params=res)
 
     def add_output_stream(self, output_stream: Queue, agent_output: str) -> None:
+        """Encode agent_output as an OpenAI chat.completion.chunk message and put it on the output stream queue.
+
+        Args:
+        output_stream: Queue receiving the JSON-encoded chunk.
+        agent_output: Assistant text carried by the chunk delta.
+        """
         if not output_stream:
             return
         output = {
@@ -132,6 +156,11 @@ class OpenAIProtocolTemplate(AgentTemplate):
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
                            **kwargs) -> dict:
+        """Execute the agent chain once against the given input and persist the exchange into memory.
+
+        Returns:
+        dict: Agent input extended with the generated answer under 'output'.
+        """
         self.load_memory(memory, agent_input)
         process_llm_token(llm, prompt.as_langchain(), self.agent_model.profile, agent_input)
         chain = prompt.as_langchain() | llm.as_langchain_runnable(
@@ -141,6 +170,11 @@ class OpenAIProtocolTemplate(AgentTemplate):
         return {**agent_input, 'output': res}
 
     def _get_run_config(self, input_object: InputObject) -> RunnableConfig:
+        """Build the RunnableConfig wiring the OpenAI protocol stream output handler and the LLM invocation memory handler as callbacks.
+
+        Args:
+        input_object: Input object that may carry the output stream.
+        """
         config = RunnableConfig()
         callbacks = []
         output_stream = input_object.get_data('output_stream')
@@ -152,6 +186,15 @@ class OpenAIProtocolTemplate(AgentTemplate):
 
     def invoke_chain(self, chain: RunnableSerializable[Any, str], agent_input: dict, input_object: InputObject,
                      **kwargs):
+        """Run the chain as a single invocation or, when the chain streams, by forwarding each token to add_output_stream.
+
+        Args:
+        chain: Runnable chain producing the answer.
+        agent_input: Dict fed to the chain as input.
+        input_object: Input object holding the output stream.
+        Returns:
+        The chain result or the streamed tokens combined via generate_result.
+        """
         if not self.judge_chain_stream(chain):
             res = chain.invoke(input=agent_input, config=self.get_run_config())
             return res
