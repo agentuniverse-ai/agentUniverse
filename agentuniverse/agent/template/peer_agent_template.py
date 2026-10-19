@@ -82,8 +82,9 @@ class PeerAgentTemplate(AgentTemplate):
         peer_results: list[dict] = agent_result.get('result', [])
         for item in reversed(peer_results):
             expressing_result = item.get('expressing_result')
-            if expressing_result:
+            if expressing_result and expressing_result.get('output') is not None:
                 return {'output': expressing_result.get('output')}
+        return {'output': ''}
 
     def _generate_agents(self) -> dict:
         planning_agent = self._get_and_validate_agent(self.planning_agent_name, PlanningAgentTemplate)
