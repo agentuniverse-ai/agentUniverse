@@ -26,6 +26,8 @@ import tiktoken
 from pydantic import Field
 
 from agentuniverse.base.annotation.trace import trace_llm
+from agentuniverse.base.config.component_configer.configers.llm_configer import \
+    LLMConfiger
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
@@ -91,6 +93,35 @@ class GroqLLM(OpenAIStyleLLM):
     proxy: Optional[str] = Field(default_factory=lambda: get_from_env("GROQ_PROXY"))
     organization: Optional[str] = Field(default_factory=lambda: get_from_env("GROQ_ORGANIZATION"))
 
+    def initialize_by_component_configer(
+            self, component_configer: LLMConfiger) -> 'GroqLLM':
+        """Apply the component configuration, normalising empty placeholders.
+
+        The OpenAI-style parent already wires ``api_key`` / ``api_base`` /
+        ``organization`` / ``proxy`` from the YAML config, but an unset
+        ``${GROQ_*}`` placeholder is substituted with an empty string at
+        config-load time. This override normalises such empty values back to
+        the environment-derived defaults so credential resolution behaves as
+        if the key had been omitted from the config entirely.
+
+        Args:
+            component_configer (LLMConfiger): the ComponentConfiger object.
+
+        Returns:
+            GroqLLM: the configured object.
+        """
+        super().initialize_by_component_configer(component_configer)
+        if not self.api_key or not self.api_key.strip():
+            self.api_key = get_from_env("GROQ_API_KEY")
+        if not self.api_base or not self.api_base.strip():
+            self.api_base = get_from_env("GROQ_API_BASE") or \
+                "https://api.groq.com/openai/v1"
+        if not self.proxy or not self.proxy.strip():
+            self.proxy = get_from_env("GROQ_PROXY")
+        if not self.organization or not self.organization.strip():
+            self.organization = get_from_env("GROQ_ORGANIZATION")
+        return self
+
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
         """Synchronous call to the Groq chat completions endpoint.
 
@@ -136,9 +167,14 @@ class GroqLLM(OpenAIStyleLLM):
         2. Otherwise the model name is looked up in
            :data:`GROQ_MAX_CONTEXT_LENGTH`.
         3. As a last resort :data:`GROQ_DEFAULT_CONTEXT_LENGTH` is returned.
+
+        Note: the Groq table is consulted directly instead of delegating to
+        ``super().max_context_length()`` — the OpenAI-style parent always
+        returns a truthy fallback from the OpenAI table, which would make the
+        Groq-specific lengths unreachable.
         """
-        if super().max_context_length():
-            return super().max_context_length()
+        if self._max_context_length:
+            return self._max_context_length
         return GROQ_MAX_CONTEXT_LENGTH.get(self.model_name, GROQ_DEFAULT_CONTEXT_LENGTH)
 
     def get_num_tokens(self, text: str) -> int:

@@ -13,12 +13,32 @@ any external dependency.
 
 import asyncio
 import unittest
+import unittest.mock
+from unittest.mock import MagicMock
 
 from agentuniverse.llm.default.groq_llm import (
     GROQ_DEFAULT_CONTEXT_LENGTH,
     GROQ_MAX_CONTEXT_LENGTH,
     GroqLLM,
 )
+
+
+def _mock_configer(config: dict) -> MagicMock:
+    """Build an LLMConfiger stand-in whose parent-init fields are neutral."""
+    configer = MagicMock()
+    configer.configer.value = dict(config)
+    configer.yaml_func_instance = None
+    configer.name = None
+    configer.description = None
+    configer.model_name = config.get('model_name')
+    configer.temperature = None
+    configer.request_timeout = None
+    configer.max_tokens = None
+    configer.max_retries = None
+    configer.streaming = None
+    configer.ext_info = None
+    configer.tracing = False
+    return configer
 
 
 class TestGroqLLM(unittest.TestCase):
@@ -86,6 +106,66 @@ class TestGroqLLM(unittest.TestCase):
     def test_get_num_tokens_empty_string(self) -> None:
         """An empty string must cost zero tokens."""
         self.assertEqual(self.llm.get_num_tokens(''), 0)
+
+    def test_config_credentials_are_applied(self) -> None:
+        """Non-empty credential values from the config must reach the instance."""
+        llm = GroqLLM(model_name='llama-3.3-70b-versatile')
+        configer = _mock_configer({
+            'api_key': 'yaml-key',
+            'api_base': 'https://api.groq.com/openai/v1',
+            'organization': 'org-1',
+            'proxy': 'http://proxy:8080',
+        })
+        llm.initialize_by_component_configer(configer)
+        self.assertEqual(llm.api_key, 'yaml-key')
+        self.assertEqual(llm.api_base, 'https://api.groq.com/openai/v1')
+        self.assertEqual(llm.organization, 'org-1')
+        self.assertEqual(llm.proxy, 'http://proxy:8080')
+
+    def test_empty_placeholder_credentials_are_skipped(self) -> None:
+        """Empty-string placeholders (unset ${GROQ_*} env vars) fall back to defaults."""
+        empty_env = {
+            'GROQ_API_KEY': '',
+            'GROQ_API_BASE': '',
+            'GROQ_PROXY': '',
+            'GROQ_ORGANIZATION': '',
+        }
+        with unittest.mock.patch.dict('os.environ', empty_env):
+            llm = GroqLLM(model_name='llama-3.3-70b-versatile')
+            configer = _mock_configer({
+                'api_key': '',
+                'api_base': '',
+                'organization': '',
+                'proxy': '',
+            })
+            llm.initialize_by_component_configer(configer)
+            self.assertIsNone(llm.api_key)
+            self.assertEqual(
+                llm.api_base, 'https://api.groq.com/openai/v1')
+            self.assertIsNone(llm.organization)
+            self.assertIsNone(llm.proxy)
+
+    def test_empty_placeholder_credentials_use_env_vars(self) -> None:
+        """Empty placeholders must resolve back to the GROQ_* env variables."""
+        env = {
+            'GROQ_API_KEY': 'env-key',
+            'GROQ_API_BASE': 'https://env-base.example/v1',
+            'GROQ_PROXY': 'http://env-proxy:8080',
+            'GROQ_ORGANIZATION': 'env-org',
+        }
+        with unittest.mock.patch.dict('os.environ', env):
+            llm = GroqLLM(model_name='llama-3.3-70b-versatile')
+            configer = _mock_configer({
+                'api_key': '',
+                'api_base': '',
+                'organization': '',
+                'proxy': '',
+            })
+            llm.initialize_by_component_configer(configer)
+            self.assertEqual(llm.api_key, 'env-key')
+            self.assertEqual(llm.api_base, 'https://env-base.example/v1')
+            self.assertEqual(llm.proxy, 'http://env-proxy:8080')
+            self.assertEqual(llm.organization, 'env-org')
 
     # ========== Integration tests (require a real GROQ_API_KEY) ==========
     # Uncomment and set GROQ_API_KEY in the environment to exercise the
