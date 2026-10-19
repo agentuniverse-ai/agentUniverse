@@ -27,7 +27,7 @@ from examples.third_party_examples.apps.prompt_generator_app.prompt_generator_he
 class TestPromptTemplateHelper(unittest.TestCase):
     """Test cases for PromptTemplateHelper class."""
 
-    def test_generate_prompt_template_react(self):
+    def test_generate_prompt_template_react(self) -> None:
         """Test generating ReAct agent prompt template."""
         prompt_model = PromptTemplateHelper.generate_prompt_template(
             task_description="智能客服助手，处理用户咨询和订单问题",
@@ -44,7 +44,7 @@ class TestPromptTemplateHelper(unittest.TestCase):
         self.assertTrue(any(keyword in combined_text for keyword in ["电商", "平台", "platform", "商务"]))
         self.assertIn("工具", prompt_model.instruction.lower())
 
-    def test_generate_prompt_template_rag(self):
+    def test_generate_prompt_template_rag(self) -> None:
         """Test generating RAG agent prompt template."""
         prompt_model = PromptTemplateHelper.generate_prompt_template(
             task_description="医疗咨询专家，基于医疗知识库回答用户问题",
@@ -60,7 +60,7 @@ class TestPromptTemplateHelper(unittest.TestCase):
         self.assertTrue(any(keyword in combined_text for keyword in ["医疗", "医疗知识", "healthcare", "analysis", "information", "expert", "professional"]))
         self.assertIn("医疗", prompt_model.target.lower())
 
-    def test_generate_yaml_config(self):
+    def test_generate_yaml_config(self) -> None:
         """Test generating YAML configuration."""
         prompt_model = PromptTemplateHelper.generate_prompt_template(
             task_description="Test agent",
@@ -79,7 +79,7 @@ class TestPromptTemplateHelper(unittest.TestCase):
         self.assertIn("type: 'PROMPT'", yaml_config)
         self.assertIn("version: 'test.cn'", yaml_config)
 
-    def test_get_supported_agent_types(self):
+    def test_get_supported_agent_types(self) -> None:
         """Test retrieving supported agent types."""
         types = PromptTemplateHelper.get_supported_agent_types()
 
@@ -91,7 +91,7 @@ class TestPromptTemplateHelper(unittest.TestCase):
         self.assertIn("reviewing", types)
         self.assertIn("workflow", types)
 
-    def test_extract_domain(self):
+    def test_extract_domain(self) -> None:
         """Test domain extraction functionality."""
         # Test financial domain recognition
         domain = PromptTemplateHelper._extract_domain("Intelligent stock analysis assistant")
@@ -109,7 +109,7 @@ class TestPromptTemplateHelper(unittest.TestCase):
 class TestPromptOptimization(unittest.TestCase):
     """Prompt optimization functionality tests."""
 
-    def test_optimize_existing_prompt(self):
+    def test_optimize_existing_prompt(self) -> None:
         """Test optimizing existing prompt."""
         original_prompt = "You are an AI assistant that helps users answer questions."
 
@@ -130,16 +130,16 @@ class TestPromptOptimization(unittest.TestCase):
 class TestPromptConfigGeneration(unittest.TestCase):
     """Prompt configuration generation functionality tests."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up temporary directory."""
         self.temp_dir = tempfile.mkdtemp()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up temporary directory."""
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_generate_prompt_config(self):
+    def test_generate_prompt_config(self) -> None:
         """Test generating prompt configuration."""
         output_file = os.path.join(self.temp_dir, "test_prompt.yaml")
 
@@ -165,7 +165,7 @@ class TestPromptConfigGeneration(unittest.TestCase):
             file_content = f.read()
             self.assertEqual(file_content, yaml_config)
 
-    def test_generate_different_agent_types(self):
+    def test_generate_different_agent_types(self) -> None:
         """Test generating different types of agent configurations."""
         agent_types = ['react', 'rag', 'planning', 'executing', 'expressing']
 
@@ -187,7 +187,7 @@ class TestPromptConfigGeneration(unittest.TestCase):
 class TestPromptConfigIntegration(unittest.TestCase):
     """Prompt configuration integration tests."""
 
-    def test_generated_config_format(self):
+    def test_generated_config_format(self) -> None:
         """Test whether the generated configuration format meets PromptConfiger requirements."""
         yaml_config = generate_prompt_config(
             task_description="Integration test agent",
