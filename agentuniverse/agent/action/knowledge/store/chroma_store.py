@@ -48,8 +48,10 @@ class ChromaStore(Store):
             raise ValueError(
                 "ChromaStore.persist_path is not set; configure a local "
                 "directory or an http(s) Chroma server URL.")
-        if self.persist_path.startswith('http') or \
-                self.persist_path.startswith('https'):
+        if self.persist_path and (
+            self.persist_path.startswith('http') or
+            self.persist_path.startswith('https')
+        ):
             # Remote database URL
             parsed_url = urlparse(self.persist_path)
             # urlparse returns port=None when the URL omits it; str(None) =
@@ -62,11 +64,15 @@ class ChromaStore(Store):
                 chroma_server_host=parsed_url.hostname,
                 chroma_server_http_port=str(port)
             )
-        else:
+        elif self.persist_path:
+            # Local persistent database
             settings = Settings(
                 is_persistent=True,
                 persist_directory=self.persist_path
             )
+        else:
+            # In-memory only (no persistence path configured)
+            settings = Settings()
 
         client = chromadb.Client(settings)
         if self.collection is None:
