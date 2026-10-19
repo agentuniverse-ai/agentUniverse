@@ -47,9 +47,15 @@ class Service(ComponentBase):
     def run(self, **kwargs) -> str:
         """The executed function when the service is called."""
         if hasattr(self.agent, 'agent_model') and 'streaming' in kwargs:
-            llm_model = self.agent.agent_model.profile.get('llm_model', {})
+            profile = self.agent.agent_model.profile
+            if not isinstance(profile, dict):
+                profile = {}
+            llm_model = profile.get('llm_model')
+            if not isinstance(llm_model, dict):
+                llm_model = {}
             llm_model['streaming'] = kwargs['streaming']
-            self.agent.agent_model.profile['llm_model'] = llm_model
+            profile['llm_model'] = llm_model
+            self.agent.agent_model.profile = profile
         return self.agent.run(**kwargs).to_json_str()
 
     @property
