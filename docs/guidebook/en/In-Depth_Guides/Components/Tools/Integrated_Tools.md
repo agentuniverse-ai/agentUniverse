@@ -634,3 +634,46 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Line Operations Tool
+
+`LineOpsTool` is a line-level text operations utility built purely on
+the Python standard library — no network, no extra dependencies — for
+the routine cleanup agents perform on model outputs, generated lists
+and logs. It supports seven modes: `sort` orders lines lexicographically
+by default, or naturally with `natural=True`, which chunks digit runs
+and compares them numerically so `file2` sorts before `file10` (leading
+zeros compare equal: `v07` equals `v7`); `case_insensitive` lowercases
+before comparing, `reverse=True` flips the order, and `unique=True`
+removes duplicate lines before sorting; `unique` deduplicates while
+preserving first-occurrence order and reports how many duplicates were
+removed; `trim` strips trailing whitespace from every line and, with
+`drop_empty=True`, drops lines left empty; `number` prefixes running
+numbers as `1. line` (`number_format="dot"`) or `1) line` (`number_format="paren"`),
+starting at `start` and optionally zero-padded (`pad=3` gives
+`001. line`); `reverse` flips the line order; and `head` / `tail` keep
+the first / last `n` lines (default 10) while reporting the total line
+count, the returned line count and a `truncated` flag.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.line_ops_tool import LineOpsTool
+
+tool = LineOpsTool()
+sorted_lines = tool.execute(mode="sort", text="file10\nfile2\nfile1", natural=True)["result"]
+cleaned = tool.execute(mode="trim", text="a  \nb\n\n c ", drop_empty=True)["result"]
+numbered = tool.execute(mode="number", text="first\nsecond", number_format="paren", pad=2)["result"]
+top = tool.execute(mode="head", text="one\ntwo\nthree", n=2)
+```
+
+Line endings are handled explicitly: `\r\n` and stray `\r` in the input
+are normalized to `\n` before processing, a single trailing newline
+does not introduce an extra empty line, and the output is joined with
+`\n` by default or with `\r\n` when `newline="crlf"`. All operations
+are deterministic — no randomness, no time dependence. Inputs are
+validated strictly before any work: wrong `text` type, empty text,
+boolean options passed as non-booleans, unknown `format` / `newline`
+values, out-of-bounds `n` / `start` / `pad`, and text over 1,000,000
+characters or 100,000 lines raise a `ValueError`. Every result carries
+the joined text plus the input and output line counts, and the
+mode-specific flags (`duplicates_removed`, `lines_dropped`, `truncated`)
+so agents can report what happened.

@@ -1,0 +1,107 @@
+name: line_ops_tool
+description: Line operations tool — pure Python stdlib, no network required. Sort lines lexicographically or naturally (digit runs compared numerically so file2 < file10) with case-insensitive, reverse and unique-then-sort options (mode='sort'), deduplicate lines preserving first-occurrence order (mode='unique'), strip trailing whitespace per line with an optional drop-empty-lines flag (mode='trim'), prefix running numbers as '1. ' / '1) ' with zero-padding and custom start (mode='number'), reverse line order (mode='reverse'), and keep the first/last N lines with count and truncation reporting (mode='head'/'tail'). CRLF input is normalized; output uses LF or CRLF.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.line_ops_tool
+  class: LineOpsTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Line operation — sort, unique, trim, number, reverse, head or tail.
+    required: true
+  text:
+    type: string
+    description: The input text (lines separated by newlines). Required for every mode. CRLF and stray CR are normalized to LF; a single trailing newline does not add an empty line.
+    required: false
+  natural:
+    type: boolean
+    description: Sort mode only — compare digit runs numerically so file2 sorts before file10; default is plain lexicographic order.
+    required: false
+  case_insensitive:
+    type: boolean
+    description: Sort mode only — lowercase lines (or non-digit chunks in natural mode) before comparing.
+    required: false
+  reverse:
+    type: boolean
+    description: Sort mode only — flip the ordering; lines with equal keys keep their input order.
+    required: false
+  unique:
+    type: boolean
+    description: Sort mode only — remove duplicate lines (exact match, first occurrence kept) before sorting.
+    required: false
+  drop_empty:
+    type: boolean
+    description: Trim mode only — drop lines that are empty after trailing-whitespace stripping.
+    required: false
+  number_format:
+    type: string
+    description: Number mode only — line number prefix style, dot ("1. line") or paren ("1) line"). Defaults to dot.
+    required: false
+  start:
+    type: integer
+    description: Number mode only — first line number (default 1, range 0-999999).
+    required: false
+  pad:
+    type: integer
+    description: Number mode only — zero-pad the line number to this many digits (0-9; 0 means no padding, e.g. pad=3 gives "001. line").
+    required: false
+  n:
+    type: integer
+    description: Head/tail modes only — number of lines to keep (default 10, range 1-100000). The result reports the total line count, the returned line count and a truncated flag.
+    required: false
+  newline:
+    type: string
+    description: Output line ending — lf (default, join with \n) or crlf (join with \r\n).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["sort", "unique", "trim", "number", "reverse", "head", "tail"]
+      description: Line operation to perform.
+    text:
+      type: string
+      description: The input text (lines separated by newlines).
+    natural:
+      type: boolean
+      description: Natural (digit-run numeric-aware) sort order (sort mode).
+    case_insensitive:
+      type: boolean
+      description: Lowercase before comparing (sort mode).
+    reverse:
+      type: boolean
+      description: Flip the sort order (sort mode).
+    unique:
+      type: boolean
+      description: Remove duplicate lines before sorting (sort mode).
+    drop_empty:
+      type: boolean
+      description: Drop lines left empty after trimming (trim mode).
+    number_format:
+      type: string
+      enum: ["dot", "paren"]
+      description: Line number prefix style (number mode).
+    start:
+      type: integer
+      minimum: 0
+      maximum: 999999
+      description: First line number (number mode).
+    pad:
+      type: integer
+      minimum: 0
+      maximum: 9
+      description: Zero-pad width for the line number (number mode).
+    n:
+      type: integer
+      minimum: 1
+      maximum: 100000
+      description: Number of lines to keep (head/tail modes).
+    newline:
+      type: string
+      enum: ["lf", "crlf"]
+      description: Output line ending.
+  required: ["mode"]
