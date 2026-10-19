@@ -1,0 +1,75 @@
+name: image_resizer_tool
+description: >-
+  Resize, scale, crop, convert, and inspect images using Pillow. All paths
+  are confined to base_dir; input/output byte sizes and output formats are
+  bounded. Pillow is imported lazily.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.image_resizer_tool
+  class: ImageResizerTool
+input_keys:
+  - mode
+  - file_path
+base_dir: .
+max_input_bytes: 26214400
+max_output_bytes: 26214400
+allowed_formats: [jpg, jpeg, png, webp]
+args_model:
+  mode: {type: string, required: true}
+  file_path: {type: string, required: true}
+  output_path: {type: string, required: false}
+  width: {type: integer, required: false}
+  height: {type: integer, required: false}
+  factor: {type: number, required: false}
+  box: {type: array, required: false}
+  target_format: {type: string, required: false}
+  quality: {type: integer, required: false, default: 85}
+  overwrite: {type: boolean, required: false, default: false}
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [resize, scale, crop, convert, info]
+      description: Image operation to perform.
+    file_path:
+      type: string
+      description: Path to the source image, relative to base_dir.
+    output_path:
+      type: string
+      description: Destination path, relative to base_dir (ignored for info).
+    width:
+      type: integer
+      minimum: 1
+      description: Target width in pixels (resize mode).
+    height:
+      type: integer
+      minimum: 1
+      description: Target height in pixels (resize mode).
+    factor:
+      type: number
+      exclusiveMinimum: 0
+      description: Scale factor (scale mode), e.g. 0.5 halves each axis.
+    box:
+      type: array
+      items: {type: integer}
+      minItems: 4
+      maxItems: 4
+      description: Crop rectangle [left, top, right, bottom] in pixels.
+    target_format:
+      type: string
+      enum: [jpg, jpeg, png, webp]
+      description: Output format (required for convert; inferred from extension otherwise).
+    quality:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 85
+      description: Quality for lossy formats (JPEG, WEBP).
+    overwrite:
+      type: boolean
+      default: false
+      description: Allow replacing an existing output file.
+  required: [mode, file_path]
+  additionalProperties: false
