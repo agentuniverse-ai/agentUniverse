@@ -121,10 +121,10 @@ class QdrantStore(Store):
 
         return self.to_documents(results)
 
-    def insert_document(self, documents: List[Document], **kwargs):
+    def insert_document(self, documents: List[Document], **kwargs) -> None:
         self.upsert_document(documents, **kwargs)
 
-    def upsert_document(self, documents: List[Document], **kwargs):
+    def upsert_document(self, documents: List[Document], **kwargs) -> None:
         if self.client is None:
             return
 
@@ -155,10 +155,10 @@ class QdrantStore(Store):
         if points:
             self.client.upsert(collection_name=self.collection_name, points=points)
 
-    def update_document(self, documents: List[Document], **kwargs):
+    def update_document(self, documents: List[Document], **kwargs) -> None:
         self.upsert_document(documents, **kwargs)
 
-    def delete_document(self, document_id: str, **kwargs):
+    def delete_document(self, document_id: str, **kwargs) -> None:
         if self.client is None:
             return
         self.client.delete(collection_name=self.collection_name, points_selector=[document_id])
