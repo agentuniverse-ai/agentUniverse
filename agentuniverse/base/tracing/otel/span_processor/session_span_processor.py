@@ -13,18 +13,18 @@ from agentuniverse.base.tracing.otel.consts import SPAN_SESSION_ID_KEY
 
 
 class SessionSpanProcessor(SpanProcessor):
-    def on_start(self, span, parent_context=None):
+    def on_start(self, span, parent_context=None) -> None:
         session_id = get_session_id()
         if session_id:
             span.set_attribute(SPAN_SESSION_ID_KEY, session_id)
         else:
             span.set_attribute(SPAN_SESSION_ID_KEY, '-1')
 
-    def on_end(self, span):
+    def on_end(self, span) -> None:
         pass
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         pass
 
-    def force_flush(self, timeout_millis=30000):
+    def force_flush(self, timeout_millis=30000) -> None:
         pass
