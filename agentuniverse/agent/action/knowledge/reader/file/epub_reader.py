@@ -45,27 +45,42 @@ class EpubReader(Reader):
             file = Path(file)
 
         # Load the EPUB book
-        book = epub.read_epub(str(file))
+        try:
+            book = epub.read_epub(str(file))
+        except Exception as exc:
+            raise ValueError(
+                f"Failed to parse EPUB file {file.name}: {exc}") from exc
         document_list = []
+
+        def _safe_meta(key: str) -> str:
+            """Safely extract a metadata field, handling None values."""
+            raw = book.get_metadata('DC', key)
+            if raw and raw[0] and raw[0][0]:
+                return str(raw[0][0])
+            return "Unknown"
 
         # Extract book metadata
         book_metadata = {
             "file_name": file.name,
-            "title": book.get_metadata('DC', 'title')[0][0] if book.get_metadata('DC', 'title') else "Unknown",
-            "author": book.get_metadata('DC', 'creator')[0][0] if book.get_metadata('DC', 'creator') else "Unknown",
-            "language": book.get_metadata('DC', 'language')[0][0] if book.get_metadata('DC', 'language') else "Unknown",
-            "publisher": book.get_metadata('DC', 'publisher')[0][0] if book.get_metadata('DC', 'publisher') else "Unknown"
+            "title": _safe_meta('title'),
+            "author": _safe_meta('creator'),
+            "language": _safe_meta('language'),
+            "publisher": _safe_meta('publisher'),
         }
 
         chapter_count = 0
-        
+
         # Process each item in the book
         for item in book.get_items():
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapter_count += 1
-                
-                # Extract text content from HTML
-                content = item.get_content().decode('utf-8', errors='ignore')
+
+                # Extract text content from HTML. get_content() can return
+                # None on corrupt/truncated epubs.
+                raw_content = item.get_content()
+                if raw_content is None:
+                    continue
+                content = raw_content.decode('utf-8', errors='ignore')
                 text_content = self._extract_text_from_html(content)
                 
                 if text_content.strip():  # Only add non-empty chapters

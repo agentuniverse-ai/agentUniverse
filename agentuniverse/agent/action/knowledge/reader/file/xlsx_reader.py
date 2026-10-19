@@ -42,7 +42,11 @@ class XlsxReader(Reader):
             file = Path(file)
 
         # Load the workbook
-        workbook = openpyxl.load_workbook(file, data_only=True)
+        try:
+            workbook = openpyxl.load_workbook(file, data_only=True)
+        except Exception as exc:
+            raise ValueError(
+                f"Failed to parse XLSX file {file.name}: {exc}") from exc
         document_list = []
 
         # Process each worksheet
@@ -60,9 +64,12 @@ class XlsxReader(Reader):
                 for col in range(1, max_col + 1):
                     cell = worksheet.cell(row=row, column=col)
                     if cell.value is not None:
-                        # Convert cell value to string, handling different data types
-                        if isinstance(cell.value, (int, float)):
-                            row_data.append(str(cell.value))
+                        # Handle datetime specially; everything else str().
+                        import datetime as _dt
+                        if isinstance(cell.value, _dt.datetime):
+                            row_data.append(cell.value.isoformat())
+                        elif isinstance(cell.value, _dt.date):
+                            row_data.append(cell.value.isoformat())
                         else:
                             row_data.append(str(cell.value))
                     else:

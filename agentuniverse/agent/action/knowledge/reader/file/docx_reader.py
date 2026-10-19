@@ -33,7 +33,13 @@ class DocxReader(Reader):
 
         if isinstance(file, str):
             file = Path(file)
-        text = docx2txt.process(file)
+        try:
+            text = docx2txt.process(file)
+        except Exception as exc:
+            raise ValueError(
+                f"Failed to parse DOCX file {file.name}: {exc}") from exc
+        if text is None:
+            text = ""
         metadata = {"file_name": file.name}
         if ext_info is not None:
             metadata.update(ext_info)
