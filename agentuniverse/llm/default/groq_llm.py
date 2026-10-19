@@ -137,8 +137,8 @@ class GroqLLM(OpenAIStyleLLM):
            :data:`GROQ_MAX_CONTEXT_LENGTH`.
         3. As a last resort :data:`GROQ_DEFAULT_CONTEXT_LENGTH` is returned.
         """
-        if super().max_context_length():
-            return super().max_context_length()
+        if self._max_context_length:
+            return self._max_context_length
         return GROQ_MAX_CONTEXT_LENGTH.get(self.model_name, GROQ_DEFAULT_CONTEXT_LENGTH)
 
     def get_num_tokens(self, text: str) -> int:
