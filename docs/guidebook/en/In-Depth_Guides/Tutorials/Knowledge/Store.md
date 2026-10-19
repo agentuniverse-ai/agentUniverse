@@ -96,3 +96,43 @@ Supported metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are 
 ## PGVectorStore
 
 `PGVectorStore` adds PostgreSQL/pgvector persistence with synchronous and asynchronous CRUD, cosine/L2/inner-product search, JSONB containment filters, optional managed embeddings, dimension validation, automatic table/extension creation, and an optional HNSW index. Install the `store_ext` extra and copy `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` into the application configuration directory. Set `connection_url` in that copy or use `PGVECTOR_CONNECTION_URL`; never commit credentials.
+
+## MongoDBAtlasStore
+
+`MongoDBAtlasStore` is a vector store backed by MongoDB Atlas Vector Search. It uses the ``$vectorSearch`` aggregation pipeline stage to provide insert, query, upsert, update, delete, and inspection with `cosine` / `euclidean` / `dotProduct` similarity functions, configurable vector dimensions, optional on-demand embedding through a registered aU embedding component, optional metadata filtering, and bounded resource usage (`similarity_top_k`). Install the optional dependency with `pip install 'agentUniverse[store_ext]'` (or `pip install pymongo`) and provision a MongoDB Atlas cluster with a Vector Search index.
+
+Copy `agentuniverse/agent/action/knowledge/store/mongodb_atlas_store.yaml.example` into the application configuration directory and resolve the built-in `mongodb_atlas_store` component. Set `connection_url` in that copy (or via the `MONGODB_ATLAS_URI` environment variable); `embedding_model` names a registered aU embedding component used to embed documents and queries on demand. The Atlas Vector Search index (default name `vector_index`) must be configured over the `vector_field` via the Atlas UI / Administration API.
+
+```yaml
+name: mongodb_atlas_store
+description: MongoDB Atlas Vector Search store for knowledge retrieval
+connection_url: ''
+database_name: agentuniverse
+collection_name: documents
+embedding_model: openai_embedding
+dimensions: 1536
+similarity: cosine
+similarity_top_k: 10
+vector_field: embedding
+text_field: text
+index_name: vector_index
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.mongodb_atlas_store
+  class: MongoDBAtlasStore
+```
+- connection_url: MongoDB connection string; falls back to the `MONGODB_ATLAS_URI` environment variable.
+- database_name: MongoDB database that holds the collection.
+- collection_name: MongoDB collection used to store documents.
+- embedding_model: Registered aU embedding component used to embed documents / queries on demand.
+- dimensions: Vector dimension; if `null`, inferred from the first inserted document.
+- similarity: Similarity function for `$vectorSearch` — `cosine`, `euclidean`, or `dotProduct`.
+- similarity_top_k: Default number of results returned by `query`.
+- vector_field: Field name that stores the embedding vector.
+- text_field: Field name that stores the document text.
+- index_name: Name of the Atlas Vector Search index.
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"tenant": "acme"}, embedding=[0.1, 0.2, 0.3])])
+results = store.query(Query(embeddings=[[0.1, 0.2, 0.3]], similarity_top_k=5), metadata_filter={"tenant": "acme"})
+```

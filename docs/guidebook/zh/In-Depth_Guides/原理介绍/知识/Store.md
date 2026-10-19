@@ -96,3 +96,43 @@ results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metada
 ## PGVectorStore
 
 `PGVectorStore` 提供基于 PostgreSQL/pgvector 的同步与异步 CRUD、余弦/L2/内积检索、JSONB 包含过滤、可选的自动向量化、维度校验、自动建表和可选 HNSW 索引。安装 `store_ext` extra，并将 `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` 复制到应用配置目录。连接地址可以写在本地配置的 `connection_url` 中，或通过 `PGVECTOR_CONNECTION_URL` 提供；请勿提交数据库凭据。
+
+## MongoDBAtlasStore
+
+`MongoDBAtlasStore` 是基于 MongoDB Atlas Vector Search 的向量存储。通过 ``$vectorSearch`` 聚合管道阶段提供插入、查询、upsert、更新、删除及巡检能力，支持 cosine / euclidean / dotProduct 相似度函数、可配置向量维度、通过已注册 aU embedding 组件按需向量化、可选 metadata 过滤，以及受控的资源使用（`similarity_top_k`）。安装可选依赖 `pip install 'agentUniverse[store_ext]'`（或 `pip install pymongo`），并准备一个配置了 Vector Search 索引的 MongoDB Atlas 集群。
+
+将 `agentuniverse/agent/action/knowledge/store/mongodb_atlas_store.yaml.example` 复制到应用配置目录，加载内置 `mongodb_atlas_store` 组件。在该配置副本中设置 `connection_url`（或通过 `MONGODB_ATLAS_URI` 环境变量提供）；`embedding_model` 指定一个已注册的 aU embedding 组件，用于按需对文档和查询向量化。Atlas Vector Search 索引（默认名 `vector_index`）需通过 Atlas 控制台 / 管理 API 在 `vector_field` 上配置。
+
+```yaml
+name: mongodb_atlas_store
+description: MongoDB Atlas Vector Search store for knowledge retrieval
+connection_url: ''
+database_name: agentuniverse
+collection_name: documents
+embedding_model: openai_embedding
+dimensions: 1536
+similarity: cosine
+similarity_top_k: 10
+vector_field: embedding
+text_field: text
+index_name: vector_index
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.mongodb_atlas_store
+  class: MongoDBAtlasStore
+```
+- connection_url: MongoDB 连接串；未设置时回退到 `MONGODB_ATLAS_URI` 环境变量。
+- database_name: 存放集合的 MongoDB 数据库。
+- collection_name: 存放文档的 MongoDB 集合。
+- embedding_model: 用于按需对文档/查询向量化的已注册 aU embedding 组件名。
+- dimensions: 向量维度；为 `null` 时由首条插入文档推断。
+- similarity: `$vectorSearch` 相似度函数——`cosine`、`euclidean` 或 `dotProduct`。
+- similarity_top_k: `query` 默认返回的结果数。
+- vector_field: 存储向量 embedding 的字段名。
+- text_field: 存储文档文本的字段名。
+- index_name: Atlas Vector Search 索引名。
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"tenant": "acme"}, embedding=[0.1, 0.2, 0.3])])
+results = store.query(Query(embeddings=[[0.1, 0.2, 0.3]], similarity_top_k=5), metadata_filter={"tenant": "acme"})
+```
