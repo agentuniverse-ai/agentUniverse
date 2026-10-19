@@ -56,7 +56,7 @@ class PythonREPLTool(Tool):
 
         pattern = re.compile(r"```python(.*?)``", re.DOTALL)
         matches = pattern.findall(input)
-        if len(matches) == 0:
+        if not matches:
             pattern = re.compile(r"```py(.*?)``", re.DOTALL)
             matches = pattern.findall(input)
         if len(matches) == 0:
