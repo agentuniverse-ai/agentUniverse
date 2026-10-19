@@ -109,6 +109,9 @@ def parse_partial_json(s: str, *, strict: bool = False) -> Any:
     # If we're still inside a string at the end of processing,
     # we need to close the string.
     if is_inside_string:
+        if escaped:
+            # Drop the incomplete escape so it cannot escape the closing quote.
+            new_s = new_s[:-1]
         new_s += '"'
 
     # Try to parse mods of string until we succeed or run out of characters.
