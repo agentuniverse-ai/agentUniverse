@@ -526,3 +526,33 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## NVD CVE Tool
+
+`NvdCveTool` queries the official National Vulnerability Database CVE API 2.0. A
+`CVE-YYYY-NNNN` query performs an exact identifier lookup; any other query searches
+vulnerability descriptions. Keyword calls support a bounded `max_results`, a
+zero-based `start_index`, and optional exact-phrase matching.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.nvd_cve_tool import NvdCveTool
+
+tool = NvdCveTool()
+record = tool.execute(query="CVE-2021-44228")
+results = tool.execute(
+    query="Apache HTTP Server",
+    max_results=5,
+    exact_match=True,
+)
+```
+
+Results normalize the highest available CVSS v4/v3/v2 metric, CWE weaknesses,
+references, affected CPE criteria, CVE tags, CISA KEV fields, record status, and
+the NVD detail URL. Descriptions and nested collections have explicit limits.
+Each execution makes one request; the tool is not a bulk dataset downloader.
+
+Anonymous use follows NVD's public rate limit. Set `NVD_API_KEY` to send a key in
+the `apiKey` header for the higher authenticated limit. Timeouts, HTTP failures,
+rate limits, malformed JSON, and invalid response shapes return a structured
+`error` without exposing the key. Every response includes the NVD source link and
+the attribution notice required by NVD API guidance.
