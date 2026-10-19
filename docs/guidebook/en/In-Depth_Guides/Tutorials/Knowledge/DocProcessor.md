@@ -309,3 +309,31 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ChecklistCompletenessAnalyzer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/checklist_completeness_analyzer.yaml)
+
+This component measures how complete the checkbox task lists inside each document are, addressing the *pre-processing/analysis* direction of issue #258. Knowledge corpora and ops runbooks are full of task lists — onboarding guides, release checklists, incident review action items — and the dangerous ones are the half-finished ones: a runbook whose "verify backups" box is still open is misinformation once it is indexed. For every document the processor scans for checkbox-style list items and writes the analysis to `metadata[checklist]`: `total` / `checked` / `unchecked` / `empty_labels` counts, `ratio` (`checked / total` rounded to 4 decimals, or `null` when no checkbox was found — no fabricated score), `missing_items` (labels of the unchecked items in document order, capped) and a `missing_truncated` flag for when the cap cut the list short.
+
+The detection rules are deliberately conservative and dependency-free. An item is a line that starts, after optional indentation, with an optional list marker (`-`, `*`, `+`, `1.` or `1)`) followed by a checkbox `[ ]` (unchecked) or `[x]` / `[X]` (checked); a bare checkbox at line start counts too. Bracket contents other than a single space, `x` or `X` (`[o]`, `[maybe]`, `[]`) are ordinary text, as are checkboxes in mid-sentence, escaped ones (`\[x]`) and every line inside a fenced code block (``` or `~~~`; an unclosed fence runs to the end of the text, so sample checklists in embedded logs are never counted). Labels are right-stripped; an empty label is counted in `empty_labels` but never listed in `missing_items`, keeping authoring mistakes visible without polluting the missing list.
+
+By default the processor only stamps metadata. Setting `min_ratio` and/or `max_ratio` switches on a filter mode that drops documents whose completion ratio falls outside the inclusive range; documents without a computable ratio (no checkboxes found — they get a `"no checkboxes found"` note under `metadata[checklist_note]`) are always kept, since no evidence exists to reject them. The component is about *list completeness* and complements structural processors such as `ListStructureExtractor`: it does not re-shape lists, it scores how much of them is done, and the metrics travel with the document into the store. Everything is pure Python, deterministic and offline — identical inputs always produce identical metadata.
+
+The component definition file is as follows:
+```yaml
+name: 'checklist_completeness_analyzer'
+description: 'analyze checkbox task lists and stamp completeness ratio and missing items into document metadata'
+min_ratio: null               # optional lower completion ratio for filtering
+max_ratio: null               # optional upper completion ratio for filtering
+checklist_key: 'checklist'    # metadata key for the analysis; '' disables
+note_key: 'checklist_note'    # metadata key for the no-checkbox note; '' disables
+max_items_reported: 25        # cap on unchecked labels kept in missing_items
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.checklist_completeness_analyzer'
+  class: 'ChecklistCompletenessAnalyzer'
+```
+- min_ratio: Optional minimum completion ratio (0..1); documents scoring below it are dropped in filter mode. `null` (default) disables the bound and with it filtering.
+- max_ratio: Optional maximum completion ratio (0..1); documents scoring above it are dropped in filter mode. `null` (default) disables the bound.
+- checklist_key: Metadata key the analysis dictionary is written to on every document; an empty value disables stamping. The dictionary holds `total` / `checked` / `unchecked` / `empty_labels` integers, `ratio` (number, or `null` when no checkbox was found), `missing_items` (labels of unchecked items, capped) and `missing_truncated`.
+- note_key: Metadata key the note for documents without any checkbox is written to; an empty value disables the note.
+- max_items_reported: Maximum number of unchecked item labels kept in `missing_items` (`0` keeps none). When labels are omitted because of this cap, `missing_truncated` is set to `true`.
