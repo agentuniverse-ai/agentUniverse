@@ -529,6 +529,22 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
 
+## CSV Tool
+
+`CSVTool` reads, writes, appends to, and inspects comma-separated and custom-delimiter CSV files without additional dependencies. It exposes `read`, `write`, `append`, and `info` modes and returns structured rows instead of converting the whole file to one document.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.csv_tool import CSVTool
+
+tool = CSVTool(base_dir="/srv/agent-files")
+tool.execute(mode="write", file_path="report.csv", rows=[["name", "score"], ["Ada", 10]])
+result = tool.execute(mode="read", file_path="report.csv")
+```
+
+`read` returns the decoded `header` when `has_header=true`, the data `rows`, `row_count`, `column_count`, `delimiter`, and `encoding`; `null` cells are written as empty fields. `info` streams the file and reports its size and shape without materializing records. `write` and `append` require `rows`, and `append` also requires an existing rectangular file that can be decoded with the requested encoding. Append rewrites the existing text in that encoding before adding new rows, so the result is uniformly encoded, and it refuses mixed-width records or appended rows that do not match the existing column count. Both mutations reject non-`.csv` paths, invalid delimiters or encodings, non-scalar rows, and configured row, column, field, character, and byte limits, and use a same-directory temporary file followed by `os.replace` so a rejected request leaves an existing destination untouched. Paths are confined to `base_dir`, and `write` refuses to replace an existing file unless `overwrite=true`.
+
+Character budgets (`max_total_chars` and `max_field_chars`) count decoded cell text, while byte budgets (`max_read_bytes` and `max_write_bytes`) count the encoded file. A multibyte encoding can therefore reach `max_write_bytes` before `max_total_chars`; `append` applies the byte budget to the rewritten result as well as the read budget to the existing file.
+
 ## NVD CVE Tool
 
 `NvdCveTool` queries the official National Vulnerability Database CVE API 2.0. A

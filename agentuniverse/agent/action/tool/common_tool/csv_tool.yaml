@@ -1,0 +1,39 @@
+name: csv_tool
+description: Read, write, append to, and inspect bounded CSV files.
+tool_type: api
+metadata: {type: TOOL, module: agentuniverse.agent.action.tool.common_tool.csv_tool, class: CSVTool}
+input_keys: [mode, file_path]
+base_dir: .
+max_read_bytes: 52428800
+max_write_bytes: 52428800
+max_rows: 100000
+max_columns: 1000
+max_field_chars: 100000
+max_total_chars: 10000000
+args_model:
+  mode: {type: string, required: true}
+  file_path: {type: string, required: true}
+  rows: {type: array, required: false}
+  delimiter: {type: string, required: false, default: ','}
+  encoding: {type: string, required: false, default: utf-8}
+  has_header: {type: boolean, required: false, default: true}
+  overwrite: {type: boolean, required: false, default: false}
+args_model_schema:
+  type: object
+  properties:
+    mode: {type: string, enum: [read, write, append, info]}
+    file_path: {type: string}
+    rows:
+      type: array
+      minItems: 1
+      description: Required for write and append; each cell must be a scalar value.
+      items:
+        type: array
+        minItems: 1
+        items: {type: [string, number, boolean, "null"]}
+    delimiter: {type: string, minLength: 1, maxLength: 1}
+    encoding: {type: string, minLength: 1}
+    has_header: {type: boolean, default: true}
+    overwrite: {type: boolean, default: false}
+  required: [mode, file_path]
+  additionalProperties: false
