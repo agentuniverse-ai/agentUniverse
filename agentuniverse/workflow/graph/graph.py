@@ -24,6 +24,8 @@ class Graph(nx.DiGraph):
         nodes_config = config.get('nodes')
         if not nodes_config:
             raise ValueError('The nodes configuration is empty')
+        if sum(node.get('type') == NodeEnum.START.value for node in nodes_config) != 1:
+            raise ValueError('The workflow graph must contain exactly one start node')
         for node_config in nodes_config:
             self._add_graph_node(workflow_id, node_config)
         edges_config = config.get('edges')
@@ -31,6 +33,9 @@ class Graph(nx.DiGraph):
             raise ValueError('The edges configuration is empty')
         for edge_config in edges_config:
             self._add_graph_edge(edge_config)
+        start_id = next(node['id'] for node in nodes_config if node['type'] == NodeEnum.START.value)
+        if self.in_degree(start_id):
+            raise ValueError('The start node must not have incoming edges')
         if not nx.is_directed_acyclic_graph(self):
             raise ValueError("The provided configuration does not form a DAG.")
         return self
