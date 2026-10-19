@@ -1,0 +1,25 @@
+name: markdown_table_extractor_tool
+description: >-
+  Extract Markdown tables into structured data and convert them to CSV or
+  JSON. Pure-Python regex parsing, zero dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.markdown_table_extractor_tool
+  class: MarkdownTableExtractorTool
+input_keys:
+  - text
+args_model_schema:
+  type: object
+  properties:
+    text: {type: string, description: "Markdown text to scan for tables."}
+    mode:
+      type: string
+      enum: [extract, extract_first, to_csv, to_json]
+      default: extract
+    table_index:
+      type: integer
+      minimum: 0
+      description: "Optional table index for to_csv / to_json."
+  required: [text]
+  additionalProperties: false
