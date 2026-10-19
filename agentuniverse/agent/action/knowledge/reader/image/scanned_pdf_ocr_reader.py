@@ -3,6 +3,7 @@
 
 # @Time    : 2025/9/29
 # @FileName: scanned_pdf_ocr_reader.py
+from contextlib import ExitStack
 from typing import List, Optional, Dict, Union
 from pathlib import Path
 
@@ -16,6 +17,9 @@ class ScannedPdfOCRReader(Reader):
     Strategy:
       1) Try to extract text with pypdf. If empty/None, fallback to OCR.
       2) OCR via PaddleOCR -> pytesseract -> easyocr.
+
+    Text extraction failures use OCR only for the affected page. Completed
+    pages are retained in order; OCR/rendering errors propagate without retries.
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
@@ -27,28 +31,32 @@ class ScannedPdfOCRReader(Reader):
 
         texts: List[str] = []
         engines: List[str] = []
-        try:
-            import pypdf  # type: ignore
-            print("debugging: ScannedPdfOCRReader using pypdf first")
-            with open(file, "rb") as fp:
+        with ExitStack() as stack:
+            try:
+                import pypdf  # type: ignore
+                print("debugging: ScannedPdfOCRReader using pypdf first")
+                fp = stack.enter_context(open(file, "rb"))
                 pdf = pypdf.PdfReader(fp)
-                for i, page in enumerate(pdf.pages):
-                    txt = page.extract_text() or ""
-                    if txt.strip():
-                        texts.append(txt)
-                        engines.append("pypdf")
-                    else:
-                        ocr_txt, ocr_engine = self._ocr_pdf_page(file, i)
-                        texts.append(ocr_txt)
-                        engines.append(ocr_engine)
-        except Exception as e:
-            print(f"debugging: ScannedPdfOCRReader pypdf failed: {e}")
-            # If pypdf fails, OCR every page
-            num_pages = self._count_pdf_pages(file)
+                num_pages = len(pdf.pages)
+            except Exception as e:
+                print(f"debugging: ScannedPdfOCRReader pypdf failed: {e}")
+                pdf = None
+                num_pages = self._count_pdf_pages(file)
+
             for i in range(num_pages):
-                ocr_txt, ocr_engine = self._ocr_pdf_page(file, i)
-                texts.append(ocr_txt)
-                engines.append(ocr_engine)
+                txt = ""
+                if pdf is not None:
+                    try:
+                        txt = pdf.pages[i].extract_text() or ""
+                    except Exception as e:
+                        print(f"debugging: ScannedPdfOCRReader page {i} extraction failed: {e}")
+                if txt.strip():
+                    texts.append(txt)
+                    engines.append("pypdf")
+                else:
+                    ocr_txt, ocr_engine = self._ocr_pdf_page(file, i)
+                    texts.append(ocr_txt)
+                    engines.append(ocr_engine)
 
         text_all = "\n\n".join(texts)
         engine_summary = ",".join(sorted(set(engines))) if engines else "unknown"
