@@ -239,6 +239,7 @@ class PGVectorStore(Store):
             )
 
     async def async_upsert_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Asynchronously insert the documents or update them by id together with their embeddings. Does nothing when documents is empty. Args: documents (list[Document]): The documents to persist. **kwargs: Unused options."""
         if not documents:
             return
         vectors = self._vectors_for_documents(documents)
@@ -255,27 +256,34 @@ class PGVectorStore(Store):
             )
 
     def insert_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Insert the documents, delegating to upsert_document. Args: documents (list[Document]): The documents to persist. **kwargs: Unused options."""
         self.upsert_document(documents, **kwargs)
 
     async def async_insert_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Asynchronously insert the documents, delegating to async_upsert_document. Args: documents (list[Document]): The documents to persist. **kwargs: Unused options."""
         await self.async_upsert_document(documents, **kwargs)
 
     def update_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Update the documents by id, delegating to upsert_document. Args: documents (list[Document]): The documents to update. **kwargs: Unused options."""
         self.upsert_document(documents, **kwargs)
 
     async def async_update_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Asynchronously update the documents by id, delegating to async_upsert_document. Args: documents (list[Document]): The documents to update. **kwargs: Unused options."""
         await self.async_upsert_document(documents, **kwargs)
 
     def delete_document(self, document_id: str, **kwargs: Any) -> None:
+        """Delete the document with the given id from the store. Args: document_id (str): The id of the document to delete. **kwargs: Unused options."""
         self._ensure_client().execute(f"DELETE FROM {self.table_name} WHERE id = %s", [str(document_id)])
 
     async def async_delete_document(self, document_id: str, **kwargs: Any) -> None:
+        """Asynchronously delete the document with the given id from the store. Args: document_id (str): The id of the document to delete. **kwargs: Unused options."""
         await (await self._ensure_async_client()).execute(
             f"DELETE FROM {self.table_name} WHERE id = %s", [str(document_id)]
         )
 
     @staticmethod
     def _rows_to_documents(rows: Any) -> list[Document]:
+        """Convert raw pgvector result rows into Document objects. Args: rows (Any): The rows returned by the query. Returns: list[Document]: The converted documents."""
         return [
             Document(
                 id=str(row[0]),
@@ -288,6 +296,7 @@ class PGVectorStore(Store):
 
     @staticmethod
     def _embedding_list(value: Any) -> list[float]:
+        """Convert a pgvector vector value into a plain list of floats, returning an empty list for None. Args: value (Any): The vector value returned by the driver. Returns: list[float]: The vector as a Python list."""
         if value is None:
             return []
         # Registered pgvector adapters return pgvector.Vector, which exposes
