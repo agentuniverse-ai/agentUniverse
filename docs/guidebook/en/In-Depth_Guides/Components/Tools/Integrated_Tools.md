@@ -634,3 +634,51 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Unicode Inspector Tool
+
+`UnicodeInspectorTool` is a "what is this character" inspection helper
+built purely on the Python standard library `unicodedata` module, with
+zero network access. It is aimed at agents that handle exotic text —
+debugging mojibake, detecting mixed scripts, or checking normalization.
+It offers three modes. `inspect` describes every character of a string
+(capped at the first 100 characters, the total count is always
+reported): each record carries the character, its codepoint as
+`U+XXXX`, its hex value, its Unicode name (`<unnamed>` for unassigned
+code points), its general category with a human-readable label (e.g.
+`Ll (Lowercase Letter)`), its bidirectional class, its East Asian
+width with the meaning of the `W` / `F` / `H` / `Na` / `A` / `N`
+classes documented, its NFD decomposition mapping (or `None`) and an
+`is_emoji_ish` flag that is true when the category is `So` (Other
+Symbol — where plain-text emoji live). `string_stats` summarizes the
+script mix with a codepoint-range / category heuristic (counts for
+Latin, CJK, Hangul, Kana, Cyrillic, Greek, Arabic, Hebrew, digits,
+punctuation, symbols and whitespace, plus a catch-all `other` bucket so
+the counts always sum to the total), and reports the NFKC-normalized
+form together with the length in all three metrics that matter: code
+points, UTF-8 bytes and UTF-16 code units. `normalize` applies one of
+the NFC / NFD / NFKC / NFKD forms and returns the normalized string, a
+changed flag and the positions of the original string that changed
+(capped at 100).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.unicode_inspector_tool import UnicodeInspectorTool
+
+tool = UnicodeInspectorTool()
+records = tool.execute(mode="inspect", text="a中😀")["characters"]
+stats = tool.execute(mode="string_stats", text="Hello, 世界! 123 안녕")
+nfd = tool.execute(mode="normalize", text="café", form="NFD")
+```
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, empty text, unknown mode or form, text over
+100,000 characters) raise a `ValueError`. The script buckets of the
+`string_stats` mode are a heuristic: whitespace is detected first
+(`str.isspace`), then the script codepoint ranges, then the general
+categories (`Nd` digits, `P*` punctuation, `S*` symbols); marks,
+control and format characters fall into the `other` bucket, and
+non-ASCII digits such as Arabic-Indic digits count as their script
+rather than as digits. Character properties come from the Python
+`unicodedata` database of the running interpreter, so a property may
+shift when the database is updated by a Python upgrade; within one
+interpreter all outputs are deterministic.
