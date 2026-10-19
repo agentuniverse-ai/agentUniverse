@@ -9,12 +9,16 @@
 import os
 import json
 import asyncio
+import tempfile
+from datetime import datetime, timezone
+from zipfile import ZIP_DEFLATED, ZipFile
 from typing import Optional, List, Dict, Any, Union
 from enum import Enum
 from dataclasses import dataclass
 from pydantic import Field
 
 from agentuniverse.agent.action.tool.tool import Tool
+from agentuniverse.agent.action.tool.common_tool.file_path_utils import atomic_publish_file
 from agentuniverse.base.annotation.retry import retry
 from agentuniverse.base.util.logging.logging_util import LOGGER
 
@@ -190,6 +194,29 @@ class ExcelTool(Tool):
                 "file_path": file_path
             }
 
+    @staticmethod
+    def _save_workbook(workbook, file_path: str, overwrite: bool = True) -> None:
+        """Publish a fully serialized workbook without truncating the destination."""
+        from openpyxl.writer.excel import ExcelWriter
+
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w+b", prefix=".excel-", suffix=".xlsx",
+                dir=os.path.dirname(os.path.abspath(file_path)), delete=False,
+            ) as temporary:
+                temporary_path = temporary.name
+                # Match openpyxl's save_workbook, with archive ownership so a
+                # serialization error closes the ZIP before its backing file.
+                workbook.properties.modified = datetime.now(timezone.utc).replace(tzinfo=None)
+                with ZipFile(temporary, "w", ZIP_DEFLATED, allowZip64=True) as archive:
+                    ExcelWriter(workbook, archive).save()
+            atomic_publish_file(temporary_path, file_path, overwrite=overwrite)
+        finally:
+            workbook.close()
+            if temporary_path and os.path.exists(temporary_path):
+                os.unlink(temporary_path)
+
     @retry(3, 1.0)
     def _write_excel(self, file_path: str, data: List[List[Any]],
                     sheet_name: str = "Sheet1", overwrite: bool = False) -> Dict[str, Any]:
@@ -237,8 +264,7 @@ class ExcelTool(Tool):
                 for cell in sheet[1]:
                     cell.font = openpyxl.styles.Font(bold=True)
 
-            workbook.save(file_path)
-            workbook.close()
+            self._save_workbook(workbook, file_path, overwrite=overwrite)
 
             file_size = os.path.getsize(file_path)
 
@@ -306,8 +332,7 @@ class ExcelTool(Tool):
             for row_data in data:
                 sheet.append(row_data)
 
-            workbook.save(file_path)
-            workbook.close()
+            self._save_workbook(workbook, file_path)
 
             file_size = os.path.getsize(file_path)
 
