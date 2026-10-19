@@ -89,6 +89,18 @@ class PhoneFormatToolFormatTest(unittest.TestCase):
         )
         self.assertEqual(result["result"], "+49301234567")
 
+    def test_national_zero_stripped_for_fr(self) -> None:
+        result = self.tool.execute(
+            mode="format", phone="01 42 68 53 00", default_region="FR"
+        )
+        self.assertEqual(result["result"], "+33142685300")
+
+    def test_national_zero_stripped_for_cn_beijing(self) -> None:
+        result = self.tool.execute(
+            mode="format", phone="010-1234 5678", default_region="CN"
+        )
+        self.assertEqual(result["result"], "+861012345678")
+
     def test_russian_trunk_is_eight_not_zero(self) -> None:
         result = self.tool.execute(
             mode="format", phone="8 495 123-45-67", default_region="RU"
@@ -157,6 +169,29 @@ class PhoneFormatToolFormatTest(unittest.TestCase):
     def test_nanp_international_nine_digits_rejected(self) -> None:
         result = self.tool.execute(mode="format", phone="+1 315 555 267")
         self.assertEqual(result["error"]["type"], "invalid_nanp")
+
+    def test_nanp_area_code_starting_zero_or_one_rejected(self) -> None:
+        # Classic NANP numbering: area codes (NPA) start with 2-9, so
+        # 915 (as in +1 915 …) stays valid while 015/115 are not.
+        for bad in ("+10155552671", "+11155552671"):
+            with self.subTest(bad=bad):
+                result = self.tool.execute(mode="format", phone=bad)
+                self.assertEqual(result["error"]["type"], "invalid_nanp")
+                self.assertIn("area and exchange codes", result["error"]["message"])
+        good = self.tool.execute(mode="format", phone="+19155552671")
+        self.assertEqual(good["result"], "+19155552671")
+
+    def test_nanp_exchange_code_starting_zero_or_one_rejected(self) -> None:
+        # Exchange codes (NXX) start with 2-9 as well.
+        for bad in ("+14150552671", "+14151552671"):
+            with self.subTest(bad=bad):
+                result = self.tool.execute(mode="format", phone=bad)
+                self.assertEqual(result["error"]["type"], "invalid_nanp")
+
+    def test_nanp_valid_area_and_exchange_accepted(self) -> None:
+        # Toll-free 800 NPA and a 555 NXX are both structurally valid.
+        result = self.tool.execute(mode="format", phone="+1 800 555 0199")
+        self.assertEqual(result["result"], "+18005550199")
 
     def test_seven_digit_lower_bound_accepted(self) -> None:
         # Not '+1'-lead: a +1 number must be exactly 11 digits (NANP).
@@ -306,6 +341,14 @@ class PhoneFormatToolClassifyTest(unittest.TestCase):
         result = self.tool.execute(mode="classify", phone="+16715551234")
         self.assertEqual(result["region_guess"], "GU")
 
+    def test_dominican_republic_nanp_codes(self) -> None:
+        # +1-809/829/849 are the Dominican Republic, not US/CA.
+        for raw in ("+18095551234", "+18295551234", "+18495551234"):
+            with self.subTest(raw=raw):
+                result = self.tool.execute(mode="classify", phone=raw)
+                self.assertEqual(result["region_guess"], "DO")
+                self.assertEqual(result["matched_prefix"], raw[1:5])
+
     def test_cn(self) -> None:
         result = self.tool.execute(mode="classify", phone="+8613812345678")
         self.assertEqual(result["region_guess"], "CN")
@@ -406,6 +449,53 @@ class PhoneFormatToolExtractTest(unittest.TestCase):
             mode="extract", text="Office: 415-555-2671, ask for Bob."
         )
         self.assertEqual(result["result"], ["+14155552671"])
+
+    def test_extract_nanp_with_leading_one_not_mistaken_for_cn(self) -> None:
+        # '1-415-555-2671' is the NANP form with the leading 1: an
+        # 11-digit 1[3-9] run WITH separators must resolve to US, not
+        # be shape-guessed as a China mobile and prefixed with +86.
+        result = self.tool.execute(
+            mode="extract", text="Dial 1-415-555-2671 after hours"
+        )
+        self.assertEqual(result["result"], ["+14155552671"])
+        self.assertEqual(result["phones"][0]["region"], "US")
+
+    def test_extract_international_with_wide_final_group(self) -> None:
+        # Subscriber blocks are often written unpunctuated behind a
+        # separated country code ('+49 30 1234567').
+        result = self.tool.execute(
+            mode="extract", text="Office: +49 30 1234567"
+        )
+        self.assertEqual(result["result"], ["+49301234567"])
+
+    def test_extract_national_with_wide_final_group_and_region(self) -> None:
+        result = self.tool.execute(
+            mode="extract", text="switchboard 030 1234567", default_region="DE"
+        )
+        self.assertEqual(result["result"], ["+49301234567"])
+
+    def test_extract_tools_own_display_form_round_trips(self) -> None:
+        # The display output of the format mode ('+44 2079460958')
+        # must itself be extractable back to the same E.164 number.
+        displayed = self.tool.execute(
+            mode="format", phone="020 7946 0958", default_region="GB",
+            output="display",
+        )["result"]
+        result = self.tool.execute(
+            mode="extract", text=f"reach me at {displayed} please"
+        )
+        self.assertEqual(result["result"], ["+442079460958"])
+
+    def test_extract_separator_shaped_cn_mobile_resolved_by_leading_group(self) -> None:
+        # '138 1234 5678' is digit-identical to an 11-digit NANP form,
+        # but its leading group is the 3-digit '13x'-'19x' China-mobile
+        # prefix (a NANP country-code 1 stands as a lone group), so it
+        # shape-implies CN even though it carries separators.
+        result = self.tool.execute(
+            mode="extract", text="call 138 1234 5678 today"
+        )
+        self.assertEqual(result["result"], ["+8613812345678"])
+        self.assertEqual(result["phones"][0]["region"], "CN")
 
     def test_extract_with_default_region(self) -> None:
         result = self.tool.execute(

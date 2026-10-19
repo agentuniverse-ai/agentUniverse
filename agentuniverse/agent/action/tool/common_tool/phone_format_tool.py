@@ -46,7 +46,9 @@ Supported modes:
      with the region's dial code, it is not prepended twice.
      The dial code is then prepended.
   5. ``+1`` (NANP) numbers must carry exactly 10 digits after the
-     code — the one region-specific rule enforced beyond length.
+     code, and both the area code (NPA) and the exchange code (NXX)
+     must start with 2-9 (the classic ``[2-9]XX`` rule) — the one
+     region-specific family of rules enforced beyond length.
 
 * ``classify`` — inspect an already-international number
   (``+``/``00`` form only): region guess from the table via
@@ -64,9 +66,13 @@ Supported modes:
   guarded against dates (``2023-01-15``, ``01/15/2023``) and
   arithmetic context (``3 +86 …``, ``= 44 123 456 7890``).  Bare
   candidates are formatted with ``default_region`` when given,
-  otherwise with the shape-implied region (China mobile → ``CN``,
-  NANP shapes → ``US``); candidates that cannot be resolved are
-  returned per-item as structured errors.  Loose separated digit
+  otherwise with the shape-implied region: a contiguous 11-digit
+  ``1[3-9]…`` run or a separated span whose leading group is the
+  3-digit ``13x``-``19x`` prefix implies China mobile, while other
+  10-digit or ``1``-prefixed 11-digit spans imply the NANP ``US``
+  default (so ``1-415-555-2671`` is never mistaken for a CN number,
+  and vice versa); candidates that cannot be resolved are returned
+  per-item as structured errors.  Loose separated digit
   runs that are neither dates nor arithmetic may still surface
   (order numbers, amounts) — extraction is deliberately
   conservative-but-not-exact and reports what it formatted.
@@ -74,7 +80,8 @@ Supported modes:
 Honest-subset notes (what this tool does NOT do): no per-number
 type assignment beyond the documented China-mobile heuristic, no
 libphonenumber metadata (validity is the loose 7-15 digit bound
-plus the NANP 10-digit rule), no extension suffixes (``x123``),
+plus the NANP 10-digit / leading-2-9 rules), no extension suffixes
+(``x123``),
 and no carrier/line-type lookups.  National trunk prefixes are a
 single table column: real-world exceptions (Italian mobiles carry
 no trunk ``0`` in E.164, Mexico removed its ``01`` trunk in 2019,
@@ -114,6 +121,10 @@ _CN_MOBILE_RE = re.compile(r"\A1[3-9]\d{9}\Z")
 # ITU-T E.164 loose digit-count bounds (country code included).
 _MIN_DIGITS = 7
 _MAX_DIGITS = 15
+
+# NANP numbering rule: both the area code (NPA) and the exchange
+# code (NXX) must start with 2-9 — codes starting 0/1 are reserved.
+_NANP_FIRST_DIGITS = frozenset("23456789")
 
 
 class PhoneFormatTool(Tool):
@@ -192,6 +203,9 @@ class PhoneFormatTool(Tool):
         "1473": "GD",   # Grenada
         "1671": "GU",   # Guam
         "1876": "JM",   # Jamaica
+        "1809": "DO",   # Dominican Republic (overlays 1829/1849 share it)
+        "1829": "DO",
+        "1849": "DO",
         "1664": "MS",   # Montserrat
         "1787": "PR",   # Puerto Rico (overlay 1939 shares the region)
         "1939": "PR",
@@ -211,8 +225,11 @@ class PhoneFormatTool(Tool):
     # Candidate shapes for the extract mode (PIIReporter family)
     # ------------------------------------------------------------------ #
     _EXTRACT_RES: ClassVar[list] = [
-        # International with explicit country code and separators.
-        re.compile(r"\+\d{1,3}[\s.-]\d{2,4}(?:[\s.-]\d{2,4}){1,5}(?!\d)"),
+        # International with explicit country code and separators. The
+        # final group may be one wide unpunctuated subscriber block
+        # (e.g. the tool's own display form '+44 2079460958'), so any
+        # group after the dial code may run beyond the classic 2-4.
+        re.compile(r"\+\d{1,3}(?:[\s.-]\d{1,14}){1,6}(?!\d)"),
         # International contiguous (11-15 digits).
         re.compile(r"\+\d{11,15}(?!\d)"),
         # China mobile run.
@@ -222,8 +239,9 @@ class PhoneFormatTool(Tool):
         # North-American 3-3-4 with separators, optional leading 1-.
         re.compile(r"(?<![\d(])(?:1[\s.-])?\d{3}[\s.-]\d{3}[\s.-]\d{4}(?!\d)"),
         # General separated digit run (7-15 digits after stripping),
-        # with optional international + or 00 prefix.
-        re.compile(r"(?<!\d)(?:\+|00)?\d{1,4}(?:[ .-]\d{1,4})+(?!\d)"),
+        # with optional international + or 00 prefix; the final group
+        # may be a wide unpunctuated block ('030 1234567').
+        re.compile(r"(?<!\d)(?:\+|00)?\d{1,4}(?:[ .-]\d{1,4}){0,5}[ .-]\d{1,14}(?!\d)"),
     ]
 
     # Guards against calendar and arithmetic context (PIIReporter family).
@@ -379,12 +397,6 @@ class PhoneFormatTool(Tool):
             return None
         return digits, had_plus, had_double_zero
 
-    @staticmethod
-    def _digits_from_raw(raw: str) -> tuple:
-        """Digit parts of an extracted candidate span: ``(digits, had_plus)``."""
-        had_plus = raw.startswith("+")
-        return raw.replace("+", "").strip(), had_plus
-
     def _region_entry(self, region: str) -> dict:
         """Table entry for a two-letter region code, or ``None``."""
         for code, entry in self.DIAL_CODES.items():
@@ -479,6 +491,24 @@ class PhoneFormatTool(Tool):
                     f"the code (got {len(intl) - 1}: +{intl})"
                 ),
             )
+        if intl.startswith("1"):
+            # Classic NANP numbering: both the area code (NPA) and the
+            # exchange code (NXX) start with 2-9; leading 0/1 is
+            # reserved and never valid in an assigned number.
+            area_code, exchange_code = intl[1:4], intl[4:7]
+            if (
+                area_code[0] not in _NANP_FIRST_DIGITS
+                or exchange_code[0] not in _NANP_FIRST_DIGITS
+            ):
+                return self._error_result(
+                    context,
+                    error_type="invalid_nanp",
+                    message=(
+                        "+1 (NANP) area and exchange codes must start with "
+                        f"2-9 (got area code {area_code!r} and exchange "
+                        f"{exchange_code!r} in +{intl})"
+                    ),
+                )
 
         e164 = "+" + intl
         if output == "display":
@@ -660,7 +690,17 @@ class PhoneFormatTool(Tool):
             for char in _SEPARATORS:
                 stripped = stripped.replace(char, "")
             if not candidate_region:
-                if _CN_MOBILE_RE.match(stripped):
+                first_group = re.match(r"\d{1,4}", raw)
+                first_group_len = len(first_group.group(0)) if first_group else 0
+                if _CN_MOBILE_RE.match(stripped) and (
+                    stripped == raw or first_group_len == 3
+                ):
+                    # China-mobile shape: a contiguous 11-digit run, or
+                    # a separated span whose leading group is the
+                    # 3-digit '13x'-'19x' prefix ('138 1234 5678'). A
+                    # NANP form like '1-415-555-2671' carries its
+                    # leading 1 as a lone group and is not mistaken
+                    # for one.
                     candidate_region = "CN"  # shape-implied
                 elif len(stripped) == 10 or (
                     len(stripped) == 11 and stripped.startswith("1")
