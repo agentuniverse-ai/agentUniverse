@@ -22,14 +22,15 @@ comments and processing instructions are ignored by the parser.
 XML from untrusted sources is hostile input, so parsing is guarded:
 
 * any ``<!DOCTYPE`` or ``<!ENTITY`` declaration is rejected *before*
-  parsing — this closes both XXE (external entity resolution) and
+  parsing; a parser-level guard also rejects DTDs in UTF-16 and other
+  supported encodings — this closes both XXE (external entity resolution) and
   entity-expansion bombs ("billion laughs") deterministically, at the
   cost of refusing DTD-bearing documents (a deliberate trade for a
   knowledge-ingestion reader: data exports do not need DTDs);
 * ``max_file_bytes`` (default 10 MiB) is enforced via ``stat`` before
   reading a path and via a bounded read for file-like objects;
 * ``max_depth`` (default 64) rejects pathologically nested documents
-  before recursion approaches the interpreter limit.
+  while parsing, before an oversized tree is built.
 
 Malformed XML and bound violations raise ``ValueError`` (same convention
 as the other file readers); wrong configuration types fail loudly at
@@ -65,6 +66,29 @@ def _local_name(tag: Any) -> str:
 def _collapse(text: str | None) -> str:
     """Normalize whitespace runs; empty when nothing meaningful is left."""
     return " ".join((text or "").split())
+
+
+class _GuardedTreeBuilder(ET.TreeBuilder):
+    """Reject DTDs and excessive depth during parsing, for every encoding."""
+
+    def __init__(self, max_depth: int) -> None:
+        super().__init__()
+        self.max_depth = max_depth
+        self.depth = 0
+
+    def doctype(self, name, pubid, system) -> None:
+        raise ValueError("XML contains a DTD/ENTITY declaration; refusing to parse (XXE and entity-expansion guard).")
+
+    def start(self, tag, attrs):
+        self.depth += 1
+        if self.depth > self.max_depth:
+            raise ValueError(f"XML nesting exceeds max_depth={self.max_depth}; refusing to parse.")
+        return super().start(tag, attrs)
+
+    def end(self, tag):
+        element = super().end(tag)
+        self.depth -= 1
+        return element
 
 
 class _WalkState:
@@ -112,7 +136,8 @@ class XmlReader(Reader):
         raw, file_name = self._read_bytes(file)
         self._reject_dtd(raw, file_name)
         try:
-            root = ET.parse(BytesIO(raw)).getroot()
+            parser = ET.XMLParser(target=_GuardedTreeBuilder(self.max_depth))
+            root = ET.parse(BytesIO(raw), parser=parser).getroot()
         except ET.ParseError as e:
             raise ValueError(f"Failed to parse XML file {file_name}: {e}") from e
         lines: list[str] = []

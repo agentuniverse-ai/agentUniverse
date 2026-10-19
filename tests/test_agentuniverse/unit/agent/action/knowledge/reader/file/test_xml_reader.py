@@ -156,6 +156,23 @@ class TestXmlSafety(unittest.TestCase):
             with self.assertRaises(ValueError):
                 _read(path)
 
+    def test_utf16_dtd_rejected_before_entity_expansion(self) -> None:
+        xml = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE r [<!ENTITY a "expanded">]><r>&a;</r>'
+        for encoding in ("utf-16", "utf-16-le", "utf-16-be"):
+            with self.subTest(encoding=encoding), self.assertRaisesRegex(ValueError, "DTD/ENTITY"):
+                XmlReader().load_data(file=io.BytesIO(xml.encode(encoding)))
+
+    def test_utf16_without_dtd_is_supported(self) -> None:
+        raw = '<?xml version="1.0" encoding="UTF-16"?><root>安全</root>'.encode("utf-16")
+        self.assertEqual(XmlReader().load_data(file=io.BytesIO(raw))[0].text, "root: 安全")
+
+    def test_depth_bound_checked_before_malformed_tail(self) -> None:
+        # Abort as soon as nesting crosses the limit, before parsing the
+        # remainder or constructing an entire hostile tree.
+        raw = ("<a>" * 6 + "<broken").encode()
+        with self.assertRaisesRegex(ValueError, "max_depth"):
+            XmlReader(max_depth=5).load_data(file=io.BytesIO(raw))
+
     def test_external_entity_dtd_rejected(self) -> None:
         xml = '<!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]>' "<r>&x;</r>"
         with tempfile.TemporaryDirectory() as tmp:
