@@ -27,6 +27,7 @@ _YAML_PATH = os.path.join(os.path.dirname(mmr_module.__file__),
 
 
 def _doc(name: str, embedding) -> Document:
+    """Build a Document with the given text and embedding vector."""
     return Document(text=name, embedding=list(embedding))
 
 
@@ -44,27 +45,33 @@ class TestMMRSelection(unittest.TestCase):
     """Greedy MMR selection over pre-supplied embeddings."""
 
     def setUp(self) -> None:
+        """Create a query whose embeddings point along the x-axis."""
         self.query = Query(query_str="q", embeddings=[_Q])
 
     def _run(self, docs, **kwargs):
+        """Run an MMRProcessor over docs with the query and given kwargs."""
         proc = MMRProcessor(**kwargs)
         return proc.process_docs(docs, self.query)
 
     def test_empty_input_returns_empty(self) -> None:
+        """Empty input yields an empty output list."""
         self.assertEqual(self._run([]), [])
 
     def test_non_positive_top_n_returns_empty(self) -> None:
+        """Zero or negative top_n yields an empty output list."""
         docs = [_doc("d1", _D1)]
         self.assertEqual(self._run(docs, top_n=0), [])
         self.assertEqual(self._run(docs, top_n=-3), [])
 
     def test_pure_relevance_when_lambda_is_one(self) -> None:
+        """lambda=1 orders strictly by query relevance (d1 > d2 > d3)."""
         # lambda=1 ignores diversity: output is relevance order d1 > d2 > d3.
         out = self._run([_doc("d1", _D1), _doc("d2", _D2), _doc("d3", _D3)],
                         lambda_coef=1.0)
         self.assertEqual([d.text for d in out], ["d1", "d2", "d3"])
 
     def test_diversity_when_lambda_is_zero(self) -> None:
+        """lambda=0 maximises diversity, preferring the orthogonal d3 to d2."""
         # lambda=0 maximises diversity: after the most relevant d1, the
         # orthogonal d3 is preferred over the redundant d2.
         out = self._run([_doc("d1", _D1), _doc("d2", _D2), _doc("d3", _D3)],
@@ -72,11 +79,13 @@ class TestMMRSelection(unittest.TestCase):
         self.assertEqual([d.text for d in out], ["d1", "d3", "d2"])
 
     def test_top_n_truncates_after_reranking(self) -> None:
+        """top_n limits the number of reranked output docs."""
         out = self._run([_doc("d1", _D1), _doc("d2", _D2), _doc("d3", _D3)],
                         lambda_coef=1.0, top_n=2)
         self.assertEqual([d.text for d in out], ["d1", "d2"])
 
     def test_most_relevant_first_regardless_of_lambda(self) -> None:
+        """The first MMR pick is always the most query-relevant document."""
         # The first MMR pick is always the most query-relevant document.
         for lam in (0.0, 0.25, 0.5, 0.75, 1.0):
             out = self._run([_doc("d2", _D2), _doc("d1", _D1), _doc("d3", _D3)],
@@ -84,11 +93,13 @@ class TestMMRSelection(unittest.TestCase):
             self.assertEqual(out[0].text, "d1", f"lambda={lam}")
 
     def test_top_n_larger_than_input_keeps_all(self) -> None:
+        """A top_n larger than the input keeps every document."""
         out = self._run([_doc("d1", _D1), _doc("d2", _D2)],
                         lambda_coef=1.0, top_n=10)
         self.assertEqual(len(out), 2)
 
     def test_score_key_stamps_cosine_relevance(self) -> None:
+        """score_key stamps each output doc with its cosine relevance."""
         out = self._run([_doc("d1", _D1), _doc("d2", _D2), _doc("d3", _D3)],
                         lambda_coef=1.0, score_key="mmr_score")
         scores = {d.text: d.metadata["mmr_score"] for d in out}
@@ -97,6 +108,7 @@ class TestMMRSelection(unittest.TestCase):
         self.assertAlmostEqual(scores["d3"], 0.0)
 
     def test_no_score_key_leaves_metadata_clean(self) -> None:
+        """Without score_key no score is stamped into output metadata."""
         out = self._run([_doc("d1", _D1)], lambda_coef=1.0)
         self.assertNotIn("mmr_score", out[0].metadata or {})
 
@@ -105,6 +117,7 @@ class TestMMREmbeddingResolution(unittest.TestCase):
     """Embedding acquisition and graceful fallback."""
 
     def test_uses_query_embeddings_directly(self) -> None:
+        """Precomputed query embeddings are used without EmbeddingManager."""
         # Query.embeddings[0] is used; no EmbeddingManager call is made.
         query = Query(query_str="q", embeddings=[_Q])
         with patch.object(mmr_module, "EmbeddingManager") as emb_mgr:
@@ -114,12 +127,14 @@ class TestMMREmbeddingResolution(unittest.TestCase):
         self.assertEqual([d.text for d in out], ["d1", "d2"])
 
     def test_missing_embeddings_without_model_falls_back(self) -> None:
+        """No embeddings and no embedding_name degrades to input order."""
         # No embeddings anywhere and no embedding_name -> input order preserved.
         docs = [Document(text="a"), Document(text="b")]
         out = MMRProcessor().process_docs(docs, Query(query_str="q"))
         self.assertEqual([d.text for d in out], ["a", "b"])
 
     def test_partial_embeddings_without_model_falls_back(self) -> None:
+        """Missing doc embeddings and no model degrades to input order."""
         # One doc has an embedding, the other does not, and there is no model to
         # fill the gap -> safe fallback to input order.
         docs = [_doc("d1", _D1), Document(text="d2")]
@@ -128,6 +143,7 @@ class TestMMREmbeddingResolution(unittest.TestCase):
         self.assertEqual([d.text for d in out], ["d1", "d2"])
 
     def test_embedding_name_computes_missing_embeddings(self) -> None:
+        """embedding_name drives EmbeddingManager to fill missing embeddings."""
         # Docs lack embeddings; embedding_name drives an EmbeddingManager call
         # that supplies them, so MMR runs and ranks by relevance.
         docs = [Document(text="d1"), Document(text="d2"), Document(text="d3")]
@@ -145,6 +161,7 @@ class TestMMREmbeddingResolution(unittest.TestCase):
         self.assertEqual([d.text for d in out], ["d1", "d2", "d3"])
 
     def test_embedding_lookup_failure_falls_back(self) -> None:
+        """An EmbeddingManager lookup failure degrades to input order."""
         with patch.object(mmr_module, "EmbeddingManager") as emb_mgr:
             emb_mgr.return_value.get_instance_obj.side_effect = RuntimeError(
                 "no model")
@@ -162,10 +179,12 @@ class TestMMREmbeddingHomogeneity(unittest.TestCase):
     """
 
     def test_cosine_rejects_mismatched_dimensions(self) -> None:
+        """_cosine raises ValueError on vectors of differing dimensions."""
         with self.assertRaises(ValueError):
             MMRProcessor._cosine([1.0, 0.0], [1.0, 0.0, 0.0])
 
     def test_mixed_document_dimensions_degrade_to_input_order(self) -> None:
+        """Mixed-dimension doc vectors degrade to input order, not truncation."""
         # Documents carry vectors of different dimensions (e.g. from stores
         # backed by different models). Without a model to homogenise them, MMR
         # must not silently truncate and rank; it degrades to input order.
@@ -175,6 +194,7 @@ class TestMMREmbeddingHomogeneity(unittest.TestCase):
         self.assertEqual([d.text for d in out], ["d1", "d2"])
 
     def test_query_document_dimension_mismatch_degrades_to_input_order(self) -> None:
+        """A mismatched query vector dimension degrades to input order."""
         # Even with equal document dimensions, a query vector of a different
         # dimension cannot be compared meaningfully.
         docs = [_doc("d1", _D1), _doc("d2", _D2)]            # dim 2
@@ -183,6 +203,7 @@ class TestMMREmbeddingHomogeneity(unittest.TestCase):
         self.assertEqual([d.text for d in out], ["d1", "d2"])
 
     def test_embedding_name_recomputes_all_ignoring_precomputed(self) -> None:
+        """embedding_name recomputes every vector in one homogeneous space."""
         # Docs carry precomputed vectors from DIFFERENT models/dimensions. With
         # embedding_name set, every embedding is recomputed with that one model,
         # the heterogeneous precomputed vectors are ignored, and MMR produces a
@@ -211,6 +232,7 @@ class TestMMREmbeddingHomogeneity(unittest.TestCase):
         self.assertEqual(list(docs[2].embedding), _D3)
 
     def test_embedding_name_rejects_precomputed_query_without_query_str(self) -> None:
+        """A foreign precomputed query vector is rejected, degrading to order."""
         # Regression: when embedding_name is configured but the query carries
         # only a precomputed vector (no query_str), the query's provenance is
         # unverifiable. Even if the precomputed vector has the SAME dimension as
@@ -243,11 +265,13 @@ class TestMMRConfig(unittest.TestCase):
     """Initialization and configuration."""
 
     def test_invalid_lambda_raises(self) -> None:
+        """A lambda coefficient outside [0, 1] raises a ValueError."""
         configer = SimpleNamespace(name="mmr", description="d", lambda_coef=1.5)
         with self.assertRaises(ValueError):
             MMRProcessor()._initialize_by_component_configer(configer)
 
     def test_attributes_loaded_from_configer(self) -> None:
+        """Component config values populate the MMRProcessor attributes."""
         configer = SimpleNamespace(
             name="mmr", description="d",
             lambda_coef=0.3, top_n=4, embedding_name="emb", score_key="s")
@@ -262,6 +286,7 @@ class TestMMRRegistration(unittest.TestCase):
     """The shipped yaml resolves through the real framework loader."""
 
     def test_yaml_resolves_to_doc_processor_type(self) -> None:
+        """The shipped yaml registers as a DOC_PROCESSOR component type."""
         configer = Configer(path=os.path.abspath(_YAML_PATH)).load()
         component_configer = ComponentConfiger().load_by_configer(configer)
         self.assertEqual(
@@ -269,6 +294,7 @@ class TestMMRRegistration(unittest.TestCase):
             ComponentEnum.DOC_PROCESSOR.value)
 
     def test_yaml_exposes_module_and_class(self) -> None:
+        """The shipped yaml points at the MMRProcessor class."""
         configer = Configer(path=os.path.abspath(_YAML_PATH)).load()
         component_configer = ComponentConfiger().load_by_configer(configer)
         self.assertEqual(
@@ -281,16 +307,21 @@ class TestMMRThroughKnowledgePipeline(unittest.TestCase):
     """MMR runs as a real post_processor through Knowledge.query_knowledge."""
 
     def test_mmr_reranks_in_the_pipeline(self) -> None:
+        """MMR reranks store results as a post_processor in query_knowledge."""
         from agentuniverse.agent.action.knowledge import knowledge as \
             knowledge_module
         from agentuniverse.agent.action.knowledge.knowledge import Knowledge
         import agentuniverse.base.annotation.trace as trace_module
 
         class _FakeStore:
+            """Store double holding docs and serving fresh copies on query."""
+
             def __init__(self, docs):
+                """Store the given documents for later queries."""
                 self._docs = docs
 
             def query(self, query):
+                """Return fresh copies preserving text, embeddings, metadata."""
                 # Fresh copies, preserving the hand-crafted embeddings.
                 return [Document(text=d.text, embedding=list(d.embedding),
                                  metadata=dict(d.metadata or {}))

@@ -145,6 +145,8 @@ class Tool(ComponentBase):
             parse react string to you input
             you can define your own logic here by override this function
         """
+        if not self.input_keys:
+            return {}
         return {
             self.input_keys[0]: input_str
         }
