@@ -53,7 +53,8 @@ def parse_dynamic_str(param: str):
         return param
 
 
-def get_module_path(yaml_path: str, root_name: str) -> str:
+def get_module_path(yaml_path: str, root_name: str,
+                    root_path: str | Path | None = None) -> str:
     """
     Convert a YAML file path to its corresponding Python module path.
     This function takes a YAML file path and a root package name, and returns the full Python module path.
@@ -63,6 +64,8 @@ def get_module_path(yaml_path: str, root_name: str) -> str:
     Args:
         yaml_path: The full path to the YAML file
         root_name: The name of the root package that serves as the starting point for the module path
+        root_path: The exact project directory, when known. This avoids ambiguity
+            if an ancestor or a nested package has the same name as root_name.
 
     Returns:
         str: The full Python module path corresponding to the YAML file location
@@ -82,6 +85,15 @@ def get_module_path(yaml_path: str, root_name: str) -> str:
 
     # Get the absolute path of the directory and split it into components
     abs_dir_path = os.path.abspath(dir_path)
+    if root_path is not None:
+        try:
+            relevant_dirs = Path(abs_dir_path).relative_to(
+                Path(os.path.abspath(root_path))).parts
+        except ValueError as e:
+            raise FileNotFoundError(
+                f"YAML file is outside the project root: {yaml_path}") from e
+        return ".".join([root_name, *relevant_dirs, file_name])
+
     path_parts = abs_dir_path.split(os.sep)
 
     try:
