@@ -60,7 +60,10 @@ class Toolkit(ComponentBase):
             Toolkit: the Toolkit object
         """
         try:
-            for key, value in component_configer.configer.value.items():
+            config_value = getattr(component_configer.configer, "value", {})
+            if not isinstance(config_value, dict):
+                config_value = {}
+            for key, value in config_value.items():
                 if key != 'metadata':
                     setattr(self, key, value)
         except Exception as e:
