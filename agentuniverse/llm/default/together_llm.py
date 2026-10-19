@@ -26,7 +26,7 @@ from typing import Any, AsyncIterator, Iterator, Optional, Union
 import tiktoken
 from pydantic import Field
 
-from agentuniverse.base.annotation.trace import trace_llm
+from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
@@ -129,6 +129,40 @@ class TogetherLLM(OpenAIStyleLLM):
             iterator of :class:`LLMOutput` chunks when ``stream=True``.
         """
         return await super()._acall(messages, **kwargs)
+
+    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'TogetherLLM':
+        """Initialize the component from YAML, guarding unset ``${VAR}`` placeholders.
+
+        YAML ``${VAR}`` placeholders resolve to an empty string when the
+        environment variable is unset, so a copied ``together_llm.yaml.example``
+        with a missing ``TOGETHER_API_KEY`` / ``TOGETHER_PROXY`` would
+        otherwise assign ``''`` over the class defaults. That is worse than it
+        sounds: the OpenAI client only rejects a *missing* key, so an empty key
+        is silently sent upstream and surfaces as an opaque 401, and an empty
+        ``api_base`` makes the client fall back to
+        ``https://api.openai.com/v1`` — sending Together credentials to the
+        wrong endpoint. Normalizing the empty values here makes an unset
+        variable behave exactly like an omitted key: ``api_key`` /
+        ``proxy`` / ``organization`` fall back to ``None`` and ``api_base`` to
+        the Together endpoint.
+
+        Args:
+            component_configer (LLMConfiger): the LLM component configer.
+
+        Returns:
+            TogetherLLM: the initialized instance.
+        """
+        super().initialize_by_component_configer(component_configer)
+        if not self.api_key:
+            self.api_key = None
+        if not self.api_base:
+            self.api_base = get_from_env("TOGETHER_API_BASE") or \
+                "https://api.together.xyz/v1"
+        if not self.proxy:
+            self.proxy = None
+        if not self.organization:
+            self.organization = None
+        return self
 
     def max_context_length(self) -> int:
         """Return the maximum context length for the configured Together model.
