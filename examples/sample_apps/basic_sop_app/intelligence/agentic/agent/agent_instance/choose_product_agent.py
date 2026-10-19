@@ -15,6 +15,11 @@ from langchain_core.utils.json import parse_json_markdown
 
 
 class ChooseProductAgent(AgentTemplate):
+    """Agent template that picks the best-matching product for the user.
+
+    It evaluates the user requirement together with the candidate product
+    descriptions and returns the chosen product list with a reason.
+    """
 
     def input_keys(self) -> list[str]:
         """Return the input keys of the Agent."""
@@ -56,6 +61,15 @@ class ChooseProductAgent(AgentTemplate):
         return final_result
 
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
+        """Build the chat prompt for choosing the product.
+
+        Args:
+            agent_input (dict): agent input, which may carry an expert
+                framework and image urls.
+            **kwargs: additional agent execution arguments.
+        Returns:
+            ChatPrompt: the assembled chat prompt.
+        """
         expert_framework = agent_input.pop('expert_framework', '') or ''
 
         profile: dict = self.agent_model.profile
@@ -91,6 +105,13 @@ class ChooseProductAgent(AgentTemplate):
         return chat_prompt
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'ChooseProductAgent':
+        """Initialize the agent and cache its configured prompt version.
+
+        Args:
+            component_configer (AgentConfiger): the agent component configer.
+        Returns:
+            ChooseProductAgent: the initialized agent instance.
+        """
         super().initialize_by_component_configer(component_configer)
         self.prompt_version = self.agent_model.profile.get('prompt_version')
         return self
