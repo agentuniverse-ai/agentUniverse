@@ -97,8 +97,14 @@ class OpenAIEmbedding(Embedding):
         """Convert the agentUniverse(aU) openai embedding class to the langchain openai embedding class."""
         client = self.client.embeddings if self.client else None
         async_client = self.async_client.embeddings if self.async_client else None
+        request_options = {}
+        if self.embedding_model_name is not None:
+            request_options['model'] = self.embedding_model_name
+        if self.dimensions:
+            request_options['model_kwargs'] = {'dimensions': self.dimensions}
         return OpenAIEmbeddings(openai_api_key=self.openai_api_key,
-                                client=client, async_client=async_client)
+                                client=client, async_client=async_client,
+                                **request_options)
 
     def _initialize_by_component_configer(self,
                                           embedding_configer: ComponentConfiger) \
