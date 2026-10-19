@@ -13,22 +13,18 @@ dependency. Addresses #252.
 
 # ruff: noqa: TRY003, TRY004
 
-import logging
-import mimetypes
 import os
 import smtplib
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, ClassVar, List, Optional
+from typing import ClassVar, List, Optional
 
 from agentuniverse.agent.action.tool.common_tool.file_path_utils import \
     resolve_safe_path
 from agentuniverse.agent.action.tool.tool import Tool
-from agentuniverse.base.config.component_configer.component_configer import \
-    ComponentConfiger
-
-logger = logging.getLogger(__name__)
+from agentuniverse.base.config.component_configer.configers.tool_configer \
+    import ToolConfiger
 
 
 class EmailSenderTool(Tool):
@@ -44,6 +40,8 @@ class EmailSenderTool(Tool):
         sender_email: Default sender email address.
         allow_send: Opt-in gate. If False (default), the tool refuses to send
             and returns a clear error. Set to True to enable.
+        timeout: Socket timeout in seconds for SMTP connect and commands
+            (default 30). Prevents indefinite hangs on unresponsive servers.
         max_attachment_bytes: Maximum total attachment size in bytes (default 10 MB).
         max_recipients: Maximum number of recipients (default 50).
         base_dir: Base directory for resolving attachment paths.
@@ -57,9 +55,16 @@ class EmailSenderTool(Tool):
     use_ssl: bool = False
     sender_email: Optional[str] = None
     allow_send: bool = False
+    timeout: float = 30.0
     max_attachment_bytes: int = 10 * 1024 * 1024
     max_recipients: int = 50
     base_dir: str = "."
+
+    #: String fields where an empty or unresolved ``${VAR}`` placeholder
+    #: means "not configured" and must fall back to the default (None).
+    _PLACEHOLDER_FIELDS: ClassVar[frozenset] = frozenset(
+        {"smtp_host", "smtp_username", "smtp_password", "sender_email"}
+    )
 
     def execute(self, mode: str = "send", to: str = "", subject: str = "",
                 body: str = "", html: bool = False,
@@ -113,6 +118,9 @@ class EmailSenderTool(Tool):
 
         # Parse and bound recipients.
         recipients = [r.strip() for r in to.split(",") if r.strip()]
+        if not recipients:
+            return self._error("validation_error",
+                               "at least one valid recipient (to) is required")
         cc_list = [r.strip() for r in cc.split(",") if cc and r.strip()]
         bcc_list = [r.strip() for r in bcc.split(",") if bcc and r.strip()]
         all_recipients = recipients + cc_list + bcc_list
@@ -156,9 +164,11 @@ class EmailSenderTool(Tool):
         # Send via SMTP.
         try:
             if self.use_ssl:
-                server = smtplib.SMTP_SSL(self.smtp_host, self.smtp_port)
+                server = smtplib.SMTP_SSL(self.smtp_host, self.smtp_port,
+                                          timeout=self.timeout)
             else:
-                server = smtplib.SMTP(self.smtp_host, self.smtp_port)
+                server = smtplib.SMTP(self.smtp_host, self.smtp_port,
+                                      timeout=self.timeout)
                 if self.use_tls:
                     server.starttls()
             try:
@@ -180,12 +190,36 @@ class EmailSenderTool(Tool):
             attachments=len(attachments) if attachments else 0,
         )
 
-    def _initialize_by_component_configer(self, configer: ComponentConfiger) \
-            -> "EmailSenderTool":
-        super()._initialize_by_component_configer(configer)
-        for field in ("smtp_host", "smtp_port", "smtp_username", "smtp_password",
-                      "use_tls", "use_ssl", "sender_email", "allow_send",
-                      "max_attachment_bytes", "max_recipients", "base_dir"):
-            if hasattr(configer, field):
-                setattr(self, field, getattr(configer, field))
+    def initialize_by_component_configer(
+            self, component_configer: ToolConfiger) -> "EmailSenderTool":
+        """Apply YAML configuration, guarding placeholder credential values.
+
+        ``Tool.initialize_by_component_configer`` copies every YAML key onto
+        the instance verbatim, so an ``smtp_host: ''`` entry would otherwise
+        override the ``Optional[str]`` default with a meaningless empty
+        string. Normalize those fields afterwards.
+        """
+        super().initialize_by_component_configer(component_configer)
+        for field in self._PLACEHOLDER_FIELDS:
+            raw = getattr(self, field, None)
+            cleaned = self._clean_optional_str(raw)
+            if cleaned is not raw:
+                setattr(self, field, cleaned)
         return self
+
+    @staticmethod
+    def _clean_optional_str(value: object) -> Optional[str]:
+        """Map empty or unresolved ``${VAR}`` placeholders to ``None``.
+
+        A YAML value such as ``smtp_host: ''`` or ``smtp_host: ${SMTP_HOST}``
+        means "not configured"; keeping the literal string would defeat the
+        ``Optional[str]`` defaults and produce confusing downstream errors.
+        """
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        stripped = value.strip()
+        if not stripped or (stripped.startswith("${") and stripped.endswith("}")):
+            return None
+        return stripped

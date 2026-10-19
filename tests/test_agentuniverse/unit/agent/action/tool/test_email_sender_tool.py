@@ -144,6 +144,97 @@ class TestEmailSenderSend(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["error_type"], "operation_error")
 
+    def test_socket_timeout_passed_to_smtp(self):
+        tool = self._tool()
+        tool.timeout = 7.5
+        with patch("smtplib.SMTP") as mock_smtp:
+            mock_smtp.return_value = MagicMock()
+            result = tool.execute(to="a@b.com", body="x")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(mock_smtp.call_args.kwargs.get("timeout"), 7.5)
+
+    def test_whitespace_only_recipients_rejected(self):
+        tool = self._tool()
+        result = tool.execute(to=" , , ", body="x")
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "validation_error")
+        self.assertIn("recipient", result["error"])
+
+
+class TestEmailSenderComponentConfig(unittest.TestCase):
+    """YAML-driven configuration must reach the tool instance."""
+
+    def _tool_from_config(self, extra: dict) -> EmailSenderTool:
+        import tempfile
+        import os
+        import yaml
+        from agentuniverse.base.config.configer import Configer
+        from agentuniverse.base.config.component_configer.configers.tool_configer \
+            import ToolConfiger
+        payload = {
+            "name": "email_sender_tool_cfgtest",
+            "description": "test instance",
+            "tool_type": "api",
+            "metadata": {
+                "type": "TOOL",
+                "module": "agentuniverse.agent.action.tool.common_tool.email_sender_tool",
+                "class": "EmailSenderTool",
+            },
+        }
+        payload.update(extra)
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            path = os.path.join(tmp_dir, "email_sender_tool_cfgtest.yaml")
+            with open(path, "w", encoding="utf-8") as handle:
+                yaml.safe_dump(payload, handle)
+            config = Configer(path=path).load()
+            component = ToolConfiger().load_by_configer(config)
+            tool = EmailSenderTool()
+            tool.initialize_by_component_configer(component)
+            return tool
+        finally:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_yaml_fields_applied(self):
+        tool = self._tool_from_config({
+            "smtp_host": "smtp.example.com",
+            "smtp_port": 465,
+            "use_ssl": True,
+            "use_tls": False,
+            "sender_email": "bot@example.com",
+            "allow_send": True,
+            "timeout": 12,
+            "max_recipients": 3,
+        })
+        self.assertEqual(tool.smtp_host, "smtp.example.com")
+        self.assertEqual(tool.smtp_port, 465)
+        self.assertTrue(tool.use_ssl)
+        self.assertFalse(tool.use_tls)
+        self.assertEqual(tool.sender_email, "bot@example.com")
+        self.assertTrue(tool.allow_send)
+        self.assertEqual(tool.timeout, 12)
+        self.assertEqual(tool.max_recipients, 3)
+
+    def test_empty_string_placeholders_fall_back_to_none(self):
+        tool = self._tool_from_config({
+            "smtp_host": "",
+            "smtp_username": "   ",
+            "smtp_password": "${SMTP_PASSWORD}",
+            "sender_email": "",
+        })
+        self.assertIsNone(tool.smtp_host)
+        self.assertIsNone(tool.smtp_username)
+        self.assertIsNone(tool.smtp_password)
+        self.assertIsNone(tool.sender_email)
+
+    def test_absent_fields_keep_defaults(self):
+        tool = self._tool_from_config({})
+        self.assertIsNone(tool.smtp_host)
+        self.assertFalse(tool.allow_send)
+        self.assertEqual(tool.timeout, 30.0)
+        self.assertEqual(tool.max_recipients, 50)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

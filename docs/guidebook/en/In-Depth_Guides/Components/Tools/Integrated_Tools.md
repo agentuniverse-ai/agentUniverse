@@ -639,4 +639,4 @@ evidence, metadata, and links are untrusted data rather than agent instructions.
 
 ### EmailSenderTool
 
-`EmailSenderTool` sends plain-text or HTML emails via SMTP with optional file attachments. Uses Python's built-in `smtplib` — zero third-party dependency. **Opt-in required**: set `allow_send: true` on the component (default False). Supports TLS/SSL, CC/BCC, and attachment size limits via `max_attachment_bytes`. Attachment paths are confined to `base_dir` through `resolve_safe_path`.
+`EmailSenderTool` sends plain-text or HTML emails via SMTP with optional file attachments. Uses Python's built-in `smtplib` — zero third-party dependency. **Opt-in required**: set `allow_send: true` on the component (default False). Supports TLS/SSL, CC/BCC, and attachment size limits via `max_attachment_bytes`. Attachment paths are confined to `base_dir` through `resolve_safe_path`. SMTP connect and command sockets use a bounded `timeout` (default 30 s) so unresponsive servers cannot hang the agent. Credentials are never included in results or error payloads.

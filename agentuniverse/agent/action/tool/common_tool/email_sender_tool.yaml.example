@@ -18,6 +18,7 @@ use_tls: true
 use_ssl: false
 sender_email: ''
 allow_send: false
+timeout: 30
 max_attachment_bytes: 10485760
 max_recipients: 50
 base_dir: '.'
