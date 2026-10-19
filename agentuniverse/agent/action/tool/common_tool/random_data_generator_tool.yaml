@@ -1,0 +1,62 @@
+name: random_data_generator_tool
+description: Random data generator tool — pure Python stdlib, no network required. Person names from curated pools (mode='name', style=first/last/full), email addresses on reserved RFC 2606 example domains or a custom validated domain (mode='email'), lowercase hex tokens with an optional prefix (mode='hex', bytes 1-256), and RFC 4122 UUID v4 values (mode='uuid'). Every mode takes count (1-50) and reports the Shannon entropy of one value as entropy_bits.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.random_data_generator_tool
+  class: RandomDataGeneratorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Generator mode — name, email, hex or uuid.
+    required: true
+  count:
+    type: integer
+    description: How many values to generate, 1-50 (default 1). A string of digits is accepted.
+    required: false
+  style:
+    type: string
+    description: Name mode only — first, last or full (default, "First Last"), case-insensitive.
+    required: false
+  domain:
+    type: string
+    description: Email mode only — custom domain such as corp.example; validated as a hostname (letters, digits, hyphens, dots, at least one dot). Defaults to the reserved example.com / example.org / example.net pool.
+    required: false
+  bytes:
+    type: integer
+    description: Hex mode only — random bytes per token, 1-256 (default 16). A string of digits is accepted.
+    required: false
+  prefix:
+    type: string
+    description: Hex mode only — short ASCII prefix such as tok_ prepended to each token (default empty).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["name", "email", "hex", "uuid"]
+      description: Generator mode.
+    count:
+      type: integer
+      minimum: 1
+      maximum: 50
+      description: Number of values to generate (all modes).
+    style:
+      type: string
+      enum: ["first", "last", "full"]
+      description: Which name style to generate (name mode).
+    domain:
+      type: string
+      description: Custom domain used instead of the reserved example-domain pool (email mode).
+    bytes:
+      type: integer
+      minimum: 1
+      maximum: 256
+      description: Random bytes per hex token (hex mode).
+    prefix:
+      type: string
+      description: ASCII prefix prepended to each hex token (hex mode).
+  required: ["mode"]
