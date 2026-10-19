@@ -1,0 +1,18 @@
+name: myscale_store
+description: MyScale (ClickHouse-based) vector knowledge store
+host: localhost
+port: 8443
+username: default
+password: ""
+database: default
+table_name: agentuniverse_documents
+secure: true
+embedding_model: openai_embedding
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+create_table: true
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.myscale_store
+  class: MyScaleStore

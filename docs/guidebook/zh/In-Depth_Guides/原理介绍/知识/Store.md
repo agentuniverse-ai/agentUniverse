@@ -96,3 +96,17 @@ results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metada
 ## PGVectorStore
 
 `PGVectorStore` 提供基于 PostgreSQL/pgvector 的同步与异步 CRUD、余弦/L2/内积检索、JSONB 包含过滤、可选的自动向量化、维度校验、自动建表和可选 HNSW 索引。安装 `store_ext` extra，并将 `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` 复制到应用配置目录。连接地址可以写在本地配置的 `connection_url` 中，或通过 `PGVECTOR_CONNECTION_URL` 提供；请勿提交数据库凭据。
+
+## MyScaleStore
+
+`MyScaleStore` 接入 MyScale——一个基于 ClickHouse 的 SQL 向量数据库，提供同步与异步的向量增删改查及最近邻检索。通过 `pip install clickhouse-connect` 安装可选依赖，并将配置指向一个运行中的 MyScale（或 ClickHouse）实例。
+
+将 `agentuniverse/agent/action/knowledge/store/myscale_store.yaml.example` 复制到应用配置目录，设置连接信息（`host`、`port`、`username`、`password`、`database`、`secure`）及目标 `table_name`。当 `create_table` 启用时，组件会在首次使用时创建一个带 `Array(Float32)` embedding 列的 `MergeTree` 表。
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"team": "acme"}, embedding=[0.1, 0.2])])
+results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metadata_filter={"team": "acme"})
+```
+
+检索使用 ClickHouse 内置的距离函数（`cosineDistance`、`L2Distance`、`dotProduct`），通过 `distance` 设置（`cosine`、`l2`、`inner_product`）选择。表名与库名会通过严格白名单校验；所有取值——embedding、top-k、元数据过滤字面量及文档 id——均经 `clickhouse-connect` 原生参数绑定传入，不向 SQL 文本中拼接任何用户输入。每条 embedding 都会按 `dimensions`（未配置时由首条文档推断）进行维度校验。
+
