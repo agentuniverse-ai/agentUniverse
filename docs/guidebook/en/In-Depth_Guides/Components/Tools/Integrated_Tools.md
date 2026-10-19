@@ -634,3 +634,54 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Hex Dump Tool
+
+`HexDumpTool` renders classic, offset-aligned hexdump views of byte data
+for debugging, built purely on the Python standard library with zero
+network access. Where `TextCodecTool` converts between representations
+(Base64 / hex encoding round trips), this tool inspects bytes: `dump`
+mode renders xxd-style lines — an 8-digit hex offset, `width`
+space-separated lowercase hex byte pairs (8 / 16 / 32 per line, default
+16, with blank padding so short lines stay column-aligned), and an ASCII
+column between pipes where every byte outside `0x20`-`0x7E` shows as
+`.`; the input is UTF-8 text (`input_encoding='utf8-text'`, the
+default) or Base64-encoded bytes (`input_encoding='base64'`). `find`
+mode locates a hex pattern (two hex digits per byte, `??` matches any
+single byte) and reports every matching byte offset — including
+overlapping occurrences — each with the dump line(s) of context that
+cover the match. `patch` mode applies a list of `{"offset": int,
+"hex": str}` patches to the decoded bytes, bounds-checked, in list
+order (a later patch overwrites an earlier one in overlapping
+regions), and returns the patched bytes as Base64.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import HexDumpTool
+
+tool = HexDumpTool()
+view = tool.execute(mode="dump", data="Hello, World!\n")["result"]
+hits = tool.execute(mode="find", data="Hello, World!\n",
+                    pattern="6f????64")
+patched = tool.execute(mode="patch", data="SGVsbG8sIFdvcmxkIQo=",
+                       input_encoding="base64",
+                       patches=[{"offset": 0, "hex": "4a"}])["result"]
+```
+
+For `"Hello, World!\n"` the default dump view is exactly:
+
+```text
+00000000  48 65 6c 6c 6f 2c 20 57 6f 72 6c 64 21 0a        |Hello, World!.|
+```
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, empty input, unknown mode / width /
+input_encoding, an odd-length pattern or one with invalid characters
+such as a lone `?`, a pattern over 4096 bytes, more than 1000 patches,
+a patch offset that is not a non-negative integer, a decoded payload
+over 1 MiB) raise a `ValueError`. Errors that depend on the content
+being processed — input declared as Base64 that is not valid standard
+Base64, and a patch that would write past the end of the data — are
+returned as a structured `error` payload (`{"type": ..., "message":
+...}`) instead of raising. `find` reports at most 1000 matches with
+context (the total is still counted and `truncated` is set), and all
+output is deterministic.
