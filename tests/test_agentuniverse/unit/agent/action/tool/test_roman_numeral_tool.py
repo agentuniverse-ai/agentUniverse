@@ -16,6 +16,7 @@ in each message, and the arithmetic modes are checked against known
 sums / differences / products including out-of-range results.
 """
 
+import random
 import unittest
 
 from agentuniverse.agent.action.tool.common_tool import RomanNumeralTool
@@ -46,6 +47,47 @@ SPOT_VECTORS = [
     (3888, "MMMDCCCLXXXVIII"),  # longest canonical numeral: 15 chars
     (3999, "MMMCMXCIX"),
 ]
+
+# --------------------------------------------------------------------- #
+# Independent per-digit reference encoder (distinct algorithm from the
+# tool's greedy value table), used by the mutation-invariant test.
+# --------------------------------------------------------------------- #
+_REF_THOUSANDS = ("", "M", "MM", "MMM")
+_REF_HUNDREDS = (
+    "", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM",
+)
+_REF_TENS = ("", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC")
+_REF_ONES = ("", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX")
+
+
+def _ref_encode(value: int) -> str:
+    return (
+        _REF_THOUSANDS[value // 1000]
+        + _REF_HUNDREDS[value // 100 % 10]
+        + _REF_TENS[value // 10 % 10]
+        + _REF_ONES[value % 10]
+    )
+
+
+def _ref_scan(numeral: str) -> int:
+    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    total = 0
+    for index, symbol in enumerate(numeral):
+        if (
+            index + 1 < len(numeral)
+            and values[symbol] < values[numeral[index + 1]]
+        ):
+            total -= values[symbol]
+        else:
+            total += values[symbol]
+    return total
+
+
+def _ref_is_canonical(numeral: str) -> bool:
+    if not numeral or any(ch not in "MDCLXVI" for ch in numeral):
+        return False
+    value = _ref_scan(numeral)
+    return 1 <= value <= 3999 and numeral == _ref_encode(value)
 
 
 class RomanNumeralToolTest(unittest.TestCase):
@@ -137,6 +179,58 @@ class RomanNumeralToolTest(unittest.TestCase):
                 )["result"],
             )["result"]
             self.assertEqual(again, numeral)
+
+    def test_single_character_mutation_invariant(self) -> None:
+        # Every single-character mutation (one symbol inserted, deleted
+        # or duplicated at any position) of a canonical numeral must
+        # either be canonical itself — and then parse to exactly its own
+        # value against the independent reference — or be rejected as
+        # invalid_roman with a rule citation. A mutation is never
+        # accepted with a wrong value or rejected when canonical.
+        # Deterministic bounded sample of the exhaustive sweep.
+        rng = random.Random(20261019)
+        accepted = rejected = 0
+        for value in sorted(rng.sample(range(1, 4000), 40)):
+            base = _ref_encode(value)
+            mutations = set()
+            for pos in range(len(base) + 1):
+                for symbol in "IVXLCDM":
+                    mutations.add(base[:pos] + symbol + base[pos:])
+            for pos in range(len(base)):
+                mutations.add(base[:pos] + base[pos + 1:])
+                mutations.add(base[:pos] + base[pos] * 2 + base[pos + 1:])
+            for mutation in sorted(mutations):
+                if not mutation:
+                    # Deleting the only character of a one-symbol
+                    # numeral leaves the empty string, which is a
+                    # malformed parameter (ValueError) by contract.
+                    with self.assertRaises(ValueError):
+                        self.tool.execute(mode="from_roman", numeral=mutation)
+                    continue
+                result = self.tool.execute(
+                    mode="from_roman", numeral=mutation
+                )
+                if _ref_is_canonical(mutation):
+                    accepted += 1
+                    self.assertEqual(
+                        result.get("result"),
+                        _ref_scan(mutation),
+                        msg=mutation,
+                    )
+                else:
+                    rejected += 1
+                    self.assertNotIn("result", result, msg=mutation)
+                    self.assertEqual(
+                        result["error"]["type"],
+                        "invalid_roman",
+                        msg=mutation,
+                    )
+                    self.assertRegex(
+                        result["error"]["message"], r"rule [1-4] ", msg=mutation
+                    )
+        # The sample exercises both directions of the invariant.
+        self.assertGreater(accepted, 0)
+        self.assertGreater(rejected, 0)
 
     # ------------------------------------------------------------------ #
     # Non-canonical rejection matrix with rule citations
