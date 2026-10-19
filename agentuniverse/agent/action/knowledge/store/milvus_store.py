@@ -92,7 +92,7 @@ class MilvusStore(Store):
         if hasattr(milvus_store_configer, "similarity_top_k"):
             self.similarity_top_k = milvus_store_configer.similarity_top_k
         if hasattr(milvus_store_configer, "query_embedding"):
-            self.similarity_top_k = milvus_store_configer.query_embedding
+            self.query_embedding = milvus_store_configer.query_embedding
         return self
 
     def _create_or_load_collection(self,

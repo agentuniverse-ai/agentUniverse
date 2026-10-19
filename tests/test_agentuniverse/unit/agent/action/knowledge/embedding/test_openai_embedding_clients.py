@@ -6,6 +6,8 @@ from agentuniverse.agent.action.knowledge.embedding.openai_embedding import (
 
 
 def test_as_langchain_allows_uninitialized_async_client():
+    """Test that as langchain allows uninitialized async client.
+    """
     sync_client = MagicMock()
     langchain_embedding = MagicMock()
     embedding = OpenAIEmbedding(

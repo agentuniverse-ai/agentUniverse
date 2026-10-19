@@ -128,6 +128,7 @@ class SecureArchiveTool(Tool):
         return path.as_posix().rstrip("/")
 
     def _entries(self, path: str) -> list[dict[str, Any]]:
+        """Return safe public names alongside private archive lookup names."""
         entries: list[dict[str, Any]] = []
         if self._kind(path) == "zip":
             try:
@@ -141,6 +142,7 @@ class SecureArchiveTool(Tool):
                         entries.append(
                             {
                                 "name": self._safe_member_name(item.filename),
+                                "_source_name": item.filename,
                                 "size": item.file_size,
                                 "compressed_size": item.compress_size,
                                 "is_dir": item.is_dir(),
@@ -157,6 +159,7 @@ class SecureArchiveTool(Tool):
                         entries.append(
                             {
                                 "name": self._safe_member_name(item.name),
+                                "_source_name": item.name,
                                 "size": item.size,
                                 "compressed_size": None,
                                 "is_dir": item.isdir(),
@@ -269,7 +272,14 @@ class SecureArchiveTool(Tool):
 
     @staticmethod
     def _list(path: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
-        return {"status": "success", "mode": "list", "file_path": path, "entries": entries, "entry_count": len(entries)}
+        public_entries = [{key: item[key] for key in ("name", "size", "compressed_size", "is_dir")} for item in entries]
+        return {
+            "status": "success",
+            "mode": "list",
+            "file_path": path,
+            "entries": public_entries,
+            "entry_count": len(entries),
+        }
 
     def _info(self, path: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
         return {
@@ -319,7 +329,7 @@ class SecureArchiveTool(Tool):
                     if item["is_dir"]:
                         os.makedirs(destination, exist_ok=True)
                         continue
-                    with archive.open(item["name"]) as source:
+                    with archive.open(item["_source_name"]) as source:
                         self._atomic_copy(source, destination, item["size"])
                     extracted.append(destination)
         else:
@@ -328,7 +338,7 @@ class SecureArchiveTool(Tool):
                     if item["is_dir"]:
                         os.makedirs(destination, exist_ok=True)
                         continue
-                    source = archive.extractfile(item["name"])
+                    source = archive.extractfile(item["_source_name"])
                     if source is None:
                         raise ValueError(f"unable to read archive member: {item['name']}")
                     with source:
