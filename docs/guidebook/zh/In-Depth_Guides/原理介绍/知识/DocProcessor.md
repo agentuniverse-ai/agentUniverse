@@ -310,3 +310,23 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ListStructureExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/list_structure_extractor.yaml)
+
+该组件检测文档中的列表并把其结构记录进 metadata，对应 issue #258 的*结构提取*方向。大量知识源——发布说明、规章制度、规格文档、抓取页面——内容以列表承载，而现有 doc processor 只做文本切分（字符/token/递归切分器、层级正则切分器），没有一个记录列表结构本身，下游因此无法区分三项待办清单和一大段散文。该组件逐行扫描文本，识别无符号项（`-`、`*`、`•`、`·`、en 短横、em 长横，均要求后跟分隔空白，因此 `--force` 与 `---` 分隔线不会被误判）、编号项（`1.`、`1)`、`(a)`（大小写均可）、`(一)` 中文编号四类）以及任务复选框（`- [ ]` / `- [x]` / 裸 `[ ]`），并逐项记录勾选状态。
+
+连续且同一样式的项归入同一个列表块；任何非列表行——散文或空行——都会结束当前块，样式切换（`-` 换 `*`、`1.` 换 `1)`)）也会开启新块，与读者对列表边界的感知一致。嵌套层级由行首缩进推得：一个制表符或每两个空格算一层，封顶 4 层，文档的视觉层级因此完整保留进 metadata。每个检测到的块以 `{kind: bullet|numbered|checkbox, span, item_count, items: [{text, span, level, marker, checked（仅复选框）}]}` 写入 `metadata['lists']`，其中 span 是相对原文的字符偏移，原文绝不改动。该载荷以 `max_lists` 个块、每块 `max_items_per_list` 个项为上限，避免列表密集文档撑爆 metadata；而 `metadata['list_count']`、每块的 `item_count` 与 `metadata['checkbox_summary']`（`{total, checked}`，仅当存在复选框时写入）始终汇报未截断的真实总数。不含任何列表的文档原样通过，text 与 id 绝不修改；整个流程纯 Python、确定且离线——在结构轴线上与 `OutlineExtractor`（标题骨架）、`QAPairExtractor`（问答挖掘）互补。
+
+组件定义文件如下：
+```yaml
+name: 'list_structure_extractor'
+description: 'detect bullet/numbered/checkbox lists and record their structure into document metadata'
+max_lists: 20                # metadata['lists'] 记录的最大块数
+max_items_per_list: 100      # 每块记录的最大项数
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.list_structure_extractor'
+  class: 'ListStructureExtractor'
+```
+- max_lists：写入 `metadata['lists']` 的最大块数，必须 >= 1。超出上限的块不进入载荷，但 `metadata['list_count']` 仍汇报真实总数。
+- max_items_per_list：每个列表块记录的最大项数，必须 >= 1。即使项载荷被裁剪，每块的 `item_count` 也保留真实总数。
