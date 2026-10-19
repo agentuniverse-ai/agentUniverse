@@ -1,7 +1,7 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # @Time    : 2024/12/13 11:19
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: es_conversation_memory_storage.py
 import json
@@ -143,6 +143,8 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             agent_id (str): The agent id of the memory to add.
         """
         message_list = ConversationMessage.check_and_convert_message(message_list, session_id)
+        if not message_list:
+            return
         actions = []
         for message in message_list:
             action = self.memory_converter.to_es_action(message, session_id=session_id, agent_id=agent_id, **kwargs)
