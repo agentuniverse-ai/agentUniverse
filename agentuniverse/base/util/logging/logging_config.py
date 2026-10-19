@@ -59,17 +59,19 @@ class LoggingConfig(object):
                 the path of the toml file
         """
         self.__config = None
+        if config_path is None:
+            self._use_default_config()
+            return
+
         try:
             self.__config = Configer().load_by_path(config_path).value['LOG_CONFIG']
         except (FileNotFoundError, TypeError):
             print("can't find log config file, use default config")
-            for log_module in LoggingConfig.log_extend_module_list:
-                LoggingConfig.log_extend_module_switch[log_module] = False
+            self._use_default_config()
             return
         except (tomli.TOMLDecodeError, KeyError):
             print("log config file isn't a valid toml, use default config.")
-            for log_module in LoggingConfig.log_extend_module_list:
-                LoggingConfig.log_extend_module_switch[log_module] = False
+            self._use_default_config()
             return
 
         for log_module in LoggingConfig.log_extend_module_list:
@@ -123,6 +125,12 @@ class LoggingConfig(object):
             LoggingConfig.sls_log_send_interval = float(
                 self._get_config_or_default("ALIYUN_SLS_CONFIG",
                                             "sls_log_send_interval"))
+
+    @staticmethod
+    def _use_default_config():
+        """Disable optional log modules while retaining default settings."""
+        for log_module in LoggingConfig.log_extend_module_list:
+            LoggingConfig.log_extend_module_switch[log_module] = False
 
     def _get_config_or_default(self, section, key, default_value=None):
         """Get config attribute from toml data, return default_value if no such

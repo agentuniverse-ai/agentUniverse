@@ -7,7 +7,7 @@
 # @FileName: llm_output.py
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentuniverse.agent.memory.message import Message
 
@@ -36,9 +36,7 @@ class FunctionCall(BaseModel):
     name: str
     arguments: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        allow_mutation = False
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 def prune_none(obj):
@@ -174,7 +172,7 @@ class TokenUsage(BaseModel):
 
     def __iadd__(self, other: "TokenUsage") -> "TokenUsage":
         tmp = self + other
-        for field in self.__fields__:
+        for field in type(self).model_fields:
             setattr(self, field, getattr(tmp, field))
         return self
 
