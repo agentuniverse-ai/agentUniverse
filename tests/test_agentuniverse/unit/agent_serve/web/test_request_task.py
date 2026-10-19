@@ -1,5 +1,3 @@
-import asyncio
-from types import SimpleNamespace
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
@@ -8,12 +6,16 @@ from types import SimpleNamespace
 
 """Unit tests for RequestTask state handling (no database persistence)."""
 
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 
 from agentuniverse.agent_serve.web.request_task import (
     EOF_SIGNAL,
     RequestTask,
     TaskStateEnum,
+    VALID_TRANSITIONS,
 )
 
 
@@ -41,8 +43,6 @@ def test_async_receive_steps_marks_successful_task_finished():
     assert request_task.request_state() == TaskStateEnum.FINISHED.value
     assert request_task.__request_do__.result == {"result": {"answer": "done"}}
     assert '"answer": "done"' in result_chunk
-    VALID_TRANSITIONS,
-)
 
 
 def ok_func():
