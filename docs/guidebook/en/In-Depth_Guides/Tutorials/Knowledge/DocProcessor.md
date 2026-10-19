@@ -309,3 +309,25 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [VocabularyCoverageProfiler](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/vocabulary_coverage_profiler.yaml)
+
+This component profiles each document's lexical diversity into metadata, addressing the *pre-processing / analysis* direction of issue #258. Splitters and embedding models behave very differently on a vocabulary-rich essay and on a page that repeats one phrase two hundred times, yet both look like "a document" until someone measures them. The profiler computes a compact set of vocabulary statistics per document — before any splitter or embedding model runs — so pipelines can pick chunk sizes, choose embedding strategies, or route low-information documents aside. It is deliberately distinct from `TextQualityScorer` (composite quality gates) and `ReadingLevelScorer` (readability formulas): neither reports these vocabulary-shape numbers, and this component computes nothing else.
+
+Tokenization follows the `StopwordRemover` family, pure stdlib and deterministic: Latin word runs (letters plus at most one internal apostrophe, lowercased, so *Apple* and *apple* count as one type) plus individual CJK ideographs as char-sized units; digits, punctuation and other scripts contribute nothing. Over the case-folded token stream the component reports: `token_count` and `type_count` (distinct tokens); `type_token_ratio` (the classic TTR, which falls with length even for rich prose) alongside `root_ttr` (Guiraud's index, `type_count / sqrt(token_count)`, far less length-dependent — both are reported so consumers can use whichever suits); `hapax_count` / `hapax_ratio` for tokens occurring exactly once (a large hapax share with a small type count signals noise such as ids or typos); `avg_word_length` and `longest_word` (first-encountered token wins length ties); `stopword_coverage`, the percentage of tokens found in the built-in compact EN+ZH function-word inventories (boilerplate scores high, dense technical prose low); and `top_5_tokens` with counts, ties broken alphabetically so output is reproducible. Everything lands in `metadata[vocabulary_key]`; documents are neither dropped, reordered nor rewritten, metadata mappings are copied before mutation, and text/id stay untouched. A tokenless document (empty, whitespace, digits or punctuation only) gets `token_count` 0 and `type_count` 0 with every ratio and average `None` — never a division error. When a document's `root_ttr` is strictly below `low_diversity_threshold` (default 5.0, roughly the floor for healthy prose), the string `low_diversity` is additionally stamped into `metadata[flag_key]`; tokenless documents are never flagged. The whole pass is offline, deterministic and dependency-free.
+
+The component definition file is as follows:
+```yaml
+name: 'vocabulary_coverage_profiler'
+description: 'profile lexical diversity (TTR, root TTR, hapax, stopword coverage) into document metadata'
+low_diversity_threshold: 5.0  # root TTR strictly below this stamps 'low_diversity'
+vocabulary_key: 'vocabulary'   # metadata key for the statistics dict; '' disables
+flag_key: 'vocabulary_flag'    # metadata key for the low-diversity marker; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.vocabulary_coverage_profiler'
+  class: 'VocabularyCoverageProfiler'
+```
+- low_diversity_threshold: Root TTR (`type_count / sqrt(token_count)`) strictly below this value flags the document as `low_diversity`; must be > 0. Tokenless documents are never flagged.
+- vocabulary_key: Metadata key the statistics dict (token_count, type_count, type_token_ratio, root_ttr, hapax_count, hapax_ratio, avg_word_length, longest_word, stopword_coverage, top_5_tokens) is written to; an empty value disables stamping the statistics.
+- flag_key: Metadata key the `low_diversity` marker is written to on flagged documents; an empty value disables flagging.
