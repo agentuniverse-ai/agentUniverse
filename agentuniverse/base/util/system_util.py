@@ -182,19 +182,16 @@ def process_dict_with_funcs(input_dict: dict, yaml_func_instance: Any) -> dict:
     if not input_dict or yaml_func_instance is None:
         return input_dict
 
-    processed_dict = {}
-    for key, value in input_dict.items():
+    def process_value(value):
         if isinstance(value, str) and value.startswith('@FUNC('):
-            # Process the @FUNC expression
-            processed_dict[key] = process_yaml_func(value, yaml_func_instance)
-        elif isinstance(value, dict):
-            # Recursively process nested dictionaries
-            processed_dict[key] = process_dict_with_funcs(value, yaml_func_instance)
-        else:
-            # Keep the value as is
-            processed_dict[key] = value
+            return process_yaml_func(value, yaml_func_instance)
+        if isinstance(value, dict):
+            return {key: process_value(nested_value) for key, nested_value in value.items()}
+        if isinstance(value, list):
+            return [process_value(item) for item in value]
+        return value
 
-    return processed_dict
+    return process_value(input_dict)
 
 
 def is_system_builtin(component_instance: ComponentBase) -> bool:
