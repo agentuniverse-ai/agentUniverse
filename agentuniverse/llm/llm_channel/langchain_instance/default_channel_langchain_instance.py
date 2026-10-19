@@ -21,9 +21,11 @@ from pydantic.v1 import BaseModel
 
 
 class DefaultChannelLangchainInstance(ChatOpenAI):
+    """ChatOpenAI-compatible LangChain wrapper backed by an agentUniverse LLMChannel."""
     llm_channel: Optional[BaseModel] = None
 
     def __init__(self, llm_channel):
+        """Build the LangChain wrapper from the channel settings (model name, temperature, timeout, max tokens, keys and base URL). Args: llm_channel: The underlying LLMChannel."""
         init_params = dict()
         init_params['model_name'] = llm_channel.channel_model_name
         init_params['temperature'] = llm_channel.temperature if llm_channel.temperature else 0.7
@@ -99,6 +101,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
 
     async def as_langchain_achunk(self, stream_iterator: AsyncIterator, run_manager=None) \
             -> AsyncIterator[ChatGenerationChunk]:
+        """Convert the asynchronous stream of channel results into ChatGenerationChunk objects, notifying run_manager for every token. Args: stream_iterator (AsyncIterator): The channel stream. run_manager: Optional async run manager. Yields: ChatGenerationChunk: The streamed chunks."""
         default_chunk_class = AIMessageChunk
         async for llm_result in stream_iterator:
             chunk = llm_result.raw
@@ -121,6 +124,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
                 await run_manager.on_llm_new_token(token=chunk.text, chunk=chunk)
 
     def get_num_tokens_from_messages(self, messages: List[BaseMessage]) -> int:
+        """Count the tokens of the messages using the wrapped channel. Args: messages (List[BaseMessage]): The chat messages. Returns: int: The number of tokens."""
         messages_str = get_buffer_string(messages)
         return self.llm_channel.get_num_tokens(messages_str)
 
@@ -165,6 +169,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
             run_manager: Optional[CallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
+        """Stream the channel response and yield one ChatGenerationChunk per received chunk. Args: messages (List[BaseMessage]): The chat messages. stop (Optional[List[str]]): Optional stop words. run_manager: Optional run manager. **kwargs: Extra options. Yields: ChatGenerationChunk: The streamed chunks."""
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
 
