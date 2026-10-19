@@ -29,3 +29,14 @@ def test_invalid_ids_are_rejected_before_product_creation(component_id):
 @pytest.mark.parametrize("component_id", ["agent_1", "plugin-two", "A9"])
 def test_valid_ids_keep_existing_product_naming(component_id):
     validate_component_id(component_id, "Tool")
+
+
+@pytest.mark.parametrize("component_id", ["CON", "nul", "Com1", "LPT9"])
+def test_windows_device_names_are_rejected(component_id):
+    with pytest.raises(ValueError, match="reserved Windows filename"):
+        validate_component_id(component_id, "Tool")
+
+
+@pytest.mark.parametrize("component_id", ["console", "com0", "lpt10"])
+def test_similar_nonreserved_ids_remain_valid(component_id):
+    validate_component_id(component_id, "Tool")
