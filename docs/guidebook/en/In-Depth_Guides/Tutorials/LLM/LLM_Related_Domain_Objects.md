@@ -21,8 +21,9 @@ remain 130 total tokens. See the [OpenAI usage reference](https://developers.ope
 
 `+` and `+=` accumulate totals as well as details. Pydantic serialization retains
 reported totals when present, so restoring an `LLMOutput` preserves its counts.
-Monitoring also preserves explicitly reported zero totals. When provider usage
-is absent, the existing local token estimation remains available.
+Monitoring also preserves explicitly reported zero totals. When `LLMOutput.usage`
+is absent, it first checks supported API usage in the raw response. Missing or
+malformed raw usage retains the existing local token estimation fallback.
 Changing a detail counter does not change an explicitly reported provider total.
 Manually constructed `TokenUsage(...)` objects without reported totals retain
 the existing additive behavior and serialized field layout.

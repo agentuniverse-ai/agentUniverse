@@ -2,10 +2,17 @@
 import copy
 
 from openai.types import CompletionUsage
-from openai.types.chat import ChatCompletionChunk
+from openai.types.chat import ChatCompletion, ChatCompletionChunk
 import pytest
 
 from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
+
+
+class CharacterCounter:
+    """Deterministic local tokenizer for the estimation path."""
+    @staticmethod
+    def get_num_tokens(text):
+        return len(text)
 
 
 def chat_usage():
@@ -201,12 +208,6 @@ def test_monitor_retains_explicit_zero_provider_totals(prompt, completion):
 def test_monitor_still_estimates_when_no_provider_totals_exist(usage):
     from agentuniverse.base.util.monitor.monitor import Monitor
 
-    class CharacterCounter:
-        """Deterministic local tokenizer for the estimation path."""
-        @staticmethod
-        def get_num_tokens(text):
-            return len(text)
-
     result = Monitor.get_llm_token_usage(
         CharacterCounter(), {"messages": [{"role": "user", "content": "hello"}]},
         LLMOutput(text="ok", usage=usage),
@@ -215,3 +216,71 @@ def test_monitor_still_estimates_when_no_provider_totals_exist(usage):
     assert result["prompt_tokens"] == 11
     assert result["completion_tokens"] == 2
     assert result["total_tokens"] == 13
+
+
+@pytest.mark.parametrize("prompt,completion,cached,reasoning", [
+    (100, 30, 40, 10), (17, 0, 0, 0), (0, 0, 0, 0),
+])
+def test_monitor_recovers_usage_from_sdk_completion_raw(
+        prompt, completion, cached, reasoning):
+    from agentuniverse.base.util.monitor.monitor import Monitor
+
+    response = ChatCompletion(
+        id="local-completion", created=0, model="local-fixture",
+        object="chat.completion",
+        choices=[{"index": 0, "finish_reason": "stop", "message": {
+            "role": "assistant", "content": "local result" if completion else None,
+        }}],
+        usage=CompletionUsage(
+            prompt_tokens=prompt, completion_tokens=completion,
+            total_tokens=prompt + completion,
+            prompt_tokens_details={"cached_tokens": cached},
+            completion_tokens_details={"reasoning_tokens": reasoning},
+        ),
+    )
+    raw = response.model_dump()
+    original = copy.deepcopy(raw)
+    output = LLMOutput(text=response.choices[0].message.content, raw=raw)
+    assert output.usage is None
+
+    result = Monitor.get_llm_token_usage(None, None, output)
+
+    assert result["prompt_tokens"] == prompt
+    assert result["completion_tokens"] == completion
+    assert result["total_tokens"] == prompt + completion
+    assert output.usage.cached_tokens == cached
+    assert output.usage.reasoning_tokens == reasoning
+    assert raw == original
+
+
+def test_monitor_prefers_explicit_usage_over_raw_response():
+    from agentuniverse.base.util.monitor.monitor import Monitor
+
+    provided = TokenUsage(text_in=5, text_out=2)
+    output = LLMOutput(text="local", usage=provided, raw={"usage": chat_usage()})
+
+    result = Monitor.get_llm_token_usage(None, None, output)
+
+    assert result["total_tokens"] == 7
+    assert output.usage is provided
+
+
+@pytest.mark.parametrize("raw_usage", [
+    None, [], {}, {"prompt_tokens": 1},
+    {"prompt_tokens": None, "completion_tokens": 2},
+    {"prompt_tokens": "invalid", "completion_tokens": 2},
+])
+def test_monitor_estimates_when_raw_usage_is_missing_or_malformed(raw_usage):
+    from agentuniverse.base.util.monitor.monitor import Monitor
+
+    output = LLMOutput(text="ok", raw={"usage": raw_usage})
+
+    result = Monitor.get_llm_token_usage(
+        CharacterCounter(), {"messages": [{"role": "user", "content": "hello"}]},
+        output,
+    )
+
+    assert result["prompt_tokens"] == 11
+    assert result["completion_tokens"] == 2
+    assert result["total_tokens"] == 13
+    assert getattr(output.usage, "reported_prompt_tokens", None) is None
