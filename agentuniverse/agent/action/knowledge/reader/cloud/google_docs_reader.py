@@ -19,6 +19,18 @@ class GoogleDocsReader(Reader):
     """
 
     def _load_data(self, doc_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
+        """Load a Google Docs document and return it as a list with a single Document.
+
+        Args:
+            doc_id(str): The Google Drive file id of the document.
+            ext_info(Optional[Dict]): Extra information, such as credentials metadata.
+
+        Returns:
+            List[Document]: A one-element list containing the loaded document.
+
+        Raises:
+            ValueError: If doc_id is empty.
+        """
         print(f"debugging: GoogleDocsReader start load doc_id={doc_id}")
         if not doc_id:
             raise ValueError("GoogleDocsReader requires doc_id")
@@ -34,6 +46,14 @@ class GoogleDocsReader(Reader):
 
     @staticmethod
     def _public_metadata(ext_info: Dict) -> Dict:
+        """Filter ext_info down to non-sensitive entries by removing credential-like keys.
+
+        Args:
+            ext_info(Dict): The raw extra information dict.
+
+        Returns:
+            Dict: The filtered metadata dict.
+        """
         sensitive_keys = {
             "GOOGLE_SERVICE_ACCOUNT_JSON",
             "google_service_account_json",
@@ -43,6 +63,18 @@ class GoogleDocsReader(Reader):
         return {key: value for key, value in ext_info.items() if key not in sensitive_keys}
 
     def _build_drive_service(self, ext_info: Optional[Dict]):
+        """Build a Google Drive v3 service using a service account credentials file.
+
+        Args:
+            ext_info(Optional[Dict]): Extra information that may carry the service account json path.
+
+        Returns:
+            The built Drive service.
+
+        Raises:
+            ImportError: If the Google API client packages are not installed.
+            EnvironmentError: If no service account json path is configured.
+        """
         try:
             from google.oauth2.service_account import Credentials  # type: ignore
             from googleapiclient.discovery import build  # type: ignore
@@ -58,6 +90,15 @@ class GoogleDocsReader(Reader):
         return build('drive', 'v3', credentials=creds)
 
     def _export_html(self, drive, file_id: str) -> str:
+        """Export a Google Docs file as an HTML string through the Drive API.
+
+        Args:
+            drive: The Google Drive service.
+            file_id(str): The Google Drive file id to export.
+
+        Returns:
+            str: The exported HTML content.
+        """
         from googleapiclient.http import MediaIoBaseDownload  # type: ignore
         import io
         print("debugging: GoogleDocsReader exporting as HTML")
@@ -71,6 +112,17 @@ class GoogleDocsReader(Reader):
         return html
 
     def _html_to_text(self, html: str) -> str:
+        """Convert an HTML string into cleaned plain text by removing scripts, styles and empty lines.
+
+        Args:
+            html(str): The HTML content to convert.
+
+        Returns:
+            str: The extracted plain text.
+
+        Raises:
+            ImportError: If beautifulsoup4 is not installed.
+        """
         try:
             from bs4 import BeautifulSoup  # type: ignore
         except Exception:
