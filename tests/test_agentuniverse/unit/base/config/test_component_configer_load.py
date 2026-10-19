@@ -25,6 +25,8 @@ from agentuniverse.base.config.configer import Configer
     ],
 )
 def test_load_uses_configer_passed_to_constructor(configer_class, value):
+    """Test that load uses configer passed to constructor.
+    """
     configer = Configer()
     configer.value = value
 

@@ -115,7 +115,10 @@ class BenchmarkMetrics:
             "resource": max(0, (1 - self.memory_usage_mb / 1000)) * 100,
         }
 
-        return sum(score * weights[category] for category, score in scores.items())
+        weighted_score = sum(
+            score * weights[category] for category, score in scores.items()
+        )
+        return max(0.0, min(100.0, weighted_score))
 
 
 @dataclass
@@ -318,6 +321,9 @@ class ContextBenchmarkSuite:
         Returns:
             Tuple of (compression_ratio, information_loss)
         """
+        if num_segments <= 0:
+            raise ValueError("num_segments must be positive")
+
         session_id = f"benchmark_compression_{datetime.now().timestamp()}"
         window = self.context_manager.create_context_window(
             session_id,
@@ -402,6 +408,9 @@ class ContextBenchmarkSuite:
         Returns:
             Dictionary with latency statistics
         """
+        if num_operations <= 0:
+            raise ValueError("num_operations must be positive")
+
         session_id = f"benchmark_perf_{datetime.now().timestamp()}"
         self.context_manager.create_context_window(session_id)
 
@@ -454,6 +463,9 @@ class ContextBenchmarkSuite:
             Tuple of (memory_mb, tokens_per_turn_avg)
         """
         import sys
+
+        if num_turns <= 0:
+            raise ValueError("num_turns must be positive")
 
         session_id = f"benchmark_resource_{datetime.now().timestamp()}"
         self.context_manager.create_context_window(session_id)
