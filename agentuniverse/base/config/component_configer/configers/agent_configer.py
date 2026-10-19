@@ -74,5 +74,5 @@ class AgentConfiger(ComponentConfiger):
             self.__memory = configer_value.get('memory') or self.__memory
             self.__action = configer_value.get('action') or self.__action
         except Exception as e:
-            raise Exception(f"Failed to parse the Agent configuration: {e}")
+            raise Exception(f"Failed to parse the Agent configuration: {e}") from e
         return self
