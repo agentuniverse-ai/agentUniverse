@@ -1,0 +1,16 @@
+name: redis_vector_store
+description: Redis Stack HNSW vector store
+connection_url: redis://localhost:6379/0
+index_name: agentuniverse_documents
+key_prefix: "agentuniverse:document:"
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+create_index: true
+filter_tag_fields: [tenant, category]
+hnsw_m: 16
+hnsw_ef_construction: 200
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.redis_vector_store
+  class: RedisVectorStore

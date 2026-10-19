@@ -185,5 +185,17 @@ class YouTubeToolTest(unittest.TestCase):
         result = self.tool.execute(mode=tool_input.mode)
         self.assertTrue(result != [])
 
+    def test_parse_duration_with_day_component(self) -> None:
+        self.assertEqual(self.tool.parse_duration('P1DT2H3M4S'), 93784)
+
+    def test_parse_duration_rejects_partial_trailing_text(self) -> None:
+        self.assertEqual(self.tool.parse_duration('PT1Mbad'), 0)
+
+    def test_parse_stat_count_handles_missing_or_malformed_values(self) -> None:
+        self.assertEqual(self.tool._parse_stat_count("123"), 123)
+        self.assertEqual(self.tool._parse_stat_count(None), 0)
+        self.assertEqual(self.tool._parse_stat_count(""), 0)
+        self.assertEqual(self.tool._parse_stat_count("hidden"), 0)
+
 if __name__ == '__main__':
     unittest.main()

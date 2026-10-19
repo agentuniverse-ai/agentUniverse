@@ -68,6 +68,63 @@ class WriteFileToolTest(unittest.TestCase):
         
         with open(file_path, 'r') as f:
             self.assertEqual(f.read(), initial_content + append_content)
+
+    def test_string_false_append_value_overwrites_file(self):
+        file_path = os.path.join(self.temp_dir, 'test_append_string_false.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+
+        tool_input = ToolInput({
+            'file_path': file_path,
+            'content': 'new content',
+            'append': 'false'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['append_mode'], False)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'new content')
+
+    def test_typo_append_value_returns_error_without_writing(self):
+        file_path = os.path.join(self.temp_dir, 'test_append_typo.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+
+        tool_input = ToolInput({
+            'file_path': file_path,
+            'content': 'new content',
+            'append': 'flase'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('append must be a boolean value', result['error'])
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'old content')
+
+    def test_non_binary_numeric_append_value_returns_error_without_writing(self):
+        file_path = os.path.join(self.temp_dir, 'test_append_numeric.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+
+        tool_input = ToolInput({
+            'file_path': file_path,
+            'content': 'new content',
+            'append': 2
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('append numeric value must be 0 or 1', result['error'])
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'old content')
     
     def test_create_directory_structure(self):
         file_path = os.path.join(self.temp_dir, 'nested/dir/structure/test.txt')

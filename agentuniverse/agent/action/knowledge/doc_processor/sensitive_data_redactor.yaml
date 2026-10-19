@@ -1,0 +1,33 @@
+name: 'sensitive_data_redactor'
+description: 'Redact common PII / sensitive identifiers (email, card, id, SSN, IP, API keys) from recalled documents before they reach the LLM. Addresses the privacy / compliance direction of issue #248.'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_data_redactor'
+  class: 'SensitiveDataRedactor'
+
+# --- Entities to redact ---
+# Built-in high-precision types: email, credit_card, id_card, ssn, ip_address,
+# api_key. Add 'phone' to enable (fuzzier) phone redaction.
+entities:
+  - email
+  - credit_card
+  - id_card
+  - ssn
+  - ip_address
+  - api_key
+
+# --- Replacement ---
+# Text substituted for every detected match.
+replacement: '[REDACTED]'
+
+# --- Custom patterns ---
+# Extra regex entries for domain-specific identifiers, e.g.
+#   - name: employee_id
+#     pattern: '\bEMP-\d{6}\b'
+custom_patterns: []
+
+# --- Redaction summary ---
+# Metadata key (per document) recording {entity: count} of what was redacted.
+# Set to null to omit.
+log_key: 'redaction_summary'

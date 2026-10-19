@@ -7,13 +7,14 @@
 
 import asyncio
 import queue
-import time
 import threading
+import time
+from contextvars import copy_context
 
 import pytest
 
-from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 from agentuniverse.base.context.framework_context import FrameworkContext
+from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 
 context_manager: FrameworkContextManager = FrameworkContextManager()
 
@@ -50,6 +51,51 @@ async def test_context_thread_and_async_isolation():
     assert queue2.get() == 11
     assert queue3.get() == 11
     assert queue4.get() == 11
+
+
+def test_set_all_contexts_returns_tokens_for_restoration():
+    context_manager.clear_all_contexts()
+    original_token = context_manager.set_context("request_id", "worker-value")
+
+    tokens = context_manager.set_all_contexts(
+        {
+            "request_id": "parent-value",
+            "temporary_key": "temporary-value",
+        }
+    )
+
+    assert context_manager.get_context("request_id") == "parent-value"
+    assert context_manager.get_context("temporary_key") == "temporary-value"
+
+    for var_name, token in tokens.items():
+        context_manager.reset_context(var_name, token)
+
+    assert context_manager.get_context("request_id") == "worker-value"
+    assert context_manager.get_context("temporary_key") is None
+
+    context_manager.reset_context("request_id", original_token)
+    context_manager.clear_all_contexts()
+
+
+def test_log_context_isolated_across_copied_contexts():
+    context_manager.clear_all_contexts()
+    context_manager.set_log_context("request_id", "parent")
+    child_context = copy_context()
+
+    def update_child_context():
+        context_manager.set_log_context("worker_id", "child")
+        return context_manager.get_context("LOG_CONTEXT")
+
+    child_log_context = child_context.run(update_child_context)
+
+    assert child_log_context == {
+        "request_id": "parent",
+        "worker_id": "child",
+    }
+    assert context_manager.get_context("LOG_CONTEXT") == {
+        "request_id": "parent",
+    }
+    context_manager.clear_all_contexts()
 
 
 if __name__ == "__main__":

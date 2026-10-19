@@ -80,3 +80,19 @@ store = ['sample_standard_app.intelligence.agentic.knowledge.store']
 - [Chroma](../../技术组件/存储/ChromaDB.md)
 - [Milvus](../../技术组件/存储/Milvus.md)
 - [Sqlite](../../技术组件/存储/Sqlite.md)
+### RedisVectorStore
+
+`RedisVectorStore` 使用 Redis Stack/RediSearch HNSW 索引提供同步和异步向量增删改查。通过 `pip install 'agentUniverse[store_ext]'` 安装可选依赖，并使用 Redis Stack；不含 Search 模块的普通 Redis 无法使用该组件。
+
+复制 `redis_vector_store.yaml.example`，配置向量维度、距离度量、键前缀，以及需要精确过滤的 TAG 元数据字段。连接凭证也可通过 `REDIS_VECTOR_URL` 注入，避免写入 YAML。
+
+```python
+store.upsert_document([Document(id="1", text="hello", metadata={"tenant": "acme"}, embedding=[0.1, 0.2])])
+results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metadata_filter={"tenant": "acme"})
+```
+
+支持 `cosine`、`l2`、`inner_product`。元数据过滤仅允许使用 `filter_tag_fields` 中声明的字段；组件会验证标识符并转义 RediSearch TAG 查询值。
+
+## PGVectorStore
+
+`PGVectorStore` 提供基于 PostgreSQL/pgvector 的同步与异步 CRUD、余弦/L2/内积检索、JSONB 包含过滤、可选的自动向量化、维度校验、自动建表和可选 HNSW 索引。安装 `store_ext` extra，并将 `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` 复制到应用配置目录。连接地址可以写在本地配置的 `connection_url` 中，或通过 `PGVECTOR_CONNECTION_URL` 提供；请勿提交数据库凭据。

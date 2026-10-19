@@ -18,20 +18,10 @@ from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.store.store import Store
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
-# faiss and numpy are imported at module scope so every method (query / insert /
-# _create_faiss_index / ...) sees the same names. They are optional dependencies:
-# a hard module-level import would break environments without faiss installed,
-# so each is wrapped and ``_new_client`` surfaces a clear ImportError when the
-# store is actually used.
-try:
-    import faiss  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover - exercised via the skip guard in tests
-    faiss = None  # type: ignore[assignment]
-
-try:
-    import numpy as np  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover - numpy ships with faiss-cpu
-    np = None  # type: ignore[assignment]
+# Module-level placeholders for optional dependencies; populated lazily
+# by _new_client so that importing this module never requires faiss/numpy.
+faiss = None
+np = None
 
 # Default configuration for FAISS index types
 DEFAULT_INDEX_CONFIG = {
@@ -259,12 +249,19 @@ class FAISSStore(Store):
 
     def _new_client(self) -> Any:
         """Initialize the FAISS index and load existing data if available."""
-        if faiss is None:
-            faiss_not_installed_msg = (
-                "FAISS is not installed. Please install it with 'pip install faiss-cpu' "
-                "for CPU version or 'pip install faiss-gpu' for GPU version."
-            )
-            raise ImportError(faiss_not_installed_msg)
+        global faiss, np
+        if faiss is None or np is None:
+            try:
+                import faiss as _faiss
+                import numpy as _np
+            except ImportError as e:
+                FAISS_NOT_INSTALLED_MSG = (
+                    "FAISS is not installed. Please install it with 'pip install faiss-cpu' "
+                    "for CPU version or 'pip install faiss-gpu' for GPU version."
+                )
+                raise ImportError(FAISS_NOT_INSTALLED_MSG) from e
+            faiss = _faiss
+            np = _np
         self._load_index_and_metadata()
         return self.faiss_index
 

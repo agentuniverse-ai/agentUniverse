@@ -22,7 +22,7 @@ from agentuniverse.agent.action.tool.common_tool.command_status_tool import Comm
 
 class CommandStatusToolTest(unittest.TestCase):
     def setUp(self):
-        self.run_tool = RunCommandTool()
+        self.run_tool = RunCommandTool(allow_command_execution=True)
         self.status_tool = CommandStatusTool()
 
     def test_command_status_check(self):
@@ -79,6 +79,36 @@ class CommandStatusToolTest(unittest.TestCase):
         
         self.assertIn('error', status_result)
         self.assertEqual(status_result['status'], 'not_found')
+
+    def test_string_thread_id_is_parsed(self):
+        status_input = ToolInput({
+            'thread_id': '12345678'
+        })
+        status_json = self.status_tool.execute(status_input)
+        status_result = json.loads(status_json)
+
+        self.assertIn('error', status_result)
+        self.assertEqual(status_result['status'], 'not_found')
+
+    def test_malformed_thread_id_returns_input_error(self):
+        status_input = ToolInput({
+            'thread_id': 'abc'
+        })
+        status_json = self.status_tool.execute(status_input)
+        status_result = json.loads(status_json)
+
+        self.assertEqual(status_result['status'], 'error')
+        self.assertIn('thread_id must be an integer', status_result['error'])
+
+    def test_boolean_thread_id_returns_input_error(self):
+        status_input = ToolInput({
+            'thread_id': True
+        })
+        status_json = self.status_tool.execute(status_input)
+        status_result = json.loads(status_json)
+
+        self.assertEqual(status_result['status'], 'error')
+        self.assertIn('thread_id must be an integer', status_result['error'])
 
 
 if __name__ == '__main__':

@@ -12,11 +12,26 @@ from agentuniverse.agent.action.tool.common_tool.run_command_tool import get_com
 
 
 class CommandStatusTool(Tool):
+    @staticmethod
+    def _normalize_thread_id(thread_id):
+        if isinstance(thread_id, bool):
+            raise ValueError("thread_id must be an integer")
+        if isinstance(thread_id, int):
+            return thread_id
+        if isinstance(thread_id, str) and thread_id.isdigit():
+            return int(thread_id)
+        raise ValueError("thread_id must be an integer")
+
     def execute(self, thread_id: int | ToolInput) -> str:
         if isinstance(thread_id, ToolInput):
             thread_id = thread_id.get_data("thread_id")
-        if isinstance(thread_id, str) and thread_id.isdigit():
-            thread_id = int(thread_id)
+        try:
+            thread_id = self._normalize_thread_id(thread_id)
+        except ValueError as e:
+            return json.dumps({
+                "error": str(e),
+                "status": "error"
+            })
 
         result = get_command_result(thread_id)
 
