@@ -720,7 +720,14 @@ class NumberToWordsTool(Tool):
                 after_group_unit = True
                 pending_post_group = False
             elif ch == "亿":
-                if not (total or wan_value or section or digit is not None):
+                if total:
+                    return (
+                        "a repeated '亿' is not supported — stacking '亿' "
+                        "levels describes values of at least 10^16, beyond "
+                        "the supported 12-digit range (e.g. write '一百亿', "
+                        "not '亿亿')"
+                    )
+                if not (wan_value or section or digit is not None):
                     return "a bare '亿' must be preceded by a number"
                 total += (wan_value + section + (digit or 0)) * 100_000_000
                 wan_value = 0

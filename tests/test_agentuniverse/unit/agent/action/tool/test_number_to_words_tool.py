@@ -412,8 +412,44 @@ class NumberToWordsToolErrorPayloadTest(unittest.TestCase):
             "五 万",
             "一百X",
             "一万二",
+            "一亿亿",
+            "一亿一亿",
+            "一亿零亿",
+            "一千亿亿",
+            "一亿二亿",
         ):
             self.assert_invalid_words(words, lang="zh")
+
+    def test_chinese_repeated_yi_is_rejected(self) -> None:
+        # A second '亿' would describe at least 10^16 — beyond the
+        # supported 12-digit range — and must never compose additively
+        # (previously '一亿一亿' silently parsed as 200,000,000).
+        for words in ("一亿亿", "一亿一亿", "一亿零亿", "一千亿亿", "一亿二亿"):
+            with self.subTest(words=words):
+                result = self.tool.execute(
+                    mode="words_to_number", words=words, lang="zh"
+                )
+                self.assertEqual(
+                    result["error"]["type"], "invalid_words", msg=words
+                )
+                self.assertIn("亿", result["error"]["message"])
+                self.assertNotIn("result", result)
+
+    def test_chinese_wan_after_yi_still_parses(self) -> None:
+        # The repeated-'亿' guard must not reject legitimate follow-up
+        # 万 sections after a single 亿.
+        cases = {
+            "一亿一万": 100010000,
+            "一亿零一万": 100010000,
+            "一亿二千万": 120000000,
+            "九千九百九十九亿九千九百九十九万九千九百九十九": 999999999999,
+        }
+        for words, expected in cases.items():
+            with self.subTest(words=words):
+                result = self.tool.execute(
+                    mode="words_to_number", words=words, lang="zh"
+                )
+                self.assertEqual(result["result"], expected, msg=words)
 
     def test_english_out_of_range_words(self) -> None:
         # "trillion" is beyond the supported short-scale vocabulary — the
