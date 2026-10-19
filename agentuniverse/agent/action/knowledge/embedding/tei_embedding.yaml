@@ -1,0 +1,7 @@
+name: 'tei_embedding'
+description: 'embedding use a self-hosted Hugging Face Text Embeddings Inference (TEI) server via its OpenAI-compatible /v1/embeddings endpoint (keyless, e.g. BAAI/bge-m3)'
+embedding_model_name: 'BAAI/bge-m3'
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.tei_embedding'
+  class: 'TEIEmbedding'
