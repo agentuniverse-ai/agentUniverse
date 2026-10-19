@@ -28,6 +28,7 @@ class Product(ComponentBase):
 
     @property
     def instance(self) -> ComponentBase:
+        """Return the concrete component instance bound to this product."""
         return self._instance
 
     def get_ctime(self) -> float:
