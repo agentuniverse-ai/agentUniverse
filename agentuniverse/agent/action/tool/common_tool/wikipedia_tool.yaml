@@ -1,0 +1,65 @@
+name: wikipedia_tool
+description: Wikipedia (MediaWiki API) tool — no API key required. Searches Wikipedia (mode='search') and fetches either the short summary card (mode='summary') or the full plain-text extract with an optional sentence/character limit (mode='details') of a page, from a configurable language edition (default en).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.wikipedia_tool
+  class: WikipediaTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Query mode — search (full-text search returning titles+snippets), summary (compact REST summary card), or details (full plain-text extract with optional sentence/char limit).
+    required: true
+  query:
+    type: string
+    description: Search keywords, required in search mode (e.g. 'theory of relativity'). Ignored in summary/details modes.
+    required: false
+  title:
+    type: string
+    description: Page title, required in summary/details modes (e.g. 'Albert Einstein'). Ignored in search mode.
+    required: false
+  max_results:
+    type: integer
+    description: Number of results to return (search mode only), from 1 to 25.
+    required: false
+    default: 5
+  sentences:
+    type: integer
+    description: Return the first 1 to 10 sentences of the extract (details mode only). Cannot be combined with chars.
+    required: false
+  chars:
+    type: integer
+    description: Return the first 1 to 1200 characters of the extract (details mode only). Cannot be combined with sentences.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["search", "summary", "details"]
+      description: Query mode.
+    query:
+      type: string
+      description: Search keywords (search mode only).
+    title:
+      type: string
+      description: Page title (summary/details modes only).
+    max_results:
+      type: integer
+      default: 5
+      minimum: 1
+      maximum: 25
+      description: Result count bound (search mode only).
+    sentences:
+      type: integer
+      minimum: 1
+      maximum: 10
+      description: Extract sentence limit (details mode only).
+    chars:
+      type: integer
+      minimum: 1
+      maximum: 1200
+      description: Extract character limit (details mode only).
+  required: ["mode"]
