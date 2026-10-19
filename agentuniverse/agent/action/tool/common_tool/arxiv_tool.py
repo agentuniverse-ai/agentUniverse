@@ -89,7 +89,7 @@ class ArxivTool(Tool):
         try:
             import arxiv
         except ImportError:
-            raise ImportError("arxiv is required. Install with: pip install arxiv")
+            raise ImportError("arxiv is required. Install with: pip install arxiv") from None
 
         if self.sch_engine is None:
             self.sch_engine = arxiv.Client()
@@ -141,7 +141,7 @@ class ArxivTool(Tool):
         try:
             import arxiv
         except ImportError:
-            raise ImportError("arxiv is required. Install with: pip install arxiv")
+            raise ImportError("arxiv is required. Install with: pip install arxiv") from None
     
         search = arxiv.Search(
             query="abs:" + processed_query,
@@ -178,7 +178,7 @@ class ArxivTool(Tool):
         try:
             import arxiv
         except ImportError:
-            raise ImportError("arxiv is required. Install with: pip install arxiv")
+            raise ImportError("arxiv is required. Install with: pip install arxiv") from None
         search = arxiv.Search(id_list=[paper_id])
         paper = next(self.sch_engine.results(search), None)
         if paper is None:
@@ -190,7 +190,7 @@ class ArxivTool(Tool):
         except ImportError:
             raise ImportError(
                 "pypdf is required to read PDF files: `pip install pypdf`"
-            )
+            ) from None
         reader = pypdf.PdfReader('downloaded-paper.pdf')
         text_content = [page.extract_text() for page in reader.pages]
         if os.path.exists("downloaded-paper.pdf"):
