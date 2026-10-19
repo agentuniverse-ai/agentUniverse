@@ -310,3 +310,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [SentenceLengthFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sentence_length_filter.yaml)
+
+该组件对散文内部的统计性超长句做标记或删除，对应 issue #258 的*知识预处理*方向。真实的知识文档常是正文里混着寄生内容：每段产品描述下都重复的模板句、每页末尾粘贴的法律免责声明、以一长串逗号分隔行直接塞进段落的表格转储。这些离群句不带任何主题信号，却会随正文进入每个分块，稀释周围文本的向量表达，并把召回结果推向模板内容。该组件采用与 `QuestionDetector` 同族的保守分句规则（`. ! ?` 与 `。！？` 为边界；英文句点额外有缩写、单字母首字母缩写、小数点与省略号守护），逐句按字符数计量，当句子长度**严格大于** `mean + k * stdev`（对文档自身句子计算的总体标准差，使基准自动适配每篇文档的语域）或**严格大于** `max_chars` 时判定为离群——恰好等于任一阈值不算离群。统计规则要求句子数不少于 `min_sentences`（默认 3）；不足时只有绝对上限生效，因为两个句子的均值是噪声而非基准。绝对上限在两种情形下始终生效，是短文档与整体膨胀文档的兜底。
+
+三种模式消费离群结果。`tag`（默认）不改文本，把每个离群句以 `{"index", "length", "span"}` 写入 `metadata['sentence_outliers']`，其中 `span` 是满足 `text[start:end] == 句子` 的字符偏移对。`drop` 删除离群句并用单个空格重新连接幸存句子，把未截断的删除数记入 `metadata['sentence_removed_count']`、至多 10 条被删句子文本记入 `metadata['sentence_removed']`；无删除时文本逐字节原样返回，因此可以放心常驻流水线。`keep_only` 是逆操作——只保留离群句——用于模板内容检查：先在语料上运行并阅读输出，看清到底是哪些免责声明、模板长句和表格转储在污染语料，再为 `drop` 通行确定阈值。已有的 metadata 条目全部保留，写入前会复制 metadata 映射，id 等字段绝不改动。整个流程纯 Python、确定且离线，与相邻组件互补：`ThresholdFilter` 约束整篇文档的大小而本组件在文档内部的句子粒度工作，`ParagraphStatsProfiler` 度量段落结构，`QuestionDetector` / `SentencePositionTagger` 对句子做分类而非计量。
+
+组件定义文件如下：
+```yaml
+name: 'sentence_length_filter'
+description: 'tag or drop statistical sentence-length outliers (boilerplate runs, legal disclaimers, table dumps) inside prose'
+k: 2.0                      # 长度 > mean + k * stdev（严格大于）即离群
+max_chars: 500              # 绝对上限，始终生效（严格大于）
+min_sentences: 3            # 启用统计规则所需的最少句子数
+mode: 'tag'                 # tag | drop | keep_only
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sentence_length_filter'
+  class: 'SentenceLengthFilter'
+```
+- k: 统计离群规则中总体标准差的倍数；必须 > 0。默认 2.0——对接近正态的句长分布约等于经典的 95% 区间。
+- max_chars: 句子字符长度的绝对上限；必须 >= 1。严格超出的句子无论统计结果如何均为离群。默认 500。
+- min_sentences: 启用统计规则所需的最少句子数；必须 >= 1。不足时只有 `max_chars` 生效。默认 3。
+- mode: 离群句的处理方式——`tag` 写 metadata 且不改文本；`drop` 删除离群句并用单空格重接幸存句；`keep_only` 只保留离群句（模板内容检查）。
