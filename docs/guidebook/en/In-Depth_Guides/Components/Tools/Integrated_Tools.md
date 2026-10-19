@@ -634,3 +634,58 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Wordplay Tool
+
+`WordplayTool` is an anagram / palindrome / letter-score utility built
+purely on the Python standard library (`itertools`, `collections`)
+with zero network access. It supports four modes. `check` tests the
+classic wordplay properties: `check='is_palindrome'` compares the
+letters-only reduction of the text (Unicode casefold plus every
+non-letter character stripped) with its reverse — so `A man, a plan,
+a canal: Panama` and the CJK classic `上海自来水来自海上` are both
+palindromes — while the optional `strict` flag compares the raw
+characters exactly with no case folding and nothing stripped;
+`check='is_anagram'` compares two texts' letter multisets and reports
+on which basis (letters-only and/or raw characters) the verdict holds,
+together with letter-count summaries and the letters whose counts
+differ; `check='both'` runs the two side by side.
+`anagrams_of` permutes an input word's letters (capped at 8 letters)
+and keeps the permutations found in a small built-in common-English
+demo word list (~500 words, hand-curated so it contains dozens of
+classic anagram groups such as *listen / silent / enlist / tinsel /
+inlets*; it is a demo list, not a dictionary, and English only),
+returning at most 50 alphabetically-sorted matches excluding the
+input word itself. `palindrome_parts` finds the longest palindromic
+substring (first occurrence on ties) plus every distinct palindromic
+substring of length >= 3, capped at 50 entries.
+`letter_score` scores a word with the standard English Scrabble tile
+values and reports non-ASCII-letter characters separately as
+unscored.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.wordplay_tool import WordplayTool
+
+tool = WordplayTool()
+pal = tool.execute(mode="check", text="A man, a plan, a canal: Panama",
+                   check="is_palindrome")["palindrome"]["is_palindrome"]
+ana = tool.execute(mode="check", text="Dormitory", second_text="Dirty Room",
+                   check="is_anagram")["anagram"]["is_anagram"]
+anagrams = tool.execute(mode="anagrams_of", text="listen")["anagrams"]
+score = tool.execute(mode="letter_score", text="kwyjibo")["score"]  # 26
+```
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, empty text, unknown mode / check value, a
+non-boolean `strict`, a missing or malformed `second_text`, text over
+2,000 characters, or an `anagrams_of` input longer than 8 letters
+after the reduction) raise a `ValueError`. Errors that depend on the
+content being processed — a text that reduces to zero letters (e.g.
+`"!!!"`) or an `anagrams_of` input with no letters — return a
+structured `error` payload (`{"type": "empty_after_strip", ...}`)
+instead of raising, and `letter_score` returns
+`no_scoreable_letters` for text without any ASCII letter. Everything
+is deterministic (no randomness — candidates come from
+`itertools.permutations`), palindrome checks work on any alphabetic
+script including CJK, while `anagrams_of` and `letter_score` are
+English-only by construction.
