@@ -20,10 +20,12 @@ id_generator = RandomIdGenerator()
 
 
 class AuTraceContext:
+    """Tracing context that holds the current session, trace, and span identifiers and accumulates per-span token usage."""
     _token_count_dict = {}
     _token_count_lock = threading.Lock()
 
     def __init__(self):
+        """Initialise the context, seeding session id as None. If a valid OTel span is currently active its trace/span ids are adopted; otherwise fresh ids are generated."""
         self._session_id = None
         current_span = trace.get_current_span()
 
@@ -37,11 +39,23 @@ class AuTraceContext:
 
     @classmethod
     def new_context(cls):
+        """Create and return a new AuTraceContext instance via the constructor.
+
+        Returns:
+            A new AuTraceContext instance.
+        """
         return cls()
 
     @classmethod
     def from_trace_context(cls, trace_id: str, span_id: str,
                            session_id: Optional[str] = None):
+        """Build an AuTraceContext from explicit trace, span, and optional session identifiers without running the constructor, and set the corresponding OTel context.
+        Args:
+            trace_id: Hex-string trace id to store on the instance.
+            span_id: Hex-string span id to store on the instance.
+            session_id: Optional session id to store; defaults to None.
+        Returns: The constructed AuTraceContext instance.
+        """
         instance = cls.__new__(cls)
         instance._session_id = session_id
         instance._trace_id = trace_id
@@ -52,15 +66,34 @@ class AuTraceContext:
 
     @staticmethod
     def _generate_trace_id() -> str:
+        """Generate a random trace id via the module id generator and format it as a hex string.
+
+        Returns:
+            The formatted hex-string trace id.
+        """
         trace_id_int = id_generator.generate_trace_id()
         return format_trace_id(trace_id_int)
 
     @staticmethod
     def _generate_span_id() -> str:
+        """Generate a random span id via the module id generator and format it as a hex string.
+
+        Returns:
+            The formatted hex-string span id.
+        """
         span_id_int = id_generator.generate_span_id()
         return format_span_id(span_id_int)
 
     def _set_otel_context(self, trace_id: str, span_id: str):
+        """Attach a remote, sampled span context built from the given trace/span ids as the current OTel context.
+
+        Args:
+            trace_id: Hex-string trace id to parse into the span context.
+            span_id: Hex-string span id to parse into the span context.
+
+        Returns:
+            The OTel context token of the attached context, or None if parsing or attaching fails.
+        """
         try:
             trace_id_int = int(trace_id, 16)
             span_id_int = int(span_id, 16)
