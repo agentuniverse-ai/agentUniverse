@@ -1,0 +1,36 @@
+name: srt_tool
+description: SRT subtitle tool — pure Python stdlib, no network required. Parse SubRip text into structured cues with tolerant timestamp handling (mode='parse'), shift all cues by a millisecond offset, negative allowed, clamped to the representable range and re-serialized as canonical SRT (mode='shift'), renumber cues from 1 preserving order-as-found (mode='renumber'), and report cue count, total/min/max/mean durations, overlapping pairs and reading-speed warnings (mode='stats').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.srt_tool
+  class: SrtTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Subtitle operation — parse, shift, renumber or stats.
+    required: true
+  text:
+    type: string
+    description: The raw SRT subtitle text. Required by every mode; UTF-8 BOM, CRLF and CR line endings are tolerated.
+    required: false
+  milliseconds:
+    type: integer
+    description: Shift mode only — the constant offset applied to every cue timestamp in milliseconds; negative values are allowed and shifted times are clamped to the representable range [0, 99:59:59.999].
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "shift", "renumber", "stats"]
+      description: Subtitle operation.
+    text:
+      type: string
+      description: Raw SRT subtitle text (all modes).
+    milliseconds:
+      type: integer
+      description: Constant per-cue timestamp offset in milliseconds (shift mode).
+  required: ["mode"]
