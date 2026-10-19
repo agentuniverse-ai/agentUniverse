@@ -18,6 +18,11 @@ class ProductApplication:
 
     @classmethod
     def start(cls):
+        """Start the AgentUniverse framework and the agentUniverse-product portal.
+
+        Boots the framework with `core_mode=True`, then starts the product
+        portal via `AgentUniverseProduct().start()`.
+        """
         AgentUniverse().start(core_mode=True)
         AgentUniverseProduct().start()
 
