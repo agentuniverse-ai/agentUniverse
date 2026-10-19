@@ -85,7 +85,7 @@ class ChatPrompt(Prompt):
                                 "utf-8",
                             )
                             extension = parsed_url.path.lower().split(".")[-1]
-                            mime_type = f"image/{extension}"
+                            mime_type = "image/jpeg" if extension in ("jpg", "jpeg") else f"image/{extension}"
                             content = [
                                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}}]
                             self.messages.append(Message(type=ChatMessageEnum.HUMAN.value, content=content))
