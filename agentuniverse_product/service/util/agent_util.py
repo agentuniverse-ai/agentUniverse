@@ -41,6 +41,7 @@ from agentuniverse_product.service.model.planner_dto import PlannerDTO
 from agentuniverse_product.service.model.prompt_dto import PromptDTO
 from agentuniverse_product.service.model.tool_dto import ToolDTO
 from agentuniverse_product.service.util.common_util import dict_does_not_contain_keys
+from agentuniverse_product.service.util.id_util import validate_component_id
 
 
 def assemble_product_config_data(agent_dto: AgentDTO) -> Dict:
@@ -72,8 +73,7 @@ def validate_create_agent_parameters(agent_dto: AgentDTO) -> None:
     Args:
         agent_dto (AgentDTO): The agent DTO.
     """
-    if agent_dto.id is None:
-        raise ValueError("Agent id cannot be None.")
+    validate_component_id(agent_dto.id, "Agent")
     agent = AgentManager().get_instance_obj(agent_dto.id, new_instance=False)
     if agent:
         raise ValueError("Agent instance corresponding to the agent id already exists.")

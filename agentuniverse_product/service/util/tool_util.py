@@ -15,6 +15,7 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.config.configer import Configer
 from agentuniverse_product.service.model.tool_dto import ToolDTO
+from agentuniverse_product.service.util.id_util import validate_component_id
 
 
 def validate_create_api_tool_parameters(tool_dto: ToolDTO) -> None:
@@ -23,8 +24,7 @@ def validate_create_api_tool_parameters(tool_dto: ToolDTO) -> None:
     Args :
         tool_dto (ToolDTO): The tool DTO object containing the tool parameters.
     """
-    if tool_dto.id is None:
-        raise ValueError("Tool id cannot be None.")
+    validate_component_id(tool_dto.id, "Tool")
     tool = ToolManager().get_instance_obj(tool_dto.id)
     if tool:
         raise ValueError(f"Tool instance corresponding to the tool id already exists. {tool_dto.id}")
