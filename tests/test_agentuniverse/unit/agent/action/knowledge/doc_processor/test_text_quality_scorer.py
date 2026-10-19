@@ -178,6 +178,7 @@ class TestTextQualityScorer(unittest.TestCase):
         """A short mixed string pins every Latin-path metric by hand."""
         metrics = self.scorer._analyze("Hello, world! 123")
         self.assertEqual(metrics['length_chars'], 17)
+        self.assertEqual(metrics['non_whitespace_chars'], 15)
         self.assertEqual(metrics['word_count'], 2)      # "123" has no letter
         self.assertEqual(metrics['mean_word_length'], 5.0)
         self.assertEqual(metrics['unique_word_ratio'], 1.0)
@@ -194,6 +195,7 @@ class TestTextQualityScorer(unittest.TestCase):
         units, CJK punctuation counts, mean Latin word length is None."""
         metrics = self.scorer._analyze("你好，世界。")
         self.assertEqual(metrics['length_chars'], 6)
+        self.assertEqual(metrics['non_whitespace_chars'], 6)
         self.assertEqual(metrics['word_count'], 4)
         self.assertIsNone(metrics['mean_word_length'])
         self.assertEqual(metrics['unique_word_ratio'], 1.0)
@@ -281,6 +283,63 @@ class TestTextQualityScorer(unittest.TestCase):
     def test_digit_dump_scores_low(self):
         """A bare digit dump scores very low."""
         self.assertLessEqual(self._score(DIGIT_DUMP), 10.0)
+
+    def test_letterless_documents_score_exactly_zero(self):
+        """Empty, whitespace-only, symbol-only and digit-only documents —
+        every text without a single letter or CJK character — score
+        exactly 0, as documented (the old gate missed digit-only and
+        punctuation-only soup)."""
+        for text in (DIGIT_DUMP, "1" * 300, "!" * 300, "." * 150 + "," * 150,
+                     "\u2605" * 300, "12345 !?@# \u2606\u2606 67890",
+                     "   ", " \n\t\n  ", "", None):
+            self.assertEqual(self._score(text), 0.0, msg=repr(text))
+
+    def test_soup_gate_measured_over_non_whitespace_chars(self):
+        """The symbol/digit-soup gate needs 100+ non-whitespace
+        characters, not 100+ total characters: whitespace padding must
+        not push a document under the gate."""
+        s = TextQualityScorer()
+        s.weights = {'length': 1.0}   # isolate: score = 100 * length ramp
+        # Each unit has 7 non-whitespace chars (1 letter, 6 soup) joined
+        # by regular " \n" separators (a 2-char mixed run stays regular).
+        unit = "a\u2605\u2606" + "1234"
+        self.assertEqual(len(unit), 7)
+        padded = " \n".join([unit] * 12)   # 84 non-ws, 106 total chars
+        dense = " \n".join([unit] * 15)    # 105 non-ws, 133 total chars
+        metrics = s._analyze(padded)
+        self.assertEqual(metrics['non_whitespace_chars'], 84)
+        # 84 non-ws < 100: no soup gate despite the 106 total characters.
+        self.assertAlmostEqual(s._composite_score(metrics), 41.25,
+                               places=6)
+        # 105 non-ws >= 100 with alpha ratio 15/105 < 0.20: gate applies.
+        self.assertAlmostEqual(s._composite_score(s._analyze(dense)),
+                               23.25, places=6)
+
+    def test_cjk_path_ignores_latin_word_length(self):
+        """On the CJK-aware path a stray short Latin token must not drag
+        the structure sub-score down: Latin word length only contributes
+        on the Latin path."""
+        stray = GOOD_ZH + " x"
+        metrics = self.scorer._analyze(stray)
+        self.assertEqual(metrics['script'], 'cjk')
+        self.assertEqual(metrics['mean_word_length'], 1.0)  # still reported
+        with_stray = self._score(stray)
+        self.assertGreaterEqual(with_stray, self._score(GOOD_ZH) - 1.0)
+        self.assertGreaterEqual(with_stray, 80.0)
+        # On the Latin path mean word length still contributes: 30
+        # one-character words flatten the structure sub-score while 30
+        # two-character words keep it maximal.
+        s = TextQualityScorer()
+        s.weights = {'structure': 1.0}
+        import string
+        short_words = " ".join(list(string.ascii_lowercase) + ["a", "b",
+                                                                "c", "d"])
+        long_words = " ".join(
+            [a + b for a, b in zip(string.ascii_lowercase,
+                                   string.ascii_lowercase)] +
+            ["a1", "b1", "c1", "d1"])
+        self.assertEqual(s._composite_score(s._analyze(short_words)), 0.0)
+        self.assertEqual(s._composite_score(s._analyze(long_words)), 100.0)
 
     def test_chinese_spam_loop_scores_low(self):
         """A repeated promotional phrase without punctuation triggers the

@@ -53,6 +53,8 @@ class TextQualityScorer(DocProcessor):
     Per-document metrics, all pure-stdlib and computed in one pass:
 
     - ``length_chars``: total characters of the text;
+    - ``non_whitespace_chars``: total characters excluding whitespace —
+      the denominator the symbol/digit-soup gate is measured over;
     - ``word_count``: word units — whitespace-separated tokens containing
       Latin letters plus every CJK character (CJK text is not spaced, so
       characters are the natural unit and Chinese documents are not
@@ -85,7 +87,8 @@ class TextQualityScorer(DocProcessor):
     almost verbatim (unique ratio < 0.10 over 30+ units — spam loops,
     scraper boilerplate) lose half their score, and long documents that are
     mostly symbols or digits (alpha ratio < 0.20 over 100+ non-whitespace
-    characters) lose 60%. Empty or whitespace-only documents score exactly
+    characters) lose 60%. Empty, whitespace-only, symbol-only and
+    digit-only documents score exactly
     0. Everything is fixed arithmetic: no randomness, no network, no model
     calls — the same text always yields the same score and metrics dict.
 
@@ -219,6 +222,7 @@ class TextQualityScorer(DocProcessor):
 
         return {
             'length_chars': len(text or ""),
+            'non_whitespace_chars': non_ws,
             'word_count': word_count,
             'mean_word_length': mean_word_length,
             'unique_word_ratio': unique_ratio,
@@ -280,23 +284,26 @@ class TextQualityScorer(DocProcessor):
 
         Returns:
             float: Weighted-mean score after pathology gates; exactly 0.0
-            for documents without measurable content (empty, whitespace-
-            only, symbol-only or digit-only texts).
+                for documents without measurable content (empty,
+                whitespace-only, symbol-only or digit-only texts).
         """
-        if metrics['word_count'] == 0 and metrics['alpha_ratio'] == 0.0 \
-                and metrics['digit_ratio'] == 0.0 \
-                and metrics['punctuation_ratio'] == 0.0:
-            # No measurable content at all: empty, whitespace-only,
-            # symbol-only and digit-only texts score exactly 0.
+        # word_count == 0 iff the text carries no alphabetic character at
+        # all (every CJK char is a unit and every CJK-free token with a
+        # letter is a Latin word): empty, whitespace-only, symbol-only and
+        # digit-only texts score exactly 0.
+        if metrics['word_count'] == 0:
             return 0.0
 
         words = metrics['word_count']
         unique = metrics['unique_word_ratio']
         mean_length = metrics['mean_word_length']
-        # A CJK-path document without Latin words has no meaningful Latin
-        # word length; the metric stays neutral instead of punishing it.
-        length_score = 1.0 if mean_length is None else _band(
-            mean_length, 2.0, 9.0, 1.2, 15.0)
+        # A CJK-path document counts characters, not Latin words, so the
+        # Latin word-length heuristic stays neutral there (the same holds
+        # for documents without any Latin words at all).
+        if mean_length is None or metrics.get('script') == 'cjk':
+            length_score = 1.0
+        else:
+            length_score = _band(mean_length, 2.0, 9.0, 1.2, 15.0)
 
         sub_scores = {
             'alpha': _ramp(metrics['alpha_ratio'], 0.25, 0.75),
@@ -324,7 +331,9 @@ class TextQualityScorer(DocProcessor):
         # be able to rescue.
         if words >= 30 and unique < 0.10:
             score *= 0.5
-        if metrics['length_chars'] >= 100 and metrics['alpha_ratio'] < 0.20:
+        non_ws_chars = metrics.get('non_whitespace_chars',
+                                   metrics['length_chars'])
+        if non_ws_chars >= 100 and metrics['alpha_ratio'] < 0.20:
             score *= 0.4
         return score
 
