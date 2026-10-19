@@ -220,18 +220,7 @@ class SourceCredibilityScorer(DocProcessor):
         text = value.strip().lower()
         if not text:
             return None
-        if "://" in text:
-            # Strip everything around the authority component of a URL.
-            rest = text.split("://", 1)[1]
-            host = rest.split("/", 1)[0]
-            host = host.split("?", 1)[0].split("#", 1)[0]
-            # Drop userinfo and port but keep IPv6 brackets usable.
-            if "@" in host:
-                host = host.rsplit("@", 1)[1]
-            host = host.strip("[]")
-            host = host.split(":", 1)[0]
-            text = host
-        return text
+        return _normalize_source_text(text)
 
     # ------------------------------------------------------------------ #
     # Scoring
@@ -367,7 +356,15 @@ class SourceCredibilityScorer(DocProcessor):
                     raise ValueError(
                         f"credibility_map['{pattern}'] must be in [0, 1], "
                         f"got: {score}")
-                validated[pattern.strip().lower()] = float(score)
+                # Normalize keys the same way sources are normalized at
+                # lookup time (lowercase; URL keys reduced to the bare
+                # domain) so a "https://host/path" entry actually matches.
+                normalized = _normalize_source_text(pattern.strip().lower())
+                if not normalized:
+                    raise ValueError(
+                        f"credibility_map key {pattern!r} does not contain a "
+                        f"usable domain or label")
+                validated[normalized] = float(score)
             self.credibility_map = validated
 
         if hasattr(doc_processor_configer, "min_score"):
@@ -392,6 +389,34 @@ class SourceCredibilityScorer(DocProcessor):
 # ----------------------------------------------------------------------- #
 # Module-level helpers (pure functions, kept out of the class for testability)
 # ----------------------------------------------------------------------- #
+
+def _normalize_source_text(text: str) -> str:
+    """Reduce a raw source string to its comparable form.
+
+    URLs are reduced to a lowercase bare domain (scheme, userinfo, port,
+    path, query and fragment stripped) so that ``https://CDC.gov:443/x?y=1``
+    and ``cdc.gov`` compare equal. Values without a scheme separator pass
+    through unchanged (already lowercased by the caller).
+
+    Args:
+        text: Lowercased, stripped source string.
+
+    Returns:
+        str: The normalized source identifier.
+    """
+    if "://" in text:
+        # Strip everything around the authority component of a URL.
+        rest = text.split("://", 1)[1]
+        host = rest.split("/", 1)[0]
+        host = host.split("?", 1)[0].split("#", 1)[0]
+        # Drop userinfo and port but keep IPv6 brackets usable.
+        if "@" in host:
+            host = host.rsplit("@", 1)[1]
+        host = host.strip("[]")
+        host = host.split(":", 1)[0]
+        text = host
+    return text
+
 
 def _wildcard_domain_match(pattern: str, domain: str) -> bool:
     """Match a domain against a wildcard pattern such as ``*.gov``.

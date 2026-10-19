@@ -197,6 +197,23 @@ class TestSourceCredibilityScorer(unittest.TestCase):
         self.assertEqual(scores["from en.wikipedia.org"], 0.99)
         self.assertEqual(scores["from shady.io"], 0.05)
 
+    def test_url_form_map_entry_matches_domain_sources(self):
+        """A credibility_map key written as a full URL is reduced to its
+        bare domain at configuration time and then matches both URL-form
+        and bare-domain sources (instead of silently falling back to
+        default_score)."""
+        configer = self._create_configer({
+            'name': 's', 'description': 'd',
+            'credibility_map': {'https://MyCompany.COM/about': 0.95},
+        })
+        s = SourceCredibilityScorer()
+        s._initialize_by_component_configer(configer)
+        docs = [_doc('https://mycompany.com/about'), _doc('mycompany.com')]
+        results = s.process_docs(docs, self.query)
+        scores = {d.text: d.metadata['credibility_score'] for d in results}
+        self.assertEqual(scores['from https://mycompany.com/about'], 0.95)
+        self.assertEqual(scores['from mycompany.com'], 0.95)
+
     def test_wildcard_domain_matching(self):
         """'*.gov' matches any subdomain of gov but not 'gov' itself; the
         longest custom wildcard wins over shorter ones."""
