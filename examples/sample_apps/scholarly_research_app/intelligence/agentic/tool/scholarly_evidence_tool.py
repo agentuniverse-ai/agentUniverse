@@ -269,8 +269,11 @@ class ScholarlyEvidenceTool(Tool):
             primary = matches[0]
             cls._merge_record(primary, record)
             for duplicate in matches[1:]:
-                cls._merge_record(primary, duplicate)
-                deduplicated.remove(duplicate)
+                # A title-only bridge may match two mutually conflicting works.
+                # Recheck after every merge as the primary gains identifiers.
+                if cls._records_match(primary, duplicate):
+                    cls._merge_record(primary, duplicate)
+                    deduplicated.remove(duplicate)
         return deduplicated
 
     @staticmethod
@@ -340,7 +343,10 @@ class ScholarlyEvidenceTool(Tool):
         url = cls._bounded_text(value, 1000)
         if not url:
             return ""
-        parsed = urlsplit(url)
+        try:
+            parsed = urlsplit(url)
+        except ValueError:
+            return ""
         return url if parsed.scheme.lower() in {"http", "https"} and parsed.netloc else ""
 
     @classmethod

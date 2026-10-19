@@ -19,6 +19,11 @@ layer that:
 - caps source results, evidence count, text lengths, and author count; and
 - assigns stable `E1`, `E2`, ... identifiers for grounded synthesis.
 
+Title-only records cannot bridge two works with conflicting DOI or PMID values.
+Identifier compatibility is checked again after each merge. A malformed source or
+PDF URL is omitted without discarding otherwise usable evidence; a valid DOI or
+PMID can still provide a fallback source URL.
+
 The agent prompt requires source-status disclosure, evidence-ID citations, explicit
 uncertainty, and a warning that metadata or abstracts are not full-text appraisal.
 
