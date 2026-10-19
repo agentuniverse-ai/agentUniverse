@@ -1,0 +1,38 @@
+name: ip_geo_tool
+description: IP geolocation tool (ipapi.co) — no API key required. Resolves the city, region, country, network operator, and timezone of a specific public IPv4/IPv6 address (mode='lookup') or of the caller's own IP (mode='self'); optionally keeps the reverse DNS hostname (reverse=True).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.ip_geo_tool
+  class: IPGeoTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Query mode — lookup (geolocate one specific public IPv4/IPv6 address given via ip) or self (geolocate the caller's own IP).
+    required: true
+  ip:
+    type: string
+    description: The IPv4 or IPv6 address to geolocate, as a string or an integer. Required in lookup mode (ignored in self mode); private, reserved, and other non-routable addresses are rejected before any request.
+    required: false
+  reverse:
+    type: boolean
+    description: Keep the reverse DNS hostname field of the response when the API provides one. Default false.
+    required: false
+    default: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lookup", "self"]
+      description: Query mode.
+    ip:
+      type: string
+      description: Target IPv4/IPv6 address (lookup mode only).
+    reverse:
+      type: boolean
+      default: false
+      description: Keep the reverse DNS hostname when available.
+  required: ["mode"]
