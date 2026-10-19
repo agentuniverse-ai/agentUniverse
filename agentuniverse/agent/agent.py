@@ -130,6 +130,7 @@ class Agent(ComponentBase, ABC):
 
     @trace_agent
     async def async_run(self, **kwargs) -> OutputObject:
+        """Run the agent asynchronously end to end: check the input, build an InputObject, execute the agent and parse the result into an OutputObject. Args: **kwargs: The agent input parameters. Returns: OutputObject: The agent output."""
         self.input_check(kwargs)
         input_object = InputObject(kwargs)
         self.update_trace_context(input_object)
@@ -159,6 +160,7 @@ class Agent(ComponentBase, ABC):
         return planner_result
 
     async def async_execute(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Execute the core agent logic; subclasses implement their behaviour here. Args: input_object (InputObject): The validated agent input. agent_input (dict): The parsed agent input. Returns: dict: The raw agent result."""
         pass
 
     def pre_parse_input(self, input_object) -> dict:
@@ -289,6 +291,7 @@ class Agent(ComponentBase, ABC):
         )
 
     def process_llm(self, **kwargs) -> LLM:
+        """Resolve the LLM instance for this run from the llm_name kwarg or the agent model profile. Args: **kwargs: May carry llm_name. Returns: LLM: The configured LLM instance."""
         llm_name = kwargs.get('llm_name') or self.agent_model.profile.get('llm_model', {}).get('name')
         llm: LLM = LLMManager().get_instance_obj(llm_name)
         if is_system_builtin(llm):
@@ -297,6 +300,7 @@ class Agent(ComponentBase, ABC):
         return llm
 
     def process_memory(self, agent_input: dict, **kwargs) -> Memory | None:
+        """Resolve the memory and conversation memory instances configured for the agent. Args: agent_input (dict): The parsed agent input. **kwargs: May carry memory_name and conversation_memory. Returns: Memory | None: The memory instance, or None when none is configured."""
         memory_name = kwargs.get('memory_name') or self.agent_model.memory.get('name')
         memory: Memory = MemoryManager().get_instance_obj(memory_name)
         conversation_memory_name = kwargs.get('conversation_memory') or self.agent_model.memory.get(
@@ -320,6 +324,7 @@ class Agent(ComponentBase, ABC):
 
     def invoke_chain(self, chain: RunnableSerializable[Any, str], agent_input: dict, input_object: InputObject,
                      **kwargs):
+        """Invoke the chain with the given agent input. When the chain streams, tokens are streamed to the output stream instead of returning a single result. Args: chain (RunnableSerializable): The chain to run. agent_input (dict): Input for the chain. input_object (InputObject): The agent input object holding the output stream. **kwargs: Extra options. Returns: The chain result (str or aggregated stream tokens)."""
         if not self.judge_chain_stream(chain):
             res = chain.invoke(input=agent_input, config=self.get_run_config())
             return res
@@ -337,6 +342,7 @@ class Agent(ComponentBase, ABC):
 
     async def async_invoke_chain(self, chain: RunnableSerializable[Any, str], agent_input: dict,
                                  input_object: InputObject, **kwargs):
+        """Asynchronously invoke the chain with the given agent input, streaming tokens to the output stream when the chain streams. Args: chain (RunnableSerializable): The chain to run. agent_input (dict): Input for the chain. input_object (InputObject): The agent input object holding the output stream. **kwargs: Extra options. Returns: The chain result (str or aggregated stream tokens)."""
         if not self.judge_chain_stream(chain):
             res = await chain.ainvoke(input=agent_input, config=self.get_run_config())
             return res
@@ -354,6 +360,7 @@ class Agent(ComponentBase, ABC):
 
     def judge_chain_stream(self,
                            chain: RunnableSerializable[Any, str]) -> bool:
+        """Determine whether the chain should stream by inspecting the streaming settings of its steps. Args: chain (RunnableSerializable): The chain to inspect. Returns: bool: True when streaming should be used."""
         streaming = False
         for _step in chain.steps:
             if hasattr(_step, "llm"):
@@ -363,6 +370,7 @@ class Agent(ComponentBase, ABC):
         return streaming
 
     def generate_result(self, data: list[dict | str]):
+        """Assemble streamed LLM chunks into a single result: joins raw string chunks, or joins text and reasoning_content from dict chunks. Args: data (list): The streamed chunks. Returns: str or dict: The aggregated result."""
         if not data:
             return ""
         if isinstance(data[0], str):
