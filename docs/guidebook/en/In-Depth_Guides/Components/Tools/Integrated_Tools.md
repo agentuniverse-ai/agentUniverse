@@ -634,3 +634,68 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## XML Path Tool
+
+`XmlPathTool` is a compact XML path query tool built purely on the
+Python standard library `xml.etree.ElementTree` — no XPath engine
+dependency and no network access. It complements `XmlReader`
+(structured ingestion of XML documents) the way `JsonPathTool`
+complements JSON readers: a small query language over already-loaded
+XML text. `query` mode returns every element a path selects, each
+match carrying its tag, attributes, a capped own-text snippet and
+child count; `attrs` mode returns each match's attribute dict;
+`text` mode returns each match's stripped own text (empty-text
+elements reported as `null` plus an `empty_text_count`); `validate`
+mode checks well-formedness and reports the expat error line and
+1-based column on failure.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.xml_path_tool import XmlPathTool
+
+tool = XmlPathTool()
+books = tool.execute(mode="query", xml_text=xml, path="/catalog/book[@category='fiction']")
+price = tool.execute(mode="text", xml_text=xml, path="/catalog/book[1]/price")["values"]
+ok = tool.execute(mode="validate", xml_text=xml)
+```
+
+The path syntax is an honest SUBSET of XPath 1.0, not full XPath:
+absolute paths only (`/root/child` nesting); `//` for descendants at
+any depth; `**` as an alias of `//` between steps (a trailing
+`/catalog/**` selects all descendants); `*` matching any one-level
+name; `[n]` 1-based indexes and `[last()]` — numbered per parent
+element after a `/` step (like XPath, `/root/shelf/book[1]` is the
+first `book` child of each `shelf`) and over the de-duplicated
+document-order list after a `//` step; and `[@attr='value']` /
+`[@attr]` attribute predicates with single- or double-quoted values
+and `\'` / `\\` escapes, chainable left to right. Not supported —
+rejected with a positioned syntax error rather than silently
+approximated: relative paths, `.` / `..`, namespace prefixes in
+paths, `text()` / `node()` tests, `|` unions, ranges, functions other
+than `last()` and comparisons other than `=`. Matching is
+namespace-blind on local names (`<dc:creator>` and `<creator>` both
+match `creator`), so two namespaces reusing one local name are
+indistinguishable; `text` mode returns only the element's own text
+block, without concatenating mixed content or nested text.
+
+Before any parsing, a byte-level pre-scan of the UTF-8 encoded input
+rejects documents containing `<!DOCTYPE` or `<!ENTITY` markup — the
+standard guard against XXE and entity-expansion (billion laughs)
+attacks, mirroring the DTD guard of `XmlReader`. The scan is
+conservative: mentions of those tokens inside comments are rejected
+too, and no external entities, DTDs or network fetches are ever
+processed.
+
+Inputs are validated strictly before any work: malformed parameters
+(unknown mode, missing / empty / over-long `xml_text` or `path`,
+non-string inputs) raise a `ValueError`. Content-level failures —
+forbidden DTD / ENTITY markup (with its located line / column), XML
+that is not well-formed (with the expat error line / column), text
+that cannot be encoded to UTF-8, and path syntax errors (with the
+offending position) — are returned as a structured `error` payload
+(`{"type": ..., "message": ...}`) instead of raising. A path that
+selects nothing is a normal empty result (`found: false`), not an
+error. Cost is bounded by caps rather than timeouts: at most 100,000
+characters of XML, 2,000 characters of path and 1,000 returned
+matches (with a `truncated` flag); evaluation is iterative and never
+mutates the parsed document.
