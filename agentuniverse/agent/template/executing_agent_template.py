@@ -30,18 +30,26 @@ from agentuniverse.prompt.prompt import Prompt
 
 
 class ExecutingAgentTemplate(AgentTemplate):
+    """Agent template that executes the subtasks of a planning result, running
+    them concurrently and aggregating their outputs.
+    """
     _context_values: Optional[dict] = {}
 
     class Config:
+        """Pydantic configuration that allows arbitrary attribute types."""
         arbitrary_types_allowed = True
 
     def input_keys(self) -> list[str]:
         return ['input', 'planning_result']
 
     def output_keys(self) -> list[str]:
+        """Return the list of output keys this template exposes."""
         return ['executing_result']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
+        """Fill agent_input with the user input, the planning framework and the
+        optional expert framework for the executing step.
+        """
         agent_input['input'] = input_object.get_data('input')
         agent_input['framework'] = input_object.get_data('planning_result').get_data('framework')
         agent_input['expert_framework'] = input_object.get_data('expert_framework', {}).get('executing')
@@ -49,10 +57,12 @@ class ExecutingAgentTemplate(AgentTemplate):
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
                            **kwargs) -> dict:
+        """Execute all subtasks of the planning framework and return the aggregated result."""
         return self._execute_tasks(input_object, agent_input, memory, llm, prompt)
 
     async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
                                        prompt: Prompt, **kwargs) -> dict:
+        """Execute all subtasks in the default thread pool executor and return the aggregated result."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._execute_tasks, input_object, agent_input, memory,
                                           llm, prompt)
