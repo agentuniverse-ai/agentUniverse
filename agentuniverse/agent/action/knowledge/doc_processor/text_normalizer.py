@@ -364,9 +364,9 @@ class TextNormalizer(DocProcessor):
             limit = doc_processor_configer.max_blank_lines
             if isinstance(limit, bool) or not isinstance(limit, int):
                 raise ValueError("max_blank_lines must be an integer")
-            self.max_blank_lines = limit
-            if self.max_blank_lines < 0:
+            if limit < 0:
                 raise ValueError("max_blank_lines must be >= 0")
+            self.max_blank_lines = limit
 
         if hasattr(doc_processor_configer, 'url_mask_token') and \
                 doc_processor_configer.url_mask_token is not None:
