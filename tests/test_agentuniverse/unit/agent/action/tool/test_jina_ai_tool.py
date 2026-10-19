@@ -58,26 +58,6 @@ class JinaAIToolTLSTest(unittest.TestCase):
         # The failure is reported through the logger, never printed to stdout.
         self.assertEqual(out.getvalue(), "")
 
-    def test_make_api_request_handles_http_error_without_response(self) -> None:
-        """Verify an HTTP error without a response body yields an error message."""
-        tool = JinaAITool()
-        with (
-            patch.object(
-                jina_module.requests,
-                "get",
-                side_effect=requests.HTTPError("connection failed"),
-            ),
-            patch.object(jina_module.time, "sleep"),
-        ):
-            result = tool._make_api_request(
-                "https://r.jina.ai/https://example.com",
-                timeout=1,
-                error_prefix="Error reading URL",
-            )
-
-        self.assertIn("HTTP Error", result)
-        self.assertIn("connection failed", result)
-
     def test_execute_overrides_do_not_persist_between_calls(self) -> None:
         tool = JinaAITool(mode="read", api_key="configured-key", headers={"X-Base": "base"})
         payload = {"data": {"content": "page text"}}
@@ -103,6 +83,26 @@ class JinaAIToolTLSTest(unittest.TestCase):
         self.assertNotIn("X-Call", read_tool._get_headers())
         self.assertEqual(tool.mode, "read")
         self.assertEqual(tool.timeout, 30)
+
+    def test_make_api_request_handles_http_error_without_response(self) -> None:
+        """Verify an HTTP error without a response body yields an error message."""
+        tool = JinaAITool()
+        with (
+            patch.object(
+                jina_module.requests,
+                "get",
+                side_effect=requests.HTTPError("connection failed"),
+            ),
+            patch.object(jina_module.time, "sleep"),
+        ):
+            result = tool._make_api_request(
+                "https://r.jina.ai/https://example.com",
+                timeout=1,
+                error_prefix="Error reading URL",
+            )
+
+        self.assertIn("HTTP Error", result)
+        self.assertIn("connection failed", result)
 
 
 if __name__ == "__main__":
