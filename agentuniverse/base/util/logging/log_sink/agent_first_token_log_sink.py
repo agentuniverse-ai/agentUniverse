@@ -14,12 +14,27 @@ from agentuniverse.base.util.monitor.monitor import Monitor
 
 
 class AgentFirstTokenLogSink(BaseFileLogSink):
+    """Log sink that records the agent first-token latency to a file log."""
+
     log_type: LogTypeEnum = LogTypeEnum.agent_first_token
 
     def process_record(self, record):
+        """Rewrite the record message with the generated first-token log.
+
+        Args:
+            record: The log record dict being processed.
+        """
         record["message"] = self.generate_log(
             cost_time=record['extra'].get('cost_time')
         )
 
     def generate_log(self, cost_time) -> str:
+        """Build the first-token cost log message.
+
+        Args:
+            cost_time: The elapsed time in seconds before the first token.
+
+        Returns:
+            str: The invocation chain prefix followed by the cost text.
+        """
         return Monitor.get_invocation_chain_str() + f" Agent first token cost {cost_time:.2f} seconds."
