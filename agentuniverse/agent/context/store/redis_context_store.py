@@ -17,8 +17,8 @@ Use cases:
 """
 
 import json
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from typing import List, Optional
+from datetime import datetime
 
 from agentuniverse.agent.context.context_store import ContextStore
 from agentuniverse.agent.context.context_model import (
@@ -169,7 +169,7 @@ class RedisContextStore(ContextStore):
 
                 segments.append(segment)
 
-            except Exception as e:
+            except Exception:
                 # Skip corrupted segments
                 continue
 
@@ -195,28 +195,33 @@ class RedisContextStore(ContextStore):
         Returns:
             List of matching segments ranked by relevance
         """
+        query_lower = query.strip().lower()
+        query_terms = query_lower.split()
+        if not query_terms or top_k <= 0:
+            return []
+
         # Get all segments and do in-memory search
         # For production, consider Redis full-text search module
         segments = self.get(session_id, limit=1000)
-
-        query_lower = query.lower()
-        query_terms = query_lower.split()
 
         # Score segments
         scored = []
         for segment in segments:
             content_lower = segment.content.lower()
 
+            phrase_match = query_lower in content_lower
+            matching_terms = [term for term in query_terms if term in content_lower]
+            if not phrase_match and not matching_terms:
+                continue
+
             score = 0.0
 
             # Exact phrase match
-            if query_lower in content_lower:
+            if phrase_match:
                 score += 10.0
 
             # Term matches
-            for term in query_terms:
-                if term in content_lower:
-                    score += 2.0
+            score += 2.0 * len(matching_terms)
 
             # Priority bonus
             priority_bonus = {
