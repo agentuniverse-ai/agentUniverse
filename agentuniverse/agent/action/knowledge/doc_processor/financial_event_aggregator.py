@@ -8,6 +8,7 @@
 
 import hashlib
 import logging
+from collections import deque
 from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -260,10 +261,13 @@ class FinancialEventAggregator(DocProcessor):
                 # Expand cluster
                 cluster_docs = [docs[i]]
                 visited.add(i)
-                queue = neighbors.copy()
+                queue = deque(neighbors)
+                # Discover once; overlapping neighborhoods must not requeue
+                # documents that are already waiting to be visited.
+                queued = set(neighbors)
 
                 while queue:
-                    j = queue.pop(0)
+                    j = queue.popleft()
                     if j in visited:
                         continue
 
@@ -272,7 +276,10 @@ class FinancialEventAggregator(DocProcessor):
 
                     # Find neighbors of j
                     j_neighbors = [k for k in range(n) if distance_matrix[j][k] < eps and k != j]
-                    queue.extend([k for k in j_neighbors if k not in visited])
+                    for k in j_neighbors:
+                        if k not in visited and k not in queued:
+                            queued.add(k)
+                            queue.append(k)
 
                 cluster = self._create_cluster(cluster_docs)
                 clusters.append(cluster)
