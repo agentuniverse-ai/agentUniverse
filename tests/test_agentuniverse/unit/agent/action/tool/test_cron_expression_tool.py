@@ -103,6 +103,31 @@ class CronExpressionToolValidateTest(unittest.TestCase):
         result = self.tool.execute(mode="validate", expression="0 0 * * 5-7")
         self.assertEqual(result["fields"]["day-of-week"], [0, 5, 6])
 
+    def test_validate_dow_step_from_value_wraps_to_sunday(self) -> None:
+        # '5/2' steps from Friday through the field end (7 = Sunday),
+        # so the expanded set is Friday and Sunday.
+        result = self.tool.execute(mode="validate", expression="0 0 * * 5/2")
+        self.assertEqual(result["fields"]["day-of-week"], [0, 5])
+        result = self.tool.execute(mode="validate", expression="0 0 * * 1/2")
+        self.assertEqual(result["fields"]["day-of-week"], [0, 1, 3, 5])
+
+    def test_validate_quartz_extensions_rejected_honestly(self) -> None:
+        # L / W / # / ? and six-field seconds syntax are not supported;
+        # they must fail validation with a field error, not misparse.
+        for expression, field in (
+            ("0 0 L * *", "day-of-month"),
+            ("0 0 15W * *", "day-of-month"),
+            ("0 0 * * 1#2", "day-of-week"),
+            ("0 0 ? * 1", "day-of-month"),
+            ("0 */5 * * * *", "expression"),
+            ("@reboot", "macro"),
+        ):
+            result = self.tool.execute(mode="validate", expression=expression)
+            self.assertFalse(result["valid"], expression)
+            self.assertEqual(
+                result["errors"][0]["field"], field, expression
+            )
+
     def test_validate_macros(self) -> None:
         expected = {
             "@daily": ("0 0 * * *", None, None),
@@ -179,6 +204,16 @@ class CronExpressionToolValidateTest(unittest.TestCase):
         self.assert_field_error("*/0 * * * *", "minute", "positive integer")
         self.assert_field_error("*/-2 * * * *", "minute", "positive integer")
         self.assert_field_error("*/a * * * *", "minute", "step must be a positive integer")
+
+    def test_validate_rejects_non_plain_digit_tokens(self) -> None:
+        # int() alone would accept underscore separators, signs and
+        # non-ASCII digit characters; none of them are cron syntax.
+        self.assert_field_error("1_0 * * * *", "minute", "not a valid integer")
+        self.assert_field_error("*/1_5 * * * *", "minute", "positive integer")
+        self.assert_field_error("+5 * * * *", "minute", "not a valid integer")
+        self.assert_field_error("*/+15 * * * *", "minute", "positive integer")
+        self.assert_field_error("٥ * * * *", "minute", "not a valid integer")
+        self.assert_field_error("*/٥ * * * *", "minute", "positive integer")
 
     def test_validate_stray_commas_and_slashes(self) -> None:
         self.assert_field_error("1,,2 * * * *", "minute", "empty list element")
@@ -613,6 +648,20 @@ class CronExpressionToolParameterTest(unittest.TestCase):
         self.assert_invalid(mode="next", expression="* * * * *", now="notadate")
         self.assert_invalid(
             mode="next", expression="* * * * *", now="2026-13-45T99:00:00"
+        )
+
+    def test_parameter_validation_precedes_expression_parsing(self) -> None:
+        # Malformed parameters raise before any computation, even when
+        # the expression is also invalid (documented contract).
+        self.assert_invalid(
+            mode="next", expression="60 * * * *", now=NOW_2026_01_01, count=0
+        )
+        self.assert_invalid(
+            mode="next", expression="60 * * * *", now="notadate"
+        )
+        self.assert_invalid(
+            mode="next", expression="60 * * * *",
+            now=NOW_2026_01_01, max_iterations=0,
         )
 
     def test_unused_next_parameters_are_ignored_by_other_modes(self) -> None:

@@ -31,6 +31,12 @@ Supported syntax — standard five-field Vixie-style cron:
   are restricted (neither is the literal ``*``), a day matches when
   *either* field matches.
 
+Deliberately **not** supported (they fail validation with a precise
+per-field error rather than being misread): Quartz / Jenkins extensions
+such as ``L`` (last day), ``W`` (nearest weekday), ``#`` (nth weekday)
+and ``?``; six-field expressions with a seconds or year field; and the
+``@reboot`` macro (scheduling semantics, not an expression to parse).
+
 Three modes:
 
 * ``validate`` — parse the expression and report per-field errors
@@ -201,6 +207,15 @@ class CronExpressionTool(Tool):
         if mode == "validate":
             return self._run_validate(clean_expression)
 
+        # Malformed `next` parameters raise before any computation, as
+        # documented — even when the expression itself is invalid too.
+        clean_now: Optional[datetime] = None
+        clean_count = clean_cap = 0
+        if mode == "next":
+            clean_count = self._validate_count(count)
+            clean_cap = self._validate_max_iterations(max_iterations)
+            clean_now = self._validate_now(now)
+
         parsed = self._parse(clean_expression)
         if parsed.error_fields:
             return self._expression_error(mode, clean_expression, parsed)
@@ -211,7 +226,7 @@ class CronExpressionTool(Tool):
                 "description": self._describe(parsed),
             }
         return self._run_next(
-            clean_expression, parsed, now, count, max_iterations
+            clean_expression, parsed, clean_now, clean_count, clean_cap
         )
 
     # ------------------------------------------------------------------ #
@@ -418,13 +433,15 @@ class CronExpressionTool(Tool):
                     f"the {name} field has a '/' with no step value "
                     f"(got {part[:64]!r})"
                 )
-            try:
-                step = int(step_text)
-            except ValueError:
+            # Plain ASCII digit runs only: int() would also accept
+            # underscores ('1_5'), signs ('+2') and non-ASCII digits,
+            # none of which are cron syntax.
+            if not (step_text.isascii() and step_text.isdigit()):
                 return (
                     f"the {name} field step must be a positive integer "
                     f"(got {step_text[:64]!r})"
                 )
+            step = int(step_text)
             if step < 1:
                 return (
                     f"the {name} field step must be a positive integer, "
@@ -481,9 +498,11 @@ class CronExpressionTool(Tool):
             )
         if names is not None and value_text.lower() in names:
             return names[value_text.lower()], None
-        try:
-            value = int(value_text)
-        except ValueError:
+        # Plain ASCII digit runs only: int() would also accept
+        # underscores ('1_0'), signs ('+5') and non-ASCII digit
+        # characters (e.g. Eastern Arabic numerals), none of which are
+        # cron syntax.
+        if not (value_text.isascii() and value_text.isdigit()):
             if names is MONTH_NAMES:
                 hint = " (month names jan-dec are also accepted)"
             elif names is DOW_NAMES:
@@ -494,6 +513,7 @@ class CronExpressionTool(Tool):
                 f"the {name} field value {value_text[:64]!r} is not a "
                 f"valid integer{hint}"
             )
+        value = int(value_text)
         if not low <= value <= high:
             return None, (
                 f"the {name} field value {value} is out of range "
@@ -709,22 +729,23 @@ class CronExpressionTool(Tool):
         self,
         expression: str,
         parsed: "_ParsedCron",
-        now: Any,
-        count: Any,
-        max_iterations: Any,
+        now: datetime,
+        count: int,
+        max_iterations: int,
     ) -> Dict[str, Any]:
-        """Compute the next run datetimes after ``now``."""
-        clean_count = self._validate_count(count)
-        clean_cap = self._validate_max_iterations(max_iterations)
-        clean_now = self._validate_now(now)
+        """Compute the next run datetimes after ``now``.
+
+        ``now`` / ``count`` / ``max_iterations`` arrive already
+        validated by :meth:`execute`.
+        """
         matches, capped, checks = self._iterate_matches(
-            parsed, clean_now, clean_count, clean_cap
+            parsed, now, count, max_iterations
         )
         base: Dict[str, Any] = {
             "mode": "next",
             "expression": expression,
-            "now": clean_now.isoformat(),
-            "count": clean_count,
+            "now": now.isoformat(),
+            "count": count,
         }
         if capped:
             return {
@@ -732,8 +753,8 @@ class CronExpressionTool(Tool):
                 "error": {
                     "type": "iteration_cap_exceeded",
                     "message": (
-                        f"gave up after {clean_cap:,} candidate checks "
-                        f"with {len(matches)} of {clean_count} requested "
+                        f"gave up after {max_iterations:,} candidate checks "
+                        f"with {len(matches)} of {count} requested "
                         "matches found — the expression is either "
                         "unmatchable (e.g. February 31st) or its next "
                         "runs lie beyond the scan horizon; raise "
