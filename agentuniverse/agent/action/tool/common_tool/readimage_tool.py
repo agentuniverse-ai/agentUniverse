@@ -58,6 +58,17 @@ def detect_text_regions(image, east_model='frozen_east_text_detection.pb', min_c
     """
     _require_dependency(cv2, "opencv-python")
     _require_dependency(np, "numpy")
+    if (
+        isinstance(width, bool)
+        or isinstance(height, bool)
+        or not isinstance(width, int)
+        or not isinstance(height, int)
+        or width <= 0
+        or height <= 0
+        or width % 32 != 0
+        or height % 32 != 0
+    ):
+        raise ValueError("width and height must be positive multiples of 32")
     # Load the EAST model
     net = cv2.dnn.readNet(east_model)
     orig = image.copy()
