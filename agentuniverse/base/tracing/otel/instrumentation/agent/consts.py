@@ -13,6 +13,8 @@ INSTRUMENTOR_VERSION = "0.1.0"
 
 # Metric Names
 class MetricNames:
+    """Constant metric names recorded by the agent instrumentation.
+    """
     AGENT_CALLS_TOTAL = "agent_calls_total"
     AGENT_ERRORS_TOTAL = "agent_errors_total"
     AGENT_CALL_DURATION = "agent_call_duration"
@@ -27,6 +29,8 @@ class MetricNames:
 # Span Attribute Names
 class SpanAttributes:
     # Agent attributes
+    """Constant span attribute names used by the agent instrumentation.
+    """
     SPAN_KIND = "au.span.kind"
     AGENT_NAME = "au.agent.name"
     AGENT_INPUT = "au.agent.input"
@@ -55,6 +59,8 @@ class SpanAttributes:
 
 
 class MetricLabels:
+    """Constant metric label names used by the agent instrumentation.
+    """
     AGENT_NAME = "au_agent_name"
     CALLER_NAME = "au_trace_caller_name"
     CALLER_TYPE = "au_trace_caller_type"
