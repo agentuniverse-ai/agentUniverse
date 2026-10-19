@@ -19,7 +19,7 @@ from agentuniverse.base.util.monitor.monitor import Monitor
 from agentuniverse.llm.llm_output import LLMOutput
 
 
-def get_caller_info(instance: object = None):
+def get_caller_info(instance: object = None) -> dict:
     source_list = Monitor.get_invocation_chain()
     if len(source_list) > 0:
         return {
