@@ -310,3 +310,31 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [QuestionDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/question_detector.yaml)
+
+该组件找出文档中的疑问句并写入 metadata，对应 issue #258 的*知识抽取*方向。语料中埋着大量值得挖掘的问题：FAQ 页面成批地问答，社区帖子原样提问，客服记录几乎就是问题日志。该检测器把每篇文档切成句子并逐一判定是否为疑问句——全程离线、确定性、零模型调用——FAQ 挖掘与 QA 对构建流程因此可以直接消费 metadata 中的命中结果，而不必重新切分散文。
+
+分句策略刻意保守。句子结束于 `. ! ?` 与中文的 `。！？`；针对英文句点设置三重保护：常见缩写（"Dr. Smith asked..."）、单字母缩写（"J. K. Rowling"、"e.g."）与小数（"3.14"）不切分，句尾的连续终止标点（"真的吗？！"）及后随引号归属其终止的句子。一个句子按如下优先级判定为疑问句：**wh**——以英文疑问开头词起句（what、why、how、when、where、who、which、whose、is、are、do、does、did、can、could、would、should、will，忽略大小写，允许前导引号，不要求句尾问号），或句中含中文疑问词（为什么 / 什么 / 怎么 / 如何 / 多少 / 几 / 哪——中文没有词边界，故在句中任意位置匹配）；**tagged**——句中带内联疑问标记：英文 "..., right?" 结尾（问号必需），或中文的是不是 / 对吗；**polar**——句尾就是 `?` / `？`，或中文陈述句以语气词 吗 结尾。
+
+每个命中项为 `{"text": str, "span": (start, end), "kind": "wh" | "polar" | "tagged", "opener": str | None}`——`span` 是相对原文的字符偏移，且严格满足 `text == document.text[start:end]`，各 span 有序不重叠；`opener` 是匹配到的疑问词（tagged 类为其标记词），polar 类为 None。词数低于 `min_words` 的片段（含至少一个字母数字字符的空白分隔词元）被整体忽略——默认 1 只丢弃"？"这类纯标点残留，单词问句 "Why?" 仍然计入。`metadata['question_count']` 始终报告未截断的总数，`metadata['question_ratio']` 报告疑问句占比（空文本为 0.0）；`metadata['questions']` 最多保留 `max_questions` 条。所有文档原样通过：text/id 不动，metadata 写入前先复制。词元匹配是启发式的——中文 哪 里都行/几 乎、英文感叹式 "What a day!" 等可能产生误报。该组件与 `QAPairExtractor`（需要*成对*的问答）和 `MultiQueryParaphraser`（用 LLM *生成*问题）互补：本组件只*检测*已有提问。
+
+组件定义文件如下：
+```yaml
+name: 'question_detector'
+description: 'find interrogative sentences and stamp them into document metadata for FAQ mining and QA-pair workflows'
+max_questions: 50             # metadata['questions'] 最多保留的命中数
+min_words: 1                  # 片段计为句子的最小词数
+questions_key: 'questions'    # 命中列表写入的 metadata 键；'' 表示不写入
+count_key: 'question_count'   # 未截断计数写入的 metadata 键；'' 表示不写入
+ratio_key: 'question_ratio'   # 疑问句占比写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.question_detector'
+  class: 'QuestionDetector'
+```
+- max_questions：metadata['questions'] 最多保留的命中条数，必须 >= 0。question_count 始终报告未截断总数，截断列表不会掩盖真实规模。
+- min_words：片段计为句子的最小词数（含至少一个字母数字字符的空白分隔词元），必须 >= 1。默认 1 保留 "Why?" 这类单词问句，只丢弃纯标点片段。
+- questions_key：`{'text', 'span', 'kind', 'opener'}` 命中列表（截断后）写入的 metadata 键；为空则不写入。
+- count_key：未截断的疑问句计数写入的 metadata 键；为空则不写入。
+- ratio_key：疑问句占比（疑问句 / 总句数，空文本为 0.0）写入的 metadata 键；为空则不写入。

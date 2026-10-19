@@ -309,3 +309,31 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [QuestionDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/question_detector.yaml)
+
+This component finds interrogative sentences and stamps them into document metadata, addressing the *knowledge extraction* direction of issue #258. Corpora are full of questions worth mining: FAQ pages answer them in bulk, community posts ask them verbatim, and support transcripts are essentially question logs. This detector splits each document into sentences and classifies every one as a question or not — offline, deterministically, with no model call — so FAQ mining and QA-pair construction workflows can consume the hits directly from metadata instead of re-tokenising prose.
+
+Segmentation is deliberately conservative. Sentences end at `. ! ?` and their CJK counterparts `。！？`, with three English guards on the dot: known abbreviations ("Dr. Smith asked..."), single-letter initials ("J. K. Rowling", "e.g.") and decimals ("3.14") do not split, and a trailing punctuation run ("真的吗？！") plus closing quotes belongs to the sentence it terminates. A sentence counts as a question when, in priority order: **wh** — it starts with an English interrogative opener (what, why, how, when, where, who, which, whose, is, are, do, does, did, can, could, would, should, will — case-insensitive, leading quotes allowed, terminal punctuation not required) or contains a Chinese interrogative token (为什么 / 什么 / 怎么 / 如何 / 多少 / 几 / 哪, matched anywhere since Chinese has no word boundaries); **tagged** — it carries an inline marker: an English "..., right?" ending (the question mark is required), or the Chinese markers 是不是 / 对吗; **polar** — it simply ends with `?` / `？`, or a Chinese statement ends with the particle 吗.
+
+Each hit is `{"text": str, "span": (start, end), "kind": "wh" | "polar" | "tagged", "opener": str | None}` — `span` are character offsets into the original text with `text == document.text[start:end]` exactly, spans ordered and non-overlapping; `opener` is the matched interrogative token (the tag marker for tagged questions) and `None` for polar questions. Segments with fewer than `min_words` words (whitespace tokens containing at least one alphanumeric character) are ignored entirely — the default of 1 only drops punctuation husks like a bare "？", while a single-word "Why?" still counts. `metadata['question_count']` always reports the uncapped total and `metadata['question_ratio']` the share of question sentences (0.0 for empty text); `metadata['questions']` is capped at `max_questions` hits. Every document passes through with text/id untouched and metadata mappings copied before mutation. Token matching is a heuristic — Chinese 哪 in 哪里都行 or 几 in 几乎, or English exclamatory "What a day!", can yield false positives. The component complements `QAPairExtractor` (which requires *paired* questions and answers) and `MultiQueryParaphraser` (which *generates* questions with an LLM): this one only *detects* what is already asked.
+
+The component definition file is as follows:
+```yaml
+name: 'question_detector'
+description: 'find interrogative sentences and stamp them into document metadata for FAQ mining and QA-pair workflows'
+max_questions: 50             # max hits kept in metadata['questions']
+min_words: 1                  # minimum words for a segment to count as a sentence
+questions_key: 'questions'    # metadata key for the (capped) hit list; '' disables
+count_key: 'question_count'   # metadata key for the uncapped count; '' disables
+ratio_key: 'question_ratio'   # metadata key for question ratio; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.question_detector'
+  class: 'QuestionDetector'
+```
+- max_questions: Maximum number of hits kept in `metadata['questions']`; must be >= 0. `question_count` always reports the uncapped total, so capping the list never hides the true magnitude.
+- min_words: Minimum number of words (whitespace tokens containing at least one alphanumeric character) for a segment to count as a sentence; must be >= 1. The default 1 keeps single-word questions such as "Why?" and only drops punctuation-only segments.
+- questions_key: Metadata key the (capped) list of `{'text', 'span', 'kind', 'opener'}` hits is written to; an empty value disables this stamp.
+- count_key: Metadata key the uncapped question sentence count is written to; an empty value disables this stamp.
+- ratio_key: Metadata key the question ratio (question sentences / total sentences, 0.0 for empty text) is written to; an empty value disables this stamp.
