@@ -5,6 +5,7 @@
 # @FileName: statistics_extractor.py
 
 import re
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -76,9 +77,10 @@ _RE_PERCENT_SIGN = re.compile(rf"(?P<num>{_NUM})\s*[％%]")
 _RE_PERCENT_WORD = re.compile(
     rf"(?P<num>{_NUM})\s+(?:percent|per\s+cent)\b", re.IGNORECASE)
 
-# 百分之四十五 / 百分之三点五 / 百分之45 — Arabic digits or basic CJK numerals.
+# 百分之四十五 / 百分之三点五 / 百分之45 / 百分之三万 — Arabic digits or
+# basic CJK numerals (万亿 included so sectioned numerals parse fully).
 _RE_PERCENT_CJK = re.compile(
-    r"百分之(?P<num>\d+(?:\.\d+)?|[零〇一二三四五六七八九十百千点两]{1,16})")
+    r"百分之(?P<num>\d+(?:\.\d+)?|[零〇一二三四五六七八九十百千点两万亿]{1,16})")
 
 # 1,200 users — plain number followed by an English unit word (space
 # required, so "1st" never parses as unit "st").
@@ -131,8 +133,12 @@ _RE_ORDINAL = re.compile(
 # URLs — slash ratios inside them are paths, not fractions.
 _RE_URL = re.compile(r"\b(?:https?|ftp)://\S+|\bwww\.\S+", re.IGNORECASE)
 
-# CJK calendar fragments: 2026年, 10月19日, 5日.
-_RE_CJK_CALENDAR = re.compile(r"(?:19|20)\d{2}年|\d{1,2}月|\d{1,2}日")
+# CJK calendar fragments: 2026年, 10月19日, 5日. Each alternative carries
+# a lookbehind rejecting digits and commas so the fragment must stand at
+# the head of its number: inside "1,000日元" the "00日" tail is part of a
+# comma-grouped amount, not a day-of-month, and the count survives.
+_RE_CJK_CALENDAR = re.compile(
+    r"(?<![\d,])(?:19|20)\d{2}年|(?<![\d,])\d{1,2}月|(?<![\d,])\d{1,2}日")
 
 # am/pm right after a colon pair marks a clock time.
 _RE_AMPM = re.compile(r"\s*(?:a\.?m\.?|p\.?m\.?)\b", re.IGNORECASE)
@@ -161,28 +167,37 @@ class StatisticsExtractor(DocProcessor):
 
     1. ``percentage`` — ``45%``, ``45.3 percent``, the full-width ``45％``
        and basic CJK forms ``百分之四十五`` (parsed to 45, including
-       ``百分之三点五`` -> 3.5 and ``百分之百`` -> 100).
+       ``百分之三点五`` -> 3.5, ``百分之百`` -> 100 and sectioned
+       numerals such as ``百分之三万`` -> 30000).
     2. ``count`` — a number followed by a unit word, optionally through a
        magnitude word: ``1,200 users``, ``3 million items``, ``5万次``,
        ``7 billion`` (unit empty when only the magnitude word follows).
-       Magnitude words are resolved into ``value``: ``5万`` -> 50000,
-       ``3 million`` -> 3000000, ``1.5亿`` -> 150000000. The unit is the
-       following English word (function words and calendar words rejected)
-       or the full following CJK character run.
+       Magnitude words are resolved into ``value`` with exact Decimal
+       arithmetic: ``5万`` -> 50000, ``3 million`` -> 3000000,
+       ``1.5亿`` -> 150000000, ``1.13万`` -> 11300 (never an
+       ulp off, as float multiplication would be). The unit is the
+       following English word (function words and calendar words
+       rejected — ``5 billion in cash`` records unit ``""``) or the full
+       following CJK character run.
     3. ``ratio`` — ``3:2`` and ``3/4`` (value is the quotient, e.g. 1.5
        and 0.75). Slash pairs carry a context guard against calendar
        readings: ``a/b`` with a <= 12 and 13 <= b <= 31 is treated as a
-       month/day date (so ``10/19`` is skipped while ``3/4`` is kept), as
-       are full dates (``2026-10-19``, ``10/19/2026``), slash chains
-       (``a/3/4``) and anything inside a URL. Colon pairs skip clock
-       shapes: a two-digit right side with a leading zero (``10:05``), an
-       am/pm suffix (``10:30 am``) or an ``at`` prefix.
+       month/day date (so ``10/19`` is skipped while ``3/4`` is kept), a
+       four-digit 19xx/20xx year over 1..12 is a year/month date
+       (``2026/10``), as are full dates (``2026-10-19``, ``10/19/2026``),
+       slash chains (``a/3/4``) and anything inside a URL. Colon pairs
+       skip clock shapes: a two-digit right side with a leading zero
+       (``10:05``), an am/pm suffix (``10:30 am``), an ``at`` prefix, an
+       h:m:s tail (``10:30:45``) and ISO 8601 ``T``-glued date-times
+       (``2026-10-19T10:30``).
     4. ``raw_number`` — comma-grouped bare numbers ``1,234,567``, capped at
        values >= 1000 by construction so small quantities stay out.
 
     Common false positives are guarded out before any hit is accepted:
     dates (``2026-10-19``, ``10/19/2026``, CJK ``2026年10月19日`` and
-    bare ``2026年``/``10月``/``5日`` fragments), version numbers
+    bare ``2026年``/``10月``/``5日`` fragments — where a fragment only
+    counts as calendar when it heads its own number, so amounts like
+    ``1,000日元`` still extract), version numbers
     (``v1.2.3``, ``1.2.3``, IP addresses) and ordinals (``21st``,
     ``1,000th``). Overlapping candidates resolve by kind priority
     percentage > count > ratio > raw_number, longest match first, so
@@ -352,21 +367,34 @@ class StatisticsExtractor(DocProcessor):
             return before in ("/", ":", "：")
 
         # Multiplier forms first so their longer spans win the overlap
-        # race against the plain-unit regex on the same number.
+        # race against the plain-unit regex on the same number. Scaling
+        # goes through Decimal: float multiplication is off by an ulp for
+        # many two-decimal inputs ("1.13万" -> 11299.999999999998).
         for match in _RE_COUNT_EN_MULT.finditer(text):
             if _after_separator(match):
                 continue
             unit = match.group("unit") or ""
-            value = self._apply_multiplier(self._to_number(
-                match.group("num")), match.group("mult").lower())
-            yield self._hit(KIND_COUNT, value, unit, match, raw=False)
+            if unit.lower() in _EN_UNIT_STOPWORDS:
+                # "5 billion in cash": a function word is not a unit —
+                # trim the hit back to the multiplier itself.
+                end = match.end("mult")
+                unit = ""
+            else:
+                end = match.end()
+            value = self._scaled_number(
+                match.group("num"),
+                _EN_MULTIPLIERS[match.group("mult").lower()])
+            yield (match.start(), end,
+                   {"kind": KIND_COUNT, "value": value, "unit": unit,
+                    "text": text[match.start():end]})
         for match in _RE_COUNT_CJK_MULT.finditer(text):
             if _after_separator(match):
                 continue
             unit = match.group("cunit") or ""
-            value = self._to_number(match.group("num"))
+            factor = 1
             for char in match.group("cmult"):
-                value *= _CJK_MULTIPLIERS[char]
+                factor *= _CJK_MULTIPLIERS[char]
+            value = self._scaled_number(match.group("num"), factor)
             yield self._hit(KIND_COUNT, value, unit, match, raw=False)
         for match in _RE_COUNT_EN_PLAIN.finditer(text):
             if _after_separator(match):
@@ -391,10 +419,11 @@ class StatisticsExtractor(DocProcessor):
         """Yield ratio hits: 3:2 (value 1.5) and 3/4 (value 0.75).
 
         Colon pairs are skipped when they read like clock times (leading-
-        zero right side, am/pm suffix, "at" prefix). Slash pairs are
-        skipped when they read like dates — month/day shapes (a <= 12,
-        13 <= b <= 31, so 10/19 drops while 3/4 survives), full dates
-        (covered by guard spans), slash chains and URL paths.
+        zero right side, am/pm suffix, "at" prefix, an h:m:s tail, or an
+        ISO 8601 "T"-glued date-time). Slash pairs are skipped when they
+        read like dates — month/day shapes (a <= 12, 13 <= b <= 31, so
+        10/19 drops while 3/4 survives), year/month shapes (2026/10),
+        full dates (covered by guard spans), slash chains and URL paths.
 
         Args:
             text: Document text.
@@ -409,6 +438,13 @@ class StatisticsExtractor(DocProcessor):
                 continue
             if len(right) == 2 and right[0] == "0":
                 continue  # 10:05 — clock minutes
+            if len(right) == 2 and \
+                    text[match.end():match.end() + 1] == ":":
+                continue  # 10:30:45 — hour:minute of an h:m:s clock
+            if text[max(0, match.start() - 1):match.start()] == "T" and \
+                    text[max(0, match.start() - 2):
+                         max(0, match.start() - 1)].isdigit():
+                continue  # 2026-10-19T10:30 — ISO 8601 date-time
             if _RE_AMPM.match(text, match.end()):
                 continue  # 10:30 am
             if _RE_AT_PREFIX.search(text[max(0, match.start() - 8):
@@ -426,9 +462,12 @@ class StatisticsExtractor(DocProcessor):
             after = text[match.end():match.end() + 1]
             if before.endswith("/") or after.startswith("/"):
                 continue  # a/3/4 chains and 10/19/2026 interiors
-            if left.isdigit() and right.isdigit() \
-                    and int(left) <= 12 and 13 <= int(right) <= 31:
-                continue  # month/day calendar shape (10/19)
+            if left.isdigit() and right.isdigit():
+                li, ri = int(left), int(right)
+                if li <= 12 and 13 <= ri <= 31:
+                    continue  # month/day calendar shape (10/19)
+                if len(left) == 4 and 1900 <= li <= 2099 and 1 <= ri <= 12:
+                    continue  # year/month calendar shape (2026/10)
             yield self._hit(KIND_RATIO,
                             self._to_number(left) / self._to_number(right),
                             "", match, raw=False)
@@ -503,17 +542,26 @@ class StatisticsExtractor(DocProcessor):
         return value
 
     @staticmethod
-    def _apply_multiplier(value: float, word: str) -> float:
-        """Scale a value by an English magnitude word.
+    def _scaled_number(raw: str, factor: int):
+        """Parse a numeric token and scale it by an exact integer factor.
+
+        The arithmetic runs through :class:`decimal.Decimal` so magnitude
+        words fold into the value exactly: float multiplication misses
+        by an ulp on many two-decimal inputs ("1.13万" would yield
+        11299.999999999998 instead of 11300).
 
         Args:
-            value: Parsed number.
-            word: Multiplier word, lowercased.
+            raw: Numeric text such as "1.13" or "2,000".
+            factor: Exact integer multiplier (e.g. 10000 for 万).
 
         Returns:
-            float: value * multiplier ("3" + "million" -> 3000000.0).
+            int | float: ``11300`` for "1.13" * 10000; ``12345.6`` for
+            "1.23456" * 10000. Integral results become ints.
         """
-        return value * _EN_MULTIPLIERS[word]
+        value = Decimal(raw.replace(",", "")) * factor
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
 
     @staticmethod
     def _parse_cjk_numeral(raw: str) -> Optional[float]:

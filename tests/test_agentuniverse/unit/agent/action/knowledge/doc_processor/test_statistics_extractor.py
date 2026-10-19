@@ -583,6 +583,115 @@ class TestStatisticsExtractor(unittest.TestCase):
         self.extractor.process_docs([doc], self.query)
         self.assertNotIn("statistics", doc.metadata or {})
 
+    def test_multiplier_arithmetic_is_exact(self):
+        """Magnitude scaling is exact Decimal arithmetic: two-decimal
+        inputs that float multiplication would knock an ulp off
+        ("1.13万" -> 11299.999999999998) come out as clean ints."""
+        cases = [
+            ("增长1.13万倍", 11300),
+            ("增速1.09亿", 109000000),
+            ("规模1.11万亿", 1110000000000),
+            ("成本2.15亿", 215000000),
+            ("下载3.5万", 35000),
+            ("about 2.01 million items", 2010000),
+            ("some 1.07 billion items", 1070000000),
+            ("roughly 2.03 thousand items", 2030),
+            ("nearly 1.11 trillion items", 1110000000000),
+        ]
+        for text, value in cases:
+            with self.subTest(text=text):
+                hit = self._only(text)
+                self.assertEqual(hit["value"], value)
+                self.assertIsInstance(hit["value"], int)
+
+    def test_scaled_number_helper(self):
+        """_scaled_number: exact ints for integral products, floats for
+        fractional ones, comma separators dropped."""
+        scaled = StatisticsExtractor._scaled_number
+        self.assertEqual(scaled("1.13", 10000), 11300)
+        self.assertIsInstance(scaled("1.13", 10000), int)
+        self.assertEqual(scaled("1.23456", 10000), 12345.6)
+        self.assertEqual(scaled("2,000", 1000000), 2000000000)
+        self.assertEqual(scaled("0.5", 1000), 500)
+
+    def test_multiplier_function_word_not_a_unit(self):
+        """"5 billion in cash": a function word after the magnitude word
+        is not a unit — the hit trims back to "5 billion" with unit ""."""
+        for text, matched in (("5 billion in cash", "5 billion"),
+                              ("3 million are active", "3 million"),
+                              ("2 million of these", "2 million"),
+                              ("7 thousand was paid", "7 thousand")):
+            with self.subTest(text=text):
+                hit = self._only(text)
+                self.assertEqual(hit["kind"], "count")
+                self.assertEqual(hit["unit"], "")
+                self.assertEqual(hit["text"], matched)
+
+    def test_calendar_fragment_must_head_its_number(self):
+        """1,000日元 / 1,500月产能 extract as counts: the guard only
+        fires when the 月/日 fragment heads its own number, while bare
+        fragments (during 10月) stay guarded."""
+        cases = [
+            ("票价1,000日元", 1000, "日元"),
+            ("每1,500月产能提升", 1500, "月产能提升"),
+        ]
+        for text, value, unit in cases:
+            with self.subTest(text=text):
+                hit = self._only(text)
+                self.assertEqual(hit["kind"], "count")
+                self.assertEqual(hit["value"], value)
+                self.assertEqual(hit["unit"], unit)
+        self.assertEqual(self._hits("during 10月 only"), [])
+        self.assertEqual(self._hits("by 5日 it closed"), [])
+        self.assertEqual(
+            self._kinds_texts("2026年10月19日发布，持续5年"),
+            [("count", "5年")])
+
+    def test_hms_clock_and_iso_datetime_excluded(self):
+        """10:30:45 / 12:34:56 / 2026-10-19T10:30 are clock readings,
+        not ratios; a 1:2:4 mix chain with one-digit middles still
+        parses."""
+        for text in ("log 12:34:56", "10:30:45 sharp",
+                     "Meeting 2026-10-19T10:30:00Z",
+                     "at 2026-10-19T10:30"):
+            with self.subTest(text=text):
+                self.assertEqual(
+                    [h for h in self._hits(text) if h["kind"] == "ratio"],
+                    [])
+        self.assertEqual(self._kinds_texts("mix 1:2:4 by weight"),
+                         [("ratio", "1:2")])
+        self.assertEqual(self._kinds_texts("aspect 16:9"), [("ratio", "16:9")])
+
+    def test_slash_year_month_excluded(self):
+        """2026/10 reads as October 2026, not a ratio of 202.6; a
+        2016/17 season span and a 1920/1080 resolution survive."""
+        self.assertEqual(
+            [h for h in self._hits("in 2026/10 we grew") if h["kind"] == "ratio"],
+            [])
+        self.assertEqual(
+            [h for h in self._hits("the 2026/3 report") if h["kind"] == "ratio"],
+            [])
+        ratios = [h for h in self._hits("the 2016/17 season")
+                  if h["kind"] == "ratio"]
+        self.assertEqual(len(ratios), 1)
+        ratios = [h for h in self._hits("screen 1920/1080 ok")
+                  if h["kind"] == "ratio"]
+        self.assertEqual(len(ratios), 1)
+
+    def test_percent_cjk_sectioned_numerals(self):
+        """百分之三万 -> 30000 and 百分之三百万 -> 3000000: the 万/亿
+        section characters parse inside CJK percentages too."""
+        cases = [
+            ("百分之三万", 30000),
+            ("百分之三百万", 3000000),
+            ("百分之四十五", 45),
+        ]
+        for text, value in cases:
+            with self.subTest(text=text):
+                hit = self._only(text)
+                self.assertEqual(hit["kind"], "percentage")
+                self.assertEqual(hit["value"], value)
+
     def test_determinism(self):
         """The same text always yields the identical hit list, across
         fresh extractor instances too."""
