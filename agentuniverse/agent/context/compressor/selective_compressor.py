@@ -511,7 +511,11 @@ class SelectiveCompressor(ContextCompressor):
         # Token loss penalty (minor factor)
         original_tokens = self.calculate_total_tokens(original_segments)
         compressed_tokens = self.calculate_total_tokens(compressed_segments)
-        token_loss_penalty = (1.0 - (compressed_tokens / original_tokens)) * 0.1
+        token_loss_penalty = (
+            (1.0 - (compressed_tokens / original_tokens)) * 0.1
+            if original_tokens > 0
+            else 0.0
+        )
 
         total_loss = min(1.0, segment_loss + token_loss_penalty)
 
