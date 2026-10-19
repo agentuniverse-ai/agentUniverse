@@ -6,7 +6,19 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 
 class WriteWordDocumentTool(Tool):
+    """Tool that appends a text paragraph to a Word .docx document using python-docx.
+    """
     def execute(self, file_path: str, content: str = "", append: bool = False) -> str:
+        """Append the given content as a paragraph to the target .docx file and return a JSON status string.
+
+        Args:
+            file_path(str): The .docx file path.
+            content(str): The paragraph text to write.
+            append(bool): Whether to append to an existing document.
+
+        Returns:
+            str: A JSON string with the write result and status.
+        """
         if not isinstance(content, str):
             return json.dumps(
                 {"error": "content must be a string", "file_path": file_path, "status": "error"}
