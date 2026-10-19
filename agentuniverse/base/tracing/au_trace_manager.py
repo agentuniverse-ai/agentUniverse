@@ -14,6 +14,7 @@ from agentuniverse.llm.llm_output import TokenUsage
 
 @singleton
 class AuTraceManager:
+    """Manages the trace context of the current run, keeping it in a ContextVar and exposing the session/trace/span ids and token usage of the active AuTraceContext."""
     def __init__(self, context_class=None):
         self.context_class = context_class or AuTraceContext
         self.context_instance = ContextVar("__au_trace_context__")
@@ -65,30 +66,37 @@ class AuTraceManager:
 
 
 def get_trace_dict() -> dict:
+    """Return the non-empty trace ids of the current trace context as a dict. Returns: dict: Mapping of session_id/trace_id/span_id to their values."""
     return AuTraceManager().get_trace_dict()
 
 
 def set_session_id(session_id: str):
+    """Set the session id on the current trace context. Args: session_id: The session id to set."""
     AuTraceManager().set_session_id(session_id)
 
 
 def get_session_id() -> str | None:
+    """Return the session id of the current trace context. Returns: The session id, or None."""
     return AuTraceManager().get_session_id()
 
 
 def set_trace_id(trace_id: str):
+    """Set the trace id on the current trace context. Args: trace_id: The trace id to set."""
     AuTraceManager().set_trace_id(trace_id)
 
 
 def get_trace_id() -> str | None:
+    """Return the trace id of the current trace context. Returns: The trace id, or None."""
     return AuTraceManager().get_trace_id()
 
 
 def set_span_id(span_id: str):
+    """Set the span id on the current trace context. Args: span_id: The span id to set."""
     AuTraceManager().set_span_id(span_id)
 
 
 def get_span_id() -> str | None:
+    """Return the span id of the current trace context. Returns: The span id, or None."""
     return AuTraceManager().get_span_id()
 
 
