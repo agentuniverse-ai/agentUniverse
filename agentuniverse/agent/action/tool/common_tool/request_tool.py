@@ -45,7 +45,7 @@ class RequestTool(Tool):
                 parse_data = parse_json_markdown(input_params)
                 return self.execute_by_method(**parse_data)
             except Exception as e:
-                LOGGER.error(f'execute request error input{input_params} error{e}')
+                LOGGER.error("RequestTool {} failed with {}", self._normalized_method(), type(e).__name__)
                 return str(e)
         else:
             return self.execute_by_method(input_params)
@@ -58,7 +58,7 @@ class RequestTool(Tool):
                 parse_data = parse_json_markdown(input_params)
                 return await self.async_execute_by_method(**parse_data)
             except Exception as e:
-                LOGGER.error(f'execute request error input{input_params} error{e}')
+                LOGGER.error("RequestTool {} failed with {}", self._normalized_method(), type(e).__name__)
                 return str(e)
         return await self.async_execute_by_method(input_params)
 
