@@ -329,6 +329,7 @@ class WordDocumentTool(Tool):
         return tables
 
     def _info(self, path: str) -> dict[str, Any]:
+        """Return summary information about the DOCX at path, including sizes, counts and core-property metadata. Args: path (str): The DOCX path. Returns: dict[str, Any]: The info result."""
         self._check_archive(path)
         document = self._document_class()(path)
         props = document.core_properties
@@ -345,6 +346,7 @@ class WordDocumentTool(Tool):
 
     @staticmethod
     def _success(mode: str, path: str, count: int, document: Any, **extra: Any) -> dict[str, Any]:
+        """Build a structured success result for create/append operations with document statistics. Args: mode (str): The operation mode. path (str): The file path. count (int): The number of blocks added. document (Any): The saved document. **extra: Additional result fields. Returns: dict[str, Any]: The success result."""
         return {
             "status": "success",
             "mode": mode,
@@ -357,6 +359,7 @@ class WordDocumentTool(Tool):
         }
 
     def _save(self, document: Any, path: str) -> None:
+        """Save the document to path atomically via a temporary file, enforcing the configured write byte limits. Raises: ValueError when the generated document exceeds the limits. Args: document (Any): The python-docx document. path (str): The destination path."""
         os.makedirs(os.path.dirname(path), exist_ok=True)
         temporary = None
         try:
@@ -388,6 +391,7 @@ class _ReadBudget:
     __slots__ = ("max_blocks", "max_text_chars", "remaining_blocks", "remaining_chars", "truncated")
 
     def __init__(self, tool: "WordDocumentTool") -> None:
+        """Initialise the read budget from the tool limits. Args: tool (WordDocumentTool): The tool whose limits are copied."""
         self.max_text_chars = tool.max_text_chars
         self.max_blocks = tool.max_blocks
         self.remaining_chars = tool.max_text_chars
@@ -395,19 +399,23 @@ class _ReadBudget:
         self.truncated = False
 
     def allow_block(self) -> bool:
+        """Check whether another block may still be processed, marking the walk truncated when the block budget is exhausted. Returns: bool: True when a block may be processed."""
         if self.remaining_blocks <= 0:
             self.truncated = True
             return False
         return True
 
     def used_block(self) -> None:
+        """Consume one block from the remaining block budget."""
         if self.remaining_blocks > 0:
             self.remaining_blocks -= 1
 
     def chars_exhausted(self) -> bool:
+        """Check whether the text character budget is exhausted. Returns: bool: True when no characters remain."""
         return self.remaining_chars <= 0
 
     def mark_truncated(self) -> None:
+        """Mark the read walk as truncated."""
         self.truncated = True
 
     def consume_text(self, value: Any) -> tuple[str, bool]:
