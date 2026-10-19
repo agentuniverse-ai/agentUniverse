@@ -536,7 +536,9 @@ class Agent(ComponentBase, ABC):
         agent_input[memory.memory_key] = memory_str
         return memory_str
 
-    def add_memory(self, memory: Memory, content: Any, type: str = 'Q&A', agent_input: dict[str, Any] = {}):
+    def add_memory(self, memory: Memory, content: Any, type: str = 'Q&A', agent_input: dict[str, Any] = None):
+        if agent_input is None:
+            agent_input = {}
         if not memory:
             return
         session_id = agent_input.get('session_id')
