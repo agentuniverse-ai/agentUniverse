@@ -51,7 +51,7 @@ def assemble_plugin_product_config_data(plugin_dto: PluginDTO, tool_id_list: Lis
             'module': 'agentuniverse_product.base.plugin_product',
             'type': 'PRODUCT'
         },
-        'openapi_desc': ''
+        'openapi_desc': plugin_dto.openapi_desc or ''
     }
 
 
@@ -79,12 +79,17 @@ def parse_openapi_yaml_to_tool_bundle(yaml: str) -> list:
     for path, path_item in openapi['paths'].items():
         methods = ['get', 'post', 'put', 'delete',
                    'patch', 'head', 'options', 'trace']
+        path_parameters = path_item.get('parameters', [])
         for method in methods:
             if method in path_item:
+                operation = dict(path_item[method])
+                operation_parameters = operation.get('parameters', [])
+                merged = _merge_parameters(path_parameters, operation_parameters)
+                operation['parameters'] = _resolve_parameter_refs(openapi, merged)
                 interfaces.append({
                     'path': path,
                     'method': method,
-                    'operation': path_item[method],
+                    'operation': operation,
                     'url': server_url + path,
                 })
     # create tool bundle
@@ -120,3 +125,58 @@ def parse_openapi_yaml_to_tool_bundle(yaml: str) -> list:
             interface['operation']['operationId'] = f'{path}_{interface["method"]}'
 
     return interfaces
+
+
+def _resolve_ref(openapi: dict, ref: str) -> dict:
+    """Resolve a local OpenAPI $ref against the document root.
+
+    Args:
+        openapi (dict): The OpenAPI document root.
+        ref (str): The $ref string, expected to start with '#/'.
+
+    Returns:
+        dict: The referenced object.
+
+    Raises:
+        Exception: If the reference is malformed or points to a missing node.
+    """
+    if not ref.startswith('#/'):
+        raise Exception(f'Only local OpenAPI references are supported: {ref}')
+    root = openapi
+    for part in ref[2:].split('/'):
+        if part not in root:
+            raise Exception(f'Unresolved OpenAPI reference: {ref}')
+        root = root[part]
+    return root
+
+
+def _resolve_parameter_refs(openapi: dict, parameters: list) -> list:
+    """Resolve $ref entries inside an OpenAPI parameter list.
+
+    Args:
+        openapi (dict): The OpenAPI document root.
+        parameters (list): The parameter list.
+
+    Returns:
+        list: A new list with references resolved to concrete parameter objects.
+    """
+    resolved = []
+    for parameter in parameters:
+        if '$ref' in parameter:
+            resolved.append(_resolve_ref(openapi, parameter['$ref']))
+        else:
+            resolved.append(parameter)
+    return resolved
+
+
+def _merge_parameters(path_parameters: list, operation_parameters: list) -> list:
+    """Merge Path Item parameters with operation parameters without mutating inputs.
+
+    Args:
+        path_parameters (list): Parameters declared at the Path Item level.
+        operation_parameters (list): Parameters declared at the operation level.
+
+    Returns:
+        list: The merged parameter list.
+    """
+    return list(path_parameters) + list(operation_parameters)
