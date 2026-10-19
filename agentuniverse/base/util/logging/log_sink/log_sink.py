@@ -31,6 +31,8 @@ class LogSink(ComponentBase):
     enqueue: bool = True
 
     class Config:
+        """Pydantic model configuration for this component, allowing arbitrary types.
+        """
         arbitrary_types_allowed = True
 
     def get_inheritance_depth(self):
@@ -40,17 +42,40 @@ class LogSink(ComponentBase):
         return self.__class__.__mro__.index(LogSink)
 
     def __call__(self, message):
+        """Invoke the sink on a log message.
+
+        Args:
+            message: The loguru message whose ``record`` is dispatched to process_record.
+        """
         self.process_record(message.record)
 
     def process_record(self, record):
+        """Process a single log record.
+
+        Args:
+            record: The loguru log record to process.
+
+        Raises:
+            NotImplementedError: Subclasses must implement this method.
+        """
         raise NotImplementedError("Subclasses must implement process_record.")
 
     def filter(self, record):
+        """Filter log records by their log type.
+
+        Args:
+            record: The loguru log record to inspect.
+
+        Returns:
+            True if the record log type matches this sink log type, False otherwise.
+        """
         if not record['extra'].get('log_type') == self.log_type:
             return False
         return True
 
     def register_sink(self):
+        """Register this sink with the loguru logger when it has not been registered yet (sink_id is -1).
+        """
         if self.sink_id == -1:
             self.sink_id = logger.add(
                 self,
@@ -62,6 +87,14 @@ class LogSink(ComponentBase):
 
     def initialize_by_component_configer(self,
                                           log_sink_configer: ComponentConfiger) -> 'LogSink':
+        """Initialize the log sink from a component configer.
+
+        Args:
+            log_sink_configer(ComponentConfiger): The configer containing the sink settings.
+
+        Returns:
+            LogSink: The initialized sink instance.
+        """
         self.name = log_sink_configer.name
         self.description = log_sink_configer.description
         if hasattr(log_sink_configer, "level"):
