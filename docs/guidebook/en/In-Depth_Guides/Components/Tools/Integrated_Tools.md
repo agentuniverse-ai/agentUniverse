@@ -634,3 +634,50 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Unit Converter Tool
+
+`UnitConverterTool` is a measurement unit converter built purely on the
+Python standard library — `fractions`, `decimal`, `difflib` — with zero
+network access. It converts between units of eight categories: length
+(m, km, cm, mm, mi, yd, ft, in, nmi), mass (kg, g, t, lb, oz, jin),
+temperature (K, °C, °F, °R — affine conversions, not ratios: 0 °C =
+32 °F = 273.15 K and -40 °C = -40 °F), area (m², km², ha, acre, ft²,
+mu), volume (L, mL, m³, US and UK gallons, pint), speed (m/s, km/h,
+mph, kn), data (B with the decimal KB/MB/GB/TB family distinct from
+the binary KiB/MiB family) and time (s, ms, min, h, day, week). The
+Chinese aliases `斤` (jin, 0.5 kg), `里` (li, 500 m) and `亩` (mu,
+2000/3 m²) are accepted alongside the Latin names.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.unit_converter_tool import UnitConverterTool
+
+tool = UnitConverterTool()
+km = tool.execute(mode="convert", value=10, from_unit="mi", to_unit="km")["result"]
+body = tool.execute(mode="convert", value=98.6, from_unit="F", to_unit="C")["result"]
+mu = tool.execute(mode="convert", value=3, from_unit="亩", to_unit="m2")["result"]
+size = tool.execute(mode="convert", value=1, from_unit="MiB", to_unit="MB",
+                    round=3)["result"]
+info = tool.execute(mode="info", unit="kn")
+catalog = tool.execute(mode="categories")
+```
+
+Every conversion is computed with exact arithmetic: values and factors
+are exact fractions and `Decimal` is used only when rendering, so
+`3.6 km/h` is exactly `1 m/s`, `1 in` is exactly `2.54 cm`, and round
+trips such as `12.34 lb -> kg -> lb` return `12.34`. By default results
+are rendered to 12 significant digits; the optional `round` argument
+(0–30 decimal places, half away from zero) pins the output instead.
+Floats are accepted only at the input boundary and never used inside a
+computation. Unit lookup is case-aware (exact spelling first, then
+case-insensitive fallback), so `MB`, `mB` and `mb` all resolve to the
+megabyte and the optional `category` parameter anchors any ambiguity.
+Inputs are validated strictly before any computation: an unknown mode
+or category, a value that is not a finite number, magnitudes beyond
+1e100, or a `round` outside 0..30 raise a `ValueError`. Errors that
+depend on the content — an unknown unit (with closest-match
+suggestions), a cross-category pair such as `kg -> cm` (with the
+anchored category's units as suggestions) and an ambiguous alias — are
+returned as a structured `error` payload instead of raising.
+Conversions are deterministic; temperatures below absolute zero are
+converted as given rather than rejected.
