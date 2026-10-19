@@ -1,0 +1,45 @@
+name: json_yaml_tool
+description: JSON/YAML conversion tool — offline, built on the framework's PyYAML dependency and yaml.safe_load only. Convert JSON text to block-style YAML with allow_unicode=True and an optional sort_keys flag (mode='to_yaml'), convert YAML text to JSON with optional indent and sort_keys (mode='to_json'), or validate YAML and report the root type and key count with 1-based line/column error marks (mode='validate_yaml').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.json_yaml_tool
+  class: JsonYamlTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Conversion mode — to_yaml (JSON text to YAML), to_json (YAML text to JSON) or validate_yaml (parse YAML and report the root type and key count).
+    required: true
+  text:
+    type: string
+    description: The JSON or YAML text to process. Required in every mode; at most 1 MiB (1,048,576 characters).
+    required: false
+  sort_keys:
+    type: boolean
+    description: Sort mapping keys in the output. Applied by the to_yaml and to_json modes; defaults to false (preserve insertion order).
+    required: false
+  indent:
+    type: integer
+    description: JSON indentation width for the to_json mode — an integer between 0 and 10, defaulting to 2.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["to_yaml", "to_json", "validate_yaml"]
+      description: Conversion mode.
+    text:
+      type: string
+      description: The JSON or YAML text to convert / validate.
+    sort_keys:
+      type: boolean
+      description: Sort mapping keys in the output (to_yaml, to_json modes).
+    indent:
+      type: integer
+      minimum: 0
+      maximum: 10
+      description: JSON indentation width (to_json mode).
+  required: ["mode"]
