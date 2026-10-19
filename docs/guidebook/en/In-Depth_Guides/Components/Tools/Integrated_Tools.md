@@ -632,3 +632,33 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## SQLExplorerTool
+
+`SQLExplorerTool` runs bounded, read-only SQL queries against a configured database so an agent can explore data without issuing destructive SQL or dumping unbounded result sets. It targets a registered `SQLDBWrapper` component named by `db_wrapper_name`, validates every query, enforces row / cell / result-size limits, and applies a per-query timeout. In `read_only` mode (the default) only `SELECT` / `WITH` / `EXPLAIN` / `SHOW` / `DESCRIBE` / `DESC` statements are allowed; set `allow_write: true` to opt into `INSERT` / `UPDATE` / `DELETE`.
+
+Copy `agentuniverse/agent/action/tool/common_tool/sql_explorer_tool.yaml.example` into the application configuration directory, point `db_wrapper_name` at your registered SQLDBWrapper, and resolve the built-in `sql_explorer_tool` component.
+
+```yaml
+name: sql_explorer_tool
+description: Bounded read-only SQL query tool for database exploration
+db_wrapper_name: default_sqldb_wrapper
+max_rows: 100
+max_cell_chars: 500
+max_result_chars: 50000
+query_timeout_seconds: 30
+read_only: true
+allow_write: false
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.sql_explorer_tool
+  class: SQLExplorerTool
+input_keys: ["sql"]
+```
+- db_wrapper_name: Name of the registered SQLDBWrapper component used to connect to the database.
+- max_rows: Maximum rows returned per query (default 100).
+- max_cell_chars: Maximum characters per cell in the serialised result (default 500).
+- max_result_chars: Maximum total characters of the serialised result (default 50000).
+- query_timeout_seconds: Per-query timeout in seconds (default 30).
+- read_only: When `true` (default), only read statements are allowed.
+- allow_write: When `true`, write statements (`INSERT` / `UPDATE` / `DELETE`) are allowed; defaults to `false` and forces `read_only` off.

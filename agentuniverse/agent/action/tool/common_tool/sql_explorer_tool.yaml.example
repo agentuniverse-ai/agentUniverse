@@ -1,0 +1,14 @@
+name: sql_explorer_tool
+description: Bounded read-only SQL query tool for database exploration
+db_wrapper_name: default_sqldb_wrapper
+max_rows: 100
+max_cell_chars: 500
+max_result_chars: 50000
+query_timeout_seconds: 30
+read_only: true
+allow_write: false
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.sql_explorer_tool
+  class: SQLExplorerTool
+input_keys: ["sql"]
