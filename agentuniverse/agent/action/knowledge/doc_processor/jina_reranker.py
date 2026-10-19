@@ -74,7 +74,7 @@ class JinaReranker(DocProcessor):
                                      timeout=self.request_timeout)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Jina AI rerank API call error: {e}")
+            raise Exception(f"Jina AI rerank API call error: {e}") from e
 
         # Decode the body separately from the HTTP call. ``Response.json()``
         # raises ``requests.exceptions.JSONDecodeError`` on a non-JSON body
@@ -85,7 +85,7 @@ class JinaReranker(DocProcessor):
         try:
             results = response.json().get("results", [])
         except ValueError as e:
-            raise Exception(f"Jina AI rerank API returned a non-JSON response: {e}")
+            raise Exception(f"Jina AI rerank API returned a non-JSON response: {e}") from e
 
         rerank_docs = []
         for result in results:
