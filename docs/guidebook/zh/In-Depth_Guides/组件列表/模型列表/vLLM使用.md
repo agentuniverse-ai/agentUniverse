@@ -63,7 +63,7 @@ metadata:
 
 ## 2. 模型选择
 
-与云服务商不同，vLLM 服务可以托管 HuggingFace hub 上的**任意**模型，因此下表仅列出常用于 vLLM 部署的模型及其最大上下文窗口（输入 + 输出 token）。相同的取值也内置在 `VLLMOpenAIStyleLLM.max_context_length` 中，agentUniverse 无需访问服务即可正确估算 prompt 预算。
+与云服务商不同，vLLM 服务可以托管 HuggingFace hub 上的**任意**模型，因此下表仅列出常用于 vLLM 部署的模型及其最大上下文窗口（输入 + 输出 token）。相同的取值也内置在 `VLLM_MAX_CONTEXT_LENGTH` 表中（`VLLMOpenAIStyleLLM.max_context_length()` 会查询该表），agentUniverse 无需访问服务即可正确估算 prompt 预算。
 
 | 模型名称（HuggingFace id） | 上下文长度 |
 | --------------------------- | ---------- |

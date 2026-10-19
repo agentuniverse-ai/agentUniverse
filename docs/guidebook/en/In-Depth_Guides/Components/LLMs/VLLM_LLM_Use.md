@@ -60,7 +60,7 @@ metadata:
 
 ## 2. Pick a model
 
-Unlike cloud providers, a vLLM server can host **any** model from the HuggingFace hub, so the table below only lists commonly served models together with their maximum context window (input + output tokens). The same values are hard-coded inside `VLLMOpenAIStyleLLM.max_context_length`, so agentUniverse can budget prompts correctly even without querying the server.
+Unlike cloud providers, a vLLM server can host **any** model from the HuggingFace hub, so the table below only lists commonly served models together with their maximum context window (input + output tokens). The same values are hard-coded in the `VLLM_MAX_CONTEXT_LENGTH` table consulted by `VLLMOpenAIStyleLLM.max_context_length()`, so agentUniverse can budget prompts correctly even without querying the server.
 
 | Model name (HuggingFace id) | Context length |
 | --------------------------- | -------------- |
