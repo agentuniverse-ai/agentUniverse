@@ -87,8 +87,14 @@ class YouTubeTool(Tool):
                 part='snippet,statistics,contentDetails'
             ).execute()
 
+            # videos.list does not supply the relevance ranking from search.list.
+            # Rebuild that order using the IDs returned by the search call.
+            details_by_id = {item['id']: item for item in video_response.get('items', [])}
             results = []
-            for item in video_response.get('items', []):
+            for video_id in video_ids:
+                item = details_by_id.get(video_id)
+                if item is None:
+                    continue
                 results.append({
                     'id': item['id'],
                     'title': item['snippet']['title'],
