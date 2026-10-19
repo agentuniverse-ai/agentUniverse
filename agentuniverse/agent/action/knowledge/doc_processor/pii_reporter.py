@@ -429,7 +429,14 @@ class PIIReporter(DocProcessor):
                     if trimmed == candidate:
                         break
                     candidate = trimmed
-                pos = reported_end if reported_end is not None else m.end()
+                # When nothing validated, resume one character past the
+                # match start rather than past the whole match: an
+                # invalid head ("ref XX99 CH93 ...") must not swallow a
+                # valid IBAN that starts later inside the same greedy
+                # span. The search position strictly increases either way,
+                # so the loop always terminates.
+                pos = reported_end if reported_end is not None \
+                    else m.start() + 1
 
         if KIND_PASSPORT in enabled:
             for m in _PASSPORT_RE.finditer(text):

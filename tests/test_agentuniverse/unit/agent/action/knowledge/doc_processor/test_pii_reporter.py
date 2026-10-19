@@ -52,6 +52,8 @@ IBAN_NL_FLAT = "NL91ABNA0417164300"             # contiguous electronic form
 IBAN_BAD_CHECK = "DE89 3704 0044 0532 0130 09"  # wrong check digits
 IBAN_BAD_LENGTH = "DE89 3704 0044 0532"         # plausible but truncated
 IBAN_BAD_COUNTRY = "QQ12 3456 7890 1234 5678"   # unsupported country code
+IBAN_CH = "CH93 0076 2011 6238 5295 7"          # 21-char Swiss IBAN
+IBAN_BE = "BE68 5390 0754 7034"                 # 16-char Belgian IBAN
 
 
 def _doc(text: str, **metadata) -> Document:
@@ -325,6 +327,48 @@ class TestPIIReporter(unittest.TestCase):
                                   len(IBAN_GB) + 1 + len(IBAN_DE)),
                                  (text.index(IBAN_FR),
                                   text.index(IBAN_FR) + len(IBAN_FR))])
+
+    def test_iban_after_invalid_head_still_found(self):
+        # A failed greedy candidate ("ref XX99 CH93 ...") must not
+        # swallow the valid IBAN that starts later inside the same
+        # span: resumption restarts one character past the failed
+        # head, so the scanner re-finds the embedded standalone IBAN.
+        text = f"ref XX99 {IBAN_CH} paid"
+        findings, counts, _ = self._findings(text)
+        self.assertEqual(counts, {"iban": 1})
+        self.assertEqual(findings[0]["kind"], "iban")
+        self.assertEqual(tuple(findings[0]["span"]),
+                         (text.index(IBAN_CH),
+                          text.index(IBAN_CH) + len(IBAN_CH)))
+        self.assertEqual(text[findings[0]["span"][0]:findings[0]["span"][1]],
+                         IBAN_CH)
+
+    def test_iban_between_junk_groups_all_found(self):
+        # Valid IBAN, an unsupported-country group, then another valid
+        # IBAN: both valid ones are reported exactly once, with spans
+        # pointing at the full values.
+        text = f"refs {IBAN_CH} QQ12 3456 {IBAN_BE} paid"
+        findings, counts, _ = self._findings(text)
+        self.assertEqual(counts, {"iban": 2})
+        spans = sorted(tuple(f["span"]) for f in findings)
+        self.assertEqual(spans, [
+            (text.index(IBAN_CH), text.index(IBAN_CH) + len(IBAN_CH)),
+            (text.index(IBAN_BE), text.index(IBAN_BE) + len(IBAN_BE))])
+        for start, end in spans:
+            self.assertIn(text[start:end], (IBAN_CH, IBAN_BE))
+
+    def test_iban_scan_never_duplicates_findings(self):
+        # A long space-separated list mixes valid and invalid IBAN
+        # shapes; every valid IBAN appears once and only once.
+        parts = [IBAN_CH, IBAN_BE, IBAN_BAD_COUNTRY, IBAN_GB, IBAN_DE]
+        text = " ".join(parts * 3)
+        findings, counts, _ = self._findings(text)
+        self.assertEqual(counts["iban"], 12)
+        spans = [tuple(f["span"]) for f in findings if f["kind"] == "iban"]
+        self.assertEqual(len(spans), len(set(spans)))
+        for start, end in spans:
+            self.assertIn(text[start:end],
+                          (IBAN_CH, IBAN_BE, IBAN_GB, IBAN_DE))
 
     def test_iban_wins_overlap_with_digit_runs(self):
         # The digit tail of an IBAN is card-shaped; only the iban finding
