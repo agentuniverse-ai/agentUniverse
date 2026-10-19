@@ -115,7 +115,10 @@ class BenchmarkMetrics:
             "resource": max(0, (1 - self.memory_usage_mb / 1000)) * 100,
         }
 
-        return sum(score * weights[category] for category, score in scores.items())
+        weighted_score = sum(
+            score * weights[category] for category, score in scores.items()
+        )
+        return max(0.0, min(100.0, weighted_score))
 
 
 @dataclass
