@@ -21,6 +21,12 @@ from loguru import logger
 
 
 class CommandStatus(Enum):
+    """Execution status of a command run by RunCommandTool.
+
+    Members:
+    RUNNING: still executing; COMPLETED: finished successfully;
+    ERROR: failed or raised an exception.
+    """
     RUNNING = "running"
     COMPLETED = "completed"
     ERROR = "error"
@@ -28,6 +34,15 @@ class CommandStatus(Enum):
 
 @dataclass
 class CommandResult:
+    """Record of the outcome of a single command execution.
+
+    Attributes:
+    thread_id: thread that executed the command;
+    stdout/stderr: captured command output;
+    start_time/end_time: execution window;
+    status: CommandStatus of the run;
+    exit_code: process return code when the process finished.
+    """
     thread_id: int
     stdout: str
     stderr: str
@@ -38,12 +53,22 @@ class CommandResult:
 
     @property
     def duration(self) -> float:
+        """Elapsed time of the command execution in seconds.
+
+        Returns:
+        float: duration between start and end, or time elapsed so far when running.
+        """
         if self.end_time is None:
             return time.time() - self.start_time
         return self.end_time - self.start_time
 
     @property
     def message(self) -> str:
+        """JSON summary of the command result for the caller.
+
+        Returns:
+        str: JSON of thread_id, status, truncated stdout/stderr, exit_code and duration.
+        """
         # Truncate stdout and stderr if they are too long
         max_output_length = 2000
         truncated_stdout = self._truncate_output(
@@ -97,6 +122,15 @@ class RunCommandTool(Tool):
     allow_command_execution: bool = False
 
     def execute(self, command: str | ToolInput, cwd: str = None, blocking: bool = True) -> str:
+        """Run a shell command, optionally waiting for its completion.
+
+        Args:
+        command: the command string, or a ToolInput holding command/cwd/blocking;
+        cwd: working directory of the command; blocking: wait for completion or return immediately.
+
+        Returns:
+        str: JSON summary of the CommandResult.
+        """
         if isinstance(command, ToolInput):
             params = command.to_dict()
             cwd = params.get("cwd", cwd)
@@ -132,6 +166,15 @@ class RunCommandTool(Tool):
         return self._run_command(command, cwd, blocking)
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:
+        """Execute a command and record its result under the running thread.
+
+        Args:
+        command: the command string to run;
+        cwd: working directory of the command; blocking: inline or background run.
+
+        Returns:
+        str: JSON summary of the CommandResult.
+        """
         result = CommandResult(
             thread_id=threading.get_ident(),
             status=CommandStatus.RUNNING,
@@ -143,6 +186,7 @@ class RunCommandTool(Tool):
         thread_started = threading.Event()
 
         def __run() -> None:
+            """Spawn the process, capture its output and finalize the result record."""
             result.thread_id = threading.get_ident()
             _command_results[result.thread_id] = result
             thread_started.set()
@@ -183,4 +227,12 @@ class RunCommandTool(Tool):
 
 
 def get_command_result(thread_id: int) -> Optional[CommandResult]:
+    """Fetch the recorded result of a command run on the given thread.
+
+    Args:
+    thread_id: the thread that executed the command.
+
+    Returns:
+    Optional[CommandResult]: the recorded result, or None when unknown.
+    """
     return _command_results.get(thread_id)
