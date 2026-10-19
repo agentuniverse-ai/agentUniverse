@@ -36,6 +36,7 @@ async def acompletion_with_retry(
 
     @retry_decorator
     async def _completion_with_retry(**kwargs: Any) -> Any:
+        """Async completion call executed under the tenacity retry decorator, forwarding kwargs to the wrapped OpenAI-style LLM."""
         # Use OpenAI's async api https://github.com/openai/openai-python#async-api
         return await llm.llm.acall(**kwargs)
 
@@ -45,6 +46,9 @@ async def acompletion_with_retry(
 def _convert_delta_to_message_chunk(
         _dict: Mapping[str, Any], default_class: Type[BaseMessageChunk]
 ) -> BaseMessageChunk:
+    """Map an OpenAI stream delta dict to a LangChain message chunk.
+    The chunk type follows the delta's role, or the running default_class when no role is present; function_call, tool_calls and reasoning_content are forwarded as additional kwargs.
+    """
     role = _dict.get("role")
     content = _dict.get("content") or ""
     additional_kwargs: Dict = {}
@@ -207,6 +211,9 @@ class LangchainOpenAIStyleInstance(ChatOpenAI):
     @staticmethod
     async def as_langchain_achunk(stream_iterator: AsyncIterator, run_manager=None) \
             -> AsyncIterator[ChatGenerationChunk]:
+        """Async generator converting raw aU stream results into ChatGenerationChunk objects.
+        Each emitted chunk notifies the run manager with its token text.
+        """
         default_chunk_class = AIMessageChunk
         async for llm_result in stream_iterator:
             chunk = llm_result.raw
@@ -229,6 +236,7 @@ class LangchainOpenAIStyleInstance(ChatOpenAI):
                 await run_manager.on_llm_new_token(token=chunk.text, chunk=chunk)
 
     def get_num_tokens_from_messages(self, messages: List[BaseMessage]) -> int:
+        """Return the token count of the given messages as reported by the underlying aU LLM."""
         messages_str = get_buffer_string(messages)
         return self.llm.get_num_tokens(messages_str)
 
@@ -243,6 +251,7 @@ class LangchainOpenAIStyleInstance(ChatOpenAI):
 
         @retry_decorator
         def _completion_with_retry(**kwargs: Any) -> Any:
+            """Completion call executed under the tenacity retry decorator, forwarding kwargs to the underlying aU LLM's call."""
             return self.llm.call(**kwargs)
 
         return _completion_with_retry(**kwargs)
@@ -254,6 +263,7 @@ class LangchainOpenAIStyleInstance(ChatOpenAI):
             run_manager: Optional[CallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
+        """Streaming chat generation: convert each raw completion delta into a ChatGenerationChunk, notify the run manager per token, and yield it."""
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
 
@@ -289,6 +299,7 @@ class LangchainOpenAIStyleInstance(ChatOpenAI):
             run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
             **kwargs: Any,
     ) -> AsyncIterator[ChatGenerationChunk]:
+        """Async streaming chat generation: convert each raw completion delta into a ChatGenerationChunk, notify the run manager per token, and yield it."""
         message_dicts, params = self._create_message_dicts(messages, stop)
         params = {**params, **kwargs, "stream": True}
 
@@ -318,6 +329,13 @@ class LangchainOpenAIStyleInstance(ChatOpenAI):
             yield cg_chunk
 
     def _create_chat_result(self, response: Union[dict, BaseModel]) -> ChatResult:
+        """Build a ChatResult from a raw chat completion response (dict or BaseModel).
+
+        Args:
+        response: Raw response holding choices, usage and system fingerprint.
+        Returns:
+        ChatResult: Generations plus token usage, model name and system fingerprint.
+        """
         generations = []
         if not isinstance(response, dict):
             response = response.dict()
