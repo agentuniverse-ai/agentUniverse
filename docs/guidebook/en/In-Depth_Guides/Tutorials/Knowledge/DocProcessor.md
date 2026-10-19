@@ -307,7 +307,7 @@ metadata:
 ```
 - budget: Maximum cumulative size of the kept documents, measured in the unit of `counter`.
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
-- truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
+- truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
 
 ### [SentimentFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sentiment_filter.yaml)

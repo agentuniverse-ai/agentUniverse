@@ -308,8 +308,8 @@ metadata:
 ```
 - budget: 保留文档的最大累计大小，单位同 `counter`。
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
-- truncate: 为真时，第一个会超出预算的文档被截断到剩余预算大小并作为最后一个结果保留；为假时遇到该文档即停止。
- - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+- truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
+- tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
 
 ### [SentimentFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sentiment_filter.yaml)
 
