@@ -1,0 +1,59 @@
+name: text_diff_tool
+description: Text diff tool — pure Python stdlib difflib, no network required. Compares two texts: mode='unified' renders a unified diff (difflib.unified_diff format) with hunk and added/removed/equal line counts and a configurable context_lines window; mode='summary' returns the SequenceMatcher similarity ratio plus added/removed/equal line counts and identical flags; mode='words' returns word-level change opcodes with the changed words. Optional ignore_case and ignore_whitespace normalization.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_diff_tool
+  class: TextDiffTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Diff mode — unified, summary or words.
+    required: true
+  text1:
+    type: string
+    description: The first (older) text to compare. Empty strings are valid.
+    required: false
+  text2:
+    type: string
+    description: The second (newer) text to compare. Empty strings are valid.
+    required: false
+  ignore_case:
+    type: boolean
+    description: Compare lines (and words) case-insensitively. Defaults to false.
+    required: false
+  ignore_whitespace:
+    type: boolean
+    description: Ignore leading and trailing whitespace of each line. Defaults to false. No additional effect in words mode.
+    required: false
+  context_lines:
+    type: integer
+    description: Unchanged context lines around each unified hunk — unified mode only, defaults to 3, range 0..50. Ignored by the other modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["unified", "summary", "words"]
+      description: Diff mode.
+    text1:
+      type: string
+      description: First (older) text to compare (all modes).
+    text2:
+      type: string
+      description: Second (newer) text to compare (all modes).
+    ignore_case:
+      type: boolean
+      description: Compare case-insensitively (all modes).
+    ignore_whitespace:
+      type: boolean
+      description: Ignore leading/trailing whitespace per line (unified and summary modes).
+    context_lines:
+      type: integer
+      minimum: 0
+      maximum: 50
+      description: Context window around each hunk (unified mode).
+  required: ["mode"]
