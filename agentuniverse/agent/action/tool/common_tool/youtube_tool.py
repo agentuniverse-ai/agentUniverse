@@ -23,17 +23,33 @@ service_name = "youtube"
 api_version = "v3"
 
 class Mode(Enum):
+    """Operating modes supported by the YouTube tool."""
     VIDEO_SEARCH = "search" 
     TRENDING_VIDEOS = "trending"
     CHANNEL_INFO = "channel_info" 
 
 class YouTubeTool(Tool):
 
+    """YouTube tool built on the YouTube Data API v3.
+
+    Provides video search, trending videos, and channel information.
+    Requires a YouTube API key, read from the YOUTUBE_API_KEY
+    environment variable by default.
+    """
     service: Optional[Any] = None
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("YOUTUBE_API_KEY"))
     max_results: int = Field(10, description="Maximum video results to return")
 
     def _initialize_service(self):
+        """Build and cache the YouTube API service client.
+
+        Raises:
+            ValueError: if no api_key is configured.
+            ImportError: if google-api-python-client is not installed.
+
+        Returns:
+            Any: the YouTube service client.
+        """
         if not self.api_key:
             raise ValueError("YouTube API key not provided, please set the YOUTUBE_API_KEY environment variable.")
         if self.service is None:
@@ -70,6 +86,14 @@ class YouTubeTool(Tool):
 
     @retry(3, 1.0)
     def _search_videos(self, query: str) -> List[Dict]:
+        """Search videos by keyword and return summarized results.
+
+        Args:
+            query (str): the search keyword.
+
+        Returns:
+            List[Dict]: video summaries, or a list holding an error dict.
+        """
         try:         
             search_response = self.service.search().list(
                 q=query,
@@ -108,6 +132,14 @@ class YouTubeTool(Tool):
 
     @retry(3, 1.0)
     def _get_channel_info(self, channel_id: str) -> Dict:
+        """Fetch channel information and its recent uploaded videos.
+
+        Args:
+            channel_id (str): the YouTube channel id.
+
+        Returns:
+            Dict: channel details, or an error dict if the channel is not found.
+        """
         try:
             response = self.service.channels().list(
                 id=channel_id,
@@ -163,6 +195,14 @@ class YouTubeTool(Tool):
 
     @retry(3, 1.0)
     def _get_trending_videos(self, region_code: Optional[str] = None) -> List[Dict]:
+        """Fetch the most popular videos, optionally restricted to a region.
+
+        Args:
+            region_code (Optional[str]): ISO 3166-1 alpha-2 region code.
+
+        Returns:
+            List[Dict]: trending video summaries, or a list holding an error dict.
+        """
         try:
             request_param = {
                 'part': 'snippet,statistics,contentDetails',
@@ -200,6 +240,15 @@ class YouTubeTool(Tool):
             mode: str,
             input: Optional[str] = None
         ) -> List[Dict] | Dict:
+        """Run the YouTube tool in the requested mode.
+        Args:
+            mode (str): one of the values of the Mode enum.
+            input (Optional[str]): search query or channel id, as required by the mode.
+        Returns:
+            List[Dict] | Dict: the mode-specific result.
+        Raises:
+            ValueError: on an invalid mode or a missing required input.
+        """
         if self.service is None:
             self._initialize_service()
 
