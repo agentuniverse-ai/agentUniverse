@@ -402,6 +402,9 @@ class ContextBenchmarkSuite:
         Returns:
             Dictionary with latency statistics
         """
+        if num_operations <= 0:
+            raise ValueError("num_operations must be positive")
+
         session_id = f"benchmark_perf_{datetime.now().timestamp()}"
         self.context_manager.create_context_window(session_id)
 
