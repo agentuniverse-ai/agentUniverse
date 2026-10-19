@@ -20,6 +20,13 @@ from agentuniverse.llm.llm_output import LLMOutput
 
 
 def get_caller_info(instance: object = None):
+    """Return the source and type of the current caller in the invocation chain.
+
+    Returns:
+        dict: A ``{'source': ..., 'type': ...}`` dict taken from the last node of the
+        monitor invocation chain, or ``{'source': 'unknown', 'type': 'user'}`` when
+        the chain is empty.
+    """
     source_list = Monitor.get_invocation_chain()
     if len(source_list) > 0:
         return {
@@ -42,6 +49,11 @@ def _get_input(func, *args, **kwargs) -> dict:
 
 
 class InvocationChainContext:
+    """Context manager that tracks an invocation node on the monitor chain.
+
+    On entry it initializes the monitor invocation chain and appends a node built
+    from ``source`` and ``node_type``; on exit the node is popped from the chain.
+    """
     def __init__(self, source, node_type):
         self.source = source
         self.node_type = node_type
@@ -57,6 +69,14 @@ class InvocationChainContext:
 # llm trace
 
 def _llm_plugins(func):
+    """Wrap ``func`` with the LLM plugins configured in the application.
+
+    Args:
+        func: The LLM function to wrap.
+
+    Returns:
+        The function after the configured LLM plugins are applied.
+    """
     llm_plugins = ApplicationConfigManager().app_configer.llm_plugins
     warp_func = func
     for item in llm_plugins:
@@ -65,6 +85,15 @@ def _llm_plugins(func):
 
 
 def _get_llm_info(func, *args, **kwargs):
+    """Collect LLM invocation metadata for tracing the wrapped call.
+
+    Args:
+        func: The traced LLM function.
+        **kwargs: Keyword arguments of the LLM call.
+
+    Returns:
+        tuple: (instance, model_name, channel_name, llm_input, params, caller_info).
+    """
     llm_input = _get_input(func, *args, **kwargs)
 
     model_name = func.__qualname__
@@ -105,6 +134,15 @@ def _get_llm_info(func, *args, **kwargs):
 
 
 async def _default_llm_wrapper_async(func, *args, **kwargs):
+    """Async wrapper that traces an LLM invocation.
+
+    Adds an ``llm`` node to the invocation chain and invokes ``func`` through the
+    configured LLM plugins.
+
+    Returns:
+        LLMOutput for non-streaming calls, or an async generator of streamed
+        chunks that pops the chain when exhausted.
+    """
     # get llm input from arguments
     self, source, _, llm_input, _, _ = _get_llm_info(func, *args, **kwargs)
 
@@ -127,6 +165,15 @@ async def _default_llm_wrapper_async(func, *args, **kwargs):
 
 
 def _default_llm_wrapper_sync(func, *args, **kwargs):
+    """Sync wrapper that traces an LLM invocation.
+
+    Adds an ``llm`` node to the invocation chain and invokes ``func`` through the
+    configured LLM plugins.
+
+    Returns:
+        LLMOutput for non-streaming calls, or a generator of streamed chunks that
+        pops the chain when exhausted.
+    """
     # get llm input from arguments
     self, source, _, llm_input, _, _ = _get_llm_info(func, *args, **kwargs)
 
@@ -179,6 +226,13 @@ def trace_llm(func):
 # trace agent
 
 def _get_agent_info(func, *args, **kwargs):
+    """Collect agent invocation metadata for tracing.
+
+    Resolves the agent name from the bound instance when available.
+
+    Returns:
+        tuple: (agent instance, source name, bound input dict, start_info, pair_id).
+    """
     agent_input = _get_input(func, *args, **kwargs)
     source = func.__qualname__
     self = agent_input.pop('self', None)
@@ -196,6 +250,11 @@ def _get_agent_info(func, *args, **kwargs):
 
 
 async def _default_agent_wrapper_async(func, *args, **kwargs):
+    """Async wrapper that traces an agent invocation.
+
+    Pushes an ``agent`` invocation chain context, records the agent input and
+    result through ConversationMemoryModule, and returns the agent result.
+    """
     agent_instance, source, agent_input, start_info, pair_id = _get_agent_info(
         func, *args, **kwargs)
     with InvocationChainContext(source=source, node_type='agent'):
@@ -213,6 +272,11 @@ async def _default_agent_wrapper_async(func, *args, **kwargs):
 
 
 def _default_agent_wrapper_sync(func, *args, **kwargs):
+    """Sync wrapper that traces an agent invocation.
+
+    Pushes an ``agent`` invocation chain context, records the agent input and
+    result through ConversationMemoryModule, and returns the agent result.
+    """
     # get agent input from arguments
     agent_instance, source, agent_input, start_info, pair_id = _get_agent_info(
         func, *args, **kwargs)
