@@ -17,14 +17,19 @@ from agentuniverse.agent.action.tool.common_tool.write_file_tool import WriteFil
 
 
 class WriteFileToolTest(unittest.TestCase):
+    """Tests for the WriteFileTool covering file writing and path validation."""
+
     def setUp(self):
+        """Create a WriteFileTool bound to a scratch temp directory."""
         self.temp_dir = tempfile.mkdtemp()
         self.tool = WriteFileTool(base_dir=self.temp_dir)
         
     def tearDown(self):
+        """Remove the scratch temp directory after the test."""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
     
     def test_write_new_file(self):
+        """Verify a new file is written with the given content."""
         file_path = os.path.join(self.temp_dir, 'test_new.txt')
         content = "This is a test file content"
         
@@ -44,6 +49,7 @@ class WriteFileToolTest(unittest.TestCase):
             self.assertEqual(f.read(), content)
     
     def test_append_to_file(self):
+        """Verify content is appended when append mode is enabled."""
         file_path = os.path.join(self.temp_dir, 'test_append.txt')
         
         initial_content = "Initial content\n"
@@ -70,6 +76,7 @@ class WriteFileToolTest(unittest.TestCase):
             self.assertEqual(f.read(), initial_content + append_content)
 
     def test_string_false_append_value_overwrites_file(self):
+        """Verify the string 'false' append value overwrites the existing file."""
         file_path = os.path.join(self.temp_dir, 'test_append_string_false.txt')
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write('old content')
@@ -89,6 +96,7 @@ class WriteFileToolTest(unittest.TestCase):
             self.assertEqual(f.read(), 'new content')
 
     def test_typo_append_value_returns_error_without_writing(self):
+        """Verify a misspelled append value errors without modifying the file."""
         file_path = os.path.join(self.temp_dir, 'test_append_typo.txt')
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write('old content')
@@ -108,6 +116,7 @@ class WriteFileToolTest(unittest.TestCase):
             self.assertEqual(f.read(), 'old content')
 
     def test_non_binary_numeric_append_value_returns_error_without_writing(self):
+        """Verify a non-binary numeric append value errors without writing."""
         file_path = os.path.join(self.temp_dir, 'test_append_numeric.txt')
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write('old content')
@@ -127,6 +136,7 @@ class WriteFileToolTest(unittest.TestCase):
             self.assertEqual(f.read(), 'old content')
     
     def test_create_directory_structure(self):
+        """Verify missing parent directories are created for the target path."""
         file_path = os.path.join(self.temp_dir, 'nested/dir/structure/test.txt')
         content = "Test content in nested directory"
         
@@ -144,6 +154,7 @@ class WriteFileToolTest(unittest.TestCase):
         self.assertTrue(os.path.isdir(os.path.join(self.temp_dir, 'nested/dir/structure')))
 
     def test_write_relative_path_under_base_dir(self):
+        """Verify a relative path is resolved under the configured base directory."""
         result_json = self.tool.execute(
             file_path='relative/test.txt',
             content='relative content'
@@ -156,6 +167,7 @@ class WriteFileToolTest(unittest.TestCase):
         self.assertTrue(os.path.exists(expected_path))
 
     def test_reject_path_traversal(self):
+        """Verify paths escaping the base directory are rejected."""
         outside_name = f"{os.path.basename(self.temp_dir)}_outside.txt"
         outside_path = os.path.join(os.path.dirname(self.temp_dir), outside_name)
         self.addCleanup(lambda: os.path.exists(outside_path) and os.unlink(outside_path))
