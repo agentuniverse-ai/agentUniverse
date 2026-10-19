@@ -364,10 +364,13 @@ class CidrCalculatorTool(Tool):
         addresses: Any,
     ) -> dict[str, Any]:
         """Check a list of addresses against one network."""
+        # Parameter validation comes first: a malformed addresses list
+        # must raise ValueError even when the network token is invalid
+        # too (mirrors summarize; the documented contract).
+        items = self._validate_str_list(addresses, "addresses")
         net, error = self._parse_network(context, token, prefix)
         if error:
             return error
-        items = self._validate_str_list(addresses, "addresses")
         results: list[dict[str, Any]] = []
         contained = not_contained = invalid = 0
         for item in items:

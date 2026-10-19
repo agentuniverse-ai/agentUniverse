@@ -16,7 +16,9 @@ against the IANA special-purpose ranges, and summarization against
 known collapse results.
 """
 
+import ipaddress
 import unittest
+from itertools import islice
 
 from agentuniverse.agent.action.tool.common_tool import CidrCalculatorTool
 from agentuniverse.agent.action.tool.common_tool.cidr_calculator_tool import (
@@ -275,6 +277,16 @@ class CidrCalculatorToolContainsTest(unittest.TestCase):
     def test_contains_invalid_network_returns_error(self) -> None:
         result = self.tool.execute(mode="contains", network="10.0.0.999/24", addresses=["10.0.0.1"])
         self.assertEqual(result["error"]["type"], "invalid_address")
+
+    def test_contains_malformed_addresses_raise_even_with_invalid_network(self) -> None:
+        # Parameter validation must happen before any computation: a
+        # non-list addresses argument raises ValueError even when the
+        # network token is also invalid (regression: the network used
+        # to be parsed first and mask the malformed parameter).
+        with self.assertRaisesRegex(ValueError, "addresses must be a non-empty list"):
+            self.tool.execute(mode="contains", network="not-a-network", addresses="10.0.0.1")
+        with self.assertRaisesRegex(ValueError, "addresses must be a non-empty list"):
+            self.tool.execute(mode="contains", network="not-a-network", addresses=None)
 
 
 class CidrCalculatorToolSubnetTest(unittest.TestCase):
@@ -619,6 +631,138 @@ class CidrCalculatorToolImportTest(unittest.TestCase):
 
     def test_package_export(self) -> None:
         self.assertIs(CidrCalculatorTool, DirectCidrCalculatorTool)
+
+
+class CidrCalculatorToolStdlibAgreementTest(unittest.TestCase):
+    """Deterministic cross-check of the tool against ``ipaddress``.
+
+    The tool is a façade over the standard library, so its outputs must
+    agree with stdlib-computed expectations on a fixed (deterministic)
+    sample spanning both address families, extreme prefixes (/0, /31,
+    /32, /127, /128) and every mode.
+    """
+
+    #: Fixed sample of (network, new_prefix) pairs; deterministic and
+    #: reproducible without a seed by construction.
+    SAMPLES = (
+        ("0.0.0.0/0", 1),
+        ("10.0.0.0/8", 9),
+        ("192.168.1.0/24", 25),
+        ("192.168.1.0/25", 26),
+        ("203.0.113.128/30", 32),
+        ("192.168.1.0/31", 32),
+        ("198.51.100.7/32", None),
+        ("172.16.0.0/12", 16),
+        ("::/0", 1),
+        ("2001:db8::/32", 33),
+        ("2001:db8:1::/48", 64),
+        ("2001:db8::/127", 128),
+        ("2001:db8::1/128", None),
+        ("fe80::/10", 64),
+    )
+
+    def setUp(self) -> None:
+        self.tool = CidrCalculatorTool()
+
+    def test_info_agrees_with_stdlib(self) -> None:
+        for cidr, _ in self.SAMPLES:
+            with self.subTest(cidr=cidr):
+                net = ipaddress.ip_network(cidr)
+                result = self.tool.execute(mode="info", network=cidr)
+                self.assertEqual(
+                    (
+                        result["network"],
+                        result["version"],
+                        result["prefix"],
+                        result["netmask"],
+                        result["first_address"],
+                        result["last_address"],
+                        result["size"],
+                    ),
+                    (
+                        str(net),
+                        net.version,
+                        net.prefixlen,
+                        str(net.netmask),
+                        str(net.network_address),
+                        str(net.broadcast_address),
+                        net.num_addresses,
+                    ),
+                )
+                if net.version == 4 and net.num_addresses <= 65536:
+                    # hosts() span cross-check, small networks only
+                    # (never materialize billions of hosts for /0 etc.)
+                    hosts = list(net.hosts())
+                    self.assertEqual(result["first_usable_host"], str(hosts[0]))
+                    self.assertEqual(result["last_usable_host"], str(hosts[-1]))
+                    self.assertEqual(result["usable_host_count"], len(hosts))
+
+    def test_contains_agrees_with_stdlib(self) -> None:
+        for cidr, _ in self.SAMPLES:
+            with self.subTest(cidr=cidr):
+                net = ipaddress.ip_network(cidr)
+                probes = [
+                    str(net.network_address),
+                    str(net.broadcast_address),
+                    "8.8.8.8",
+                    "2001:db8::dead:beef",
+                ]
+                result = self.tool.execute(mode="contains", network=cidr, addresses=probes)
+                for entry, token in zip(result["results"], probes):
+                    try:
+                        addr = ipaddress.ip_address(token)
+                    except ValueError:
+                        self.assertTrue(entry["invalid"])
+                        continue
+                    self.assertFalse(entry["invalid"])
+                    self.assertEqual(entry["contained"], addr in net)
+                    self.assertEqual(entry["normalized"], str(addr))
+
+    def test_subnet_supernet_agree_with_stdlib(self) -> None:
+        for cidr, new_prefix in self.SAMPLES:
+            net = ipaddress.ip_network(cidr)
+            if new_prefix is not None:
+                with self.subTest(cidr=cidr, subnet=new_prefix):
+                    result = self.tool.execute(
+                        mode="subnet", network=cidr, new_prefix=new_prefix
+                    )
+                    # islice: never materialize more than the tool's cap
+                    expected = [str(s) for s in islice(net.subnets(new_prefix=new_prefix), 256)]
+                    self.assertEqual(result["subnets"], expected)
+                    self.assertEqual(result["count"], 1 << (new_prefix - net.prefixlen))
+            if net.prefixlen > 0:
+                shorter = net.prefixlen - 1
+                with self.subTest(cidr=cidr, supernet=shorter):
+                    result = self.tool.execute(
+                        mode="supernet", network=cidr, new_prefix=shorter
+                    )
+                    self.assertEqual(
+                        result["supernet"], str(net.supernet(new_prefix=shorter))
+                    )
+
+    def test_summarize_agrees_with_stdlib(self) -> None:
+        batches = (
+            ["192.168.0.0/24", "192.168.1.0/24"],
+            ["10.0.0.5", "10.0.0.6", "10.0.0.7", "10.0.0.8"],
+            ["2001:db8::/33", "2001:db8:8000::/33", "192.168.0.0/24", "192.168.1.0/24"],
+            ["0.0.0.0/1", "::ffff:0:0/96"],
+            ["fe80::1", "fe80::2", "10.1.0.0/16", "10.0.0.0/16"],
+        )
+        for batch in batches:
+            with self.subTest(batch=batch):
+                result = self.tool.execute(mode="summarize", networks=batch)
+                parsed = [
+                    ipaddress.ip_network(ipaddress.ip_address(t)) if "/" not in t
+                    else ipaddress.ip_network(t, strict=False)
+                    for t in batch
+                ]
+                expected = []
+                for version in (4, 6):
+                    group = [n for n in parsed if n.version == version]
+                    if group:
+                        expected += [str(n) for n in ipaddress.collapse_addresses(group)]
+                self.assertEqual(result["summary"], expected)
+                self.assertEqual(result["count"], len(expected))
 
 
 if __name__ == "__main__":
