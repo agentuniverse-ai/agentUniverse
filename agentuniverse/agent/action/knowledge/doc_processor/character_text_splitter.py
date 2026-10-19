@@ -36,6 +36,7 @@ class CharacterTextSplitter(DocProcessor):
 
     @property
     def splitter(self) -> Splitter:
+        """Return the lazily constructed character text splitter instance."""
         if not self.__splitter:
             self.__splitter = Splitter(separator=self.separator,
                                  chunk_size=self.chunk_size,
