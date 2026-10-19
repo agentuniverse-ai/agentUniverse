@@ -68,3 +68,85 @@ def test_backend_prune_handles_aware_timestamps(store_type, backend_attribute, m
 
     assert store.prune("session") == 1
     delete.assert_called_once_with("session", segment_ids=[old.id])
+
+
+def test_ram_get_sorts_mixed_naive_and_aware_timestamps():
+    store = RamContextStore()
+    older = segment_at(2)
+    newer = ContextSegment(
+        type=ContextType.CONVERSATION, content="newer", tokens=1,
+        metadata=ContextMetadata(
+            created_at=datetime.now() - timedelta(hours=1),
+            last_accessed=datetime.now() - timedelta(hours=1),
+        ),
+    )
+    store.add([older, newer], session_id="session")
+
+    assert [segment.id for segment in store.get("session")] == [newer.id, older.id]
+
+
+def test_ram_search_breaks_score_ties_with_mixed_timestamps():
+    store = RamContextStore()
+    older = ContextSegment(
+        type=ContextType.CONVERSATION, content="needle", tokens=1,
+        metadata=ContextMetadata(
+            last_accessed=datetime.now(timezone.utc) - timedelta(hours=2),
+            decay_rate=0,
+        ),
+    )
+    newer = ContextSegment(
+        type=ContextType.CONVERSATION, content="needle", tokens=1,
+        metadata=ContextMetadata(
+            last_accessed=datetime.now() - timedelta(hours=1), decay_rate=0,
+        ),
+    )
+    store.add([older, newer], session_id="session")
+
+    assert [segment.id for segment in store.search("needle", "session")] == [newer.id, older.id]
+
+
+def test_redis_get_sorts_mixed_naive_and_aware_timestamps():
+    store = RedisContextStore()
+    older = segment_at(2)
+    newer = ContextSegment(
+        type=ContextType.CONVERSATION, content="newer", tokens=1,
+        metadata=ContextMetadata(created_at=datetime.now() - timedelta(hours=1)),
+    )
+    store._redis = Mock()
+    store._redis.hgetall.return_value = {
+        segment.id.encode(): store._serialize_segment(segment)
+        for segment in (older, newer)
+    }
+
+    assert [segment.id for segment in store.get("session")] == [newer.id, older.id]
+
+
+def test_chroma_get_sorts_mixed_naive_and_aware_timestamps():
+    store = ChromaContextStore()
+    older = segment_at(2)
+    newer = ContextSegment(
+        type=ContextType.CONVERSATION, content="newer", tokens=1,
+        metadata=ContextMetadata(created_at=datetime.now() - timedelta(hours=1)),
+    )
+    store._collection = Mock()
+    store._collection.get.return_value = {
+        "ids": [older.id, newer.id],
+        "documents": [older.content, newer.content],
+        "metadatas": [
+            {
+                "segment_id": segment.id,
+                "type": segment.type.value,
+                "priority": segment.priority.value,
+                "tokens": segment.tokens,
+                "created_at": segment.metadata.created_at.isoformat(),
+                "last_accessed": segment.metadata.last_accessed.isoformat(),
+                "access_count": 0,
+                "relevance_score": 1.0,
+                "decay_rate": 0.1,
+                "session_id": "session",
+            }
+            for segment in (older, newer)
+        ],
+    }
+
+    assert [segment.id for segment in store.get("session")] == [newer.id, older.id]

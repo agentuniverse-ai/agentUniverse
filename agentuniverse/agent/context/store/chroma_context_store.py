@@ -26,6 +26,7 @@ from agentuniverse.agent.context.context_model import (
     ContextType,
     ContextPriority,
     elapsed_seconds_since,
+    timestamp_sort_key,
 )
 
 
@@ -247,7 +248,7 @@ class ChromaContextStore(ContextStore):
                     continue  # Skip corrupted entries
 
             # Sort by created_at (newest first)
-            segments.sort(key=lambda s: s.metadata.created_at, reverse=True)
+            segments.sort(key=lambda s: timestamp_sort_key(s.metadata.created_at), reverse=True)
             return segments[:limit]
 
         except Exception:

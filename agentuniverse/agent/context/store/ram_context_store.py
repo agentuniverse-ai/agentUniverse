@@ -8,12 +8,11 @@
 
 from collections import OrderedDict
 from typing import List, Optional, Dict, Any
-from datetime import datetime
 import time
 import re
 
 from agentuniverse.agent.context.context_store import ContextStore
-from agentuniverse.agent.context.context_model import ContextSegment, ContextType, ContextPriority
+from agentuniverse.agent.context.context_model import ContextSegment, ContextType, ContextPriority, timestamp_sort_key
 
 
 class RamContextStore(ContextStore):
@@ -122,7 +121,7 @@ class RamContextStore(ContextStore):
         segments = [s for s in segments if not self._is_expired(s)]
 
         # Sort by last_accessed (most recent first)
-        segments.sort(key=lambda s: s.metadata.last_accessed, reverse=True)
+        segments.sort(key=lambda s: timestamp_sort_key(s.metadata.last_accessed), reverse=True)
 
         # Update access tracking
         for segment in segments[:limit]:
@@ -185,7 +184,7 @@ class RamContextStore(ContextStore):
                 scored_segments.append((segment, score))
 
         # Sort by score (descending) then by last_accessed (descending)
-        scored_segments.sort(key=lambda x: (x[1], x[0].metadata.last_accessed), reverse=True)
+        scored_segments.sort(key=lambda x: (x[1], timestamp_sort_key(x[0].metadata.last_accessed)), reverse=True)
 
         # Update access tracking for top results
         top_segments = []

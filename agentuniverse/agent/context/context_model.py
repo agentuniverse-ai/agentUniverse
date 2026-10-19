@@ -20,6 +20,11 @@ def elapsed_seconds_since(timestamp: datetime) -> float:
     return (datetime.now(timestamp.tzinfo) - timestamp).total_seconds()
 
 
+def timestamp_sort_key(timestamp: datetime) -> float:
+    """Compare mixed timestamp kinds as instants on the local/UTC timeline."""
+    return timestamp.timestamp()
+
+
 class ContextType(str, Enum):
     """Types of context segments for categorization and routing."""
     SYSTEM = "system"              # System prompts, instructions
