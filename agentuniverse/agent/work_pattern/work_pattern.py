@@ -15,6 +15,8 @@ from agentuniverse.base.config.component_configer.configers.work_pattern_confige
 
 
 class WorkPattern(ComponentBase):
+    """Work pattern.
+    """
     name: Optional[str] = None
     description: Optional[str] = None
 
