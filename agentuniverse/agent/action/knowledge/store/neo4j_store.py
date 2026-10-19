@@ -180,12 +180,12 @@ class Neo4jStore(Store):
         session = self.driver.session()
         try:
             for doc in documents:
-                cypher = f"""
-                MERGE (d:Document {{id: '{doc.id}'}})
+                cypher = """
+                MERGE (d:Document {id: $id})
                 SET d.text = $text,
                     d.metadata = $metadata
                 """
-                session.run(cypher, text=doc.text, metadata=doc.metadata)
+                session.run(cypher, id=doc.id, text=doc.text, metadata=doc.metadata)
         finally:
             session.close()
 
@@ -198,12 +198,12 @@ class Neo4jStore(Store):
         session = self.driver.session()
         try:
             for doc in documents:
-                cypher = f"""
-                MATCH (d:Document {{id: '{doc.id}'}})
+                cypher = """
+                MATCH (d:Document {id: $id})
                 SET d.text = $text,
                     d.metadata = $metadata
                 """
-                session.run(cypher, text=doc.text, metadata=doc.metadata)
+                session.run(cypher, id=doc.id, text=doc.text, metadata=doc.metadata)
         finally:
             session.close()
 
