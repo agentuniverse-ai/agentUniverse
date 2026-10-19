@@ -24,5 +24,19 @@ metadata:
 - keyword_extractor: The tool designated for keyword extraction, specified here as jieba_keyword_extractor.
 - similarity_top_k: Returns the top k most similar documents based on the BM25 score.
 
+### Shared-instance concurrency
+
+Calls to `insert_document`, `upsert_document`, `delete_document` and `query` on
+one `SQLiteStore` instance share a connection and run serially. This keeps a
+query or another writer from committing a write that is still extracting
+keywords, and keeps recall, scoring and result loading together. Read helpers
+do not commit transactions, including when called by a keyword processor on
+the same thread. A failed write can therefore roll back its pending changes.
+
+The lock belongs to the store instance; independent stores can run concurrently.
+Accessing `conn` directly or assigning one connection to multiple store instances
+bypasses this protection. Keyword processors run inside the serialized operation
+and should not wait for another thread to call back into the same instance.
+
 ### Usage
 [Knowledge_Define_And_Use](../../../In-Depth_Guides/Tutorials/Knowledge/Knowledge_Define_And_Use.md)
