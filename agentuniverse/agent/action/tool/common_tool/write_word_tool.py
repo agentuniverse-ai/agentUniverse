@@ -14,6 +14,10 @@ class WriteWordDocumentTool(Tool):
                 "status": "error",
             })
         file_path = file_path.strip()
+        if not isinstance(content, str):
+            return json.dumps(
+                {"error": "content must be a string", "file_path": file_path, "status": "error"}
+            )
         if not file_path.lower().endswith(".docx"):
             return json.dumps(
                 {"error": "The target file must have a .docx extension.", "file_path": file_path, "status": "error"}

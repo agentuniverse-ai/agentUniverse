@@ -76,8 +76,10 @@ class ImageReader(Reader):
     def generate_description(self, image: Any) -> str:
         """Generate description of the image content."""
         pipeline = self._get_description_pipeline()
-        description = pipeline(image)[0]['generated_text']
-        return description
+        results = pipeline(image)
+        if not results or not isinstance(results[0], dict):
+            return ""
+        return str(results[0].get('generated_text') or "")
 
     def _load_data(self,
                    file: Union[str, Path],
