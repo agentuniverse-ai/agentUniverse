@@ -632,3 +632,27 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## FileSystemTool
+
+`FileSystemTool` performs bounded file-system operations — `list`, `tree`, `mkdir`, `copy`, `move`, `delete`, `exists`, `info` — all confined to `base_dir` via path-resolution/sandboxing. Every operation is bounded by configurable limits (`max_list_entries`, `max_tree_depth`, `max_batch_size`) so an agent cannot enumerate or move unbounded amounts of data. Pure Python, no third-party dependency.
+
+Register a component pointing at `agentuniverse.agent.action.tool.common_tool.filesystem_tool.FileSystemTool`, then call `execute(mode=..., path=..., target=..., depth=...)`. Paths outside `base_dir` (including resolved symlinks and traversal segments) are rejected.
+
+```yaml
+name: filesystem_tool
+description: Bounded file system operations confined to base_dir
+base_dir: /srv/agent-files
+max_list_entries: 500
+max_tree_depth: 5
+max_batch_size: 100
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.filesystem_tool
+  class: FileSystemTool
+input_keys: ["mode", "path"]
+```
+- base_dir: Root directory; all paths are resolved underneath it.
+- max_list_entries: Maximum entries returned by `list` / `tree` (default 500).
+- max_tree_depth: Maximum depth for `tree` (default 5).
+- max_batch_size: Maximum files per `copy` / `move` batch (default 100).

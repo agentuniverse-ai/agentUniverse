@@ -1,0 +1,14 @@
+name: filesystem_tool
+description: Bounded file system operations tool — mkdir, list, copy, move, delete, and tree, all confined to base_dir via resolve_safe_path.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.filesystem_tool
+  class: FileSystemTool
+input_keys:
+  - mode
+  - path
+base_dir: .
+max_list_entries: 500
+max_tree_depth: 5
+max_batch_size: 100
