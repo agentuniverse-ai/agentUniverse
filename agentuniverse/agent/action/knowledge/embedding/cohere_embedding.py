@@ -20,6 +20,8 @@ from pydantic import Field
 
 from agentuniverse.agent.action.knowledge.embedding.embedding import Embedding
 from agentuniverse.base.util.env_util import get_from_env
+from agentuniverse.base.config.component_configer.component_configer import \
+    ComponentConfiger
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,27 @@ class CohereEmbedding(Embedding):
         default_factory=lambda: get_from_env("COHERE_API_KEY"))
     input_type: str = "document"
     request_timeout: int = 30
+
+    def _initialize_by_component_configer(
+            self, embedding_configer: ComponentConfiger) -> 'CohereEmbedding':
+        """Initialize the embedding, normalising empty-string placeholders.
+
+        An empty ``api_key`` in the component config (e.g. ``api_key: ''``
+        left over from a ``${COHERE_API_KEY}`` placeholder) is treated as
+        unset so the ``COHERE_API_KEY`` environment variable applies.
+        """
+        super()._initialize_by_component_configer(embedding_configer)
+        if hasattr(embedding_configer, "input_type"):
+            self.input_type = embedding_configer.input_type
+        if hasattr(embedding_configer, "request_timeout"):
+            self.request_timeout = embedding_configer.request_timeout
+        if hasattr(embedding_configer, "api_key"):
+            api_key = embedding_configer.api_key
+            if api_key is None or not str(api_key).strip():
+                self.api_key = get_from_env("COHERE_API_KEY")
+            else:
+                self.api_key = api_key
+        return self
 
     def get_embeddings(self, texts: List[str],
                        text_type: str = "document") -> List[List[float]]:

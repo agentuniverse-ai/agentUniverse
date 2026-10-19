@@ -81,6 +81,26 @@ class TestCohereEmbedding(unittest.TestCase):
             emb = CohereEmbedding()
             self.assertEqual(emb.api_key, "env-key")
 
+    def test_empty_string_api_key_falls_back_to_env(self):
+        configer = MagicMock()
+        configer.name = "cohere_embedding"
+        configer.description = None
+        configer.api_key = ""
+        with patch.dict("os.environ", {"COHERE_API_KEY": "env-key"}):
+            emb = CohereEmbedding(api_key="cfg-key")
+            emb._initialize_by_component_configer(configer)
+            self.assertEqual(emb.api_key, "env-key")
+
+    def test_config_api_key_overrides_env(self):
+        configer = MagicMock()
+        configer.name = "cohere_embedding"
+        configer.description = None
+        configer.api_key = "cfg-key"
+        with patch.dict("os.environ", {"COHERE_API_KEY": "env-key"}):
+            emb = CohereEmbedding(api_key="")
+            emb._initialize_by_component_configer(configer)
+            self.assertEqual(emb.api_key, "cfg-key")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
