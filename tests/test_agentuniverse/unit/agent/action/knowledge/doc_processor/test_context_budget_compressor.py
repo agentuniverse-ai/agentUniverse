@@ -119,6 +119,35 @@ class TestContextBudgetCounters(unittest.TestCase):
         out = _run(["hello world"], budget=1, counter="tiktoken", truncate=True)
         self.assertEqual(out[0].text, enc.decode(enc.encode("hello world")[:1]))
 
+    def test_tiktoken_truncation_preserves_unicode_and_budget(self) -> None:
+        try:
+            import tiktoken
+        except Exception:  # noqa: BLE001 - optional dependency
+            self.skipTest("tiktoken not installed")
+
+        for encoding in ("cl100k_base", "p50k_base"):
+            enc = tiktoken.get_encoding(encoding)
+            for text, budget in [(" раб", 1), ("你好世界，这是中文测试。", 3),
+                                 ("🙂🙂abc", 1), ("образование", 1)]:
+                with self.subTest(encoding=encoding, text=text, budget=budget):
+                    out = _run([text], budget=budget, counter="tiktoken",
+                               tiktoken_encoding=encoding)
+                    if out:
+                        self.assertTrue(text.startswith(out[0].text))
+                        self.assertNotIn("\ufffd", out[0].text)
+                        self.assertLessEqual(len(enc.encode(out[0].text)), budget)
+                    else:
+                        # No complete character fits the remaining budget.
+                        self.assertGreater(len(enc.encode(text[:1])), budget)
+
+    def test_tiktoken_truncation_respects_remaining_budget(self) -> None:
+        import tiktoken
+        enc = tiktoken.get_encoding("cl100k_base")
+        out = _run(["hello", " раб"], budget=2, counter="tiktoken")
+        self.assertEqual(out[0].text, "hello")
+        self.assertTrue(" раб".startswith(out[1].text))
+        self.assertLessEqual(sum(len(enc.encode(doc.text)) for doc in out), 2)
+
 
 class TestContextBudgetTiktokenCache(unittest.TestCase):
     """Encoders are cached per encoding name; bad encodings raise.

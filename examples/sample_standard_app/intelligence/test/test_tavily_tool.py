@@ -27,31 +27,31 @@ class TavilyToolTest(unittest.TestCase):
         # 跳过测试如果没有有效的API密钥
         if self.api_key == "your_tavily_api_key_here":
             self.skipTest("未提供Tavily API密钥，跳过测试")
-            
+
         tavily_tool = ToolManager().get_instance_obj("tavily_tool")
-        
+
         print("\n-------------测试Tavily工具(搜索模式)---------------")
         result = tavily_tool.run(input=self.test_query, api_key=self.api_key, mode="search")
         print(f"搜索结果: {result}")
-        
+
         # 验证搜索结果
         self.assertIn("results", result)
         if len(result["results"]) > 0:
             print(f"搜索结果数量: {len(result['results'])}")
             print(f"第一条结果标题: {result['results'][0]['title']}")
             print(f"第一条结果URL: {result['results'][0]['url']}")
-        
+
         print("\n-------------测试Tavily工具(提取模式)---------------")
         result = tavily_tool.run(input=self.test_url, api_key=self.api_key, mode="extract", include_images=False)
         print(f"提取结果: {result}")
-        
+
         # 验证提取结果
         self.assertIn("results", result)
         if len(result["results"]) > 0:
             print(f"成功提取URL数量: {len(result['results'])}")
             print(f"第一个URL: {result['results'][0]['url']}")
             print(f"提取内容前200字符: {result['results'][0]['raw_content'][:200]}...")
-        
+
         if "failed_results" in result and len(result["failed_results"]) > 0:
             print(f"提取失败URL数量: {len(result['failed_results'])}")
             for failed in result["failed_results"]:
