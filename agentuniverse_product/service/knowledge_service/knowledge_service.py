@@ -205,6 +205,8 @@ class KnowledgeService:
                                              prefix=".upload-", suffix=".tmp", delete=False) as buffer:
                 temporary_path = buffer.name
                 shutil.copyfileobj(file.file, buffer)
+            if os.path.isfile(file_location):
+                shutil.copymode(file_location, temporary_path)
             os.replace(temporary_path, file_location)
             temporary_path = None
 

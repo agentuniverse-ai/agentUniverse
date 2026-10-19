@@ -1,6 +1,8 @@
 """Knowledge upload must preserve an existing file if transfer fails."""
 
 import io
+import os
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -81,3 +83,18 @@ def test_failed_replace_cleans_up_temporary_file(monkeypatch, tmp_path):
     assert destination.read_bytes() == b"old"
     assert imported == []
     assert sorted(path.name for path in resources.iterdir()) == ["report.txt"]
+
+
+def test_replacing_upload_preserves_existing_file_mode(monkeypatch, tmp_path):
+    resources, imported = prepare_upload(monkeypatch, tmp_path)
+    destination = resources / "report.txt"
+    destination.write_bytes(b"old")
+    os.chmod(destination, stat.S_IRUSR | stat.S_IWUSR)
+    original_mode = stat.S_IMODE(destination.stat().st_mode)
+
+    assert module.KnowledgeService.upload_knowledge_file(
+        "safe", SimpleNamespace(filename="report.txt", file=io.BytesIO(b"new"))
+    )
+
+    assert stat.S_IMODE(destination.stat().st_mode) == original_mode
+    assert imported == [b"new"]
