@@ -10,11 +10,15 @@ from typing import List, Any, Optional, TypedDict
 
 
 class AstNodePoint(TypedDict):
+    """TypedDict describing a row/column position inside an AST tree.
+    """
     row: int
     column: int
 
 
 class AstNode(TypedDict):
+    """TypedDict describing one tree-sitter style AST node with its position, text and children.
+    """
     type: str
     start_point: AstNodePoint
     end_point: AstNodePoint
@@ -25,6 +29,10 @@ class AstNode(TypedDict):
 
 
 class CodeBoundary(TypedDict):
+    """TypedDict describing a code span inside a file.
+
+    Keys: start, end, type, name, node.
+    """
     start: int
     end: int
     type: str
