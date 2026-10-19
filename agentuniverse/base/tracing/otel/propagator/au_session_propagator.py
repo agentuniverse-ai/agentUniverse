@@ -65,7 +65,7 @@ class AUSessionPropagator(textmap.TextMapPropagator):
                 span = trace.get_current_span(context)
                 try:
                     span.set_attribute(SPAN_SESSION_ID_KEY, _value[0])
-                except:
+                except Exception:
                     pass
                 break
         return context

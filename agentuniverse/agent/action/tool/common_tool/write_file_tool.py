@@ -26,6 +26,13 @@ class WriteFileTool(Tool):
             content = params.get('content', content)
             append = params.get('append', append)
             file_path = params.get('file_path')
+        if not isinstance(content, str):
+            return json.dumps({
+                "error": "content must be a string",
+                "file_path": file_path,
+                "status": "error"
+            })
+
         try:
             append = parse_strict_bool(append, "append", default=False)
         except ValueError as e:
