@@ -59,8 +59,11 @@ class DoubaoEmbedding(Embedding):
                     f"{', '.join(str(value) for value in sorted(SUPPORTED_DIMENSIONS))}"
                 )
             import numpy as np
-            norm = float(np.linalg.norm(vec[:self.embedding_dims]))
-            return [v / norm for v in vec[:self.embedding_dims]]
+            sliced = vec[:self.embedding_dims]
+            norm = float(np.linalg.norm(sliced))
+            if norm == 0.0:
+                return [0.0 for _ in sliced]
+            return [v / norm for v in sliced]
 
         try:
             response = self.client.embeddings.create(model=self.endpoint_id,
