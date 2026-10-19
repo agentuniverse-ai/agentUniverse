@@ -38,6 +38,14 @@ class SearchAPITool(Tool):
     search_type: str = "common"
 
     def _load_api_wapper(self):
+        """Load (and cache) the SearchApiAPIWrapper built from the configured key and engine.
+
+        Returns:
+            SearchApiAPIWrapper: The api wrapper.
+
+        Raises:
+            ValueError: If no SEARCHAPI_API_KEY is configured.
+        """
         if not self.search_api_key:
             raise ValueError("Please set the SEARCHAPI_API_KEY environment variable.")
         if not self.search_api_wrapper:
@@ -45,6 +53,15 @@ class SearchAPITool(Tool):
         return self.search_api_wrapper
 
     def execute(self, input: str, **kwargs):
+        """Run a search through the search api wrapper with the merged search parameters.
+
+        Args:
+            input(str): The search query.
+            **kwargs: Overrides for configured search parameters.
+
+        Returns:
+            The search results (text or json depending on search_type).
+        """
         self._load_api_wapper()
         search_params = {}
         for k, v in self.search_params.items():
@@ -57,6 +74,14 @@ class SearchAPITool(Tool):
         return self.search_api_wrapper.run(query=input, **search_params)
 
     async def async_execute(self, tool_input: ToolInput):
+        """Asynchronously run a search through the search api wrapper using the values in the ToolInput.
+
+        Args:
+            tool_input(ToolInput): The tool input holding the query and parameter overrides.
+
+        Returns:
+            The search results (text or json depending on search_type).
+        """
         self._load_api_wapper()
         search_params = {}
         for k, v in self.search_params.items():
