@@ -69,14 +69,21 @@ class SQLDBWrapperConfiger(ComponentConfiger):
         Returns:
             SQLDBWrapperConfiger: A SQLDBWrapperConfiger instance.
         """
+        if not isinstance(configer.value, dict):
+            configer.value = {}
         super().load_by_configer(configer)
         self.__set_default_meta_info()
         try:
-            self.__name = configer.value.get('name')
-            self.__description = configer.value.get('description')
-            self.db_uri = parse_dynamic_str(configer.value.get('db_uri'))
-            self.engine_args = dict(configer.value.get('engine_args', {}))
-            self.sql_database_args = dict(configer.value.get('sql_database_args', {}))
+            config_value = configer.value
+            self.__name = config_value.get('name')
+            self.__description = config_value.get('description')
+            self.db_uri = parse_dynamic_str(config_value.get('db_uri'))
+            engine_args = config_value.get('engine_args')
+            sql_database_args = config_value.get('sql_database_args')
+            self.engine_args = engine_args if isinstance(engine_args, dict) else {}
+            self.sql_database_args = (
+                sql_database_args if isinstance(sql_database_args, dict) else {}
+            )
 
         except Exception as e:
             raise Exception(f"Failed to parse the db wrapper configuration: {e}")
