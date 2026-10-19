@@ -32,6 +32,7 @@ class MemoryTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Build a ChatMemory instance backed by a DefaultOpenAILLM."""
         init_params = dict()
         init_params['model_name'] = 'gpt-4o'
         init_params['temperature'] = 0.7
@@ -49,6 +50,7 @@ class MemoryTest(unittest.TestCase):
         self.chat_memory = ChatMemory(**init_params)
 
     def test_summarize_memory_1(self) -> None:
+        """Verify long-term memory summarises history via ConversationChain."""
         langchain_memory = self.chat_memory.as_langchain()
         langchain_memory.memory_key = 'history'
         llm_chain = ConversationChain(llm=langchain_memory.llm,
@@ -57,6 +59,7 @@ class MemoryTest(unittest.TestCase):
         print(conversation)
 
     def test_summarize_memory_2(self) -> None:
+        """Verify long-term memory works through a prompt-templated LLMChain."""
         langchain_memory = self.chat_memory.as_langchain()
         prompt = PromptTemplate(
             input_variables=["chat_history", "human_input"], template=template
@@ -67,6 +70,7 @@ class MemoryTest(unittest.TestCase):
         print(conversation)
 
     def test_summarize_memory_3(self) -> None:
+        """Verify long-term memory summary produced with a verbose chain."""
         langchain_memory = self.chat_memory.as_langchain()
         prompt = PromptTemplate(
             input_variables=["chat_history", "human_input"], template=template
@@ -77,6 +81,7 @@ class MemoryTest(unittest.TestCase):
         print(res)
 
     def test_truncate_memory_1(self) -> None:
+        """Verify short-term memory truncation drives a langchain conversation."""
         self.chat_memory.type = MemoryTypeEnum.SHORT_TERM
         langchain_memory = self.chat_memory.as_langchain()
         prompt = PromptTemplate(
@@ -88,6 +93,7 @@ class MemoryTest(unittest.TestCase):
         print(conversation)
 
     def test_truncate_memory_2(self) -> None:
+        """Verify short-term memory truncation works with direct chain inputs."""
         self.chat_memory.type = MemoryTypeEnum.SHORT_TERM
         langchain_memory = self.chat_memory.as_langchain()
         prompt = PromptTemplate(
