@@ -1,0 +1,6 @@
+name: 'cohere_rerank'
+description: 'reranker use cohere api'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cohere_rerank'
+  class: 'CohereRerank'
