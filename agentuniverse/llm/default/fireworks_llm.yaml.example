@@ -1,0 +1,13 @@
+name: 'default_fireworks_llm'
+description: 'default fireworks llm powered by the Fireworks AI models'
+model_name: 'accounts/fireworks/models/llama-v3p1-70b-instruct'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${FIREWORKS_API_KEY}'
+api_base: 'https://api.fireworks.ai/inference/v1'
+proxy: '${FIREWORKS_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.fireworks_llm'
+  class: 'FireworksLLM'
