@@ -332,6 +332,7 @@ class ContractClauseFragmenter(DocProcessor):
             List of clause documents.
         """
         clause_docs = []
+        clause_index = {clause.id.lower(): clause.id for clause in clauses}
 
         for clause in clauses:
             # Build metadata
@@ -357,7 +358,7 @@ class ContractClauseFragmenter(DocProcessor):
 
             # Extract references if enabled
             if self.extract_references:
-                references = self._extract_references(clause.text, clauses)
+                references = self._extract_references(clause.text, clauses, clause_index)
                 if references:
                     metadata['clause_references'] = references
 
@@ -372,35 +373,37 @@ class ContractClauseFragmenter(DocProcessor):
 
         return clause_docs
 
-    def _extract_references(self, text: str, all_clauses: List[ClauseNode]) -> List[str]:
+    def _extract_references(self, text: str, all_clauses: List[ClauseNode],
+                            clause_index: Optional[Dict[str, str]] = None) -> List[str]:
         """Extract cross-references to other clauses.
 
         Args:
             text: Clause text.
             all_clauses: All clauses in the document.
+            clause_index: Optional prebuilt normalized-ID lookup, reused across
+                the document to avoid scanning every target for each reference.
 
         Returns:
             List of referenced clause IDs.
         """
         references = []
+        if clause_index is None:
+            clause_index = {clause.id.lower(): clause.id for clause in all_clauses}
 
         # Common reference patterns
         patterns = [
-            r'(Article|ARTICLE)\s+([IVX\d]+)',
-            r'(Section|SECTION)\s+(\d+(\.\d+)*)',
-            r'clause\s+(\d+(\.\d+)*)',
-            r'第(.+?)条',  # Chinese
+            ('article', r'\bArticle\s+([IVX\d]+)\b'),
+            ('section', r'\bSection\s+(\d+(?:\.\d+)*)\b'),
+            ('clause', r'\bclause\s+(\d+(?:\.\d+)*)\b'),
+            ('article', r'第([一二三四五六七八九十百千\d]+)条'),
         ]
 
-        for pattern in patterns:
+        for prefix, pattern in patterns:
             matches = re.finditer(pattern, text, re.IGNORECASE)
             for match in matches:
-                ref_text = match.group(0)
-                # Try to find matching clause
-                for clause in all_clauses:
-                    if ref_text.lower() in clause.text.lower()[:100]:  # Check beginning of clause
-                        if clause.id not in references:
-                            references.append(clause.id)
+                target_id = clause_index.get(f'{prefix}_{match.group(1)}'.lower())
+                if target_id is not None and target_id not in references:
+                    references.append(target_id)
 
         return references
 
