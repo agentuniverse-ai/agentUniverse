@@ -1,0 +1,29 @@
+name: slack_mrkdwn_tool
+description: Slack mrkdwn markup tool — pure Python stdlib, no network required. Convert Slack mrkdwn to standard Markdown (mode='to_markdown': *bold*->**bold**, _italic_->*italic*, ~strike~->~~strike~~, <url|text>->[text](url), <@id>/<#id|name>/<!here> mentions, >>> blockquotes, code untouched), Markdown back to mrkdwn (mode='to_mrkdwn': inverse mapping incl. **bold**->*bold*, [text](url)-><url|text>, @here-><!here>), or score which dialect a text is written in (mode='detect').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.slack_mrkdwn_tool
+  class: SlackMrkdwnTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Conversion mode — to_markdown (Slack mrkdwn to standard Markdown), to_mrkdwn (standard Markdown to Slack mrkdwn) or detect (score which dialect the text is written in).
+    required: true
+  text:
+    type: string
+    description: The markup text to convert or analyse. Required for every mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["to_markdown", "to_mrkdwn", "detect"]
+      description: Conversion mode.
+    text:
+      type: string
+      description: The markup text to convert or analyse.
+  required: ["mode"]
