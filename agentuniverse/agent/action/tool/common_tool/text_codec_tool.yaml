@@ -1,0 +1,81 @@
+name: text_codec_tool
+description: Text codec tool — pure Python stdlib, no network required. Base64 encode/decode of UTF-8 text (mode='base64'), RFC 3986 percent encode/decode with an optional safe-character string (mode='url'), lowercase hex encode/decode (mode='hex'), MD5/SHA-1/SHA-256/SHA-512 hashes with optional salt prefix (mode='hash'), and UUID v4 random / v5 namespace+name deterministic generation (mode='uuid').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_codec_tool
+  class: TextCodecTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Codec mode — base64, url, hex, hash or uuid.
+    required: true
+  text:
+    type: string
+    description: The text to encode, decode or hash. Required for the base64, url, hex and hash modes; not used by uuid mode.
+    required: false
+  operation:
+    type: string
+    description: encode or decode — required for the base64, url and hex modes; not used by hash or uuid modes.
+    required: false
+  algorithm:
+    type: string
+    description: Hash algorithm — md5, sha1, sha256 or sha512. Required for the hash mode.
+    required: false
+  salt:
+    type: string
+    description: Optional salt string prefixed to the text before hashing (digest of salt + text). Hash mode only.
+    required: false
+  version:
+    type: integer
+    description: UUID version — 4 (random) or 5 (deterministic namespace + name). Required for the uuid mode.
+    required: false
+  namespace:
+    type: string
+    description: UUID v5 only — one of the well-known labels dns/url/oid/x500 (case-insensitive) or a custom namespace as a UUID hex string.
+    required: false
+  name:
+    type: string
+    description: UUID v5 only — the name hashed into the UUID (e.g. a domain or URL).
+    required: false
+  safe:
+    type: string
+    description: URL encode mode only — extra ASCII characters (no whitespace, no %) left unescaped; by default everything but unreserved characters is percent-encoded.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["base64", "url", "hex", "hash", "uuid"]
+      description: Codec mode.
+    text:
+      type: string
+      description: Text to encode / decode / hash (base64, url, hex, hash modes).
+    operation:
+      type: string
+      enum: ["encode", "decode"]
+      description: Encode or decode (base64, url, hex modes).
+    algorithm:
+      type: string
+      enum: ["md5", "sha1", "sha256", "sha512"]
+      description: Hash algorithm (hash mode).
+    salt:
+      type: string
+      description: Optional salt prefixed to the text before hashing (hash mode).
+    version:
+      type: integer
+      enum: [4, 5]
+      description: UUID version (uuid mode).
+    namespace:
+      type: string
+      description: Well-known namespace label (dns/url/oid/x500) or UUID hex string (uuid v5 mode).
+    name:
+      type: string
+      description: Name hashed into the UUID (uuid v5 mode).
+    safe:
+      type: string
+      description: Extra characters left unescaped when percent-encoding (url encode mode).
+  required: ["mode"]
