@@ -21,6 +21,7 @@ DASHSCOPE_EMBEDDING_URL = "https://dashscope.aliyuncs.com/api/v1/services/embedd
 
 def batched(inputs: List,
             batch_size: int = DASHSCOPE_MAX_BATCH_SIZE) -> Generator[List, None, None]:
+    """Yield consecutive sublists of the input in the given batch size."""
     # Split input string list, due to dashscope support 25 strings in one call.
     for i in range(0, len(inputs), batch_size):
         yield inputs[i:i + batch_size]
