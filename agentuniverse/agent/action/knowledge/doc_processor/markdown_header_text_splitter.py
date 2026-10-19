@@ -113,6 +113,12 @@ class MarkdownHeaderTextSplitter(DocProcessor):
         sections: List[Tuple[str, str]] = []
 
         def flush() -> None:
+            """Flush the buffered section text into the sections list.
+            
+            Joins the buffered lines, clears the buffer, and appends the section with
+            its current header path, unless it is an empty body or a preamble that is
+            configured to be dropped.
+            """
             body = "\n".join(buffer).strip("\n")
             buffer.clear()
             if not body:
