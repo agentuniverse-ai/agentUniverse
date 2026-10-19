@@ -96,3 +96,32 @@ Supported metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are 
 ## PGVectorStore
 
 `PGVectorStore` adds PostgreSQL/pgvector persistence with synchronous and asynchronous CRUD, cosine/L2/inner-product search, JSONB containment filters, optional managed embeddings, dimension validation, automatic table/extension creation, and an optional HNSW index. Install the `store_ext` extra and copy `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` into the application configuration directory. Set `connection_url` in that copy or use `PGVECTOR_CONNECTION_URL`; never commit credentials.
+
+## LanceDBStore
+
+`LanceDBStore` is an embedded (serverless) vector store backed by LanceDB — no separate server process is required, and data persists to a local directory. It provides insert, query, upsert, update, delete, and inspection with cosine / L2 / dot distance metrics, configurable vector dimensions, optional on-demand embedding through a registered aU embedding component, and bounded resource usage (`similarity_top_k`, `max_insert_batch`). This makes it ideal for development, testing, and single-node production deployments.
+
+Install the optional dependency with `pip install 'agentUniverse[store_ext]'`, then copy `agentuniverse/agent/action/knowledge/store/lancedb_store.yaml.example` into the application configuration directory and resolve the built-in `lancedb_store` component. The local database directory (`db_path`) is created on first connect.
+
+```yaml
+name: lancedb_store
+description: LanceDB embedded vector store for knowledge retrieval
+db_path: ./lancedb
+table_name: agentuniverse_documents
+embedding_model: openai_embedding
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+max_insert_batch: 500
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.lancedb_store
+  class: LanceDBStore
+```
+- db_path: Local directory for the LanceDB database; created on first connect if it does not exist.
+- table_name: LanceDB table name.
+- embedding_model: Registered aU embedding component used to embed documents / queries on demand.
+- dimensions: Vector dimension; if `null`, inferred from the first inserted document.
+- distance: Distance metric — `cosine`, `l2`, or `dot`.
+- similarity_top_k: Default number of results returned by `query`.
+- max_insert_batch: Maximum documents per insert batch.
