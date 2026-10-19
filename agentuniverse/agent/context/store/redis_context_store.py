@@ -130,7 +130,7 @@ class RedisContextStore(ContextStore):
         session_id: str,
         context_type: Optional[ContextType] = None,
         priority: Optional[ContextPriority] = None,
-        limit: int = 100,
+        limit: Optional[int] = 100,
         **kwargs
     ) -> List[ContextSegment]:
         """Retrieve segments from Redis.
@@ -139,7 +139,7 @@ class RedisContextStore(ContextStore):
             session_id: Session identifier
             context_type: Optional type filter
             priority: Optional priority filter
-            limit: Maximum number of segments to return
+            limit: Maximum number of segments to return; None returns all
             **kwargs: Additional parameters
 
         Returns:
@@ -202,7 +202,9 @@ class RedisContextStore(ContextStore):
 
         # Get all segments and do in-memory search
         # For production, consider Redis full-text search module
-        segments = self.get(session_id, limit=1000)
+        # get() already reads the complete Redis hash before applying its
+        # result limit, so search all candidates instead of dropping older hits.
+        segments = self.get(session_id, limit=None)
 
         # Score segments
         scored = []

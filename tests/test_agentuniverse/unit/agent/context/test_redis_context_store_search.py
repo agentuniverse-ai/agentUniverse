@@ -1,5 +1,7 @@
 """Keyword search should exclude context with no textual match."""
 
+from datetime import datetime, timedelta
+
 from agentuniverse.agent.context.context_model import ContextPriority, ContextSegment, ContextType
 from agentuniverse.agent.context.store.redis_context_store import RedisContextStore
 
@@ -26,3 +28,23 @@ def test_search_requires_a_text_match_even_for_high_priority_segments():
     assert [segment.id for segment in store.search("needle", "one")] == [relevant.id]
     assert store.search("missing", "one") == []
     assert store.search("  ", "one") == []
+
+
+def test_search_finds_match_beyond_default_result_limit():
+    store = RedisContextStore()
+    now = datetime.now()
+    segments = [
+        ContextSegment(type=ContextType.CONVERSATION, content="unrelated", tokens=1,
+                       metadata={"created_at": now - timedelta(minutes=index)})
+        for index in range(1000)
+    ]
+    older_match = ContextSegment(
+        type=ContextType.CONVERSATION, content="needle", tokens=1,
+        metadata={"created_at": now - timedelta(days=2)},
+    )
+    segments.append(older_match)
+    store._redis = FakeRedis({store._make_session_key("one"): {
+        segment.id.encode(): store._serialize_segment(segment) for segment in segments
+    }})
+
+    assert [segment.id for segment in store.search("needle", "one")] == [older_match.id]
