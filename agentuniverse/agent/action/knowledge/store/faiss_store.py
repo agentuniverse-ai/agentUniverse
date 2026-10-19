@@ -17,6 +17,11 @@ from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.store.store import Store
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
+# Module-level placeholders for optional dependencies; populated lazily
+# by _new_client so that importing this module never requires faiss/numpy.
+faiss = None
+np = None
+
 # Default configuration for FAISS index types
 DEFAULT_INDEX_CONFIG = {
     "index_type": "IndexFlatL2",
@@ -72,15 +77,19 @@ class FAISSStore(Store):
 
     def _new_client(self) -> Any:
         """Initialize the FAISS index and load existing data if available."""
-        try:
-            import faiss
-            import numpy as np
-        except ImportError as e:
-            FAISS_NOT_INSTALLED_MSG = (
-                "FAISS is not installed. Please install it with 'pip install faiss-cpu' "
-                "for CPU version or 'pip install faiss-gpu' for GPU version."
-            )
-            raise ImportError(FAISS_NOT_INSTALLED_MSG) from e
+        global faiss, np
+        if faiss is None or np is None:
+            try:
+                import faiss as _faiss
+                import numpy as _np
+            except ImportError as e:
+                FAISS_NOT_INSTALLED_MSG = (
+                    "FAISS is not installed. Please install it with 'pip install faiss-cpu' "
+                    "for CPU version or 'pip install faiss-gpu' for GPU version."
+                )
+                raise ImportError(FAISS_NOT_INSTALLED_MSG) from e
+            faiss = _faiss
+            np = _np
         self._load_index_and_metadata()
         return self.faiss_index
 

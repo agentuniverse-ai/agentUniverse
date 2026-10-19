@@ -243,7 +243,7 @@ class Monitor(BaseModel):
                 for key, value in cur_token_usage.items():
                     try:
                         result_usage[key] = old_token_usage[key] + value if key in old_token_usage else value
-                    except:
+                    except Exception:
                         # not addable value
                         pass
                 FrameworkContextManager().set_context(trace_id + '_token_usage', result_usage)
@@ -291,7 +291,9 @@ class Monitor(BaseModel):
 
             if llm_obj is None or llm_input is None:
                 return {}
-            messages = llm_input.get('kwargs', {}).pop('messages', None)
+            messages = llm_input.get('messages')
+            if messages is None:
+                messages = llm_input.get('kwargs', {}).get('messages')
 
             input_str = ''
             if messages is not None and isinstance(messages, list):

@@ -1,5 +1,7 @@
+import io
 import os
 import stat
+import tarfile
 import tempfile
 import unittest
 import zipfile
@@ -59,6 +61,35 @@ class SecureArchiveToolTest(unittest.TestCase):
         result = self.tool.execute(mode="extract", file_path="bundle.zip", output_dir="out", members=["nested/b.txt"])
         self.assertEqual(len(result["output_paths"]), 1)
         self.assertFalse(os.path.exists(os.path.join(self.directory.name, "out/a.txt")))
+
+    def test_extracts_zip_member_with_backslashes(self):
+        with zipfile.ZipFile(os.path.join(self.directory.name, "windows.zip"), "w") as archive:
+            archive.writestr("nested\\file.txt", b"payload")
+
+        listed = self.tool.execute(mode="list", file_path="windows.zip")
+        self.assertEqual(listed["status"], "success")
+        self.assertEqual(listed["entries"][0]["name"], "nested/file.txt")
+        self.assertEqual(
+            set(listed["entries"][0]),
+            {"name", "size", "compressed_size", "is_dir"},
+        )
+
+        result = self.tool.execute(mode="extract", file_path="windows.zip", output_dir="windows-out")
+        self.assertEqual(result["status"], "success")
+        with open(os.path.join(self.directory.name, "windows-out/nested/file.txt"), "rb") as stream:
+            self.assertEqual(stream.read(), b"payload")
+
+    def test_extracts_tar_member_with_backslashes(self):
+        payload = b"payload"
+        with tarfile.open(os.path.join(self.directory.name, "windows.tar"), "w") as archive:
+            info = tarfile.TarInfo("nested\\file.txt")
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+
+        result = self.tool.execute(mode="extract", file_path="windows.tar", output_dir="tar-windows-out")
+        self.assertEqual(result["status"], "success")
+        with open(os.path.join(self.directory.name, "tar-windows-out/nested/file.txt"), "rb") as stream:
+            self.assertEqual(stream.read(), payload)
 
     def test_create_refuses_overwrite(self):
         self.tool.execute(mode="create", file_path="bundle.zip", input_paths=["a.txt"])
