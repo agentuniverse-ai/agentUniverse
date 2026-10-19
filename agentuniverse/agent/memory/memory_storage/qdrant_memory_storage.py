@@ -48,6 +48,9 @@ class QdrantMemoryStorage(MemoryStorage):
     """
 
     class Config:
+        """Pydantic model configuration for QdrantMemoryStorage.
+        Allows arbitrary types so QdrantClient can be stored as a field.
+        """
         arbitrary_types_allowed = True
 
     connection_args: Optional[dict] = None
@@ -60,6 +63,14 @@ class QdrantMemoryStorage(MemoryStorage):
     VECTOR_NAME: ClassVar[str] = "embedding"
 
     def _initialize_by_component_configer(self, memory_storage_config: ComponentConfiger) -> "QdrantMemoryStorage":
+        """Populate the connection, collection, distance and embedding settings of this instance from the component configer.
+        connection_args falls back to DEFAULT_CONNECTION_ARGS when the configer does not provide it.
+
+        Args:
+        memory_storage_config: Configer carrying the memory storage attributes.
+        Returns:
+        The initialized QdrantMemoryStorage instance (self).
+        """
         super()._initialize_by_component_configer(memory_storage_config)
         if getattr(memory_storage_config, "connection_args", None):
             self.connection_args = memory_storage_config.connection_args
@@ -74,6 +85,9 @@ class QdrantMemoryStorage(MemoryStorage):
         return self
 
     def _metric_from_str(self) -> Distance:
+        """Map the configured distance string to the qdrant Distance enum.
+        Unknown or missing values fall back to Distance.COSINE.
+        """
         return {
             "COSINE": Distance.COSINE,
             "EUCLID": Distance.EUCLID,
@@ -82,6 +96,7 @@ class QdrantMemoryStorage(MemoryStorage):
         }.get((self.distance or "COSINE").upper(), Distance.COSINE)
 
     def _ensure_client(self) -> QdrantClient:
+        """Return the cached QdrantClient, creating and caching one from connection_args when it does not exist yet."""
         if self.client is not None:
             return self.client
         args = self.connection_args or DEFAULT_CONNECTION_ARGS
@@ -89,6 +104,11 @@ class QdrantMemoryStorage(MemoryStorage):
         return self.client
 
     def _ensure_collection(self, dim: int) -> None:
+        """Create the configured Qdrant collection when it is missing.
+
+        Args:
+        dim: Dimension of the embedding vector stored under the named vector.
+        """
         client = self._ensure_client()
         if not client.collection_exists(self.collection_name):
             metric = self._metric_from_str()
@@ -101,6 +121,14 @@ class QdrantMemoryStorage(MemoryStorage):
     def _build_filter(
         session_id: Optional[str], agent_id: Optional[str], source: Optional[str], type_value: Optional[Any]
     ) -> Optional[Filter]:
+        """Build a qdrant Filter of must-match conditions over payload keys, or None when no condition applies.
+
+        Args:
+        session_id: Optional session id to match.
+        agent_id: Optional agent id to match.
+        source: Optional source value to match.
+        type_value: Optional container whose first element is matched against the type key.
+        """
         must_conditions: List[Any] = []
         if session_id:
             must_conditions.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
@@ -122,6 +150,15 @@ class QdrantMemoryStorage(MemoryStorage):
         client.delete(collection_name=self.collection_name, points_selector=filt)
 
     def add(self, message_list: List[Message], session_id: str = None, agent_id: str = None, **kwargs) -> None:
+        """Embed each message and persist it as a vector point of the configured collection.
+
+        Args:
+        message_list: Messages to store; an empty list is a no-op.
+        session_id: Optional session id stamped on each point payload.
+        agent_id: Optional agent id stamped on each point payload.
+        Raises:
+        ValueError: When a message cannot be embedded into a vector.
+        """
         if not message_list:
             return
         client = self._ensure_client()
@@ -177,6 +214,15 @@ class QdrantMemoryStorage(MemoryStorage):
     def get(
         self, session_id: str = None, agent_id: str = None, top_k=10, input: str = "", source: str = None, **kwargs
     ) -> List[Message]:
+        """Retrieve up to top_k stored messages for the given scope: semantic vector search when input is provided, otherwise a scroll of the filtered collection.
+        Args:
+        session_id: Optional session id filter.
+        agent_id: Optional agent id filter.
+        input: Query text enabling vector search.
+        top_k: Maximum number of messages to return.
+        Returns:
+        List[Message]: Matching messages.
+        """
         client = self._ensure_client()
         filt = self._build_filter(
             session_id=session_id, agent_id=agent_id, source=source, type_value=kwargs.get("type")
@@ -219,6 +265,13 @@ class QdrantMemoryStorage(MemoryStorage):
         return messages[:top_k]
 
     def to_messages(self, results: Any) -> List[Message]:
+        """Convert qdrant result items (query or scroll points) into Message objects.
+
+        Args:
+        results: Qdrant points carrying payload dicts.
+        Returns:
+        List[Message]: Converted messages; empty when results is empty or conversion fails.
+        """
         message_list: List[Message] = []
         if not results:
             return message_list
