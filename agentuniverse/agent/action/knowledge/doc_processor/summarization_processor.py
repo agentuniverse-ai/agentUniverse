@@ -53,7 +53,7 @@ _STOP_WORDS = frozenset({
 _WORD_RE = re.compile(r"[A-Za-z0-9]+|[一-鿿]")
 # Sentence boundaries: latin terminal punctuation, CJK terminal punctuation,
 # and newlines. Trailing empty fragments are dropped by the caller.
-_SENTENCE_SPLIT_RE = re.compile(r"[。！？!?\.…]|\n+")
+_SENTENCE_SPLIT_RE = re.compile(r"[。！？!?…]|(?<!\d)\.|\.(?!\d)|\n+")
 
 # Default system instruction for the LLM summarizer.
 _DEFAULT_SUMMARY_INSTRUCTION = (
