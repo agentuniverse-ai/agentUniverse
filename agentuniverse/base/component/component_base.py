@@ -54,5 +54,5 @@ class ComponentBase(BaseModel):
     def create_copy(self):
         try:
             return self.model_copy(deep=True)
-        except:
+        except Exception:
             return self.model_copy()
