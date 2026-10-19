@@ -172,6 +172,17 @@ class CrossrefToolTest(unittest.TestCase):
         )
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
+    def test_doi_lookup_decodes_percent_escapes_in_resolver_url(self, mock_get: Mock) -> None:
+        mock_get.return_value = response_mock(
+            json_data={"status": "ok", "message-type": "work", "message": SAMPLE_WORK}
+        )
+
+        result = self.tool.execute(query="https://doi.org/10.1000/a%23b", mode="doi")
+
+        self.assertEqual(result["query"], "10.1000/a#b")
+        self.assertEqual(mock_get.call_args.args[0], "https://api.crossref.org/v1/works/10.1000%2Fa%23b")
+
+    @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_search_maps_paging_sorting_and_date_filters(self, mock_get: Mock) -> None:
         mock_get.return_value = response_mock(
             json_data={

@@ -8,7 +8,7 @@ from calendar import monthrange
 from datetime import date
 from html.parser import HTMLParser
 from typing import Any, ClassVar, Dict, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 import requests
 from pydantic import Field
@@ -361,7 +361,11 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _normalize_doi(value: str) -> str:
-        doi = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", value, flags=re.IGNORECASE).strip()
+        resolver = re.match(r"^https?://(?:dx\.)?doi\.org/", value, flags=re.IGNORECASE)
+        if resolver:
+            doi = unquote(value[resolver.end():]).strip()
+        else:
+            doi = re.sub(r"^doi:\s*", "", value, flags=re.IGNORECASE).strip()
         if not doi.startswith("10.") or "/" not in doi or any(character.isspace() for character in doi):
             raise ValueError("query must contain a valid DOI in doi mode")
         return doi
