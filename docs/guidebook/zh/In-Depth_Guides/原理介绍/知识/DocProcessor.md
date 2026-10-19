@@ -310,3 +310,31 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [OrgNameExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/org_name_extractor.yaml)
+
+该组件将组织机构名称抽取到文档 metadata 中，对应 issue #258 的*知识抽取*方向。供应链与商业知识图谱由组织实体构成——合同绑定了哪些供应商、哪些银行为交易融资、哪些大学参与署名——而这些实体通常以带法定后缀或机构后缀的专有名词形式存在于行文中（"Siemens AG"、"华为技术有限公司"），在被结构化之前对检索不可见。本组件用后缀锚定的正则表达式扫描每篇文档，把找到的提及写入 metadata，原文保持不动。
+
+抽取过程无上下文、后缀驱动、确定且离线：先把 URL 与邮箱从工作副本中抹除（等长占位符替换，span 相对原文依然有效——粘贴链接里的 "Bayer AG" 是地址而非提及），再按后缀锚点定位候选名并向左扩展名称模式。英文名为大写开头词序列，可用 `&`、`of`、`the` 与连字符连接（"Bank of America Corp"、"Johnson & Johnson Inc."、"AT&T Inc"、"3M Company"）；前导冠词会被裁剪（"The ACME Widget & Tool Corporation" 记为 "ACME Widget & Tool Corporation"），后缀保留在名称内。中文名为连续汉字串，可由音译间隔号连接、中间穿插带括号的地区段（"甲骨文（中国）软件系统有限公司"、"路威·酩轩集团"）。
+
+支持的后缀锚点：英文——Inc、Inc.、Corp、Corporation、Company、Co.、Ltd、LLC、LLP、PLC、GmbH、AG、SA、NV、Group、Holdings、Partners、Labs、Technologies、Industries（大小写敏感，另含全大写变体）；中文——股份有限公司、有限公司、集团、公司、银行、证券、基金、研究院、研究所、大学、学院（最长优先）。
+
+精度防护均不依赖上下文模型：后缀前至少要有一个名称字符（裸 "Inc." 或 "公司" 不会被匹配）；仅由冠词构成的名称会被拒绝（"The Corporation announced..." 不产出结果）；英文后缀必须按给定大小写书写（句中小写 "inc" 不触发）；后缀必须在词边界结束（"Incorporated"、"Companies" 不含触发词）；中文后缀后跟组词延续字符时会被拒绝（一名大学生、资产证券化、银行卡 都不是机构名）。
+
+每条结果形如 `{"name": str, "span": (start, end)}`，且保证 `text[span[0]:span[1]] == name`；条目按首次出现排序、忽略大小写去重（保留首个拼写）、截断至 `max_orgs`，`metadata['org_count']` 记录截断前的去重计数。空列表同样会写入。无上下文设计的已知取舍：无后缀的组织（"Apple"、"摩根大通"）不会被抽取；在无词间空格的中文里名称串会向左延伸到最近的非汉字边界，紧邻其他行文的提及会连带吸收（建议先经分割器处理再抽取）；句首大写普通名词后接泛化后缀（"Study Group"）可能误报。以上定位了它与相关组件的差异：`ContactEntityExtractor`（#3441）抽取邮箱/URL/电话——是联系点而非机构名；`SupplyChainEntityExtractor` 依赖每个提及周围的角色上下文（如 "supplier: X" 行），会漏掉以普通行文陈述的组织。
+
+组件定义文件如下：
+```yaml
+name: 'org_name_extractor'
+description: 'extract organization names into document metadata via suffix anchors'
+max_orgs: 50                 # 写入机构的数量上限；>= 1
+organizations_key: 'organizations'  # [{name, span}] 列表写入的 metadata 键；'' 表示不写入
+count_key: 'org_count'      # 去重计数写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.org_name_extractor'
+  class: 'OrgNameExtractor'
+```
+- max_orgs：写入 metadata 的机构数量上限，必须 >= 1。截断前的去重计数仍写入计数键，因此计数超过 max_orgs 即说明发生了截断。
+- organizations_key：`[{name, span}]` 列表写入的 metadata 键；为空则不写入列表。
+- count_key：去重机构数写入的 metadata 键；为空则不写入计数。
