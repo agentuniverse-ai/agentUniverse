@@ -16,9 +16,9 @@ privacy-sensitive deployments, and offline use.
 import logging
 from typing import List, Optional
 
-from pydantic import Field
-
 from agentuniverse.agent.action.knowledge.embedding.embedding import Embedding
+from agentuniverse.base.config.component_configer.component_configer import \
+    ComponentConfiger
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,24 @@ class SentenceTransformerEmbedding(Embedding):
     batch_size: int = 32
 
     _model: Optional[object] = None
+
+    def _initialize_by_component_configer(
+            self, embedding_configer: ComponentConfiger) -> 'Embedding':
+        """Apply component-specific fields from the YAML configuration.
+
+        The base class only copies ``name``, ``description``,
+        ``embedding_dims`` and ``embedding_model_name``; without this
+        override, ``device`` / ``normalize_embeddings`` / ``batch_size``
+        set in YAML would be silently ignored.
+        """
+        super()._initialize_by_component_configer(embedding_configer)
+        if hasattr(embedding_configer, "device"):
+            self.device = embedding_configer.device
+        if hasattr(embedding_configer, "normalize_embeddings"):
+            self.normalize_embeddings = embedding_configer.normalize_embeddings
+        if hasattr(embedding_configer, "batch_size"):
+            self.batch_size = embedding_configer.batch_size
+        return self
 
     def _get_model(self):
         if self._model is not None:

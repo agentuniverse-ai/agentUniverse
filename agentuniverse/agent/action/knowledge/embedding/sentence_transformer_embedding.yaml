@@ -1,0 +1,11 @@
+name: 'sentence_transformer_embedding'
+description: 'embedding using locally-hosted sentence-transformers models (no API key or network required)'
+embedding_model_name: 'all-MiniLM-L6-v2'
+device: 'cpu'
+normalize_embeddings: true
+batch_size: 32
+
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.sentence_transformer_embedding'
+  class: 'SentenceTransformerEmbedding'
