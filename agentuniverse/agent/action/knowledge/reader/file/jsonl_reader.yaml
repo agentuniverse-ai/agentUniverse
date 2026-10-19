@@ -1,0 +1,6 @@
+name: 'default_jsonl_reader'
+description: 'read UTF-8 JSON Lines and NDJSON knowledge records'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.jsonl_reader'
+  class: 'JsonlReader'
