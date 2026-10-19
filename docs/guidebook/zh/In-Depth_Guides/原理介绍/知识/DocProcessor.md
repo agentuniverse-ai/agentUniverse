@@ -310,3 +310,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [DuplicateSentenceFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/duplicate_sentence_filter.yaml)
+
+本组件在**单个文档内部**删除重复出现的句子，对应 issue #258 的*预处理*方向。抓取来的页面会把同一段免责声明或导航样板贴到每一节，法律文书在每个附件里重复同一条款，LLM 生成的文本在词穷时会循环重复某句话；下游切分器随之产出多个完全相同的分块，既浪费 embedding 预算，又会在召回时挤掉不同的命中。过滤器以刻意保守的规则断句——只有当句末标点串（`. ! ? … 。 ！ ？`）后面是空白、文本结尾或任意非 ASCII 字母数字字符时才算句界，因此中文文本在 `。` 处无需空格即可断句，而 `3.14`、`e.g.` 保持完整——随后每个重复句只保留一处出现，并把其余从文本中剔除后重组。
+
+每个句子由规范化 key 标识：casefold、内部空白折叠为单个空格、剥离尾部标点（含右引号/右括号），因此 `"Hello world."`、`hello   world!` 与 `HELLO WORLD...` 共用一个 key。`mode: 'exact'`（默认）下，与已保留 key 相同的后出现的句子即为重复（相似度 1.0）；`mode: 'near'` 下，token 集合（casefold 后去除两端标点的词）的 Jaccard 相似度 `|A ∩ B| / |A ∪ B| >= jaccard_threshold`（默认 0.9，含等于）也算重复——可捕捉较长句子的一词改写。near 模式按长度分桶以保持实际线性：已保留句子按*去重后 token 数*建立索引，候选句只与计数相差不超过 2 的已保留句子比较。由于 Jaccard 受 `min/max` token 集大小约束，这个滑动长度桶绝不会漏掉计数相差 ≤ 2 的真重复；计数相差 ≥ 3 的句子对则刻意不比较——在默认 0.9 阈值下，这样的句子对只有在较短一句已含 ≥ 27 个去重 token 时才可能达到阈值（差 3 迫使 `min >= 3t/(1-t) = 27`），用这个角落换来更短的比较列表。
+
+默认保留**第一次**出现（`keep_last: false`）；`keep_last: true` 改为保留**最后一次**出现——适合后续重复反映最新措辞的场景。每次删除都写入元数据：`duplicate_sentences`（最多 50 条，每条 `{index, length, span, similarity}`——句序号、字符长度、原文中的 `[start, end]` 偏移，exact 为 1.0、near 为 Jaccard 值），外加不封顶的 `duplicate_count` 与当前 `duplicate_mode`。元数据映射在修改前先复制。重组文本用保留句之间**原始的**句间空白拼接：被删句子连同其前置分隔符一起移除，重组文本绝不会以被删首句的分隔符开头，结尾空白只在末句存活时保留——没有删除时文本按字节原样返回。仅含标点的句子（规范化为空 key）永远不会互相合并。组件为纯 Python、确定性、完全离线；因为它在单文档内部去重，与跨批次删除近似重复**整篇文档**的 `SimHashDedupFilter` / `SemanticDeduplicator` 以及跨语料的行级样板移除互为补充。
+
+组件定义文件如下：
+```yaml
+name: 'duplicate_sentence_filter'
+description: 'remove repeated sentences within each document (exact or near-duplicate mode)'
+mode: 'exact'              # exact | near
+jaccard_threshold: 0.9     # near 模式 token 集 Jaccard，>= 判重，范围 (0, 1]
+keep_last: false           # 保留最后一次出现而非第一次
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.duplicate_sentence_filter'
+  class: 'DuplicateSentenceFilter'
+```
+- mode: `'exact'` 删除与已保留 key 相同的后出现的句子；`'near'` 额外把 token 集 Jaccard 相似度 >= `jaccard_threshold` 判为重复。
+- jaccard_threshold: near 模式判重的最小 token 集 Jaccard 相似度，用 `>=` 比较，范围 (0, 1]；仅在 `mode: 'near'` 时生效。
+- keep_last: 为假（默认）保留首次出现并删除后续；为真保留最后一次出现（最新措辞）并删除先前的。
