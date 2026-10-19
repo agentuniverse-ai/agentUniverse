@@ -1,0 +1,57 @@
+name: bibtex_tool
+description: BibTeX tool — pure Python stdlib, no network required. Parse .bib bibliography text into entries with type, citation key and fields (mode='parse', with brace-balanced values preserving nested braces, quoted values, '#'-concatenation and @string macro expansion, @comment/@preamble skipped, author/editor split into person lists), summarise a file (mode='summary', with counts by type, year range and per-entry one-liners), filter entries (mode='filter', with entry_type / query substring / year range) and list citation keys in order (mode='to_keys').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.bibtex_tool
+  class: BibtexTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: BibTeX mode — parse, summary, filter or to_keys.
+    required: true
+  bib:
+    type: string
+    description: The .bib source text. Required for every mode; at most 1,000,000 characters.
+    required: false
+  entry_type:
+    type: string
+    description: filter mode only — exact entry-type match, case-insensitive (e.g. article).
+    required: false
+  query:
+    type: string
+    description: filter mode only — case-insensitive substring matched against the citation key or any field value.
+    required: false
+  year_from:
+    type: integer
+    description: filter mode only — inclusive lower bound on the four-digit year; an integer or digit string.
+    required: false
+  year_to:
+    type: integer
+    description: filter mode only — inclusive upper bound on the four-digit year; an integer or digit string.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "summary", "filter", "to_keys"]
+      description: BibTeX mode.
+    bib:
+      type: string
+      description: The .bib source text (all modes).
+    entry_type:
+      type: string
+      description: Exact entry-type match (filter mode).
+    query:
+      type: string
+      description: Substring matched against key or field values (filter mode).
+    year_from:
+      type: integer
+      description: Inclusive year lower bound (filter mode).
+    year_to:
+      type: integer
+      description: Inclusive year upper bound (filter mode).
+  required: ["mode"]
