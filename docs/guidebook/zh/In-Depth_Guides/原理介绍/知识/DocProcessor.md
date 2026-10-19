@@ -310,3 +310,32 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [HeadingConsistencyChecker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/heading_consistency_checker.yaml)
+
+该组件校验每篇文档的 ATX 标题结构并把发现写入 metadata，对应 issue #258 的*预处理/分析*方向，是面向文档入库的质量门。文档语料经由多人之手进入知识库——导出、格式转换、章节拼接——而标题结构通常最先遭殃：层级从 h1 直接跳到 h4，同一个小节标题出现三次，大纲条目被留空。下游的切分器和 outline 消费方都在默认信任这套结构。解析器识别 ATX 标题（`#` 到 `######`，最多三个前导空格，支持结尾井号串）并对围栏代码块免疫，因此 C 代码片段里的 `#include` 行绝不会污染大纲。它与 `OutlineExtractor` 互补：后者只负责*提取*大纲，本组件负责*校验*大纲。
+
+五项检查在解析出的标题序列上运行，每项产出一条发现 `{kind, line, text, detail}`：`level_jump`——比上一个标题深超过一级的标题（h1 后直接跟 h4 即跳级 3；恰好深一级是正常嵌套，向上任意跳都不算）。该项是信息性检查，与代码风格检查器一样依赖具体风格约定——是给人的提示而非错误。`duplicate_heading`——同一标题文本（casefold 折叠、内部空白归一）出现两次及以上；每个重复标题产出一条发现，锚定首次出现处并列出所有出现行号，空标题不参与。`empty_heading`——井号后没有任何文本的标题，会渲染成无名大纲条目。`max_depth_exceeded`——深于 `max_level` 的标题；默认 6 等于关闭该检查，只有风格约定配置了更紧的上限时才会触发。`first_heading_not_h1`——文档首个标题从二级或更深开始；默认关闭，因为不少合法文档在扉页被剥去后确实从 h2 开始。
+
+发现连同汇总数值写入 metadata：`metadata[heading_issues]` 是按文档顺序排列、上限 `max_findings`（默认 100）条的发现列表；`metadata[heading_issue_counts]` 按 kind 统计*完整*结果的发现数；`metadata[heading_issue_total]` 是未截断的总数；`metadata[heading_score]` 是一个粗糙的健康度启发式——干净文档为 1.0，每条发现扣 0.1，下限 0.0。该评分刻意从简：它按"需要多少标题修复"为文档排序，并不权衡严重程度。完全没有标题的文档无可校验，得分为 `None` 且发现列表为空，调用方因此能区分"无可检查"与"检查后干净"。除 metadata 盖章外文档原样通过（text、id 和顺序均不动），因此本组件可以安全地位于按分数丢弃文档的过滤器之前。纯 Python、确定性、离线。
+
+组件定义文件如下：
+```yaml
+name: 'heading_consistency_checker'
+description: 'validate ATX heading structure and record findings into document metadata'
+max_level: 6                 # 允许的最深层级，[1, 6]；6 即关闭该检查
+flag_first_not_h1: false     # 报告首标题为 h2 及更深的文档
+max_findings: 100            # metadata 发现列表的截断上限
+issues_key: 'heading_issues'      # 发现列表的 metadata 键；'' 表示不写入
+counts_key: 'heading_issue_counts'  # 按 kind 计数的 metadata 键；'' 表示不写入
+total_key: 'heading_issue_total'  # 未截断总数的 metadata 键；'' 表示不写入
+score_key: 'heading_score'   # 分数的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.heading_consistency_checker'
+  class: 'HeadingConsistencyChecker'
+```
+- max_level: 允许的最深 ATX 层级，[1, 6]。默认 6 时 `max_depth_exceeded` 关闭——ATX 本身最深就是 6，只有配置了更紧的上限（如扁平风格的 3）才会触发。
+- flag_first_not_h1: 为真时，文档首个标题从二级或更深开始即报告 `first_heading_not_h1`；默认关闭。
+- max_findings: metadata 中保留的发现条数上限，>= 1。计数、总数与评分始终反映全部发现，不受列表截断影响。
+- issues_key / counts_key / total_key / score_key: 发现列表、按 kind 计数、未截断总数与分数的 metadata 键；空值表示不写入该项。

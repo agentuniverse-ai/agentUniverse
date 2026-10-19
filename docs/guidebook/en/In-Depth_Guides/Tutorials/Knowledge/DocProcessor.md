@@ -309,3 +309,32 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [HeadingConsistencyChecker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/heading_consistency_checker.yaml)
+
+This component validates the ATX heading structure of every document and records what it finds into metadata, addressing the *pre-processing/analysis* direction of issue #258 as an ingestion QA gate for documentation. Document corpora enter knowledge bases through many hands — exports, conversions, concatenated chapters — and heading structure is usually the first casualty: levels jump from h1 straight to h4, the same section title appears three times, an outline entry is left blank. Downstream splitters and outline consumers trust that structure silently. The parser recognizes ATX headings (`#` to `######`, up to three leading spaces, optional closing hash run) and is immune to fenced code blocks, so a `#include` line inside a C snippet never pollutes the outline. It complements `OutlineExtractor`: that component *extracts* the outline silently, this one *validates* it.
+
+Five checks run over the parsed heading sequence, each producing a finding `{kind, line, text, detail}`: `level_jump` — a heading more than one level deeper than the previous one (h1 followed by h4 is a skip of 3; skipping exactly one level is normal nesting and jumping back up any amount is fine). This check is informational and style-guide-dependent in the way linters are — a hint for a human, not an error. `duplicate_heading` — the same title text (casefolded, internal whitespace collapsed) appearing two or more times; one finding per duplicated title, anchored at the first occurrence and listing every occurrence line, with empty headings excluded. `empty_heading` — a heading marker with no text after the hashes, which renders as a nameless outline entry. `max_depth_exceeded` — a heading deeper than `max_level`; the default 6 turns this check off, so it only fires when a style guide configures a tighter bound. `first_heading_not_h1` — the document's first heading starts at level 2 or deeper; off by default because many valid documents legitimately start at h2.
+
+Findings land in metadata together with summary numbers: `metadata[heading_issues]` is the finding list capped at `max_findings` (default 100) entries in document order; `metadata[heading_issue_counts]` counts findings per kind over the *complete* result; `metadata[heading_issue_total]` is the uncapped total; and `metadata[heading_score]` is a crude health heuristic — 1.0 for a clean document, minus 0.1 per finding, floored at 0.0, deliberately simple: it orders documents by how much heading surgery they need, it does not weigh severities. A document containing no headings at all has nothing to validate and receives a score of `None` with an empty finding list, so callers can distinguish 'nothing to check' from 'checked and clean'. Documents pass through unchanged apart from the metadata stamps (text, id and order untouched), so the component can safely sit in front of filters that drop documents by score. Pure Python, deterministic and offline.
+
+The component definition file is as follows:
+```yaml
+name: 'heading_consistency_checker'
+description: 'validate ATX heading structure and record findings into document metadata'
+max_level: 6                 # deepest allowed level in [1, 6]; 6 = check off
+flag_first_not_h1: false     # report docs whose first heading is h2+
+max_findings: 100            # cap for the metadata finding list
+issues_key: 'heading_issues'      # metadata key for the finding list; '' disables
+counts_key: 'heading_issue_counts'  # metadata key for per-kind counts; '' disables
+total_key: 'heading_issue_total'  # metadata key for the uncapped total; '' disables
+score_key: 'heading_score'   # metadata key for the score; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.heading_consistency_checker'
+  class: 'HeadingConsistencyChecker'
+```
+- max_level: Deepest allowed ATX level, in [1, 6]. The default 6 disables `max_depth_exceeded` — ATX itself stops at 6, so nothing can exceed it until a tighter bound is configured (e.g. 3 for a flat style guide).
+- flag_first_not_h1: When true, report the document's first heading starting at level 2 or deeper as `first_heading_not_h1`; default false.
+- max_findings: Maximum number of findings kept in the metadata list, >= 1. Counts, total and score always reflect every finding, capped list or not.
+- issues_key / counts_key / total_key / score_key: Metadata keys for the finding list, per-kind counts, uncapped total and score; an empty value disables that stamp.
