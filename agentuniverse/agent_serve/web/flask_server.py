@@ -64,7 +64,7 @@ app.json.ensure_ascii = False
 
 
 @app.before_request
-def before():
+def before() -> None:
     logger.bind(
         log_type=LogTypeEnum.flask_request,
         flask_request=request,
@@ -85,7 +85,7 @@ def after_request(response):
     return response
 
 @app.teardown_request
-def teardown_resource(exception):
+def teardown_resource(exception) -> None:
     """
     Clear the context
     """
@@ -93,7 +93,7 @@ def teardown_resource(exception):
 
 
 @app.route("/echo")
-def echo():
+def echo() -> str:
     return 'Welcome to agentUniverse!!!'
 
 
