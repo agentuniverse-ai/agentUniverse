@@ -16,6 +16,7 @@ import tiktoken
 from agentuniverse.llm.langchain_instance import LangchainOpenAI
 from agentuniverse.llm.llm import LLM, LLMOutput
 from agentuniverse.base.util.env_util import get_from_env
+from agentuniverse.base.util.stream_util import map_stream, map_async_stream
 
 OPENAI_MAX_CONTEXT_LENGTH = {
     "gpt-3.5-turbo": 4096,
@@ -192,15 +193,9 @@ class OpenAILLM(LLM):
     @classmethod
     def generate_stream_result(cls, stream: Iterator) -> Iterator[LLMOutput]:
         """Generate the result of the stream."""
-        for chunk in stream:
-            llm_output = cls.parse_result(chunk)
-            if llm_output:
-                yield llm_output
+        return map_stream(stream, cls.parse_result)
 
     @classmethod
-    async def agenerate_stream_result(cls, stream: AsyncIterator) -> AsyncIterator[LLMOutput]:
+    def agenerate_stream_result(cls, stream: AsyncIterator) -> AsyncIterator[LLMOutput]:
         """Generate the result of the stream."""
-        async for chunk in stream:
-            llm_output = cls.parse_result(chunk)
-            if llm_output:
-                yield llm_output
+        return map_async_stream(stream, cls.parse_result)

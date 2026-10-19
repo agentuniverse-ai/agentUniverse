@@ -17,6 +17,7 @@ from openai import OpenAI, AsyncOpenAI
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.base.util.system_util import process_yaml_func
+from agentuniverse.base.util.stream_util import map_stream, map_async_stream
 from agentuniverse.llm.llm import LLM, LLMOutput
 from agentuniverse.llm.openai_style_langchain_instance import LangchainOpenAIStyleInstance
 
@@ -234,17 +235,11 @@ class OpenAIStyleLLM(LLM):
 
     def generate_stream_result(self, stream: openai.Stream):
         """Generate the result of the stream."""
-        for chunk in stream:
-            llm_output = self.parse_result(chunk)
-            if llm_output:
-                yield llm_output
+        return map_stream(stream, self.parse_result)
 
-    async def agenerate_stream_result(self, stream: AsyncIterator) -> AsyncIterator[LLMOutput]:
+    def agenerate_stream_result(self, stream: AsyncIterator) -> AsyncIterator[LLMOutput]:
         """Generate the result of the stream."""
-        async for chunk in stream:
-            llm_output = self.parse_result(chunk)
-            if llm_output:
-                yield llm_output
+        return map_async_stream(stream, self.parse_result)
 
     def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'LLM':
         if 'api_base' in component_configer.configer.value:

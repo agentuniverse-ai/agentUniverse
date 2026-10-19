@@ -22,6 +22,7 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 from agentuniverse.llm.llm_channel.langchain_instance.default_channel_langchain_instance import \
     DefaultChannelLangchainInstance
 from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
+from agentuniverse.base.util.stream_util import map_stream, map_async_stream
 
 
 class LLMChannel(ComponentBase):
@@ -254,17 +255,11 @@ class LLMChannel(ComponentBase):
 
     def generate_stream_result(self, stream: openai.Stream):
         """Generate the result of the stream."""
-        for chunk in stream:
-            llm_output = self.parse_result(chunk)
-            if llm_output:
-                yield llm_output
+        return map_stream(stream, self.parse_result)
 
-    async def agenerate_stream_result(self, stream: AsyncIterator) -> AsyncIterator[LLMOutput]:
+    def agenerate_stream_result(self, stream: AsyncIterator) -> AsyncIterator[LLMOutput]:
         """Generate the result of the stream."""
-        async for chunk in stream:
-            llm_output = self.parse_result(chunk)
-            if llm_output:
-                yield llm_output
+        return map_async_stream(stream, self.parse_result)
 
     @staticmethod
     def parse_result(chunk):
