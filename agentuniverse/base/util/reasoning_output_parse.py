@@ -14,7 +14,18 @@ from langchain_core.outputs import Generation
 
 
 class ReasoningOutputParser(StrOutputParser):
+    """Output parser that extracts both the generated text and the model reasoning content from generation results.
+    """
     def parse_result(self, result: List[Generation], *, partial: bool = False) -> T:
+        """Parse generation results into a dict with the text and, when present, the reasoning content.
+
+        Args:
+            result(List[Generation]): The generation results to parse.
+            partial(bool): Whether partial output should be parsed.
+
+        Returns:
+            A dict containing the text and optionally the reasoning_content, or an empty string when no result is given.
+        """
         if not result:
             return ""
 
