@@ -32,7 +32,6 @@ from agentuniverse.agent.plan.planner.react_planner.stream_callback import Strea
 from agentuniverse.base.util.agent_util import assemble_memory_input
 from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
-from agentuniverse.prompt.chat_prompt import ChatPrompt
 from agentuniverse.prompt.prompt import Prompt
 from agentuniverse.prompt.prompt_manager import PromptManager
 from agentuniverse.prompt.prompt_model import AgentPromptModel

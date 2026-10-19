@@ -35,7 +35,7 @@ were removed, so downstream stages can tell that redaction ran.
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import \
     DocProcessor

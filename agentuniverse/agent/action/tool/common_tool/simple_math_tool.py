@@ -7,7 +7,7 @@
 # @FileName: simple_math_tool.py
 
 
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 
 
 class AddTool(Tool):

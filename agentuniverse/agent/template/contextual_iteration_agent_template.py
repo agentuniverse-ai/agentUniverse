@@ -8,7 +8,6 @@ import json
 from typing import Optional
 from langchain_core.output_parsers import StrOutputParser
 
-from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.template.agent_template import AgentTemplate
@@ -191,7 +190,7 @@ class ContextualIterationAgentTemplate(AgentTemplate):
         if self.iteration > 0:
             try:
                 self.continue_prompt_version = component_configer.continue_prompt_version
-            except AttributeError as e:
+            except AttributeError:
                 LOGGER.error("Contextual iteration agent need continue_prompt_version while iteration > 0")
         if hasattr(component_configer, "if_loop_prompt_version"):
             self.if_loop_prompt_version = component_configer.if_loop_prompt_version

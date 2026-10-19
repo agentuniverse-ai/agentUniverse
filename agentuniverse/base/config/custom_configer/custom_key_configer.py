@@ -21,7 +21,7 @@ class CustomKeyConfiger(Configer):
         if config_path:
             try:
                 self.load()
-            except FileNotFoundError as e:
+            except FileNotFoundError:
                 print(f"Custom key file {config_path} read error, "
                       f"skip load custom key.")
         key_list = self._Configer__value.get("KEY_LIST")

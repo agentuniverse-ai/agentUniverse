@@ -152,7 +152,7 @@ class Memory(ComponentBase):
         if self.context_manager_name:
             try:
                 from agentuniverse.agent.context.context_manager_manager import ContextManagerManager
-                from agentuniverse.agent.context.context_model import ContextType, ContextPriority
+                from agentuniverse.agent.context.context_model import ContextType
 
                 ctx_mgr = ContextManagerManager().get_instance_obj(self.context_manager_name)
                 if ctx_mgr:

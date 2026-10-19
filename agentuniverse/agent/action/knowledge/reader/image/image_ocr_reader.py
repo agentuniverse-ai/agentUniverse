@@ -70,7 +70,7 @@ class ImageOCRReader(Reader):
             reader = easyocr.Reader(['ch_sim', 'en'])
             result = reader.readtext(str(file), detail=0)
             return "\n".join(result), "easyocr"
-        except Exception as e_easy:
+        except Exception:
             raise ImportError(
                 "No OCR engine available. Install one of: "
                 "`pip install paddleocr paddlepaddle` or "

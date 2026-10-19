@@ -376,6 +376,9 @@ class SemanticScholarTool(Tool):
             "timeout": self.timeout,
         }
         url = f"{self.base_url}{path}"
+        # requests waits forever without a timeout, so a stalled Semantic Scholar
+        # response would block the agent instead of raising.
+        request_kwargs.setdefault('timeout', 30)
         if json_body is None:
             response = requests.get(url, **request_kwargs)
         else:

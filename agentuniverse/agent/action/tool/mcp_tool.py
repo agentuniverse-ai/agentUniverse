@@ -1,11 +1,10 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-import asyncio
-from typing import Any, Optional, Literal, List
+from typing import Optional, Literal, List
 
 from mcp.types import CallToolResult
 
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
 from agentuniverse.base.config.component_configer.configers.tool_configer import \

@@ -260,7 +260,7 @@ class SummarizeCompressor(ContextCompressor):
 
             return summary_seg
 
-        except Exception as e:
+        except Exception:
             # Fallback to basic summarization on error
             return self._basic_summarization_segment(segments, target_tokens)
 

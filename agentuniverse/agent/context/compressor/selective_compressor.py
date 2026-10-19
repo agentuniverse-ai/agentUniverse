@@ -21,7 +21,7 @@ loss by intelligently selecting which segments to preserve.
 """
 
 import time
-from typing import List, Optional, Set
+from typing import List
 from datetime import datetime
 
 from agentuniverse.agent.context.compressor.context_compressor import (

@@ -15,7 +15,6 @@ The ContextManager is responsible for:
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
 
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
@@ -451,7 +450,7 @@ class ContextManager(ComponentBase):
 
                 return  # Compression successful
 
-            except Exception as e:
+            except Exception:
                 # Compression failed, fall back to simple eviction
                 pass
 

@@ -11,7 +11,7 @@ from pydantic import Field
 from langchain_community.utilities import BingSearchAPIWrapper
 
 from agentuniverse.agent.action.tool.common_tool.mock_search_tool import MockSearchTool
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.util.env_util import get_from_env
 
 

@@ -6,7 +6,6 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: web_booster.py
 
-import sys
 import threading
 
 from .post_fork_queue import POST_FORK_QUEUE

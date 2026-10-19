@@ -17,8 +17,8 @@ Use cases:
 """
 
 import json
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from typing import List, Optional
+from datetime import datetime
 
 from agentuniverse.agent.context.context_store import ContextStore
 from agentuniverse.agent.context.context_model import (
@@ -169,7 +169,7 @@ class RedisContextStore(ContextStore):
 
                 segments.append(segment)
 
-            except Exception as e:
+            except Exception:
                 # Skip corrupted segments
                 continue
 

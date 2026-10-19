@@ -6,9 +6,8 @@
 # @Email   :
 # @FileName: langchain_tool.py
 import importlib
-import importlib
 from typing import Optional, Type
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from langchain_core.tools import BaseTool
 

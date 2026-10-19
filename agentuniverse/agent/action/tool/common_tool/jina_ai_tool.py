@@ -9,7 +9,7 @@ from typing import Optional, Dict
 import requests
 import time
 from pydantic import Field
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.util.env_util import get_from_env
 from loguru import logger
 import html

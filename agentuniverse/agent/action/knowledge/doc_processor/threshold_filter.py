@@ -6,7 +6,7 @@
 # @FileName: threshold_filter.py
 
 import math
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Dict, Any, Literal
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
 from agentuniverse.agent.action.knowledge.store.document import Document

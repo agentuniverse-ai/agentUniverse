@@ -27,8 +27,7 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.component_configer.configers.planner_configer import PlannerConfiger
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
-from agentuniverse.prompt.prompt import Prompt
-from agentuniverse.base.util.memory_util import generate_messages, get_memory_string
+from agentuniverse.base.util.memory_util import generate_messages
 
 logging.getLogger().setLevel(logging.ERROR)
 

@@ -7,7 +7,6 @@
 # @FileName: readimage_tool.py
 
 import re
-import os
 
 try:
     import cv2

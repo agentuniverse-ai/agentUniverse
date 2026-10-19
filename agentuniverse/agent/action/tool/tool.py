@@ -215,7 +215,7 @@ class Tool(ComponentBase):
                 param_type = type_hints[param_name]
                 if param_type is not ToolInput:
                     return False
-            except Exception as e:
+            except Exception:
                 return False
             return True
         except ValueError:

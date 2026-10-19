@@ -6,7 +6,6 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: logging_util.py
 
-import os
 import sys
 from typing import Optional
 from pathlib import Path

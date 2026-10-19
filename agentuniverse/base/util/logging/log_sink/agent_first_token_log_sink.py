@@ -6,7 +6,6 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: agent_first_token_log_sink.py
 
-from typing import Union
 
 from agentuniverse.base.util.logging.log_sink.base_file_log_sink import BaseFileLogSink
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum

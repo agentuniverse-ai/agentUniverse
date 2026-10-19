@@ -10,7 +10,7 @@ from typing import Optional, Dict, List, Any
 
 from pydantic import BaseModel
 
-from agentuniverse.workflow.node.enum import NodeEnum, NodeStatusEnum
+from agentuniverse.workflow.node.enum import NodeEnum
 from agentuniverse.workflow.node.node_output import NodeOutput
 from agentuniverse.workflow.node.node_config import NodeOutputParams, NodeInputParams
 from agentuniverse.workflow.workflow_output import WorkflowOutput

@@ -77,7 +77,7 @@ class AuTraceContext:
             token = context.attach(ctx)
             return token
 
-        except Exception as e:
+        except Exception:
             return None
 
     @property

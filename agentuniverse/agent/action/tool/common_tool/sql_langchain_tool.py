@@ -8,7 +8,6 @@
 
 from typing import Type, Optional
 from agentuniverse.agent.action.tool.common_tool.langchain_tool import LangChainTool
-from agentuniverse.agent.action.tool.tool import ToolInput
 from agentuniverse.database.sqldb_wrapper_manager import SQLDBWrapperManager
 from langchain_core.tools import BaseTool, Tool as LangchainTool
 

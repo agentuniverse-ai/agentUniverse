@@ -6,12 +6,11 @@
 # @FileName: tavily_tool.py
 # @Need install: pip install tavily-python
 
-from typing import Any, Dict, Literal, Optional, List
+from typing import Literal, Optional, List
 
 from pydantic import Field
 
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
-from agentuniverse.agent.action.tool.enum import ToolTypeEnum
+from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.base.util.logging.logging_util import LOGGER
 

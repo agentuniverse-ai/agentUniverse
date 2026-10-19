@@ -7,7 +7,7 @@
 # @FileName: request_library.py
 import datetime
 
-from sqlalchemy import JSON, Integer, String, DateTime, Text, Column
+from sqlalchemy import JSON, Integer, String, DateTime, Column
 from sqlalchemy import select
 from sqlalchemy.orm import declarative_base
 

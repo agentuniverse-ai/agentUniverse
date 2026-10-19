@@ -24,7 +24,6 @@ from agentuniverse.agent.action.knowledge.doc_processor.doc_processor_manager im
 from agentuniverse.agent.action.knowledge.query_paraphraser.query_paraphraser import QueryParaphraser
 from agentuniverse.agent.action.knowledge.query_paraphraser.query_paraphraser_manager import QueryParaphraserManager
 from agentuniverse.agent.action.knowledge.rag_router.rag_router_manager import RagRouterManager
-from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.reader.reader_manager import ReaderManager
 from agentuniverse.base.annotation.trace import trace_knowledge
 from agentuniverse.base.component.component_base import ComponentBase

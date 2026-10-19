@@ -12,15 +12,14 @@ from abc import abstractmethod
 from typing import Optional, List, Any
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
-from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, func, or_, create_engine, Engine, insert
+from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, func, or_, create_engine, Engine
 
 from agentuniverse.agent.memory.conversation_memory.conversation_message import ConversationMessage
 from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageEnum, ConversationMessageSourceType
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
-from agentuniverse.database.sqldb_wrapper import SQLDBWrapper
 
 
 class BaseMemoryConverter(BaseModel):

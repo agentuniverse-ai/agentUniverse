@@ -284,7 +284,7 @@ def find_default_llm_config(package_list: list[str]):
 
                         if os.path.exists(default_llm_toml_path):
                             return os.path.abspath(default_llm_toml_path)
-                except Exception as e:
+                except Exception:
                     continue
         return None
     except Exception as e:

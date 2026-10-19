@@ -8,7 +8,7 @@
 
 import json
 import logging
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 

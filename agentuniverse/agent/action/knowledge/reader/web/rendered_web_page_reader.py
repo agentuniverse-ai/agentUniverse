@@ -39,7 +39,7 @@ class RenderedWebPageReader(Reader):
     def _render_and_get_html(self, url: str) -> str:
         try:
             from playwright.sync_api import sync_playwright  # type: ignore
-        except Exception as e:
+        except Exception:
             raise ImportError(
                 "playwright is required for RenderedWebPageReader. "
                 "Install with `pip install playwright` and run `playwright install`"

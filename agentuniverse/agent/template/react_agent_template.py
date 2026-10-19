@@ -18,7 +18,7 @@ from langchain_core.tools import BaseTool, ToolsRenderer, render_text_descriptio
 from datetime import datetime
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
-from agentuniverse.base.util.agent_util import assemble_memory_input, assemble_memory_output
+from agentuniverse.base.util.agent_util import assemble_memory_output
 from agentuniverse.agent.action.knowledge.knowledge import Knowledge
 from agentuniverse.agent.action.knowledge.knowledge_manager import KnowledgeManager
 from agentuniverse.agent.action.tool.tool import Tool

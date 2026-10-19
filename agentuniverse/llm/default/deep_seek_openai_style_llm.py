@@ -10,7 +10,6 @@ from typing import Optional, Any, Union, Iterator, AsyncIterator
 
 from pydantic import Field
 
-from agentuniverse.base.annotation.trace import trace_llm
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM

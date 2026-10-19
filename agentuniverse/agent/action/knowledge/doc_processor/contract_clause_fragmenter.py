@@ -8,7 +8,7 @@
 
 import re
 import logging
-from typing import List, Optional, Dict, Tuple, Any
+from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 

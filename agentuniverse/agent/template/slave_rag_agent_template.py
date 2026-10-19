@@ -7,9 +7,6 @@
 # @FileName: slave_rag_agent_template.py
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-from typing import Any
-from langchain_core.runnables import RunnableSerializable
-import datetime
 import re
 
 from agentuniverse.agent.template.agent_template import AgentTemplate

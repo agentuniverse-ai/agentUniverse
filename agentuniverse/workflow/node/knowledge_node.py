@@ -11,7 +11,7 @@ from agentuniverse.agent.action.knowledge.knowledge import Knowledge
 from agentuniverse.agent.action.knowledge.knowledge_manager import KnowledgeManager
 from agentuniverse.workflow.node.enum import NodeEnum, NodeStatusEnum
 from agentuniverse.workflow.node.node import Node, NodeData
-from agentuniverse.workflow.node.node_config import KnowledgeNodeInputParams, NodeInfoParams, NodeOutputParams
+from agentuniverse.workflow.node.node_config import KnowledgeNodeInputParams, NodeOutputParams
 from agentuniverse.workflow.node.node_output import NodeOutput
 from agentuniverse.workflow.workflow_output import WorkflowOutput
 

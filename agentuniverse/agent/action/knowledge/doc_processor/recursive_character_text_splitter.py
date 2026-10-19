@@ -6,7 +6,7 @@ from typing import List
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: recursive_character_text_splitter.py
-from typing import List, Optional
+from typing import Optional
 from langchain.text_splitter import RecursiveCharacterTextSplitter as Splitter
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import \

@@ -6,7 +6,6 @@
 # @FileName : aws_bedrock_llm.py
 
 from typing import Optional, Any, Union, Iterator, AsyncIterator
-import json
 
 from pydantic import Field
 

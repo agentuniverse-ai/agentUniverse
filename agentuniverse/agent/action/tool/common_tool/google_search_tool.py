@@ -7,7 +7,7 @@
 
 from typing import Optional
 
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.util.env_util import get_from_env
 from langchain_community.utilities.google_serper import GoogleSerperAPIWrapper
 from pydantic import Field

@@ -5,15 +5,14 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: agent_node.py
-import re
-from typing import List, Dict
+from typing import List
 
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.workflow.node.enum import NodeEnum, NodeStatusEnum
 from agentuniverse.workflow.node.node import Node, NodeData
-from agentuniverse.workflow.node.node_config import AgentNodeInputParams, NodeInfoParams, NodeOutputParams
+from agentuniverse.workflow.node.node_config import AgentNodeInputParams, NodeOutputParams
 from agentuniverse.workflow.node.node_output import NodeOutput
 from agentuniverse.workflow.workflow_output import WorkflowOutput
 

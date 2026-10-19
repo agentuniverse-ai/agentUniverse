@@ -9,7 +9,7 @@
 
 from typing import Any, Optional
 
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.util.logging.logging_util import LOGGER
 from langchain_community.utilities.requests import GenericRequestsWrapper

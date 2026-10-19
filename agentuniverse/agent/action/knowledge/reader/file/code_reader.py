@@ -5,7 +5,6 @@
 # @Author  : hiro
 # @Email   : hiromesh@qq.com
 # @FileName: code_reader.py
-import os
 from pathlib import Path
 from typing import List, Union, Optional, Dict
 

@@ -6,7 +6,7 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: chat_prompt.py
 import base64
-from typing import List, Optional
+from typing import List
 import re
 from urllib.parse import urlparse
 

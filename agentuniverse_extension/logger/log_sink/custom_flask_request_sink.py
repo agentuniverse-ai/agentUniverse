@@ -16,7 +16,7 @@ class CustomFlaskRequestSink(FlaskRequestLogSink):
         if flask_request.data:
             try:
                 log_string += f" Body: {flask_request.get_data(as_text=True)}"
-            except Exception as e:
+            except Exception:
                 pass
 
         return log_string

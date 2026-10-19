@@ -9,7 +9,7 @@
 from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.component.component_manager_base import \
-    ComponentManagerBase, ComponentTypeVar
+    ComponentManagerBase
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 
 

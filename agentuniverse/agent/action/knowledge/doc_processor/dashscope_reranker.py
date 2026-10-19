@@ -6,7 +6,7 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: dashscope_reranker.py
 
-from typing import List, Optional
+from typing import List
 import dashscope
 from http import HTTPStatus
 

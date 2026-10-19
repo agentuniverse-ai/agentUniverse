@@ -8,10 +8,9 @@
 
 import re
 import logging
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
 from agentuniverse.agent.action.knowledge.store.document import Document

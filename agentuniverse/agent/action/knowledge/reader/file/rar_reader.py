@@ -9,7 +9,7 @@ import os
 import tempfile
 import shutil
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import List, Union, Optional, Dict, Type, Set
+from typing import List, Union, Optional, Dict, Type
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -180,7 +180,7 @@ class RarReader(Reader):
                             if doc:
                                 documents.extend(doc)
 
-                    except Exception as e:
+                    except Exception:
                         continue
 
         except rarfile.Error as e:
@@ -232,7 +232,7 @@ class RarReader(Reader):
             documents = reader.load_data(file_path, ext_info=metadata)
             return documents
 
-        except Exception as e:
+        except Exception:
             return []
 
     def _get_reader_for_file(self, file_path: Path) -> Optional[Reader]:

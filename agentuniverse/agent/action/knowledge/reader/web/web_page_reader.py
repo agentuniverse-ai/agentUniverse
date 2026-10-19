@@ -101,7 +101,7 @@ class WebPageReader(Reader):
             text = soup.get_text("\n")
             text = "\n".join([line.strip() for line in text.splitlines() if line.strip()])
             return text, {"extractor": "bs4"}
-        except Exception as e_bs:
+        except Exception:
             raise RuntimeError(
                 "Install one of the extractors: `pip install trafilatura` or "
                 "`pip install readability-lxml beautifulsoup4 lxml`"

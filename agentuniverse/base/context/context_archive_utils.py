@@ -5,7 +5,6 @@
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: context_archive_utils.py
-import re
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
 
 

@@ -6,8 +6,7 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: chroma_hierarchical_store.py
 
-from typing import List, Any, Optional
-from chromadb.api.models.Collection import Collection
+from typing import List, Optional
 
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
 from agentuniverse.agent.action.knowledge.store.document import Document

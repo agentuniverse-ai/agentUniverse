@@ -18,7 +18,7 @@ from chromadb.api.models.Collection import Collection
 
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
 from agentuniverse.agent.memory.conversation_memory.conversation_message import ConversationMessage
-from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageEnum, ConversationMessageSourceType
+from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageSourceType
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 

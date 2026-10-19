@@ -22,6 +22,6 @@ class CustomFlaskResponseSink(FlaskResponseLogSink):
             if flask_response.data:  # 记录响应体
                 try:
                     response_str += f' Data:{flask_response.get_data(as_text=True)}'
-                except Exception as e:
+                except Exception:
                     pass
         return response_str

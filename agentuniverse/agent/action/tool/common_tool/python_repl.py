@@ -8,7 +8,7 @@
 
 import re
 
-from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.tool import Tool
 from langchain_community.utilities import PythonREPL
 from loguru import logger
 from pydantic import Field

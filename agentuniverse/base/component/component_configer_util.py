@@ -30,7 +30,6 @@ from agentuniverse.base.config.component_configer.configers.planner_configer imp
 from agentuniverse.base.config.component_configer.configers.prompt_configer import PromptConfiger
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.config.component_configer.configers.sqldb_wrapper_config import SQLDBWrapperConfiger
-from agentuniverse.base.config.config_type_enum import ConfigTypeEnum
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.llm.llm_channel.llm_channel_manager import LLMChannelManager

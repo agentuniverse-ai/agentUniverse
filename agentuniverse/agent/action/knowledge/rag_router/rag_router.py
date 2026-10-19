@@ -6,7 +6,6 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: rag_router.py
 
-from abc import abstractmethod
 from typing import List, Optional, Tuple
 
 from agentuniverse.agent.action.knowledge.store.query import Query

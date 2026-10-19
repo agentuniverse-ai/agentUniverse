@@ -321,7 +321,7 @@ class Monitor(BaseModel):
                 output.usage.text_out = llm_obj.get_num_tokens(output.text)
                 output.usage.text_in = llm_obj.get_num_tokens(input_str)
             return output.usage.to_dict()
-        except Exception as e:
+        except Exception:
             return {}
 
     def _get_or_create_subdir(self, subdir: str) -> str:

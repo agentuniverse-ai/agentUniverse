@@ -9,7 +9,7 @@ from typing import Optional, Any
 
 import networkx as nx
 
-from agentuniverse.workflow.node.enum import NodeEnum, NodeStatusEnum
+from agentuniverse.workflow.node.enum import NodeEnum
 from agentuniverse.workflow.node.node import Node
 from agentuniverse.workflow.node.node_constant import NODE_CLS_MAPPING
 from agentuniverse.workflow.node.node_output import NodeOutput

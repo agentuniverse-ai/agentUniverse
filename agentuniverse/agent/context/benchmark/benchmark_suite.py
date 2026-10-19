@@ -17,16 +17,14 @@ against industry standards (Cursor, Claude, etc.) across multiple dimensions:
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 
 from agentuniverse.agent.context.context_manager import ContextManager
 from agentuniverse.agent.context.context_model import (
-    ContextSegment,
     ContextType,
     ContextPriority,
-    ContextMetadata,
 )
 
 

@@ -210,7 +210,7 @@ class SevenZipReader(Reader):
                             if doc:
                                 documents.extend(doc)
 
-                    except Exception as e:
+                    except Exception:
                         # 跳过处理失败的文件，继续处理其他文件
                         continue
 
@@ -257,7 +257,7 @@ class SevenZipReader(Reader):
             documents = reader.load_data(file_path, ext_info=metadata)
             return documents
 
-        except Exception as e:
+        except Exception:
             # 处理失败时返回空列表
             return []
 

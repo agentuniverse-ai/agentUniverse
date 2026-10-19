@@ -6,7 +6,6 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: tool_invocation_log_sink.py
 
-from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.base.util.logging.log_sink.base_file_log_sink import BaseFileLogSink
 from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 from agentuniverse.base.util.monitor.monitor import Monitor

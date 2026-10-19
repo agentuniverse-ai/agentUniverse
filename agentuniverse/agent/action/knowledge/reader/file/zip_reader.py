@@ -11,7 +11,7 @@ import tempfile
 import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
-from typing import Dict, List, Optional, Union, Type
+from typing import Dict, List, Optional, Union
 
 from agentuniverse.agent.action.knowledge.reader.file.code_reader import CODE_FILE_EXTENSIONS, CodeReader
 from agentuniverse.agent.action.knowledge.reader.file.csv_reader import CSVReader

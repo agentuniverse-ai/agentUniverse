@@ -13,7 +13,7 @@ from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.component.component_base import ComponentEnum
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
-from agentuniverse.base.util.memory_util import get_memory_string, get_memory_tokens
+from agentuniverse.base.util.memory_util import get_memory_string
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.prompt.prompt import Prompt

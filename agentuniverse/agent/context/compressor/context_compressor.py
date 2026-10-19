@@ -12,7 +12,7 @@ compression strategies.
 """
 
 from abc import abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List
 from pydantic import BaseModel, Field
 
 from agentuniverse.base.component.component_base import ComponentBase

@@ -17,7 +17,7 @@ Use cases:
 """
 
 import time
-from typing import List, Optional
+from typing import List
 
 from agentuniverse.agent.context.compressor.context_compressor import (
     ContextCompressor,

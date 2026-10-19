@@ -18,7 +18,6 @@ from aliyun.log.logclient import LogClient
 from aliyun.log.logitem import LogItem
 from aliyun.log.putlogsrequest import PutLogsRequest
 from aliyun.log.putlogsresponse import PutLogsResponse
-from loguru import logger
 
 
 class AsyncSlsSender:

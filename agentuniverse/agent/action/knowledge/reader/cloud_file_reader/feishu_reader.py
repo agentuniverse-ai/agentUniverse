@@ -8,7 +8,7 @@
 
 from bs4 import BeautifulSoup
 import time
-from typing import Dict,List
+from typing import List
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 class PublicFeishuReader:

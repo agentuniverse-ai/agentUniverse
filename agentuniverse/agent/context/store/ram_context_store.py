@@ -7,8 +7,7 @@
 """In-memory context store with LRU eviction."""
 
 from collections import OrderedDict
-from typing import List, Optional, Dict, Any
-from datetime import datetime
+from typing import List, Optional, Dict
 import time
 import re
 
