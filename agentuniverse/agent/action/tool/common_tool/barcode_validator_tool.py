@@ -254,31 +254,31 @@ class BarcodeValidatorTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"barcode_validator_tool: {message}")
 
-    @classmethod
-    def _validate_code(cls, code: Any) -> str:
+    def _validate_code(self, code: Any) -> str:
         """Validate the ``code`` input and return its stripped form.
 
         Leading / trailing whitespace is removed, embedded hyphens and
         spaces are stripped, and a lowercase ``x`` is normalised to
         ``X``; anything else survives verbatim and is checked later as
-        content.
+        content. The raw length is bounded by ``max_code_chars``.
         """
         if code is None or isinstance(code, bool) or not isinstance(code, str):
-            cls._invalid(f"code must be a string (got {code!r})")
+            self._invalid(f"code must be a string (got {code!r})")
         if not code.strip():
-            cls._invalid(
+            self._invalid(
                 f"code must be a non-empty string (got {code.strip()!r})"
             )
-        if len(code) > 64:
-            cls._invalid(
-                f"code exceeds the {64}-character limit "
+        limit = self.max_code_chars
+        if len(code) > limit:
+            self._invalid(
+                f"code exceeds the {limit}-character limit "
                 f"(got {len(code)} characters)"
             )
         stripped = (
             code.strip().replace("-", "").replace(" ", "").replace("x", "X")
         )
         if not stripped:
-            cls._invalid(
+            self._invalid(
                 "code must contain at least one character besides "
                 "hyphens and spaces"
             )

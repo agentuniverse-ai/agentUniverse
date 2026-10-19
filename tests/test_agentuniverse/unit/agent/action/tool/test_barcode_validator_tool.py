@@ -584,6 +584,19 @@ class BarcodeValidatorToolTest(unittest.TestCase):
         ok = self.tool.execute(mode="validate", code="0" * 8)
         self.assertIn("valid", ok)
 
+    def test_code_length_limit_is_configurable(self) -> None:
+        # max_code_chars is a documented public field and must actually
+        # bound the raw input length (it was previously hardcoded to 64).
+        self.tool.max_code_chars = 10
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="validate", code="978-0-306-40615-7")  # 17 raw
+        # A raw length within the tightened limit still works.
+        result = self.tool.execute(mode="validate", code="0306406152")
+        self.assertTrue(result["valid"])
+        self.tool.max_code_chars = 64
+        result = self.tool.execute(mode="validate", code="978-0-306-40615-7")
+        self.assertTrue(result["valid"])
+
     def test_invalid_code_type(self) -> None:
         for bad in ("isbn", "ean", "foo", 123, True):
             with self.subTest(bad=bad):
