@@ -634,3 +634,47 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Multi Text Search Tool
+
+`MultiTextSearchTool` is grep for agents — it searches, filters and
+counts across a LIST of texts (log lines, document chunks, knowledge
+snippets) purely on the Python standard library, with no network
+access. Where `RegexTool` operates on a single text, this tool answers
+"which of these entries match?" Four modes are supported: `search`
+returns the matching indices plus, for every match, the exact
+character span and a context window of `context_chars` characters on
+either side (edge-clamped); `filter` returns the matching entries
+themselves with their indices and per-entry match counts, or the
+non-matching entries with `invert=True`; `count` returns exact
+per-entry match counts for every entry; and `index_of` takes a batch
+of patterns and returns the first matching index for each one (`null`
+when nothing matches, the first non-matching index with `invert=True`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.multi_text_search_tool import MultiTextSearchTool
+
+tool = MultiTextSearchTool()
+hits = tool.execute(mode="search", texts=log_lines, pattern=r"ERROR|WARN", context_chars=40)
+kept = tool.execute(mode="filter", texts=chunks, pattern="TODO", regex=False, invert=True)
+counts = tool.execute(mode="count", texts=log_lines, pattern=r"\btimeout\b")
+firsts = tool.execute(mode="index_of", texts=log_lines, patterns=["ERROR", "FATAL"])
+```
+
+The pattern is a regular expression by default, compiled with
+optional `flags` (`IGNORECASE`/`I`, `MULTILINE`/`M`, `DOTALL`/`S`,
+`ASCII`/`A`); with `regex=False` it is matched as a literal substring
+(metacharacters are escaped), and `case_sensitive` selects case
+behavior in both modes. Spans and contexts are Unicode code point
+offsets into the original entry. Malformed parameters raise a
+`ValueError` before any computation; a pattern that fails to compile
+is returned as a structured `error` payload carrying the `re.error`
+message. Resource use is bounded by input and result caps only — at
+most 5,000 entries of 100,000 characters each, at most 100 `index_of`
+patterns per batch, and `search`/`filter` stop with
+`truncated: true` once 100 matching entries or 1,000 matches have
+been recorded; `count` and `index_of` are never truncated. The tool
+does not inspect patterns for catastrophic backtracking, so an
+exponential regex such as `(a+)+b` can still be slow on adversarial
+inputs within the caps — keep such patterns out of agent-facing
+calls.
