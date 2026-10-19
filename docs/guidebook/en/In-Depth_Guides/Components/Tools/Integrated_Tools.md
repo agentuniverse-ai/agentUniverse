@@ -634,3 +634,52 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Text Directionality Tool
+
+`TextDirectionalityTool` analyzes which way text flows, built purely on
+the Python standard library `unicodedata` with zero network access.
+Every character is classified by its Unicode bidirectional category and
+the strong classes are aggregated into a verdict: `detect` mode returns
+the dominant direction of the whole text — `ltr` / `rtl` / `mixed`, or
+`neutral` when no strong character exists at all (digits and
+punctuation alone never decide the direction) — with the strong
+left/right counts, the `rtl_ratio` (strong RTL share of all strong
+characters) and the raw per-class counts; `per_paragraph` mode splits
+the text on blank lines and analyzes each paragraph independently,
+returning per-paragraph direction, counts, 1-based line ranges and
+previews plus the indices of mixed paragraphs; `bidi_chars` mode locates
+the explicit bidi control characters (U+200E LRM, U+200F RLM,
+U+202A-U+202E embedding/override marks, U+2066-U+2069 isolates) with
+index, name, kind and a security note — override marks can reorder how
+text renders and are a known display-spoofing technique (for example
+hiding an `.exe` extension inside what looks like `file.png`); and
+`strip_bidi` mode removes those controls and returns the cleaned text
+with per-codepoint removal counts — LRM/RLM are invisible display hints
+that are safe to strip in data contexts, while embedding/override and
+isolate marks actively reorder display, so inspect them with
+`bidi_chars` first.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.text_directionality_tool import TextDirectionalityTool
+
+tool = TextDirectionalityTool()
+tool.execute(mode="detect", text="hello שלום")["dominant_direction"]     # 'mixed'
+tool.execute(mode="detect", text="مرحبا")["rtl_ratio"]                    # 1.0
+tool.execute(mode="per_paragraph", text="latin\n\nمرحبا")["summary"]     # {'ltr': 1, ...}
+tool.execute(mode="bidi_chars", text="photo\u202egnp.exe")["has_override"]  # True
+tool.execute(mode="strip_bidi", text="ab\u202dcd!")["cleaned"]              # 'abcd!'
+```
+
+The eleven explicit bidi control characters carry strong bidi classes
+themselves (LRM is class `L`, RLM is class `R`) but are formatting
+marks, not content: they are excluded from the `detect` /
+`per_paragraph` verdicts and reported separately as
+`bidi_control_count`, so an invisible mark can never flip a verdict.
+Inputs are validated strictly before any computation: an unknown mode
+or a missing / non-string / empty / oversized (over 100,000 characters)
+text raises a `ValueError`. All output is deterministic — no randomness,
+no network, no new dependencies. Direction analysis complements script
+*identification* (a language filter tells you which script a codepoint
+belongs to; this tool tells you which way the content flows and where
+display-reordering controls hide).
