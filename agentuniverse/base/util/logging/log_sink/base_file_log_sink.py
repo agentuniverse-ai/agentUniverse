@@ -21,16 +21,16 @@ class BaseFileLogSink(LogSink):
     log_retention: str = LoggingConfig.log_retention
     compression: str = None
 
-    def process_record(self, record):
+    def process_record(self, record) -> None:
         raise NotImplementedError("Subclasses must implement process_record.")
 
-    def filter(self, record):
+    def filter(self, record) -> bool:
         if not record['extra'].get('log_type') == self.log_type:
             return False
         self.process_record(record)
         return True
 
-    def register_sink(self):
+    def register_sink(self) -> None:
         if self.sink_id == -1:
             self.sink_id = logger.add(
                 sink=_get_log_file_path(self.file_prefix),
