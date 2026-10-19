@@ -9,7 +9,7 @@ import tempfile
 import zipfile
 from typing import Any, ClassVar, cast
 
-from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_safe_path
+from agentuniverse.agent.action.tool.common_tool.file_path_utils import atomic_publish_file, resolve_safe_path
 from agentuniverse.agent.action.tool.tool import Tool
 
 
@@ -215,7 +215,7 @@ class WordDocumentTool(Tool):
         validated = self._validate_blocks(blocks)
         self._apply_metadata(document, self._metadata(metadata))
         self._apply_blocks(document, validated)
-        self._save(document, path)
+        self._save(document, path, overwrite=overwrite)
         return self._success("create", path, len(validated), document, template_path=source, overwritten=overwrite)
 
     def _append(self, path: str, blocks: Any) -> dict[str, Any]:
@@ -356,7 +356,7 @@ class WordDocumentTool(Tool):
             **extra,
         }
 
-    def _save(self, document: Any, path: str) -> None:
+    def _save(self, document: Any, path: str, overwrite: bool = True) -> None:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         temporary = None
         try:
@@ -368,7 +368,7 @@ class WordDocumentTool(Tool):
             if os.path.getsize(temporary) > self.max_write_bytes:
                 raise ValueError("generated document exceeds max_write_bytes")
             self._check_archive(temporary, "generated document", self.max_write_bytes)
-            os.replace(temporary, path)
+            atomic_publish_file(temporary, path, overwrite=overwrite)
             temporary = None
         finally:
             if temporary and os.path.exists(temporary):
