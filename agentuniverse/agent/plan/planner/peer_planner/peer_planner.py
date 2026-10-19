@@ -211,7 +211,7 @@ class PeerPlanner(Planner):
 
         input_object.add_data('executing_result', executing_result)
         # add executing agent log info
-        logger_info = f"\nExecuting agent execution result is :\n"
+        logger_info = "\nExecuting agent execution result is :\n"
         if executing_result.get_data('executing_result'):
             for index, one_exec_res in enumerate(executing_result.get_data('executing_result')):
                 one_exec_log_info = f"[{index + 1}] input: {one_exec_res['input']}\n"
