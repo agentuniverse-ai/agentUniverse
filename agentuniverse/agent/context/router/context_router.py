@@ -310,6 +310,6 @@ class ContextRouter(ComponentBase):
             # Prioritize cold tier if available
             if "cold" in tiers:
                 tiers.remove("cold")
-                tiers.append("cold")  # Search last (but include)
+                tiers.insert(0, "cold")
 
         return tiers
