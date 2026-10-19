@@ -28,7 +28,8 @@ class ThresholdFilter(DocProcessor):
         filters: List of filter configurations, each specifying a filter type and parameters.
         logic_operator: Logic operator for combining multiple filters ('AND' or 'OR').
         score_field: Metadata field name containing relevance scores.
-        default_score: Default score for documents without score metadata.
+        default_score: Finite fallback for missing, non-numeric, overflowing,
+            or non-finite document scores.
         preserve_order: Whether to maintain original document order in results.
 
     Example:
@@ -206,22 +207,28 @@ class ThresholdFilter(DocProcessor):
         """Extract score from document metadata.
 
         Attempts to retrieve score from metadata[score_field].
-        Returns default_score if metadata is missing or score field not found.
+        Returns default_score for missing, non-numeric, overflowing or
+        non-finite values, so NaN/Infinity cannot corrupt score comparisons.
 
         Args:
             doc: Document to extract score from.
 
         Returns:
             float: Document score or default_score if not found.
-        """
-        if not doc.metadata:
-            return float(self.default_score)
 
-        value = doc.metadata.get(self.score_field, self.default_score)
+        Raises:
+            ValueError: If default_score is not finite.
+        """
+        fallback = float(self.default_score)
+        if not math.isfinite(fallback):
+            raise ValueError("default_score must be finite for score-based filtering")
+
+        value = (doc.metadata or {}).get(self.score_field, fallback)
         try:
-            return float(value)
-        except (TypeError, ValueError):
-            return float(self.default_score)
+            score = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return fallback
+        return score if math.isfinite(score) else fallback
 
     def _combine_results(self, results: List[List[Document]], logic: str) -> List[Document]:
         """Combine filter results using AND/OR logic.
