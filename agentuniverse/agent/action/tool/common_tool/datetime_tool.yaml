@@ -1,0 +1,75 @@
+name: datetime_tool
+description: >-
+  Datetime operations with zero dependencies and no network access:
+  current time in any timezone (now), parse and reformat datetime
+  strings (format), convert between timezones (convert), difference
+  between datetimes in seconds/minutes/hours/days/weeks or calendar
+  months/years (diff), and date arithmetic with month-end clamping
+  (add).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.datetime_tool
+  class: DateTimeTool
+input_keys: [mode]
+# Timezone applied to naive inputs and used by `now` when none is given:
+# UTC, local, an IANA name (Asia/Shanghai) or a fixed offset (+08:00).
+default_timezone: UTC
+# strftime pattern used for output when no `fmt` is supplied.
+default_format: "%Y-%m-%d %H:%M:%S"
+# Largest absolute offset accepted by each `add` unit.
+max_unit_value: 100000
+args_model:
+  mode: {type: string, required: true, description: now, format, convert, diff, or add}
+  datetime_str: {type: string, required: false, description: Datetime to operate on (required by format, convert, diff, add; parsed by input_fmt or auto-detection)}
+  end_datetime: {type: string, required: false, description: End of the interval for diff (defaults to the current time)}
+  timezone_str: {type: string, required: false, description: Timezone attached to naive inputs and used by now (IANA name, UTC, local, or +HH:MM)}
+  target_timezone: {type: string, required: false, default: UTC, description: Destination timezone for convert}
+  input_fmt: {type: string, required: false, description: Explicit strftime pattern for parsing datetime_str (auto-detection when omitted)}
+  fmt: {type: string, required: false, default: "%Y-%m-%d %H:%M:%S", description: strftime pattern used to render output}
+  unit: {type: string, required: false, default: days, description: 'diff unit: seconds, minutes, hours, days, weeks, months or years'}
+  years: {type: number, required: false, default: 0, description: Years offset for add (negative subtracts)}
+  months: {type: number, required: false, default: 0, description: Months offset for add, month-end days clamped}
+  weeks: {type: number, required: false, default: 0, description: Weeks offset for add}
+  days: {type: number, required: false, default: 0, description: Days offset for add}
+  hours: {type: number, required: false, default: 0, description: Hours offset for add}
+  minutes: {type: number, required: false, default: 0, description: Minutes offset for add}
+  seconds: {type: number, required: false, default: 0, description: Seconds offset for add}
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [now, format, convert, diff, add]
+      description: Datetime operation to run.
+    datetime_str:
+      type: string
+      description: Datetime to operate on; parsed with input_fmt or by auto-detection (year-first, month-first slash and English textual dates, ISO 8601).
+    end_datetime:
+      type: string
+      description: Interval end for diff; defaults to the current time.
+    timezone_str:
+      type: string
+      description: Timezone for naive inputs and for now (IANA name, UTC, local, or fixed offset +HH:MM).
+    target_timezone:
+      type: string
+      default: UTC
+    input_fmt:
+      type: string
+      description: Explicit strftime parse pattern; required for ambiguous day-first dates such as 31/12/2026.
+    fmt:
+      type: string
+      default: "%Y-%m-%d %H:%M:%S"
+    unit:
+      type: string
+      enum: [seconds, minutes, hours, days, weeks, months, years]
+      default: days
+    years: {type: integer, default: 0}
+    months: {type: integer, default: 0}
+    weeks: {type: integer, default: 0}
+    days: {type: integer, default: 0}
+    hours: {type: integer, default: 0}
+    minutes: {type: integer, default: 0}
+    seconds: {type: integer, default: 0}
+  required: [mode]
+  additionalProperties: false
