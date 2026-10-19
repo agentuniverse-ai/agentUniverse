@@ -309,3 +309,42 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [InstructionExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/instruction_extractor.yaml)
+
+This component finds imperative instruction / action sentences and stamps them into document metadata, addressing the *knowledge extraction* direction of issue #258. Manuals, SOPs and how-to documents are written as commands — "Install the package first.", "Click OK to continue.", "请输入用户名。", "You must back up the database before upgrading." — and those action sentences are exactly what procedure reconstruction, checklist mining and instruction-aware retrieval want isolated. Existing components cover neighbouring concerns (QuestionDetector finds questions; position-tagging utilities record where a sentence sits) but nothing identifies *instructions*. Detection is deterministic and dependency-free.
+
+Sentence segmentation is conservative (same family as QuestionDetector): sentences end at `. ! ?` and `。！？`, with abbreviation ("Dr. Smith asked..."), single-letter-initial ("e.g.") and decimal ("3.14") guards on the dot, and terminal runs plus closing quotes kept with their sentence. Document structure is respected on top: sentences never cross into a heading (`#`) or table (`|`) line, never survive past a numbered-item line or a blank paragraph line (plain-to-plain breaks are soft wraps), and heading/table fragments are dropped entirely.
+
+A sentence is an instruction when, in priority order:
+
+| kind | trigger |
+|------|---------|
+| `imperative` | begins with one of 120 bundled English imperative verbs (install, open, click, select, verify, ensure, configure, restart, download, ... — see the module's documented list; the noun "note" is deliberately excluded), case-insensitive, followed by a word that is not a past-tense `-ed` verb |
+| `zh_imperative` | begins with 请 / 务必 / 先 / 然后 / 接着 plus at least one more character |
+| `directive` | contains "you must" / "you should" / "you need to" (case-insensitive) or 你需要 / 你必须 |
+| `step` | no independent evidence, but lives in numbered-step context: its line begins with an `N.` / `N)` marker (the marker is excluded from the span) or it lazily continues the immediately preceding numbered item; context-inherited confidence |
+
+Negative guards: sentences ending in `?` / `？` are questions and never count, and the past-tense guard rejects noun-subject sentences like "Install completed successfully." / "Update failed on three nodes." at the (documented) cost of over-rejecting participle adjectives ("Install required packages").
+
+Each hit is `{"kind", "text", "span": (start, end), "verb"}` — spans are ordered, non-overlapping character offsets with `text == document.text[start:end]`, and `verb` is filled for English imperatives only. Aggregates land next to the list: `instruction_count` is the uncapped total, and `has_procedure` is True when at least `procedure_threshold` sentences live in numbered-step context.
+
+The component definition file is as follows:
+```yaml
+name: 'instruction_extractor'
+description: 'find imperative instruction / action sentences and stamp them into document metadata'
+max_instructions: 100          # cap on metadata['instructions']; count is uncapped
+min_words: 1                   # minimum words for a segment to count as a sentence
+procedure_threshold: 3         # numbered-context sentences needed for has_procedure
+instructions_key: 'instructions'    # '' disables the hit-list stamp
+count_key: 'instruction_count'      # '' disables the count stamp
+has_procedure_key: 'has_procedure'  # '' disables the procedure flag stamp
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.instruction_extractor'
+  class: 'InstructionExtractor'
+```
+- max_instructions: Maximum number of hits kept in `metadata['instructions']`; must be >= 0. `instruction_count` always reports the uncapped total.
+- min_words: Minimum number of word-bearing tokens for a segment to count as a sentence; must be >= 1.
+- procedure_threshold: Number of numbered-step-context sentences required for `has_procedure`; must be >= 1.
+- instructions_key / count_key / has_procedure_key: Metadata keys for the hit list, count and procedure flag; empty values disable the respective stamps.

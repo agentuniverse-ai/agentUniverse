@@ -310,3 +310,42 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [InstructionExtractor 指令提取器](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/instruction_extractor.yaml)
+
+该组件查找祈使句式的指令 / 操作句子并写入文档元数据，对应 issue #258 的*知识提取*方向。手册、SOP 与操作指南以命令句写成——"Install the package first."、"Click OK to continue."、"请输入用户名。"、"You must back up the database before upgrading."——而流程重建、清单挖掘与面向指令的检索恰恰需要把这些动作句分离出来。已有组件覆盖了相邻关注点（QuestionDetector 找疑问句、位置标记工具记录句子位置），但没有组件识别*指令*。检测过程确定性、无外部依赖。
+
+句子切分与 QuestionDetector 同族且保守：句子终止于 `. ! ?` 与 `。！？`，句点附带缩写（"Dr. Smith asked..."）、单字母首字母（"e.g."）与小数（"3.14"）保护，句末标点串与后引号归属其句子。在此之上还尊重文档结构：句子不会越过标题（`#`）或表格（`|`）行、不会越过编号条目行或空行段落分隔（普通行之间的换行视为软换行），标题 / 表格行片段被整体丢弃。
+
+满足以下条件之一（按优先级）即判定为指令：
+
+| kind | 触发条件 |
+|------|----------|
+| `imperative` | 以内置 120 个英文祈使动词之一开头（install、open、click、select、verify、ensure、configure、restart、download、……，完整清单见模块内文档；名词 "note" 被刻意排除），大小写不敏感，且后继词不是 `-ed` 过去式动词 |
+| `zh_imperative` | 以 请 / 务必 / 先 / 然后 / 接着 开头且其后还有实际内容 |
+| `directive` | 包含 "you must" / "you should" / "you need to"（大小写不敏感）或 你需要 / 你必须 |
+| `step` | 无独立证据但处于编号步骤上下文：所在行以 `N.` / `N)` 标记开头（标记不计入 span），或紧接上一编号条目的惰性续行；置信度由上下文继承 |
+
+负向保护：以 `?` / `？` 结尾的疑问句永不计数；过去式保护拒绝 "Install completed successfully." / "Update failed on three nodes." 这类名词主语句，代价是（有文档说明的）误拒分词形容词（"Install required packages"）。
+
+每个命中为 `{"kind", "text", "span": (start, end), "verb"}`——span 为有序不重叠的字符偏移且 `text == document.text[start:end]`，`verb` 仅对英文祈使句填写。列表旁附带聚合信息：`instruction_count` 为未截断总数；当处于编号步骤上下文的句子数不少于 `procedure_threshold` 时 `has_procedure` 为真。
+
+组件定义文件如下：
+```yaml
+name: 'instruction_extractor'
+description: 'find imperative instruction / action sentences and stamp them into document metadata'
+max_instructions: 100          # metadata['instructions'] 的截断上限；计数不截断
+min_words: 1                   # 片段计入句子的最小词数
+procedure_threshold: 3         # 触发 has_procedure 所需的编号上下文句子数
+instructions_key: 'instructions'    # '' 禁用命中列表写入
+count_key: 'instruction_count'      # '' 禁用计数写入
+has_procedure_key: 'has_procedure'  # '' 禁用流程标记写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.instruction_extractor'
+  class: 'InstructionExtractor'
+```
+- max_instructions：`metadata['instructions']` 保留的最大命中数，必须 >= 0；`instruction_count` 始终报告未截断总数。
+- min_words：片段计入句子的最小词数（含字母数字或 CJK 字符的空白分隔词元），必须 >= 1。
+- procedure_threshold：`has_procedure` 为真所需的编号步骤上下文句子数，必须 >= 1。
+- instructions_key / count_key / has_procedure_key：命中列表、计数与流程标记的元数据键；留空则禁用对应写入。
