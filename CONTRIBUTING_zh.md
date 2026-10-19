@@ -2,7 +2,7 @@
 感谢您对agentUniverse的关注并有意愿为项目做出贡献，欢迎您加入agentUniverse的社区大家庭。作为一个人工智能领域的开源项目，您的贡献对我们项目的发展和改进至关重要。我们欢迎各种类型的贡献参与，如新功能引入、代码修复、文档改进、issue提交、案例添加等。
 
 ### 与我们沟通
-如果您有任何贡献相关的想法与疑问可以提前与我们进行沟通，您可以在agentUniverse的项目的[issue](https://github.com/antgroup/agentUniverse/issues) 、发送邮件、或加入我们的社群进行沟通，更详细的沟通方式可见[联系方式](docs/guidebook/zh/联系我们.md)。
+如果您有任何贡献相关的想法与疑问可以提前与我们进行沟通，您可以在agentUniverse的项目的[issue](https://github.com/agentuniverse-ai/agentUniverse/issues) 、发送邮件、或加入我们的社群进行沟通，更详细的沟通方式可见[联系方式](docs/guidebook/zh/联系我们.md)。
 
 ### 贡献指南
 #### 项目代码与文档贡献
@@ -22,7 +22,7 @@ commit类型列表：
 在PR的提交过程中，我们沿用了上述commit类型，您可在PR提交中根据主要内容选择对应类型作为PR标签。
 
 请您确保在提交PR时满足如下要求：
-- 阅读并理解[贡献者指南](https://github.com/antgroup/agentUniverse/blob/master/CONTRIBUTING_zh.md) 的要求。
+- 阅读并理解[贡献者指南](https://github.com/agentuniverse-ai/agentUniverse/blob/master/CONTRIBUTING_zh.md) 的要求。
 - 检查没有与此PR请求重复的功能并与项目维护者进行了沟通。
 - 接受PR配合维护人员的建议进行修改或关闭。
 - 提交测试文件并提供测试结果截图(功能修改、BUG修复类PR必须提供，其他按需)

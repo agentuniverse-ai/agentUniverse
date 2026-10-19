@@ -6,6 +6,9 @@
 # @FileName: test_financial_indicator_extractor.py
 
 import unittest
+from unittest.mock import MagicMock, patch
+
+from agentuniverse.agent.action.knowledge.doc_processor import financial_indicator_extractor as extractor_module
 from agentuniverse.agent.action.knowledge.doc_processor.financial_indicator_extractor import FinancialIndicatorExtractor
 from agentuniverse.agent.action.knowledge.store.document import Document
 
@@ -127,6 +130,19 @@ YoY growth of 10%
         # Check for YoY type
         has_yoy = any(c.get('comparison_type') == 'yoy' for c in comparisons)
         self.assertTrue(has_yoy)
+
+    def test_comparison_group_errors_are_not_silenced(self):
+        """Unexpected regex group errors should propagate to the caller."""
+        match = MagicMock()
+        match.lastindex = 1
+        match.group.side_effect = RuntimeError("unexpected group failure")
+        match.groups.side_effect = RuntimeError("unexpected group failure")
+
+        with (
+            patch.object(extractor_module.re, "finditer", return_value=[match]),
+            self.assertRaisesRegex(RuntimeError, "unexpected group failure"),
+        ):
+            self.extractor._detect_comparisons("Revenue up 12% YoY", [])
 
     def test_qoq_comparison_extraction(self):
         """Test quarter-over-quarter comparison extraction."""
