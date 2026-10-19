@@ -529,6 +529,22 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
 
+## JSONFormatterTool
+
+`JSONFormatterTool` is a dependency-free JSON utility for cleaning up, shrinking, and sanity-checking JSON payloads. It supports four modes: `beautify` (re-indent with a configurable `indent` width), `minify` (strip all optional whitespace), `validate` (report whether the input is well-formed JSON plus its top-level type), and `extract` (pull the first balanced JSON value out of arbitrary text such as an LLM response or a fenced markdown block).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.json_formatter_tool import JSONFormatterTool
+
+tool = JSONFormatterTool()  # max_input_chars=100000, indent=2
+tool.execute(mode="beautify", input='{"a":1,"b":[2,3]}')
+tool.execute(mode="minify", input='{"a": 1, "b": [2, 3]}')
+tool.execute(mode="validate", input='{"a": 1}')
+tool.execute(mode="extract", input='Here is the data:\n```json\n{"a": 1}\n```')
+```
+
+The tool relies only on the Python standard library `json` module. Every result is a structured dict with a `status` field (`success` or `error`); beautify/minify results carry `output`, validate results carry `valid`/`type`/`size`, and extract results carry `output`/`type`/`start`/`end`. Inputs longer than `max_input_chars` are rejected, and all parsing errors are surfaced as `json_error` payloads rather than raised exceptions.
+
 ## NVD CVE Tool
 
 `NvdCveTool` queries the official National Vulnerability Database CVE API 2.0. A
