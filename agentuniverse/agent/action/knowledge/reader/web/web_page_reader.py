@@ -24,6 +24,18 @@ class WebPageReader(Reader):
     """
 
     def _load_data(self, url: str, ext_info: Optional[Dict] = None) -> List[Document]:
+        """Fetch a web page, extract its main text and return it wrapped in a Document with url metadata.
+
+        Args:
+            url(str): The page url to read.
+            ext_info(Optional[Dict]): Extra metadata merged into the document.
+
+        Returns:
+            List[Document]: A one-element list containing the extracted page text.
+
+        Raises:
+            ValueError: If url is empty or not a string.
+        """
         print(f"debugging: WebPageReader start load url={url}")
         if not isinstance(url, str) or not url:
             raise ValueError("WebPageReader._load_data requires a non-empty url string")
@@ -42,6 +54,17 @@ class WebPageReader(Reader):
         return [Document(text=text, metadata=metadata)]
 
     def _fetch_html(self, url: str) -> str:
+        """Fetch the html of the given url, preferring httpx and falling back to requests.
+
+        Args:
+            url(str): The page url to fetch.
+
+        Returns:
+            str: The fetched html.
+
+        Raises:
+            RuntimeError: If both http clients fail to fetch the page.
+        """
         try:
             import httpx  # type: ignore
             print("debugging: WebPageReader using httpx")
@@ -68,6 +91,18 @@ class WebPageReader(Reader):
 
     def _extract_main_text(self, html: str, url: str) -> (str, Dict):
         # Try trafilatura
+        """Extract the main article text from html, trying trafilatura, readability, then a plain BeautifulSoup fallback.
+
+        Args:
+            html(str): The page html.
+            url(str): The page url (kept for context).
+
+        Returns:
+            tuple: The extracted text and a dict naming the extractor used.
+
+        Raises:
+            RuntimeError: If none of the extractors is installed.
+        """
         try:
             import trafilatura  # type: ignore
             print("debugging: WebPageReader using trafilatura")
