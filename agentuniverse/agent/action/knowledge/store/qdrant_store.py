@@ -100,7 +100,7 @@ class QdrantStore(Store):
             return []
 
         embedding = query.embeddings
-        if self.embedding_model is not None and (not embedding or len(embedding) == 0):
+        if self.embedding_model is not None and not embedding:
             model = EmbeddingManager().get_instance_obj(self.embedding_model)
             embedding = model.get_embeddings([query.query_str], text_type="query")
 
