@@ -93,7 +93,7 @@ class Planner(ComponentBase):
         params['agent_llm_name'] = llm_name
         return memory.set_by_agent_model(**params)
 
-    def run_all_actions(self, agent_model: AgentModel, planner_input: dict, input_object: InputObject):
+    def run_all_actions(self, agent_model: AgentModel, planner_input: dict, input_object: InputObject) -> None:
         """Tool and knowledge processing.
 
         Args:
@@ -175,7 +175,7 @@ class Planner(ComponentBase):
         return self
 
     @staticmethod
-    def stream_output(input_object: InputObject, data: dict):
+    def stream_output(input_object: InputObject, data: dict) -> None:
         """Stream output.
 
         Args:
