@@ -12,7 +12,7 @@ from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from typing import Any, ClassVar, cast
 
-from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_safe_path
+from agentuniverse.agent.action.tool.common_tool.file_path_utils import atomic_publish_file, resolve_safe_path
 from agentuniverse.agent.action.tool.tool import Tool
 
 
@@ -227,7 +227,7 @@ class EmailDocumentTool(Tool):
         for source, name, maintype, subtype in files:
             with open(source, "rb") as stream:
                 message.add_attachment(stream.read(), maintype=maintype, subtype=subtype, filename=name)
-        self._atomic_write(path, message.as_bytes())
+        self._atomic_write(path, message.as_bytes(), overwrite=overwrite)
         return {
             "status": "success",
             "mode": "create",
@@ -344,7 +344,7 @@ class EmailDocumentTool(Tool):
         os.makedirs(directory, exist_ok=True)
         outputs = []
         for item, destination in destinations:
-            self._atomic_write(destination, item["part"].get_payload(decode=True) or b"")
+            self._atomic_write(destination, item["part"].get_payload(decode=True) or b"", overwrite=overwrite)
             outputs.append(destination)
         return {
             "status": "success",
@@ -355,7 +355,7 @@ class EmailDocumentTool(Tool):
             "attachment_count": len(outputs),
         }
 
-    def _atomic_write(self, destination: str, content: bytes) -> None:
+    def _atomic_write(self, destination: str, content: bytes, overwrite: bool = True) -> None:
         if len(content) > self.max_write_bytes:
             raise ValueError(f"generated file exceeds max_write_bytes ({self.max_write_bytes})")
         os.makedirs(os.path.dirname(destination), exist_ok=True)
@@ -366,7 +366,7 @@ class EmailDocumentTool(Tool):
             ) as output:
                 temporary = output.name
                 output.write(content)
-            os.replace(temporary, destination)
+            atomic_publish_file(temporary, destination, overwrite=overwrite)
             temporary = None
         finally:
             if temporary and os.path.exists(temporary):

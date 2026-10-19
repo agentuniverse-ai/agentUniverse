@@ -5,7 +5,7 @@ import os
 import tempfile
 from typing import Any, cast
 
-from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_safe_path
+from agentuniverse.agent.action.tool.common_tool.file_path_utils import atomic_publish_file, resolve_safe_path
 from agentuniverse.agent.action.tool.tool import Tool
 
 # Public execute() converts validation exceptions to structured tool responses.
@@ -166,7 +166,7 @@ class PDFTool(Tool):
         properties = self._metadata(metadata)
         if properties:
             writer.add_metadata(properties)
-        self._save(writer, output)
+        self._save(writer, output, overwrite=overwrite)
         return {
             "status": "success",
             "mode": "merge",
@@ -183,15 +183,16 @@ class PDFTool(Tool):
         _, Writer = self._classes()
         os.makedirs(directory, exist_ok=True)
         stem = os.path.splitext(os.path.basename(source))[0]
-        # Preflight every destination before writing any page. This prevents a
-        # late overwrite conflict from leaving a partially split document set.
+        # Preflight existing destinations before writing the first page.
+        # Publication also checks each file atomically; a concurrent conflict
+        # may still leave earlier pages already written.
         outputs = [os.path.join(directory, f"{stem}-page-{index + 1}.pdf") for index in indexes]
         for destination in outputs:
             self._check_overwrite(destination, overwrite)
         for index, destination in zip(indexes, outputs, strict=True):
             writer = Writer()
             writer.add_page(reader.pages[index])
-            self._save(writer, destination)
+            self._save(writer, destination, overwrite=overwrite)
         return {
             "status": "success",
             "mode": "split",
@@ -213,7 +214,7 @@ class PDFTool(Tool):
             if index in indexes:
                 page.rotate(rotation)
             writer.add_page(page)
-        self._save(writer, destination)
+        self._save(writer, destination, overwrite=overwrite)
         return {
             "status": "success",
             "mode": "rotate",
@@ -265,7 +266,7 @@ class PDFTool(Tool):
         if os.path.exists(path) and not overwrite:
             raise ValueError(f"file exists: {path}; set overwrite=true")
 
-    def _save(self, writer: Any, destination: str) -> None:
+    def _save(self, writer: Any, destination: str, overwrite: bool = True) -> None:
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         temporary = None
         try:
@@ -276,7 +277,7 @@ class PDFTool(Tool):
                 writer.write(output)
             if os.path.getsize(temporary) > self.max_write_bytes:
                 raise ValueError("generated PDF exceeds max_write_bytes")
-            os.replace(temporary, destination)
+            atomic_publish_file(temporary, destination, overwrite=overwrite)
             temporary = None
         finally:
             if temporary and os.path.exists(temporary):

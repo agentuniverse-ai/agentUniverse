@@ -1,11 +1,14 @@
 """Create-only document writes must survive a concurrent successful creator."""
 import threading
 
+import pytest
+
+pytest.importorskip("docx")
+pytest.importorskip("pptx")
 from docx import Document
 from docx.document import Document as WordDocument
 from pptx import Presentation
 from pptx.presentation import Presentation as PowerPointPresentation
-import pytest
 
 from agentuniverse.agent.action.tool.common_tool.powerpoint_tool import PowerPointTool
 from agentuniverse.agent.action.tool.common_tool.word_document_tool import WordDocumentTool
