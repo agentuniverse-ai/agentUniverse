@@ -6,7 +6,7 @@
 # @Email   : hiromesh@qq.com
 # @FileName: code_ast_processor.py
 import json
-from typing import List, Dict, Any, Optional, cast
+from typing import List, Dict, Any, Iterator, Optional, cast
 
 from agentuniverse.agent.action.knowledge.doc_processor.types.ast_types import AstNode, AstNodePoint, CodeBoundary
 from agentuniverse.agent.action.knowledge.doc_processor.types.code_types import CodeFeatures, CodeRepresentation, ChunkRepresentation
@@ -124,12 +124,7 @@ class CodeAstProcessor(DocProcessor):
             "statement_count": 0
         }
 
-        cursor = node.walk()
-
-        def _visit():
-            nonlocal features
-            current_node = cursor.node
-
+        for current_node in self._iter_tree_nodes(node):
             if current_node.type == "identifier":
                 features["identifier_count"] += 1
             elif current_node.type in ("function_definition", "method_definition", "function_declaration"):
@@ -139,27 +134,30 @@ class CodeAstProcessor(DocProcessor):
             elif "statement" in current_node.type:
                 features["statement_count"] += 1
 
-            if cursor.goto_first_child():
-                _visit()
-                cursor.goto_parent()
-            if cursor.goto_next_sibling():
-                _visit()
-
-        _visit()
         return features
+
+    @staticmethod
+    def _iter_tree_nodes(root_node: Any) -> Iterator[Any]:
+        """Visit a subtree in preorder without Python recursion.
+
+        The native cursor stays rooted at the supplied node, so backtracking
+        cannot visit its siblings outside the requested subtree.
+        """
+        cursor = root_node.walk()
+        while True:
+            yield cursor.node
+            if cursor.goto_first_child():
+                continue
+            while not cursor.goto_next_sibling():
+                if not cursor.goto_parent():
+                    return
 
     def _count_node_types(self, root_node) -> Dict[str, int]:
         counts = {}
-
-        def _traverse(node):
+        for node in self._iter_tree_nodes(root_node):
             if node.type not in counts:
                 counts[node.type] = 0
             counts[node.type] += 1
-
-            for child in node.children:
-                _traverse(child)
-
-        _traverse(root_node)
         return counts
 
     def _calculate_code_metrics(self, code: str, language: str) -> CodeMetrics:
@@ -213,21 +211,8 @@ class CodeAstProcessor(DocProcessor):
                     }
                     boundaries.append(boundary)
 
-        traverse_cursor = root_node.walk()
-
-        def _traverse_nodes():
-            current_node = traverse_cursor.node
-
-            _collect_declarations(current_node)
-
-            if traverse_cursor.goto_first_child():
-                _traverse_nodes()
-                traverse_cursor.goto_parent()
-
-            if traverse_cursor.goto_next_sibling():
-                _traverse_nodes()
-
-        _traverse_nodes()
+        for node in self._iter_tree_nodes(root_node):
+            _collect_declarations(node)
 
         if boundaries:
             for boundary in boundaries:
