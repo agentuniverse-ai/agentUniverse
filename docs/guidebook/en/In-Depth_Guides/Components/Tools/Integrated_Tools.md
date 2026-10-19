@@ -634,3 +634,53 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Env File Tool
+
+`EnvFileTool` parses, inspects, edits, serializes and validates dotenv
+(`.env`) text purely on the Python standard library, with zero network
+access. It complements `IniConfigTool` (INI) and `JsonYamlTool`
+(JSON/YAML): a dotenv file is not an INI file — it is a flat list of
+shell-style `KEY=value` assignments with quote and escape semantics,
+`export` prefixes, last-wins duplicate keys and `${VAR}` / `$VAR`
+reference conventions of its own. `parse` mode returns an ordered dict
+where every entry carries the parsed `value`, the `raw` value portion
+as written, the winning `line` number, the `exported` flag and all
+occurrence `lines`, plus blank/comment line counts, a
+last-wins `duplicates` list and a `malformed_lines` list (lines with
+no `=`, an invalid key charset or a dangling `export` are recorded,
+not fatal). `get` reads one key case-sensitively; `set` returns
+patched text that rewrites the first occurrence in place, removes
+later duplicates and appends missing keys before the trailing
+comment block, preserving every other byte (order, comments, blank
+lines, missing final newline); `serialize` renders a dict as canonical
+`.env` text — plain values unquoted, values containing whitespace,
+`#`, `'`, `"` or backslashes double-quoted with `\n`/`\t`/`\r`/`\\`/`\"`
+escapes — with optional `export` prefixes; `validate` lists `${VAR}`
+and `$VAR` references to variables the file never defines.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.env_file_tool import EnvFileTool
+
+tool = EnvFileTool()
+env = tool.execute(mode="parse", text=".env file content as text")["variables"]
+host = tool.execute(mode="get", text=content, key="API_HOST")["value"]
+patched = tool.execute(mode="set", text=content, key="API_PORT", value="9090")["result"]
+canonical = tool.execute(mode="serialize", data={"A": "x y", "B": "2"})["result"]
+warnings = tool.execute(mode="validate", text=content)["warnings"]
+```
+
+Value parsing follows dotenv rules, cross-checked against
+python-dotenv: double quotes unescape `\n`, `\t`, `\r`, `\\` and `\"`
+(unknown escapes stay literal, anything after the closing quote is
+ignored); single quotes are fully literal; unquoted values end at the
+first `#` preceded by whitespace (a `#` glued directly after `=` or
+into text is data, and `\#` shields a comment while staying as
+written), with surrounding whitespace stripped. Duplicate keys are
+last-wins, and the tool never expands variable references — it only
+reports undefined ones. Inputs are validated strictly before any
+computation (wrong types, empty text outside `set`, keys not matching
+`[A-Za-z_][A-Za-z0-9_]*`, oversized text/values, `export` lists naming
+unknown keys raise a `ValueError`); unterminated quotes and a missing
+key on `get` are structured `error` payloads. The tool operates purely
+on text and never touches the filesystem.
