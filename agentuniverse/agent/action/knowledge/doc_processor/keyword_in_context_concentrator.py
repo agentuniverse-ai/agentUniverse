@@ -43,15 +43,21 @@ class KeywordInContextConcentrator(DocProcessor):
     knowledge-insertion time (pre-processing), and with live query terms
     at recall time (post-processing).
 
-    Matching is plain substring search refined with word boundaries where
-    they make sense: when a keyword edge is an ASCII word character the
-    match requires a ``\\b`` boundary there, so ``rate`` matches
-    ``rate`` but not ``rates`` or ``generate``; CJK keyword edges get no
-    boundary requirement because CJK text has no spaces — ``利率`` must
-    match inside ``利率风险``. Matching is case-insensitive unless
-    ``case_sensitive``. Overlapping occurrences of the *same* keyword
-    follow regex non-overlapping semantics; different keywords may match
-    the same span and are each reported.
+    Matching is plain substring search refined with word boundaries
+    where they make sense: when a keyword edge is an ASCII word
+    character, the match requires that the neighbouring character is
+    not another ASCII word character, so ``rate`` matches ``rate`` but
+    not ``rates`` or ``generate``; because that boundary only guards
+    against ASCII word characters, ``rate`` still matches when glued
+    directly to CJK text (``使用rate表示``) — CJK scripts do not
+    separate words with spaces, which is also why CJK keyword edges
+    carry no boundary at all (``利率`` matches inside ``利率风险``).
+    Matching is case-insensitive unless ``case_sensitive``; keywords
+    that differ only in case are the same matcher under
+    case-insensitive matching and are merged (the first spelling
+    wins). Overlapping occurrences of the *same* keyword follow regex
+    non-overlapping semantics; different keywords may match the same
+    span and are each reported.
 
     Each snippet records the keyword, its ``start`` / ``end`` offsets in
     the original text, and a display-ready ``context``: the surrounding
@@ -69,7 +75,9 @@ class KeywordInContextConcentrator(DocProcessor):
 
     Attributes:
         keywords: Static keyword list applied to every batch, in config
-            order (duplicates and blank entries are dropped).
+            order (duplicates and blank entries are dropped; with
+            case-insensitive matching, keywords differing only in
+            case count as duplicates and keep the first spelling).
         use_query_keywords: When true (default), the query's keyword set
             is merged into the effective keywords (sorted
             alphabetically, after the static list).
@@ -134,7 +142,12 @@ class KeywordInContextConcentrator(DocProcessor):
         Static keywords keep config order; query keywords follow,
         alphabetically sorted — ``Query.keywords`` is a set, and sorting
         keeps the effective list (and therefore all stamped output)
-        identical across processes and runs.
+        identical across processes and runs. Under case-insensitive
+        matching (the default) keywords that differ only in case are
+        the same matcher, so they are merged and only the first
+        spelling survives — otherwise every occurrence would be counted
+        once per case variant and duplicate spans would crowd the
+        snippet list.
 
         Args:
             query: Query object or None.
@@ -147,8 +160,12 @@ class KeywordInContextConcentrator(DocProcessor):
 
         def _add(keyword: str) -> None:
             stripped = keyword.strip() if isinstance(keyword, str) else ""
-            if stripped and stripped not in seen:
-                seen.add(stripped)
+            if not stripped:
+                return
+            identity = stripped if self.case_sensitive \
+                else stripped.lower()
+            if identity not in seen:
+                seen.add(identity)
                 ordered.append(stripped)
 
         for keyword in self.keywords or []:
@@ -190,13 +207,16 @@ class KeywordInContextConcentrator(DocProcessor):
     def _keyword_pattern(keyword: str, flags: int = 0) -> "re.Pattern[str]":
         """Compile the match pattern for one keyword.
 
-        A ``\\b`` boundary is required at each keyword edge that is an
-        ASCII word character, so short English keywords do not fire
-        inside longer words (``rate`` vs ``rates`` / ``generate``). CJK
-        edges get no boundary: Chinese and Japanese do not separate
-        words with spaces, and ``\\b`` between two CJK characters never
-        holds (both are ``\\w``), which would make CJK keywords
-        unmatchable.
+        An ASCII word boundary is required at each keyword edge that is
+        an ASCII word character — implemented as lookarounds against
+        ``[A-Za-z0-9_]`` rather than ``\\b`` — so short English
+        keywords do not fire inside longer words (``rate`` vs
+        ``rates`` / ``generate``). ``\\b`` would additionally reject
+        keywords glued directly to CJK text (``使用rate表示``), because
+        every CJK character is itself a regex word character; the
+        lookarounds keep such mixed-script matches working, which is
+        the same rationale that exempts CJK keyword edges from any
+        boundary at all.
 
         Args:
             keyword: Non-empty keyword string.
@@ -210,9 +230,9 @@ class KeywordInContextConcentrator(DocProcessor):
         """
         parts = [re.escape(keyword)]
         if KeywordInContextConcentrator._is_ascii_word_char(keyword[0]):
-            parts.insert(0, r'\b')
+            parts.insert(0, r'(?<![A-Za-z0-9_])')
         if KeywordInContextConcentrator._is_ascii_word_char(keyword[-1]):
-            parts.append(r'\b')
+            parts.append(r'(?![A-Za-z0-9_])')
         return re.compile(''.join(parts), flags)
 
     @staticmethod

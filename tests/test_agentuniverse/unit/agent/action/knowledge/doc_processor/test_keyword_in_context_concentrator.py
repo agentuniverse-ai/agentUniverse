@@ -180,6 +180,52 @@ class TestKeywordInContextConcentrator(unittest.TestCase):
         self.assertEqual(
             len(self.processor._find_occurrences("利率风险上升", ['利率'])), 1)
 
+    def test_ascii_keyword_glued_to_cjk_matches(self):
+        """The ASCII boundary only guards against ASCII word characters,
+        so an English keyword glued directly to CJK text still matches
+        (\\b would reject it because CJK characters are regex word
+        characters) while true ASCII word embedding stays excluded."""
+        hits = self.processor._find_occurrences("使用rate表示", ['rate'])
+        self.assertEqual(hits, [(2, 6, 0)])
+        self.assertEqual("使用rate表示"[2:6], 'rate')
+        # glued on the left, inside running Chinese, case-insensitive
+        self.assertEqual(
+            self.processor._find_occurrences("CPU使用率与cpu负载", ['cpu']),
+            [(0, 3, 0), (7, 10, 0)])
+        # an ASCII word character adjacent to the keyword still blocks
+        self.assertEqual(
+            self.processor._find_occurrences("使用rateX表示", ['rate']), [])
+        self.assertEqual(
+            self.processor._find_occurrences("使用Xrate表示", ['rate']), [])
+
+    def test_case_variant_keywords_merged_when_case_insensitive(self):
+        """With case_sensitive=False, keywords differing only in case
+        are the same matcher: they merge into one (first spelling wins)
+        instead of double-counting every occurrence and filling the
+        snippet list with duplicate spans."""
+        self.processor.keywords = ['rate', 'Rate', 'RATE']
+        effective = self.processor._effective_keywords(None)
+        self.assertEqual(effective, ['rate'])
+        result = self.processor.process_docs(
+            [_doc("rate Rate RATE rate")], None)
+        record = result[0].metadata['kwic']
+        self.assertEqual(record['keywords'], ['rate'])
+        self.assertEqual(record['counts'], {'rate': 4})
+        self.assertEqual(record['total_occurrences'], 4)
+        self.assertEqual([(s['start'], s['end']) for s in record['snippets']],
+                         [(0, 4), (5, 9), (10, 14), (15, 19)])
+        # A case-variant query keyword merges into the static spelling.
+        self.processor.keywords = ['rate']
+        self.assertEqual(
+            self.processor._effective_keywords(Query(keywords={'Rate'})),
+            ['rate'])
+        # With case_sensitive=True the variants are distinct matchers
+        # and must all survive the merge.
+        self.processor.case_sensitive = True
+        self.processor.keywords = ['rate', 'Rate']
+        self.assertEqual(self.processor._effective_keywords(None),
+                         ['rate', 'Rate'])
+
     def test_overlapping_distinct_keywords_both_reported(self):
         """'rate' and 'interest rate' cover the same span; each keyword
         reports its own occurrence, ordered by start offset."""
