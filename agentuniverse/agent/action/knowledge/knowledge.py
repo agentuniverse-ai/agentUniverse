@@ -145,8 +145,8 @@ class Knowledge(ComponentBase):
             origin_docs = doc_processor.process_docs(origin_docs, query=query)
         return origin_docs
 
-    def _channel_fusion_enabled(self) -> bool:
-        """Return whether a configured post-processor opts into per-channel recall.
+    def _channel_fusion_keys(self) -> List[str]:
+        """Return the metadata keys configured for per-channel recall.
 
         A fusion processor (e.g. ``ReciprocalRankFusionProcessor``) declares a
         ``channel_key`` — the metadata field it reads to tell retrieval channels
@@ -156,14 +156,16 @@ class Knowledge(ComponentBase):
         document, so an optional fusion processor can never change the output of
         pipelines that do not use it.
         """
+        channel_keys = []
         for _processor_code in self.post_processors:
             try:
                 _processor = DocProcessorManager().get_instance_obj(_processor_code)
             except Exception:  # noqa: BLE001 - an unresolved processor is not channel-aware
                 continue
-            if getattr(_processor, "channel_key", None):
-                return True
-        return False
+            channel_key = getattr(_processor, "channel_key", None)
+            if channel_key and channel_key not in channel_keys:
+                channel_keys.append(channel_key)
+        return channel_keys
 
     def _paraphrase_query(self, origin_query: Query) -> Query:
         for _paraphraser_code in self.query_paraphrasers:
@@ -253,19 +255,21 @@ class Knowledge(ComponentBase):
         # retrieval contract — a document recalled by several stores is
         # returned exactly once — so adding an optional fusion processor never
         # changes the output of pipelines that do not use it.
-        preserve_channels = self._channel_fusion_enabled()
+        channel_keys = self._channel_fusion_keys()
         retrieved_docs = {}
         for future, store_code in futures:
             try:
                 task_result = future.result()
                 for _doc in task_result:
-                    if preserve_channels:
+                    if channel_keys:
                         # Stamp the store code that recalled this document and
                         # de-duplicate per channel (id + channel): a document
                         # recalled by several stores is kept once per store,
                         # while a duplicate within the same store is dropped.
                         metadata = dict(_doc.metadata or {})
                         metadata[RECALL_CHANNEL_KEY] = store_code
+                        for channel_key in channel_keys:
+                            metadata[channel_key] = store_code
                         _doc.metadata = metadata
                         dedup_identity = (_doc.id, store_code)
                     else:
