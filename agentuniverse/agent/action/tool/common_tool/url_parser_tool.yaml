@@ -1,0 +1,119 @@
+name: url_parser_tool
+description: URL parser tool — pure Python stdlib urllib.parse, no network required. Parse a URL into scheme/host/port (scheme defaults resolved)/path/ordered query parameter list/fragment with userinfo and IPv6 support (mode='parse'); get/set/delete query parameters, multi-value aware and order preserving (mode='query'); build a URL from validated parts (mode='build'); and canonicalize URLs — lowercase scheme/host, remove default ports, sort query keys, resolve trailing-dot hosts, drop empty fragments — idempotently (mode='normalize').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.url_parser_tool
+  class: URLParserTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: URL mode — parse, query, build or normalize.
+    required: true
+  url:
+    type: string
+    description: The URL to work on. Required for the parse, query and normalize modes; not used by build mode.
+    required: false
+  allow_scheme_relative:
+    type: boolean
+    description: Allow URLs / builds without a scheme (relative references such as //host/path). Defaults to false for parse and build; query and normalize always accept scheme-less URLs.
+    required: false
+  operation:
+    type: string
+    description: Query mode operation — get, set or delete. Required for the query mode only.
+    required: false
+  key:
+    type: string
+    description: Query mode — the parameter name. Required for set/delete; optional for get (without it every pair is returned).
+    required: false
+  value:
+    type: string
+    description: Query set only — the new value (or a list of values, which sets multiple occurrences).
+    required: false
+  scheme:
+    type: string
+    description: Build mode — the URL scheme, e.g. https. Required unless allow_scheme_relative is true.
+    required: false
+  host:
+    type: string
+    description: Build mode — the host, IPv6 literals in brackets; mutually exclusive with netloc.
+    required: false
+  netloc:
+    type: string
+    description: Build mode — a raw authority block (user:pass@host:port); mutually exclusive with host/port/username/password.
+    required: false
+  port:
+    type: integer
+    description: Build mode — an explicit port within 1-65535.
+    required: false
+  path:
+    type: string
+    description: Build mode — the path, empty or starting with '/'.
+    required: false
+  query:
+    type: string
+    description: Build mode — the query as a raw string (no leading '?') or a list of [key, value] pairs or a dict (values may be lists for multi-value).
+    required: false
+  fragment:
+    type: string
+    description: Build mode — the fragment, no leading '#'.
+    required: false
+  username:
+    type: string
+    description: Build mode — percent-encoded into the authority userinfo block.
+    required: false
+  password:
+    type: string
+    description: Build mode — percent-encoded into the authority userinfo block.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "query", "build", "normalize"]
+      description: URL mode.
+    url:
+      type: string
+      description: URL to parse / edit / normalize (parse, query, normalize modes).
+    allow_scheme_relative:
+      type: boolean
+      description: Permit scheme-less URLs (parse and build modes).
+    operation:
+      type: string
+      enum: ["get", "set", "delete"]
+      description: Query parameter operation (query mode).
+    key:
+      type: string
+      description: Query parameter name (query mode).
+    value:
+      description: New value, or list of values (query set).
+    scheme:
+      type: string
+      description: URL scheme (build mode).
+    host:
+      type: string
+      description: Host, IPv6 literals bracketed (build mode).
+    netloc:
+      type: string
+      description: Raw authority block (build mode).
+    port:
+      type: integer
+      description: Explicit port, 1-65535 (build mode).
+    path:
+      type: string
+      description: Path, empty or '/'-prefixed (build mode).
+    query:
+      description: Raw query string or [key, value] pairs or dict (build mode).
+    fragment:
+      type: string
+      description: Fragment without '#' (build mode).
+    username:
+      type: string
+      description: Userinfo username, percent-encoded (build mode).
+    password:
+      type: string
+      description: Userinfo password, percent-encoded (build mode).
+  required: ["mode"]
