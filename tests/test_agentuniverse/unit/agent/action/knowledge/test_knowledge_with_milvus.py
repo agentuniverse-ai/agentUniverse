@@ -20,6 +20,7 @@ class KnowledgeTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Build a Knowledge instance backed by a MilvusStore."""
         init_params = {}
         init_params['name'] = 'test_knowledge'
         init_params['description'] = 'test_knowledge_description'
@@ -28,21 +29,25 @@ class KnowledgeTest(unittest.TestCase):
         self.knowledge = Knowledge(**init_params)
 
     def test_store_update_documents(self) -> None:
+        """Verify MilvusStore.update_document runs with sample documents."""
         store = self.knowledge.store
         store.update_document([Document(text='This is an iPhone', metadata={'type': 'Electronic products'}),
                                Document(text='This is a Tesla.', metadata={'type': 'Industrial products'})])
 
     def test_store_upsert_documents(self) -> None:
+        """Verify MilvusStore.upsert_document runs with sample documents."""
         store = self.knowledge.store
         store.upsert_document([Document(text='This is an iPhone', metadata={'type': 'Cell phone'}),
                                Document(text='This is a Tesla.', metadata={'type': 'Car'})])
 
     def test_store_insert_documents(self) -> None:
+        """Verify MilvusStore.insert_documents runs with sample documents."""
         store = self.knowledge.store
         store.insert_documents([Document(text='This is a document about engineer'),
                                 Document(text='This is a document about finance')])
 
     def test_query(self) -> None:
+        """Verify a MilvusStore query returns results for a sample query."""
         store = self.knowledge.store
         query = Query(query_str='Which one is a cell phone?', similarity_top_k=1)
         res = store.query(query)
