@@ -101,6 +101,44 @@ class DomainValidatorToolValidateTest(unittest.TestCase):
         self.assertEqual(result["hostname"], "example.com")
         self.assertEqual(result["verdict"], "valid")
 
+    def test_trailing_root_dot_makes_single_label_fully_qualified(self) -> None:
+        # RFC 1035: the trailing root dot makes a name explicitly fully
+        # qualified, so 'localhost.' must be valid without the
+        # allow_single_label flag even though the dot-less 'localhost'
+        # is rejected. The old code claimed the input 'has no dot' —
+        # contradicted by the very dot it had just stripped.
+        result = self.tool.execute(mode="validate", hostname="localhost.")
+        self.assertTrue(result["trailing_dot_stripped"])
+        self.assertEqual(result["hostname"], "localhost")
+        self.assertEqual(result["verdict"], "valid")
+        self.assertEqual(result["reasons"], [])
+        self.assertEqual(result["warnings"], [])
+
+    def test_bare_root_dot_reports_empty_label_only(self) -> None:
+        # '.' strips to the empty name: invalid via the empty-label
+        # reason, without a contradictory single-label complaint.
+        result = self.tool.execute(mode="validate", hostname=".")
+        self.assertTrue(result["trailing_dot_stripped"])
+        self.assertEqual(result["verdict"], "invalid")
+        self.assertTrue(
+            any("empty" in r for r in result["reasons"]),
+            result["reasons"],
+        )
+        self.assertFalse(
+            any("single-label" in r for r in result["reasons"]),
+            result["reasons"],
+        )
+
+    def test_valid_at_253_char_boundary_with_root_dot(self) -> None:
+        # 254 presented characters, 253 after the root dot is stripped:
+        # the DNS 253-character limit applies to the name without the
+        # trailing root dot, so this stays valid.
+        result = self.tool.execute(mode="validate", hostname=HOST_253 + ".")
+        self.assertTrue(result["trailing_dot_stripped"])
+        self.assertEqual(result["hostname"], HOST_253)
+        self.assertEqual(result["verdict"], "valid")
+        self.assertEqual(result["reasons"], [])
+
     def test_valid_at_253_char_boundary(self) -> None:
         result = self.tool.execute(mode="validate", hostname=HOST_253)
         self.assertEqual(result["verdict"], "valid")

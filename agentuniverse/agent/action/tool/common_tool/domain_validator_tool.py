@@ -30,7 +30,10 @@ Three modes are supported:
   - no leading or trailing hyphen in any label;
   - no empty label (double dot, leading dot);
   - at least one dot — a single-label name such as ``localhost`` is only
-    accepted with ``allow_single_label=True`` (downgraded to a warning);
+    accepted with ``allow_single_label=True`` (downgraded to a warning).
+    A single-label name that *carries* the trailing root dot
+    (``localhost.``) is already explicitly fully qualified per RFC 1035,
+    so it passes without the flag;
   - the top-level label is alphabetic and at least two characters long
     (so ``example.123`` and ``example.c`` are rejected).
 
@@ -422,7 +425,11 @@ class DomainValidatorTool(Tool):
                 f"{MAX_DNS_NAME_CHARS}-character DNS limit"
             )
         labels = host.split(".")
-        if len(labels) == 1 and "." not in host:
+        # A stripped trailing root dot means the input *did* carry a
+        # dot: RFC 1035 marks such a name explicitly fully qualified
+        # even when it has only one label, so the single-label check
+        # only applies to names that never contained a dot at all.
+        if len(labels) == 1 and not trailing_dot:
             message = (
                 f"single-label hostname {host!r} has no dot and is not a "
                 "fully qualified domain name"
