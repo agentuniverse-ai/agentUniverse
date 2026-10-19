@@ -77,27 +77,20 @@ class TavilyTool(Tool):
         Returns:
             Dict: 包含搜索结果或提取内容的字典
         """
-        # 检查API密钥
-        if not self.api_key:
+        def setting(name):
+            value = kwargs.get(name)
+            return getattr(self, name) if value is None else value
+
+        api_key = setting("api_key")
+        if not api_key:
             return {"error": "未提供Tavily API密钥，请设置TAVILY_API_KEY环境变量或在调用时提供api_key参数"}
-            
-        # 更新可选配置（如果提供）
-        possible_params = [
-            "api_key", "search_depth", "include_answer", "mode",
-            "topic", "days", "time_range", "max_results", "include_domains", "exclude_domains",
-            "include_raw_content", "include_images", "include_image_descriptions", "extract_depth"
-        ]
-        
-        for param in possible_params:
-            if kwargs.get(param) is not None:
-                setattr(self, param, kwargs.get(param))
 
         try:
             # 初始化Tavily客户端
-            client = _get_tavily_client_class()(api_key=self.api_key)
+            client = _get_tavily_client_class()(api_key=api_key)
             
             # 根据操作模式执行不同的操作
-            if self.mode == "extract":
+            if setting("mode") == "extract":
                 # 提取模式
                 urls = input
                 if not urls:
@@ -110,8 +103,8 @@ class TavilyTool(Tool):
                 # 提取参数
                 extract_params = {
                     "urls": urls,
-                    "include_images": self.include_images,
-                    "extract_depth": self.extract_depth
+                    "include_images": setting("include_images"),
+                    "extract_depth": setting("extract_depth")
                 }
                 
                 # 执行提取
@@ -129,21 +122,21 @@ class TavilyTool(Tool):
                 # 搜索参数
                 search_params = {
                     "query": query,
-                    "search_depth": self.search_depth
+                    "search_depth": setting("search_depth")
                 }
                 
                 # 添加其他可选参数（如果有设置）
                 for param_name, param_attr in {
-                    "topic": self.topic,
-                    "days": self.days,
-                    "time_range": self.time_range,
-                    "max_results": self.max_results,
-                    "include_domains": self.include_domains,
-                    "exclude_domains": self.exclude_domains,
-                    "include_answer": self.include_answer,
-                    "include_raw_content": self.include_raw_content,
-                    "include_images": self.include_images,
-                    "include_image_descriptions": self.include_image_descriptions
+                    "topic": setting("topic"),
+                    "days": setting("days"),
+                    "time_range": setting("time_range"),
+                    "max_results": setting("max_results"),
+                    "include_domains": setting("include_domains"),
+                    "exclude_domains": setting("exclude_domains"),
+                    "include_answer": setting("include_answer"),
+                    "include_raw_content": setting("include_raw_content"),
+                    "include_images": setting("include_images"),
+                    "include_image_descriptions": setting("include_image_descriptions")
                 }.items():
                     if param_attr is not None:
                         search_params[param_name] = param_attr
