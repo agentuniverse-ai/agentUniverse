@@ -60,7 +60,10 @@ appends ``...`` for ``language='en'`` (the default) or ``…`` for
 already fits the budget is returned byte-identical with no ellipsis.
 By default (``count_ellipsis=False``) the ellipsis is NOT counted
 against the budget, so the result may exceed ``max`` by the ellipsis
-length; with ``count_ellipsis=True`` (character-based modes only) the
+length; with ``count_ellipsis=True`` (character-based modes only —
+``chars`` and ``head_chars_keep_sentences``; it has no effect in the
+``words`` / ``sentences`` modes, where the budget counts words or
+sentences) the
 ellipsis IS counted — the text budget shrinks by the ellipsis length,
 so the hard character cut plus ellipsis never exceeds ``max``
 (``head_chars_keep_sentences`` may still exceed it when the snap to a
@@ -208,8 +211,11 @@ class TextTruncateTool(Tool):
                 counted, the text budget shrinks by the ellipsis
                 length and the hard cut plus ellipsis never exceeds
                 ``max`` (sentence-snap extension may still exceed
-                it by design). Meaningful for the character-based
-                modes. Requires ``add_ellipsis``.
+                it by design). Meaningful only in the character-based
+                modes (``chars`` and ``head_chars_keep_sentences``);
+                it has no effect in the ``words`` / ``sentences``
+                modes, where the budget counts words or sentences.
+                Requires ``add_ellipsis``.
             min_length (int): Optional guard (>= 1, characters; must
                 not exceed ``max`` in the character-based modes): if
                 a cut would leave fewer characters than this, the
@@ -260,10 +266,17 @@ class TextTruncateTool(Tool):
             )
 
         ellipsis = _ELLIPSIS[clean_language] if use_ellipsis else ""
-        # Effective character budget for the ellipsis-counted case
-        # (character-based modes; word/sentence counts are unaffected).
+        # Effective character budget for the ellipsis-counted case.
+        # Only the character-based modes count the ellipsis against
+        # ``max``; in the words / sentences modes the budget is a word
+        # or sentence count, so count_ellipsis has no effect there and
+        # must not reject small budgets.
         char_budget = clean_max
-        if use_ellipsis and count_ell:
+        if (
+            use_ellipsis
+            and count_ell
+            and mode in ("chars", "head_chars_keep_sentences")
+        ):
             char_budget = clean_max - len(ellipsis)
             if char_budget < 1:
                 self._invalid(

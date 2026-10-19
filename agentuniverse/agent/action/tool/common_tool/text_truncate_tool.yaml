@@ -30,7 +30,7 @@ args_model:
     required: false
   count_ellipsis:
     type: boolean
-    description: With add_ellipsis — when false (default) the ellipsis is NOT counted against the budget and the result may exceed max by the ellipsis length; when true the ellipsis IS counted, the text budget shrinks by the ellipsis length and the hard cut plus ellipsis never exceeds max (sentence-snap extension may still exceed it by design). Character-based modes; requires add_ellipsis.
+    description: With add_ellipsis — when false (default) the ellipsis is NOT counted against the budget and the result may exceed max by the ellipsis length; when true the ellipsis IS counted, the text budget shrinks by the ellipsis length and the hard cut plus ellipsis never exceeds max (sentence-snap extension may still exceed it by design). Only meaningful in the character-based modes (chars / head_chars_keep_sentences); no effect in the words / sentences modes. Requires add_ellipsis.
     required: false
   min_length:
     type: integer
@@ -71,7 +71,7 @@ args_model_schema:
       description: Ellipsis style — en uses '...', cjk uses '…'.
     count_ellipsis:
       type: boolean
-      description: Count the appended ellipsis against the budget (requires add_ellipsis; character-based modes).
+      description: Count the appended ellipsis against the budget (requires add_ellipsis; only meaningful in the character-based modes chars / head_chars_keep_sentences).
     min_length:
       type: integer
       minimum: 1

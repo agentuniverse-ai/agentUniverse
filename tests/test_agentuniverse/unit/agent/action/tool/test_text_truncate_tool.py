@@ -404,6 +404,17 @@ class TextTruncateToolTest(unittest.TestCase):
         self.assertEqual(result["boundary"], "sentence")
         self.assertEqual(result["result"], "First sentence here.")
 
+    def test_head_chars_tie_prefers_boundary_not_exceeding_budget(self) -> None:
+        # Boundaries at 20 and 40 sit exactly 10 away from the budget
+        # 30: the tie must prefer the boundary at or below the budget.
+        result = self.tool.execute(
+            mode="head_chars_keep_sentences", text=self.HEAD_TEXT,
+            max=30, tolerance=10,
+        )
+        self.assertEqual(result["boundary"], "sentence")
+        self.assertEqual(result["result"], "First sentence here.")
+        self.assertEqual(result["result_length"], 20)
+
     def test_head_chars_cjk_boundary_selection(self) -> None:
         # Boundaries at 7, 14 and 18; the nearest to the budget 8 is
         # the one at 7.
@@ -494,6 +505,29 @@ class TextTruncateToolTest(unittest.TestCase):
         self.assertEqual(result["boundary"], "sentence")
         self.assertEqual(result["result"], "First sentence here....")
         self.assertEqual(result["result_length"], 23)
+
+    def test_ellipsis_counted_has_no_effect_in_words_mode(self) -> None:
+        # count_ellipsis only applies to the character-based modes; in
+        # the words mode the budget counts words, so even a tiny max
+        # must not be rejected by the ellipsis-budget check and the
+        # ellipsis is appended uncounted (regression: this used to
+        # raise "max (2) is too small to fit the 'en' ellipsis").
+        result = self.tool.execute(
+            mode="words", text="a b c d", max=2,
+            add_ellipsis=True, count_ellipsis=True,
+        )
+        self.assertEqual(result["result"], "a b...")
+        self.assertTrue(result["truncated"])
+
+    def test_ellipsis_counted_has_no_effect_in_sentences_mode(self) -> None:
+        # Same regression for the sentences mode with the 1-character
+        # cjk ellipsis: max=1 sentence is a valid budget.
+        result = self.tool.execute(
+            mode="sentences", text="One. Two.", max=1,
+            add_ellipsis=True, count_ellipsis=True, language="cjk",
+        )
+        self.assertEqual(result["result"], "One.…")
+        self.assertEqual(result["sentences_kept"], 1)
 
     # ------------------------------------------------------------------ #
     # min_length behavior (shared)
