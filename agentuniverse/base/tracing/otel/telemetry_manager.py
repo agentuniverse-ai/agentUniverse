@@ -106,7 +106,7 @@ class TelemetryManager:
 
         tracer_provider: TracerProvider = provider_cls(**provider_kwargs)
 
-        processors = otel_conf.get("processors", [])
+        processors = list(otel_conf.get("processors", []))
         processors.extend(DEFAULT_SPAN_PROCESSORS)
         self._attach_span_processors(
             tracer_provider, processors
@@ -137,7 +137,7 @@ class TelemetryManager:
     # -------- Propagator -------------------------------------------------
     def _setup_propagator(self, otel_conf: Dict[str, Any]) -> None:
         """Setup context propagators"""
-        propagators_conf = otel_conf.get("propagators", [])
+        propagators_conf = list(otel_conf.get("propagators", []))
         propagators_conf.extend(DEFAULT_TRACE_PROPAGATORS)
 
         propagators = []
