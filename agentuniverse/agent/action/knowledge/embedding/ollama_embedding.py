@@ -130,6 +130,8 @@ class OllamaEmbedding(Embedding):
         return self
 
     def _initialize_clients(self) -> None:
+        """Initialize clients.
+        """
         if not self.ollama_base_url:
             raise Exception("OLLAMA_BASE_URL is missing")
         if not self.embedding_model_name:
