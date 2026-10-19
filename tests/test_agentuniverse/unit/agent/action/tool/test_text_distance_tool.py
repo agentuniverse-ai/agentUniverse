@@ -418,6 +418,57 @@ class TextDistanceToolTest(unittest.TestCase):
         result = self.tool.execute(mode="levenshtein", text_a="a" * 2000, text_b="b" * 2000)
         self.assertEqual(result["result"], 2000)
 
+    def test_matrix_cell_limit_applies_after_casefold(self) -> None:
+        # casefold() expands "ß" to "ss" and "ﬃ" (U+FB03) to "ffi", so the
+        # DP-cell bound must be measured on the case-folded texts the
+        # dynamic program actually runs on, not on the raw inputs.
+        # Raw product 1,000 x 1,000 = 1,000,000 passes, but the folded
+        # product is 2,000 x 2,000 = 4,000,000 — exactly at the bound.
+        at_bound = self.tool.execute(
+            mode="levenshtein", text_a="ß" * 1_000, text_b="ß" * 1_000, case_sensitive=False
+        )
+        self.assertEqual(at_bound["result"], 0)
+
+        # Raw product 1,001 x 1,000 = 1,001,000 passes, but the folded
+        # product is 2,002 x 2,000 = 4,004,000 — past the bound.
+        self.assert_invalid(
+            mode="levenshtein", text_a="ß" * 1_001, text_b="ß" * 1_000, case_sensitive=False
+        )
+
+        # Ligature expansion (1 -> 3): raw 1,200 x 1,200 = 1,440,000 passes,
+        # folded 3,600 x 3,600 = 12,960,000 must be rejected.
+        self.assert_invalid(
+            mode="levenshtein",
+            text_a="ﬃ" * 1_200,
+            text_b="ﬃ" * 1_200,
+            case_sensitive=False,
+        )
+
+        # The same inputs are fine case-sensitively (no folding, no excess).
+        literal = self.tool.execute(
+            mode="levenshtein", text_a="ß" * 1_001, text_b="ß" * 1_000
+        )
+        self.assertEqual(literal["result"], 1)
+
+    def test_limits_are_instance_configurable(self) -> None:
+        # max_chars / max_matrix_cells are documented attributes; lowering
+        # them on an instance must tighten validation, not be ignored.
+        tool = TextDistanceTool()
+        tool.max_chars = 8
+        with self.assertRaises(ValueError):
+            tool.execute(mode="levenshtein", text_a="a" * 9, text_b="b")
+        self.assertEqual(
+            tool.execute(mode="levenshtein", text_a="a" * 8, text_b="b")["result"], 8
+        )
+
+        tool = TextDistanceTool()
+        tool.max_matrix_cells = 99
+        with self.assertRaises(ValueError):
+            tool.execute(mode="levenshtein", text_a="a" * 10, text_b="b" * 10)
+        self.assertEqual(
+            tool.execute(mode="levenshtein", text_a="a" * 9, text_b="b" * 10)["result"], 10
+        )
+
     def test_invalid_case_sensitive(self) -> None:
         for bad in ("yes", 1, 0, "true"):
             with self.subTest(bad=bad):

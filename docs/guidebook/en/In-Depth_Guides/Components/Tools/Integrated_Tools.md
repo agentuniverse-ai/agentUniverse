@@ -666,7 +666,10 @@ sim = tool.execute(mode="similarity", text_a="Kitten", text_b="SITTING",
 Inputs are validated strictly before any computation: an unknown mode
 or metric, non-string texts, texts over 10,000 characters each, or a
 `len(text_a) * len(text_b)` product over 4,000,000 cells (the bound of
-the pure-Python dynamic program) raise a `ValueError`. Empty strings
+the pure-Python dynamic program, measured on the case-folded texts
+when `case_sensitive=False`, so casefold's character expansion —
+`ß`→`ss`, `ﬃ`→`ffi` — cannot push the real matrix past the limit)
+raise a `ValueError`. Empty strings
 are valid — their distance to a text is that text's length. Every
 result carries the mode, the input lengths, the resolved
 `case_sensitive` flag, and the underlying `distance` in

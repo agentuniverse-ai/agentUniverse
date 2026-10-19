@@ -40,8 +40,11 @@ to both inputs before measuring, giving case-insensitive comparison.
 Input validation is strict and happens before any computation:
 malformed parameters (unknown mode or metric, non-string inputs,
 texts over 10,000 characters each, or a character-count product over
-4,000,000 — the pure-Python DP matrix bound) raise a ``ValueError``,
-mirroring the other common tools. There are no content-level failure
+4,000,000 — the pure-Python DP matrix bound, measured on the
+case-folded texts the dynamic program actually runs on, so
+casefold's character expansion cannot push the real matrix past the
+limit) raise a ``ValueError``, mirroring the other common tools.
+There are no content-level failure
 modes: every pair of valid strings has a well-defined distance, so
 results are always returned, never raised.
 """
@@ -123,12 +126,22 @@ class TextDistanceTool(Tool):
             ValueError: If any parameter is malformed (unknown mode or
                 metric, non-string texts, texts over ``max_chars``
                 characters, or a length product over
-                ``max_matrix_cells``).
+                ``max_matrix_cells`` — measured after ``casefold()``
+                when ``case_sensitive=False``, since casefold can
+                expand characters).
         """
         if mode not in self.MODES:
             self._invalid(f"mode must be one of: {', '.join(self.MODES)} (got {mode!r})")
         clean_a = self._validate_text("text_a", text_a)
         clean_b = self._validate_text("text_b", text_b)
+        clean_case_sensitive = self._validate_case_sensitive(case_sensitive)
+        if not clean_case_sensitive:
+            clean_a = clean_a.casefold()
+            clean_b = clean_b.casefold()
+        # The cell bound guards the dynamic program, so it is checked on the
+        # (case-folded) texts the DP actually runs on: casefold can expand a
+        # character (e.g. "ß" -> "ss", "ﬃ" -> "ffi") and must not be able to
+        # push the real matrix past the limit.
         if len(clean_a) * len(clean_b) > self.max_matrix_cells:
             self._invalid(
                 f"len(text_a) * len(text_b) must not exceed "
@@ -136,10 +149,6 @@ class TextDistanceTool(Tool):
                 f"dynamic program (got {len(clean_a):,} x "
                 f"{len(clean_b):,} = {len(clean_a) * len(clean_b):,})"
             )
-        clean_case_sensitive = self._validate_case_sensitive(case_sensitive)
-        if not clean_case_sensitive:
-            clean_a = clean_a.casefold()
-            clean_b = clean_b.casefold()
 
         context: Dict[str, Any] = {
             "mode": mode,
@@ -169,13 +178,14 @@ class TextDistanceTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"text_distance_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, label: str, text: Any) -> str:
+    def _validate_text(self, label: str, text: Any) -> str:
         """Validate one input text (empty strings are well-defined)."""
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"{label} must be a string (got {text!r})")
-        if len(text) > 10_000:
-            cls._invalid(f"{label} exceeds the {10_000:,}-character limit (got {len(text):,} characters)")
+            self._invalid(f"{label} must be a string (got {text!r})")
+        if len(text) > self.max_chars:
+            self._invalid(
+                f"{label} exceeds the {self.max_chars:,}-character limit (got {len(text):,} characters)"
+            )
         return text
 
     @classmethod
