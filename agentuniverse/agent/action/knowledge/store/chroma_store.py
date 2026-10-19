@@ -41,8 +41,10 @@ class ChromaStore(Store):
 
     def _new_client(self) -> Any:
         """Initialize the chroma client."""
-        if self.persist_path.startswith('http') or \
-                self.persist_path.startswith('https'):
+        if self.persist_path and (
+            self.persist_path.startswith('http') or
+            self.persist_path.startswith('https')
+        ):
             # Remote database URL
             parsed_url = urlparse(self.persist_path)
             settings = Settings(
@@ -50,11 +52,15 @@ class ChromaStore(Store):
                 chroma_server_host=parsed_url.hostname,
                 chroma_server_http_port=str(parsed_url.port)
             )
-        else:
+        elif self.persist_path:
+            # Local persistent database
             settings = Settings(
                 is_persistent=True,
                 persist_directory=self.persist_path
             )
+        else:
+            # In-memory only (no persistence path configured)
+            settings = Settings()
 
         client = chromadb.Client(settings)
         if self.collection is None:
