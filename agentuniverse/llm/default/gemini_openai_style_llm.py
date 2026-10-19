@@ -57,6 +57,12 @@ class GeminiOpenAIStyleLLM(OpenAIStyleLLM):
         return await super()._acall(messages, **kwargs)
 
     def max_context_length(self) -> int:
+        """Return the maximum context length for the configured Gemini model.
+
+        Uses the value configured on the parent class when set, otherwise
+        looks the model up in ``GEMINI_MAX_CONTEXT_LENGTH`` and falls back to
+        8000 for unknown models.
+        """
         if super().max_context_length():
             return super().max_context_length()
         return GEMINI_MAX_CONTEXT_LENGTH.get(self.model_name, 8000)  # Default context length if model not found
