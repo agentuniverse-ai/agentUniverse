@@ -1,0 +1,13 @@
+name: 'default_stepfun_llm'
+description: 'default stepfun llm powered by the StepFun models'
+model_name: 'step-2-16k'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${STEPFUN_API_KEY}'
+api_base: 'https://api.stepfun.com/v1'
+proxy: '${STEPFUN_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.stepfun_llm'
+  class: 'StepFunLLM'
