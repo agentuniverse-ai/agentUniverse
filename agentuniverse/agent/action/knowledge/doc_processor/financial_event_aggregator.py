@@ -517,6 +517,8 @@ Summary:"""
     def _generate_extractive_summary(self, docs: List[Document]) -> str:
         """Generate extractive summary (fallback method).
 
+        Keep short non-empty sentences as well as longer news excerpts.
+
         Args:
             docs: Documents to summarize.
 
@@ -528,7 +530,7 @@ Summary:"""
         for doc in docs[:5]:  # Limit to first 5 docs
             # Extract first sentence
             first_sentence = doc.text.split('.')[0] + '.'
-            if len(first_sentence) > 20:
+            if first_sentence.strip('. \t\r\n'):
                 summary_parts.append(first_sentence)
 
         summary = ' '.join(summary_parts)
@@ -632,8 +634,10 @@ Summary:"""
         keywords = set(['financial_event', cluster.event_type])
         keywords.update(cluster.entities_involved)
 
-        # Create aggregated document
+        # Source-cluster identity stays stable when the summary changes and
+        # separates independent events that happen to have identical summaries.
         aggregated_doc = Document(
+            id=cluster.event_id,
             text=summary,
             metadata=metadata,
             keywords=keywords
