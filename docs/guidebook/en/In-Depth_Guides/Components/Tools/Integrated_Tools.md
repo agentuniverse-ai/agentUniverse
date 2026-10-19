@@ -634,3 +634,55 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## CIDR Calculator Tool
+
+`CidrCalculatorTool` is an IPv4 / IPv6 network calculator built purely on
+the Python standard library `ipaddress` module, with zero network access.
+It covers the CIDR plumbing agents often need: `info` mode returns a full
+network report for a CIDR (`"192.168.1.0/24"`) or an address plus a
+separate `prefix` argument (netmask, wildcard mask, broadcast address,
+first/last address, network size, and for IPv4 the first/last usable host
+plus the usable host count, counting every address of a `/31` or `/32` as
+usable per RFC 3021); `contains` mode checks a list of addresses against
+one network with a per-address verdict; `subnet` mode splits a network
+into equal subnets of a longer prefix, returning the total count and the
+first subnets with capped output; `supernet` mode computes the enclosing
+network of a shorter prefix; `ip_info` mode classifies a single address
+(private / global / loopback / link-local / multicast / reserved, plus a
+single `type` label) and reports its compressed and exploded forms and
+integer value; and `summarize` mode collapses a list of addresses and
+CIDRs into minimal merged summary ranges, summarizing IPv4 and IPv6
+inputs in separate groups.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.cidr_calculator_tool import CidrCalculatorTool
+
+tool = CidrCalculatorTool()
+report = tool.execute(mode="info", network="192.168.1.0/24")
+# {'mode': 'info', 'network': '192.168.1.0/24', 'prefix': 24,
+#  'netmask': '255.255.255.0', 'wildcard_mask': '0.0.0.255',
+#  'broadcast_address': '192.168.1.255', 'size': 256,
+#  'first_usable_host': '192.168.1.1', 'last_usable_host': '192.168.1.254', ...}
+verdicts = tool.execute(mode="contains", network="10.0.0.0/8", addresses=["10.1.2.3", "192.168.1.1"])
+split = tool.execute(mode="subnet", network="10.0.0.0/8", new_prefix=16)
+summary = tool.execute(mode="summarize", networks=["192.168.0.0/24", "192.168.1.0/24"])
+# {'mode': 'summarize', 'summary': ['192.168.0.0/23'], 'count': 1, ...}
+```
+
+Inputs are validated strictly before any computation: malformed parameters
+(unknown mode, wrong types, missing required arguments, non-integer
+prefixes, empty or non-list inputs, lists over 256 items) raise a
+`ValueError`. Errors that depend on the content being processed — an
+invalid address, an invalid network, a prefix outside the address
+family's range, a `new_prefix` that is not a strict refinement of the
+input network, and a network whose host bits are set (e.g.
+`192.168.1.5/24`) — are returned as a structured `error` payload
+(`{"type": ..., "message": ...}`) that includes the offending token and,
+for host bits set, both the strict and the normalized interpretation,
+instead of raising. Subnet output is capped at 256 subnets per response
+with a `truncated` flag and the full count. All results are
+deterministic; the tool performs no DNS resolution or any other network
+activity, so `ip_info` classifications reflect the IANA special-purpose
+registries as encoded by the local Python version, not live routing
+data.
