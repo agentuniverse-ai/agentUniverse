@@ -1,0 +1,47 @@
+name: youtube_tool
+description: YouTube Data API v3 tool — search YouTube videos by keyword (mode='search') and fetch video details and statistics such as views, likes, comments and duration for one or more video IDs (mode='videos'). Requires the YOUTUBE_API_KEY environment variable.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.youtube_tool
+  class: YouTubeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Query mode — search (keyword video search) or videos (details/statistics for known video IDs).
+    required: true
+  query:
+    type: string
+    description: Search keywords, required in search mode (e.g. 'machine learning tutorial'). Ignored in videos mode.
+    required: false
+  video_id:
+    type: string
+    description: One YouTube video ID (exactly 11 characters) or a comma-separated list of up to 10 IDs, required in videos mode. Ignored in search mode.
+    required: false
+  max_results:
+    type: integer
+    description: Number of results to return (search mode only), from 1 to 25.
+    required: false
+    default: 5
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["search", "videos"]
+      description: Query mode.
+    query:
+      type: string
+      description: Search keywords (search mode only).
+    video_id:
+      type: string
+      description: Video ID or comma-separated list of up to 10 IDs (videos mode only).
+    max_results:
+      type: integer
+      default: 5
+      minimum: 1
+      maximum: 25
+      description: Result count bound (search mode only).
+  required: ["mode"]
