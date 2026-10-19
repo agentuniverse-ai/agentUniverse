@@ -22,4 +22,3 @@ class ServerApplication:
 
 if __name__ == "__main__":
     ServerApplication.start()
-    

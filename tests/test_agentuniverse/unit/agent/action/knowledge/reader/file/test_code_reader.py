@@ -15,8 +15,10 @@ from agentuniverse.agent.action.knowledge.reader.file.code_reader import CodeRea
 
 
 class TestCodeReader(unittest.TestCase):
+    """Unit tests for CodeReader loading source files of several languages."""
 
     def setUp(self):
+        """Create a fresh CodeReader, temp dir, and sample source files for each test."""
         self.reader = CodeReader()
         self.temp_dir = tempfile.TemporaryDirectory()
         self.py_code: str = '''
@@ -85,9 +87,11 @@ impl Config {
             f.write(self.rs_code)
 
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         self.temp_dir.cleanup()
 
     def test_load_python(self):
+        """A .py file loads as one document with python language metadata."""
         docs = self.reader._load_data(os.path.join(self.temp_dir.name, "test.py"))
         self.assertEqual(len(docs), 1)
         self.assertEqual(docs[0].text, self.py_code)
@@ -96,6 +100,7 @@ impl Config {
         self.assertEqual(docs[0].metadata["file_name"], "test.py")
 
     def test_load_java(self):
+        """A .java file loads as one document with java language metadata."""
         docs = self.reader._load_data(os.path.join(self.temp_dir.name, "test.java"))
         self.assertEqual(len(docs), 1)
         self.assertEqual(docs[0].text, self.java_code)
@@ -104,6 +109,7 @@ impl Config {
         self.assertEqual(docs[0].metadata["file_name"], "test.java")
 
     def test_load_rust(self):
+        """A .rs file loads as one document with rust language metadata."""
         docs = self.reader._load_data(os.path.join(self.temp_dir.name, "test.rs"))
         self.assertEqual(len(docs), 1)
         self.assertEqual(docs[0].text, self.rs_code)

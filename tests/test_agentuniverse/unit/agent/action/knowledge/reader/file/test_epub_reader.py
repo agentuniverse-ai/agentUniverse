@@ -78,19 +78,19 @@ class TestEpubReader(unittest.TestCase):
             self.skipTest("EbookLib not available for testing")
 
         self.create_test_epub()
-        
+
         # Test loading the EPUB
         documents = self.reader._load_data(self.test_epub_path)
-        
+
         # Verify results
         self.assertIsInstance(documents, list)
         self.assertGreater(len(documents), 0)
-        
+
         # Check document content
         doc = documents[0]
         self.assertIn("Test Chapter", doc.text)
         self.assertIn("test paragraph", doc.text)
-        
+
         # Check metadata
         metadata = doc.metadata
         self.assertEqual(metadata['title'], 'Test Book')
@@ -108,14 +108,14 @@ class TestEpubReader(unittest.TestCase):
             self.skipTest("EbookLib not available for testing")
 
         self.create_test_epub()
-        
+
         custom_metadata = {
             "custom_field": "custom_value",
             "processing_date": "2024-12-19"
         }
-        
+
         documents = self.reader._load_data(self.test_epub_path, ext_info=custom_metadata)
-        
+
         # Check that custom metadata is included
         doc = documents[0]
         self.assertEqual(doc.metadata['custom_field'], 'custom_value')
@@ -124,7 +124,7 @@ class TestEpubReader(unittest.TestCase):
     def test_load_data_file_not_found(self):
         """Test handling of non-existent file"""
         non_existent_file = os.path.join(self.temp_dir, "non_existent.epub")
-        
+
         with self.assertRaises(Exception):
             self.reader._load_data(non_existent_file)
 
@@ -134,7 +134,7 @@ class TestEpubReader(unittest.TestCase):
         invalid_epub_path = os.path.join(self.temp_dir, "invalid.epub")
         with open(invalid_epub_path, 'w') as f:
             f.write("This is not a valid EPUB file")
-        
+
         try:
             with self.assertRaises(Exception):
                 self.reader._load_data(invalid_epub_path)
@@ -154,13 +154,13 @@ class TestEpubReader(unittest.TestCase):
         </body>
         </html>
         '''
-        
+
         result = self.reader._extract_text_from_html(html_content)
-        
+
         # Should contain text content
         self.assertIn("Header", result)
         self.assertIn("This is a test paragraph", result)
-        
+
         # Should not contain script or style content
         self.assertNotIn("console.log", result)
         self.assertNotIn("color: red", result)
@@ -175,9 +175,9 @@ class TestEpubReader(unittest.TestCase):
         </body>
         </html>
         '''
-        
+
         result = self.reader._extract_text_with_regex(html_content)
-        
+
         # Should extract text and decode entities
         self.assertIn("Header", result)
         self.assertIn("Test & example with <tags>", result)
@@ -192,13 +192,13 @@ class TestEpubReader(unittest.TestCase):
             self.skipTest("EbookLib not available for testing")
 
         self.create_test_epub()
-        
+
         # Test with string path
         documents1 = self.reader._load_data(self.test_epub_path)
-        
+
         # Test with Path object
         documents2 = self.reader._load_data(Path(self.test_epub_path))
-        
+
         # Both should produce same results
         self.assertEqual(len(documents1), len(documents2))
         self.assertEqual(documents1[0].text, documents2[0].text)
@@ -228,7 +228,7 @@ class TestEpubReader(unittest.TestCase):
         </body>
         </html>
         '''
-        
+
         book.add_item(empty_chapter)
         book.toc = (epub.Link("empty.xhtml", "Empty", "empty"),)
         book.add_item(epub.EpubNcx())
@@ -236,7 +236,7 @@ class TestEpubReader(unittest.TestCase):
         book.spine = ['nav', empty_chapter]
 
         empty_epub_path = os.path.join(self.temp_dir, "empty.epub")
-        
+
         try:
             epub.write_epub(empty_epub_path, book, {})
             documents = self.reader._load_data(empty_epub_path)
