@@ -19,7 +19,7 @@ class GRRAgentTest(unittest.TestCase):
         """Set up test environment by starting AgentUniverse."""
         AgentUniverse().start(config_path='grr_agent_app/config/config.toml')
 
-    def test_grr_agent_basic(self):
+    def test_grr_agent_basic(self) -> None:
         """Test basic GRR agent functionality.
 
         Tests the overall process of GRR agents:
@@ -35,7 +35,7 @@ class GRRAgentTest(unittest.TestCase):
         result_dict = result.to_dict()
         self.assertIn('output', result_dict)
 
-    def test_grr_agent_content_generation(self):
+    def test_grr_agent_content_generation(self) -> None:
         """Test GRR agent for content generation tasks."""
         instance: Agent = AgentManager().get_instance_obj('demo_grr_agent')
         result = instance.run(input='为一家科技公司撰写一段产品介绍，突出创新性和用户体验')
@@ -45,7 +45,7 @@ class GRRAgentTest(unittest.TestCase):
         result_dict = result.to_dict()
         self.assertIn('output', result_dict)
 
-    def test_grr_agent_creative_writing(self):
+    def test_grr_agent_creative_writing(self) -> None:
         """Test GRR agent for creative writing tasks."""
         instance: Agent = AgentManager().get_instance_obj('demo_grr_agent')
         result = instance.run(input='写一个关于未来城市生活的简短故事开头')
