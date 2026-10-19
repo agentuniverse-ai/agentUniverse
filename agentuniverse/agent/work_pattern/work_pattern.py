@@ -61,4 +61,9 @@ class WorkPattern(ComponentBase):
         return self
 
     def set_by_agent_model(self, **kwargs):
+        """Bind the member agent templates on the work pattern.
+        
+        Base implementation is a no-op; subclasses store the agent templates
+        provided through the keyword arguments.
+        """
         pass
