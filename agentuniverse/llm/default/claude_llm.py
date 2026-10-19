@@ -106,6 +106,8 @@ class ClaudeLLM(LLM):
 
     @staticmethod
     def parse_result(data):
+        if not data.content:
+            raise ValueError("Claude LLM returned a response with no content blocks")
         text = data.content[0].text
         if not text:
             return
