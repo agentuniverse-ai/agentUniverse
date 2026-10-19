@@ -634,3 +634,9 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## 5. Text Tools
+
+### RegexTool
+
+`RegexTool` provides match, extract, replace, and split operations using Python's built-in `re` module — zero third-party dependency. Resolve the built-in `regex_tool` component. Operations: `match` (first match with groups), `extract` (all matches, bounded by `max_matches`), `replace` (supports group references like `\1`), `split`. Flags: `i` (case-insensitive), `m` (multiline), `s` (dotall), `x` (verbose). Invalid patterns return a structured error.
