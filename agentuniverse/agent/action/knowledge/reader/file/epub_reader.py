@@ -33,6 +33,7 @@ class EpubReader(Reader):
     Used to read and parse EPUB format e-books, supports chapter extraction and metadata parsing.
     Block elements and explicit line breaks separate extracted text with spaces;
     inline formatting preserves adjacent text within a word.
+    Read raw chapter content so direct body text is retained; omit HTML head metadata.
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
@@ -80,8 +81,8 @@ class EpubReader(Reader):
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapter_count += 1
                 
-                # Extract text content from HTML
-                content = item.get_content().decode('utf-8', errors='ignore')
+                # Regenerating EpubHtml drops text before the body's first child.
+                content = item.content.decode('utf-8', errors='ignore')
                 text_content = self._extract_text_from_html(content)
                 
                 if text_content.strip():  # Only add non-empty chapters
@@ -116,6 +117,9 @@ class EpubReader(Reader):
             return self._extract_text_with_regex(html_content)
         
         soup = BeautifulSoup(html_content, 'html.parser')
+
+        for head in soup.find_all("head"):
+            head.decompose()
         
         # Remove script and style elements
         for script in soup(["script", "style"]):
@@ -143,8 +147,12 @@ class EpubReader(Reader):
         Returns:
             str: Extracted plain text
         """
+        # Raw chapters retain metadata and comments that EpubHtml regenerated away.
+        text = re.sub(r'<!--.*?-->', '', html_content, flags=re.DOTALL)
+        text = re.sub(r'<head\b[^>]*>.*?</head\s*>', '', text,
+                      flags=re.IGNORECASE | re.DOTALL)
         # Add boundaries before stripping tags or decoding escaped literal markup.
-        text = _HTML_BLOCK_PATTERN.sub(' ', html_content)
+        text = _HTML_BLOCK_PATTERN.sub(' ', text)
         text = re.sub(r'<[^>]+>', '', text)
     
         text = text.replace('&amp;', '&')
