@@ -66,10 +66,14 @@ class HierarchicalRegexTextSplitter(DocProcessor):
                 match = pattern.match(line)
                 if match:
                     _ptr = levels.index((level_name, pattern))
-                    parent_level = \
-                        levels[_ptr - 1][0] if _ptr > 0 else 'root'
-                    parent_id = current_level[parent_level].id if \
-                        current_level[parent_level] else 'root'
+                    # A new ancestor closes the previous descendant branch.
+                    for deeper_level, _ in levels[_ptr + 1:]:
+                        current_level[deeper_level] = None
+                    parent_id = 'root'
+                    for ancestor_level, _ in reversed(levels[:_ptr]):
+                        if current_level[ancestor_level] is not None:
+                            parent_id = current_level[ancestor_level].id
+                            break
                     # use uuid4 to generate a random id, because chapter name can always duplicate
                     node = Document(
                         id=str(uuid.uuid4()),
