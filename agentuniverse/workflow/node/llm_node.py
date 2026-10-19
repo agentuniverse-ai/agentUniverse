@@ -33,6 +33,8 @@ class LLMNode(Node):
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
         inputs: LLMNodeInputParams = self._data.inputs
+        if inputs is None:
+            raise ValueError("LLM node inputs are required.")
 
         param_map = {
             'model_name': None,
@@ -41,16 +43,16 @@ class LLMNode(Node):
             'id': None
         }
 
-        for llm_param in inputs.llm_param:
+        for llm_param in inputs.llm_param or []:
             if llm_param.name in param_map:
                 if isinstance(llm_param.value, str):
                     param_map[llm_param.name] = llm_param.value
-                else:
+                elif isinstance(llm_param.value, dict):
                     param_map[llm_param.name] = llm_param.value.get('content', None)
 
         model_name = param_map['model_name']
         temperature = param_map['temperature']
-        prompt = param_map['prompt']
+        prompt = param_map['prompt'] or ''
         llm_id = param_map['id']
 
         llm: LLM = LLMManager().get_instance_obj(llm_id)
@@ -63,7 +65,7 @@ class LLMNode(Node):
         else:
             llm.set_by_agent_model(temperature=temperature)
 
-        llm_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
+        llm_input_params = self._resolve_input_params(inputs.input_param or [], workflow_output)
         for variable in input_variables:
             if variable not in llm_input_params:
                 raise ValueError(f"The variable {variable} is not found in the input params.")
@@ -73,7 +75,9 @@ class LLMNode(Node):
         llm_output: LLMOutput = llm.call(messages=messages, streaming=False)
 
         # handle output parameters
-        output_params: List[NodeOutputParams] = self._data.outputs
+        output_params: List[NodeOutputParams] = self._data.outputs or []
+        if not output_params:
+            raise ValueError("LLM node outputs are required.")
         output_params[0].value = llm_output.text
         workflow_output.workflow_parameters[self.id] = output_params
 
