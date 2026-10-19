@@ -205,14 +205,14 @@ class MultiQueryParaphraser(QueryParaphraser):
         variants: list[str] = []
         seen: set[str] = set()
         for line in text.splitlines():
-            variant = _normalize_variant(line)
+            variant = _normalize_variant(line)[: self.max_query_chars].strip()
             if not variant:
                 continue
             folded = " ".join(variant.split()).casefold()
             if folded == original_folded or folded in seen:
                 continue
             seen.add(folded)
-            variants.append(variant[: self.max_query_chars])
+            variants.append(variant)
             if len(variants) >= self.num_queries:
                 break
         return variants

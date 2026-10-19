@@ -87,6 +87,14 @@ class TestMultiQueryParsing(unittest.TestCase):
         query = _paraphrase("q", llm, max_query_chars=50)
         self.assertEqual(len(query.ext_info["multi_query_variants"][0]), 50)
 
+    def test_variants_deduplicated_after_truncation(self) -> None:
+        query = _paraphrase("q", _fake_llm("1. Same prefix one\n2. SAME prefix two\n3. other"), max_query_chars=11)
+        self.assertEqual(query.ext_info["multi_query_variants"], ["Same prefix", "other"])
+
+    def test_variant_equal_to_original_after_truncation_dropped(self) -> None:
+        query = _paraphrase("reset", _fake_llm("1. RESET extra\n2. other"), max_query_chars=5)
+        self.assertEqual(query.ext_info["multi_query_variants"], ["other"])
+
     def test_normalize_variant_helper(self) -> None:
         self.assertEqual(_normalize_variant("  3、  'hello'  "), "hello")
         self.assertEqual(_normalize_variant("no decoration"), "no decoration")
