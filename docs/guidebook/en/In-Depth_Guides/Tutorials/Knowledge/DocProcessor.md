@@ -309,3 +309,35 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [KeywordInContextConcentrator](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/keyword_in_context_concentrator.yaml)
+
+This component concentrates keyword-in-context (KWIC) snippets into document metadata, addressing the *knowledge extraction / indexing* direction of issue #258. Retrieval answers "which documents mention the terms?" but rarely preserves *where* or *in what wording* they appear; consumers that need evidence — snippet panels in a search UI, citation displays, agents that must quote a source precisely — otherwise re-scan full texts at display time. For every occurrence of each keyword this processor extracts the surrounding `window_size` characters and stamps the windows into `metadata[kwic_key]`, ready for snippet display; the document text itself is never modified. It is the inverse of `JiebaKeywordExtractor`: that component discovers which keywords a document contains, this one zooms in on where keywords you already care about occur.
+
+Keywords come from two sources merged in a fixed order: the static `keywords` list (config order, deduplicated) — suited to pre-insertion pre-processing with fixed domain terms — and, when `use_query_keywords` is true, the query's own keyword set, sorted alphabetically so output never depends on set iteration order (recall-time usage). Matching is substring search refined with word boundaries where they make sense: a `\b` boundary is required at each ASCII keyword edge, so `rate` matches `rate` but not `rates` or `generate`; CJK edges get no boundary requirement because Chinese/Japanese do not separate words with spaces (a `\b` between two CJK characters never holds), so `利率` still matches inside `利率风险`. Matching is case-insensitive unless `case_sensitive`; overlapping occurrences of the same keyword follow regex non-overlapping semantics, while different keywords may match the same span and are each reported.
+
+Each snippet records the keyword, its `start` / `end` offsets in the original text, and a display-ready `context`: the surrounding window with whitespace runs collapsed to single spaces and `…` markers on the sides where the window was clipped by a document edge (no marker means the window reaches a real boundary). At most `max_snippets` snippets are stored in text order, while `total_occurrences` and the per-keyword `counts` (zero-hit keywords included) always cover every match. Documents with fewer than `min_occurrences` total matches can be dropped (default 0 keeps everything — stamp-only). The whole pipeline is pure Python, offline and deterministic.
+
+The component definition file is as follows:
+```yaml
+name: 'keyword_in_context_concentrator'
+description: 'extract keyword-in-context windows around keyword occurrences into metadata for snippet display'
+keywords: ['rate', 'inflation']   # static keywords, in this order
+use_query_keywords: true          # merge the query's keyword set
+window_size: 60                   # context characters per side
+max_snippets: 10                  # snippets stored per document
+min_occurrences: 0                # 0 = stamp-only, no filtering
+case_sensitive: false             # match regardless of case
+kwic_key: 'kwic'                  # metadata key for the record; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.keyword_in_context_concentrator'
+  class: 'KeywordInContextConcentrator'
+```
+- keywords: Static keyword list applied to every batch, in config order; duplicates and blank entries are dropped.
+- use_query_keywords: When true (default), the query's keyword set is merged into the effective keywords, alphabetically sorted after the static list.
+- window_size: Characters of context kept on each side of an occurrence; 0 narrows the snippet to the keyword itself.
+- max_snippets: Maximum snippets stored per document (in text order); counters always cover every occurrence.
+- min_occurrences: Minimum total keyword occurrences for a document to be kept; 0 (default) keeps every document.
+- case_sensitive: When false (default), keywords match regardless of case.
+- kwic_key: Metadata key the concordance record (`{keywords, total_occurrences, counts, snippets}`) is written to on kept documents; an empty value disables stamping.
