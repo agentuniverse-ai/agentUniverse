@@ -5,7 +5,8 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: workflow.py
-from typing import Callable, Optional
+from collections.abc import Mapping
+from typing import Any, Callable, Optional
 
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
@@ -26,6 +27,7 @@ class Workflow(ComponentBase):
 
     class Config:
         """Configuration for this pydantic object."""
+
         arbitrary_types_allowed = True
 
     def __init__(self, **kwargs):
@@ -36,14 +38,23 @@ class Workflow(ComponentBase):
         appname = ApplicationConfigManager().app_configer.base_info_appname
         return f'{appname}.{self.component_type.value.lower()}.{self.id}'
 
+    def _identity(self) -> str:
+        """Return the workflow identifier used in error messages."""
+        return self.id or self.name or "<unnamed>"
+
     def build(self) -> 'Workflow':
         if self.graph_config is None:
-            raise ValueError('The graph config is None.')
+            message = (
+                f"Workflow '{self._identity()}' cannot be built because "
+                "its graph configuration is missing. "
+                "Please check the 'graph' field in the workflow configuration."
+            )
+            raise ValueError(message)
         self.graph = Graph().build(self.id, self.graph_config)
         return self
 
     def run(self, input_params: Optional[dict] = None, *,
-            resume_from: Optional[WorkflowOutput | str | bytes | dict] = None,
+            resume_from: Optional[WorkflowOutput | str | bytes | Mapping[str, Any]] = None,
             checkpoint_callback: Optional[Callable[[WorkflowOutput], None]] = None) -> WorkflowOutput:
         """Run a new workflow or resume one from a durable checkpoint.
 
@@ -53,7 +64,11 @@ class Workflow(ComponentBase):
         ``resume_from`` without re-running completed nodes.
         """
         if self.graph is None:
-            raise ValueError('The graph of the workflow is None.')
+            message = (
+                f"Workflow '{self._identity()}' has not been built. "
+                "Call build() successfully before run()."
+            )
+            raise ValueError(message)
         if resume_from is None:
             workflow_output = WorkflowOutput(
                 workflow_id=self.id,
@@ -72,7 +87,7 @@ class Workflow(ComponentBase):
         self.graph.run(workflow_output, checkpoint_callback=checkpoint_callback)
         return workflow_output
 
-    def resume(self, checkpoint: WorkflowOutput | str | bytes | dict, *,
+    def resume(self, checkpoint: WorkflowOutput | str | bytes | Mapping[str, Any], *,
                checkpoint_callback: Optional[Callable[[WorkflowOutput], None]] = None) -> WorkflowOutput:
         """Resume this workflow from an object, mapping, or JSON checkpoint."""
         return self.run(
@@ -81,14 +96,15 @@ class Workflow(ComponentBase):
         )
 
     @staticmethod
-    def _restore_checkpoint(checkpoint: WorkflowOutput | str | bytes | dict) -> WorkflowOutput:
+    def _restore_checkpoint(
+            checkpoint: WorkflowOutput | str | bytes | Mapping[str, Any]) -> WorkflowOutput:
         if isinstance(checkpoint, WorkflowOutput):
             return checkpoint.model_copy(deep=True)
         if isinstance(checkpoint, (str, bytes)):
             return WorkflowOutput.from_checkpoint_json(checkpoint)
-        if isinstance(checkpoint, dict):
-            return WorkflowOutput.model_validate(checkpoint)
-        raise TypeError('checkpoint must be a WorkflowOutput, dict, JSON string, or bytes.')
+        if isinstance(checkpoint, Mapping):
+            return WorkflowOutput.model_validate(dict(checkpoint))
+        raise TypeError('checkpoint must be a WorkflowOutput, mapping, JSON string, or bytes.')
 
     def initialize_by_component_configer(self, component_configer: WorkflowConfiger) -> 'Workflow':
         """Initialize the Workflow by the ComponentConfiger object.
@@ -98,6 +114,7 @@ class Workflow(ComponentBase):
         Returns:
             Workflow: the Workflow object
         """
+        super().initialize_by_component_configer(component_configer)
         if component_configer.id:
             self.id = component_configer.id
         if component_configer.name:

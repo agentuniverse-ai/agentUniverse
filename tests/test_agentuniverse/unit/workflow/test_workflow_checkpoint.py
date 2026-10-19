@@ -1,3 +1,4 @@
+from types import MappingProxyType
 from typing import ClassVar
 
 import pytest
@@ -24,6 +25,11 @@ class _RecordingNode(Node):
 
 class _Interruption(RuntimeError):
     pass
+
+
+class _FailedNode(Node):
+    def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        return NodeOutput(node_id=self.id, status=NodeStatusEnum.FAILED)
 
 
 def _workflow() -> Workflow:
@@ -113,3 +119,37 @@ def test_resume_rejects_changed_start_parameters():
 
     with pytest.raises(ValueError, match="Input parameters"):
         workflow.run({"input": "changed"}, resume_from=checkpoint)
+
+
+def test_checkpoint_callback_is_not_called_for_failed_nodes():
+    graph = Graph()
+    graph.add_node(
+        "start",
+        instance=_FailedNode(id="start", type=NodeEnum.START, data={}),
+        type=NodeEnum.START.value,
+    )
+    workflow = Workflow(id="durable-workflow", graph=graph)
+    checkpoints = []
+
+    workflow.run(checkpoint_callback=checkpoints.append)
+
+    assert checkpoints == []
+
+
+def test_resume_accepts_read_only_mapping_checkpoint():
+    _RecordingNode.calls = {}
+    workflow = _workflow()
+    checkpoint = MappingProxyType({
+        "workflow_id": "durable-workflow",
+        "workflow_start_params": {},
+        "workflow_node_results": {
+            "start": {
+                "node_id": "start",
+                "status": NodeStatusEnum.SUCCEEDED,
+            },
+        },
+    })
+
+    result = workflow.resume(checkpoint)
+
+    assert set(result.workflow_node_results) == {"start", "work", "end"}

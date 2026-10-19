@@ -24,6 +24,8 @@ class Graph(nx.DiGraph):
         nodes_config = config.get('nodes')
         if not nodes_config:
             raise ValueError('The nodes configuration is empty')
+        if sum(node.get('type') == NodeEnum.START.value for node in nodes_config) != 1:
+            raise ValueError('The workflow graph must contain exactly one start node')
         for node_config in nodes_config:
             self._add_graph_node(workflow_id, node_config)
         edges_config = config.get('edges')
@@ -31,6 +33,9 @@ class Graph(nx.DiGraph):
             raise ValueError('The edges configuration is empty')
         for edge_config in edges_config:
             self._add_graph_edge(edge_config)
+        start_id = next(node['id'] for node in nodes_config if node['type'] == NodeEnum.START.value)
+        if self.in_degree(start_id):
+            raise ValueError('The start node must not have incoming edges')
         if not nx.is_directed_acyclic_graph(self):
             raise ValueError("The provided configuration does not form a DAG.")
         return self
@@ -81,8 +86,11 @@ class Graph(nx.DiGraph):
             if self._has_node_been_executed(workflow_output, next_node.id):
                 predecessor_node = next_node
                 continue
-            self._run_node(cur_node=next_node, workflow_output=workflow_output)
-            if checkpoint_callback:
+            node_output = self._run_node(
+                cur_node=next_node,
+                workflow_output=workflow_output,
+            )
+            if checkpoint_callback and node_output.status == NodeStatusEnum.SUCCEEDED:
                 checkpoint_callback(workflow_output.model_copy(deep=True))
             if next_node.type == NodeEnum.END:
                 break
@@ -134,7 +142,7 @@ class Graph(nx.DiGraph):
 
     @staticmethod
     def _run_node(cur_node: Node = None,
-                  workflow_output: WorkflowOutput = None) -> None:
+                  workflow_output: WorkflowOutput = None) -> NodeOutput:
         """Run the node in the graph.
 
         Args:
@@ -143,3 +151,4 @@ class Graph(nx.DiGraph):
         """
         node_output = cur_node.run(workflow_output)
         workflow_output.workflow_node_results[cur_node.id] = node_output
+        return node_output
