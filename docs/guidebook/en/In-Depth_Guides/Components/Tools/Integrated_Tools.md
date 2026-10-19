@@ -634,3 +634,51 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Date Range Tool
+
+`DateRangeTool` is an interval set-operations utility for calendar ranges,
+built purely on the Python standard library (`datetime.date`) with zero
+network access. It is distinct from `DateTimeTool` (single-datetime
+parsing, formatting and arithmetic) and `DurationTool` (duration
+arithmetic): it works on *ranges of calendar days* given as
+`[start, end]` ISO date pairs where both ends are inclusive — a range
+`["2026-01-01", "2026-01-03"]` covers three days, and all day counts
+follow that convention. `intersect` returns the overlap range and its
+day count, or `None` with the number of gap days when the ranges do
+not meet; `union` merges two ranges into one when they overlap or touch
+on adjacent days, otherwise returns both with the gap; `contains`
+gives per-date containment verdicts (boundary dates count as
+contained); `overlaps` reports whether two ranges share at least one
+day plus the shared day count; `gap` counts the calendar days strictly
+between two ranges (0 when they overlap or touch, symmetric in the
+argument order); `subtract` removes range B from range A and returns
+the remaining sub-range(s) with the removed day count; and
+`multi_merge` coalesces an arbitrary list of ranges into the sorted,
+non-overlapping minimal list — the calendar-coalescing primitive for
+scheduling agents.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.date_range_tool import DateRangeTool
+
+tool = DateRangeTool()
+overlap = tool.execute(mode="intersect", range_a=["2026-01-01", "2026-01-10"],
+                       range_b=["2026-01-05", "2026-01-20"])
+# {'intersection': ['2026-01-05', '2026-01-10'], 'days': 6, 'gap_days': 0, ...}
+free = tool.execute(mode="subtract", range_a=["2026-01-01", "2026-01-31"],
+                    range_b=["2026-01-10", "2026-01-20"])
+# {'difference': [['2026-01-01', '2026-01-09'], ['2026-01-21', '2026-01-31']], ...}
+calendar = tool.execute(mode="multi_merge", ranges=[["2026-01-01", "2026-01-05"],
+                                                    ["2026-01-04", "2026-01-10"],
+                                                    ["2026-02-01", "2026-02-10"]])
+# {'merged': [['2026-01-01', '2026-01-10'], ['2026-02-01', '2026-02-10']], ...}
+```
+
+Inputs are validated strictly before any computation: an unknown mode, a
+range that is not a list/tuple of exactly two `YYYY-MM-DD` strings, a
+non-calendar date such as `2026-02-30` (including Feb 29 of non-leap
+years), `start` after `end`, missing or mis-typed arguments for the
+chosen mode, and empty or over-cap lists (1000 dates or ranges) raise a
+`ValueError` naming the offending parameter. Results are deterministic
+and correct across month, year, and leap-February boundaries because
+all arithmetic runs on `datetime.date` ordinals.

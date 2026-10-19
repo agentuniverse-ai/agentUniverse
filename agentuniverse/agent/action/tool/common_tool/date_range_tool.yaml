@@ -1,0 +1,70 @@
+name: date_range_tool
+description: Date range tool — pure Python stdlib interval set operations on inclusive [start, end] ISO date pairs. Intersection with gap reporting (mode='intersect'), union merging overlapping or adjacent ranges (mode='union'), per-date containment verdicts (mode='contains'), overlap test with shared day count (mode='overlaps'), gap day count between ranges (mode='gap'), range subtraction into remaining sub-ranges (mode='subtract'), and many-range coalescing into a sorted non-overlapping list (mode='multi_merge').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.date_range_tool
+  class: DateRangeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — intersect, union, contains, overlaps, gap, subtract or multi_merge.
+    required: true
+  range_a:
+    type: array
+    description: First range as [start, end] ISO date strings (YYYY-MM-DD), both ends inclusive. Required for every mode except multi_merge; the base range of subtract and the container range of contains.
+    required: false
+  range_b:
+    type: array
+    description: Second range in the same form. Required for intersect, union, overlaps, gap and subtract; not used by contains or multi_merge.
+    required: false
+  dates:
+    type: array
+    description: List of ISO date strings (YYYY-MM-DD) checked against range_a. Required for the contains mode.
+    required: false
+  ranges:
+    type: array
+    description: List of [start, end] ranges to coalesce. Required for the multi_merge mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["intersect", "union", "contains", "overlaps", "gap", "subtract", "multi_merge"]
+      description: Date-range set operation.
+    range_a:
+      type: array
+      items:
+        type: string
+        format: date
+      minItems: 2
+      maxItems: 2
+      description: Inclusive [start, end] range (ISO YYYY-MM-DD pair).
+    range_b:
+      type: array
+      items:
+        type: string
+        format: date
+      minItems: 2
+      maxItems: 2
+      description: Inclusive [start, end] range (ISO YYYY-MM-DD pair).
+    dates:
+      type: array
+      items:
+        type: string
+        format: date
+      description: ISO dates to test against range_a (contains mode).
+    ranges:
+      type: array
+      items:
+        type: array
+        items:
+          type: string
+          format: date
+        minItems: 2
+        maxItems: 2
+      description: Ranges to coalesce (multi_merge mode).
+  required: ["mode"]
