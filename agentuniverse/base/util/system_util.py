@@ -88,7 +88,7 @@ def get_module_path(yaml_path: str, root_name: str) -> str:
         # Find the position of the root path
         root_index = path_parts.index(root_name)
     except ValueError:
-        raise FileNotFoundError(f"Corresponding Python file not found for YAML file: {yaml_path}")
+        raise FileNotFoundError(f"Corresponding Python file not found for YAML file: {yaml_path}") from None
 
     # Extract the directory parts after the root path
     relevant_dirs = path_parts[root_index + 1:]
@@ -130,7 +130,7 @@ def process_yaml_func(func_expr: str, yaml_func_instance: Any) -> str:
         try:
             parsed_expr = ast.parse(func_expr, mode='eval')
         except SyntaxError as e:
-            raise ValueError(f"Invalid function expression: {func_expr}. Error: {e}")
+            raise ValueError(f"Invalid function expression: {func_expr}. Error: {e}") from e
 
         # Ensure the expression is a function call
         if not isinstance(parsed_expr.body, ast.Call):
@@ -150,14 +150,14 @@ def process_yaml_func(func_expr: str, yaml_func_instance: Any) -> str:
             try:
                 sig.bind(*args, **kwargs)  # Ensure arguments match the function signature
             except TypeError as e:
-                raise ValueError(f"Invalid arguments for method {func_name}: {e}")
+                raise ValueError(f"Invalid arguments for method {func_name}: {e}") from e
 
             # Call the method and return the result
             try:
                 res = func(*args, **kwargs)
                 return res
             except Exception as e:
-                raise Exception(f"Failed to execute method {func_name}: {str(e)}")
+                raise Exception(f"Failed to execute method {func_name}: {str(e)}") from e
         else:
             raise AttributeError(f"Method {func_name} not found in yaml_func_extension.py")
 
