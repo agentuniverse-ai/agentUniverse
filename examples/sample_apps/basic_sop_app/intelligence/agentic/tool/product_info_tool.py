@@ -10,8 +10,18 @@ from basic_sop_app.intelligence.utils.constant import product_b_info, product_c_
 
 
 class SearchProductInfoTool(Tool):
+    """Tool that composes insurance product descriptions for brands B and C from requested tags."""
 
     def execute(self, input: list):
+        """Compose the product description texts for brands B and C.
+
+        Args:
+            input (list): Tags of the product clauses to include (e.g. 'A'-'L').
+                The tag 'G' is skipped and 'K' is treated as 'L'.
+
+        Returns:
+            dict: Mapping of brand keys 'B' and 'C' to their extended descriptions.
+        """
         product_info_item_list = input
 
         product_b_description = product_b_info.BASE_PRODUCT_DESCRIPTION
