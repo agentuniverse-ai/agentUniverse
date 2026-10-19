@@ -286,8 +286,9 @@ class MarkdownBeautifyTool(Tool):
         """Convert setext headings to ATX and normalize ATX levels.
 
         With ``flatten`` (the beautify path) heading levels additionally
-        collapse to a gap-free hierarchy: the first level used becomes 1 and
-        each deeper level is at most one below the previous heading's.
+        collapse to a gap-free hierarchy: sibling headings (same original
+        level) share one normalized level, and no heading lands more than
+        one level below the shallowest heading seen so far.
 
         Args:
             text: Protected Markdown text.
@@ -542,7 +543,6 @@ class MarkdownBeautifyTool(Tool):
         # heading styles land in the same per-level counters and underline
         # lines are not mistaken for paragraphs or thematic breaks.
         lines = self._setext_to_atx(lines)
-        non_blank = [line for line in lines if line.strip()]
 
         headings: Dict[str, int] = {f"h{level}": 0 for level in range(1, 7)}
         paragraphs = 0
@@ -602,11 +602,17 @@ class MarkdownBeautifyTool(Tool):
         # syntax appearing inside code is not reported as document structure.
         links = len(_LINK_RE.findall(protected))
         images = len(_IMAGE_RE.findall(protected))
-        words = len(protected.split())
+        # Words come from the protected text with the placeholder sentinels
+        # removed, so code spans contribute no prose words (and the sentinels
+        # themselves are never counted). Line totals instead use the original
+        # text: a fenced block collapses to one placeholder line while
+        # scanning, but its lines are still document lines.
+        words = len(_PROTECT_RE.sub(" ", protected).split())
+        all_lines = text.split("\n")
 
         return {
-            "lines": len(lines),
-            "non_blank_lines": len(non_blank),
+            "lines": len(all_lines),
+            "non_blank_lines": sum(1 for line in all_lines if line.strip()),
             "chars": len(text),
             "words": words,
             "headings": headings,

@@ -278,6 +278,20 @@ class MarkdownBeautifyToolTest(unittest.TestCase):
         self.assertEqual(stats["images"], 1)
         self.assertEqual(stats["blockquote_lines"], 1)
 
+    def test_stats_lines_and_words_with_code(self):
+        """Fenced blocks count toward the line totals while their content
+        stays out of the prose word count; sentinels are never words."""
+        fenced_only = "```python\nx = 1\ny = 2\n```\n"
+        stats = self.run_tool(mode="stats", markdown=fenced_only)["stats"]
+        self.assertEqual(stats["lines"], 5)
+        self.assertEqual(stats["non_blank_lines"], 4)
+        self.assertEqual(stats["words"], 0)
+        self.assertEqual(stats["code_blocks"]["fenced"], 1)
+
+        stats = self.run_tool(mode="stats",
+                              markdown="see `a b c` now\n")["stats"]
+        self.assertEqual(stats["words"], 2)
+
     def test_stats_empty_and_changed_flag(self):
         """Empty input produces empty output with success; an already-clean
         document reports changed=False."""
