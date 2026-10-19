@@ -1,0 +1,67 @@
+name: unit_converter_tool
+description: Unit converter tool — pure Python stdlib, no network required. Eight categories (length, mass, temperature, area, volume, speed, data, time) converted with exact arithmetic. mode='convert' converts a value between two units of one category (from_unit/to_unit with an optional category context and round decimal places); mode='categories' lists every category with its units and factors; mode='info' reports one unit's factor, symbol, aliases and family (decimal vs binary data units, affine temperature scales). Chinese aliases 斤 / 里 / 亩 accepted alongside the Latin names.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.unit_converter_tool
+  class: UnitConverterTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Converter mode — convert, categories or info.
+    required: true
+  value:
+    type: string
+    description: The numeric value to convert (decimal or exponent notation; numbers are also accepted). Required for the convert mode.
+    required: false
+  from_unit:
+    type: string
+    description: Source unit for the convert mode, e.g. km, lb, °C, 亩, MB, km/h. Matched case-aware against canonical names and aliases.
+    required: false
+  to_unit:
+    type: string
+    description: Target unit for the convert mode. Must belong to the same category as from_unit.
+    required: false
+  category:
+    type: string
+    description: Optional category context — length, mass, temperature, area, volume, speed, data or time. Constrains unit resolution so ambiguous aliases are resolved by category.
+    required: false
+  unit:
+    type: string
+    description: The unit to describe (factor, symbol, aliases, family). Required for the info mode.
+    required: false
+  round:
+    type: integer
+    description: Optional number of decimal places (0..30) for the converted result; rounding is half away from zero. By default results are rendered to 12 significant digits.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["convert", "categories", "info"]
+      description: Converter mode.
+    value:
+      type: string
+      description: Numeric value to convert (convert mode).
+    from_unit:
+      type: string
+      description: Source unit (convert mode).
+    to_unit:
+      type: string
+      description: Target unit (convert mode).
+    category:
+      type: string
+      enum: ["length", "mass", "temperature", "area", "volume", "speed", "data", "time"]
+      description: Category context that constrains unit resolution.
+    unit:
+      type: string
+      description: Unit to describe (info mode).
+    round:
+      type: integer
+      minimum: 0
+      maximum: 30
+      description: Decimal places for the converted result (half away from zero).
+  required: ["mode"]
