@@ -1,0 +1,11 @@
+name: text_converter_tool
+description: Bounded text conversion tool — case conversion (upper/lower/title/sentence), whitespace normalization, HTML-to-text, and slugify, with input length bounds.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_converter_tool
+  class: TextConverterTool
+input_keys:
+  - mode
+  - text
+max_input_chars: 100000

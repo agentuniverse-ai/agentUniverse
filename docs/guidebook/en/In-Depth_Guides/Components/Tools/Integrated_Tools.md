@@ -632,3 +632,23 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## TextConverterTool
+
+`TextConverterTool` converts text between Markdown, HTML, and plain text: `markdown_to_html`, `html_to_text`, and `markdown_to_text` (Markdown → HTML → text). It is built on Python's standard `html.parser` and `re`, so it has zero third-party dependency. Input length is bounded by `max_input_chars` (default 100000). It addresses issue #252.
+
+Register a component pointing at `agentuniverse.agent.action.tool.common_tool.text_converter_tool.TextConverterTool`, then call `execute(mode=..., text=...)`. The result is returned as `{"status": "success", "mode": ..., "converted": ...}`.
+
+```yaml
+name: text_converter_tool
+description: Convert text between Markdown, HTML, and plain text
+max_input_chars: 100000
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_converter_tool
+  class: TextConverterTool
+input_keys: ["mode", "text"]
+```
+- max_input_chars: Maximum input length in characters (default 100000); longer inputs are rejected.
+- mode: One of `markdown_to_html`, `html_to_text`, `markdown_to_text`.
+- text: Input text to convert.
