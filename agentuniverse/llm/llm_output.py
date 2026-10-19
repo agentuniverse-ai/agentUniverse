@@ -103,6 +103,8 @@ class TokenUsage(BaseModel):
         if "prompt_tokens" in usage:
             det_in = usage.get("prompt_tokens_details", {})
             det_out = usage.get("completion_tokens_details", {})
+            det_in = det_in if isinstance(det_in, dict) else {}
+            det_out = det_out if isinstance(det_out, dict) else {}
 
             return cls(
                 text_in=det_in.get("text_tokens", usage["prompt_tokens"]),
@@ -120,6 +122,8 @@ class TokenUsage(BaseModel):
         if "input_tokens" in usage:
             det_in = usage.get("input_tokens_details", {})
             det_out = usage.get("output_token_details", {})
+            det_in = det_in if isinstance(det_in, dict) else {}
+            det_out = det_out if isinstance(det_out, dict) else {}
 
             return cls(
                 text_in=det_in.get("text_tokens", usage["input_tokens"]),
