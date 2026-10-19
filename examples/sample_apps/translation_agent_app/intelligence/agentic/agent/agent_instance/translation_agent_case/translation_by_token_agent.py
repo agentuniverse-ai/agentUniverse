@@ -30,7 +30,7 @@ def calculate_chunk_size(token_count: int, token_limit: int) -> int:
     return chunk_size
 
 
-def output_middle_result(input_object: InputObject, data: any):
+def output_middle_result(input_object: InputObject, data: any) -> None:
     output_stream: Queue = input_object.get_data('output_stream', None)
     if output_stream:
         output_stream.put(data)
