@@ -11,12 +11,26 @@ import shutil
 import time
 import pytest
 
+from agentuniverse.base.config.configer import Configer
+from agentuniverse.base.context.framework_context import FrameworkContext
 from agentuniverse.base.util.logging.logging_config import LoggingConfig
 from agentuniverse.base.util.logging.logging_util import LOGGER, init_loggers, LOG_FILE_PREFIX
-from agentuniverse.base.context.framework_context import FrameworkContext
 
 test_context = {"LOG_CONTEXT": {"REQUEST_ID": "1111-2222-3333",
                                 "AGENT_ID": "TEST_AGENT"}}
+
+
+def test_logging_config_without_path_uses_defaults(monkeypatch):
+    monkeypatch.setattr(LoggingConfig, "log_extend_module_switch", {"sls_log": True})
+
+    def fail_load_by_path(*args, **kwargs):
+        raise AssertionError("Configer.load_by_path should not be called without a config path")
+
+    monkeypatch.setattr(Configer, "load_by_path", fail_load_by_path)
+
+    LoggingConfig()
+
+    assert LoggingConfig.log_extend_module_switch == {"sls_log": False}
 
 
 def test_logging_util():
