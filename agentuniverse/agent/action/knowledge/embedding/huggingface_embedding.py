@@ -18,6 +18,8 @@ from typing import List, Optional
 from pydantic import Field
 
 from agentuniverse.agent.action.knowledge.embedding.embedding import Embedding
+from agentuniverse.base.config.component_configer.component_configer import \
+    ComponentConfiger
 from agentuniverse.base.util.env_util import get_from_env
 
 logger = logging.getLogger(__name__)
@@ -151,3 +153,31 @@ class HuggingFaceEmbedding(Embedding):
                     sums[i] += val
         n = len(token_embeddings)
         return [s / n for s in sums]
+
+    def _initialize_by_component_configer(self,
+                                          embedding_configer: ComponentConfiger) \
+            -> 'HuggingFaceEmbedding':
+        """Initialize the embedding by the ComponentConfiger object.
+
+        Without this override the base class only reads ``name``,
+        ``description``, ``embedding_dims`` and ``embedding_model_name``, so
+        the ``api_key`` / ``timeout`` fields of the component YAML would be
+        silently ignored.
+
+        Args:
+            embedding_configer: A configer containing the embedding basic
+                info.
+
+        Returns:
+            The initialized embedding instance.
+        """
+        super()._initialize_by_component_configer(embedding_configer)
+        # An empty string means the ``${HUGGINGFACE_API_KEY}`` placeholder
+        # resolved against an unset environment variable; applying it
+        # verbatim would clobber a key already picked up from ``HF_TOKEN``
+        # by the field default, so only non-empty values are applied.
+        if hasattr(embedding_configer, "api_key") and embedding_configer.api_key:
+            self.api_key = embedding_configer.api_key
+        if hasattr(embedding_configer, "timeout") and embedding_configer.timeout is not None:
+            self.timeout = embedding_configer.timeout
+        return self

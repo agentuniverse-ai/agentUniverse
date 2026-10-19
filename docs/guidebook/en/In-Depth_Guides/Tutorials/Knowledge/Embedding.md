@@ -6,7 +6,7 @@ agentUniverse provides several built-in embedding components used by the Knowled
 
 `HuggingFaceEmbedding` generates text embeddings using models hosted on the Hugging Face Hub via the `InferenceClient` from `huggingface_hub`. It supports sentence-transformers models, BGE, GTE, and any embedding model exposed through the Hub feature-extraction API. Install the SDK with `pip install huggingface_hub`.
 
-Register a component pointing at `agentuniverse.agent.action.knowledge.embedding.huggingface_embedding.HuggingFaceEmbedding`, then reference it by name from a store or processor (e.g. `embedding_model: huggingface_embedding`). The API key is read from `HUGGINGFACE_API_KEY` (or `HF_TOKEN`).
+Register a component pointing at `agentuniverse.agent.action.knowledge.embedding.huggingface_embedding.HuggingFaceEmbedding`, then reference it by name from a store or processor (e.g. `embedding_model: huggingface_embedding`). A default `huggingface_embedding` configuration ships with the package (the YAML below), so the component is registered out of the box. The API key is read from `HUGGINGFACE_API_KEY` (or `HF_TOKEN`).
 
 ```yaml
 name: 'huggingface_embedding'

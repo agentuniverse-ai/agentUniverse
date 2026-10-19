@@ -6,7 +6,7 @@ agentUniverse 提供若干内置 embedding 组件，供知识库 store 与文档
 
 `HuggingFaceEmbedding` 通过 `huggingface_hub` 的 `InferenceClient`，使用 Hugging Face Hub 上托管的模型生成文本向量。支持 sentence-transformers 模型、BGE、GTE，以及任何通过 Hub feature-extraction API 暴露的 embedding 模型。安装 SDK：`pip install huggingface_hub`。
 
-注册一个指向 `agentuniverse.agent.action.knowledge.embedding.huggingface_embedding.HuggingFaceEmbedding` 的组件，然后在 store 或处理器中按名引用（如 `embedding_model: huggingface_embedding`）。API Key 从 `HUGGINGFACE_API_KEY`（或 `HF_TOKEN`）读取。
+注册一个指向 `agentuniverse.agent.action.knowledge.embedding.huggingface_embedding.HuggingFaceEmbedding` 的组件，然后在 store 或处理器中按名引用（如 `embedding_model: huggingface_embedding`）。包内自带如下默认 `huggingface_embedding` 配置，组件开箱即完成注册。API Key 从 `HUGGINGFACE_API_KEY`（或 `HF_TOKEN`）读取。
 
 ```yaml
 name: 'huggingface_embedding'

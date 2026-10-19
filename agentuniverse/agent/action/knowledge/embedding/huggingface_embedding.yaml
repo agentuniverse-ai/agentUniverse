@@ -1,7 +1,7 @@
 name: 'huggingface_embedding'
 description: 'Embedding component backed by the Hugging Face Hub Inference API (sentence-transformers, BGE, GTE, etc.).'
 embedding_model_name: 'sentence-transformers/all-MiniLM-L6-v2'
-api_key: ''
+api_key: '${HUGGINGFACE_API_KEY}'
 timeout: 30.0
 metadata:
   type: 'EMBEDDING'
