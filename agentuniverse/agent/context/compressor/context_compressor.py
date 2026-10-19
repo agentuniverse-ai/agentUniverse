@@ -196,6 +196,12 @@ class ContextCompressor(ComponentBase):
         }
 
         def importance_score(seg: ContextSegment) -> float:
+            """Calculate an importance score for a context segment.
+            
+            The score is the priority weight multiplied by the segment's decay
+            score and an access-count bonus (1 + 0.1 * access_count); a higher
+            score means the segment is more important.
+            """
             priority_weight = priority_weights.get(seg.priority.value.lower(), 2.0)
             decay = seg.calculate_decay()
             access_bonus = 1.0 + (seg.metadata.access_count * 0.1)
