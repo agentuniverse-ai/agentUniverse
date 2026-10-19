@@ -18,10 +18,23 @@ class StartNode(Node):
     """The basic class of the start node."""
 
     def __init__(self, **kwargs):
+        """Initialize the start node and set its type to the start node enum.
+
+        Args:
+            **kwargs: Field values for the node.
+        """
         super().__init__(**kwargs)
         self.type = NodeEnum.START
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        """Propagate the workflow start input into the first output parameter and record the node outputs.
+
+        Args:
+            workflow_output(WorkflowOutput): The workflow execution output.
+
+        Returns:
+            NodeOutput: The node output holding the propagated input.
+        """
         start_params: dict = workflow_output.workflow_start_params
         start_val = start_params.get('input', '')
         output_params: List[NodeOutputParams] = self._data.outputs
