@@ -114,14 +114,29 @@ class AppConfiger(object):
 
     @property
     def core_prompt_package_list(self) -> Optional[list[str]]:
+        """Return the core prompt package list.
+
+        Returns:
+            Optional[list[str]]: the prompt package list of the core, or None if not set in the configer.
+        """
         return self.__core_prompt_package_list
 
     @property
     def core_product_package_list(self) -> Optional[list[str]]:
+        """Return the core product package list.
+
+        Returns:
+            Optional[list[str]]: the product package list of the core, or None if not set in the configer.
+        """
         return self.__core_product_package_list
 
     @property
     def core_workflow_package_list(self) -> Optional[list[str]]:
+        """Return the core workflow package list.
+
+        Returns:
+            Optional[list[str]]: the workflow package list of the core, or None if not set in the configer.
+        """
         return self.__core_workflow_package_list
 
     @property
@@ -181,18 +196,41 @@ class AppConfiger(object):
 
     @property
     def conversation_memory_configer(self) -> dict:
+        """Return the conversation memory configuration dictionary.
+
+        Returns:
+            dict: the conversation memory configuration; empty dict when none has been loaded.
+        """
         return self.__conversation_memory_configer
 
     @property
     def root_package_name(self) -> str:
+        """Return the root package name of the application.
+
+        Returns:
+            str: the configured root package name, or None if not set in the configer.
+        """
         return self.__root_package_name
 
     @property
     def yaml_func_instance(self):
+        """Return the YAML function instance.
+
+        Returns:
+            the currently stored YAML function instance, or None if none has been set.
+        """
         return self.__yaml_func_instance
 
     @yaml_func_instance.setter
     def yaml_func_instance(self, value):
+        """Set the YAML function instance to the given value.
+
+        Args:
+            value: the YAML function instance to store.
+
+        Returns:
+            None.
+        """
         self.__yaml_func_instance = value
 
     @property
