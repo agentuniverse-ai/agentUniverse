@@ -12,13 +12,37 @@ any external dependency.
 """
 
 import asyncio
+import os
+import tempfile
 import unittest
+from unittest import mock
 
+from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
+from agentuniverse.base.config.configer import Configer
 from agentuniverse.llm.default.cerebras_llm import (
     CEREBRAS_DEFAULT_CONTEXT_LENGTH,
     CEREBRAS_MAX_CONTEXT_LENGTH,
     CerebrasLLM,
 )
+
+_CEREBRAS_ENV_KEYS = ('CEREBRAS_API_KEY', 'CEREBRAS_API_BASE', 'CEREBRAS_PROXY')
+
+
+def _build_llm_configer_from_yaml(yaml_text: str) -> LLMConfiger:
+    """Load an inline YAML snippet into a real LLMConfiger so that the
+    framework's `${VAR}` placeholder resolution (empty string when the
+    environment variable is unset) is exercised end to end."""
+    with tempfile.NamedTemporaryFile('w', suffix='.yaml', delete=False) as f:
+        f.write(yaml_text)
+        path = f.name
+    try:
+        configer = Configer()
+        configer.load_by_path(path)
+        llm_configer = LLMConfiger()
+        llm_configer.load_by_configer(configer)
+        return llm_configer
+    finally:
+        os.unlink(path)
 
 
 class TestCerebrasLLM(unittest.TestCase):
@@ -98,6 +122,53 @@ class TestCerebrasLLM(unittest.TestCase):
     def test_get_num_tokens_empty_string(self) -> None:
         """An empty string must cost zero tokens."""
         self.assertEqual(self.llm.get_num_tokens(''), 0)
+
+    # ========== YAML ${VAR} placeholder handling ==========
+
+    _EXAMPLE_YAML = (
+        "name: 'cerebras_llm'\n"
+        "description: 'cerebras llm'\n"
+        "model_name: 'llama-3.3-70b'\n"
+        "api_key: '${CEREBRAS_API_KEY}'\n"
+        "api_base: '${CEREBRAS_API_BASE}'\n"
+        "proxy: '${CEREBRAS_PROXY}'\n"
+        "metadata:\n"
+        "  type: 'LLM'\n"
+        "  module: 'agentuniverse.llm.default.cerebras_llm'\n"
+        "  class: 'CerebrasLLM'\n"
+    )
+
+    def test_unset_env_placeholders_fall_back_to_defaults(self) -> None:
+        """`${VAR}` resolves to '' when the variable is unset; the component
+        must treat that like an omitted key instead of sending empty strings
+        upstream (empty api_key fails late with an opaque 401, empty api_base
+        would silently target https://api.openai.com/v1)."""
+        env = {k: v for k, v in os.environ.items()
+               if k not in _CEREBRAS_ENV_KEYS}
+        with mock.patch.dict(os.environ, env, clear=True):
+            configer = _build_llm_configer_from_yaml(self._EXAMPLE_YAML)
+            llm = CerebrasLLM(model_name='llama-3.3-70b')
+            llm.initialize_by_component_configer(configer)
+            self.assertIsNone(llm.api_key)
+            self.assertIsNone(llm.proxy)
+            self.assertEqual(llm.api_base, 'https://api.cerebras.ai/v1')
+            self.assertEqual(llm.model_name, 'llama-3.3-70b')
+            self.assertEqual(llm.name, 'cerebras_llm')
+
+    def test_set_env_placeholder_values_survive_initialization(self) -> None:
+        """Real placeholder values must not be clobbered by the guard."""
+        env = {k: v for k, v in os.environ.items()
+               if k not in _CEREBRAS_ENV_KEYS}
+        env['CEREBRAS_API_KEY'] = 'csk-test-key'
+        env['CEREBRAS_API_BASE'] = 'https://example.invalid/v1'
+        env['CEREBRAS_PROXY'] = 'http://proxy.invalid:8080'
+        with mock.patch.dict(os.environ, env, clear=True):
+            configer = _build_llm_configer_from_yaml(self._EXAMPLE_YAML)
+            llm = CerebrasLLM(model_name='llama-3.3-70b')
+            llm.initialize_by_component_configer(configer)
+            self.assertEqual(llm.api_key, 'csk-test-key')
+            self.assertEqual(llm.api_base, 'https://example.invalid/v1')
+            self.assertEqual(llm.proxy, 'http://proxy.invalid:8080')
 
     # ========== Integration tests (require a real CEREBRAS_API_KEY) ==========
     # Uncomment and set CEREBRAS_API_KEY in the environment to exercise the
