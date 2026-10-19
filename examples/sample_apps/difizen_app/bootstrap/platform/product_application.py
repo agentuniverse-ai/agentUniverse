@@ -18,7 +18,11 @@ class ProductApplication:
 
     @classmethod
     def start(cls):
-        AgentUniverse().start(core_mode=True)
+        """Start the AgentUniverse core and the aU-product portal.
+
+        Initializes the framework in core mode and starts the product portal,
+        which redirects to the aU-product homepage by default.
+        """
         AgentUniverseProduct().start()
 
 
