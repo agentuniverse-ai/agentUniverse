@@ -27,7 +27,7 @@ DEFAULT_GUNICORN_CONFIG = {
 
 
 # Execute all func in the queue after fork chile process.
-def post_fork(server, worker):
+def post_fork(server, worker) -> None:
     for _func, args, kwargs in POST_FORK_QUEUE:
         _func(*args, **kwargs)
 
@@ -56,7 +56,7 @@ class GunicornApplication(BaseApplication):
 
         super().__init__()
 
-    def load_config(self):
+    def load_config(self) -> None:
         """Check the config file first, use default config while config file
         not exist, then overwrite parts which in options."""
         if not self.default_config:
@@ -75,7 +75,7 @@ class GunicornApplication(BaseApplication):
         # Set post fork.
         self.cfg.set('post_fork', post_fork)
 
-    def update_config(self, options: dict):
+    def update_config(self, options: dict) -> None:
         self.options = options
         self.load_config()
 
