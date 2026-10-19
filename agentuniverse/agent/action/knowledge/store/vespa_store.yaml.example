@@ -1,0 +1,20 @@
+name: vespa_store
+description: Vespa open-source search and vector engine knowledge store
+application_url: http://localhost:8080
+# mTLS data-plane credentials for Vespa Cloud / secured endpoints.
+cert_path: /path/to/data-plane-public-cert.pem
+key_path: /path/to/data-plane-private-key.pem
+schema_name: agentuniverse_document
+namespace: agentuniverse
+cluster_name: agentuniverse_cluster
+embedding_model: openai_embedding
+dimensions: 1536
+embedding_field: embedding
+id_field: id
+text_field: text
+metadata_field: metadata
+similarity_top_k: 10
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.vespa_store
+  class: VespaStore
