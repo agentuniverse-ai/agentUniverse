@@ -26,4 +26,4 @@ class LLMInvocationLogSink(BaseFileLogSink):
         log_str = f" LLM cost {cost_time:.2f} seconds"
         if used_token:
             log_str += f", token usage: {used_token}"
-        return Monitor.get_invocation_chain_str() + log_str + f" LLM output finished."
+        return Monitor.get_invocation_chain_str() + log_str + " LLM output finished."
