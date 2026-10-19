@@ -634,3 +634,45 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Phonetic Alphabet Tool
+
+`PhoneticAlphabetTool` implements the NATO / ICAO spelling alphabet
+purely on the Python standard library with zero network access. It is
+the utility for voice-friendly communication: `spell` mode converts
+text to phonetic words one character at a time (A→Alfa … Z→Zulu,
+0→Zero … 9→Niner) with a configurable space marker (default
+`[space]`) and punctuation passed through flagged; `read` mode maps
+phonetic words back to text case-insensitively, rejecting unknown
+words with their name and position; `list` mode returns the complete
+letter and digit tables.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.phonetic_alphabet_tool import PhoneticAlphabetTool
+
+tool = PhoneticAlphabetTool()
+spelled = tool.execute(mode="spell", text="Hello World")["result"]
+# 'Hotel Echo Lima Lima Oscar [space] Whiskey Oscar Romeo Lima Delta'
+back = tool.execute(mode="read", text=spelled)["result"]  # 'HELLO WORLD'
+table = tool.execute(mode="list")["letters"]  # {'A': 'Alfa', ..., 'Z': 'Zulu'}
+```
+
+Only the single worldwide-standard ICAO/NATO alphabet is supported.
+Spelling alphabets such as the German DIN 5009 or the French
+"alphabet radio" exist in several mutually incompatible revisions, so
+rather than embed a possibly wrong table the tool deliberately offers
+no alphabet option and uses the official ICAO spellings — `Alfa` and
+`Juliett` with their ICAO lettering and the digit word `Niner`.
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, missing or empty text, unknown mode, invalid
+`space_marker`, control characters or non-space whitespace, text over
+10,000 characters) raise a `ValueError`. Spell results preserve the
+original case in the per-character `entries` list and report
+passed-through characters in `flagged`; content-level failures in read
+mode — any token that is not a phonetic word, digit word, space marker
+or single non-alphanumeric character — return a structured `error`
+payload naming the offending word and its position. For text
+consisting only of letters, digits and spaces, `read(spell(text))`
+round-trips exactly except that letters are canonicalised to
+uppercase (the read mapping is case-insensitive, so letter case cannot
+be recovered); flagged characters survive as themselves.
