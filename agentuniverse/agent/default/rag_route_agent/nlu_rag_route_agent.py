@@ -48,6 +48,14 @@ class NluRagRouteAgent(RagAgentTemplate):
         return agent_result
 
     def process_llm(self, **kwargs) -> LLM:
+        """Get the LLM configured for this agent.
+        
+        Prefers the llm_model name from the agent profile and falls back to the
+        inherited llm_name.
+        
+        Returns:
+            LLM: The LLM instance.
+        """
         llm_name = self.agent_model.profile.get('llm_model', {}).get('name') or self.llm_name
         return LLMManager().get_instance_obj(llm_name)
 
