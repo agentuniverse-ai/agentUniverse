@@ -163,7 +163,7 @@ class ThresholdFilter(DocProcessor):
         Returns:
             List[Document]: Top K documents by score.
         """
-        k = config.get("k", len(docs))
+        k = max(0, config.get("k", len(docs)))
 
         # Score each document
         scored_docs = [(doc, self._get_score(doc)) for doc in docs]
@@ -215,9 +215,13 @@ class ThresholdFilter(DocProcessor):
             float: Document score or default_score if not found.
         """
         if not doc.metadata:
-            return self.default_score
+            return float(self.default_score)
 
-        return doc.metadata.get(self.score_field, self.default_score)
+        value = doc.metadata.get(self.score_field, self.default_score)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float(self.default_score)
 
     def _combine_results(self, results: List[List[Document]], logic: str) -> List[Document]:
         """Combine filter results using AND/OR logic.
