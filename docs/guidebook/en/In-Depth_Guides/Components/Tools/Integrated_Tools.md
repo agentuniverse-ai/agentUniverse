@@ -632,3 +632,28 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## HttpRequestTool
+
+`HttpRequestTool` is a general-purpose HTTP client (`GET` / `POST` / `PUT` / `DELETE` / `PATCH` / `HEAD`) with configurable timeout, response-size limit, and SSRF-safe redirect handling. Unlike `APITool` (which requires an OpenAPI spec), it takes a URL and method directly — useful for ad-hoc API calls, webhooks, and simple data fetching. It follows the same bounded contract as `APITool` (#701): redirects are opt-in and bounded, the response body is size-limited, and every request carries a timeout. No extra install (`requests` is already a core dependency).
+
+Register a component pointing at `agentuniverse.agent.action.tool.common_tool.http_request_tool.HttpRequestTool`, then call `execute(url=..., method=..., headers=..., params=..., body=..., timeout=...)`.
+
+```yaml
+name: http_request_tool
+description: Bounded HTTP request tool with SSRF-safe defaults
+default_timeout: 30
+max_response_bytes: 1048576
+allow_redirects: false
+max_redirects: 5
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.http_request_tool
+  class: HttpRequestTool
+input_keys: ["url"]
+```
+- default_timeout: Request timeout in seconds (default 30).
+- max_response_bytes: Maximum response body size in bytes (default 1 MB); larger bodies are truncated and flagged with `truncated: true`.
+- allow_redirects: Whether to follow redirects (default `false` — opt-in, same contract as `APITool`).
+- max_redirects: Maximum redirect chain length when redirects are enabled (default 5).
+- default_headers: Default headers applied to every request.
