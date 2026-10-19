@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Union, Optional, Dict
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.utils import detect_file_encoding
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 
@@ -51,7 +52,8 @@ class CodeReader(Reader):
         if isinstance(file, Path):
             if not file.exists():
                 raise FileNotFoundError(f"Code file not found: {file}")
-        file_content = file.read_text(encoding="utf-8")
+        file_content = file.read_text(encoding=detect_file_encoding(file),
+                                      errors="replace")
         file_name = file.name
         file_suffix = file.suffix.lower()
         language = CODE_FILE_EXTENSIONS.get(file_suffix, 'unknown')

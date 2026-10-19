@@ -33,6 +33,10 @@ class LangChainTool(Tool):
 
     def init_langchain_tool(self, component_configer):
         langchain_info = component_configer.configer.value.get('langchain')
+        if not langchain_info or not isinstance(langchain_info, dict):
+            raise ValueError(
+                "A 'langchain' section (with module and class_name) is "
+                "required in the LangChainTool component configuration.")
         module = langchain_info.get("module")
         class_name = langchain_info.get("class_name")
         module = importlib.import_module(module)
