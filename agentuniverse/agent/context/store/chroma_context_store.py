@@ -16,7 +16,6 @@ Use cases:
 - Cold storage tier for rarely accessed context
 """
 
-import json
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -459,11 +458,21 @@ class ChromaContextStore(ContextStore):
             return 0
 
         try:
-            results = self._collection.get(
-                where={"session_id": session_id},
-                limit=1  # We only need count, not data
-            )
-            return self._collection.count()
+            # Chroma's count() applies to the whole collection. Page through
+            # matching IDs without loading document text, metadata or vectors.
+            batch_size = 1000
+            total = 0
+            while True:
+                results = self._collection.get(
+                    where={"session_id": session_id},
+                    include=[],
+                    limit=batch_size,
+                    offset=total,
+                )
+                batch_count = len(results["ids"])
+                total += batch_count
+                if batch_count < batch_size:
+                    return total
         except Exception:
             return 0
 
