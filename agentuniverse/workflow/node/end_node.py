@@ -16,6 +16,8 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 
 class EndNodeData(NodeData):
+    """NodeData subclass holding the end node input configuration.
+    """
     inputs: Optional[EndNodeInputParams] = None
 
 
@@ -24,10 +26,26 @@ class EndNode(Node):
     _data_cls = EndNodeData
 
     def __init__(self, **kwargs):
+        """Initialize the end node and set its type to the end node enum.
+
+        Args:
+            **kwargs: Field values for the node.
+        """
         super().__init__(**kwargs)
         self.type = NodeEnum.END
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        """Resolve the template variables of the end prompt with the resolved input parameters and store the final output.
+
+        Args:
+            workflow_output(WorkflowOutput): The workflow execution output.
+
+        Returns:
+            NodeOutput: The node output holding the final prompt value.
+
+        Raises:
+            ValueError: If a template variable can not be resolved.
+        """
         inputs: EndNodeInputParams = self._data.inputs
         prompt: NodeInfoParams = inputs.prompt
         if isinstance(prompt.value, dict):
