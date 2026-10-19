@@ -18,6 +18,12 @@ from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
+_FUNCTION_NODE_TYPES = (
+    "function_definition", "method_definition", "function_declaration", "method_declaration"
+)
+_CLASS_NODE_TYPES = ("class_definition", "class_declaration")
+
+
 class CodeAstProcessor(DocProcessor):
 
     max_depth: int = 8
@@ -127,9 +133,9 @@ class CodeAstProcessor(DocProcessor):
         for current_node in self._iter_tree_nodes(node):
             if current_node.type == "identifier":
                 features["identifier_count"] += 1
-            elif current_node.type in ("function_definition", "method_definition", "function_declaration"):
+            elif current_node.type in _FUNCTION_NODE_TYPES:
                 features["function_count"] += 1
-            elif current_node.type in ("class_definition", "class_declaration"):
+            elif current_node.type in _CLASS_NODE_TYPES:
                 features["class_count"] += 1
             elif "statement" in current_node.type:
                 features["statement_count"] += 1
@@ -188,19 +194,22 @@ class CodeAstProcessor(DocProcessor):
 
         def _collect_declarations(node, path=""):
 
-            if node.type in ("function_definition", "method_definition", "class_definition",
-                             "function_declaration", "method_declaration", "class_declaration"):
+            if node.type in _FUNCTION_NODE_TYPES + _CLASS_NODE_TYPES:
                 start_line = node.start_point[0]
                 end_line = node.end_point[0]
 
                 if end_line - start_line >= 3:
-                    node_type = "function" if "function" in node.type else "class"
+                    node_type = "class" if node.type in _CLASS_NODE_TYPES else "function"
                     name = None
 
-                    for child in node.children:
-                        if child.type == "identifier":
-                            name = code_bytes[child.start_byte:child.end_byte].decode("utf8")
-                            break
+                    name_node = node.child_by_field_name("name")
+                    if name_node is None:
+                        name_node = next(
+                            (child for child in node.children if child.type == "identifier"),
+                            None,
+                        )
+                    if name_node is not None:
+                        name = code_bytes[name_node.start_byte:name_node.end_byte].decode("utf8")
 
                     boundary: CodeBoundary = {
                         "start": start_line,

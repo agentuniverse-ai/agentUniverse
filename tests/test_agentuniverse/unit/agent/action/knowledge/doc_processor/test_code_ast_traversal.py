@@ -169,3 +169,108 @@ def test_backtracking_visits_the_next_parent_after_a_large_child_set(tmp_path):
     assert features["function_count"] == 2
     assert features["identifier_count"] == 602
     assert features["node_counts"]["assignment"] == 600
+
+
+def chunking_processor(tmp_path, language):
+    proc = processor(tmp_path, language)
+    proc.chunk_size = 10
+    proc.chunk_overlap = 2
+    return proc
+
+
+def assert_named_chunks(docs, names, kinds):
+    chunks = docs[1:]
+    assert [doc.metadata["chunk_name"] for doc in chunks] == names
+    assert [doc.metadata["chunk_type"] for doc in chunks] == kinds
+    assert [json.loads(doc.text)["name"] for doc in chunks] == names
+    assert [json.loads(doc.text)["type"] for doc in chunks] == kinds
+
+
+def test_java_methods_are_functions_in_features_and_chunks(tmp_path):
+    proc = chunking_processor(tmp_path, "java")
+    code = "class Demo {\n int run() {\n  int x = 1;\n  int y = 2;\n  return x + y;\n }\n}\n"
+    result, docs = process(proc, code, "java")
+    assert result["features"]["function_count"] == 1
+    assert result["features"]["class_count"] == 1
+    assert_named_chunks(docs, ["Demo", "run"], ["class", "function"])
+
+
+def test_java_multiline_interface_methods_are_counted_and_named(tmp_path):
+    proc = chunking_processor(tmp_path, "java")
+    code = "interface Service {\n String run(\n  String name,\n  int count\n );\n int count(\n  String name,\n  int limit\n );\n}\n"
+    result, docs = process(proc, code, "java")
+    assert result["features"]["function_count"] == 2
+    assert_named_chunks(docs, ["run", "count"], ["function", "function"])
+
+
+def test_javascript_class_method_variants_have_function_chunks(tmp_path):
+    proc = chunking_processor(tmp_path, "javascript")
+    code = """class Demo {
+ constructor() {
+  const x = 1;
+  const y = 2;
+  this.value = x + y;
+ }
+ run() {
+  const x = 1;
+  const y = 2;
+  return x + y;
+ }
+ async runAsync() {
+  const x = 1;
+  const y = 2;
+  return x + y;
+ }
+ *items() {
+  const x = 1;
+  const y = 2;
+  yield x + y;
+ }
+ get value() {
+  const x = 1;
+  const y = 2;
+  return x + y;
+ }
+ set value(next) {
+  const x = next;
+  const y = 2;
+  this.saved = x + y;
+ }
+}
+"""
+    result, docs = process(proc, code, "javascript")
+    assert result["features"]["function_count"] == 6
+    assert result["features"]["class_count"] == 1
+    assert_named_chunks(docs, ["Demo", "constructor", "run", "runAsync", "items", "value", "value"],
+                        ["class"] + ["function"] * 6)
+
+
+def test_javascript_object_methods_use_grammar_name_fields(tmp_path):
+    proc = chunking_processor(tmp_path, "javascript")
+    code = "const object = {\n run() {\n  const x = 1;\n  const y = 2;\n  return x + y;\n },\n [\"méthod\"]() {\n  const x = 3;\n  const y = 4;\n  return x + y;\n }\n};\n"
+    result, docs = process(proc, code, "javascript")
+    assert result["features"]["function_count"] == 2
+    assert_named_chunks(docs, ["run", '["méthod"]'], ["function", "function"])
+
+
+def test_javascript_private_and_unicode_method_names_preserve_byte_slices(tmp_path):
+    proc = chunking_processor(tmp_path, "javascript")
+    code = "// 中文\nclass Demo {\n #secret() {\n  const x = 1;\n  const y = 2;\n  return x + y;\n }\n 处理() {\n  const x = 3;\n  const y = 4;\n  return x + y;\n }\n}\n"
+    result, docs = process(proc, code, "javascript")
+    assert result["features"]["function_count"] == 2
+    assert_named_chunks(docs, ["Demo", "#secret", "处理"], ["class", "function", "function"])
+
+
+def test_public_processing_switches_languages_without_mixing_method_metadata(tmp_path):
+    proc = chunking_processor(tmp_path, "python")
+    samples = {
+        "python": "class Demo:\n def run(self):\n  x = 1\n  y = 2\n  return x + y\n",
+        "javascript": "class Demo {\n run() {\n  const x = 1;\n  const y = 2;\n  return x + y;\n }\n}\n",
+        "java": "class Demo {\n int run() {\n  int x = 1;\n  int y = 2;\n  return x + y;\n }\n}\n",
+    }
+    for language, code in samples.items():
+        pytest.importorskip("tree_sitter_" + language)
+        result, docs = process(proc, code, language)
+        assert result["features"]["function_count"] == 1
+        assert_named_chunks(docs, ["Demo", "run"], ["class", "function"])
+        assert all(doc.metadata["language"] == language for doc in docs)
