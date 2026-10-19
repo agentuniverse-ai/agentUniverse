@@ -78,6 +78,32 @@ class JinaAIToolTLSTest(unittest.TestCase):
         self.assertIn("HTTP Error", result)
         self.assertIn("connection failed", result)
 
+    def test_execute_overrides_do_not_persist_between_calls(self) -> None:
+        tool = JinaAITool(mode="read", api_key="configured-key", headers={"X-Base": "base"})
+        payload = {"data": {"content": "page text"}}
+        with patch.object(JinaAITool, "_make_api_request", autospec=True, return_value=payload) as request:
+            tool.execute(
+                input="temporary search",
+                mode="search",
+                timeout=5,
+                api_key="call-key",
+                headers={"X-Call": "call"},
+            )
+            search_tool = request.call_args.args[0]
+            self.assertEqual(search_tool._get_headers()["Authorization"], "Bearer call-key")
+            self.assertEqual(search_tool._get_headers()["X-Call"], "call")
+            self.assertEqual(search_tool.timeout, 5)
+
+            result = tool.execute(input="https://example.com")
+            read_tool = request.call_args.args[0]
+
+        self.assertEqual(result, "page text")
+        self.assertEqual(read_tool._get_headers()["Authorization"], "Bearer configured-key")
+        self.assertEqual(read_tool._get_headers()["X-Base"], "base")
+        self.assertNotIn("X-Call", read_tool._get_headers())
+        self.assertEqual(tool.mode, "read")
+        self.assertEqual(tool.timeout, 30)
+
 
 if __name__ == "__main__":
     unittest.main()

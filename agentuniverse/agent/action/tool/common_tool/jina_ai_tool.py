@@ -50,31 +50,34 @@ class JinaAITool(Tool):
         if not input:
             return None
         
-        # Update optional configurations
+        # Apply call-specific settings to a copy so later invocations keep the
+        # configured defaults, including credentials and custom headers.
+        overrides = {}
         if mode:
-            self.mode = mode
+            overrides["mode"] = mode
         if timeout:
-            self.timeout = timeout
+            overrides["timeout"] = timeout
         if api_key:
-            self.api_key = api_key
+            overrides["api_key"] = api_key
         if max_read_content_length:
-            self.max_read_content_length = max_read_content_length
+            overrides["max_read_content_length"] = max_read_content_length
         if remove_image is not None:
-            self.remove_image = remove_image
+            overrides["remove_image"] = remove_image
         if headers:
-            self.headers = headers
+            overrides["headers"] = headers
+        tool = self.model_copy(update=overrides) if overrides else self
 
         # print(f"mode: {self.mode}, max_read_content_length: {self.max_read_content_length}, headers: {self.headers}")
 
-        if self.mode == "read":
+        if tool.mode == "read":
             if input.startswith("https://") or input.startswith("http://"):
-                return self.read_url(url=html.unescape(input))
+                return tool.read_url(url=html.unescape(input))
             else:
                 return None
-        elif self.mode == "search":
-            return self.search_query(query=input)
-        elif self.mode == "check_fact":
-            return self.check_fact(query=input)
+        elif tool.mode == "search":
+            return tool.search_query(query=input)
+        elif tool.mode == "check_fact":
+            return tool.check_fact(query=input)
         else:
             return None
 
