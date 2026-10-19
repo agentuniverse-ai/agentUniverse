@@ -27,7 +27,7 @@ class OpenAIEmbedding(Embedding):
     async_client: Any = None
     dimensions: Optional[int] = None
 
-    def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Get the OpenAI embeddings.
 
         Note:
@@ -61,7 +61,7 @@ class OpenAIEmbedding(Embedding):
         except BadRequestError as e:
             raise ValueError(e.message)
 
-    async def async_get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Asynchronously get the OpenAI embeddings.
 
         Note:

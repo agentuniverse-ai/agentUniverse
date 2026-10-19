@@ -103,7 +103,7 @@ class MCPTool(Tool):
                 break
         if not tool_info:
             raise Exception(f'No tool named {self.tool_name} in mcp server {self.server_name}')
-        self.input_keys = tool_info.inputSchema['required']
+        self.input_keys = tool_info.inputSchema.get('required', [])
         self.args_model_schema = tool_info.inputSchema
         if not self.description:
             self.description = f'{tool_info.description}\n{str(tool_info.inputSchema)}'
