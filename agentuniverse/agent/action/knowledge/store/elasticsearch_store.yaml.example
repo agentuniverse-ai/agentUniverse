@@ -1,0 +1,16 @@
+name: 'elasticsearch_store'
+description: 'Elasticsearch vector store'
+index_name: 'agentuniverse'
+distance: 'COSINE'
+similarity_top_k: 10
+# num_candidates: 100
+with_vectors: false
+connection_args:
+  hosts: 'http://localhost:9200'
+  # api_key: 'your-elasticsearch-api-key'
+  # basic_auth: ['elastic', 'your-password']
+  # cloud_id: 'your-cloud-id'
+metadata:
+  type: 'STORE'
+  module: 'agentuniverse.agent.action.knowledge.store.elasticsearch_store'
+  class: 'ElasticsearchStore'
