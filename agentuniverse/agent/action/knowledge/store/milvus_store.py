@@ -160,7 +160,7 @@ class MilvusStore(Store):
         if not self.collection:
             return self.to_documents([])
         embedding = query.embeddings
-        if self.embedding_model is not None and len(embedding) == 0:
+        if self.embedding_model is not None and not embedding:
             if not self.embedding_model:
                 raise Exception("Milvus store can only save vector, "
                                 "you should provide embedding in your document or specify an embedding model.")
