@@ -22,10 +22,12 @@ class TestRarReaderBasic(unittest.TestCase):
     """Basic functionality tests"""
 
     def setUp(self):
+        """Set up a fresh RarReader instance and a temporary directory for each test."""
         self.reader = RarReader()
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
@@ -137,10 +139,12 @@ class TestRarReaderComplexScenarios(unittest.TestCase):
     """Complex scenario tests"""
 
     def setUp(self):
+        """Set up a fresh RarReader instance and a temporary directory for each test."""
         self.reader = RarReader()
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
@@ -414,10 +418,12 @@ class TestRarReaderSizeLimits(unittest.TestCase):
     """Size limit tests"""
 
     def setUp(self):
+        """Set up a fresh RarReader instance and a temporary directory for each test."""
         self.reader = RarReader()
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
@@ -538,10 +544,12 @@ class TestRarReaderRealWorldScenarios(unittest.TestCase):
     """Real-world scenario tests"""
 
     def setUp(self):
+        """Set up a fresh RarReader instance and a temporary directory for each test."""
         self.reader = RarReader()
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
@@ -859,14 +867,17 @@ class TestRarReaderEdgeCases(unittest.TestCase):
     """Edge case tests"""
 
     def setUp(self):
+        """Set up a fresh RarReader instance and a temporary directory for each test."""
         self.reader = RarReader()
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
     def test_rejects_unsafe_archive_entry_names(self):
+        """Archive entry names that escape the extraction root are flagged unsafe."""
         unsafe_names = [
             "../escape.txt",
             "safe/../../escape.txt",
@@ -1023,10 +1034,12 @@ class TestRarReaderPerformance(unittest.TestCase):
     """Performance tests"""
 
     def setUp(self):
+        """Set up a fresh RarReader instance and a temporary directory for each test."""
         self.reader = RarReader()
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
