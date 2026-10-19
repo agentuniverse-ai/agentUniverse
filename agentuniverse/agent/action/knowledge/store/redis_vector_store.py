@@ -223,6 +223,32 @@ class RedisVectorStore(Store):
             self._check_vector(vector)
         return vectors
 
+    async def _async_embedding_for_query(self, query: Query) -> list[float]:
+        if query.embeddings:
+            vector = query.embeddings[0]
+        elif self.embedding_model and query.query_str:
+            model = EmbeddingManager().get_instance_obj(self.embedding_model, strict=True)
+            vectors = await model.async_get_embeddings([query.query_str], text_type="query")
+            vector = vectors[0]
+        else:
+            raise ValueError("query requires embeddings or an embedding_model plus query_str")
+        self._check_vector(vector)
+        return vector
+
+    async def _async_vectors_for_documents(self, documents: list[Document]) -> list[list[float]]:
+        missing = [index for index, document in enumerate(documents) if not document.embedding]
+        if missing:
+            if not self.embedding_model:
+                raise ValueError("documents without embeddings require embedding_model")
+            model = EmbeddingManager().get_instance_obj(self.embedding_model, strict=True)
+            generated = await model.async_get_embeddings([documents[index].text or "" for index in missing])
+            for index, vector in zip(missing, generated, strict=True):
+                documents[index].embedding = vector
+        vectors = [document.embedding for document in documents]
+        for vector in vectors:
+            self._check_vector(vector)
+        return vectors
+
     def _check_vector(self, vector: Any) -> None:
         if (
             not isinstance(vector, list)
@@ -346,7 +372,7 @@ class RedisVectorStore(Store):
         return self._rows_to_documents(response)
 
     async def async_query(self, query: Query, **kwargs: Any) -> list[Document]:
-        vector = self._embedding_for_query(query)
+        vector = await self._async_embedding_for_query(query)
         top_k = self._top_k(query)
         await self._async_ensure_index(len(vector))
         response = await (await self._ensure_async_client()).execute_command(
@@ -383,7 +409,7 @@ class RedisVectorStore(Store):
     async def async_upsert_document(self, documents: list[Document], **kwargs: Any) -> None:
         if not documents:
             return
-        vectors = self._vectors_for_documents(documents)
+        vectors = await self._async_vectors_for_documents(documents)
         await self._async_ensure_index(len(vectors[0]))
         connection = await self._ensure_async_client()
         async with connection.pipeline(transaction=False) as pipeline:
