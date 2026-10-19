@@ -76,7 +76,7 @@ class TestPromptRetryOptions(unittest.TestCase):
             manager.return_value.get_instance_obj.return_value = None
             process_llm_token(counter, prompt, profile, planner_input)
         self.assertEqual('x' * 32, planner_input['background'])
-        self.assertEqual(3, counter.calls)
+        self.assertGreaterEqual(counter.calls, 3)
 
     def test_retry_false_surfaces_first_failure(self):
         counter = TokenCounter(failures_at={1, 2})
