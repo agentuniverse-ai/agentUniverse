@@ -12,8 +12,22 @@ from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 
 
 class QianfanLLMChannel(LLMChannel):
+    """LLM channel for the Baidu Qianfan platform.
+
+    Attributes:
+        channel_api_base (Optional[str]): Base url of the qianfan api.
+    """
+
     channel_api_base: Optional[str] = "https://qianfan.baidubce.com/v2/"
 
     def _initialize_by_component_configer(self, component_configer: ComponentConfiger) -> 'QianfanLLMChannel':
+        """Initialize the channel from the component configer.
+
+        Args:
+            component_configer (ComponentConfiger): The component configer instance.
+
+        Returns:
+            QianfanLLMChannel: The initialized channel instance.
+        """
         super()._initialize_by_component_configer(component_configer)
         return self
