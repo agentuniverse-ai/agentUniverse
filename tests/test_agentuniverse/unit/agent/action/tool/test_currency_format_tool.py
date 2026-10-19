@@ -498,6 +498,19 @@ class CurrencyFormatToolTest(unittest.TestCase):
             currency="USD",
         )
 
+    def test_amount_underscore_grouping_rejected(self) -> None:
+        # Decimal() silently tolerates underscores in almost any
+        # position ('_100', '100_', '1__0'), which is outside the
+        # documented plain-numeric-string contract — reject them.
+        for bad in ("1_000", "_100", "100_", "1__0", "1_0.5"):
+            with self.subTest(bad=bad):
+                self._assert_invalid(
+                    "plain numeric string",
+                    mode="format",
+                    amount=bad,
+                    currency="USD",
+                )
+
     def test_amount_list_rejected(self) -> None:
         self._assert_invalid(
             "amount must be an int, float or numeric string",
@@ -536,6 +549,37 @@ class CurrencyFormatToolTest(unittest.TestCase):
             mode="format",
             amount="1e16",
             currency="USD",
+        )
+
+    def test_bounds_are_configurable_fields(self) -> None:
+        # max_abs_amount and max_decimals are documented public fields
+        # and must actually bound their inputs (the limit was previously
+        # a hardcoded ClassVar and the decimals range a hardcoded 0-6,
+        # so overriding either field had no effect).
+        self.tool.max_abs_amount = Decimal(1000)
+        self._assert_invalid(
+            "|amount| exceeds the 1,000 limit",
+            mode="format",
+            amount=2000,
+            currency="USD",
+        )
+        self.assertEqual(
+            self.tool.execute(mode="format", amount=1000, currency="USD")["result"],
+            "1,000.00",
+        )
+        self.tool.max_decimals = 2
+        self._assert_invalid(
+            "decimals must be an integer between 0 and 2",
+            mode="format",
+            amount=1.5,
+            currency="USD",
+            decimals=5,
+        )
+        self.assertEqual(
+            self.tool.execute(
+                mode="format", amount=1.5, currency="USD", decimals=2
+            )["result"],
+            "1.50",
         )
 
     def test_currency_wrong_length_rejected(self) -> None:

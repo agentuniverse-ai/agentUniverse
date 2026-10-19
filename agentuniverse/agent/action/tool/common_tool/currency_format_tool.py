@@ -157,7 +157,7 @@ class CurrencyFormatTool(Tool):
     }
 
     SOURCE: ClassVar[str] = "ISO 4217 (embedded indicative table, offline)"
-    MAX_ABS_AMOUNT: ClassVar[Decimal] = Decimal(10) ** 15
+    max_abs_amount: Decimal = Decimal(10) ** 15
     max_decimals: int = 6
 
     # ------------------------------------------------------------------ #
@@ -231,18 +231,18 @@ class CurrencyFormatTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"currency_format_tool: {message}")
 
-    @classmethod
-    def _validate_amount(cls, amount: Any) -> Decimal:
+    def _validate_amount(self, amount: Any) -> Decimal:
         """Validate the ``amount`` input and return it as a Decimal.
 
         Accepts ints, finite floats and plain numeric strings (leading /
-        trailing whitespace tolerated, thousands separators rejected);
-        rejects NaN / infinity and any magnitude above ``MAX_ABS_AMOUNT``.
-        Floats are converted through their shortest decimal
-        representation so binary artifacts never reach the formatter.
+        trailing whitespace tolerated, thousands separators and
+        underscore digit grouping rejected); rejects NaN / infinity and
+        any magnitude above ``max_abs_amount``. Floats are converted
+        through their shortest decimal representation so binary
+        artifacts never reach the formatter.
         """
         if amount is None or isinstance(amount, bool):
-            cls._invalid(
+            self._invalid(
                 "amount is required for the format and convert_presentation "
                 f"modes and must be an int, float or numeric string (got {amount!r})"
             )
@@ -250,21 +250,26 @@ class CurrencyFormatTool(Tool):
             text = str(amount)
         elif isinstance(amount, str):
             text = amount.strip()
+            if "_" in text:
+                self._invalid(
+                    "amount must be a plain numeric string without "
+                    f"underscore or thousands separators (got {amount!r})"
+                )
         else:
-            cls._invalid(
+            self._invalid(
                 "amount must be an int, float or numeric string "
                 f"(got {amount!r})"
             )
         try:
             value = Decimal(text)
         except (InvalidOperation, ValueError):
-            cls._invalid(f"amount must be a finite number (got {amount!r})")
+            self._invalid(f"amount must be a finite number (got {amount!r})")
         if not value.is_finite():
-            cls._invalid(f"amount must be a finite number (got {text!r})")
-        if abs(value) > cls.MAX_ABS_AMOUNT:
-            cls._invalid(
+            self._invalid(f"amount must be a finite number (got {text!r})")
+        if abs(value) > self.max_abs_amount:
+            self._invalid(
                 "|amount| exceeds the "
-                f"{cls.MAX_ABS_AMOUNT:,} limit (got {text!r})"
+                f"{self.max_abs_amount:,} limit (got {text!r})"
             )
         return value
 
@@ -312,18 +317,19 @@ class CurrencyFormatTool(Tool):
             )
         return normalized
 
-    @classmethod
-    def _validate_decimals(cls, decimals: Any, default: int) -> int:
+    def _validate_decimals(self, decimals: Any, default: int) -> int:
         """Validate the format-mode ``decimals`` override."""
         if decimals is None:
             return default
         if isinstance(decimals, bool) or not isinstance(decimals, int):
-            cls._invalid(
-                f"decimals must be an integer between 0 and 6 (got {decimals!r})"
+            self._invalid(
+                f"decimals must be an integer between 0 and {self.max_decimals} "
+                f"(got {decimals!r})"
             )
-        if not 0 <= decimals <= 6:
-            cls._invalid(
-                f"decimals must be an integer between 0 and 6 (got {decimals!r})"
+        if not 0 <= decimals <= self.max_decimals:
+            self._invalid(
+                f"decimals must be an integer between 0 and {self.max_decimals} "
+                f"(got {decimals!r})"
             )
         return decimals
 
