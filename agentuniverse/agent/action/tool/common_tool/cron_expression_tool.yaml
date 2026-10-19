@@ -1,0 +1,54 @@
+name: cron_expression_tool
+description: Cron expression tool — pure Python stdlib, no network required. Parses standard five-field cron expressions (minute hour day-of-month month day-of-week) supporting '*', lists, ranges, steps, month/day names and the @daily/@hourly/@weekly/@monthly/@yearly macros. mode='validate' reports per-field parse errors, mode='describe' returns a human-readable English summary, and mode='next' returns the next N run datetimes after a given or injected now (minute iteration with a hard iteration cap).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.cron_expression_tool
+  class: CronExpressionTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — validate, describe or next.
+    required: true
+  expression:
+    type: string
+    description: The cron expression — five whitespace-separated fields (minute hour day-of-month month day-of-week) or one of the @daily/@midnight/@hourly/@weekly/@monthly/@yearly/@annually macros.
+    required: false
+  now:
+    type: string
+    description: next mode only — reference time the matches must be strictly after, as an ISO-8601 datetime ('2026-01-15T10:30:00') or a bare date ('2026-01-15'); defaults to the system clock. Tests inject a fixed value.
+    required: false
+  count:
+    type: integer
+    description: next mode only — how many upcoming run datetimes to return (1-100, default 1).
+    required: false
+  max_iterations:
+    type: integer
+    description: next mode only — hard cap on candidate minute examinations (1-5,000,000, default 1,000,000). Unmatchable expressions such as '0 0 31 2 *' exhaust the cap and return an iteration_cap_exceeded error.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["validate", "describe", "next"]
+      description: Operation mode.
+    expression:
+      type: string
+      description: Cron expression (five fields or an @ macro).
+    now:
+      type: string
+      description: Reference time for the next mode (ISO-8601).
+    count:
+      type: integer
+      minimum: 1
+      maximum: 100
+      description: Number of upcoming runs to return (next mode).
+    max_iterations:
+      type: integer
+      minimum: 1
+      maximum: 5000000
+      description: Hard cap on candidate examinations (next mode).
+  required: ["mode"]
