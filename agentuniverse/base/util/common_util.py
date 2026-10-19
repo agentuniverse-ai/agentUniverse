@@ -109,6 +109,9 @@ def parse_partial_json(s: str, *, strict: bool = False) -> Any:
     # If we're still inside a string at the end of processing,
     # we need to close the string.
     if is_inside_string:
+        if escaped:
+            # Drop the incomplete escape so it cannot escape the closing quote.
+            new_s = new_s[:-1]
         new_s += '"'
 
     # Try to parse mods of string until we succeed or run out of characters.
@@ -175,14 +178,15 @@ def _parse_json(
     return parser(json_str)
 
 
-def parse_and_check_json_markdown(text: str, expected_keys: List[str]) -> dict:
+def parse_and_check_json_markdown(text: str, expected_keys: List[str] | None) -> dict:
     """
     Parse a JSON string from a Markdown string and check that it
     contains the expected keys.
 
     Args:
         text: The Markdown string.
-        expected_keys: The expected keys in the JSON string.
+        expected_keys: The expected keys in the JSON string. ``None`` means
+            that the caller does not require any input fields.
 
     Returns:
         The parsed JSON object as a Python dictionary.
@@ -191,7 +195,7 @@ def parse_and_check_json_markdown(text: str, expected_keys: List[str]) -> dict:
         json_obj = parse_json_markdown(text)
     except json.JSONDecodeError as e:
         raise Exception(f"Got invalid JSON object. Error: {e}")
-    for key in expected_keys:
+    for key in expected_keys or []:
         if key not in json_obj:
             raise Exception(
                 f"Got invalid return object. Expected key `{key}` "
