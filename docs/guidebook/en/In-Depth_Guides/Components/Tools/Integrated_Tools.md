@@ -632,3 +632,27 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## ICalendarTool
+
+`ICalendarTool` creates, reads, inspects, and merges RFC 5545 `.ics` calendars from structured event data. Events support date or date-time ranges, IANA timezones, attendees, categories, recurrence rules, and display alarms.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.icalendar_tool import ICalendarTool
+
+tool = ICalendarTool(base_dir="/srv/agent-files")
+tool.execute(
+    mode="create",
+    file_path="planning.ics",
+    default_timezone="Asia/Shanghai",
+    events=[{
+        "summary": "Release planning",
+        "start": "2026-07-20T10:00:00",
+        "end": "2026-07-20T11:00:00",
+        "attendees": ["mailto:team@example.com"],
+        "alarms": [{"minutes_before": 15}],
+    }],
+)
+```
+
+Paths are confined to `base_dir`; event count, every externally loaded property, property count, attendees, categories, alarms, input size, and generated size are bounded. The complete serialized read response is constrained by `max_output_chars`. Merge admits at most `max_input_files`, checks the aggregate `max_merge_bytes` budget as each file is loaded, and adds validated events incrementally instead of retaining every source calendar. Writes use a same-directory temporary file and explicit overwrite.

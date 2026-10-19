@@ -1,0 +1,96 @@
+name: icalendar_tool
+description: Create, read, inspect, and merge bounded iCalendar ICS files.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.icalendar_tool
+  class: ICalendarTool
+input_keys:
+  - mode
+  - file_path
+base_dir: .
+max_read_bytes: 10485760
+max_write_bytes: 10485760
+max_events: 1000
+max_text_chars: 200000
+max_output_chars: 500000
+max_field_chars: 20000
+max_attendees_per_event: 100
+max_categories_per_event: 100
+max_alarms_per_event: 10
+max_properties_per_event: 50
+max_input_files: 100
+max_merge_bytes: 52428800
+args_model:
+  mode:
+    type: string
+    required: true
+    description: Operation mode — create, read, info, or merge.
+  file_path:
+    type: string
+    required: true
+    description: ICS path underneath base_dir.
+  events:
+    type: array
+    required: false
+  input_paths:
+    type: array
+    required: false
+  overwrite:
+    type: boolean
+    required: false
+    default: false
+  calendar_name:
+    type: string
+    required: false
+  calendar_description:
+    type: string
+    required: false
+  default_timezone:
+    type: string
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["create", "read", "info", "merge"]
+    file_path:
+      type: string
+    events:
+      type: array
+      items:
+        type: object
+        properties:
+          uid: {type: string}
+          summary: {type: string}
+          start: {type: string}
+          end: {type: string}
+          description: {type: string}
+          location: {type: string}
+          status: {type: string, enum: ["tentative", "confirmed", "cancelled"]}
+          organizer: {type: string}
+          attendees: {type: array, items: {type: string}}
+          categories: {type: array, items: {type: string}}
+          url: {type: string}
+          rrule: {type: string}
+          alarms:
+            type: array
+            items:
+              type: object
+              properties:
+                minutes_before: {type: integer, minimum: 0}
+                description: {type: string}
+              required: ["minutes_before"]
+              additionalProperties: false
+        required: ["summary", "start", "end"]
+        additionalProperties: false
+    input_paths:
+      type: array
+      items: {type: string}
+    overwrite: {type: boolean, default: false}
+    calendar_name: {type: string}
+    calendar_description: {type: string}
+    default_timezone: {type: string}
+  required: ["mode", "file_path"]
+  additionalProperties: false
