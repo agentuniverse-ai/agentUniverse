@@ -97,9 +97,12 @@ class _BoundedFileIO:
 
     def close(self) -> None:
         if not self._closed:
-            self._file.flush()
-            self._file.close()
-            self._closed = True
+            try:
+                # File.close() flushes and releases the handle even if flushing
+                # fails. A separate flush here could prevent closing entirely.
+                self._file.close()
+            finally:
+                self._closed = self._file.closed
 
 
 class _BoundedWriterFactory:
@@ -138,6 +141,18 @@ class _BoundedWriterFactory:
                 _raise_reader_error(ValueError, f"Duplicate 7Z member name: {member_name}")
             self.products[member_name] = writer
         return writer
+
+    def close(self) -> None:
+        """Attempt every close, even when one member reports an I/O error."""
+        first_error = None
+        for writer in self.products.values():
+            try:
+                writer.close()
+            except OSError as exc:
+                if first_error is None:
+                    first_error = exc
+        if first_error is not None:
+            raise first_error
 
 
 class SevenZipReader(Reader):
@@ -288,11 +303,22 @@ class SevenZipReader(Reader):
                 if not selected_sizes:
                     return []
                 factory = _BoundedWriterFactory(Path(temp_dir), selected_sizes, budget)
-                archive.extract(
-                    path=Path(temp_dir),
-                    targets=list(selected_sizes),
-                    factory=factory,
-                )
+                try:
+                    archive.extract(
+                        path=Path(temp_dir),
+                        targets=list(selected_sizes),
+                        factory=factory,
+                    )
+                except BaseException:
+                    # py7zr does not close custom writers after failed extraction.
+                    # Release handles before the outer temporary-directory cleanup.
+                    try:
+                        factory.close()
+                    except OSError:
+                        pass  # Keep the original extraction error after cleanup.
+                    raise
+                else:
+                    factory.close()
 
             for entry_name in selected_sizes:
                 writer = factory.products.get(entry_name)
