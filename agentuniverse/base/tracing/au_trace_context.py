@@ -102,18 +102,18 @@ class AuTraceContext:
             return format_span_id(span_context.span_id)
         return self._span_id
 
-    def set_session_id(self, session_id: str):
+    def set_session_id(self, session_id: str) -> None:
         self._session_id = session_id
 
-    def set_trace_id(self, trace_id: str):
+    def set_trace_id(self, trace_id: str) -> None:
         self._trace_id = trace_id
         self._set_otel_context(trace_id, self._span_id)
 
-    def set_span_id(self, span_id: str):
+    def set_span_id(self, span_id: str) -> None:
         self._span_id = span_id
         self._set_otel_context(self._trace_id, span_id)
 
-    def set_trace_context(self, trace_id: str, span_id: str):
+    def set_trace_context(self, trace_id: str, span_id: str) -> None:
         self._trace_id = trace_id
         self._span_id = span_id
         self._set_otel_context(trace_id, span_id)
@@ -124,13 +124,13 @@ class AuTraceContext:
             return None
         return span.context.span_id
 
-    def init_new_token_usage(self, span_id=None):
+    def init_new_token_usage(self, span_id=None) -> None:
         span_id = span_id or trace.get_current_span().get_span_context().span_id
         if not span_id:
             return
         self._token_count_dict[span_id] = TokenUsage()
 
-    def add_current_token_usage(self, token_usage, span_id=None):
+    def add_current_token_usage(self, token_usage, span_id=None) -> None:
         span_id = span_id or trace.get_current_span().get_span_context().span_id
         if not span_id:
             return
@@ -142,7 +142,7 @@ class AuTraceContext:
         else:
             self._token_count_dict[span_id] += token_usage
 
-    def add_current_token_usage_to_parent(self, token_usage=None, parent_span_id=None):
+    def add_current_token_usage_to_parent(self, token_usage=None, parent_span_id=None) -> None:
         if not token_usage:
             token_usage = self.get_current_token_usage()
         if parent_span_id and parent_span_id in self._token_count_dict:
