@@ -221,38 +221,95 @@ class AppConfiger(object):
 
     @property
     def llm_configer_map(self) -> Dict[str, LLMConfiger]:
+        """Return the map of LLM configers.
+
+        Returns:
+            Dict[str, LLMConfiger]: mapping of LLM names to their LLMConfiger instances; empty dict when none are registered.
+        """
         return self.__llm_configer_map
 
     @llm_configer_map.setter
     def llm_configer_map(self, value: Dict[str, LLMConfiger]):
+        """Set the LLM configer map to the given value.
+
+        Args:
+            value: mapping of LLM names to their LLMConfiger instances.
+
+        Returns:
+            None.
+        """
         self.__llm_configer_map = value
 
     @property
     def agent_llm_set(self) -> set:
+        """Return the set of LLMs bound to agents.
+
+        Returns:
+            set: the set of agent LLM names; empty set when none have been added.
+        """
         return self.__agent_llm_set
 
     @agent_llm_set.setter
     def agent_llm_set(self, value: set):
+        """Set the agent LLM set to the given value.
+
+        Args:
+            value: the set of agent LLM names to store.
+
+        Returns:
+            None.
+        """
         self.__agent_llm_set = value
 
     @property
     def agent_tool_set(self) -> set:
+        """Return the set of tools bound to agents.
+
+        Returns:
+            set: the set of agent tool names; empty set when none have been added.
+        """
         return self.__agent_tool_set
 
     @property
     def agent_toolkit_set(self) -> set:
+        """Return the set of toolkits bound to agents.
+
+        Returns:
+            set: the set of agent toolkit names; empty set when none have been added.
+        """
         return self.__agent_toolkit_set
 
     @agent_tool_set.setter
     def agent_tool_set(self, value: set):
+        """Set the agent tool set to the given value.
+
+        Args:
+            value: the set of agent tool names to store.
+
+        Returns:
+            None.
+        """
         self.__agent_tool_set = value
 
     @property
     def llm_plugins(self):
+        """Return the loaded LLM plugins.
+
+        Returns:
+            Any: the collection of LLM plugins; empty set when none have been loaded.
+        """
         return self.__llm_plugins
 
     @classmethod
     def load_llm_plugins(cls, plugin_modules):
+        """Resolve dotted plugin module names into their callables.
+
+        Args:
+            plugin_modules: dotted paths in the form 'module_path.function_name' to import and resolve.
+
+        Returns:
+            list: one callable per entry of plugin_modules, imported via importlib and fetched by getattr.
+        """
         funcs = []
         for item in plugin_modules:
             module_name, func_name = item.rsplit('.', 1)
