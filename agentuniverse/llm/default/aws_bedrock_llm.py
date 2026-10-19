@@ -68,7 +68,7 @@ class AWSBedrockLLM(LLM):
             try:
                 import boto3
             except ImportError:
-                raise ImportError("boto3 is required for AWS Bedrock LLM. Install it with: pip install boto3")
+                raise ImportError("boto3 is required for AWS Bedrock LLM. Install it with: pip install boto3") from None
             
             session_kwargs = {
                 'region_name': self.aws_region,
@@ -154,7 +154,7 @@ class AWSBedrockLLM(LLM):
                 return LLMOutput(text=text, raw=response)
         
         except Exception as e:
-            raise RuntimeError(f"Error calling AWS Bedrock: {e}")
+            raise RuntimeError(f"Error calling AWS Bedrock: {e}") from e
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         """Async call to AWS Bedrock LLM.
@@ -187,7 +187,7 @@ class AWSBedrockLLM(LLM):
                     # End of message
                     break
         except Exception as e:
-            raise RuntimeError(f"Error in streaming response: {e}")
+            raise RuntimeError(f"Error in streaming response: {e}") from e
 
     def max_context_length(self) -> int:
         """Return the maximum context length for the model."""
@@ -224,4 +224,4 @@ class AWSBedrockLLM(LLM):
             raise ImportError(
                 "langchain-aws is required for LangChain integration. "
                 "Install it with: pip install langchain-aws"
-            )
+            ) from None
