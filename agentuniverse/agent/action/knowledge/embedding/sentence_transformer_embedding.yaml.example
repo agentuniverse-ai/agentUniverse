@@ -1,0 +1,10 @@
+name: 'sentence_transformer_embedding'
+description: 'Embedding component backed by local sentence-transformers models (all-MiniLM-L6-v2, BGE, etc.), runs on CPU or CUDA.'
+embedding_model_name: 'all-MiniLM-L6-v2'
+device: 'cpu'
+normalize_embeddings: true
+batch_size: 32
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.sentence_transformer_embedding'
+  class: 'SentenceTransformerEmbedding'
