@@ -309,3 +309,44 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [QuoteAttributionAnalyzer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/quote_attribution_analyzer.yaml)
+
+This component pairs direct quotes with their attributed speakers, addressing the *knowledge extraction* direction of issue #258. News wires, interview transcripts, earnings calls and committee reports carry their most quotable knowledge inside quotation marks — but for a knowledge base the raw quotation is only half the fact: `"We will not rest until every customer is refunded," said Alice Chen` is useful precisely because *Alice Chen* committed to it. Retrieval over embeddings blurs that structure away, so this analyzer recovers it before insertion and stamps every quote/speaker pair into metadata, extending the flat `quote` kind of `CitationExtractor` into structured who-said-what records. It is a pass-through component: documents are returned unfiltered, text/id untouched, metadata copied before mutation.
+
+Quoted spans are recognized in four styles — ASCII doubles `"..."`, curly doubles `“...”`, CJK corner brackets `「...」` and German low-high `„...“` — paired within a line so quotations never leak across paragraphs; apostrophes/single quotes are deliberately not delimiters. The text is split into sentences (Chinese terminators need no following space; `Dr.`/`Mr.`/initial periods do not split), every quote's interior is blanked out so the quoted words cannot trigger a pattern, and the sentence containing each quote is searched for attribution patterns. When several match, the one nearest the quote wins. When the quote ends its own sentence and nothing matched, the search extends into the next sentence (patterns must start within its first 48 characters), which recovers `"We are disappointed." Alice Weber said in a note.`
+
+Attribution patterns:
+
+| language | pattern | example |
+|---|---|---|
+| EN | name run before the verb (said/says/told/added/noted/claimed/stated), titles like Dr./Mr./President kept, lowercase particles (`of`, `van`) glue multi-word names, comma appositives between name and verb skipped | `Alice Weber, the finance director, said "..."` → `Alice Weber` |
+| EN | post-position after the verb | `"..." said Alice Chen.` → `Alice Chen` |
+| EN | `according to NAME` | `According to Bob Martinez, "..."` → `Bob Martinez` |
+| EN/ZH | pronoun before the verb (he/she/they; 他/她/它/他们/她们) | `"..." she added` → pronoun backoff |
+| ZH | hanzi run (≤4 chars, leading function characters stripped) before 表示/称/说/指出/认为; single-character verbs must be followed by punctuation, so 称为/说明 do not fire | `李娜表示：“……”` → `李娜` |
+| ZH | `据X报道` | `据新华社报道，“……”` → `新华社` |
+
+Pronoun backoff is a documented heuristic: `he/she/they` carry no name, so the analyzer looks back through the most recent `speaker_lookback` attribution events of the same document (default 2) and reuses the nearest named speaker — the "speaker tracking" approximation that journalists' antecedents usually satisfy. A pronoun without a named antecedent in range, or a quote with no pattern at all, yields `speaker_resolved: unknown`. Known limits, kept honestly: attribution is lexical rather than syntactic, so a heavily rewritten sentence can defeat any pattern; the Chinese name run has no word segmentation, so long modifiers directly before a verb may survive into the name; and pronoun backoff does no gender or number checking.
+
+Every record is `{quote, speaker, speaker_resolved, attribution_text, span}` — `quote` includes its markers, `speaker_resolved` is `'name'`, `'pronoun'` (resolved via backoff) or `'unknown'`, `attribution_text` is the matched pattern, and `span` is a `(start, end)` pair reproducing the quote exactly. Records are ordered by document position and capped at `max_quotes`; `metadata['quote_count']` keeps the true total so truncation is detectable, and `metadata['speakers']` is an insertion-ordered `{speaker: quote_count}` tally over all successfully attributed quotes. The whole pipeline is pure stdlib `re`, deterministic and offline.
+
+The component definition file is as follows:
+```yaml
+name: 'quote_attribution_analyzer'
+description: 'pair direct quotes with their attributed speakers and stamp them into document metadata'
+max_quotes: 50              # quote records kept; total still in quote_count
+speaker_lookback: 2         # attribution events searched for pronoun backoff
+quotes_key: 'quotes'        # metadata key for the record list; '' disables
+count_key: 'quote_count'    # metadata key for the uncapped total; '' disables
+speakers_key: 'speakers'    # metadata key for the {speaker: count} tally; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.quote_attribution_analyzer'
+  class: 'QuoteAttributionAnalyzer'
+```
+- max_quotes: Maximum number of quote records kept in `metadata[quotes_key]`; must be >= 1. The default 50 bounds metadata growth on quote-dense transcripts.
+- speaker_lookback: How many previous attribution events are searched (most recent first) when resolving he/she/they back to a named speaker; must be >= 1.
+- quotes_key: Metadata key for the quote record list; an empty value disables that stamp.
+- count_key: Metadata key for the total (uncapped) number of quotes found; an empty value disables that stamp.
+- speakers_key: Metadata key for the deduplicated `{speaker: quote_count}` tally; an empty value disables that stamp.

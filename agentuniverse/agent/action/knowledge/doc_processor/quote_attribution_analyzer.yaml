@@ -1,0 +1,29 @@
+name: 'quote_attribution_analyzer'
+description: 'pair direct quotes with their attributed speakers and stamp them into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.quote_attribution_analyzer'
+  class: 'QuoteAttributionAnalyzer'
+
+# Maximum number of quote records kept in metadata['quotes']; the total
+# found is still reported in metadata['quote_count'], so truncation is
+# detectable. Must be >= 1.
+max_quotes: 50
+
+# How many previous attribution events are searched (most recent first)
+# when resolving he/she/they (and Chinese equivalents) back to a named
+# speaker. Must be >= 1.
+speaker_lookback: 2
+
+# Metadata key for the quote record list; '' disables the stamp. Each
+# record is {quote, speaker, speaker_resolved, attribution_text, span}.
+quotes_key: 'quotes'
+
+# Metadata key for the total (uncapped) number of quotes found;
+# '' disables the stamp.
+count_key: 'quote_count'
+
+# Metadata key for the deduplicated {speaker: quote_count} tally over all
+# successfully attributed quotes; '' disables the stamp.
+speakers_key: 'speakers'
