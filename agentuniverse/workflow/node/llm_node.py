@@ -67,7 +67,8 @@ class LLMNode(Node):
         for variable in input_variables:
             if variable not in llm_input_params:
                 raise ValueError(f"The variable {variable} is not found in the input params.")
-            prompt = prompt.replace('{{' + variable + '}}', llm_input_params[variable])
+            value = llm_input_params[variable]
+            prompt = prompt.replace('{{' + variable + '}}', str(value) if value is not None else '')
 
         messages = [{'role': 'user', 'content': prompt}]
         llm_output: LLMOutput = llm.call(messages=messages, streaming=False)
