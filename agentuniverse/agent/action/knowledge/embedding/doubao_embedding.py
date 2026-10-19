@@ -52,6 +52,8 @@ class DoubaoEmbedding(Embedding):
             raise ValueError("endpoint_id is required but not set")
 
         def sliced_norm_l2(vec: List[float]) -> List[float]:
+            """Sliced norm l2.
+            """
             if self.embedding_dims not in SUPPORTED_DIMENSIONS:
                 raise ValueError(
                     f"Unsupported embedding dimension: {self.embedding_dims}. "
