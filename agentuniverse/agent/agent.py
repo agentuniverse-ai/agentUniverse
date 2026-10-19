@@ -556,7 +556,9 @@ class Agent(ComponentBase, ABC):
                           })
         memory.add([message], session_id=session_id, agent_id=agent_id)
 
-    def summarize_memory(self, agent_input: dict[str, Any] = {}, memory: Memory = None):
+    def summarize_memory(self, agent_input: dict[str, Any] = None, memory: Memory = None):
+        if agent_input is None:
+            agent_input = {}
         def do_summarize(params):
             content = memory.summarize_memory(**params)
             memory.add([
