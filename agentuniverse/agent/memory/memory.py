@@ -266,6 +266,9 @@ class Memory(ComponentBase):
         if component_configer.memory_retrieval_storage:
             self.memory_retrieval_storage = component_configer.memory_retrieval_storage
         if not self.memory_retrieval_storage:
+            if not self.memory_storages:
+                raise ValueError(f"Memory '{self.name}' has no memory_storages configured "
+                                 f"and no memory_retrieval_storage is set")
             self.memory_retrieval_storage = self.memory_storages[0]
         if component_configer.memory_summarize_agent:
             self.summarize_agent_id = component_configer.memory_summarize_agent
