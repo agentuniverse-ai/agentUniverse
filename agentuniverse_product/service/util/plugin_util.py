@@ -12,6 +12,7 @@ import uuid
 from yaml import safe_load
 from agentuniverse_product.base.product_manager import ProductManager
 from agentuniverse_product.service.model.plugin_dto import PluginDTO
+from agentuniverse_product.service.util.id_util import validate_component_id
 
 
 def validate_create_plugin_parameters(plugin_dto: PluginDTO) -> None:
@@ -20,8 +21,7 @@ def validate_create_plugin_parameters(plugin_dto: PluginDTO) -> None:
     Args:
         plugin_dto (PluginDTO): The plugin DTO object containing the plugin parameters.
     """
-    if plugin_dto.id is None:
-        raise ValueError("Plugin id cannot be None.")
+    validate_component_id(plugin_dto.id, "Plugin")
     plugin = ProductManager().get_instance_obj(plugin_dto.id, new_instance=False)
     if plugin:
         raise ValueError("Plugin instance corresponding to the plugin id already exists.")

@@ -23,6 +23,7 @@ from agentuniverse_product.base.util.yaml_util import (
     read_yaml_file,
 )
 from agentuniverse_product.service.util.common_util import get_core_path, get_resources_path
+from agentuniverse_product.service.util.id_util import validate_component_id
 from agentuniverse_product.service.util.knowledge_util import (
     register_knowledge,
     unregister_knowledge,
@@ -63,6 +64,7 @@ class KnowledgeService:
         """
         # write product YAML file
         knowledge_id = knowledge_dto.id
+        validate_component_id(knowledge_id, "Knowledge")
 
         product_file_name = f"{knowledge_id}_product"
 
