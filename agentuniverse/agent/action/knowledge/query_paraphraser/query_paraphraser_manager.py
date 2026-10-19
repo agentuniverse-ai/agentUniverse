@@ -17,4 +17,6 @@ class QueryParaphraserManager(ComponentManagerBase[QueryParaphraser]):
     """A singleton manager class of the QueryParaphraser."""
 
     def __init__(self):
+        """Initialize the query paraphraser manager.
+        """
         super().__init__(ComponentEnum.QUERY_PARAPHRASER)
