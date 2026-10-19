@@ -34,3 +34,12 @@ def test_count_pages_through_large_sessions():
 
     assert store.count("first") == 1001
     assert [call[3] for call in collection.calls] == [0, 1000]
+
+
+def test_count_checks_following_page_at_exact_batch_boundary():
+    store = ChromaContextStore()
+    collection = FakeCollection(["first"] * 2000 + ["second"])
+    store._collection = collection
+
+    assert store.count("first") == 2000
+    assert [call[3] for call in collection.calls] == [0, 1000, 2000]
