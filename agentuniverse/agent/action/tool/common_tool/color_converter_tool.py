@@ -40,8 +40,18 @@ is ``(L1 + 0.05) / (L2 + 0.05)`` with ``L1 >= L2``.
 
 Precision: RGB channels are computed with the CSS Color Model
 algorithm and rounded half-up; hue, saturation and lightness/value are
-emitted with one decimal place, which keeps ``hsl -> rgb -> hsl`` (and
-``hsv -> rgb -> hsv``) round trips within one unit of the input.
+emitted with one decimal place. Round trips through the 8-bit RGB
+staging point are quantization-bound rather than exact: ``rgb ->
+hsl -> rgb`` and ``rgb -> hsv -> rgb`` are byte-exact across the full
+8-bit gamut, and lightness/value round trips stay within 0.2 units,
+but hue and saturation drift within about one unit only for
+well-saturated mid-gamut colors (saturation >= 25%, 25%-75%
+lightness/value). Toward the achromatic corners a single 8-bit step
+dominates the chroma, so drift grows to a few points of saturation
+and up to tens of degrees of hue at ~5% saturation/lightness, and
+fully achromatic inputs (0% saturation, 0% lightness/value, or 100%
+lightness — full-value hsv colors keep their hue) lose hue
+information entirely and normalize to hue 0.
 
 Input validation is strict and happens before any computation:
 malformed parameters (wrong types, unknown mode or target format,

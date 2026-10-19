@@ -15,7 +15,10 @@ Color Model example hsl(120, 50%, 50%) -> rgb(64, 191, 64)), WCAG
 ratios against published values (black on white = 21:1, the famous
 AA-boundary grays #767676 = 4.54 and #777777 = 4.48 on white) plus an
 independent inline re-implementation of the WCAG luminance formula,
-and hsl/hsv round trips stay within one unit as documented.
+and hsl/hsv round trips follow the documented quantization bounds
+(byte-exact through the 8-bit RGB staging point, lightness/value
+within 0.2 units, hue/saturation within about one unit for saturated
+mid-gamut colors only).
 """
 
 import unittest
@@ -276,7 +279,9 @@ class ColorConverterToolTest(unittest.TestCase):
         self.assertIn("nearest", result["error"]["message"])
 
     # ------------------------------------------------------------------ #
-    # Round-trip precision (documented: within one unit)
+    # Round-trip precision (documented: byte-exact through the 8-bit RGB
+    # staging point; lightness/value within 0.2 units; hue/saturation
+    # within one unit only for saturated mid-gamut colors)
     # ------------------------------------------------------------------ #
 
     @staticmethod
@@ -285,7 +290,7 @@ class ColorConverterToolTest(unittest.TestCase):
         h, s, l = (p.strip().rstrip("%") for p in body.split(",")[:3])
         return float(h), float(s), float(l)
 
-    def test_hsl_round_trip_within_one_unit(self) -> None:
+    def test_hsl_round_trip_mid_gamut_within_one_unit(self) -> None:
         samples = [
             (0, 100, 50),
             (120, 50, 50),
@@ -311,7 +316,7 @@ class ColorConverterToolTest(unittest.TestCase):
                 self.assertLessEqual(abs(bs - s), 1)
                 self.assertLessEqual(abs(bl - l), 1)
 
-    def test_hsv_round_trip_within_one_unit(self) -> None:
+    def test_hsv_round_trip_mid_gamut_within_one_unit(self) -> None:
         samples = [
             (0, 100, 100),
             (120, 50, 50),
@@ -351,6 +356,97 @@ class ColorConverterToolTest(unittest.TestCase):
                     mode="convert", color=rgb, to_format="hex"
                 )["result"]
                 self.assertEqual(back, hex_color)
+
+    def test_rgb_through_hsl_hsv_is_byte_exact(self) -> None:
+        # rgb -> hsl/hsv (1 decimal) -> rgb must return the original
+        # bytes for every sampled color across the whole cube: the
+        # 1-decimal representation loses no channel information.
+        for r in range(0, 256, 17):
+            for g in range(0, 256, 17):
+                for b in range(0, 256, 17):
+                    with self.subTest(rgb=(r, g, b)):
+                        h, s, l = self.tool._rgb_to_hsl(r, g, b)
+                        self.assertEqual(self.tool._hsl_to_rgb(h, s, l), (r, g, b))
+                        hv, sv, vv = self.tool._rgb_to_hsv(r, g, b)
+                        self.assertEqual(self.tool._hsv_to_rgb(hv, sv, vv), (r, g, b))
+
+    def test_lightness_value_round_trip_within_quantization(self) -> None:
+        # Lightness/value round trips stay within 0.2 units everywhere,
+        # including achromatic corners (documented bound).
+        for kind in ("hsl", "hsv"):
+            for h in range(0, 360, 30):
+                for s in range(0, 101, 10):
+                    for third in range(0, 101, 10):
+                        with self.subTest(kind=kind, h=h, s=s, third=third):
+                            text = self.tool.execute(
+                                mode="convert",
+                                color=f"{kind}({h}, {s}%, {third}%)",
+                                to_format=kind,
+                            )["result"]
+                            bh, bs, bthird = self._parse_hsl(text)
+                            self.assertLessEqual(hue_distance(bh, h), 180)
+                            self.assertLessEqual(abs(bs - s), 100)
+                            self.assertLessEqual(abs(bthird - third), 0.2 + 1e-9)
+
+    def test_hue_saturation_drift_bounded_in_saturated_mid_gamut(self) -> None:
+        # For saturation >= 25% and 25%-75% lightness/value the drift
+        # stays small (measured maxima: 1.3 hue / 0.3 sat for hsl,
+        # 2.7 hue / 0.3 sat for hsv — asserted with margin).
+        for kind in ("hsl", "hsv"):
+            for h in range(0, 360, 15):
+                for s in range(25, 101, 5):
+                    for third in range(25, 76, 5):
+                        with self.subTest(kind=kind, h=h, s=s, third=third):
+                            text = self.tool.execute(
+                                mode="convert",
+                                color=f"{kind}({h}, {s}%, {third}%)",
+                                to_format=kind,
+                            )["result"]
+                            bh, bs, bthird = self._parse_hsl(text)
+                            self.assertLessEqual(hue_distance(bh, h), 3)
+                            self.assertLessEqual(abs(bs - s), 1)
+                            self.assertLessEqual(abs(bthird - third), 0.2 + 1e-9)
+
+    def test_achromatic_round_trips_normalize_hue_to_zero(self) -> None:
+        # 0% saturation, 0% lightness/value, and (hsl only) 100%
+        # lightness carry no hue: the round trip must normalize to
+        # hue 0 (documented). Note hsv(…, 100%, 100%) is a vivid
+        # color, not white — hsv keeps its hue at full value.
+        cases = {
+            "hsl": (
+                "hsl(180, 0%, 50%)",
+                "hsl(217, 100%, 0%)",
+                "hsl(217, 100%, 100%)",
+            ),
+            "hsv": ("hsv(180, 0%, 50%)", "hsv(217, 100%, 0%)"),
+        }
+        for kind, texts in cases.items():
+            for text in texts:
+                with self.subTest(kind=kind, text=text):
+                    result = self.tool.execute(
+                        mode="convert", color=text, to_format=kind
+                    )["result"]
+                    bh, bs, bthird = self._parse_hsl(result)
+                    self.assertEqual(bh, 0.0)
+                    self.assertEqual(bs, 0.0)
+
+    def test_near_achromatic_quantization_drift_documented(self) -> None:
+        # Near the achromatic corners a single 8-bit step dominates the
+        # tiny chroma, so hue/saturation drift far beyond one unit.
+        # These pins document the measured worst-case behavior.
+        result = self.tool.execute(
+            mode="convert", color="hsl(21, 5%, 5%)", to_format="hsl"
+        )["result"]
+        self.assertEqual(result, "hsl(60, 4%, 4.9%)")
+        result = self.tool.execute(
+            mode="convert", color="hsv(0, 10%, 5%)", to_format="hsv"
+        )["result"]
+        self.assertEqual(result, "hsv(0, 15.4%, 5.1%)")
+        # The lightness/value channels stay exact regardless.
+        result = self.tool.execute(
+            mode="convert", color="hsl(0, 80%, 5%)", to_format="hsl"
+        )["result"]
+        self.assertEqual(result, "hsl(0, 76.9%, 5.1%)")
 
     # ------------------------------------------------------------------ #
     # info mode
