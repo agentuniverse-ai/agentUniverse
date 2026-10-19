@@ -209,7 +209,6 @@ async def _default_agent_wrapper_async(func, *args, **kwargs):
                                                          result,
                                                          start_info,
                                                          pair_id)
-        Monitor.pop_invocation_chain()
         return result
 
 

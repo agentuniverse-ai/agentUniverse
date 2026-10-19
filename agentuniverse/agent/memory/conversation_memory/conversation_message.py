@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/12/5 17:43
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: conversation_message.py
 
@@ -36,7 +36,11 @@ class ConversationMessage(Message):
         content (Optional[str]): Message content.
         metadata (Optional[dict]): The metadata of the message.
     """
-    id: Optional[str | int] = uuid.uuid4().hex
+    # Generate an identifier for each instance rather than once at import time.
+    # ``uuid.uuid4().hex`` as a plain default is evaluated when the class is
+    # defined, which causes every message created without an explicit id to
+    # share the same identifier.
+    id: Optional[str | int] = Field(default_factory=lambda: uuid.uuid4().hex)
     trace_id: Optional[str] = None
     conversation_id: Optional[str] = None
     source: Optional[str] = None
@@ -113,7 +117,7 @@ class ConversationMessage(Message):
 
     @classmethod
     def check_and_convert_message(cls, messages, session_id: str = None):
-        if len(messages) == 0:
+        if not messages:
             return []
         message = messages[0]
         if isinstance(message, cls):
