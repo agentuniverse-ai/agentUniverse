@@ -8,7 +8,9 @@ from typing import Any, Optional, Iterator, Union, AsyncIterator
 
 from pydantic import Field
 
+from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.base.util.env_util import get_from_env
+from agentuniverse.base.util.system_util import process_yaml_func
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_output import LLMOutput
 
@@ -77,6 +79,32 @@ class HuggingFaceHubLLM(LLM):
         if self.async_client is None:
             self._new_async_client()
         return self.async_client
+
+    def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'HuggingFaceHubLLM':
+        """Initialize the LLM by the ComponentConfiger object.
+
+        Copies the component-specific fields (``api_key``,
+        ``inference_endpoint``, ``timeout``) from the YAML configuration.
+        Unset ``${VAR}`` placeholders resolve to empty strings at config
+        load time; empty values are ignored so the environment-derived
+        defaults (such as the ``HF_TOKEN`` fallback) are preserved.
+        """
+        super().initialize_by_component_configer(component_configer)
+        config_value = component_configer.configer.value
+        if 'api_key' in config_value:
+            api_key = process_yaml_func(config_value.get('api_key'),
+                                        component_configer.yaml_func_instance)
+            if api_key:
+                self.api_key = api_key
+        if 'inference_endpoint' in config_value:
+            inference_endpoint = process_yaml_func(
+                config_value.get('inference_endpoint'),
+                component_configer.yaml_func_instance)
+            if inference_endpoint:
+                self.inference_endpoint = inference_endpoint
+        if config_value.get('timeout') is not None:
+            self.timeout = config_value.get('timeout')
+        return self
 
     def _call(self, messages: list, **kwargs: Any) \
             -> Union[LLMOutput, Iterator[LLMOutput]]:

@@ -6,7 +6,22 @@
 import unittest
 from unittest.mock import MagicMock, patch, AsyncMock
 
+from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.llm.default.huggingface_hub_llm import HuggingFaceHubLLM
+
+
+class _FakeConfiger:
+    """Minimal Configer stand-in exposing a raw yaml value dict."""
+
+    def __init__(self, value):
+        self.value = value
+        self.path = "huggingface_hub_llm.yaml"
+
+
+def _make_llm_configer(value):
+    configer = LLMConfiger().load_by_configer(_FakeConfiger(value))
+    configer.yaml_func_instance = None
+    return configer
 
 
 class TestHuggingFaceHubLLMConfig(unittest.TestCase):
@@ -102,6 +117,59 @@ class TestHuggingFaceHubLLMCall(unittest.TestCase):
         gen = llm._call(messages=[{"role": "user", "content": "hi"}])
         chunks = [chunk.text for chunk in gen]
         self.assertEqual(chunks, ["chunk1", "chunk2"])
+
+
+class TestHuggingFaceHubLLMConfigerInit(unittest.TestCase):
+
+    _METADATA = {
+        "type": "LLM",
+        "module": "agentuniverse.llm.default.huggingface_hub_llm",
+        "class": "HuggingFaceHubLLM",
+    }
+
+    def test_yaml_fields_are_applied(self):
+        llm = HuggingFaceHubLLM(model_name="m")
+        configer = _make_llm_configer({
+            "name": "default_huggingface_hub_llm",
+            "description": "desc",
+            "model_name": "meta-llama/Meta-Llama-3-8B-Instruct",
+            "api_key": "hf-from-yaml",
+            "inference_endpoint": "https://my.endpoint.huggingface.cloud",
+            "timeout": 60,
+            "metadata": self._METADATA,
+        })
+        llm.initialize_by_component_configer(configer)
+        self.assertEqual(llm.name, "default_huggingface_hub_llm")
+        self.assertEqual(llm.model_name, "meta-llama/Meta-Llama-3-8B-Instruct")
+        self.assertEqual(llm.api_key, "hf-from-yaml")
+        self.assertEqual(llm.inference_endpoint,
+                         "https://my.endpoint.huggingface.cloud")
+        self.assertEqual(llm.timeout, 60)
+
+    def test_empty_placeholder_does_not_clobber_env_fallback(self):
+        # Unset ${VAR} placeholders resolve to '' at config load time.
+        llm = HuggingFaceHubLLM(model_name="m", api_key="hf-token-fallback")
+        configer = _make_llm_configer({
+            "name": "default_huggingface_hub_llm",
+            "model_name": "m",
+            "api_key": "",
+            "inference_endpoint": "",
+            "metadata": self._METADATA,
+        })
+        llm.initialize_by_component_configer(configer)
+        self.assertEqual(llm.api_key, "hf-token-fallback")
+        self.assertIsNone(llm.inference_endpoint)
+
+    def test_absent_fields_keep_defaults(self):
+        llm = HuggingFaceHubLLM(model_name="m", api_key="k")
+        configer = _make_llm_configer({
+            "name": "default_huggingface_hub_llm",
+            "model_name": "m",
+            "metadata": self._METADATA,
+        })
+        llm.initialize_by_component_configer(configer)
+        self.assertEqual(llm.api_key, "k")
+        self.assertEqual(llm.timeout, 30.0)
 
 
 class TestHuggingFaceHubLLMGetNumTokens(unittest.TestCase):

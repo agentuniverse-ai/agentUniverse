@@ -64,3 +64,9 @@ HUGGINGFACE_INFERENCE_ENDPOINT=https://<your-endpoint>.endpoints.huggingface.clo
 - `inference_endpoint`: Optional custom inference endpoint URL for dedicated endpoints (TEI / TGI); env: `HUGGINGFACE_INFERENCE_ENDPOINT`. When set, it takes precedence over `model_name`.
 - `timeout`: Request timeout in seconds (default 30).
 - `max_tokens`, `temperature`, `streaming`: Standard generation parameters.
+
+## 4. Notes
+
+- A ready-to-use template named `default_huggingface_hub_llm` ships with the source tree (`agentuniverse/llm/default/huggingface_hub_llm.yaml`). After setting the `HUGGINGFACE_API_KEY` (or `HF_TOKEN`) environment variable you can reference it directly from your agents.
+- `huggingface_hub_llm.yaml.example` in the same directory can be copied into your application configuration directory and edited in place.
+- Unset `${VAR}` placeholders resolve to empty strings and are ignored, so the `HF_TOKEN` environment fallback keeps working even when `HUGGINGFACE_API_KEY` is not defined.

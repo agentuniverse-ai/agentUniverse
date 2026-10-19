@@ -64,3 +64,9 @@ HUGGINGFACE_INFERENCE_ENDPOINT=https://<your-endpoint>.endpoints.huggingface.clo
 - `inference_endpoint`：可选的自定义推理 endpoint URL，用于专用 endpoint（TEI / TGI）；环境变量 `HUGGINGFACE_INFERENCE_ENDPOINT`。设置后优先于 `model_name`。
 - `timeout`：请求超时秒数（默认 30）。
 - `max_tokens`、`temperature`、`streaming`：标准生成参数。
+
+## 4. 说明
+
+- 源码中内置了 name 为 `default_huggingface_hub_llm` 的模板配置（`agentuniverse/llm/default/huggingface_hub_llm.yaml`），配置 `HUGGINGFACE_API_KEY`（或 `HF_TOKEN`）环境变量后即可在 agent 中直接引用。
+- 同目录下的 `huggingface_hub_llm.yaml.example` 可复制到应用配置目录中就地修改使用。
+- 未设置的 `${VAR}` 占位符会解析为空字符串并被忽略，因此即使未定义 `HUGGINGFACE_API_KEY`，`HF_TOKEN` 环境变量回退依然生效。
