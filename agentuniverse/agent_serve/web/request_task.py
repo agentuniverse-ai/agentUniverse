@@ -75,7 +75,7 @@ class RequestTask:
         self.async_queue = asyncio.Queue(maxsize=2000)
         self.async_task = None
 
-    def update_request_do(self, force: bool = False):
+    def update_request_do(self, force: bool = False) -> None:
         current_time = time.time()
         if_update = current_time - self.last_update_time >= RequestLibrary().update_interval
 
@@ -228,7 +228,7 @@ class RequestTask:
                 self.update_request_do(force=True)
             yield "data:" + json.dumps({"error": {"error_msg": str(e)}}) + "\n\n"
 
-    def append_steps(self):
+    def append_steps(self) -> None:
         """Tracing async service running state and update it to database."""
         try:
             self.next_state(TaskStateEnum.RUNNING)
@@ -262,7 +262,7 @@ class RequestTask:
             if self.saved:
                 self.update_request_do(force=True)
 
-    def async_run(self):
+    def async_run(self) -> None:
         """Run the service in async mode."""
         self.kwargs['output_stream'] = self.queue
         self.thread = ThreadWithReturnValue(target=copy_current_request_context(self.func),
@@ -310,7 +310,7 @@ class RequestTask:
             if self.saved:
                 RequestLibrary().update_request(self.__request_do__)
 
-    def next_state(self, next_state: TaskStateEnum):
+    def next_state(self, next_state: TaskStateEnum) -> None:
         """Update request task state if the transition is valid."""
         if ((TaskStateEnum[self.__request_do__.state.upper()], next_state)
                 in VALID_TRANSITIONS):
@@ -318,7 +318,7 @@ class RequestTask:
         else:
             raise Exception("Invalid state transition")
 
-    def check_state(self):
+    def check_state(self) -> None:
         """Keep check request task thread state every minute, if the thread
         is alive, update the request modified time in database."""
         while True:
@@ -366,7 +366,7 @@ class RequestTask:
         return self.thread.result()
 
     @staticmethod
-    def is_validate(request_do: RequestDO):
+    def is_validate(request_do: RequestDO) -> None:
         """If there is no update within ten minutes and the status is neither
         completed nor failed, the task is considered to have failed."""
         if (request_do.gmt_modified < datetime.now() - timedelta(minutes=10)
@@ -376,7 +376,7 @@ class RequestTask:
             request_do.state = TaskStateEnum.FAIL.value
             RequestLibrary().update_request(request_do)
 
-    def cancel(self):
+    def cancel(self) -> None:
         """Cancel the request task. If a response SSE stream is working, put
         the EOF into the queue."""
         self.next_state(TaskStateEnum.CANCELED)
@@ -387,11 +387,11 @@ class RequestTask:
         """Return the request task state."""
         return self.__request_do__.state
 
-    def canceled(self):
+    def canceled(self) -> bool:
         """Whether task is canceled state."""
         return self.__request_do__.state == TaskStateEnum.CANCELED.value
 
-    def finished(self):
+    def finished(self) -> None:
         """Set task to finished state."""
         self.__request_do__.state = TaskStateEnum.FINISHED.value
 
