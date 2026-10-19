@@ -32,9 +32,22 @@ class _FakeStore:
     """
 
     def __init__(self, docs):
+        """Store the fixed document list this fake store will return.
+
+        Args:
+            docs: The list of Document objects served on every query.
+        """
         self._docs = docs
 
     def query(self, query: Query):
+        """Return fresh copies of the fixed documents for the given query.
+
+        Args:
+            query: The query being served by the fake store.
+
+        Returns:
+            A list of new Document copies mirroring the stored documents.
+        """
         return [Document(text=d.text, metadata=dict(d.metadata or {}))
                 for d in self._docs]
 
@@ -43,6 +56,16 @@ class TestKnowledgeRrfIntegration(unittest.TestCase):
     """Multi-store recall fused by RRF through the Knowledge pipeline."""
 
     def _build_knowledge(self, stores):
+        """Build a Knowledge wired for RRF fusion over the given stores.
+
+        Args:
+            stores: Mapping of store code to store instance used as the
+                knowledge's backing stores.
+
+        Returns:
+            A Knowledge instance configured with the base router and the
+            reciprocal rank fusion post-processor.
+        """
         return Knowledge(
             name="rrf_knowledge",
             stores=list(stores.keys()),
