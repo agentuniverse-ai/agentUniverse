@@ -1,0 +1,30 @@
+name: 'contact_entity_extractor'
+description: 'lift contact entities (emails, URLs, phone numbers) into document metadata via high-precision regexes'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.contact_entity_extractor'
+  class: 'ContactEntityExtractor'
+
+# Entity kinds to extract, a non-empty subset of ['email', 'url', 'phone'].
+# Order defines the key order of the stamped metadata mappings.
+entity_types:
+  - 'email'
+  - 'url'
+  - 'phone'
+
+# Metadata key the {kind: [values]} mapping is written to; '' disables
+# stamping. Lists are empty-but-present when nothing is found, so callers
+# can tell 'extraction ran, found nothing' from 'extraction never ran'.
+entities_key: 'entities'
+
+# Metadata key the {kind: count} mapping is written to (counts after
+# dedupe and capping); '' disables stamping.
+counts_key: 'entity_counts'
+
+# When true, repeated contacts collapse to their first spelling —
+# case-insensitive comparison for emails/URLs, digit-wise for phones.
+dedupe: true
+
+# Maximum values kept per kind after dedupe; 0 means unlimited.
+max_per_type: 0
