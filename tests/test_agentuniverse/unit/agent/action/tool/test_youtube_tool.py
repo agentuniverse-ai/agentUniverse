@@ -140,7 +140,7 @@ class YouTubeToolTest(unittest.TestCase):
     """
     def setUp(self) -> None:
         self.tool = YouTubeTool(service=FakeYouTubeService(), api_key="test-key")
-    
+
     def test_search_videos(self) -> None:
         tool_input = ToolInput({
             'mode': Mode.VIDEO_SEARCH.value,

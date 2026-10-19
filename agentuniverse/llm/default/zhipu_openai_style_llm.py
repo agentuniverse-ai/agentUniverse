@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/9/6 16:00
-# @Author  : wangyapei 
+# @Author  : wangyapei
 # @FileName: zhipu_openai_style_llm.py
 
 from typing import Optional, Any, Union, Iterator, AsyncIterator
@@ -66,5 +66,7 @@ class DefaultZhiPuLLM(OpenAIStyleLLM):
 
           The total length of input tokens and generated tokens is limited by the openai model's context length.
           """
+        if self._max_context_length:
+            return self._max_context_length
         return ZHIPU_MAXCONTETNLENGTH.get(self.model_name, 128000)
 
