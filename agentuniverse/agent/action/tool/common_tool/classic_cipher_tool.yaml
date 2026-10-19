@@ -1,0 +1,54 @@
+name: classic_cipher_tool
+description: Classical cipher tool — pure Python stdlib, no network required. ROT13 self-inverse transform (mode='rot13'), Caesar encode/decode with shift 1-25 (mode='caesar'), Atbash mirror mapping (mode='atbash'), Vigenère encode/decode with a letters-only key (mode='vigenere'), and brute-force Caesar/ROT13 cracking that ranks all 26 shifts by English letter-frequency chi-squared score and returns the top-3 candidates (mode='crack'). Case is preserved and non-ASCII letters, digits, punctuation and CJK pass through unchanged.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.classic_cipher_tool
+  class: ClassicCipherTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Cipher mode — rot13, caesar, atbash, vigenere or crack.
+    required: true
+  text:
+    type: string
+    description: The text to encode, decode or crack. Required for every mode; only the 26 ASCII letters are transformed (case preserved), everything else passes through unchanged.
+    required: false
+  operation:
+    type: string
+    description: encode or decode — required for the caesar and vigenere modes; the self-inverse rot13/atbash modes and crack do not use it.
+    required: false
+  shift:
+    type: integer
+    description: Caesar shift, an integer between 1 and 25 (a plain digit string like "3" is also accepted). Caesar mode only.
+    required: false
+  key:
+    type: string
+    description: Vigenère key — a non-empty string of ASCII letters only (case-insensitive); the key stream advances only over the letters of the text. Vigenère mode only.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["rot13", "caesar", "atbash", "vigenere", "crack"]
+      description: Cipher mode.
+    text:
+      type: string
+      description: Text to transform (all modes).
+    operation:
+      type: string
+      enum: ["encode", "decode"]
+      description: Encode or decode (caesar, vigenere modes).
+    shift:
+      type: integer
+      minimum: 1
+      maximum: 25
+      description: Caesar shift between 1 and 25 (caesar mode).
+    key:
+      type: string
+      pattern: "^[A-Za-z]+$"
+      description: Letters-only Vigenère key (vigenere mode).
+  required: ["mode"]
