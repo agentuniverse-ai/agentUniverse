@@ -710,18 +710,42 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _authors(cls, value: Any) -> List[str]:
+        """Extract the trimmed author names from a raw authors array.
+
+        Args:
+            value: Raw authors value from the API.
+
+        Returns:
+            List of author names, or an empty list when value is not a list.
+        """
         if not isinstance(value, list):
             return []
         return [name for author in value if isinstance(author, dict) if (name := cls._string_value(author.get("name")))]
 
     @classmethod
     def _external_ids(cls, value: Any) -> Dict[str, str]:
+        """Flatten a raw externalIds object into a dictionary of string keys and scalar values.
+
+        Args:
+            value: Raw externalIds object from the API.
+
+        Returns:
+            Dict of external identifier keys to their scalar string values.
+        """
         if not isinstance(value, dict):
             return {}
         return {str(key): normalized for key, item in value.items() if (normalized := cls._scalar_string(item))}
 
     @classmethod
     def _open_access_pdf(cls, value: Any) -> Dict[str, str]:
+        """Extract the present fields of a raw openAccessPdf object.
+
+        Args:
+            value: Raw openAccessPdf object from the API.
+
+        Returns:
+            Dict containing any of the url, status, and license fields that are present.
+        """
         if not isinstance(value, dict):
             return {}
         return {
@@ -732,24 +756,29 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _string_list(cls, value: Any) -> List[str]:
+        """Return the trimmed non-empty strings found in a list, or an empty list otherwise."""
         if not isinstance(value, list):
             return []
         return [normalized for item in value if (normalized := cls._string_value(item))]
 
     @staticmethod
     def _string_value(value: Any) -> str:
+        """Return the trimmed value when it is a string, otherwise an empty string."""
         return value.strip() if isinstance(value, str) else ""
 
     @classmethod
     def _bounded_string(cls, value: Any, max_length: int) -> str:
+        """Return the trimmed string truncated to at most max_length characters, or an empty string when the value is not a string."""
         return cls._string_value(value)[:max_length]
 
     @staticmethod
     def _serialized_size(value: Dict[str, Any]) -> int:
+        """Return the UTF-8 byte length of the value serialized as compact JSON."""
         return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
 
     @staticmethod
     def _scalar_string(value: Any) -> str:
+        """Return a trimmed string for string and non-boolean integer values, otherwise an empty string."""
         if isinstance(value, str):
             return value.strip()
         if isinstance(value, int) and not isinstance(value, bool):
@@ -758,16 +787,35 @@ class SemanticScholarTool(Tool):
 
     @staticmethod
     def _integer_value(value: Any) -> int:
+        """Return the value when it is a non-boolean integer, otherwise 0."""
         return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
     @staticmethod
     def _required_nonnegative_integer(value: Any, field_name: str) -> int:
+        """Validate that value is a non-negative integer and return it.
+
+        Args:
+            value: Value to validate.
+            field_name: Field name used in the validation error message.
+
+        Returns:
+            Validated non-negative integer.
+        """
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ValueError(f"invalid {field_name}")
         return value
 
     @classmethod
     def _optional_nonnegative_integer(cls, value: Any, field_name: str) -> Optional[int]:
+        """Return None for a missing value, otherwise validate and return a non-negative integer.
+
+        Args:
+            value: Value to validate, or None.
+            field_name: Field name used in the validation error message.
+
+        Returns:
+            Validated non-negative integer, or None when value is None.
+        """
         if value is None:
             return None
         return cls._required_nonnegative_integer(value, field_name)
@@ -781,6 +829,7 @@ class SemanticScholarTool(Tool):
         offset: int,
         search_filters: Dict[str, Any],
     ) -> Dict[str, Any]:
+        """Compose the operation context dictionary with mode, query, limits, and mode-appropriate filters."""
         context = {
             "mode": mode,
             "query": query,
@@ -796,6 +845,14 @@ class SemanticScholarTool(Tool):
 
     @staticmethod
     def _http_error_message(status_code: Optional[int]) -> str:
+        """Build a human-readable message for an HTTP error status.
+
+        Args:
+            status_code: HTTP status code from the failed response, or None.
+
+        Returns:
+            Descriptive message, with retry guidance for status 429.
+        """
         if status_code == 429:
             return (
                 "Semantic Scholar returned HTTP status 429 (rate limited). "
@@ -811,6 +868,13 @@ class SemanticScholarTool(Tool):
         error_type: str,
         message: str,
     ) -> Dict[str, Any]:
+        """Build the structured error result for the operation, with empty result fields and error metadata.
+
+        Args:
+            context: Operation context produced by _operation_context.
+            error_type: Machine-readable error type.
+            message: Human-readable error description.
+        """
         result = {
             **context,
             "total_results": 0,
