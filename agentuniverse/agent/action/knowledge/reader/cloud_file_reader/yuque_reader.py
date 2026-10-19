@@ -95,6 +95,14 @@ class YuqueReader(Reader):
         md = data.get('sourcecode', '')
         # Process image references inline
         def repl(m):
+            """Replacement callback: return a Markdown image tag for a match.
+
+            Args:
+                m: The regex match whose first group holds the image URL.
+
+            Returns:
+                A Markdown image reference ``![](<url>)`` built from the URL.
+            """
             src = m.group(1)
             return f'![]({src})'
         return re.sub(r'!\[.*?\]\((.*?)\)', repl, md)
