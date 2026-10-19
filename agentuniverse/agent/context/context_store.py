@@ -8,11 +8,10 @@
 
 from abc import abstractmethod
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
 
 from agentuniverse.base.component.component_base import ComponentBase
 from agentuniverse.base.component.component_enum import ComponentEnum
-from agentuniverse.agent.context.context_model import ContextSegment, ContextType, ContextPriority
+from agentuniverse.agent.context.context_model import ContextSegment, ContextType, ContextPriority, elapsed_seconds_since
 
 
 class ContextStore(ComponentBase):
@@ -216,7 +215,7 @@ class ContextStore(ComponentBase):
         if self.ttl_hours <= 0:
             return False
 
-        age_hours = (datetime.now() - segment.metadata.created_at).total_seconds() / 3600
+        age_hours = elapsed_seconds_since(segment.metadata.created_at) / 3600
         return age_hours > self.ttl_hours
 
     def _should_prune(
@@ -259,7 +258,7 @@ class ContextStore(ComponentBase):
 
         # Check age
         if max_age_hours:
-            age_hours = (datetime.now() - segment.metadata.created_at).total_seconds() / 3600
+            age_hours = elapsed_seconds_since(segment.metadata.created_at) / 3600
             if age_hours > max_age_hours:
                 return True
 

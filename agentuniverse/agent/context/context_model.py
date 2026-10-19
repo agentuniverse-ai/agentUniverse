@@ -7,12 +7,17 @@
 # @FileName: context_model.py
 """Core data models for context engineering system."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 import uuid
 import hashlib
+
+
+def elapsed_seconds_since(timestamp: datetime) -> float:
+    """Return elapsed seconds for naive or timezone-aware context timestamps."""
+    return (datetime.now(timestamp.tzinfo) - timestamp).total_seconds()
 
 
 class ContextType(str, Enum):
@@ -80,14 +85,15 @@ class ContextMetadata(BaseModel):
         if self.relevance_score == 0.0:
             return 0.0
 
-        time_since_access = (datetime.now() - self.last_accessed).total_seconds() / 3600  # hours
+        time_since_access = elapsed_seconds_since(self.last_accessed) / 3600  # hours
         decay_factor = max(0.0, 1.0 - (time_since_access * self.decay_rate / 24))  # 24 hours baseline
 
         return self.relevance_score * decay_factor
 
     def update_access(self) -> None:
         """Update access tracking."""
-        self.last_accessed = datetime.now()
+        now = datetime.now(self.last_accessed.tzinfo)
+        self.last_accessed = max(now, self.last_accessed + timedelta(microseconds=1))
         self.access_count += 1
 
 
