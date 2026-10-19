@@ -302,7 +302,7 @@ class FAISSStore(Store):
                 continue
 
             embedding = document.embedding
-            if len(embedding) == 0:
+            if not embedding:
                 if self.embedding_model is not None:
                     embedding = self._get_embedding(document.text)
                 else:
