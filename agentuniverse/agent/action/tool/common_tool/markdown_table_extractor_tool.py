@@ -22,7 +22,6 @@ from agentuniverse.base.util.logging.logging_util import LOGGER
 
 # A table is a header row, a separator row (---|:--|--:), then >=0 data rows.
 # We match conservatively: each row must contain at least one pipe.
-TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
 SEPARATOR = re.compile(r"^\s*\|?[\s:|-]*:?-+[\s:|-]*\|?\s*$")
 # A separator cell must contain at least one dash; only ':', '-', '|', space allowed.
 SEPARATOR_CELL = re.compile(r"^:?-{2,}:?$")
@@ -135,6 +134,8 @@ class MarkdownTableExtractorTool(Tool):
                 raise ValueError(f"text contains more than MAX_TABLES ({MAX_TABLES})")
             if len(rows) > MAX_ROWS:
                 raise ValueError(f"a table exceeds MAX_ROWS ({MAX_ROWS})")
+            if len(header_cells) > MAX_COLUMNS:
+                raise ValueError(f"a table exceeds MAX_COLUMNS ({MAX_COLUMNS})")
             tables.append(
                 {
                     "header": header_cells,

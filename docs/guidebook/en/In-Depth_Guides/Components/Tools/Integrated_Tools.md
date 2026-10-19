@@ -634,3 +634,28 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## MarkdownTableExtractorTool
+
+`MarkdownTableExtractorTool` parses GitHub-Flavored Markdown tables out of
+arbitrary Markdown text and returns them as structured data (`header` +
+`rows`), with helpers to render the result as CSV or JSON. Pure-Python regex
+parsing, zero dependencies.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.markdown_table_extractor_tool import MarkdownTableExtractorTool
+
+tool = MarkdownTableExtractorTool()
+md = "| Name | Age |\n|------|-----|\n| Alice | 30 |"
+tool.execute(text=md, mode="extract")         # structured tables
+tool.execute(text=md, mode="extract_first")   # first table (null when none)
+tool.execute(text=md, mode="to_csv")          # CSV string
+tool.execute(text=md, mode="to_json")         # JSON list of objects
+```
+
+Parsing follows GFM table syntax: a header row, a separator row (`---`, `:--`,
+`--:`, `:--:`), then data rows. Rows with or without surrounding pipes and
+escaped pipes (`\|`) inside cells are supported. `to_csv` / `to_json` accept an
+optional `table_index`. Text length, table count, row count, and column count
+are bounded; validation failures return structured `validation_error` results
+instead of raising.
