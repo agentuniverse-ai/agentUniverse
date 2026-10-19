@@ -11,34 +11,40 @@ from pydantic import BaseModel
 
 
 class NodeOutputParams(BaseModel):
+    """Parameters describing a single node output value: name, type and value."""
     name: Optional[str] = None
     type: Optional[str] = None
     value: Optional[Any] = None
 
 
 class InputValueParams(BaseModel):
+    """Parameters describing a node input value: its type and content."""
     type: Optional[str] = None
     content: Optional[Union[List, str]] = None
 
 
 class NodeInputParams(BaseModel):
+    """Parameters describing a node input: name, type and optional value params."""
     name: Optional[str] = None
     type: Optional[str] = None
     value: Optional[InputValueParams] = None
 
 
 class NodeInfoParams(BaseModel):
+    """Parameters describing node information: name, type and value."""
     name: Optional[str] = None
     type: Optional[str] = None
     value: Optional[Any] = None
 
 
 class ToolNodeInputParams(BaseModel):
+    """Input parameters of a tool node: tool parameter list and input parameter list."""
     tool_param: Optional[List[NodeInfoParams]] = list()
     input_param: Optional[List[NodeInputParams]] = list()
 
 
 class KnowledgeNodeInputParams(BaseModel):
+    """Input parameters of a knowledge node: knowledge parameter list and input parameter list."""
     knowledge_param: Optional[List[NodeInfoParams]] = list()
     input_param: Optional[List[NodeInputParams]] = list()
 
