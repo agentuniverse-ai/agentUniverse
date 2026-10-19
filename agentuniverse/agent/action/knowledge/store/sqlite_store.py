@@ -217,7 +217,8 @@ class SQLiteStore(Store):
 
             document = Document(id=doc_row[0], text=doc_row[1],
                                 word_count=doc_row[2],
-                                metadata=json.loads(doc_row[3]))
+                                metadata=json.loads(doc_row[3])
+                                if doc_row[3] else None)
             results.append(document)
 
         return results
