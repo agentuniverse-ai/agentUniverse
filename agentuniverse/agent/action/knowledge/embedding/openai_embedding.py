@@ -61,7 +61,7 @@ class OpenAIEmbedding(Embedding):
             # Return the embeddings as a list of lists of floats
             return [embedding.embedding for embedding in data]
         except BadRequestError as e:
-            raise ValueError(e.message)
+            raise ValueError(e.message) from e
 
     async def async_get_embeddings(self, texts: List[str], text_type: str = "document") -> List[List[float]]:
         """Asynchronously get the OpenAI embeddings.
@@ -94,7 +94,7 @@ class OpenAIEmbedding(Embedding):
             # Return the embeddings as a list of lists of floats
             return [embedding.embedding for embedding in data]
         except BadRequestError as e:
-            raise ValueError(e.message)
+            raise ValueError(e.message) from e
 
     def as_langchain(self) -> OpenAIEmbeddings:
         """Convert the agentUniverse(aU) openai embedding class to the langchain openai embedding class."""

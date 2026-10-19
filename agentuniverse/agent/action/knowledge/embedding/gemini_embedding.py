@@ -48,7 +48,7 @@ class GeminiEmbedding(Embedding):
         except Exception as e:
             print(f"Error generating embedding for text: {texts}. Error: {e}")
             # Handle the error appropriately, e.g., return a zero vector or raise an exception
-            raise ValueError(e)
+            raise ValueError(e) from e
 
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Asynchronously get embeddings for a list of texts using the Gemini API."""
@@ -96,5 +96,5 @@ class GeminiEmbedding(Embedding):
                     "genai is required. Install with: pip install google-genai"
                 ) from e
             except Exception as e:
-                raise ValueError(f"Failed to initialize Gemini client: {str(e)}")
+                raise ValueError(f"Failed to initialize Gemini client: {str(e)}") from e
         return self
