@@ -167,7 +167,7 @@ class PeerPlanner(Planner):
             LOGGER.warn("no planning agent.")
             planning_result = OutputObject({"framework": [agent_input.get('input')]})
         else:
-            LOGGER.info(f"Starting planning agent.")
+            LOGGER.info("Starting planning agent.")
             planning_result = planning_agent.run(**input_object.to_dict())
 
         input_object.add_data('planning_result', planning_result)
