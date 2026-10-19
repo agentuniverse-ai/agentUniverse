@@ -7,13 +7,14 @@
 
 ``create_copy`` used to return ``self``, so every
 ``get_instance_obj(..., new_instance=True)`` caller shared one mutable
-Store. The fix follows the ``LLM.create_copy`` precedent: a shallow
-``model_copy`` for instance isolation, with live clients kept as shared
-references.
+Store. The fix copies mutable state deeply for instance isolation, with live
+clients kept as shared references.
 """
 
+import threading
 import unittest
 
+from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.store.store import Store
 
@@ -23,6 +24,7 @@ class _DummyStore(Store):
 
     embedding_model: str = ""
     options: dict = {}
+    documents: list[Document] = []
 
     def query(self, query: Query, **kwargs):
         return []
@@ -102,21 +104,41 @@ class TestStoreCreateCopySharedClients(unittest.TestCase):
         self.assertEqual(copied.name, "base")
 
 
-class TestStoreCreateCopyShallowSemantics(unittest.TestCase):
-    """Documented shallow-copy trade-off: nested objects stay shared."""
+class TestStoreCreateCopyNestedIsolation(unittest.TestCase):
+    """Mutable state is isolated while live connections remain shared."""
 
-    def test_nested_mutable_state_is_shared(self) -> None:
-        # Shallow copy (same as LLM.create_copy): rebinding a field is
-        # isolated, but mutating a shared nested object in place is visible
-        # to both. This is the documented contract, not an accident.
-        store = _DummyStore(name="s")
-        store.options = {"shared": 1}
+    def test_nested_options_are_isolated(self) -> None:
+        store = _DummyStore(name="s", options={"nested": {"values": [1]}})
         copied = store.create_copy()
-        copied.options["shared"] = 2
-        self.assertEqual(store.options["shared"], 2)
-        # Rebinding, in contrast, is isolated.
-        copied.options = {"fresh": True}
-        self.assertEqual(store.options, {"shared": 2})
+        copied.options["nested"]["values"].append(2)
+        self.assertEqual(store.options, {"nested": {"values": [1]}})
+
+    def test_document_embeddings_keywords_and_metadata_are_isolated(self) -> None:
+        store = _DummyStore(
+            name="s", documents=[Document(text="doc", embedding=[0.1], keywords={"old"}, metadata={"tags": ["old"]})]
+        )
+        copied = store.create_copy()
+        sibling = store.create_copy()
+        copied.documents[0].embedding.append(0.2)
+        copied.documents[0].keywords.add("copy")
+        copied.documents[0].metadata["tags"].append("copy")
+        store.documents[0].embedding[0] = 0.9
+        store.documents[0].keywords.add("original")
+        self.assertEqual(copied.documents[0].embedding, [0.1, 0.2])
+        self.assertEqual(copied.documents[0].keywords, {"old", "copy"})
+        self.assertEqual(store.documents[0].embedding, [0.9])
+        self.assertEqual(store.documents[0].metadata, {"tags": ["old"]})
+        self.assertEqual(sibling.documents[0].embedding, [0.1])
+        self.assertEqual(sibling.documents[0].keywords, {"old"})
+
+    def test_uncopyable_client_and_nested_alias_are_preserved(self) -> None:
+        lock = threading.Lock()
+        store = _DummyStore(name="s", client=lock, async_client=lock, options={"connection": lock})
+        copied = store.create_copy()
+        self.assertIs(copied.client, lock)
+        self.assertIs(copied.async_client, lock)
+        self.assertIs(copied.options["connection"], lock)
+        self.assertIsNot(copied.options, store.options)
 
 
 if __name__ == "__main__":

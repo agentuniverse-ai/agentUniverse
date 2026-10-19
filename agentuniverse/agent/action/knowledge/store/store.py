@@ -5,6 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: store.py
+from copy import deepcopy
 from typing import Any, List, Optional
 
 from agentuniverse.base.component.component_base import ComponentEnum
@@ -101,23 +102,16 @@ class Store(ComponentBase):
         raise NotImplementedError
 
     def create_copy(self):
-        """Return an isolated copy of this store (fixes #1183).
+        """Copy mutable store state while sharing live connection objects.
 
-        Follows the ``LLM.create_copy`` precedent: a shallow ``model_copy``
-        gives every ``get_instance_obj(..., new_instance=True)`` caller its
-        own instance identity, so per-runtime field assignments on one copy
-        never leak into the registered component or sibling copies.
+        Every ``new_instance=True`` caller gets independent configuration
+        and document state, including nested embeddings, keywords and
+        metadata. Live ``client`` / ``async_client`` objects remain shared:
+        their connections and locks must not be duplicated. The deepcopy
+        memo also preserves references to these clients in nested state.
 
-        The live ``client`` / ``async_client`` objects are deliberately kept
-        as *shared references*: they are created post-fork and may hold
-        connections and thread locks — deep-copying them is either impossible
-        or would silently duplicate expensive connection resources (the
-        concern noted by the former TODO). Sharing the connection while
-        isolating the wrapper matches how the framework already copies LLM
-        components.
+        Subclasses holding other opaque runtime resources should override
+        this method to define their resource-sharing policy.
         """
-        copied = self.model_copy()
-        # Shared references (live post-fork connection objects).
-        copied.client = self.client
-        copied.async_client = self.async_client
-        return copied
+        shared_clients = {id(self.client): self.client, id(self.async_client): self.async_client}
+        return deepcopy(self, shared_clients)
