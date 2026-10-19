@@ -1,0 +1,13 @@
+name: 'lost_in_the_middle_reorderer'
+description: 'position-aware re-orderer that places the most relevant recalled documents at the beginning and end of the context and the least relevant in the middle, dodging LLM positional bias (issue #248)'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.lost_in_the_middle_reorderer'
+  class: 'LostInTheMiddleReorderer'
+
+# Metadata key holding each document's relevance score. This follows the same
+# convention written by DashscopeReranker / JinaReranker /
+# ReciprocalRankFusionProcessor and read by ThresholdFilter, so the re-orderer
+# composes naturally after them in a post_processors chain.
+score_field: 'relevance_score'
