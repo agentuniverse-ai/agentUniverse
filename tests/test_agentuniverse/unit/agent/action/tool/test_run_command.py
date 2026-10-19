@@ -27,6 +27,7 @@ class RunCommandToolTest(unittest.TestCase):
     def setUp(self) -> None:
         # Opt in explicitly: RunCommandTool is disabled by default because it
         # runs arbitrary shell commands (see allow_command_execution).
+        """Opt in explicitly since RunCommandTool is disabled by default, then build the tool."""
         self.tool = RunCommandTool(allow_command_execution=True)
 
     def test_disabled_by_default_refuses(self) -> None:
@@ -86,6 +87,7 @@ class RunCommandToolTest(unittest.TestCase):
         self.assertEqual(cmd_result.exit_code, 0)
 
     def test_string_false_blocking_value_runs_nonblocking(self) -> None:
+        """Verify the string 'false' blocking value is treated as non-blocking execution."""
         tool_input = ToolInput({
             'command': f'"{sys.executable}" -c "import time; time.sleep(0.5); print(\'String False\')"',
             'cwd': os.getcwd(),
@@ -101,6 +103,7 @@ class RunCommandToolTest(unittest.TestCase):
         self.assertEqual(cmd_result.status, CommandStatus.RUNNING)
 
     def test_typo_blocking_value_returns_input_error(self) -> None:
+        """Verify a misspelled blocking value returns an input error."""
         tool_input = ToolInput({
             'command': 'echo "should not run"',
             'cwd': os.getcwd(),
@@ -114,6 +117,7 @@ class RunCommandToolTest(unittest.TestCase):
         self.assertIn('blocking must be a boolean value', result['error'])
 
     def test_non_binary_numeric_blocking_value_returns_input_error(self) -> None:
+        """Verify a numeric blocking value other than 0 or 1 returns an input error."""
         tool_input = ToolInput({
             'command': 'echo "should not run"',
             'cwd': os.getcwd(),

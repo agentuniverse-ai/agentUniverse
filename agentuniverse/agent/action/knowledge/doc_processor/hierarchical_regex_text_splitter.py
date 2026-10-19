@@ -121,9 +121,12 @@ class HierarchicalRegexTextSplitter(DocProcessor):
         Returns:
             List of hierarchically structured documents.
         """
+        if not origin_docs:
+            return []
+
         # merge all documents first
         merged_docs = origin_docs
-        if self.merge_first and len(origin_docs) > 0:
+        if self.merge_first:
             for _doc in origin_docs[1:]:
                 origin_docs[0].text += "\n" + _doc.text
             merged_docs = [origin_docs[0]]
