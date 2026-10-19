@@ -17,7 +17,7 @@ from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit
 )
 
 
-async def demo_prompt_generation():
+async def demo_prompt_generation() -> None:
     """Demonstrate prompt generation functionality."""
     print("=== Prompt Generation Demo ===")
     
@@ -66,7 +66,7 @@ async def demo_prompt_generation():
     print(f"Confidence Score: {result2.confidence_score}")
 
 
-async def demo_prompt_optimization():
+async def demo_prompt_optimization() -> None:
     """Demonstrate prompt optimization functionality."""
     print("\n=== Prompt Optimization Demo ===")
     
@@ -102,7 +102,7 @@ async def demo_prompt_optimization():
     print(f"Confidence Score: {optimization_result.confidence_score}")
 
 
-async def demo_scenario_analysis():
+async def demo_scenario_analysis() -> None:
     """Demonstrate scenario analysis functionality."""
     print("\n=== Scenario Analysis Demo ===")
     
@@ -135,7 +135,7 @@ async def demo_scenario_analysis():
             print(f"Suggestions: {result.analysis_result.suggestions}")
 
 
-async def demo_batch_generation():
+async def demo_batch_generation() -> None:
     """Demonstrate batch prompt generation."""
     print("\n=== Batch Generation Demo ===")
     
@@ -171,7 +171,7 @@ async def demo_batch_generation():
         print(f"Confidence Score: {result.confidence_score}")
 
 
-async def demo_quality_analysis():
+async def demo_quality_analysis() -> None:
     """Demonstrate prompt quality analysis."""
     print("\n=== Quality Analysis Demo ===")
     
@@ -200,7 +200,7 @@ async def demo_quality_analysis():
         print(f"  - {recommendation}")
 
 
-async def demo_export_functionality():
+async def demo_export_functionality() -> None:
     """Demonstrate export functionality."""
     print("\n=== Export Functionality Demo ===")
     
@@ -229,7 +229,7 @@ async def demo_export_functionality():
     print(json_config)
 
 
-async def main():
+async def main() -> None:
     """Main demo function."""
     print("Prompt Toolkit Demo")
     print("=" * 50)
