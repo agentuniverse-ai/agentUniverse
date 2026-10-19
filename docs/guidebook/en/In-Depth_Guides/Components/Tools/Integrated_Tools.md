@@ -555,6 +555,10 @@ references, credits, and an OSV detail URL. Results, text, identifiers, affected
 packages, versions, ranges, events, references, and credits all have explicit
 limits with counts or truncation flags.
 
+Malformed reference URLs are omitted individually, just like non-HTTP(S) links;
+they do not discard the advisory. `reference_count` retains the raw list size,
+and `references_truncated` also indicates omitted invalid references.
+
 The tool needs no API key and makes one request to a fixed OSV.dev endpoint per
 call. It returns structured timeout, HTTP, not-found, connection, JSON, and
 response-shape errors. An empty result means only that OSV.dev returned no known
