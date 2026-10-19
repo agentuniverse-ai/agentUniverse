@@ -4,10 +4,14 @@
 # Public execute() converts validation exceptions into structured tool errors.
 # ruff: noqa: TRY003
 
+import base64
 import mimetypes
 import os
+import quopri
 import tempfile
+from collections.abc import Iterator
 from email import policy
+from email.errors import MissingHeaderBodySeparatorDefect
 from email.message import EmailMessage, Message
 from email.parser import BytesParser
 from typing import Any, ClassVar, cast
@@ -236,16 +240,67 @@ class EmailDocumentTool(Tool):
             "file_size": os.path.getsize(path),
         }
 
+    @staticmethod
+    def _message_parts(message: Message) -> Iterator[Message]:
+        """Visit this message without descending into opaque attachments."""
+        pending = [iter((message,))]
+        while pending:
+            try:
+                part = next(pending[-1])
+            except StopIteration:
+                pending.pop()
+                continue
+            yield part
+            if (
+                part.get_filename()
+                or part.get_content_disposition() == "attachment"
+                or part.get_content_maintype() == "message"
+            ):
+                continue
+            payload = part.get_payload()
+            if part.is_multipart() and isinstance(payload, list):
+                pending.append(iter(payload))
+
+    @staticmethod
+    def _attachment_payload(part: Message) -> bytes:
+        payload = part.get_payload(decode=True)
+        if payload is not None:
+            return payload
+        if part.get_content_type() in {"message/rfc822", "message/global"}:
+            messages = part.get_payload()
+            if not isinstance(messages, list) or len(messages) != 1 or not isinstance(messages[0], Message):
+                raise ValueError("attached message must contain exactly one message")
+            inner = messages[0]
+            encoding = str(part.get("Content-Transfer-Encoding", "")).strip().lower()
+            if encoding in {"base64", "quoted-printable"}:
+                # The stdlib parser still builds a child Message before
+                # decoding an encoded message container. Keep its encoded
+                # headers unfolded; a QP soft break can look like a missing
+                # header/body separator, which serialization would insert.
+                encoded = inner.as_bytes(policy=policy.compat32.clone(max_line_length=0))
+                if any(isinstance(defect, MissingHeaderBodySeparatorDefect) for defect in inner.defects):
+                    if len(inner):
+                        encoded = encoded.replace(b"\n\n", b"\n", 1)
+                    elif encoded.startswith(b"\n"):
+                        encoded = encoded[1:]
+                if encoding == "base64":
+                    return base64.b64decode(encoded)
+                return quopri.decodestring(encoded)
+            return inner.as_bytes(policy=policy.default)
+        if part.is_multipart():
+            return part.as_bytes(policy=policy.default)
+        return b""
+
     def _attachment_parts(self, message: Message) -> list[dict[str, Any]]:
         output = []
         total = 0
         names: set[str] = set()
-        for part in message.walk():
+        for part in self._message_parts(message):
             filename = part.get_filename()
             if not filename:
                 continue
             name = self._safe_filename(str(filename))
-            payload = part.get_payload(decode=True) or b""
+            payload = self._attachment_payload(part)
             size = len(payload)
             if size > self.max_attachment_bytes:
                 raise ValueError(f"attachment exceeds max_attachment_bytes: {name}")
@@ -253,7 +308,10 @@ class EmailDocumentTool(Tool):
                 raise ValueError(f"duplicate attachment filename: {name}")
             names.add(name)
             total += size
-            output.append({"name": name, "size": size, "content_type": part.get_content_type(), "part": part})
+            output.append({
+                "name": name, "size": size, "content_type": part.get_content_type(),
+                "part": part, "payload": payload,
+            })
         if len(output) > self.max_attachments:
             raise ValueError(f"email exceeds max_attachments ({self.max_attachments})")
         if total > self.max_total_attachment_bytes:
@@ -263,8 +321,12 @@ class EmailDocumentTool(Tool):
     def _body_parts(self, message: Message) -> tuple[str, str, bool]:
         text_parts: list[str] = []
         html_parts: list[str] = []
-        for part in message.walk():
-            if part.get_filename() or part.get_content_maintype() == "multipart":
+        for part in self._message_parts(message):
+            if (
+                part.get_filename()
+                or part.get_content_disposition() == "attachment"
+                or part.get_content_maintype() == "multipart"
+            ):
                 continue
             if part.get_content_type() not in {"text/plain", "text/html"}:
                 continue
@@ -344,7 +406,7 @@ class EmailDocumentTool(Tool):
         os.makedirs(directory, exist_ok=True)
         outputs = []
         for item, destination in destinations:
-            self._atomic_write(destination, item["part"].get_payload(decode=True) or b"")
+            self._atomic_write(destination, item["payload"])
             outputs.append(destination)
         return {
             "status": "success",
