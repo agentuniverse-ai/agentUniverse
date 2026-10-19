@@ -501,17 +501,19 @@ class TextSummarizerTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"text_summarizer_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, text: Any) -> str:
-        """Validate the ``text`` input."""
+    def _validate_text(self, text: Any) -> str:
+        """Validate the ``text`` input against the configured limit."""
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"text must be a non-empty string (got {text!r})")
+            self._invalid(f"text must be a non-empty string (got {text!r})")
         if not text:
-            cls._invalid("text must be a non-empty string (got '')")
+            self._invalid("text must be a non-empty string (got '')")
         if not text.strip():
-            cls._invalid("text must contain non-whitespace characters")
-        if len(text) > 100_000:
-            cls._invalid(f"text exceeds the {100_000:,}-character limit " f"(got {len(text):,} characters)")
+            self._invalid("text must contain non-whitespace characters")
+        if len(text) > self.max_text_chars:
+            self._invalid(
+                f"text exceeds the {self.max_text_chars:,}-character limit "
+                f"(got {len(text):,} characters)"
+            )
         return text
 
     @classmethod
@@ -677,6 +679,18 @@ class TextSummarizerTool(Tool):
     # summarize mode
     # ------------------------------------------------------------------ #
 
+    @staticmethod
+    def _floor_product(ratio: float, total: int) -> int:
+        """Floor ``ratio * total`` immune to binary-float rounding error.
+
+        ``int(0.29 * 100)`` truncates the float product 28.999999999999996
+        to 28 even though the exact product is 29. The epsilon-corrected
+        floor lands on the mathematically expected value whenever the
+        true product is (within 1e-9 of) an integer, and is unchanged
+        otherwise.
+        """
+        return int(ratio * total + 1e-9)
+
     def _run_summarize(
         self,
         context: dict[str, Any],
@@ -693,7 +707,7 @@ class TextSummarizerTool(Tool):
         total = len(sentences)
         if clean_ratio is not None:
             strategy = "ratio"
-            keep = max(1, min(total, int(clean_ratio * total)))
+            keep = max(1, min(total, self._floor_product(clean_ratio, total)))
         else:
             strategy = "max_sentences"
             keep = min(clean_max, total)

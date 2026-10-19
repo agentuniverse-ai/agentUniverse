@@ -167,6 +167,23 @@ class TextSummarizerToolTest(unittest.TestCase):
         result = self.tool.execute(mode="summarize", text=EN_TEXT, ratio=0.34)
         self.assertEqual(result["selected_indices"], [0, 3])
 
+    def test_ratio_floor_immune_to_float_rounding(self) -> None:
+        # 0.29 * 100 is exactly 29 in decimal but 28.999999999999996 as a
+        # binary float; a naive int() truncation would keep 28 sentences.
+        text = " ".join(f"Sentence number {i} talks about topics." for i in range(100))
+        result = self.tool.execute(mode="summarize", text=text, ratio=0.29)
+        self.assertEqual(result["sentence_count"], 100)
+        self.assertEqual(result["selected_count"], 29)
+        # 0.35 * 180 is exactly 63 in decimal but 62.99999999999999 as a
+        # binary float.
+        text = " ".join(f"Sentence number {i} talks about topics." for i in range(180))
+        result = self.tool.execute(mode="summarize", text=text, ratio=0.35)
+        self.assertEqual(result["sentence_count"], 180)
+        self.assertEqual(result["selected_count"], 63)
+        # A true non-integer product still floors: 0.34 * 6 = 2.04 -> 2.
+        result = self.tool.execute(mode="summarize", text=EN_TEXT, ratio=0.34)
+        self.assertEqual(result["selected_count"], 2)
+
     # ------------------------------------------------------------------ #
     # summarize mode — Chinese ground truth
     # ------------------------------------------------------------------ #
@@ -332,6 +349,19 @@ class TextSummarizerToolTest(unittest.TestCase):
             mode="summarize",
             text="word. " * 40_000,
         )
+
+    def test_max_text_chars_is_honored_when_configured(self) -> None:
+        # The documented max_text_chars field must actually gate the
+        # input length when instantiated with a non-default bound.
+        capped = TextSummarizerTool(max_text_chars=50)
+        self.assertEqual(capped.max_text_chars, 50)
+        long_text = "word. " * 12  # 72 characters
+        self.assertGreater(len(long_text), 50)
+        with self.assertRaisesRegex(ValueError, "exceeds the 50-character limit"):
+            capped.execute(mode="summarize", text=long_text)
+        # Text within the configured bound is accepted.
+        ok = capped.execute(mode="summarize", text="word. " * 8)
+        self.assertEqual(ok["sentence_count"], 8)
 
     def test_invalid_max_sentences(self) -> None:
         for bad in (0, -1, 101, 2.5, "3", True, [3]):
