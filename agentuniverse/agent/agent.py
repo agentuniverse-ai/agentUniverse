@@ -572,7 +572,9 @@ class Agent(ComponentBase, ABC):
             params = self.get_memory_params(agent_input)
             Thread(target=do_summarize, args=(params,)).start()
 
-    def load_summarize_memory(self, memory: Memory, agent_input: dict[str, Any] = {}) -> str:
+    def load_summarize_memory(self, memory: Memory, agent_input: dict[str, Any] = None) -> str:
+        if agent_input is None:
+            agent_input = {}
         if memory:
             params = self.get_memory_params(agent_input)
             params['type'] = 'summarize'
