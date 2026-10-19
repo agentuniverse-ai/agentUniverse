@@ -30,8 +30,8 @@ metadata:
   class: 'RekaLLM'
 ```
 
-A ready-to-use `reka_llm.yaml.example` also ships with the source tree at
-`agentuniverse/llm/default/reka_llm.yaml.example`.
+A ready-to-use `reka_llm.yaml` also ships with the source tree at
+`agentuniverse/llm/default/reka_llm.yaml`.
 
 **Note:** Model parameters such as `api_key`, `api_base` and `proxy` can be configured in three ways:
 
@@ -139,6 +139,6 @@ Because Reka is OpenAI-compatible, every feature supported by `OpenAIStyleLLM` -
 
 ## 6. Tips
 
-- agentUniverse ships with a ready-to-use template named `default_reka_llm` (see `reka_llm.yaml.example`). After configuring the `REKA_API_KEY` environment variable you can rename it to `reka_llm.yaml` and reference it directly from your agents.
+- agentUniverse ships with a built-in LLM named `default_reka_llm` (see `reka_llm.yaml`). After configuring the `REKA_API_KEY` environment variable you can reference it directly from your agents.
 - Reka models are natively multimodal; when richer media payloads are supported by the endpoint they can be passed through the OpenAI-style message content blocks without changing this component.
 - `reka-flash` is the recommended default for agent workloads: it combines strong reasoning quality with high throughput and a 128k context window, while `reka-core` targets the most demanding multimodal reasoning tasks and `reka-edge` targets latency- and cost-sensitive calls.

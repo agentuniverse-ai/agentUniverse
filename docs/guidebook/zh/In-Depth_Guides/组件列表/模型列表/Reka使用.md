@@ -30,7 +30,7 @@ metadata:
   class: 'RekaLLM'
 ```
 
-源码目录中同时附带了一个开箱即用的模板 `agentuniverse/llm/default/reka_llm.yaml.example`。
+源码目录中同时附带了一个开箱即用的模板 `agentuniverse/llm/default/reka_llm.yaml`。
 
 **note:** `api_key` / `api_base` / `proxy` 等模型参数有三种配置方法：
 
@@ -141,6 +141,6 @@ asyncio.run(main())
 
 ## 6. Tips
 
-- agentuniverse 源码中内置了一个 name 为 `default_reka_llm` 的模板配置（`reka_llm.yaml.example`），用户将其重命名为 `reka_llm.yaml` 并配置 `REKA_API_KEY` 之后即可直接使用。
+- agentuniverse 源码中内置了一个 name 为 `default_reka_llm` 的 LLM 配置（`reka_llm.yaml`），用户配置 `REKA_API_KEY` 之后即可直接使用。
 - Reka 模型原生支持多模态；当端点支持更丰富的媒体载荷时，可通过 OpenAI 风格的消息内容块直接传递，无需修改本组件。
 - Agent 场景推荐默认使用 `reka-flash`：推理质量强、吞吐高且拥有 128k 上下文窗口；`reka-core` 面向最复杂的多模态推理任务，`reka-edge` 面向延迟与成本敏感的调用。
