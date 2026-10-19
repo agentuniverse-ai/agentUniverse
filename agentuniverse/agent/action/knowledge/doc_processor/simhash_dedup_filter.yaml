@@ -1,0 +1,35 @@
+name: 'simhash_dedup_filter'
+description: 'remove near-duplicate documents via SimHash fingerprints and Hamming distance'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.simhash_dedup_filter'
+  class: 'SimHashDedupFilter'
+
+# Maximum Hamming distance between two 64-bit SimHash fingerprints for the
+# documents to count as near-duplicates. 0 means byte-level token identity;
+# the default 3 tolerates small edits. Range [0, 64].
+hamming_threshold: 3
+
+# Number of tokens per word shingle (n-gram) used as the fingerprint
+# feature; 2 (bigrams) pairs well with the default threshold above.
+# Documents shorter than the window fall back to one whole-text shingle.
+# Must be >= 1.
+shingle_size: 2
+
+# Which member of a near-duplicate cluster survives: 'first' keeps the
+# first occurrence in batch order; 'longest' keeps the member with the
+# most text (earliest wins ties).
+keep_policy: 'first'
+
+# When false (default) tokens are lowercased before shingling, so case-only
+# rewrites deduplicate.
+case_sensitive: false
+
+# Metadata key the fingerprint hex string (16 chars) is written to on kept
+# documents; '' disables stamping.
+simhash_key: 'simhash'
+
+# Metadata key the surviving representative's id is written to on removed
+# document objects; '' disables stamping.
+dedup_of_key: 'dedup_of'
