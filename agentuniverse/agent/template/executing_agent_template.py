@@ -151,6 +151,8 @@ class ExecutingAgentTemplate(AgentTemplate):
         for tool_name in self.tool_names:
             tool = ToolManager().get_instance_obj(tool_name)
             if tool is not None:
+                if not tool.input_keys:
+                    continue
                 # note: only insert the first key of tool input.
                 input_object.add_data(tool.input_keys[0], subtask)
 
