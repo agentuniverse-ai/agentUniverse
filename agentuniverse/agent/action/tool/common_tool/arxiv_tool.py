@@ -43,6 +43,9 @@ class ArxivTool(Tool):
         if mode not in [m.value for m in SearchMode]:
             raise ValueError(f"Invalid mode: {mode}. Must be one of {[m.value for m in SearchMode]}")
 
+        if not isinstance(input, str) or not input.strip():
+            raise ValueError("input must be a non-empty string")
+
         try:
             import arxiv
         except ImportError:
