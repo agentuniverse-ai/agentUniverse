@@ -172,7 +172,8 @@ class ChromaConversationMemoryStorage(MemoryStorage):
                     {'target_type': ConversationMessageSourceType.AGENT.value}
                 ]
             }
-            if kwargs['memory_types'] and len(kwargs["memory_types"]) > 0:
+            memory_types = kwargs.get('memory_types')
+            if memory_types and len(memory_types) > 0:
                 condition = {
                     "$or": [
                         condition,
@@ -181,7 +182,7 @@ class ChromaConversationMemoryStorage(MemoryStorage):
                                 {'source': agent_id},
                                 {'source_type': ConversationMessageSourceType.AGENT.value},
                                 {'target_type': {
-                                    "$in": kwargs["memory_types"]
+                                    "$in": memory_types
                                 }}
                             ]
                         }
