@@ -321,6 +321,14 @@ class RedisVectorStore(Store):
 
     @classmethod
     def _rows_to_documents(cls, response: Any) -> list[Document]:
+        """Parse a raw FT.SEARCH response into Document objects.
+
+        Args:
+            response: Raw Redis FT.SEARCH response to parse.
+
+        Returns:
+            List of Document objects reconstructed from the response rows.
+        """
         values = list(response or [])
         documents = []
         for index in range(1, len(values), 2):
@@ -346,6 +354,15 @@ class RedisVectorStore(Store):
         return self._rows_to_documents(response)
 
     async def async_query(self, query: Query, **kwargs: Any) -> list[Document]:
+        """Run an asynchronous similarity search over the store and return the matching documents.
+
+        Args:
+            query: Query to search with.
+            kwargs: May carry an optional metadata_filter used to constrain results.
+
+        Returns:
+            List of matching Document objects ordered by similarity.
+        """
         vector = self._embedding_for_query(query)
         top_k = self._top_k(query)
         await self._async_ensure_index(len(vector))
@@ -355,6 +372,15 @@ class RedisVectorStore(Store):
         return self._rows_to_documents(response)
 
     def _mapping(self, document: Document, vector: list[float]) -> dict[str, Any]:
+        """Build the Redis hash mapping persisting a document and its vector.
+
+        Args:
+            document: Document to persist.
+            vector: Embedding vector for the document.
+
+        Returns:
+            Dict of hash field names to values, usable as an HSET mapping.
+        """
         metadata = document.metadata or {}
         mapping: dict[str, Any] = {
             "id": str(document.id),
@@ -370,6 +396,11 @@ class RedisVectorStore(Store):
         return mapping
 
     def upsert_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Write documents to Redis through a single non-transactional pipeline, overwriting any existing keys.
+
+        Args:
+            documents: Documents to store; an empty list is a no-op.
+        """
         if not documents:
             return
         vectors = self._vectors_for_documents(documents)
@@ -381,6 +412,11 @@ class RedisVectorStore(Store):
         pipeline.execute()
 
     async def async_upsert_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Asynchronously write documents to Redis through a single non-transactional pipeline, overwriting any existing keys.
+
+        Args:
+            documents: Documents to store; an empty list is a no-op.
+        """
         if not documents:
             return
         vectors = self._vectors_for_documents(documents)
@@ -392,19 +428,49 @@ class RedisVectorStore(Store):
             await pipeline.execute()
 
     def insert_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Insert documents by delegating to upsert_document, since writes overwrite any existing key.
+
+        Args:
+            documents: Documents to store.
+        """
         self.upsert_document(documents, **kwargs)
 
     async def async_insert_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Asynchronously insert documents by delegating to async_upsert_document, since writes overwrite any existing key.
+
+        Args:
+            documents: Documents to store.
+        """
         await self.async_upsert_document(documents, **kwargs)
 
     def update_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Update documents by delegating to upsert_document, which overwrites the stored keys.
+
+        Args:
+            documents: Documents to store.
+        """
         self.upsert_document(documents, **kwargs)
 
     async def async_update_document(self, documents: list[Document], **kwargs: Any) -> None:
+        """Asynchronously update documents by delegating to async_upsert_document, which overwrites the stored keys.
+
+        Args:
+            documents: Documents to store.
+        """
         await self.async_upsert_document(documents, **kwargs)
 
     def delete_document(self, document_id: str, **kwargs: Any) -> None:
+        """Delete the stored document with the given id from Redis.
+
+        Args:
+            document_id: Id of the document to delete.
+        """
         self._ensure_client().delete(f"{self.key_prefix}{document_id}")
 
     async def async_delete_document(self, document_id: str, **kwargs: Any) -> None:
+        """Asynchronously delete the stored document with the given id from Redis.
+
+        Args:
+            document_id: Id of the document to delete.
+        """
         await (await self._ensure_async_client()).delete(f"{self.key_prefix}{document_id}")
