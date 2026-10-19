@@ -536,7 +536,9 @@ class Agent(ComponentBase, ABC):
         agent_input[memory.memory_key] = memory_str
         return memory_str
 
-    def add_memory(self, memory: Memory, content: Any, type: str = 'Q&A', agent_input: dict[str, Any] = {}):
+    def add_memory(self, memory: Memory, content: Any, type: str = 'Q&A', agent_input: Optional[dict[str, Any]] = None):
+        if agent_input is None:
+            agent_input = {}
         if not memory:
             return
         session_id = agent_input.get('session_id')
@@ -556,7 +558,9 @@ class Agent(ComponentBase, ABC):
                           })
         memory.add([message], session_id=session_id, agent_id=agent_id)
 
-    def summarize_memory(self, agent_input: dict[str, Any] = {}, memory: Memory = None):
+    def summarize_memory(self, agent_input: Optional[dict[str, Any]] = None, memory: Memory = None):
+        if agent_input is None:
+            agent_input = {}
         def do_summarize(params):
             content = memory.summarize_memory(**params)
             memory.add([
@@ -572,7 +576,9 @@ class Agent(ComponentBase, ABC):
             params = self.get_memory_params(agent_input)
             Thread(target=do_summarize, args=(params,)).start()
 
-    def load_summarize_memory(self, memory: Memory, agent_input: dict[str, Any] = {}) -> str:
+    def load_summarize_memory(self, memory: Memory, agent_input: Optional[dict[str, Any]] = None) -> str:
+        if agent_input is None:
+            agent_input = {}
         if memory:
             params = self.get_memory_params(agent_input)
             params['type'] = 'summarize'
