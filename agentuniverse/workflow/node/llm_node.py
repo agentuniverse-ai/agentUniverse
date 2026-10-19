@@ -19,6 +19,8 @@ from agentuniverse.workflow.workflow_output import WorkflowOutput
 
 
 class LLMNodeData(NodeData):
+    """NodeData subclass holding the llm node input configuration.
+    """
     inputs: Optional[LLMNodeInputParams] = None
 
 
@@ -28,10 +30,26 @@ class LLMNode(Node):
     _data_cls = LLMNodeData
 
     def __init__(self, **kwargs):
+        """Initialize the llm node and set its type to the llm node enum.
+
+        Args:
+            **kwargs: Field values for the node.
+        """
         super().__init__(**kwargs)
         self.type = NodeEnum.LLM
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
+        """Invoke the referenced LLM with the prompt resolved from the input parameters and store the model answer.
+
+        Args:
+            workflow_output(WorkflowOutput): The workflow execution output.
+
+        Returns:
+            NodeOutput: The node output holding the model answer.
+
+        Raises:
+            ValueError: If the referenced llm is not registered or a template variable can not be resolved.
+        """
         inputs: LLMNodeInputParams = self._data.inputs
 
         param_map = {
