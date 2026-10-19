@@ -8,7 +8,10 @@ from agentuniverse.agent.action.knowledge.reader.file.website_bs4_reader import 
 
 
 class WebsiteBs4ReaderTest(unittest.TestCase):
+    """Unit tests for WebsiteBs4Reader crawl-state handling."""
+
     def test_load_data_resets_crawl_state_between_calls(self):
+        """Crawl bookkeeping is cleared between independent _load_data calls."""
         url = "https://example.com"
         reader = WebsiteBs4Reader()
         reader._visited.add(url)
