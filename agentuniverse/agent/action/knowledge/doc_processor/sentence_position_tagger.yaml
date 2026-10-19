@@ -1,0 +1,26 @@
+name: 'sentence_position_tagger'
+description: 'classify each sentence as opening/body/closing and stamp the roles into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sentence_position_tagger'
+  class: 'SentencePositionTagger'
+
+# Maximum number of entries kept in metadata['sentence_positions']. The
+# position_counts metadata always counts every sentence, so a capped list
+# never hides the true magnitude. Must be >= 0.
+max_sentences: 200
+
+# When true the document text is additionally rewritten with the opening
+# sentence wrapped in [[OPEN]]...[[/OPEN]] and the closing sentence in
+# [[CLOSE]]...[[/CLOSE]]. Re-processing is a no-op: the exact marker
+# literals are stripped before analysis, so markers are never doubled.
+tag_text: false
+
+# Metadata key the (capped) per-sentence role list is written to;
+# '' disables stamping.
+positions_key: 'sentence_positions'
+
+# Metadata key the {opening, body, closing} role counts (always uncapped
+# totals) are written to; '' disables stamping.
+counts_key: 'position_counts'

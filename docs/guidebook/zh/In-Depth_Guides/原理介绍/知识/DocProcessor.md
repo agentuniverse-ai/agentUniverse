@@ -310,3 +310,29 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [SentencePositionTagger](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sentence_position_tagger.yaml)
+
+该组件为每个句子标注位置角色——`opening`（开头）、`body`（正文）或 `closing`（结尾）——并写入文档 metadata，对应 issue #258 的*预处理/标注*方向。句子所处的位置本身就携带检索管线常用的信号：开头句陈述全文主旨，结尾句往往承载结论或行动号召，中间承载主体内容。抽取式展示组件可以加粗首尾句而非段落中部采样，提示词预算管线可以在预算压力下保住首尾、裁剪正文，重排器可以给标注为文档首尾的切块加权。全部逻辑离线、确定性运行，不调用任何模型。
+
+句子切分与问题检测组件遵循同一套保守规则：句子在 `. ! ?` 及其中文对应符号 `。！？` 处结束，英文句点另有三重保护——已知缩写（"Dr. Smith asked..."）、单字母首字母缩写（"J. K. Rowling"、"e.g."）与小数点（"3.14"）不切分，省略号只在最后一个点切分；结尾标点串连同后随引号归属其终止的句子，纯标点残渣（孤立的"？"）被丢弃，末尾没有终止标点的句子依然计数。角色赋值采用一条刻意保持简洁的规则：句子不足 3 个时没有可辨识的首尾，全部标为 `body`，不凭空发明 opening/closing 角色；达到 3 个及以上时，第一句为 `opening`，最后一句为 `closing`，其余为 `body`。
+
+每个句子以 `{"index": i, "role": "opening" | "body" | "closing", "span": (start, end)}` 记录在 `metadata['sentence_positions']` 中，`span` 是相对分析文本的字符偏移且满足 `sentence == text[start:end]`——各 span 有序且不重叠，消费方无需重新分词即可切片或高亮。列表最多保留 `max_sentences` 条（默认 200），而 `metadata['position_counts']`（`{"opening": n, "body": n, "closing": n}`）始终统计全部句子，三个计数之和即文档总句数。启用 `tag_text` 后还会改写文档文本：开头句包上 `[[OPEN]] ... [[/OPEN]]`、结尾句包上 `[[CLOSE]] ... [[/CLOSE]]`，让只看文本的展示层和 LLM 提示词无需读取 metadata 即可识别首尾；分析前会先剥离这四个精确的字面标记，因此重复处理是无操作——标记绝不翻倍，span/角色/计数在各次处理间保持一致，不足 3 句的文档永不改写。组件绝不修改 id 及既有 metadata 条目，写入前会复制 metadata 映射。
+
+组件定义文件如下：
+```yaml
+name: 'sentence_position_tagger'
+description: 'classify each sentence as opening/body/closing and stamp the roles into document metadata'
+max_sentences: 200           # metadata['sentence_positions'] 的条目上限
+tag_text: false              # 同时用 [[OPEN]]/[[CLOSE]] 标记包裹首尾句
+positions_key: 'sentence_positions'  # 角色列表写入的 metadata 键；'' 表示不写入
+counts_key: 'position_counts'        # 角色计数写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sentence_position_tagger'
+  class: 'SentencePositionTagger'
+```
+- max_sentences：`metadata['sentence_positions']` 最多保留的条目数，必须 >= 0。`position_counts` 始终报告未截断的总数。
+- tag_text：为真时额外改写文档文本，开头句包上 `[[OPEN]] ... [[/OPEN]]`、结尾句包上 `[[CLOSE]] ... [[/CLOSE]]`。分析前会剥离精确的标记字面量，因此重复处理是无操作、标记绝不翻倍；不足 3 句的文档永不改写。
+- positions_key：（截断后的）逐句角色列表写入的 metadata 键；为空则不写入。
+- counts_key：`{opening, body, closing}` 角色计数（始终为未截断总数，三者之和即文档总句数）写入的 metadata 键；为空则不写入。

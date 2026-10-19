@@ -309,3 +309,29 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [SentencePositionTagger](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sentence_position_tagger.yaml)
+
+This component classifies each sentence's position role — `opening`, `body` or `closing` — and stamps the roles into document metadata, addressing the *pre-processing/annotation* direction of issue #258. Where a sentence sits carries signal that retrieval pipelines routinely want: the opening sentence states what a piece is about, the closing one often carries conclusions or calls to action, and the middle carries the bulk. Extractive display components can bold the bookends instead of a mid-paragraph sample, prompt-budget pipelines can keep the bookends while trimming body sentences under pressure, and rerankers can boost chunks stamped as document bookends. Everything runs offline, deterministically and without any model call.
+
+Sentence segmentation follows the same conservative rule family as the question detector: sentences end at `. ! ?` and their CJK counterparts `。！？`, with three English guards on the dot — known abbreviations ("Dr. Smith asked..."), single-letter initials ("J. K. Rowling", "e.g.") and decimals ("3.14") do not split, and an ellipsis splits only at its final dot. A terminal-punctuation run plus closing quotes belongs to the sentence it terminates, punctuation-only husks are dropped, and a trailing sentence without terminal punctuation still counts. Role assignment is a deliberately clean rule: fewer than 3 sentences means no meaningful bookends, so every sentence is `body` and no opening/closing roles are invented; with 3 or more the first is `opening`, the last is `closing`, and everything in between is `body`.
+
+Each sentence is recorded in `metadata['sentence_positions']` as `{"index": i, "role": "opening" | "body" | "closing", "span": (start, end)}` where `span` holds character offsets into the analysed text with `sentence == text[start:end]` — spans are ordered and non-overlapping, so consumers can slice or highlight without re-tokenising. The list is capped at `max_sentences` entries (default 200) while `metadata['position_counts']` (`{"opening": n, "body": n, "closing": n}`) always counts every sentence; the three counts sum to the document's total sentence count. With `tag_text` enabled the text is additionally rewritten, wrapping the opening sentence in `[[OPEN]] ... [[/OPEN]]` and the closing in `[[CLOSE]] ... [[/CLOSE]]` so display layers and LLM prompts can spot the bookends without reading metadata; the exact marker literals are stripped before analysis, which makes re-processing a no-op — markers are never doubled, spans/roles/counts stay identical across passes, and documents with fewer than 3 sentences are never rewrapped. Id and existing metadata entries are never modified, and metadata mappings are copied before mutation.
+
+The component definition file is as follows:
+```yaml
+name: 'sentence_position_tagger'
+description: 'classify each sentence as opening/body/closing and stamp the roles into document metadata'
+max_sentences: 200           # cap on metadata['sentence_positions'] entries
+tag_text: false              # also wrap bookends in [[OPEN]]/[[CLOSE]] markers
+positions_key: 'sentence_positions'  # metadata key for the role list; '' disables
+counts_key: 'position_counts'        # metadata key for role counts; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sentence_position_tagger'
+  class: 'SentencePositionTagger'
+```
+- max_sentences: Maximum number of entries kept in `metadata['sentence_positions']`; must be >= 0. `position_counts` always reports uncapped totals.
+- tag_text: When true, the document text is additionally rewritten with the opening sentence wrapped in `[[OPEN]] ... [[/OPEN]]` and the closing sentence in `[[CLOSE]] ... [[/CLOSE]]`. The exact marker literals are stripped before analysis, so re-processing is a no-op and markers are never doubled; documents with fewer than 3 sentences are never rewrapped.
+- positions_key: Metadata key the (capped) per-sentence role list is written to; an empty value disables that stamp.
+- counts_key: Metadata key the `{opening, body, closing}` role counts (always uncapped totals; they sum to the document's sentence count) are written to; an empty value disables that stamp.
