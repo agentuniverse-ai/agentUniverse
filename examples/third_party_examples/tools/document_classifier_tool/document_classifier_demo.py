@@ -92,7 +92,7 @@ def create_sample_documents() -> List[Document]:
     return documents
 
 
-def demo_basic_classifier():
+def demo_basic_classifier() -> None:
     """演示基础文档分类器"""
     print("=" * 60)
     print("基础文档分类器演示")
@@ -164,7 +164,7 @@ def demo_basic_classifier():
         print(f"  {category}: {count}")
 
 
-def demo_chinese_classifier():
+def demo_chinese_classifier() -> None:
     """演示中文文档分类器"""
     print("\n" + "=" * 60)
     print("中文文档分类器演示")
@@ -265,7 +265,7 @@ def demo_chinese_classifier():
         print()
 
 
-def demo_content_type_classification():
+def demo_content_type_classification() -> None:
     """演示内容类型分类"""
     print("\n" + "=" * 60)
     print("内容类型自动分类演示")
@@ -293,7 +293,7 @@ def demo_content_type_classification():
         print()
 
 
-def main():
+def main() -> None:
     """主函数"""
     print("agentUniverse 文档分类器演示")
     print("=" * 60)
