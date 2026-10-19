@@ -310,3 +310,25 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [StatisticsExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/statistics_extractor.yaml)
+
+该组件把文档中的数值论断抽取进元数据，对应 issue #258 的*知识抽取*方向。文档里充满下游阶段（检索过滤、排序加权、看板生成）希望以结构化数据而非散文形式看到的数字——"45.3% 的席位"、"1,200 名用户"、"3 million 件商品"、"5万次"、"3:2 的比例"。本组件用纯正则（无模型调用、无网络、无第三方依赖）扫描每个文档，把每条数值论断记录为 `metadata[statistics_key]` 中的一个命中 `{kind, value, unit, text, span}`。识别四类：`percentage`（`45%`、`45.3 percent`、全角 `45％`，以及基础中文形式——`百分之四十五` 解析为 45、`百分之三点五` 为 3.5、`百分之百` 为 100）；`count`（数字加单位词，中间可带数量级词——`1,200 users`、`3 million items`、`5万次`；只带数量级词时单位为空，如 `7 billion`；数量级词会被解析进数值：`5万` → 50000、`3 million` → 3000000、`1.5亿` → 150000000、`3万亿` → 3000000000000）；`ratio`（`3:2` 与 `3/4`，value 为商——1.5 与 0.75）；以及 `raw_number`（带千分位分隔的裸数字如 `1,234,567`，构造上仅收录 ≥ 1000 的值，小数字不会进入噪声）。
+
+常见误报被显式排除：日期（`2026-10-19`、`10/19/2026`、中文 `2026年10月19日` 及孤立的 `2026年`/`10月`/`5日` 片段）、版本号（`v1.2.3`、`1.2.3`、IP 地址）、序数词（`21st`、`1,000th`）、钟点（前导零分钟形的 `10:05`、带 am/pm 的 `10:30 am`、`at 10:30`），以及形似"月/日"日历的斜杠对——a ≤ 12 且 13 ≤ b ≤ 31 的 `a/b` 按日期跳过，因此 `10/19` 被排除而 `3/4` 保留；斜杠链与 URL 内部的部分同样跳过。重叠候选按类别优先级（percentage > count > ratio > raw_number，长匹配优先）消解，因此 "1,200 users" 只产生一条 count 命中，而不会多出一条裸数字。除命中列表外，`metadata[summary_key]` 收到基于*全部*命中计算的摘要——总数、每类条数、每类最小/最大值——命中列表本身截断至 `max_statistics` 条（默认 100）。文档在其他方面原样通过：text 与 id 从不修改，顺序保持，元数据映射先复制再写入，无数值论断的文档不会被打上任何 statistics 键。该组件是领域无关且完全确定性的：它认得的是数值论断的*形状*，而非任何行业的词汇——这一点不同于模式硬编码到营收/利润/指标场景的 `FinancialIndicatorExtractor`。
+
+组件定义文件如下：
+```yaml
+name: 'statistics_extractor'
+description: 'pull numeric claims (percentages, counts with units, ratios, large numbers) from documents into metadata'
+max_statistics: 100            # statistics 列表最多保留的命中数
+statistics_key: 'statistics'   # 命中列表写入的元数据键；'' 表示禁用
+summary_key: 'statistics_summary'  # 摘要写入的元数据键；'' 表示禁用
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.statistics_extractor'
+  class: 'StatisticsExtractor'
+```
+- max_statistics: statistics 列表最多保留的命中条数；摘要始终反映找到的全部命中。必须是 ≥ 1 的整数。
+- statistics_key: 命中列表写入的元数据键；空值表示禁用列表写入。
+- summary_key: 每类摘要（总数、条数、最小/最大值）写入的元数据键；空值表示禁用摘要写入。
