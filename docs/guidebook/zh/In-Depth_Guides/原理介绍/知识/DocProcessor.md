@@ -310,3 +310,38 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [PIIReporter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/pii_reporter.yaml)
+
+该组件在知识*预处理*（入库）阶段检测文档中的个人身份信息（PII），并把检测结果写入文档 metadata——不改动文本中的任何一个字符。它是 `SensitiveDataRedactor` 的"报告"对应物，二者的取舍恰好相反：脱敏组件是*后处理*组件，在召回文本中就地掩码命中项（破坏性的、一次性的编辑）；而 `PIIReporter` 是一次审计扫描。知道语料中*存在*银行卡号、居民身份证号或 IBAN——位置、数量与置信度——管道负责人就能在文本被向量化或入库之前决定：丢弃、脱敏、转入受限存储，还是升级人工审核。先报告、再决策、（确有必要时）再销毁。
+
+检测采用"正则形状 + 校验和"两层，不调用任何模型即可保持高精度。13-19 位、容忍空格/横线的银行卡形状数字串只有在通过 Luhn 校验时才上报为 `card`；未通过 Luhn 的同一数字串上报为较弱的 `numeric_id`。中国居民身份证号必须满足 GB 11643 模 11 校验；IBAN 先对照国家长度表（前 10 大发行国）再用精确整数运算做 ISO 13616 mod-97 校验。邮箱按形状匹配；电话号码（带 `+` 国家码的国际格式、中国手机号、北美 3-3-4 格式）带有日期与算术上下文防护，`2023-01-15` 或 `3 +86 137 0013 8000` 不会被当成电话。护照号只以上明显低置信度的 `passport_candidate` 上报——"2 字母 + 6 数字"的形状与太多发票号/案件号相同。当两个检测器的命中区间重叠时，更强（经过校验和验证）的类型胜出。
+
+报告本身的隐私性与检测同样重要：metadata 面向日志、索引和审计，因此每条 finding 绝不携带命中的原始值——只保存掩码形式（前两字符 + *** + 后两字符）、字符区间、类型与置信度。每个文档会被写入 `metadata['pii']`（finding 列表，受 `max_findings` 限制，默认 100 条）、`metadata['pii_counts']`（按类型的总数，不受上限约束）与 `metadata['pii_risk']`（`none` / `low` / `medium` / `high`——银行卡、身份证、IBAN 记为 high）。写入前会复制 metadata 映射；text、id 及既有 metadata 绝不修改。整个组件只依赖 `re` 与整数运算——确定性、离线、零第三方依赖——并与 `SensitiveDataRedactor` 天然配合：入库时用本组件审计，召回时（或对被标记的文档）用脱敏组件真正掩码。
+
+组件定义文件如下：
+```yaml
+name: 'pii_reporter'
+description: 'detect personally identifiable information in documents and report it via metadata without modifying text'
+kinds:                        # 启用的检测类型
+  - 'email'
+  - 'phone'
+  - 'card'
+  - 'numeric_id'
+  - 'cn_id'
+  - 'iban'
+  - 'passport_candidate'
+max_findings: 100             # metadata['pii'] 的上限；计数/风险统计全部命中
+pii_key: 'pii'                # finding 列表的 metadata 键；'' 表示不写入
+counts_key: 'pii_counts'      # 按类型计数的 metadata 键；'' 表示不写入
+risk_key: 'pii_risk'          # none|low|medium|high 的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.pii_reporter'
+  class: 'PIIReporter'
+```
+- kinds：启用的检测类型。`card` 与 `numeric_id` 共享同一次数字串扫描：13-19 位数字串通过 Luhn 记为 `card`，未通过记为 `numeric_id`。`cn_id`、`iban`、`card` 均经过校验和验证（GB 11643 / ISO 13616 mod-97 / Luhn）。
+- max_findings：写入 `metadata[pii_key]` 的 finding 数量上限，必须 >= 1。计数与风险等级始终反映全部命中，不受该上限约束。
+- pii_key：finding 列表的 metadata 键。条目只携带掩码值（前两 + 后两字符）、区间、类型与置信度（校验和验证的类型与 email 为 `high`，电话与 numeric_id 为 `medium`，passport_candidate 为 `low`）。
+- counts_key：按类型总数的 metadata 键。
+- risk_key：整体风险等级的 metadata 键：`card`、`cn_id`、`iban` 记为 `high`，`phone`、`numeric_id` 记为 `medium`，`email`、`passport_candidate` 记为 `low`；文档取其中的最高值。
