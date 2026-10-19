@@ -144,7 +144,7 @@ def assemble_agent_config_data(agent_dto: AgentDTO) -> Dict:
     return agent_config_data
 
 
-def register_agent(file_path: str):
+def register_agent(file_path: str) -> None:
     """Register the agent instance to the agent manager.
 
     Args:
@@ -160,7 +160,7 @@ def register_agent(file_path: str):
     AgentManager().register(component_instance.get_instance_code(), component_instance)
 
 
-def register_product(file_path: str):
+def register_product(file_path: str) -> None:
     """Register the product instance to the product manager.
 
     Args:
@@ -176,7 +176,7 @@ def register_product(file_path: str):
     ProductManager().register(component_instance.get_instance_code(), component_instance)
 
 
-def unregister_product(file_path: str):
+def unregister_product(file_path: str) -> None:
     """Unregister the product instance from the product manager.
 
     Args:
