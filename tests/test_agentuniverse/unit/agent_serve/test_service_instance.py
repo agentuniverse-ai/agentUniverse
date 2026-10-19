@@ -17,6 +17,8 @@ from tests.test_agentuniverse.mock.agent_serve.mock_service_manager import (
 
 @patch('agentuniverse.agent_serve.service_instance.ServiceManager', new=ServiceManager)
 def test_service_instance():
+    """Test that service instance.
+    """
     unittest.TestCase().assertRaises(Exception,
                                      ServiceInstance.__init__,
                                      "not_exist_service_code")
