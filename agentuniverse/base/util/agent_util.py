@@ -55,8 +55,7 @@ def assemble_memory_output(memory: Memory, agent_input: dict,
         memory.add([cur_memory_message], **agent_input)
     if memory_messages is None:
         memory_messages = []
-    memory_messages.append(cur_memory_message)
-    return memory_messages
+    return [*memory_messages, cur_memory_message]
 
 
 def process_agent_llm_config(agent_id: str, agent_profile: dict, default_llm_configer: DefaultLLMConfiger) -> dict:
