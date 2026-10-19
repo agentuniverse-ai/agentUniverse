@@ -37,6 +37,9 @@ VLLM_MAX_CONTEXT_LENGTH = {
     "meta-llama/Llama-3.1-405B-Instruct": 131072,
     "meta-llama/Llama-3.2-1B-Instruct": 131072,
     "meta-llama/Llama-3.2-3B-Instruct": 131072,
+    "meta-llama/Llama-3.3-70B-Instruct": 131072,
+    "meta-llama/Meta-Llama-3-8B-Instruct": 8192,
+    "meta-llama/Meta-Llama-3-70B-Instruct": 8192,
     # Mistral models
     "mistralai/Mistral-7B-Instruct-v0.1": 8192,
     "mistralai/Mistral-7B-Instruct-v0.2": 32768,
@@ -47,7 +50,13 @@ VLLM_MAX_CONTEXT_LENGTH = {
     "Qwen/Qwen2-7B-Instruct": 32768,
     "Qwen/Qwen2-72B-Instruct": 32768,
     "Qwen/Qwen2.5-7B-Instruct": 32768,
+    "Qwen/Qwen2.5-14B-Instruct": 32768,
+    "Qwen/Qwen2.5-32B-Instruct": 32768,
     "Qwen/Qwen2.5-72B-Instruct": 32768,
+    "Qwen/Qwen3-8B": 32768,
+    "Qwen/Qwen3-32B": 32768,
+    # Gemma models
+    "google/gemma-2-9b-it": 8192,
     # Yi models
     "01-ai/Yi-6B-Chat": 4096,
     "01-ai/Yi-34B-Chat": 4096,
