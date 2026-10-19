@@ -10,7 +10,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 import uuid
 import hashlib
 
@@ -186,6 +186,13 @@ class ContextWindow(BaseModel):
     # Metadata
     created_at: datetime = Field(default_factory=datetime.now)
     last_updated: datetime = Field(default_factory=datetime.now)
+
+    @model_validator(mode="after")
+    def validate_reserved_tokens(self) -> 'ContextWindow':
+        """Ensure the output reserve does not exceed the total window."""
+        if self.reserved_tokens > self.max_tokens:
+            raise ValueError("reserved_tokens cannot exceed max_tokens")
+        return self
 
     def calculate_available_tokens(self) -> int:
         """Calculate tokens available for new context.
