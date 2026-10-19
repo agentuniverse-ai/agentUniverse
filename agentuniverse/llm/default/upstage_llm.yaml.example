@@ -1,0 +1,13 @@
+name: 'default_upstage_llm'
+description: 'default upstage llm powered by the Upstage Solar models'
+model_name: 'solar-pro-2'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${UPSTAGE_API_KEY}'
+api_base: 'https://api.upstage.ai/v1/solar'
+proxy: '${UPSTAGE_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.upstage_llm'
+  class: 'UpstageLLM'
