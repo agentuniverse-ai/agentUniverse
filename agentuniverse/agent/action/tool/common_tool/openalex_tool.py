@@ -125,11 +125,13 @@ class OpenAlexTool(Tool):
 
         try:
             raw_works, total_results, next_cursor = self._fetch_works(context)
-            works = [self._parse_work(work) for work in raw_works]
+            # Enforce the requested context bound even if the service overdelivers.
+            works = [self._parse_work(work) for work in raw_works[: context["max_results"]]]
             return {
                 **context,
                 "total_results": total_results,
                 "returned_results": len(works),
+                "results_truncated": len(raw_works) > len(works),
                 "next_cursor": next_cursor,
                 "works": works,
             }
@@ -556,7 +558,7 @@ class OpenAlexTool(Tool):
     def _safe_int(value: Any) -> int:
         try:
             return int(value or 0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return 0
 
     @staticmethod
@@ -591,6 +593,7 @@ class OpenAlexTool(Tool):
             "min_citation_count": min_citation_count,
             "total_results": 0,
             "returned_results": 0,
+            "results_truncated": False,
             "next_cursor": "",
             "works": [],
             "error": {"type": error_type, "message": message},
