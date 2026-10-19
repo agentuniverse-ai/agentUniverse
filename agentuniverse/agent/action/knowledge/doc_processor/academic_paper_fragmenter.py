@@ -308,8 +308,6 @@ class AcademicPaperFragmenter(DocProcessor):
                 if keyword in title_lower:
                     return section_name
 
-        return None
-
     def _extract_arguments(self, section: PaperSection) -> List[Argument]:
         """Extract arguments from a paper section.
 
