@@ -662,7 +662,11 @@ zscores = tool.execute(mode="zscore", numbers="[1, 2, 3, 4]")
 Numbers are accepted as a JSON array string (for example
 `"[1, 2.5, -3e2]"`), as plain text with one number per line (leniently:
 blank lines are skipped and commas or spaces may also separate
-tokens), or as a Python sequence for programmatic callers. Quartiles
+tokens), or as a Python sequence for programmatic callers. Every form
+accepts the same number grammar — an optional sign, digits with an
+optional fractional part, and an optional exponent — so scientific
+notation such as `-3e2` or `1.5E-3` and forms like `+.5` parse in
+JSON, in text tokens and in sequence string elements alike. Quartiles
 use the *inclusive* method — the same estimator as
 `statistics.quantiles(..., method="inclusive")`, interpolating linearly
 at fractional position `p*(N-1)` — so `q2` always equals the median.

@@ -14,7 +14,7 @@ args_model:
     required: true
   numbers:
     type: string
-    description: The numbers to analyse — a JSON array string (e.g. "[1, 2.5, -3e2]"), plain text with one number per line (blank lines skipped; commas or spaces also separate tokens) or, for programmatic callers, a list/tuple of ints or floats. Between 2 and 10000 finite values are required; NaN, infinity, booleans and non-numeric tokens are rejected with their position.
+    description: The numbers to analyse — a JSON array string (e.g. "[1, 2.5, -3e2]"), plain text with one number per line (blank lines skipped; commas or spaces also separate tokens) or, for programmatic callers, a list/tuple of ints or floats. Scientific notation (-3e2, 1.5E-3) and signed decimal forms (+.5) are accepted in every form. Between 2 and 10000 finite values are required; NaN, infinity, booleans and non-numeric tokens are rejected with their position.
     required: false
   top_n:
     type: integer

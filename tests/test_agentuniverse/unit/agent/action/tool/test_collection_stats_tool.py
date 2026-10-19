@@ -326,6 +326,27 @@ class CollectionStatsToolTest(unittest.TestCase):
         self.assertEqual(result["count"], 2)
         self.assertEqual(result["sum"], 3.5)
 
+    def test_parse_scientific_notation_in_every_form(self) -> None:
+        # The same number grammar — optional sign, optional fraction,
+        # optional exponent — is accepted in JSON, in text tokens and in
+        # sequence string elements alike.
+        as_json = self.tool.execute(mode="stats", numbers="[1e2, 1.5E-3]")
+        self.assertEqual(as_json["source"], "json_list")
+        self.assertEqual(as_json["count"], 2)
+        self.assertAlmostEqual(as_json["sum"], 100.0015, places=12)
+
+        as_text = self.tool.execute(mode="stats", numbers="1e2\n1.5E-3")
+        self.assertEqual(as_text["source"], "text")
+        self.assertAlmostEqual(as_text["sum"], 100.0015, places=12)
+
+        as_sequence = self.tool.execute(mode="stats", numbers=["1e2", "+.5"])
+        self.assertEqual(as_sequence["source"], "sequence")
+        self.assertAlmostEqual(as_sequence["sum"], 100.5, places=12)
+
+        as_lenient_text = self.tool.execute(mode="stats", numbers=".5 5.")
+        self.assertEqual(as_lenient_text["count"], 2)
+        self.assertAlmostEqual(as_lenient_text["sum"], 5.5, places=12)
+
     def test_parse_count_bounds(self) -> None:
         self.assertEqual(
             self.tool.execute(mode="stats", numbers="1\n2")["count"], 2

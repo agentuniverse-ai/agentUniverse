@@ -33,7 +33,11 @@ modes:
 Numbers are accepted as a JSON array string (``"[1, 2.5, -3e2]"``), as
 one-per-line plain text (leniently: blank lines are skipped and commas
 or spaces may also separate tokens), or as an actual Python sequence
-of ints/floats for programmatic callers. All values are normalised to
+of ints/floats for programmatic callers. Every form accepts the same
+number grammar — an optional sign, digits with an optional fractional
+part, and an optional exponent, so scientific notation such as
+``-3e2`` or ``1.5E-3`` and forms like ``+.5`` parse in JSON, text and
+sequence string elements alike. All values are normalised to
 finite floats: ``NaN``, infinities, booleans and any other
 non-numeric token are rejected with their position (element index for
 sequences and JSON arrays; line and token number for text).
