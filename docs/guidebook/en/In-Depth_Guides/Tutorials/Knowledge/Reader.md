@@ -52,7 +52,30 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml): Reads text content from local PDF files.
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml): Reads text content from local PPTX files.
 - [default_txt_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/txt_reader.yaml): Reads text content from TXT files.
+- [default_tsv_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/tsv_reader.yaml): Reads tab-separated tables, including quoted tabs and multiline fields.
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml): Reads ZIP archive files, supports nested ZIP structures and multiple file formats.
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml): Reads text content from PDF files found on the web.
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml): Reads text content from local Markdown files.
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml): Reads text content from RAR archive files (.rar).
+
+### TSV knowledge files
+
+`TSVReader` reads a tab-separated table as one Document:
+
+```python
+from agentuniverse.agent.action.knowledge.reader.file.tsv_reader import TSVReader
+
+documents = TSVReader().load_data(
+    file="faq.tsv", ext_info={"collection": "product_faq"}
+)
+```
+
+Paths, text streams and binary streams are supported. Quoted fields may contain
+tabs or newlines; use `quotechar="'"` for single-quoted fields. Text normalization,
+encoding detection, `file_name` metadata and `ext_info` follow `CSVReader` behavior.
+Caller-owned streams remain open. The existing CSV parser is reused without a
+new dependency.
+
+`FileReader` automatically dispatches `.tsv` files (including `.TSV`) to this
+reader. `ReaderManager` maps file type `tsv` to the YAML component
+`default_tsv_reader`, allowing TSV files to join the normal knowledge-loading flow.
