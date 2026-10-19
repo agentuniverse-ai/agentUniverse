@@ -329,6 +329,34 @@ class TestEmlReaderRegistration(unittest.TestCase):
     def test_reader_manager_maps_eml_type(self) -> None:
         self.assertEqual(ReaderManager.DEFAULT_READER["eml"], "default_eml_reader")
 
+    def test_extracted_eml_attachment_routes_through_file_reader(self) -> None:
+        from agentuniverse.agent.action.tool.common_tool.email_document_tool import EmailDocumentTool
+
+        # Exercise the producer's output paths, including an uppercase
+        # extension, rather than reconstructing a reader-specific path.
+        message = EmailMessage()
+        message.set_content("Attachment container")
+        message.add_attachment(
+            _eml_bytes(subject="Attached message", body="Extracted attachment content"),
+            maintype="application",
+            subtype="octet-stream",
+            filename="attached.EML",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            _write(tmp, "container.eml", message.as_bytes())
+            result = EmailDocumentTool(base_dir=tmp).execute(
+                mode="extract", file_path="container.eml", output_dir="downloads"
+            )
+            self.assertEqual(result["status"], "success", result)
+            paths = [Path(path) for path in result["output_paths"]]
+            self.assertEqual([path.name for path in paths], ["attached.EML"])
+            docs = FileReader().load_data(file_paths=paths, ext_info={"source": "attachment"})
+
+        self.assertEqual(len(docs), 1)
+        self.assertIn("Extracted attachment content", docs[0].text)
+        self.assertEqual(docs[0].metadata["email_subject"], "Attached message")
+        self.assertEqual(docs[0].metadata["source"], "attachment")
+
     def test_file_reader_dispatches_eml_end_to_end(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = _write(tmp, "dispatch.eml", _eml_bytes(subject="Dispatched", body="routed through FileReader"))
