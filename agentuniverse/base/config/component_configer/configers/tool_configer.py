@@ -44,7 +44,7 @@ class ToolConfiger(ComponentConfiger):
         Returns:
             ToolConfiger: the ToolConfiger object
         """
-        return self.load_by_configer(self.__configer)
+        return self.load_by_configer(self.configer)
 
     def load_by_configer(self, configer: Configer) -> 'ToolConfiger':
         """Load the configuration by the Configer object.

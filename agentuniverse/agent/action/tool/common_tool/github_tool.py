@@ -66,12 +66,15 @@ class GitHubTool(Tool):
             response.raise_for_status()
             return response.json()
         except requests.HTTPError as e:
-            if e.response.status_code == 403:
+            response = e.response
+            if response is None:
+                return {"error": f"HTTP Error: {str(e)}"}
+            if response.status_code == 403:
                 return {"error": "API rate limit exceeded. Please check your API key or try again later."}
-            elif e.response.status_code == 404:
+            elif response.status_code == 404:
                 return {"error": "Resource not found."}
             else:
-                return {"error": f"HTTP Error {e.response.status_code}: {e.response.text}"}
+                return {"error": f"HTTP Error {response.status_code}: {response.text}"}
         except requests.Timeout:
             return {"error": "Request timeout. Please try again."}
         except Exception as e:

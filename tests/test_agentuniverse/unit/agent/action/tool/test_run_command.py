@@ -10,6 +10,7 @@ import unittest
 import time
 import json
 import os
+import sys
 from agentuniverse.agent.action.tool.common_tool.run_command_tool import (
     RunCommandTool,
     CommandStatus,
@@ -24,7 +25,18 @@ class RunCommandToolTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.tool = RunCommandTool()
+        # Opt in explicitly: RunCommandTool is disabled by default because it
+        # runs arbitrary shell commands (see allow_command_execution).
+        self.tool = RunCommandTool(allow_command_execution=True)
+
+    def test_disabled_by_default_refuses(self) -> None:
+        """A default RunCommandTool must refuse to execute anything."""
+        tool = RunCommandTool()
+        result = json.loads(tool.execute(ToolInput({
+            'command': 'echo should_not_run', 'blocking': True})))
+        self.assertEqual(result['status'], CommandStatus.ERROR.value)
+        self.assertNotIn('should_not_run', result.get('stdout', ''))
+        self.assertIn('allow_command_execution', result['stderr'])
 
     def test_blocking_command_execution(self) -> None:
         """Test synchronous command execution"""
@@ -50,7 +62,7 @@ class RunCommandToolTest(unittest.TestCase):
     def test_nonblocking_command_execution(self) -> None:
         """Test asynchronous command execution"""
         tool_input = ToolInput({
-            'command': 'sleep 1 && echo "Async Test"',
+            'command': f'"{sys.executable}" -c "import time; time.sleep(1); print(\'Async Test\')"',
             'cwd': os.getcwd(),
             'blocking': False
         })
@@ -73,6 +85,47 @@ class RunCommandToolTest(unittest.TestCase):
         self.assertIn('Async Test', cmd_result.stdout)
         self.assertEqual(cmd_result.exit_code, 0)
 
+    def test_string_false_blocking_value_runs_nonblocking(self) -> None:
+        tool_input = ToolInput({
+            'command': f'"{sys.executable}" -c "import time; time.sleep(0.5); print(\'String False\')"',
+            'cwd': os.getcwd(),
+            'blocking': 'false'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.RUNNING.value)
+        cmd_result = get_command_result(result['thread_id'])
+        self.assertIsNotNone(cmd_result)
+        self.assertEqual(cmd_result.status, CommandStatus.RUNNING)
+
+    def test_typo_blocking_value_returns_input_error(self) -> None:
+        tool_input = ToolInput({
+            'command': 'echo "should not run"',
+            'cwd': os.getcwd(),
+            'blocking': 'flase'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.ERROR.value)
+        self.assertIn('blocking must be a boolean value', result['error'])
+
+    def test_non_binary_numeric_blocking_value_returns_input_error(self) -> None:
+        tool_input = ToolInput({
+            'command': 'echo "should not run"',
+            'cwd': os.getcwd(),
+            'blocking': 2
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.ERROR.value)
+        self.assertIn('blocking numeric value must be 0 or 1', result['error'])
+
     def test_command_error(self) -> None:
         """Test handling of commands that result in errors"""
         tool_input = ToolInput({
@@ -91,7 +144,7 @@ class RunCommandToolTest(unittest.TestCase):
     def test_command_output_escaping(self) -> None:
         """Test that special characters in command output are properly escaped"""
         tool_input = ToolInput({
-            'command': 'echo "Line 1\nLine 2\tTabbed\r\nWindows\\"Quote\\""',
+            'command': f'"{sys.executable}" -c "import sys; sys.stdout.write(\'Line 1\\\\nLine 2\\\\tTabbed\\\\r\\\\nWindows\' + chr(34) + \'Quote\' + chr(34))"',
             'cwd': os.getcwd(),
             'blocking': True
         })

@@ -1,8 +1,11 @@
 import os
 import json
+import importlib.util
 import tempfile
 import unittest
 from agentuniverse.agent.action.tool.common_tool.write_word_tool import WriteWordDocumentTool
+
+DOCX_AVAILABLE = importlib.util.find_spec("docx") is not None
 
 
 class WriteWordDocumentToolTest(unittest.TestCase):
@@ -18,6 +21,7 @@ class WriteWordDocumentToolTest(unittest.TestCase):
                 os.rmdir(os.path.join(root, name))
         os.rmdir(self.temp_dir)
 
+    @unittest.skipUnless(DOCX_AVAILABLE, "python-docx is required")
     def test_write_new_word_file(self):
         file_path = os.path.join(self.temp_dir, "test_new.docx")
         content = "***This is a test paragraph.***"
@@ -29,6 +33,7 @@ class WriteWordDocumentToolTest(unittest.TestCase):
         self.assertEqual(result["file_path"], file_path)
         self.assertTrue(os.path.exists(file_path))
 
+    @unittest.skipUnless(DOCX_AVAILABLE, "python-docx is required")
     def test_append_to_word_file(self):
         file_path = os.path.join(self.temp_dir, "test_append.docx")
 
@@ -52,6 +57,7 @@ class WriteWordDocumentToolTest(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("The target file must have a .docx extension.", result["error"])
 
+    @unittest.skipUnless(DOCX_AVAILABLE, "python-docx is required")
     def test_create_directory_structure(self):
         file_path = os.path.join(self.temp_dir, "nested/dir/structure/test.docx")
         content = "Test content in nested directory."

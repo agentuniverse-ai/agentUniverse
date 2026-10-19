@@ -30,7 +30,7 @@ class PromptConfiger(ComponentConfiger):
         Returns:
             PromptConfiger: the PromptConfiger object
         """
-        return self.load_by_configer(self.__configer)
+        return self.load_by_configer(self.configer)
 
     def load_by_configer(self, configer: Configer) -> 'PromptConfiger':
         """Load the configuration by the Configer object.
@@ -41,9 +41,10 @@ class PromptConfiger(ComponentConfiger):
         """
         super().load_by_configer(configer)
         try:
-            if configer.value.get('metadata'):
-                self.__metadata_version = configer.value.get('metadata').get('version')
-            else:
+            metadata = configer.value.get('metadata')
+            if isinstance(metadata, dict) and metadata:
+                self.__metadata_version = metadata.get('version')
+            elif configer.path:
                 path = Path(configer.path)
                 self.__metadata_version = f"{path.parent.name}.{path.stem}"
             # set the prompt default module and class

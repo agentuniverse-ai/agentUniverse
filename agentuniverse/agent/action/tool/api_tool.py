@@ -44,22 +44,13 @@ class APITool(Tool):
                 if 'type' in option:
                     # Attempt to convert the value based on the type.
                     if option['type'] == 'integer' or option['type'] == 'int':
-                        return int(value)
+                        return self._convert_integer(value)
                     elif option['type'] == 'number':
-                        if '.' in str(value):
-                            return float(value)
-                        else:
-                            return int(value)
+                        return self._convert_number(value)
                     elif option['type'] == 'string':
                         return str(value)
                     elif option['type'] == 'boolean':
-                        if str(value).lower() in ['true', '1']:
-                            return True
-                        elif str(value).lower() in ['false', '0']:
-                            return False
-                        else:
-                            # Not a boolean, try next option
-                            continue
+                        return self._convert_boolean(value)
                     elif option['type'] == 'null' and not value:
                         return None
                     else:
@@ -78,17 +69,13 @@ class APITool(Tool):
         try:
             if 'type' in property:
                 if property['type'] == 'integer' or property['type'] == 'int':
-                    return int(value)
+                    return self._convert_integer(value)
                 elif property['type'] == 'number':
-                    # check if it is a float
-                    if '.' in value:
-                        return float(value)
-                    else:
-                        return int(value)
+                    return self._convert_number(value)
                 elif property['type'] == 'string':
                     return str(value)
                 elif property['type'] == 'boolean':
-                    return bool(value)
+                    return self._convert_boolean(value)
                 elif property['type'] == 'null':
                     if value is None:
                         return None
@@ -109,6 +96,36 @@ class APITool(Tool):
                 return self.convert_body_property_any_of(property, value, property['anyOf'])
         except ValueError as e:
             return value
+
+    @staticmethod
+    def _convert_integer(value: Any) -> int:
+        if isinstance(value, bool):
+            raise ValueError("boolean is not an integer")
+        return int(value)
+
+    @staticmethod
+    def _convert_number(value: Any) -> int | float:
+        if isinstance(value, bool):
+            raise ValueError("boolean is not a number")
+        if isinstance(value, (int, float)):
+            return value
+        value_text = str(value).strip()
+        if "." in value_text or "e" in value_text.lower():
+            return float(value_text)
+        return int(value_text)
+
+    @staticmethod
+    def _convert_boolean(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)) and value in (0, 1):
+            return bool(value)
+        value_text = str(value).strip().lower()
+        if value_text in ["true", "1"]:
+            return True
+        if value_text in ["false", "0"]:
+            return False
+        raise ValueError(f"Invalid boolean value: {value}")
 
     def do_http_request(self, url: str, method: str, headers: dict[str, Any],
                         parameters: dict[str, Any]) -> httpx.Response:

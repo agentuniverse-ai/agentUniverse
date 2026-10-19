@@ -7,8 +7,15 @@
 # @FileName: test_arxiv_tool.py
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from agentuniverse.agent.action.tool.common_tool.arxiv_tool import ArxivTool, SearchMode
 from agentuniverse.agent.action.tool.tool import ToolInput
+
+
+class FakeArxivClient:
+    pass
 
 
 class ArxivToolTest(unittest.TestCase):
@@ -24,16 +31,28 @@ class ArxivToolTest(unittest.TestCase):
             'input': 'machine learning',
             'mode': SearchMode.SEARCH.value
         })
-        result = self.tool.execute(tool_input)
+        fake_arxiv = SimpleNamespace(Client=FakeArxivClient)
+        with patch.dict("sys.modules", {"arxiv": fake_arxiv}):
+            with patch.object(ArxivTool, "find_papers_by_str",
+                              autospec=True,
+                              return_value="search results") as mock_search:
+                result = self.tool.execute(tool_input)
         self.assertTrue(result!= "")
+        mock_search.assert_called_once_with(self.tool, "machine learning")
 
     def test_get_paper_detail(self) -> None:
         tool_input = ToolInput({
             'input': '1605.08386v1',
             'mode': SearchMode.DETAIL.value
         })
-        result = self.tool.execute(tool_input)
+        fake_arxiv = SimpleNamespace(Client=FakeArxivClient)
+        with patch.dict("sys.modules", {"arxiv": fake_arxiv}):
+            with patch.object(ArxivTool, "retrieve_full_paper_text",
+                              autospec=True,
+                              return_value="paper detail") as mock_detail:
+                result = self.tool.execute(tool_input)
         self.assertTrue(result!= "")
+        mock_detail.assert_called_once_with(self.tool, "1605.08386v1")
 
     def test_invalid_mode(self) -> None:
         tool_input = ToolInput({

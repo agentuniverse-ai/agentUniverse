@@ -8,6 +8,7 @@
 
 import os
 import json
+import shutil
 import tempfile
 import unittest
 
@@ -17,16 +18,11 @@ from agentuniverse.agent.action.tool.common_tool.write_file_tool import WriteFil
 
 class WriteFileToolTest(unittest.TestCase):
     def setUp(self):
-        self.tool = WriteFileTool()
         self.temp_dir = tempfile.mkdtemp()
+        self.tool = WriteFileTool(base_dir=self.temp_dir)
         
     def tearDown(self):
-        for root, dirs, files in os.walk(self.temp_dir, topdown=False):
-            for name in files:
-                os.unlink(os.path.join(root, name))
-            for name in dirs:
-                os.rmdir(os.path.join(root, name))
-        os.rmdir(self.temp_dir)
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
     
     def test_write_new_file(self):
         file_path = os.path.join(self.temp_dir, 'test_new.txt')
@@ -41,7 +37,7 @@ class WriteFileToolTest(unittest.TestCase):
         result = json.loads(result_json)
         
         self.assertEqual(result['status'], 'success')
-        self.assertEqual(result['file_path'], file_path)
+        self.assertEqual(result['file_path'], os.path.realpath(file_path))
         self.assertTrue(os.path.exists(file_path))
         
         with open(file_path, 'r') as f:
@@ -72,6 +68,63 @@ class WriteFileToolTest(unittest.TestCase):
         
         with open(file_path, 'r') as f:
             self.assertEqual(f.read(), initial_content + append_content)
+
+    def test_string_false_append_value_overwrites_file(self):
+        file_path = os.path.join(self.temp_dir, 'test_append_string_false.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+
+        tool_input = ToolInput({
+            'file_path': file_path,
+            'content': 'new content',
+            'append': 'false'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['append_mode'], False)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'new content')
+
+    def test_typo_append_value_returns_error_without_writing(self):
+        file_path = os.path.join(self.temp_dir, 'test_append_typo.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+
+        tool_input = ToolInput({
+            'file_path': file_path,
+            'content': 'new content',
+            'append': 'flase'
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('append must be a boolean value', result['error'])
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'old content')
+
+    def test_non_binary_numeric_append_value_returns_error_without_writing(self):
+        file_path = os.path.join(self.temp_dir, 'test_append_numeric.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+
+        tool_input = ToolInput({
+            'file_path': file_path,
+            'content': 'new content',
+            'append': 2
+        })
+
+        result_json = self.tool.execute(tool_input)
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('append numeric value must be 0 or 1', result['error'])
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'old content')
     
     def test_create_directory_structure(self):
         file_path = os.path.join(self.temp_dir, 'nested/dir/structure/test.txt')
@@ -89,6 +142,33 @@ class WriteFileToolTest(unittest.TestCase):
         self.assertTrue(os.path.exists(file_path))
         
         self.assertTrue(os.path.isdir(os.path.join(self.temp_dir, 'nested/dir/structure')))
+
+    def test_write_relative_path_under_base_dir(self):
+        result_json = self.tool.execute(
+            file_path='relative/test.txt',
+            content='relative content'
+        )
+        result = json.loads(result_json)
+
+        expected_path = os.path.join(self.temp_dir, 'relative', 'test.txt')
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['file_path'], os.path.realpath(expected_path))
+        self.assertTrue(os.path.exists(expected_path))
+
+    def test_reject_path_traversal(self):
+        outside_name = f"{os.path.basename(self.temp_dir)}_outside.txt"
+        outside_path = os.path.join(os.path.dirname(self.temp_dir), outside_name)
+        self.addCleanup(lambda: os.path.exists(outside_path) and os.unlink(outside_path))
+
+        result_json = self.tool.execute(
+            file_path=f'../{outside_name}',
+            content='should not be written'
+        )
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], 'error')
+        self.assertIn('escapes the allowed directory', result['error'])
+        self.assertFalse(os.path.exists(outside_path))
 
 
 if __name__ == '__main__':

@@ -41,8 +41,19 @@ class ConfluenceReader(Reader):
             "version": page.get("version", {}).get("number")
         }
         if ext_info:
-            metadata.update(ext_info)
+            metadata.update(self._public_metadata(ext_info))
         return [Document(text=text, metadata=metadata)]
+
+    @staticmethod
+    def _public_metadata(ext_info: Dict) -> Dict:
+        sensitive_keys = {
+            "token",
+            "password",
+            "CONFLUENCE_TOKEN",
+            "confluence_token",
+            "authorization",
+        }
+        return {key: value for key, value in ext_info.items() if key not in sensitive_keys}
 
     def _resolve_cred(self, ext_info: Optional[Dict]) -> (str, str, str):
         import os

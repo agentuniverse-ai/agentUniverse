@@ -34,7 +34,18 @@ class ArxivTool(Tool):
     sch_engine: Optional[Any] = None
     MAX_QUERY_LENGTH: int = Field(default=300, description="查询字符串最大长度")
 
-    def execute(self, input: str, mode: str):
+    def execute(self, input: str | ToolInput, mode: str = None):
+        if isinstance(input, ToolInput):
+            params = input.to_dict()
+            mode = params.get("mode", mode)
+            input = params.get("input")
+
+        if mode not in [m.value for m in SearchMode]:
+            raise ValueError(f"Invalid mode: {mode}. Must be one of {[m.value for m in SearchMode]}")
+
+        if not isinstance(input, str) or not input.strip():
+            raise ValueError("input must be a non-empty string")
+
         try:
             import arxiv
         except ImportError:
@@ -42,9 +53,6 @@ class ArxivTool(Tool):
 
         if self.sch_engine is None:
             self.sch_engine = arxiv.Client()
-
-        if mode not in [m.value for m in SearchMode]:
-            raise ValueError(f"Invalid mode: {mode}. Must be one of {[m.value for m in SearchMode]}")
 
         query = input
         return (self.find_papers_by_str(query) if mode == SearchMode.SEARCH.value
@@ -100,7 +108,9 @@ class ArxivTool(Tool):
         except ImportError:
             raise ImportError("arxiv is required. Install with: pip install arxiv")
         search = arxiv.Search(id_list=[paper_id])
-        paper = next(self.sch_engine.results(search))
+        paper = next(self.sch_engine.results(search), None)
+        if paper is None:
+            raise ValueError(f"No arXiv paper found for ID: {paper_id}")
         paper.download_pdf(filename="downloaded-paper.pdf") 
         
         try:

@@ -45,7 +45,7 @@ class WorkflowConfiger(ComponentConfiger):
         Returns:
             WorkflowConfiger: the WorkflowConfiger object
         """
-        return self.load_by_configer(self.__configer)
+        return self.load_by_configer(self.configer)
 
     def load_by_configer(self, configer: Configer) -> 'WorkflowConfiger':
         """Load the configuration by the Configer object.

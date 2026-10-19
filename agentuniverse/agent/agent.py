@@ -252,7 +252,7 @@ class Agent(ComponentBase, ABC):
 
     def as_langchain_tool(self):
         """Convert to LangChain tool."""
-        from langchain.agents.tools import Tool
+        from langchain.tools import Tool as LangchainTool
         format_dict = {}
         for key in self.input_keys():
             format_dict.setdefault(key, "input val")
@@ -263,7 +263,7 @@ class Agent(ComponentBase, ABC):
         and the value of the key must be a json string,the format of the json string is as follows:
         ```{format_str}```
         """
-        return Tool(
+        return LangchainTool(
             name=self.agent_model.info.get("name"),
             func=self.langchain_run,
             description=self.agent_model.info.get("description") + args_description
@@ -271,7 +271,7 @@ class Agent(ComponentBase, ABC):
 
     async def async_as_langchain_tool(self):
         """Convert to LangChain tool."""
-        from langchain.agents.tools import Tool
+        from langchain.tools import Tool as LangchainTool
         format_dict = {}
         for key in self.input_keys():
             format_dict.setdefault(key, "input val")
@@ -282,7 +282,7 @@ class Agent(ComponentBase, ABC):
         and the value of the key must be a json string,the format of the json string is as follows:
         ```{format_str}```
         """
-        return Tool(
+        return LangchainTool(
             name=self.agent_model.info.get("name"),
             func=self.async_langchain_run,
             description=self.agent_model.info.get("description") + args_description
@@ -363,6 +363,8 @@ class Agent(ComponentBase, ABC):
         return streaming
 
     def generate_result(self, data: list[dict | str]):
+        if not data:
+            return ""
         if isinstance(data[0], str):
             return "".join(data)
         text = [val.get('text') for val in data]
@@ -377,9 +379,7 @@ class Agent(ComponentBase, ABC):
         return self._get_tool_names()
 
     def _get_tool_names(self) -> list:
-        tool_name_list = self.agent_model.action.get('tool', [])
-        if tool_name_list is None:
-            tool_name_list = []
+        tool_name_list = list(self.agent_model.action.get('tool') or [])
         for toolkit_name in self.agent_model.action.get('toolkit', []):
             toolkit = ToolkitManager().get_instance_obj(toolkit_name)
             tool_name_list.extend(toolkit.tool_names)
@@ -399,8 +399,14 @@ class Agent(ComponentBase, ABC):
             try:
                 tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
                 tool_results.append(str(tool.run(**tool_input)))
-            except:
-                LOGGER.warn(f'Tool {tool_name} call failed, maybe invalid or lack arguments')
+            except Exception as e:
+                # A failed tool is logged with the full exception for operators,
+                # but the downstream agent only sees a stable, non-sensitive
+                # marker so a partial execution cannot look like a complete
+                # success. The marker is per-tool so ordering of mixed
+                # success/failure results is preserved.
+                LOGGER.warn(f'Tool {tool_name} call failed: {e}')
+                tool_results.append(f'[tool {tool_name} failed]')
         return "\n\n".join(tool_results)
 
     async def async_invoke_tools(self, input_object: InputObject, **kwargs) -> str:
@@ -412,8 +418,15 @@ class Agent(ComponentBase, ABC):
             tool: Tool = ToolManager().get_instance_obj(tool_name)
             if tool is None:
                 continue
-            tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
-            tool_results.append(await tool.async_run(**tool_input))
+            try:
+                tool_input = {key: input_object.get_data(key) for key in tool.input_keys}
+                tool_results.append(str(await tool.async_run(**tool_input)))
+            except Exception as e:
+                # See invoke_tools: log the full exception, surface only a stable
+                # per-tool marker to the downstream agent so partial execution
+                # cannot be mistaken for a complete success.
+                LOGGER.warn(f'Tool {tool_name} call failed: {e}')
+                tool_results.append(f'[tool {tool_name} failed]')
         return "\n\n".join(tool_results)
 
     def invoke_knowledge(self, query_str: str, input_object: InputObject, **kwargs) -> str:

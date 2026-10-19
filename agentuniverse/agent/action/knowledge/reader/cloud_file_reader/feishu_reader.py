@@ -6,8 +6,6 @@
 # @Email   : 2179709293@qq.com
 # @FileName: feishu_reader.py
 
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import time
 from typing import Dict,List
@@ -24,6 +22,15 @@ class PublicFeishuReader:
 
     def __init__(self):
         """Initialize Selenium WebDriver with headless configuration"""
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+        except ImportError as exc:
+            raise ImportError(
+                "selenium is required to read public Feishu documents: "
+                "please run `pip install selenium`"
+            ) from exc
+
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--disable-gpu")

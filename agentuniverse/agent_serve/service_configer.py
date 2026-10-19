@@ -6,12 +6,13 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: service_configer.py
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from ..agent.agent import Agent
-from ..agent.agent_manager import AgentManager
 from ..base.config.component_configer.component_configer import ComponentConfiger
 from ..base.config.configer import Configer
+
+if TYPE_CHECKING:
+    from ..agent.agent import Agent
 
 
 class ServiceConfiger(ComponentConfiger):
@@ -26,7 +27,7 @@ class ServiceConfiger(ComponentConfiger):
         super().__init__(configer)
         self.__name: Optional[str] = None
         self.__description: Optional[str] = None
-        self.__agent: Optional[Agent] = None
+        self.__agent: Optional['Agent'] = None
         self.__set_default_meta_info()
 
     @property
@@ -40,7 +41,7 @@ class ServiceConfiger(ComponentConfiger):
         return self.__description
 
     @property
-    def agent(self) -> Optional[Agent]:
+    def agent(self) -> Optional['Agent']:
         """Agent field."""
         return self.__agent
 
@@ -72,16 +73,36 @@ class ServiceConfiger(ComponentConfiger):
         """
         super().load_by_configer(configer)
         agent_code = configer.value.get('agent')
+        service_name = configer.value.get('name') or '<unnamed>'
+        config_path = configer.path or '<unknown>'
         self.__set_default_meta_info()
         try:
             self.__name = configer.value.get('name')
             self.__description = configer.value.get('description')
-            agent_manager: AgentManager = AgentManager()
+            if not agent_code:
+                raise ValueError(
+                    f"Service '{service_name}' in config '{config_path}' must define a non-empty 'agent'."
+                )
+            from ..agent.agent_manager import AgentManager
+
+            agent_manager = AgentManager()
             self.__agent = agent_manager.get_instance_obj(agent_code)
             if not self.__agent:
-                raise ValueError
-        except ValueError:
-            raise ValueError(f"No such Agent: {agent_code}")
+                registered_agents = agent_manager.get_instance_name_list()
+                registered_hint = (
+                    f" Registered agents: {registered_agents}."
+                    if registered_agents else
+                    " No agents are registered."
+                )
+                raise ValueError(
+                    f"No such Agent: '{agent_code}' referenced by service '{service_name}' "
+                    f"in config '{config_path}'.{registered_hint}"
+                )
+        except ValueError as e:
+            raise ValueError(str(e)) from e
         except Exception as e:
-            raise Exception(f"Failed to parse the Agent configuration: {e}")
+            raise Exception(
+                f"Failed to parse the Agent configuration for service '{service_name}' "
+                f"in config '{config_path}': {e}"
+            ) from e
         return self

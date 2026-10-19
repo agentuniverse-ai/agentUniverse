@@ -45,7 +45,7 @@ class KnowledgeConfiger(ComponentConfiger):
         Returns:
             KnowledgeConfiger: the KnowledgeConfiger object
         """
-        return self.load_by_configer(self.__configer)
+        return self.load_by_configer(self.configer)
 
     def load_by_configer(self, configer: Configer) -> 'KnowledgeConfiger':
         """Load the configuration by the Configer object.

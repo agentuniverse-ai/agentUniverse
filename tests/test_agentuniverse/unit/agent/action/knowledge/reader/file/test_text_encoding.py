@@ -36,3 +36,13 @@ def test_csv_reader_handles_utf8_bom(tmp_path):
     assert len(documents) == 1
     assert "值1" in documents[0].text
     assert documents[0].metadata["file_name"] == file_path.name
+
+
+def test_csv_reader_preserves_empty_middle_fields(tmp_path):
+    file_path = tmp_path / "empty_middle.csv"
+    file_path.write_text("name,middle,last\nAlice,,Smith\n", encoding="utf-8")
+
+    reader = CSVReader()
+    documents = reader.load_data(file_path)
+
+    assert "Alice, , Smith" in documents[0].text
