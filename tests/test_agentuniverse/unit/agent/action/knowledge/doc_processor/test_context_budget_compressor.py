@@ -90,6 +90,13 @@ class TestContextBudgetCounters(unittest.TestCase):
                    truncate=True)
         self.assertEqual(out[0].text, "one two three")
 
+    def test_word_truncation_preserves_original_whitespace(self) -> None:
+        text = "  first\n    second\tthird"
+        out = _run([text], budget=2, counter="word", truncate=True)
+        self.assertEqual(out[0].text, "  first\n    second")
+        self.assertTrue(text.startswith(out[0].text))
+        self.assertEqual(ContextBudgetCompressor(counter="word")._count(out[0].text), 2)
+
     def test_word_counter_counts_words(self) -> None:
         proc = ContextBudgetCompressor(counter="word")
         self.assertEqual(proc._count("a b c"), 3)
