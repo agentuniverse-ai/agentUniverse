@@ -632,3 +632,24 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## TabularDataTool
+
+`TabularDataTool` provides bounded, deterministic workflows for CSV, TSV, and JSONL datasets. It can create or read datasets, calculate per-column profiles, and transform rows with structured filters, projection, numeric-aware sorting, deduplication, limits, and format conversion.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.tabular_data_tool import TabularDataTool
+
+tool = TabularDataTool(base_dir="/srv/agent-files")
+tool.execute(
+    mode="transform",
+    file_path="sales.csv",
+    output_path="large-orders.jsonl",
+    filters=[{"column": "amount", "operator": "gte", "value": 1000}],
+    select_columns=["customer", "amount"],
+    sort_by="amount",
+    descending=True,
+)
+```
+
+The tool does not evaluate code or expressions. Paths, file size, generated size, rows, columns, cells, output context, profiling cardinality, and `in`-filter values are bounded, and writes are atomic. Profiles count every occurrence of retained values; when distinct cardinality exceeds the configured map, `distinct_count` becomes `null`, a truthful lower bound is returned, and top values are marked approximate. The entire serialized profile is constrained by `max_output_chars`.

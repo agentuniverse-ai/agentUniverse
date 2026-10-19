@@ -1,0 +1,56 @@
+name: tabular_data_tool
+description: Create, read, profile, and safely transform bounded CSV, TSV, and JSONL datasets.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.tabular_data_tool
+  class: TabularDataTool
+input_keys: [mode, file_path]
+base_dir: .
+max_read_bytes: 52428800
+max_write_bytes: 52428800
+max_rows: 100000
+max_columns: 200
+max_cell_chars: 100000
+max_output_chars: 500000
+max_distinct_values: 10000
+max_filter_values: 1000
+args_model:
+  mode: {type: string, required: true}
+  file_path: {type: string, required: true}
+  rows: {type: array, required: false}
+  output_path: {type: string, required: false}
+  overwrite: {type: boolean, required: false, default: false}
+  filters: {type: array, required: false}
+  select_columns: {type: array, required: false}
+  sort_by: {type: string, required: false}
+  descending: {type: boolean, required: false, default: false}
+  deduplicate_by: {type: array, required: false}
+  limit: {type: integer, required: false}
+args_model_schema:
+  type: object
+  properties:
+    mode: {type: string, enum: [create, read, profile, transform]}
+    file_path: {type: string}
+    rows:
+      type: array
+      items: {type: object}
+    output_path: {type: string}
+    overwrite: {type: boolean, default: false}
+    filters:
+      type: array
+      items:
+        type: object
+        properties:
+          column: {type: string}
+          operator: {type: string, enum: [eq, ne, gt, gte, lt, lte, contains, in, is_null]}
+          value: {}
+        required: [column, operator]
+        additionalProperties: false
+    select_columns: {type: array, items: {type: string}}
+    sort_by: {type: string}
+    descending: {type: boolean, default: false}
+    deduplicate_by: {type: array, items: {type: string}}
+    limit: {type: integer, minimum: 1}
+  required: [mode, file_path]
+  additionalProperties: false
