@@ -97,16 +97,16 @@ def demo_basic_classifier():
     print("=" * 60)
     print("基础文档分类器演示")
     print("=" * 60)
-    
+
     # 创建分类器实例
     classifier = DocumentClassifier()
-    
+
     # 设置分类类别
     classifier.set_categories([
-        '技术文档', '学术论文', '新闻资讯', '商业报告', 
+        '技术文档', '学术论文', '新闻资讯', '商业报告',
         '法律文档', '教育材料', '医疗文档', '其他'
     ])
-    
+
     # 添加关键词规则
     classifier.add_keyword_rule('技术文档', [
         'Python', '编程', '代码', 'API', '接口', '函数', '方法', '类', '模块', '开发'
@@ -129,13 +129,13 @@ def demo_basic_classifier():
     classifier.add_keyword_rule('医疗文档', [
         '患者', '疾病', '症状', '诊断', '治疗', '药物', '医生', '医院', '健康'
     ])
-    
+
     # 获取示例文档
     documents = create_sample_documents()
-    
+
     # 对文档进行分类
     classified_docs = classifier.process_docs(documents)
-    
+
     # 显示分类结果
     print("\n分类结果：")
     print("-" * 60)
@@ -143,13 +143,13 @@ def demo_basic_classifier():
         classification = doc.metadata.get('classification', '未分类')
         confidence = doc.metadata.get('classification_confidence', 0.0)
         source = doc.metadata.get('source', '未知')
-        
+
         print(f"{i}. 文档: {source}")
         print(f"   分类: {classification}")
         print(f"   置信度: {confidence:.2f}")
         print(f"   内容预览: {doc.text[:50]}...")
         print()
-    
+
     # 获取分类统计
     summary = classifier.get_classification_summary(classified_docs)
     print("分类统计摘要：")
@@ -169,16 +169,16 @@ def demo_chinese_classifier():
     print("\n" + "=" * 60)
     print("中文文档分类器演示")
     print("=" * 60)
-    
+
     # 创建中文分类器实例
     classifier = ChineseDocumentClassifier()
-    
+
     # 设置分类类别
     classifier.set_categories([
-        '技术文档', '学术论文', '新闻资讯', '商业报告', 
+        '技术文档', '学术论文', '新闻资讯', '商业报告',
         '法律文档', '教育材料', '医疗文档', '其他'
     ])
-    
+
     # 添加中文关键词规则
     classifier.add_chinese_keyword_rule('技术文档', [
         'Python', '编程', '代码', 'API', '接口', '函数', '方法', '类', '模块', '开发', '技术', '系统'
@@ -201,7 +201,7 @@ def demo_chinese_classifier():
     classifier.add_chinese_keyword_rule('医疗文档', [
         '患者', '疾病', '症状', '诊断', '治疗', '药物', '医生', '医院', '健康', '医疗', '临床'
     ])
-    
+
     # 创建中文示例文档
     chinese_documents = [
         Document(
@@ -233,10 +233,10 @@ def demo_chinese_classifier():
             metadata={"source": "病历记录.txt"}
         )
     ]
-    
+
     # 对文档进行分类
     classified_docs = classifier.process_docs(chinese_documents)
-    
+
     # 显示分类结果
     print("\n中文文档分类结果：")
     print("-" * 60)
@@ -244,13 +244,13 @@ def demo_chinese_classifier():
         classification = doc.metadata.get('classification', '未分类')
         confidence = doc.metadata.get('classification_confidence', 0.0)
         source = doc.metadata.get('source', '未知')
-        
+
         print(f"{i}. 文档: {source}")
         print(f"   分类: {classification}")
         print(f"   置信度: {confidence:.2f}")
         print(f"   内容预览: {doc.text[:50]}...")
         print()
-    
+
     # 获取文本统计信息
     print("文本统计信息：")
     print("-" * 60)
@@ -270,9 +270,9 @@ def demo_content_type_classification():
     print("\n" + "=" * 60)
     print("内容类型自动分类演示")
     print("=" * 60)
-    
+
     classifier = ChineseDocumentClassifier()
-    
+
     # 测试不同类型的文档
     test_texts = [
         "这是一个Python编程教程，介绍了如何使用Python进行Web开发。",
@@ -283,7 +283,7 @@ def demo_content_type_classification():
         "本节课我们将学习数据结构中的二叉树遍历算法。",
         "患者出现发热、咳嗽等症状，建议进行血常规检查。"
     ]
-    
+
     print("内容类型自动分类结果：")
     print("-" * 60)
     for i, text in enumerate(test_texts, 1):
@@ -297,21 +297,21 @@ def main():
     """主函数"""
     print("agentUniverse 文档分类器演示")
     print("=" * 60)
-    
+
     try:
         # 基础分类器演示
         demo_basic_classifier()
-        
+
         # 中文分类器演示
         demo_chinese_classifier()
-        
+
         # 内容类型分类演示
         demo_content_type_classification()
-        
+
         print("\n" + "=" * 60)
         print("演示完成！")
         print("=" * 60)
-        
+
     except Exception as e:
         print(f"演示过程中出现错误: {e}")
         import traceback
