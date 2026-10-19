@@ -309,3 +309,29 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [DateExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/date_extractor.yaml)
+
+This component extracts date expressions from document text and stamps them into metadata, addressing the *knowledge extraction* direction of issue #258. Knowledge bases rarely record when a document is *about*: reports, contracts and news cite the dates they discuss — quarterly periods, effective days, publication dates — yet that temporal signal stays buried in prose and invisible to retrieval. The extractor scans each document with pure `re` + `datetime` (offline, deterministic, no external dependencies), normalizes every hit to ISO-8601 `YYYY-MM-DD` and writes the findings into metadata, so downstream stages can filter, sort or boost by time — a natural companion to post-processors such as `TemporalDecayFilter`.
+
+Recognized expression families: ISO year-first dates with a consistent separator (`2026-10-19`, `2026/10/19`, `2026.10.19`); compact `20261019`; numeric day/month with a 4-digit year (`10/19/2026` US, `19/10/2026` EU); month-name dates (`Oct 19, 2026`, `October 19 2026`, `October 19th, 2026`, `SEP 5 2026`); CJK dates (`2026年10月19日`, and yearless `10月19日` which assumes the reference date's year); relative keywords (today/tomorrow/yesterday and 今天/明天/昨天) resolved as day offsets against the reference date; and simple ranges — two adjacent concrete dates joined by `~`, `-`, `–`, `—`, `至`, `到` or `to`, e.g. `2026-10-01~2026-10-19` or `从2026年10月1日到2026年10月19日` — reported once in ISO-8601 interval notation `start/end`. Every hit is validated against the real calendar (`2026-02-30` and friends are skipped, not normalized into March). When a numeric date admits both readings (`05/06/2026` — both numbers fit month and day), the entry is flagged `ambiguous: true` and read per `day_first` (default `false` = month first); unambiguous forms like `19/10/2026` are never flagged and ignore the switch.
+
+Findings land in `metadata['dates']` as `{text, iso, span, kind: date|range|relative, ambiguous}` records in order of appearance — `span` is a `[start, end)` offset pair satisfying `text[span[0]:span[1]] == text` — and, when at least two distinct dates were found (range endpoints included), the bounding pair `[min, max]` in `metadata['date_range']`. Metadata mappings are copied before mutation; text, id and other metadata fields are never modified, and documents without any date pass through untouched. Relative resolution is defined by `reference_date`: the default `''` anchors on the current day at processing time — convenient but non-deterministic across days — while an explicit `YYYY-MM-DD` makes output fully reproducible.
+
+The component definition file is as follows:
+```yaml
+name: 'date_extractor'
+description: 'extract date expressions from document text and stamp them into metadata as ISO-8601'
+reference_date: ''            # anchor for relative/yearless dates; '' = today
+day_first: false              # ambiguous numeric dates: false = month first
+dates_key: 'dates'            # metadata key for the date record list; '' disables
+range_key: 'date_range'       # metadata key for the [min, max] bound; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.date_extractor'
+  class: 'DateExtractor'
+```
+- reference_date: Anchor `YYYY-MM-DD` string for relative keywords and yearless CJK dates; `''` (default) resolves against the current day at processing time, an explicit date makes output deterministic.
+- day_first: How ambiguous numeric dates whose first two numbers both fit month and day (`05/06/2026`) are read — `false` (default) reads month first (US, -> `2026-05-06`); `true` reads day first (EU, -> `2026-06-05`). Forced readings (`19/10/2026`, `10/19/2026`) ignore this switch; ambiguous matches are always flagged.
+- dates_key: Metadata key the list of date records is written to; an empty value disables stamping.
+- range_key: Metadata key the `[min, max]` bounding pair is written to when at least two distinct dates were found; an empty value disables stamping.
