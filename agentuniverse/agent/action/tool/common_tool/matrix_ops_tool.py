@@ -262,6 +262,8 @@ class MatrixOpsTool(Tool):
         """True for finite ints / floats — booleans never count."""
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return False
+        if isinstance(value, int):
+            return True
         return math.isfinite(value)
 
     @classmethod
@@ -295,6 +297,45 @@ class MatrixOpsTool(Tool):
                 f"(got {tolerance!r})"
             )
         return tolerance
+
+    @staticmethod
+    def _fraction_to_float(exact: Fraction) -> float:
+        """Convert exactly, mapping beyond-range magnitudes to ±inf."""
+        try:
+            return float(exact)
+        except OverflowError:
+            return math.inf if exact > 0 else -math.inf
+
+    @classmethod
+    def _to_float(cls, value: Any) -> float:
+        """float() that survives ints too large for a double."""
+        return cls._fraction_to_float(Fraction(value))
+
+    @classmethod
+    def _arith(cls, left: Any, right: Any, op: str) -> Any:
+        """Add / subtract / multiply with a huge-int-safe fallback.
+
+        Mixed int/float arithmetic raises OverflowError once the int
+        cannot convert to a double; the fallback recomputes the exact
+        value with Fractions and maps it to the nearest float (±inf
+        when the magnitude exceeds the double range, mirroring pure
+        float overflow).
+        """
+        try:
+            if op == "add":
+                return left + right
+            if op == "sub":
+                return left - right
+            return left * right
+        except OverflowError:
+            exact = Fraction(left)
+            if op == "add":
+                exact += Fraction(right)
+            elif op == "sub":
+                exact -= Fraction(right)
+            else:
+                exact *= Fraction(right)
+            return cls._fraction_to_float(exact)
 
     # ------------------------------------------------------------------ #
     # Matrix parsing (content-level failures become structured errors)
@@ -458,11 +499,14 @@ class MatrixOpsTool(Tool):
         """Report shape, squareness, symmetry, diagonal and trace."""
         rows, cols = len(mat), len(mat[0])
         symmetric = rows == cols and all(
-            abs(mat[i][j] - mat[j][i]) <= tolerance
+            abs(self._arith(mat[i][j], mat[j][i], "sub")) <= tolerance
             for i in range(rows)
             for j in range(cols)
         )
         diagonal = [mat[i][i] for i in range(min(rows, cols))]
+        trace: Any = 0
+        for value in diagonal:
+            trace = self._arith(trace, value, "add")
         return {
             "mode": "info",
             "rows": rows,
@@ -473,7 +517,7 @@ class MatrixOpsTool(Tool):
             "symmetric": symmetric,
             "tolerance": tolerance,
             "diagonal": diagonal,
-            "trace": sum(diagonal),
+            "trace": trace,
         }
 
     def _run_transpose(
@@ -528,10 +572,10 @@ class MatrixOpsTool(Tool):
         """Scale every entry by xk (default) or +k."""
         if scale_type is None:
             scale_type = "multiply"
-        if scale_type == "multiply":
-            result = [[value * scalar for value in row] for row in mat]
-        else:
-            result = [[value + scalar for value in row] for row in mat]
+        op = "mul" if scale_type == "multiply" else "add"
+        result = [
+            [self._arith(value, scalar, op) for value in row] for row in mat
+        ]
         return {
             "mode": "scale",
             "scale_type": scale_type,
@@ -551,7 +595,8 @@ class MatrixOpsTool(Tool):
                 "scalar": other,
                 "shape": [a_rows, a_cols],
                 "result": [
-                    [value * other for value in row] for row in mat
+                    [self._arith(value, other, "mul") for value in row]
+                    for row in mat
                 ],
             }
         if isinstance(other, bool) or not isinstance(other, (str, list, tuple)):
@@ -572,13 +617,31 @@ class MatrixOpsTool(Tool):
                     f"the right matrix has {b_rows} rows"
                 ),
             )
-        result = [
-            [
-                sum(mat[i][k] * other_matrix[k][j] for k in range(a_cols))
-                for j in range(b_cols)
-            ]
-            for i in range(a_rows)
-        ]
+        result: List[List[Any]] = []
+        for i in range(a_rows):
+            row: List[Any] = []
+            for j in range(b_cols):
+                try:
+                    row.append(
+                        sum(
+                            mat[i][k] * other_matrix[k][j]
+                            for k in range(a_cols)
+                        )
+                    )
+                except OverflowError:
+                    row.append(
+                        self._fraction_to_float(
+                            sum(
+                                (
+                                    Fraction(mat[i][k])
+                                    * Fraction(other_matrix[k][j])
+                                    for k in range(a_cols)
+                                ),
+                                Fraction(0),
+                            )
+                        )
+                    )
+            result.append(row)
         return {
             "mode": "multiply",
             "kind": "matrix",
@@ -612,9 +675,9 @@ class MatrixOpsTool(Tool):
             payload["result"] = (
                 det.numerator if det.denominator == 1 else str(det)
             )
-            payload["value_float"] = float(det)
+            payload["value_float"] = self._to_float(det)
         elif rows <= self.max_cofactor_size:
-            work = [[float(value) for value in row] for row in mat]
+            work = [[self._to_float(value) for value in row] for row in mat]
             det = self._det_cofactor(work)
             payload["method"] = "cofactor_float"
             payload["exact"] = False
@@ -697,11 +760,11 @@ class MatrixOpsTool(Tool):
 
         return det_of(tuple(range(n)))
 
-    @staticmethod
-    def _det_gaussian(rows: List[List[Any]]) -> float:
+    @classmethod
+    def _det_gaussian(cls, rows: List[List[Any]]) -> float:
         """Determinant by Gaussian elimination with partial pivoting."""
         n = len(rows)
-        a = [[float(value) for value in row] for row in rows]
+        a = [[cls._to_float(value) for value in row] for row in rows]
         det = 1.0
         for i in range(n):
             pivot = i

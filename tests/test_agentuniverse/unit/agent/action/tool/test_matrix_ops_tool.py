@@ -16,6 +16,7 @@ where floating point would cancel the answer away), and the error
 contract against fixed messages and payloads.
 """
 
+import json
 import unittest
 
 from agentuniverse.agent.action.tool.common_tool import MatrixOpsTool
@@ -682,6 +683,118 @@ class MatrixOpsToolTest(unittest.TestCase):
             self.tool.execute(mode="multiply", matrix=[[1]], other=True)
         with self.assertRaises(ValueError):
             self.tool.execute(mode="multiply", matrix=[[1]], other=complex(1, 2))
+
+    # ------------------------------------------------------------------ #
+    # Integers beyond the double range never crash the tool
+    # ------------------------------------------------------------------ #
+
+    def test_huge_int_scalar_keeps_integer_arithmetic(self) -> None:
+        huge = 10**400
+        result = self.tool.execute(mode="scale", matrix=[[1, 2]], scalar=huge)
+        self.assertEqual(result["result"], [[huge, 2 * huge]])
+
+    def test_huge_int_tolerance_accepted(self) -> None:
+        result = self.tool.execute(
+            mode="info", matrix=[[1, 2], [3, 4]], tolerance=10**400
+        )
+        self.assertTrue(result["symmetric"])
+        self.assertEqual(result["tolerance"], 10**400)
+
+    def test_huge_int_other_scalar_shortcut(self) -> None:
+        huge = 10**400
+        result = self.tool.execute(
+            mode="multiply", matrix=[[1, 2], [3, 4]], other=huge
+        )
+        self.assertEqual(
+            result["result"],
+            [[huge, 2 * huge], [3 * huge, 4 * huge]],
+        )
+
+    def test_scale_huge_int_on_float_matrix_maps_to_infinities(self) -> None:
+        huge = 10**400
+        result = self.tool.execute(
+            mode="scale", matrix=[[0.5, -1.0]], scalar=huge
+        )
+        self.assertEqual(result["result"], [[float("inf"), float("-inf")]])
+        zero_kept = self.tool.execute(
+            mode="scale", matrix=[[0.0, 2.0]], scalar=huge
+        )
+        self.assertEqual(zero_kept["result"], [[0.0, float("inf")]])
+
+    def test_scale_add_huge_int_on_float_matrix(self) -> None:
+        result = self.tool.execute(
+            mode="scale",
+            matrix=[[0.5, -1.25]],
+            scalar=-(10**400),
+            scale_type="add",
+        )
+        self.assertEqual(result["result"], [[float("-inf"), float("-inf")]])
+
+    def test_multiply_huge_int_scalar_on_float_matrix(self) -> None:
+        result = self.tool.execute(
+            mode="multiply", matrix=[[0.5, -1.25]], other=10**400
+        )
+        self.assertEqual(result["kind"], "scalar")
+        self.assertEqual(result["result"], [[float("inf"), float("-inf")]])
+
+    def test_multiply_huge_int_matmul_overflows_to_inf(self) -> None:
+        result = self.tool.execute(
+            mode="multiply",
+            matrix=[[0.5, 1.5]],
+            other=[[10**400], [10**400]],
+        )
+        self.assertEqual(result["kind"], "matrix")
+        self.assertEqual(result["result"], [[float("inf")]])
+
+    def test_multiply_mixed_matmul_fallback_is_exact_then_float(self) -> None:
+        huge = 10**200
+        result = self.tool.execute(
+            mode="multiply", matrix=[[0.5, 1.5]], other=[[huge], [huge]]
+        )
+        self.assertEqual(result["result"], [[2e200]])
+
+    def test_info_trace_and_symmetry_with_huge_mixed_entries(self) -> None:
+        result = self.tool.execute(
+            mode="info", matrix=[[10**400, 1], [1, 0.5]]
+        )
+        self.assertEqual(result["trace"], float("inf"))
+        self.assertEqual(result["diagonal"], [10**400, 0.5])
+        mirrored = self.tool.execute(
+            mode="info", matrix=[[0.5, 10**400], [1.5, 2.0]]
+        )
+        self.assertFalse(mirrored["symmetric"])
+        equal_huge = self.tool.execute(
+            mode="info", matrix=[[0.5, 10**400], [10**400, 2.0]]
+        )
+        self.assertTrue(equal_huge["symmetric"])
+
+    def test_determinant_huge_exact_result_value_float_is_inf(self) -> None:
+        huge = 10**200
+        result = self.tool.execute(
+            mode="determinant", matrix=[[huge, 1], [1, huge]]
+        )
+        self.assertTrue(result["exact"])
+        self.assertEqual(result["method"], "cofactor_fraction")
+        self.assertEqual(result["result"], huge * huge - 1)
+        self.assertEqual(result["value_float"], float("inf"))
+
+    def test_determinant_huge_int_with_float_entry_uses_float_path(self) -> None:
+        result = self.tool.execute(
+            mode="determinant", matrix=[[10**400, 0.5], [1.0, 2.0]]
+        )
+        self.assertFalse(result["exact"])
+        self.assertEqual(result["method"], "cofactor_float")
+        self.assertEqual(result["result"], float("inf"))
+
+    def test_huge_payload_is_json_serializable(self) -> None:
+        payload = self.tool.execute(
+            mode="determinant", matrix=[[10**200, 1], [1, 10**200]]
+        )
+        json.dumps(payload)
+        scaled = self.tool.execute(
+            mode="scale", matrix=[[0.5]], scalar=10**400
+        )
+        json.dumps(scaled)
 
     # ------------------------------------------------------------------ #
     # Packaging
