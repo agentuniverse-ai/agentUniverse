@@ -50,6 +50,29 @@ class LoggingConfig(object):
     sls_log_queue_max_size: int = 1000
     sls_log_send_interval: float = 3.0
 
+    # Settings that ``__init__`` may overwrite while parsing a config file.
+    # They live on the class, so a fallback has to put every one of them back
+    # to its documented default - resetting only the extension switches would
+    # leak the previous file's log path, level, rotation policy and Aliyun SLS
+    # credentials into the default setup.
+    _MUTABLE_SETTING_NAMES = (
+        "log_level",
+        "log_path",
+        "log_rotation",
+        "log_retention",
+        "log_compression",
+        "sls_endpoint",
+        "sls_project",
+        "sls_log_store",
+        "access_key_id",
+        "access_key_secret",
+        "sls_log_queue_max_size",
+        "sls_log_send_interval",
+    )
+    # Filled in below the class body with a snapshot of the defaults declared
+    # above, so the values are not duplicated in a second place.
+    _CLASS_DEFAULTS: Dict[str, object] = {}
+
     def __init__(self, config_path: Optional[str] = None):
         """Initialize the log config using config file if specified, otherwise
         use default value.
@@ -128,7 +151,17 @@ class LoggingConfig(object):
 
     @staticmethod
     def _use_default_config():
-        """Disable optional log modules while retaining default settings."""
+        """Restore the documented defaults and disable optional modules.
+
+        ``LoggingConfig`` stores parsed values on the class, so falling back
+        to the default configuration has to undo the previous load as a whole.
+        Resetting only the extension switches would keep the old log path,
+        level, rotation, retention, compression and Aliyun SLS credentials,
+        while the extension modules were already disabled: a mixture of two
+        configurations that also leaks credentials between applications.
+        """
+        for name, value in LoggingConfig._CLASS_DEFAULTS.items():
+            setattr(LoggingConfig, name, value)
         for log_module in LoggingConfig.log_extend_module_list:
             LoggingConfig.log_extend_module_switch[log_module] = False
 
@@ -139,6 +172,14 @@ class LoggingConfig(object):
             return self.__config[section][key]
         except KeyError:
             return default_value
+
+
+# Snapshot the documented defaults declared in the class body.  Keeping a
+# single source of truth means a default can only ever be changed in one place.
+LoggingConfig._CLASS_DEFAULTS = {
+    name: getattr(LoggingConfig, name)
+    for name in LoggingConfig._MUTABLE_SETTING_NAMES
+}
 
 
 def init_log_config(config_path: Optional[str] = None):
