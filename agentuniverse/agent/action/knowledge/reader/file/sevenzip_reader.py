@@ -1,7 +1,7 @@
 import os
 import tempfile
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import List, Union, Optional, Dict, Type
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
@@ -105,8 +105,6 @@ class SevenZipReader(Reader):
         documents = []  # 存储提取的文档
         total_extracted = 0  # 已提取文件总大小
         file_count = 0  # 已处理文件计数
-        with py7zr.SevenZipFile(str(sevenzip_path), 'r') as archive:
-            archive.extractall(path=temp_dir)
 
         try:
             # 以只读模式打开7Z文件
@@ -121,7 +119,12 @@ class SevenZipReader(Reader):
                 for file_info in files_info:
                     file_info_map[file_info.filename] = file_info
 
-                # 遍历每个条目
+                approved_entries = []
+
+                # Validate the complete member list before extracting.  py7zr
+                # requires reset() between repeated extract() calls, so doing
+                # this in one bounded extraction avoids silently returning only
+                # the first valid file.
                 for entry_name in entries:
                     # 检查是否达到最大文件数限制
                     if file_count >= max_files:
@@ -135,8 +138,8 @@ class SevenZipReader(Reader):
                     if entry_name=='.':
                         continue
 
-                    # 安全检查：跳过包含".."或绝对路径的文件名
-                    if '..' in entry_name or entry_name.startswith('/'):
+                    # 安全检查：跳过路径穿越和绝对路径
+                    if self._is_unsafe_entry_name(entry_name):
                         continue
 
                     # 获取文件信息
@@ -164,20 +167,30 @@ class SevenZipReader(Reader):
                     if total_extracted + uncompressed_size > max_total_size:
                         break
 
-                    # 为每个文件创建独立的解压目录
-                    #extract_dir = os.path.join(temp_dir, f"extract_{file_count}")
-                    extract_dir = temp_dir
-                    os.makedirs(extract_dir, exist_ok=True)
+                    total_extracted += uncompressed_size
+                    file_count += 1
+                    approved_entries.append(entry_name)
 
+                extract_dir = temp_dir
+                os.makedirs(extract_dir, exist_ok=True)
+                if approved_entries:
+                    archive.extract(path=extract_dir, targets=approved_entries)
+
+                for entry_name in approved_entries:
+                    # 获取文件信息
+                    file_info = file_info_map.get(entry_name)
+                    if not file_info:
+                        continue
+
+                    # 获取未压缩大小
+                    uncompressed_size = file_info.uncompressed or 0
                     try:
-                        # 解压当前条目
-                        #archive.extract(path=extract_dir, targets=[entry_name])
-                        #archive.extract(entry_name,extract_dir)
-                        
                         # 构建提取后的完整路径
                         extracted_path = Path(extract_dir) / entry_name
-                        total_extracted += uncompressed_size
-                        file_count += 1
+                        if not self._is_resolved_path_under(
+                            extracted_path, Path(extract_dir)
+                        ):
+                            continue
 
                         # 构建完整路径（包含父路径信息）
                         full_path = os.path.join(parent_path, entry_name) if parent_path else entry_name
@@ -220,6 +233,29 @@ class SevenZipReader(Reader):
             raise ValueError(f"Error processing 7Z file: {str(e)}")
 
         return documents
+
+    @staticmethod
+    def _is_unsafe_entry_name(entry_name: str) -> bool:
+        """Return whether an archive entry can escape the extraction root."""
+        if not entry_name or entry_name == ".":
+            return True
+
+        posix_path = PurePosixPath(entry_name)
+        windows_path = PureWindowsPath(entry_name)
+        if posix_path.is_absolute() or windows_path.is_absolute():
+            return True
+        if ".." in posix_path.parts or ".." in windows_path.parts:
+            return True
+        return False
+
+    @staticmethod
+    def _is_resolved_path_under(path: Path, root: Path) -> bool:
+        """Return whether the resolved output path stays inside root."""
+        try:
+            path.resolve().relative_to(root.resolve())
+            return True
+        except ValueError:
+            return False
 
     def _process_file(
         self,
