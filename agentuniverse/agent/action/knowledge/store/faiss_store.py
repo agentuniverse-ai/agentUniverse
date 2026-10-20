@@ -410,6 +410,7 @@ class FAISSStore(Store):
     def _reset_faiss_index(self):
         """Reset the FAISS index to empty state."""
         self.faiss_index = None
+        self.document_store = {}
         self.id_to_index = {}
         self.index_to_id = {}
         self._next_index = 0

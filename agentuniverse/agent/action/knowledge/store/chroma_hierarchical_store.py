@@ -59,7 +59,7 @@ class ChromaHierarchicalStore(ChromaStore):
             if len(top_k_ids) > 0:
                 all_results = []
                 top_k = self.similarity_top_k_list[depth] if len(
-                                self.similarity_top_k_list) >= depth + 1 else self.similarity_top_k,
+                                self.similarity_top_k_list) >= depth + 1 else self.similarity_top_k
                 for parent_id in top_k_ids:
                     # Query for each parent_id
                     if len(embedding) > 0:
@@ -74,12 +74,25 @@ class ChromaHierarchicalStore(ChromaStore):
                             query_texts=[query.query_str],
                             where={"hierarchical_parent": parent_id}
                         )
-                    all_results.extend(results)
+                    if results and results.get('ids') and results['ids'][0]:
+                        for i in range(len(results['ids'][0])):
+                            all_results.append({
+                                'id': results['ids'][0][i],
+                                'distance': results['distances'][0][i] if results.get('distances') else 0,
+                                'document': results['documents'][0][i] if results.get('documents') else None,
+                                'metadata': results['metadatas'][0][i] if results.get('metadatas') else None,
+                            })
                 sorted_results = sorted(all_results,
                                         key=lambda x: x['distance'])
 
-                # Select the top k results
-                query_result = sorted_results[:top_k]
+                # Select the top k results and rebuild QueryResult format
+                top_results = sorted_results[:top_k]
+                query_result = {
+                    'ids': [[r['id'] for r in top_results]],
+                    'distances': [[r['distance'] for r in top_results]],
+                    'documents': [[r['document'] for r in top_results]],
+                    'metadatas': [[r['metadata'] for r in top_results]],
+                }
 
             else:
                 filter_condition = {
