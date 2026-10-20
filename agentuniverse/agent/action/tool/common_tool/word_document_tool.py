@@ -14,7 +14,11 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 
 class WordDocumentTool(Tool):
-    """Create, append, read, and inspect DOCX files using structured blocks."""
+    """Create, append, read, and inspect DOCX files using structured blocks.
+
+    Heading blocks use their level's built-in style unless an explicit
+    paragraph style is supplied, including styles from a template.
+    """
 
     base_dir: str = "."
     max_read_bytes: int = 20 * 1024 * 1024
@@ -237,7 +241,9 @@ class WordDocumentTool(Tool):
         for block in blocks:
             kind = block["type"]
             if kind == "heading":
-                document.add_heading(block["text"], level=block["level"])
+                heading = document.add_heading(block["text"], level=block["level"])
+                if block["style"] is not None:
+                    heading.style = block["style"]
             elif kind == "paragraph":
                 document.add_paragraph(block["text"], style=block["style"])
             elif kind == "bullet":
