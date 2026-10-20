@@ -106,8 +106,10 @@ _LINK_DEF_RE = re.compile(
 )
 # Bullet item: optional leading whitespace, one of -/*/+ and text.
 _BULLET_RE = re.compile(r"^(?P<ws>[ \t]*)[-*+](?:[ \t]+(?P<text>.*))?$")
-# Horizontal rule (three or more of the same marker character).
-_HR_RE = re.compile(r"[ \t]*([-=*_])\1{2,}[ \t]*$")
+# Horizontal rule / thematic break (three or more of the same marker
+# character, optionally separated by spaces — CommonMark allows
+# "* * *" and "- - -" just as much as "***" and "---").
+_HR_RE = re.compile(r"[ \t]*([-=*_])(?:[ \t]*\1){2,}[ \t]*$")
 
 
 @total_ordering

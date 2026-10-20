@@ -491,6 +491,36 @@ class ChangelogParserToolTest(unittest.TestCase):
         sections = self.tool.execute(mode="parse", text=text)["releases"][0]["sections"]
         self.assertEqual(sections, {"Added": [{"text": "Entry", "indent": 0}]})
 
+    def test_spaced_horizontal_rules_are_not_entries(self) -> None:
+        # CommonMark thematic breaks may separate the markers with
+        # spaces ("* * *", "- - -", "  ___  "); they must not be
+        # mistaken for bullet entries with marker-shaped text.
+        text = (
+            "## [1.0.0]\n\n### Added\n\n- Entry\n\n* * *\n\n"
+            "## [0.9.0]\n\n### Added\n\n- Older\n\n- - -\n\n### Fixed\n\n- Fix\n\n___\n"
+        )
+        releases = self.tool.execute(mode="parse", text=text)["releases"]
+        self.assertEqual(
+            releases[0]["sections"], {"Added": [{"text": "Entry", "indent": 0}]}
+        )
+        self.assertEqual(
+            releases[1]["sections"],
+            {
+                "Added": [{"text": "Older", "indent": 0}],
+                "Fixed": [{"text": "Fix", "indent": 0}],
+            },
+        )
+
+    def test_hyphen_bullet_with_marker_shaped_text_stays_a_bullet(self) -> None:
+        # "- -" / "- - x" carry fewer than three markers and remain
+        # ordinary bullets whose text happens to contain dashes.
+        text = "## [1.0.0]\n\n### Added\n\n- -\n- - x\n"
+        entries = self.tool.execute(mode="parse", text=text)["releases"][0]["sections"]["Added"]
+        self.assertEqual(
+            entries,
+            [{"text": "-", "indent": 0}, {"text": "- x", "indent": 0}],
+        )
+
     def test_crlf_line_endings(self) -> None:
         text = "## [1.0.0] - 2024-01-15\r\n\r\n### Added\r\n\r\n- Entry one\r\n  - Nested\r\n"
         release = self.tool.execute(mode="parse", text=text)["releases"][0]
