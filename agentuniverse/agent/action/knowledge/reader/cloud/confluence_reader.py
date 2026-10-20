@@ -7,6 +7,7 @@ from typing import List, Optional, Dict
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
+from agentuniverse.base.util.logging.logging_util import LOGGER
 
 
 class ConfluenceReader(Reader):
@@ -19,9 +20,9 @@ class ConfluenceReader(Reader):
     """
 
     def _load_data(self, page_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        print(f"debugging: ConfluenceReader start load page_id={page_id}")
         if not page_id:
             raise ValueError("ConfluenceReader requires page_id")
+        LOGGER.debug("ConfluenceReader start loading page.")
 
         site_url, username, token = self._resolve_cred(ext_info)
         try:
