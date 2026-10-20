@@ -13,11 +13,11 @@ from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
-SUPPORTED_FORMATS = {'jpg', 'jpeg', 'png', 'bmp', 'webp', 'tiff'}
+SUPPORTED_FORMATS = {'jpg', 'jpeg', 'png', 'bmp', 'webp', 'tif', 'tiff'}
 
 
 class ImageReader(Reader):
-    """Image reader."""
+    """Image reader, accepting both .tif and .tiff extensions for TIFF files."""
 
     languages: List[str] = ['en', 'ch_sim']
     use_gpu: bool = False
