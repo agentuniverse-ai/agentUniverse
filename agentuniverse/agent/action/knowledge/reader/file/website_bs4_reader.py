@@ -6,7 +6,7 @@
 # @FileName: website_bs4_reader.py
 
 from typing import Dict, List, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urldefrag, urljoin, urlparse
 import random
 import time
 
@@ -153,6 +153,8 @@ class WebsiteBs4Reader(Reader):
         num_links = 0
         crawler_result: Dict[str, str] = {}
         
+        # Fragments select locations within a page, not distinct HTTP resources.
+        url = urldefrag(url).url
         # Initialize crawl with starting URL
         primary_domain = self._get_primary_domain(url)
         self._urls_to_crawl.append((url, 1))
@@ -183,7 +185,7 @@ class WebsiteBs4Reader(Reader):
                 # Find and queue additional links if not at max depth
                 if current_depth < self.max_depth:
                     for link in soup.find_all("a", href=True):
-                        full_url = urljoin(current_url, link["href"])
+                        full_url = urldefrag(urljoin(current_url, link["href"])).url
                         parsed_url = urlparse(full_url)
                         if (parsed_url.netloc.endswith(primary_domain) 
                             and not any(parsed_url.path.endswith(ext) 
