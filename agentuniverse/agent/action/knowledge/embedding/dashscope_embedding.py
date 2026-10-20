@@ -100,6 +100,9 @@ class DashscopeEmbedding(Embedding):
         """
         Async version of get_embeddings.
 
+        One HTTP session is shared across sequential batches within this call
+        and closed on success, error or cancellation. Calls do not share sessions.
+
         This function interfaces with the DashScope embedding API to obtain
         embeddings for a batch of input texts. It handles batching of input texts
         to ensure efficient API calls. Each text is processed using the specified
@@ -115,19 +118,18 @@ class DashscopeEmbedding(Embedding):
             Exception: If the API call to DashScope fails, an exception is raised with
                        the respective error code and message.
         """
-        async def async_post(post_params):
-            async with aiohttp.ClientSession() as session:
-                async with await session.post(
-                        url=DASHSCOPE_EMBEDDING_URL,
-                        headers={
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {self.dashscope_api_key}"
-                        },
-                        data=json.dumps(post_params, ensure_ascii=False).encode(
-                            "utf-8"),
-                        timeout=300,
-                ) as resp:
-                    resp_json = await resp.json()
+        async def async_post(session, post_params):
+            async with await session.post(
+                    url=DASHSCOPE_EMBEDDING_URL,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.dashscope_api_key}"
+                    },
+                    data=json.dumps(post_params, ensure_ascii=False).encode(
+                        "utf-8"),
+                    timeout=300,
+            ) as resp:
+                resp_json = await resp.json()
             return resp_json
         if not self.dashscope_api_key:
             raise Exception("No DASHSCOPE_API_KEY in your environment.")
@@ -148,19 +150,22 @@ class DashscopeEmbedding(Embedding):
         post_params["parameters"]["text_type"] = kwargs[
             "text_type"] if "text_type" in kwargs else "document"
 
-        for batch in batched(texts):
-            post_params["input"]["texts"] = batch
-            resp_json: dict = await async_post(post_params)
-            data = resp_json.get("output")
-            if data:
-                data = data["embeddings"]
-                batch_result = [d['embedding'] for d in data if
-                                'embedding' in d]
-                result += batch_result
-            else:
-                error_code = resp_json.get("code", "")
-                error_message = resp_json.get("message", "")
-                raise Exception(f"Failed to call dashscope embedding api, "
-                                f"error code:{error_code}, "
-                                f"error message:{error_message}")
+        if not texts:
+            return result
+        async with aiohttp.ClientSession() as session:
+            for batch in batched(texts):
+                post_params["input"]["texts"] = batch
+                resp_json: dict = await async_post(session, post_params)
+                data = resp_json.get("output")
+                if data:
+                    data = data["embeddings"]
+                    batch_result = [d['embedding'] for d in data if
+                                    'embedding' in d]
+                    result += batch_result
+                else:
+                    error_code = resp_json.get("code", "")
+                    error_message = resp_json.get("message", "")
+                    raise Exception(f"Failed to call dashscope embedding api, "
+                                    f"error code:{error_code}, "
+                                    f"error message:{error_message}")
         return result
