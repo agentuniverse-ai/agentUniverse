@@ -1,0 +1,58 @@
+name: mime_type_tool
+description: MIME type tool — pure Python stdlib, no network required. Map a filename or extension (dot-optional, case-insensitive) to a MIME type, category and known flag (mode='lookup', embedded ~195-entry table first, stdlib mimetypes fallback beyond it); map a MIME type back to its common extensions ordered by popularity (mode='reverse'); list every extension of a category image/audio/video/text/binary/archive/code/font/model with its MIME type (mode='category'); or sniff a short text sample for JSON, XML, HTML, Markdown, CSV or Base64 signatures (mode='sniff', textual formats only).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.mime_type_tool
+  class: MimeTypeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lookup, reverse, category or sniff.
+    required: true
+  filename:
+    type: string
+    description: Lookup mode — a filename, optionally with directories (POSIX or Windows separators); the extension of the basename is resolved. Provide exactly one of filename / extension.
+    required: false
+  extension:
+    type: string
+    description: Lookup mode — a bare extension, dot optional, case-insensitive; dual suffixes such as tar.gz are accepted.
+    required: false
+  mime:
+    type: string
+    description: Reverse mode — a MIME type such as image/jpeg; parameters after ';' are ignored.
+    required: false
+  category:
+    type: string
+    description: Category mode — one of image, audio, video, text, binary, archive, code, font, model.
+    required: false
+  sample:
+    type: string
+    description: Sniff mode — the first part of the file content as a string (typically the first ~1 KB); only textual formats can be detected.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lookup", "reverse", "category", "sniff"]
+      description: Operation mode.
+    filename:
+      type: string
+      description: Filename whose extension is resolved (lookup mode).
+    extension:
+      type: string
+      description: Bare extension, dot optional, case-insensitive (lookup mode).
+    mime:
+      type: string
+      description: MIME type resolved back to extensions (reverse mode).
+    category:
+      type: string
+      enum: ["image", "audio", "video", "text", "binary", "archive", "code", "font", "model"]
+      description: Category whose extensions are listed (category mode).
+    sample:
+      type: string
+      description: Short text sample to sniff for JSON / XML / HTML / Markdown / CSV / Base64 signatures (sniff mode).
+  required: ["mode"]

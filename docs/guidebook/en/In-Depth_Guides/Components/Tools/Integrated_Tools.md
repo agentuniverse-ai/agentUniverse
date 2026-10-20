@@ -634,3 +634,64 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## MIME Type Tool
+
+`MimeTypeTool` maps between file extensions and MIME types using only
+the Python standard library, with no network access. Lookups are
+answered in two layers: an embedded, curated table of roughly 195
+extensions (deterministic across machines and Python versions) answers
+first, and the stdlib `mimetypes` module acts as a fallback for
+extensions beyond the table — the result reports which layer answered
+via `source` (`"table"` or `"stdlib"`), and stdlib answers derive their
+category from the media type's maintype (`application/*` types are
+reported as `binary`).
+
+Four modes are available. `lookup` resolves a filename (directories
+stripped, POSIX and Windows separators both honored) or a bare
+extension (dot optional, case-insensitive) to the MIME type, a coarse
+category (`image` / `audio` / `video` / `text` / `binary` / `archive`
+/ `code` / `font` / `model`) and a `known` flag; unknown extensions
+return `mime: null` with `known: false` instead of raising, and
+filenames without an extension (including dotfiles such as
+`.gitignore`) do the same. `reverse` maps a MIME type back to its
+common extensions ordered by popularity (`image/jpeg` → `.jpg` then
+`.jpeg`); parameters after `;` are ignored, and this mode consults the
+embedded table only. `category` lists every extension of one category
+with its MIME type, sorted by extension. `sniff` makes a best-effort
+*text* format guess from a short sample (the first ~1 KB given as a
+string): JSON object/array shape, XML declaration, HTML markup tags,
+Markdown ATX headings, CSV with consistent comma-separated columns,
+and the Base64 alphabet are the recognized signatures, and a UTF-8 BOM
+is reported as additional evidence. The sniffer is honest about its
+limits: it only distinguishes textual formats — binary formats cannot
+be identified from text heuristics, and Base64 content can only be
+flagged, not decoded to its underlying type here.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.mime_type_tool import MimeTypeTool
+
+tool = MimeTypeTool()
+png = tool.execute(mode="lookup", filename="photos/logo.PNG")
+archive = tool.execute(mode="lookup", extension="tar.gz")   # dual suffix
+extensions = tool.execute(mode="reverse", mime="application/gzip")["extensions"]
+fonts = tool.execute(mode="category", category="font")["entries"]
+guess = tool.execute(mode="sniff", sample='{"name": "au"}')
+```
+
+Debated mappings are fixed and documented: `.yaml` / `.yml` map to
+`text/yaml` (the long-standing practice; RFC 9512 later registered
+`application/yaml` in 2024); `.py` maps to `text/x-python`; dual-suffix
+archives describe their outer compression container (`.tar.gz` and
+`.tgz` both map to `application/gzip`, while a plain `.tar` maps to
+`application/x-tar`); and the ambiguous `.ts` follows its
+IANA-registered `video/mp2t` (also what the stdlib reports) rather
+than TypeScript, which keeps `.tsx`.
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, unknown mode or category, both or neither of
+`filename` / `extension`, whitespace or path separators in an
+extension, a MIME type without exactly one `type/subtype` pair, an
+empty or oversized sample) raise a `ValueError`. Unknown but
+well-formed extensions and MIME types are not errors — they return
+`known: false` so an agent can branch without catching exceptions.
