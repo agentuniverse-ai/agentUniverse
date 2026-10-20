@@ -49,12 +49,27 @@ and supports four modes:
   inspecting the content. Documented as lossy because the dropped side
   is gone for good; prefer ``resolve``.
 
-Marker recognition uses exactly seven-character git markers —
-``^<{7} ?``, ``^\\|{7}``, ``^={7}$`` and ``^>{7} ?`` — with the optional
-trailing label (``<<<<<<< HEAD``) tolerated on the opening and closing
-markers. Line endings are preserved token-by-token (``\\n``, ``\\r`` and
+Marker recognition uses exactly-seven-character git markers followed
+by end-of-line or a single space and a branch label (``<<<<<<< HEAD``,
+``>>>>>>> feature/x``, the diff3 ``||||||| <base label>``; git never
+emits a label glued to the marker); longer runs (``<<<<<<<<``) and
+glued text (``<<<<<<<HEAD``) are ordinary content. Line endings are
+preserved token-by-token (``\\n``, ``\\r`` and
 ``\\r\\n`` are all handled), so ``resolve`` and ``strip`` on text that
 contains no conflict markers return the input byte-identically.
+
+Two git facts are worth knowing when feeding real conflicted files
+into the tool (both verified against ``git merge-file``):
+
+* The ``\\ No newline at end of file`` note seen in ``git diff`` output
+  is a *diff-display* annotation only — it never appears in the
+  conflicted file itself, so the parser never sees (or needs) it.
+* When a conflict reaches the end of a file whose sides lack a trailing
+  newline, git's conflict rendering itself ends the closing ``>>>>>>>``
+  marker with a line terminator. The missing-newline information is
+  therefore already gone from the conflicted text, and resolved output
+  necessarily ends with that terminator; the tool round-trips exactly
+  the bytes the conflicted file carries.
 
 Input validation is strict and happens before any computation:
 malformed parameters (wrong types, unknown mode / ``choose`` / ``keep``,
@@ -76,14 +91,18 @@ from pydantic import ConfigDict
 
 from agentuniverse.agent.action.tool.tool import Tool
 
-# Conflict-marker patterns: exactly seven characters, git style. The
-# opening and closing markers tolerate an optional space + branch label
-# ("<<<<<<< HEAD", ">>>>>>> feature/x"); the separator must be a bare
-# seven-character line; the diff3 base marker carries no label.
-_OURS_OPEN_RE = re.compile(r"^<{7} ?")
-_BASE_OPEN_RE = re.compile(r"^\|{7}")
+# Conflict-marker patterns: exactly seven characters, git style,
+# followed either by end-of-line or by a single space and a branch
+# label ("<<<<<<< HEAD", ">>>>>>> feature/x", the diff3
+# "||||||| <base label>"; an empty `git merge-file -L ""` label leaves
+# a bare trailing space). This mirrors what git actually emits, so
+# longer runs ("<<<<<<<<", ">>>>>>>>") or glued text ("<<<<<<<HEAD")
+# are ordinary content, never markers; the separator must be a bare
+# seven-character line.
+_OURS_OPEN_RE = re.compile(r"^<{7}(?: .*)?$")
+_BASE_OPEN_RE = re.compile(r"^\|{7}(?: .*)?$")
 _SEPARATOR_RE = re.compile(r"^={7}$")
-_THEIRS_CLOSE_RE = re.compile(r"^>{7} ?")
+_THEIRS_CLOSE_RE = re.compile(r"^>{7}(?: .*)?$")
 
 # Line tokenizer: every line together with its own terminator ("\r\n",
 # "\n" or "\r"), so clean text round-trips byte-identically and mixed
@@ -225,19 +244,18 @@ class ConflictParserTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"conflict_parser_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, text: Any) -> str:
+    def _validate_text(self, text: Any) -> str:
         """Validate the ``text`` input (also used for ``custom_text``).
 
         The empty string is a valid (conflict-free) document; anything
-        that is not a string, and any string above the size limit, is
-        rejected.
+        that is not a string, and any string above the size limit
+        (``max_text_chars``), is rejected.
         """
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"text must be a string (got {text!r})")
-        if len(text) > 100_000:
-            cls._invalid(
-                f"text exceeds the {100_000:,}-character limit "
+            self._invalid(f"text must be a string (got {text!r})")
+        if len(text) > self.max_text_chars:
+            self._invalid(
+                f"text exceeds the {self.max_text_chars:,}-character limit "
                 f"(got {len(text):,} characters)"
             )
         return text
@@ -305,10 +323,10 @@ class ConflictParserTool(Tool):
                         f"resolutions[{position}] with choose='custom' "
                         f"requires a string custom_text (got {custom_text!r})"
                     )
-                if len(custom_text) > 100_000:
+                if len(custom_text) > self.max_text_chars:
                     self._invalid(
                         f"resolutions[{position}].custom_text exceeds the "
-                        f"{100_000:,}-character limit "
+                        f"{self.max_text_chars:,}-character limit "
                         f"(got {len(custom_text):,} characters)"
                     )
             elif custom_text is not None:

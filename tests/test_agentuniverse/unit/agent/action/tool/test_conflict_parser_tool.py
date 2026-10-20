@@ -174,16 +174,118 @@ class ConflictParserToolTest(unittest.TestCase):
         )
 
     def test_parse_marker_label_variants(self) -> None:
-        # Unlabeled markers and markers without the optional space.
+        # Unlabeled markers and labels with spaces are both accepted.
         doc = "<<<<<<<\nX\n=======\nY\n>>>>>>>\n"
         result = self.tool.execute(mode="parse", text=doc)
         self.assertEqual(result["conflict_count"], 1)
         self.assertEqual(result["conflicts"][0]["ours"], ["X"])
         self.assertEqual(result["conflicts"][0]["theirs"], ["Y"])
-        # "<<<<<<<HEAD" (no space, 8 '<') still opens a conflict.
-        doc_nospace = "<<<<<<<HEAD\nX\n=======\nY\n>>>>>>>branch\n"
-        result = self.tool.execute(mode="parse", text=doc_nospace)
+        # Real merges label the closing marker with the ref and origin,
+        # e.g. ">>>>>>> branch 'main' of /path/to/repo".
+        doc_spaced_label = (
+            "a\n<<<<<<< HEAD\nX\n=======\nY\n"
+            ">>>>>>> branch 'main' of /tmp/repo\nb\n"
+        )
+        result = self.tool.execute(mode="parse", text=doc_spaced_label)
         self.assertEqual(result["conflict_count"], 1)
+        self.assertEqual(result["clean_lines"], 2)
+
+    def test_parse_glued_and_overlong_markers_are_content(self) -> None:
+        # git never emits a label glued to the marker (it always uses a
+        # single space) and never more than seven marker characters, so
+        # '<<<<<<<HEAD' / '<<<<<<<<' / '>>>>>>>>' / '||||||||' are
+        # ordinary content, both inside and outside conflicts.
+        for doc in (
+            "intro\n<<<<<<<<\nclean\n",
+            "intro\n<<<<<<<< HEAD\nclean\n",
+            "a\n>>>>>>>>\nb\n",
+            "a\n||||||||\nb\n",
+            "intro\n<<<<<<<HEAD\nclean\n",
+            "a\n>>>>>>>label\nb\n",
+            "a\n|||||||label\nb\n",
+        ):
+            result = self.tool.execute(mode="parse", text=doc)
+            self.assertNotIn("error", result, doc)
+            self.assertEqual(result["conflict_count"], 0, doc)
+        # Inside a conflict the same runs stay inside their sections.
+        doc = "<<<<<<< HEAD\n<<<<<<<<\n=======\n||||||||\n>>>>>>>>\n>>>>>>> x\n"
+        result = self.tool.execute(mode="parse", text=doc)
+        self.assertNotIn("error", result)
+        self.assertEqual(result["conflict_count"], 1)
+        self.assertEqual(result["conflicts"][0]["ours"], ["<<<<<<<<"])
+        self.assertEqual(result["conflicts"][0]["theirs"], ["||||||||", ">>>>>>>>"])
+
+    def test_parse_real_git_marker_ground_truths(self) -> None:
+        # Literals captured from real `git merge-file` runs.
+        # (a) Empty -L labels leave a bare trailing space on the markers.
+        empty_label = "<<<<<<< \nOURS\n=======\nTHEIRS\n>>>>>>> \n"
+        result = self.tool.execute(mode="parse", text=empty_label)
+        self.assertNotIn("error", result)
+        self.assertEqual(result["conflict_count"], 1)
+        self.assertEqual(result["conflicts"][0]["ours"], ["OURS"])
+        self.assertEqual(result["conflicts"][0]["theirs"], ["THEIRS"])
+        # (b) `git merge-file -p --diff3 -L "ours label" -L "base label"
+        #     -L "theirs label"` labels the base section too.
+        diff3_labels = (
+            "a\n"
+            "<<<<<<< ours label\n"
+            "OURS\n"
+            "||||||| base label\n"
+            "b\n"
+            "=======\n"
+            "THEIRS\n"
+            ">>>>>>> theirs label\n"
+            "c\n"
+        )
+        result = self.tool.execute(mode="parse", text=diff3_labels)
+        self.assertNotIn("error", result)
+        self.assertEqual(result["conflict_count"], 1)
+        self.assertEqual(result["conflicts"][0]["marker_style"], "diff3")
+        self.assertEqual(result["conflicts"][0]["ours"], ["OURS"])
+        self.assertEqual(result["conflicts"][0]["base"], ["b"])
+        self.assertEqual(result["conflicts"][0]["theirs"], ["THEIRS"])
+
+    def test_resolve_git_eof_conflict_keeps_rendered_terminator(self) -> None:
+        # Real `git merge-file` evidence: when a conflict reaches EOF and
+        # the sides lack a trailing newline, git's conflict rendering
+        # itself ends the closing marker with a terminator (the
+        # "\ No newline at end of file" note lives only in `git diff`
+        # display, never in the conflicted file). Resolving therefore
+        # ends with that terminator — the tool round-trips exactly the
+        # bytes the conflicted file carries.
+        conflicted = (
+            "line-0\r\n"
+            "<<<<<<< ours.txt\r\n"
+            "line-1\r\n"
+            "=======\r\n"
+            "line-1\r\nNEW0\r\nNEW1\r\nNEW2\r\nNEW3\r\n"
+            ">>>>>>> theirs.txt\r\n"
+        )
+        result = self.tool.execute(
+            mode="resolve",
+            text=conflicted,
+            resolutions=[{"index": 0, "choose": "ours"}],
+        )
+        self.assertEqual(result["result"], "line-0\r\nline-1\r\n")
+
+    def test_max_text_chars_attribute_is_enforced(self) -> None:
+        # The size cap is the documented max_text_chars field, so an
+        # instance-level override is honored for both text and
+        # custom_text.
+        tool = ConflictParserTool()
+        tool.max_text_chars = 10
+        with self.assertRaises(ValueError) as ctx:
+            tool.execute(mode="parse", text="a" * 11)
+        self.assertIn("10-character limit", str(ctx.exception))
+        with self.assertRaises(ValueError) as ctx:
+            tool.execute(
+                mode="resolve",
+                text="a\n",
+                resolutions=[
+                    {"index": 0, "choose": "custom", "custom_text": "b" * 11}
+                ],
+            )
+        self.assertIn("10-character limit", str(ctx.exception))
 
     def test_parse_eight_equals_and_labeled_separator_are_content(self) -> None:
         # Only a bare exactly-seven-character '=======' line separates;
