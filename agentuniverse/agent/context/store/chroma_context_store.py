@@ -82,9 +82,9 @@ class ChromaContextStore(ContextStore):
         except ImportError:
             raise RuntimeError(
                 "Chroma library not installed. Install with: pip install chromadb"
-            )
+            ) from None
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize Chroma: {e}")
+            raise RuntimeError(f"Failed to initialize Chroma: {e}") from e
 
         return self
 
