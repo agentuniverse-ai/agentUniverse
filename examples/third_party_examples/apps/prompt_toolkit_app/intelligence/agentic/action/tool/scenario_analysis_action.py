@@ -7,10 +7,12 @@
 # @FileName: scenario_analysis_action.py
 """Scenario analysis action for the prompt toolkit demo."""
 
-from typing import Dict, Any, Optional
-from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkit
-from examples.third_party_examples.apps.prompt_toolkit_app.prompt.scenario_analyzer import ScenarioAnalyzer
+from typing import Any
+
 from agentuniverse.agent.action.tool.tool import Tool
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.scenario_analyzer import (
+    ScenarioAnalyzer,
+)
 
 
 class ScenarioAnalysisAction(Tool):
@@ -20,51 +22,48 @@ class ScenarioAnalysisAction(Tool):
     user scenarios and extract relevant context information for prompt generation.
     """
     
-    def __init__(self):
-        """Initialize the ScenarioAnalysisAction."""
-        super().__init__()
-        self.toolkit = PromptToolkit()
-        self.analyzer = ScenarioAnalyzer()
-    
-    def run(
-        self, 
-        scenario_description: str, 
-        content: Optional[str] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
+    def execute(
+        self,
+        scenario_description: str,
+        content: str | None = None,
+        target_audience: str | None = None,
+        domain: str | None = None,
+        user_role: str | None = None,
+    ) -> dict[str, Any]:
         """Analyze a scenario and extract context information.
         
         Args:
             scenario_description: Description of the scenario to analyze.
             content: Additional content to analyze.
-            **kwargs: Additional parameters including:
-                - target_audience: Target audience information
-                - domain: Domain or field information
-                - user_role: User role information
+            target_audience: Target audience information.
+            domain: Domain or field information.
+            user_role: User role information.
         
         Returns:
             Dict[str, Any]: Analysis result and extracted context.
         """
         try:
+            analyzer = ScenarioAnalyzer()
+
             # Prepare additional context
             additional_context = {}
             if content:
                 additional_context["content"] = content
-            if kwargs.get('target_audience'):
-                additional_context["target_audience"] = kwargs['target_audience']
-            if kwargs.get('domain'):
-                additional_context["domain"] = kwargs['domain']
-            if kwargs.get('user_role'):
-                additional_context["user_role"] = kwargs['user_role']
+            if target_audience:
+                additional_context["target_audience"] = target_audience
+            if domain:
+                additional_context["domain"] = domain
+            if user_role:
+                additional_context["user_role"] = user_role
             
             # Analyze scenario
-            analysis_result = self.analyzer.analyze_scenario(
+            analysis_result = analyzer.analyze_scenario(
                 scenario_description, 
                 additional_context if additional_context else None
             )
             
             # Extract context
-            context = self.analyzer.extract_context_from_content(scenario_description)
+            context = analyzer.extract_context_from_content(scenario_description)
             
             # Format response
             response = {
@@ -112,7 +111,7 @@ class ScenarioAnalysisAction(Tool):
         """
         return "Analyze user scenarios and extract context information for prompt generation."
     
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Get parameters for the action.
         
         Returns:

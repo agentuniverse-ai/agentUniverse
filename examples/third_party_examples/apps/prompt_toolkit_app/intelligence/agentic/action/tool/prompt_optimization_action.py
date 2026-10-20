@@ -7,11 +7,16 @@
 # @FileName: prompt_optimization_action.py
 """Prompt optimization action for the prompt toolkit demo."""
 
-from typing import Dict, Any
-from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import PromptToolkit
-from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import OptimizationStrategy
-from agentuniverse.prompt.prompt_model import AgentPromptModel
+from typing import Any
+
 from agentuniverse.agent.action.tool.tool import Tool
+from agentuniverse.prompt.prompt_model import AgentPromptModel
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimizer import (
+    OptimizationStrategy,
+)
+from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_toolkit import (
+    PromptToolkit,
+)
 
 
 class PromptOptimizationAction(Tool):
@@ -21,32 +26,27 @@ class PromptOptimizationAction(Tool):
     existing prompts and improve their quality.
     """
     
-    def __init__(self):
-        """Initialize the PromptOptimizationAction."""
-        super().__init__()
-        self.toolkit = PromptToolkit()
-    
-    def run(
-        self, 
-        introduction: str, 
-        target: str, 
+    def execute(
+        self,
+        introduction: str,
+        target: str,
         instruction: str,
-        **kwargs
-    ) -> Dict[str, Any]:
+        strategies: list[str | OptimizationStrategy] | None = None,
+    ) -> dict[str, Any]:
         """Optimize an existing prompt.
         
         Args:
             introduction: The introduction section of the prompt.
             target: The target section of the prompt.
             instruction: The instruction section of the prompt.
-            **kwargs: Additional parameters including:
-                - strategies: List of optimization strategies to apply
-                - custom_rules: Custom optimization rules
+            strategies: List of optimization strategies to apply.
         
         Returns:
             Dict[str, Any]: Optimization result and suggestions.
         """
         try:
+            toolkit = PromptToolkit()
+
             # Create prompt model from input
             prompt = AgentPromptModel(
                 introduction=introduction,
@@ -55,7 +55,7 @@ class PromptOptimizationAction(Tool):
             )
             
             # Get optimization strategies
-            strategies = kwargs.get('strategies', [OptimizationStrategy.CLARITY, OptimizationStrategy.STRUCTURE])
+            strategies = strategies or [OptimizationStrategy.CLARITY, OptimizationStrategy.STRUCTURE]
             if isinstance(strategies, list):
                 # Convert string strategies to enum if needed
                 strategy_enums = []
@@ -67,10 +67,10 @@ class PromptOptimizationAction(Tool):
                 strategies = strategy_enums
             
             # Optimize prompt using toolkit
-            result = self.toolkit.optimize_existing_prompt(prompt, strategies)
+            result = toolkit.optimize_existing_prompt(prompt, strategies)
             
             # Analyze quality
-            quality_analysis = self.toolkit.analyze_prompt_quality(prompt)
+            quality_analysis = toolkit.analyze_prompt_quality(prompt)
             
             # Format response
             response = {
@@ -143,7 +143,7 @@ class PromptOptimizationAction(Tool):
         """
         return "Optimize existing prompts to improve their quality, clarity, and effectiveness."
     
-    def get_parameters(self) -> Dict[str, Any]:
+    def get_parameters(self) -> dict[str, Any]:
         """Get parameters for the action.
         
         Returns:

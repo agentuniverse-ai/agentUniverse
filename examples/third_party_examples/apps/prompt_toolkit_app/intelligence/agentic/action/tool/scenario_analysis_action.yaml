@@ -1,0 +1,28 @@
+name: 'scenario_analysis_action'
+description: |
+  Analyze a scenario and extract its domain, user role, target audience, tone,
+  constraints, examples, recommended prompt type, and complexity. Optional
+  inputs include content, target_audience, domain, and user_role.
+tool_type: 'func'
+input_keys:
+  - 'scenario_description'
+args_model:
+  scenario_description: {type: string, required: true, description: Scenario to analyze}
+  content: {type: string, required: false, description: Additional content}
+  target_audience: {type: string, required: false, description: Intended audience}
+  domain: {type: string, required: false, description: Application domain}
+  user_role: {type: string, required: false, description: User role}
+args_model_schema:
+  type: object
+  properties:
+    scenario_description: {type: string, minLength: 1}
+    content: {type: string}
+    target_audience: {type: string}
+    domain: {type: string}
+    user_role: {type: string}
+  required: [scenario_description]
+  additionalProperties: false
+metadata:
+  type: 'TOOL'
+  module: 'examples.third_party_examples.apps.prompt_toolkit_app.intelligence.agentic.action.tool.scenario_analysis_action'
+  class: 'ScenarioAnalysisAction'
