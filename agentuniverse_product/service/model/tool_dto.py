@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 
 class ToolDTO(BaseModel):
+    """DTO model describing a tool.
+    """
     id: str = Field(description="ID")
     nickname: Optional[str] = Field(description="tool nickname", default="")
     avatar: Optional[str] = Field(description="tool avatar path", default="")
