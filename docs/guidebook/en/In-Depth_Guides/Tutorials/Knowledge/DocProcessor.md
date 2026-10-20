@@ -309,3 +309,29 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [DefinitionExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/definition_extractor.yaml)
+
+This component mines glossary / concept style knowledge from text. It detects definitional patterns (English: "X is a/an/the Y", "X are Ys", "X means Y", "X refers to Y", "X is defined as Y", "X, which is Y"; Chinese: "X是Y", "X是指Y", "X定义为Y", "所谓X，是指Y") within each sentence and stamps the extracted term-definition pairs into `metadata['definitions']`, so downstream components can consume them for glossary building and concept mining. It uses only the Python standard library, is fully deterministic and works offline.
+
+The component definition file is as follows:
+```yaml
+name: 'definition_extractor'
+description: 'Extract term-definition pairs from text into document metadata for glossary and concept mining'
+max_definitions: 50
+max_definition_length: 200
+max_term_words: 4
+dedup_by_term: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.definition_extractor'
+  class: 'DefinitionExtractor'
+```
+- max_definitions: Maximum number of definition entries stamped into `metadata['definitions']`; extra hits are dropped.
+- max_definition_length: Maximum length of a definition text; longer definitions are cut and flagged with `truncated: true`.
+- max_term_words: Maximum number of words in an English term candidate (Chinese terms are CJK runs of at most 12 characters).
+- dedup_by_term: When true, only the first definition per term is kept and repeats are counted in `metadata['definition_repeats']`.
+
+Each entry in `metadata['definitions']` is a dict `{term, definition, pattern, span, truncated}`, where `span` is a `[start, end]` character range over the original document text and `pattern` names the matched definitional pattern (e.g. `is`, `means`, `refers_to`, `is_defined_as`, `relative_clause`, `zh_is`, `zh_refers_to`, `zh_defined_as`, `zh_suowei`). The processor also stamps `metadata['definition_count']`.
+
+Guards: sentences ending with a question mark are skipped; existential "there is / here is" is not treated as a definition; pronoun terms (it/this/that/they/这/它...) and single common stopword terms are rejected; quoted text receives no special handling (documented limitation).

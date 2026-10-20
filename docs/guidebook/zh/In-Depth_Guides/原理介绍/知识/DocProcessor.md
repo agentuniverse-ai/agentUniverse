@@ -310,3 +310,29 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [DefinitionExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/definition_extractor.yaml)
+
+该组件从文本中挖掘术语表/概念类知识。它在每个句子内检测定义式模式（英文："X is a/an/the Y"、"X are Ys"、"X means Y"、"X refers to Y"、"X is defined as Y"、"X, which is Y"；中文："X是Y"、"X是指Y"、"X定义为Y"、"所谓X，是指Y"），并将抽取出的术语-定义对写入`metadata['definitions']`，供下游组件构建术语表和概念挖掘使用。该组件仅依赖Python标准库，完全确定性，可离线运行。
+
+组件定义文件如下：
+```yaml
+name: 'definition_extractor'
+description: 'Extract term-definition pairs from text into document metadata for glossary and concept mining'
+max_definitions: 50
+max_definition_length: 200
+max_term_words: 4
+dedup_by_term: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.definition_extractor'
+  class: 'DefinitionExtractor'
+```
+- max_definitions: 写入`metadata['definitions']`的定义条目数上限，超出的结果会被丢弃。
+- max_definition_length: 定义文本的最大长度，超长定义会被截断并标记`truncated: true`。
+- max_term_words: 英文术语候选词的最大词数（中文术语为不超过12个字符的CJK串）。
+- dedup_by_term: 为true时每个术语只保留第一条定义，重复次数记录在`metadata['definition_repeats']`中。
+
+`metadata['definitions']`中的每个条目为字典`{term, definition, pattern, span, truncated}`，其中`span`为相对于原始文档文本的`[start, end]`字符区间，`pattern`为命中的定义模式名（如`is`、`means`、`refers_to`、`is_defined_as`、`relative_clause`、`zh_is`、`zh_refers_to`、`zh_defined_as`、`zh_suowei`）。该组件同时会写入`metadata['definition_count']`。
+
+防护规则：以问号结尾的句子会被跳过；存现句"there is / here is"不会被当作定义；代词术语（it/this/that/they/这/它等）和单个常用停用词术语会被拒绝；引号内容不做特殊处理（已知限制）。
