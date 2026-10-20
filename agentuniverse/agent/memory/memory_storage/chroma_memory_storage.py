@@ -136,6 +136,8 @@ class ChromaMemoryStorage(MemoryStorage):
         Returns:
             List[Message]: A list of messages retrieved from the memory db.
         """
+        if top_k <= 0:
+            return []
         if self._collection is None:
             self._init_collection()
         filters = {"$and": []}
