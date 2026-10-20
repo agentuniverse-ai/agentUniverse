@@ -12,6 +12,15 @@ def test_detect_file_encoding_gb18030(tmp_path):
     assert detected in {"gb18030", "gbk"}
 
 
+def test_detect_file_encoding_does_not_misdetect_utf16_as_latin1(tmp_path):
+    file_path = tmp_path / "utf16.txt"
+    file_path.write_text("hello 世界", encoding="utf-16")
+
+    detected = detect_file_encoding(file_path)
+    # latin-1 能解码任意字节序列，若在回退列表中会导致 UTF-16 被误判为 latin-1
+    assert detected != "latin-1"
+
+
 def test_txt_reader_handles_gbk(tmp_path):
     content = "第一行\n第二行"
     file_path = tmp_path / "gbk.txt"
