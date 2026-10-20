@@ -309,3 +309,33 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [DanglingReferenceDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/dangling_reference_detector.yaml)
+
+This component flags references to figures, tables and equations whose anchor is missing from the document, addressing the **knowledge QA / broken-document detection** direction of issue #258. Ingested documents break quietly when a chunk says "see Figure 3" but the document never defines Figure 3 — the anchor was dropped by an export, sits in another chunk, or the numbering is simply wrong — and retrieval then confidently returns text pointing at evidence the reader will never find. The detector scans each document's text for two kinds of occurrences in three independent id namespaces (figure / table / equation): **anchors**, patterns that define a numbered item ("Figure 3: ...", "Fig. 3. ...", "Table 2: ...", "图3：...", "表2：...", "Equation (5):", "Eq. (5).", and bare line-final equation numbers like "y = f(x)   (5)"), and **references**, in-text mentions ("see Figure 3", "as shown in Fig. 3", "Table 2 lists", "by Eq. (5)", "如图3所示", "见表2"). Ranges expand: "Figures 3-5" and "图3至图5" reference figures 3, 4 and 5. Every referenced id without a same-kind anchor is reported as a dangling reference; every anchored id no reference points at is reported as unreferenced (informational only).
+
+An anchor must sit at the start of a line — markdown block markers (`#`, `>`, `*`, `-`, ordered-list markers) and a preceding `**` bold marker are tolerated, so "**Figure 3.** caption" anchors too — and must carry caption punctuation (`:`, `.` or a full-width colon) right after the number; a mention missing either property counts as a reference. This position rule resolves the classic caption ambiguity: in "Figure 3: the architecture. As Figure 3 shows, ..." the line-initial "Figure 3:" is an anchor while the mid-sentence "Figure 3" is a reference, so the document is judged sound; conversely "This is depicted in Figure 3." stays a reference because its trailing period is sentence punctuation, not caption punctuation. The matcher is deliberately conservative: bare parenthesized numbers only anchor equations at end of line after punctuation (keeping inline numeric citations out), "Figure 3.5" parses as a reference rather than an anchor with a decimal caption, and "表2" is ignored inside "报表2". English tokens are matched case-sensitively in their canonical capitalized forms. Findings land in document metadata — `metadata['dangling_references']` (entries of `{kind, id, span, context}` with ±30 characters of context, capped at 30), `metadata['dangling_count']`, `metadata['unreferenced_anchors']` / `metadata['unreferenced_anchor_count']`, and `metadata['reference_integrity']` set to `ok` or `dangling` — while text, id and existing metadata values are never modified and metadata mappings are copied before new keys are written. The whole pipeline is pure Python (regex only), fully offline and deterministic — suited to broken-doc QA at ingestion time, before chunking or embedding spend, and complementary to citation cataloging components such as `CitationExtractor`: those record what a document cites, while this one checks that internal figure/table/evidence pointers resolve.
+
+The component definition file is as follows:
+```yaml
+name: 'dangling_reference_detector'
+description: 'flag references to figures/tables/equations whose anchor is missing from the document'
+max_report: 30              # max entries in the two report lists
+context_chars: 30           # context characters kept around each span
+max_range_span: 50          # max ids a range like 'Figures 3-5' expands to
+include_unreferenced: true  # collect anchors nothing references
+dangling_key: 'dangling_references'      # '' disables the list
+unreferenced_key: 'unreferenced_anchors' # '' disables the list
+integrity_key: 'reference_integrity'     # ok | dangling; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.dangling_reference_detector'
+  class: 'DanglingReferenceDetector'
+```
++- max_report: Maximum number of entries kept in 'dangling_references' and 'unreferenced_anchors'; the two count fields always carry full totals. 0 disables both lists. Must be >= 0.
++- context_chars: Number of context characters kept on each side of every dangling reference span. Must be >= 0.
++- max_range_span: Maximum number of ids a range mention ("Figures 3-5") expands to; longer ranges are clamped to this many ids from the lower bound. Must be >= 1.
++- include_unreferenced: When true (default) anchors that are never referenced are collected into 'unreferenced_anchors'; they are informational and never affect reference_integrity.
++- dangling_key: Metadata key for the dangling reference list; an empty value disables the list ('dangling_count' is always written).
++- unreferenced_key: Metadata key for the unreferenced anchor list; an empty value disables the list ('unreferenced_anchor_count' is always written).
++- integrity_key: Metadata key for the 'ok' | 'dangling' verdict; an empty value disables the verdict.
