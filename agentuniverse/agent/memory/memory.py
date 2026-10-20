@@ -174,13 +174,20 @@ class Memory(ComponentBase):
                             type=role
                         ))
 
+                    # Select messages within budget (most recent first)
+                    selected_messages = []
+                    current_tokens = 0
                     agent_llm_name = self.agent_llm_name if hasattr(self, 'agent_llm_name') else None
-                    return self._select_messages_within_budget(
-                        messages,
-                        allocated_tokens,
-                        agent_llm_name,
-                        newest_first=True,
-                    )
+
+                    for message in messages:
+                        message_tokens = get_memory_tokens([message], agent_llm_name)
+                        if current_tokens + message_tokens <= allocated_tokens:
+                            selected_messages.append(message)
+                            current_tokens += message_tokens
+                        else:
+                            break  # Budget exceeded
+
+                    return selected_messages
 
             except Exception:
                 pass  # Fall back to traditional retrieval
@@ -192,36 +199,20 @@ class Memory(ComponentBase):
         if not memories:
             return []
 
+        selected_memories = []
+        current_tokens = 0
         agent_llm_name = self.agent_llm_name if hasattr(self, 'agent_llm_name') else None
-        return self._select_messages_within_budget(
-            memories,
-            allocated_tokens,
-            agent_llm_name,
-            newest_first=False,
-        )
 
-    @staticmethod
-    def _select_messages_within_budget(
-        messages: List[Message],
-        allocated_tokens: int,
-        agent_llm_name: Optional[str],
-        newest_first: bool,
-    ) -> List[Message]:
-        """Keep the newest contiguous messages whose full serialization fits.
-
-        Tokenizers can count the separators and role prefixes added by
-        ``get_memory_string`` differently when messages are combined.  The
-        budget therefore has to be checked against the complete candidate
-        history instead of summing one-message estimates.
-        """
-        selected: List[Message] = []
-        ordered_messages = messages if newest_first else reversed(messages)
-        for message in ordered_messages:
-            candidate = selected + [message] if newest_first else [message] + selected
-            if get_memory_tokens(candidate, agent_llm_name) > allocated_tokens:
+        # Select most recent messages within budget
+        for memory in reversed(memories):
+            memory_tokens = get_memory_tokens([memory], agent_llm_name)
+            if current_tokens + memory_tokens <= allocated_tokens:
+                selected_memories.insert(0, memory)
+                current_tokens += memory_tokens
+            else:
                 break
-            selected = candidate
-        return selected
+
+        return selected_memories
 
     def set_by_agent_model(self, **kwargs):
         """ Assign values of parameters to the Memory model in the agent configuration."""
