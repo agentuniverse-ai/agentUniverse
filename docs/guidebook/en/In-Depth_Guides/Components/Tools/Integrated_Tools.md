@@ -634,3 +634,54 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Regex Explainer Tool
+
+`RegexExplainerTool` explains what a regular expression *means* in plain
+language, built purely on the Python standard library `re` module with zero
+network access. Where `RegexTool` runs a pattern (match / extract / replace /
+split), this tool reads one: `explain` mode returns a token-by-token
+breakdown `[{token, kind, meaning, position}]`; `validate` mode compiles the
+pattern and returns the `re.error` message and position as the payload when
+it fails; `examples` mode generates 2-3 verified matching strings for simple
+patterns.
+
+The explained subset covers literals, `.`, character classes `[...]` with
+ranges and negation, the escapes `\d \w \s \D \W \S \b \B \n \t \r \f \v` and
+escaped literal characters such as `\.`, the anchors `^` `$`, capturing
+`(...)`, non-capturing `(?:...)`, named `(?P<name>...)`, lookahead
+`(?=...)` `(?!...)` groups, alternation `|`, the quantifiers `* + ? {n} {n,}
+{n,m} {,m}` with lazy `?` suffixes, and the inline flags `(?i) (?m) (?s)`.
+Constructs outside the subset — lookbehind `(?<=` / `(?<!`, backreferences
+`\1` / `(?P=name)`, `\p` Unicode classes, `\A` / `\Z`, scoped flags
+`(?i:...)`, comments `(?#...)`, conditionals, `\x` / `\u` / octal escapes —
+are each flagged with their position in a structured `unsupported` list
+rather than silently mis-explained; the subset is documented and honest about
+its limits. For simple patterns (literals, class shorthands and quantifiers,
+optionally anchored) `explain` also returns a one-line summary such as
+`"3 digits, a hyphen, 4 digits, anchored"`; otherwise the summary is omitted
+with a note saying why.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.regex_explain_tool import RegexExplainerTool
+
+tool = RegexExplainerTool()
+breakdown = tool.execute(mode="explain", pattern=r"^\d{3}-\d{4}$")
+print(breakdown["summary"])            # 3 digits, a hyphen, 4 digits, anchored
+print(breakdown["tokens"][1]["meaning"])  # any digit character (0-9)
+check = tool.execute(mode="validate", pattern="a(")  # invalid: ... at position 1
+samples = tool.execute(mode="examples", pattern=r"[a-c]{2}[0-9]{1,2}")["examples"]
+```
+
+Inputs are strictly validated before any work: a malformed `mode` or
+`pattern` (wrong type, over 10000 characters) raises `ValueError`, and in
+`explain` / `examples` mode so does a pattern that fails to compile for
+reasons other than unsupported-construct usage — except that when the failure
+is explained by constructs outside the subset (for example `\p{L}`, which
+Python `re` rejects outright), the breakdown is still returned together with
+the `compile_error` details. `examples` mode is restricted to simple patterns
+(literal runs, class shorthands, bracket classes and quantifiers, optionally
+anchored); anything else gets a structured note, and every generated string
+is verified with `re.fullmatch` before it is returned. Example generation is
+fully deterministic — fixed representative characters and minimum / upper /
+middle repetition counts, never randomness.
