@@ -116,7 +116,7 @@ def process_yaml_func(func_expr: str, yaml_func_instance: Any) -> str:
         Exception: If an error occurs while calling the method.
     """
     # Return an empty string if the function expression is None
-    if not func_expr or yaml_func_instance is None:
+    if not func_expr:
         return func_expr
 
     if func_expr.startswith('@FUNC(') and yaml_func_instance is None:
@@ -179,7 +179,7 @@ def process_dict_with_funcs(input_dict: dict, yaml_func_instance: Any) -> dict:
         ValueError: If @FUNC expression is provided but `yaml_func_instance` is None.
         Exception: If an error occurs while calling the method.
     """
-    if not input_dict or yaml_func_instance is None:
+    if not input_dict:
         return input_dict
 
     processed_dict = {}
