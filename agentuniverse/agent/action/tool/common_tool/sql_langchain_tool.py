@@ -22,6 +22,11 @@ class SqlLangchainTool(LangChainTool):
             self.get_sql_database()
         return super().execute(input, callbacks)
 
+    async def async_execute(self, input: str, callbacks):
+        if self.tool is None:
+            self.get_sql_database()
+        return await super().async_execute(input, callbacks)
+
     def get_sql_database(self):
         db_wrapper = SQLDBWrapperManager().get_instance_obj(self.db_wrapper_name)
         self.tool = self.clz(db=db_wrapper.sql_database)
