@@ -46,3 +46,14 @@ def test_csv_reader_preserves_empty_middle_fields(tmp_path):
     documents = reader.load_data(file_path)
 
     assert "Alice, , Smith" in documents[0].text
+
+
+def test_csv_reader_preserves_custom_delimiter(tmp_path):
+    file_path = tmp_path / "semicolon.csv"
+    file_path.write_text("name;age\nAlice;30\n", encoding="utf-8")
+
+    reader = CSVReader()
+    documents = reader.load_data(file_path, delimiter=";")
+
+    assert "name;age" in documents[0].text
+    assert "Alice;30" in documents[0].text
