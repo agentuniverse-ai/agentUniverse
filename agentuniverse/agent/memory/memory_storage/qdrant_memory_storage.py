@@ -19,6 +19,7 @@ from qdrant_client.models import (
     PointStruct,
     Filter,
     FieldCondition,
+    MatchAny,
     MatchValue,
 )
 
@@ -109,7 +110,12 @@ class QdrantMemoryStorage(MemoryStorage):
         if source:
             must_conditions.append(FieldCondition(key="source", match=MatchValue(value=source)))
         if type_value:
-            must_conditions.append(FieldCondition(key="type", match=MatchValue(value=type_value[0])))
+            types = type_value if isinstance(type_value, (list, tuple, set)) else [type_value]
+            types = list(types)
+            if types:
+                type_match = (MatchValue(value=types[0]) if len(types) == 1
+                              else MatchAny(any=types))
+                must_conditions.append(FieldCondition(key="type", match=type_match))
         if not must_conditions:
             return None
         return Filter(must=must_conditions)
