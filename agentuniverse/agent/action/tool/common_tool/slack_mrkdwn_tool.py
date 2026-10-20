@@ -24,6 +24,10 @@ Supported constructs (the deterministic, well-defined subset):
   pair; ``__double__`` passes through, and intraword underscores such as
   ``snake_case_name`` are never emphasized).
 * ``~strike~``       -> ``~~strike~~`` (``~~double tildes~~`` pass through).
+* URLs — bare ``https://…`` text, the target of a markdown link or
+  image, and the content of an angle token — are shielded from every
+  emphasis pass, so an underscore (or star/tilde) inside a URL never
+  becomes emphasis and the URL survives both directions verbatim.
 * Inline `` `code` `` spans and ``` fenced blocks are copied verbatim and
   shielded from every other transformation.
 * ``<https://example.com|text>`` -> ``[text](https://example.com)``.
@@ -112,7 +116,11 @@ _MD_STRIKE = re.compile(  # markdown ~~x~~ -> mrkdwn ~x~
     r"(?<!~)~~(?!~)([^\s~](?:[^~\n]*?[^\s~])?)~~(?!~)"
 )
 _MD_LINK = re.compile(  # markdown [text](url) -> mrkdwn <url|text>
-    r"(?<!!)\[([^\]\n]*)\]\(([^)\s|]+)\)"
+    # The destination may contain one level of balanced parentheses —
+    # the Wikipedia ".../Python_(programming_language)" URL shape. A
+    # bare "(" is excluded from the plain character class so parens
+    # can only enter through the balanced-pair alternative.
+    r"(?<!!)\[([^\]\n]*)\]\(((?:[^)\s|(]|\([^)\s|(]*\))+)\)"
 )
 # mrkdwn angle token: <content> or <content|label>.
 _ANGLE_TOKEN = re.compile(r"<([^<>\n|]+)(?:\|([^<>\n]*))?>")
@@ -130,6 +138,20 @@ _INLINE_CODE = re.compile(r"`([^`\n]+)`")
 _FENCE_LINE = "```"
 _PLACEHOLDER = "\x00{}\x00"
 _PLACEHOLDER_RE = re.compile("\x00(\\d+)\x00")
+
+# URL-bearing spans: the content of an mrkdwn angle token (before the
+# "|" label separator), the target of a markdown link / image, and a
+# bare scheme URL. They are stashed after the link pass so that no
+# emphasis delimiter *inside a URL* is ever rewritten —
+# ``<https://example.com/_foo_>`` must survive ``to_markdown`` intact
+# even though ``_foo_`` is a well-formed mrkdwn italic span in plain
+# prose. The character classes exclude the NUL placeholder marker so a
+# stashed span never swallows an already-stashed code span.
+_URL_SPAN = re.compile(
+    r"(?<=<)[^<>\s|\x00]+(?=[|>])"
+    r"|(?<=\]\()(?:[^)\s\x00(]|\([^)\s\x00(]*\))+(?=\))"
+    r"|\b[A-Za-z][A-Za-z0-9+.-]*://[^\s<>\x00]+"
+)
 
 
 class SlackMrkdwnTool(Tool):
@@ -269,12 +291,34 @@ class SlackMrkdwnTool(Tool):
         return _PLACEHOLDER_RE.sub(_unstash, line)
 
     @classmethod
+    def _stash_url_spans(cls, line: str, spans: list[str]) -> str:
+        """Replace URL-bearing spans with placeholders (appends to spans)."""
+
+        def _stash(match: re.Match) -> str:
+            spans.append(match.group(0))
+            return _PLACEHOLDER.format(len(spans) - 1)
+
+        return _URL_SPAN.sub(_stash, line)
+
+    @classmethod
     def _apply_inline(
-        cls, line: str, passes: list[Callable[[str], str]]
+        cls,
+        line: str,
+        link_pass: Callable[[str], str],
+        emphasis_passes: list[Callable[[str], str]],
     ) -> str:
-        """Run the given inline passes over one line, shielding code."""
+        """Run link conversion then emphasis passes, shielding code and URLs.
+
+        Inline code is stashed first, the link/angle conversion runs on
+        the bare line, then every URL the conversion produced (or left
+        behind) is stashed too, and only then do the emphasis passes
+        run — so emphasis delimiters inside URLs are never rewritten
+        while labels keep being converted.
+        """
         stashed, spans = cls._map_inline_code(line)
-        for pass_fn in passes:
+        stashed = link_pass(stashed)
+        stashed = cls._stash_url_spans(stashed, spans)
+        for pass_fn in emphasis_passes:
             stashed = pass_fn(stashed)
         return cls._restore_code(stashed, spans)
 
@@ -294,8 +338,7 @@ class SlackMrkdwnTool(Tool):
             ):
                 quote_from = index
                 break
-        inline_passes: list[Callable[[str], str]] = [
-            cls._angle_to_markdown,
+        emphasis_passes: list[Callable[[str], str]] = [
             lambda s: _MRKDWN_BOLD.sub(r"**\1**", s),
             lambda s: _MRKDWN_ITALIC.sub(r"*\1*", s),
             lambda s: _MRKDWN_STRIKE.sub(r"~~\1~~", s),
@@ -311,10 +354,14 @@ class SlackMrkdwnTool(Tool):
                     if head.startswith(" "):
                         head = head[1:]
                     line = head
-                line = cls._apply_inline(line, inline_passes)
+                line = cls._apply_inline(
+                    line, cls._angle_to_markdown, emphasis_passes
+                )
                 out.append("> " + line if line else ">")
                 continue
-            out.append(cls._apply_inline(line, inline_passes))
+            out.append(
+                cls._apply_inline(line, cls._angle_to_markdown, emphasis_passes)
+            )
         return "\n".join(out)
 
     @staticmethod
@@ -358,8 +405,7 @@ class SlackMrkdwnTool(Tool):
         # Single-star italic MUST run before double-star bold: after the
         # bold pass writes '*x*', the italic pattern would otherwise eat
         # the freshly created single-star bold delimiters.
-        inline_passes: list[Callable[[str], str]] = [
-            cls._links_to_mrkdwn,
+        emphasis_passes: list[Callable[[str], str]] = [
             lambda s: _MD_ITALIC_STAR.sub(r"_\1_", s),
             lambda s: _MD_BOLD.sub(r"*\1*", s),
             lambda s: _MD_STRIKE.sub(r"~\1~", s),
@@ -368,7 +414,7 @@ class SlackMrkdwnTool(Tool):
         out = [
             line
             if masked[index]
-            else cls._apply_inline(line, inline_passes)
+            else cls._apply_inline(line, cls._links_to_mrkdwn, emphasis_passes)
             for index, line in enumerate(lines)
         ]
         return "\n".join(out)

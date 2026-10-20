@@ -155,6 +155,49 @@ class SlackMrkdwnToolToMarkdownTest(unittest.TestCase):
             self.convert("<https://example.com>"), "<https://example.com>"
         )
 
+    # ------------------------------------------------------------------ #
+    # URL integrity: delimiters inside URLs never become emphasis
+    # ------------------------------------------------------------------ #
+
+    def test_bare_angle_url_with_underscore_pair_unchanged(self) -> None:
+        # "_foo_" would be a well-formed mrkdwn italic span in prose,
+        # but inside a URL it must never be rewritten — the documented
+        # "bare autolink unchanged" behaviour.
+        self.assertEqual(
+            self.convert("<https://example.com/_foo_>"),
+            "<https://example.com/_foo_>",
+        )
+
+    def test_labelled_angle_url_with_underscore_pair_intact(self) -> None:
+        self.assertEqual(
+            self.convert("<https://example.com/_foo_|label>"),
+            "[label](https://example.com/_foo_)",
+        )
+
+    def test_plain_url_with_underscore_pair_intact(self) -> None:
+        self.assertEqual(
+            self.convert("see https://example.com/_foo_ now"),
+            "see https://example.com/_foo_ now",
+        )
+        self.assertEqual(
+            self.convert("see https://example.com/_foo_."),
+            "see https://example.com/_foo_.",
+        )
+
+    def test_url_with_star_and_tilde_pairs_intact(self) -> None:
+        self.assertEqual(
+            self.convert("<https://ex.com/*star*|l>"), "[l](https://ex.com/*star*)"
+        )
+        self.assertEqual(
+            self.convert("<https://ex.com/~tilde~>"), "<https://ex.com/~tilde~>"
+        )
+
+    def test_emphasis_still_works_around_urls(self) -> None:
+        self.assertEqual(
+            self.convert("_real ital_ and https://example.com/a_b_"),
+            "*real ital* and https://example.com/a_b_",
+        )
+
     def test_mailto_labelled_link(self) -> None:
         self.assertEqual(
             self.convert("<mailto:alice@example.com|Alice>"),
@@ -320,6 +363,42 @@ class SlackMrkdwnToolToMrkdwnTest(unittest.TestCase):
         self.assertEqual(
             self.convert("[**bold label**](https://x)"),
             "<https://x|*bold label*>",
+        )
+
+    # ------------------------------------------------------------------ #
+    # URL integrity (inverse mapping)
+    # ------------------------------------------------------------------ #
+
+    def test_link_target_with_balanced_parentheses(self) -> None:
+        # CommonMark allows one level of balanced parentheses in a link
+        # destination — the Wikipedia URL shape.
+        self.assertEqual(
+            self.convert(
+                "[Python](https://en.wikipedia.org/wiki/Python_(programming_language))"
+            ),
+            "<https://en.wikipedia.org/wiki/Python_(programming_language)|Python>",
+        )
+        self.assertEqual(
+            self.convert("[t](https://ex.com/a(b)c)"),
+            "<https://ex.com/a(b)c|t>",
+        )
+
+    def test_mention_lookalikes_inside_urls_not_wrapped(self) -> None:
+        self.assertEqual(
+            self.convert("see https://x.com/@here and https://ex.com/@U123ABC"),
+            "see https://x.com/@here and https://ex.com/@U123ABC",
+        )
+
+    def test_image_url_with_underscores_intact(self) -> None:
+        self.assertEqual(
+            self.convert("![alt](https://ex.com/_pic_.png)"),
+            "![alt](https://ex.com/_pic_.png)",
+        )
+
+    def test_label_emphasis_and_url_integrity_together(self) -> None:
+        self.assertEqual(
+            self.convert("[**b** _i_](https://ex.com/_keep_)"),
+            "<https://ex.com/_keep_|*b* _i_>",
         )
 
     # ------------------------------------------------------------------ #
@@ -554,6 +633,107 @@ class SlackMrkdwnToolRoundTripTest(unittest.TestCase):
                 md = self.to_markdown(sample)
                 back = self.to_mrkdwn(md)
                 self.assertEqual(self.to_markdown(back), md)
+
+    # ------------------------------------------------------------------ #
+    # Randomized corpus over the supported constructs (fixed seed).
+    # ------------------------------------------------------------------ #
+
+    _WORDS = (
+        "deploy", "finished", "the", "pipeline", "alert", "fired",
+        "again", "please", "review", "asap", "ok", "5", "v2.1", "note:",
+    )
+    _IDS = ("U123ABC", "U9XZ3KQ", "W08LV1R4J2P", "USLACKBOT", "U1")
+    _CHANNELS = ("C123ABC", "C0123ABCD", "C1")
+    _URLS = (
+        "https://example.com",
+        "https://example.com/_foo_",
+        "https://example.com/a_b_c",
+        "https://en.wikipedia.org/wiki/United_States",
+        "https://ex.com/p?q=_v_&x=1",
+        "http://insecure.example.net/x",
+        "https://ex.com/*star*",
+        "https://ex.com/~tilde~",
+        "https://ex.com/@here",
+        "https://ex.com/path-(paren)",
+        "https://en.wikipedia.org/wiki/Python_(programming_language)",
+    )
+
+    def _random_atom(self, rng: "random.Random") -> str:
+        kind = rng.randrange(12)
+        word = rng.choice(self._WORDS)
+        url = rng.choice(self._URLS)
+        if kind == 0:
+            return rng.choice(self._WORDS)
+        if kind in (1, 2, 3):  # emphasis, with adversarial shapes
+            char = rng.choice("*_~")
+            style = rng.randrange(4)
+            if style == 0:
+                return f"{char}{word}{char}"
+            if style == 1:
+                return f"{char}{word} and {word}{char}"
+            if style == 2:
+                return f"{char * 2}{word}{char * 2}"  # literal double
+            return f"x{char}{word}{char}y"  # intraword
+        if kind == 4:
+            return f"<{url}>"
+        if kind == 5:
+            return f"<{url}|{word}>"
+        if kind == 6:
+            return f"<@{rng.choice(self._IDS)}>"
+        if kind == 7:
+            return f"<@{rng.choice(self._IDS)}|{word.replace(' ', '_')}>"
+        if kind == 8:
+            return f"<#{rng.choice(self._CHANNELS)}|{word.replace(' ', '_')}>"
+        if kind == 9:
+            return f"[{word}]({url})"
+        if kind == 10:
+            return url
+        return f"`{rng.choice(('*x*', '_y_', 'code', 'https://ex.com/_a_'))}`"
+
+    def _random_line(self, rng: "random.Random") -> str:
+        kind = rng.randrange(9)
+        atoms = " ".join(self._random_atom(rng) for _ in range(rng.randrange(1, 4)))
+        if kind == 0:
+            return atoms
+        if kind == 1:
+            return "> " + atoms
+        if kind == 2:
+            return f"{rng.randrange(1, 4)}. " + atoms
+        if kind == 3:
+            return "- " + atoms
+        if kind == 4:
+            return "```"
+        if kind == 5:
+            return ">>> " + atoms
+        if kind == 6:
+            return rng.choice(("* * *", "---"))
+        if kind == 7:
+            return f"![{rng.choice(self._WORDS)}]({rng.choice(self._URLS)})"
+        return atoms
+
+    def test_randomized_corpus_fixed_point_and_url_integrity(self) -> None:
+        # 200 deterministic random documents built from the supported
+        # constructs: (a) the documented fixed-point property holds and
+        # (b) every URL embedded in the input survives to_markdown,
+        # to_mrkdwn and the full cycle verbatim.
+        import random
+
+        rng = random.Random(20261020)
+        for case in range(200):
+            text = "\n".join(
+                self._random_line(rng) for _ in range(rng.randrange(1, 5))
+            )
+            with self.subTest(case=case, text=text):
+                markdown = self.to_markdown(text)
+                once = self.to_mrkdwn(markdown)
+                self.assertEqual(self.to_mrkdwn(self.to_markdown(once)), once)
+                self.assertNotIn("\x00", markdown)
+                self.assertNotIn("\x00", once)
+                for url in self._URLS:
+                    if url in text:
+                        self.assertIn(url, markdown)
+                        self.assertIn(url, self.to_mrkdwn(text))
+                        self.assertIn(url, once)
 
 
 class SlackMrkdwnToolValidationTest(unittest.TestCase):
