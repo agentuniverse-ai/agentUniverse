@@ -309,3 +309,58 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ContradictionSignalDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/contradiction_signal_detector.yaml)
+
+This component flags POTENTIAL contradictions inside document text so review pipelines can route suspicious knowledge to a human before it pollutes retrieval. It addresses the *claim-consistency review* direction of issue #258: knowledge extracted from merged or crawled sources routinely contains sentences that quietly disagree ("the export service supports batching" two paragraphs after "the export service rejects batching"), and retrieval will happily serve both sides of the disagreement.
+
+**This is explicitly a lexical heuristic, NOT semantic NLI.** It does not parse meaning, resolve coreference, or know any world facts; it pairs sentences within a small window and looks for surface patterns. Expect false positives (antonyms, scoped negations, reported speech) and false negatives (paraphrases, synonyms). The output is a triage queue for humans or a later semantic pass — never a verdict. Within the existing doc processor family, `DiscourseConnectiveAnalyzer` counts connectives and `CausalPhraseDetector` extracts cause-effect phrases; neither flags disagreements, which is the gap this fills.
+
+Three signal kinds are detected per sentence pair (earlier sentence A, later sentence B, distance at most `window_size`; every kind additionally requires at least one shared *content word* — non-stopword, lowercased, reduced by a crude s / es / ed / ing suffix-stripping stemmer, or a CJK character outside a function-character list):
+
+| kind | pattern | confidence |
+| --- | --- | --- |
+| `contrast_flip` | B opens with a contrast marker (but / however / conversely / on the contrary / in contrast; 但是 / 然而 / 相反) while sharing content with A | high with >= 2 shared terms, else medium |
+| `negation_repeat` | exactly one of A / B carries a negation marker (not / no / never / n't / none / without / cannot; 无 / 不 / 没有 / 未) over shared content | medium with >= 2 shared terms, else low |
+| `mutual_negation` | A and B open with the same first up-to-3 words ("subject-ish" opener), both are negated, and the sentences are not identical | low (rare, noisy) |
+
+Each signal records `{kind, sentence_a_span, sentence_b_span, shared_terms (<= max_shared_terms, sorted), confidence}` where spans are `[start, end)` character offsets into the document text. Per document the processor stamps `contradiction_signals` (list, capped at `max_signals`), `signal_count` (the recorded count) and `contradiction_risk`. The risk grade follows a documented weight table — each signal contributes high=3 / medium=2 / low=1 and the summed weight maps to none (no signals) / low (< 3) / medium ([3, 6)) / high (>= 6); the boundaries are tuned so that one strong flip alone does not shout "high" while several independent flags escalate. Documents are never filtered out and text is never modified, so the component is safe to slot into any insertion or post-processing chain.
+
+The component definition file is as follows:
+```yaml
+name: 'contradiction_signal_detector'
+description: 'Flag potential contradiction signals (contrast flips, negation repeats, mutual negations) in document text into metadata for review pipelines'
+window_size: 2
+max_signals: 30
+max_shared_terms: 5
+signals_key: 'contradiction_signals'
+count_key: 'signal_count'
+risk_key: 'contradiction_risk'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.contradiction_signal_detector'
+  class: 'ContradictionSignalDetector'
+```
+- window_size: Maximum sentence distance for a compared (earlier, later) pair, in [1, 5]; the default 2 compares each sentence with the next two.
+- max_signals: Maximum signals recorded per document, in [1, 1000]; further signals are dropped and `signal_count` reflects the recorded list.
+- max_shared_terms: Maximum shared content terms kept per signal, in [1, 20]; the list is sorted for determinism.
+- signals_key: Metadata key for the signal list; empty string disables stamping.
+- count_key: Metadata key for the recorded-signal count; empty string disables stamping.
+- risk_key: Metadata key for the none / low / medium / high grade; empty string disables stamping.
+
+The scan is deterministic, offline and dependency-free (pure stdlib regex). Example:
+
+```python
+from agentuniverse.agent.action.knowledge.doc_processor.contradiction_signal_detector \
+    import ContradictionSignalDetector
+from agentuniverse.agent.action.knowledge.store.document import Document
+
+docs = [Document(text="The export service supports batching. "
+                      "However, the export service rejects batching.")]
+out = ContradictionSignalDetector().process_docs(docs)
+print(out[0].metadata["contradiction_signals"])
+# [{'kind': 'contrast_flip', 'sentence_a_span': [0, 37],
+#   'sentence_b_span': [38, 83], 'shared_terms': ['batch', 'export', 'service'],
+#   'confidence': 'high'}]
+print(out[0].metadata["contradiction_risk"])   # 'medium'
+```
