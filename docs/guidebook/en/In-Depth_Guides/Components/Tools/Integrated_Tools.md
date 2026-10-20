@@ -634,3 +634,54 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Prompt Template Linter Tool
+
+`PromptTemplateLinterTool` inspects and manipulates agentUniverse prompt
+templates — the `{placeholder}` templates used by the framework's prompt
+components — using only the Python standard library, with zero network
+access. It has three modes. `lint` scans template text and reports
+findings: `malformed_braces` (unbalanced `{` / `}` or nested braces —
+error), `empty_placeholder` (`{}` — error), `invalid_name` (names with
+spaces or special characters rather than simple identifiers — error),
+`placeholder_in_code` (placeholder inside a ``` fenced block — warning,
+since the framework itself fills fenced blocks in the combine prompts),
+`duplicate_placeholder` (same name used two or more times — info, legal
+but flagged), and, when a `known_variables` list is given,
+`placeholders_not_in_vars` / `vars_without_placeholder` (info). `extract`
+returns the ordered unique placeholder names. `fill` substitutes a
+variables mapping using the framework's escaping rules and is strict by
+default: missing variables return a structured error listing them and
+extra variables produce a warning list; `keep_unknown=True` leaves
+missing placeholders unfilled instead of erroring.
+
+The placeholder convention follows the framework source:
+`agentuniverse/prompt/prompt.py` extracts `input_variables` with
+`re.findall(r'\{(.*?)}', template)`, every placeholder in the shipped
+prompts (for example the React agent's `{tools}`, `{tool_names}`,
+`{chat_history}`, `{background}`, `{input}`, `{agent_scratchpad}`) is a
+simple identifier, and templates are resolved through
+`Prompt.as_langchain()` — LangChain `PromptTemplate` with the default
+f-string format, i.e. Python `str.format` semantics where `{{` and `}}`
+are escapes for literal braces and substituted values are inserted
+verbatim.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.prompt_template_linter_tool import PromptTemplateLinterTool
+
+tool = PromptTemplateLinterTool()
+report = tool.execute(mode="lint", template="Question: {input}\n```{tools}```\n",
+                      known_variables=["input"])
+names = tool.execute(mode="extract", template="{tools} {input}")["result"]
+filled = tool.execute(mode="fill", template='Output JSON like {{"key": "{value}"}}.',
+                      variables={"value": "42"})["result"]
+```
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, empty template, unknown mode, non-string
+variable names or values, more than 200 variables, template over
+100,000 characters) raise a `ValueError`. Errors that depend on the
+content being processed — malformed template braces in `fill` mode and
+missing variables in strict mode — are returned as structured `error`
+payloads (`malformed_template`, `missing_variables`) so agents can
+react without catching exceptions.

@@ -1,0 +1,63 @@
+name: prompt_template_linter_tool
+description: >-
+  Prompt template linter tool — pure Python stdlib, no network
+  required. Lint agentUniverse {placeholder} prompt templates
+  (mode='lint' reports malformed braces, empty placeholders, invalid
+  names, placeholders inside fenced code blocks, duplicates, and the
+  comparison against a known_variables list), extract the ordered
+  unique placeholder names (mode='extract'), and fill templates with
+  a variables mapping using the framework's escaping rules
+  (mode='fill' is strict by default; keep_unknown=True leaves missing
+  placeholders unfilled).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.prompt_template_linter_tool
+  class: PromptTemplateLinterTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lint, extract or fill.
+    required: true
+  template:
+    type: string
+    description: The prompt template text using the framework's {placeholder} convention. Required for every mode.
+    required: false
+  variables:
+    type: object
+    description: Mapping of placeholder name to replacement text. Required for the fill mode.
+    required: false
+  known_variables:
+    type: array
+    description: Lint mode only — declared variable names; placeholders not in the list and variables without a placeholder are both reported.
+    required: false
+  keep_unknown:
+    type: boolean
+    description: Fill mode only — leave missing placeholders unfilled instead of returning a missing-variables error. Defaults to false.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "extract", "fill"]
+      description: Operation mode.
+    template:
+      type: string
+      description: The prompt template text ({placeholder} convention).
+    variables:
+      type: object
+      description: Placeholder name to replacement text mapping (fill mode).
+      additionalProperties:
+        type: string
+    known_variables:
+      type: array
+      items:
+        type: string
+      description: Declared variable names compared against the placeholders (lint mode).
+    keep_unknown:
+      type: boolean
+      description: Leave missing placeholders unfilled instead of erroring (fill mode).
+  required: ["mode"]
