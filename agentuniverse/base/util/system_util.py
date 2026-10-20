@@ -182,19 +182,23 @@ def process_dict_with_funcs(input_dict: dict, yaml_func_instance: Any) -> dict:
     if not input_dict or yaml_func_instance is None:
         return input_dict
 
-    processed_dict = {}
-    for key, value in input_dict.items():
-        if isinstance(value, str) and value.startswith('@FUNC('):
-            # Process the @FUNC expression
-            processed_dict[key] = process_yaml_func(value, yaml_func_instance)
-        elif isinstance(value, dict):
-            # Recursively process nested dictionaries
-            processed_dict[key] = process_dict_with_funcs(value, yaml_func_instance)
-        else:
-            # Keep the value as is
-            processed_dict[key] = value
+    return _process_config_value(input_dict, yaml_func_instance)
 
-    return processed_dict
+
+def _process_config_value(value: Any, yaml_func_instance: Any) -> Any:
+    """Resolve @FUNC expressions throughout a nested configuration value."""
+    if isinstance(value, str) and value.startswith('@FUNC('):
+        return process_yaml_func(value, yaml_func_instance)
+    if isinstance(value, dict):
+        return {
+            key: _process_config_value(item, yaml_func_instance)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_process_config_value(item, yaml_func_instance) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_process_config_value(item, yaml_func_instance) for item in value)
+    return value
 
 
 def is_system_builtin(component_instance: ComponentBase) -> bool:
