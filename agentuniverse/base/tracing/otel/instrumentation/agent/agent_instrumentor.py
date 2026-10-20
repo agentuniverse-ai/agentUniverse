@@ -158,6 +158,9 @@ class AgentSpanManager:
         return self.start_span()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """End the managed span and detach the attached context when leaving the
+        context manager.
+        """
         self.cleanup()
 
 
@@ -165,6 +168,7 @@ class AgentMetricsRecorder:
     """Handles Agent metrics recording."""
 
     def __init__(self, metrics: Dict[str, Any]):
+        """Create a metrics recorder over the given metrics registry dict."""
         self.metrics = metrics
 
     def record_call_start(self, labels: Dict[str, str]) -> None:
@@ -257,6 +261,7 @@ class AgentSpanAttributesSetter:
 
     @staticmethod
     def set_streaming(span: Span, streaming: bool) -> None:
+        """Set the streaming span attribute to the given flag."""
         span.set_attribute(SpanAttributes.AGENT_STREAMING, streaming)
 
     @staticmethod
@@ -269,6 +274,7 @@ class AgentInstrumentor(BaseInstrumentor):
     """OpenTelemetry instrumentor for Agent calls."""
 
     def __init__(self):
+        """Create an AgentInstrumentor with uninitialized tracer, meter and metrics state."""
         super().__init__()
         self._tracer: Optional[trace.Tracer] = None
         self._meter: Optional[metrics.Meter] = None
@@ -278,6 +284,11 @@ class AgentInstrumentor(BaseInstrumentor):
         self._original_agent_wrapper_async = None
 
     def instrumentation_dependencies(self):
+        """Return the list of instrumentation dependencies required by this instrumentor.
+
+        Returns:
+            list: An empty dependency list.
+        """
         return []
 
     def _instrument(self, **kwargs):
@@ -377,6 +388,9 @@ class AgentInstrumentor(BaseInstrumentor):
         """Wrap output stream queue to monitor first token time."""
 
         def on_first_put(first_put_time: float):
+            """Record the first-token duration metric and span attribute once the first
+            item is put on the output stream.
+            """
             duration = first_put_time - start_time
             self._metrics_recorder.record_first_token(duration, labels)
             AgentSpanAttributesSetter.set_first_token_attributes(span,
