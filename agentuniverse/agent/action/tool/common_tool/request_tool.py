@@ -95,9 +95,9 @@ class RequestTool(Tool):
         :param component_configer:
         :return:
         """
-        self.headers = component_configer.configer.value.get('headers')
-        self.method = component_configer.configer.value.get('method')
-        self.response_content_type = component_configer.configer.value.get('response_content_type')
+        self.headers = component_configer.configer.value.get('headers', self.headers)
+        self.method = component_configer.configer.value.get('method', self.method)
+        self.response_content_type = component_configer.configer.value.get('response_content_type', self.response_content_type)
         if 'json_parser' in component_configer.configer.value:
             self.json_parser = component_configer.configer.value.get('json_parser')
         self.requests_wrapper = GenericRequestsWrapper(
