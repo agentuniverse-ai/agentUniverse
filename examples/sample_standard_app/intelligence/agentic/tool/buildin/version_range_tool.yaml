@@ -1,0 +1,33 @@
+name: 'version_range_tool'
+description: |
+  Evaluate, compare, sort and select software versions against constraints.
+
+  Input parameters:
+    - action (required): One of check, compare, sort, latest.
+    - constraint (optional): Comma-separated comparators such as
+      ">=1.2.0, <2.0.0, !=1.5.0". A bare version means equality. An empty
+      constraint accepts every version. At most 12 comparators from 240 chars.
+    - version (optional): The candidate version for check, or the left side
+      of compare.
+    - other (optional): The right-hand version of compare.
+    - versions (optional): A list of 1..200 versions for sort and latest.
+    - include_prerelease (optional): Overrides the default prerelease ordering.
+
+  Versions use three numeric parts with an optional prerelease, such as 1.2.3
+  or 1.2.3-rc.1. Leading zeros are accepted. With include_prerelease, released
+  versions outrank their prereleases and prerelease identifiers compare
+  numerically when numeric, otherwise lexicographically, with numbers before
+  names and shorter prefixes losing. Without it, versions agreeing on their
+  numeric triple compare equal.
+
+  check reports satisfied, the parsed comparators and the failing ones;
+  compare reports relation -1, 0 or 1; sort returns the deduplicated
+  ascending order, the unique count and the duplicate count; latest selects
+  the greatest satisfying version or null and counts distinct satisfied
+  versions. Comparison is numeric, so 1.10.0 outranks 1.9.9. The tool
+  performs no network access and raises ValueError for malformed input.
+tool_type: 'func'
+input_keys: ['action']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.version_range_tool'

@@ -525,6 +525,24 @@ tool.execute(mode="extract", file_path="reports.zip", output_dir="restored", mem
 
 All paths are confined to `base_dir`. Extraction rejects absolute/traversal paths, links, special TAR files, encrypted ZIPs, duplicate members, excessive compression ratios, and configured size/count limits. Destinations are preflighted before extraction and files are written through same-directory temporary files.
 
+## Version Range Tool
+
+```python
+from agentuniverse.agent.action.tool.common_tool.version_range_tool import VersionRangeTool
+
+tool = VersionRangeTool()
+tool.execute(action="check", constraint=">=1.2.0, <2.0.0, !=1.5.0", version="1.5.2")
+tool.execute(action="latest", constraint=">=1.0.0", versions=["1.2.3", "1.10.0", "1.9.9"])
+```
+
+`version_range_tool` evaluates, compares, sorts and selects versions entirely offline, in the same
+register as the integrated search tools. `check` reports whether a candidate satisfies every
+comparator and lists the failures; `compare` returns -1, 0 or 1; `sort` returns the deduplicated
+ascending order; `latest` selects the greatest satisfying version. Comparison is numeric, so 1.10.0
+outranks 1.9.9; released versions outrank their prereleases, numbers order before names, and a
+no-prerelease mode compares numeric triples only. The tool performs no network access and raises
+`ValueError` for malformed input.
+
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
