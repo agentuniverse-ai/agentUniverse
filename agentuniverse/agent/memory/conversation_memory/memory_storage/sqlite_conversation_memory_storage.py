@@ -13,7 +13,7 @@ from typing import Optional, List, Any
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
-from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, func, or_, create_engine, Engine, insert
+from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, func, or_, create_engine, Engine, insert, inspect
 
 from agentuniverse.agent.memory.conversation_memory.conversation_message import ConversationMessage
 from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageEnum, ConversationMessageSourceType
@@ -273,6 +273,10 @@ class SqliteMemoryStorage(MemoryStorage):
             agent_id (str): The agent id of the memory to get.
             top_k (int): The number of messages to get.
 
+        Positive integer limits fetch only the latest rows from SQLite and
+        return them in chronological order, using the mapped primary key to
+        break timestamp ties. Older rows are not materialized as ORM objects.
+
         Returns:
             List[Message]: The list of messages retrieved from the memory.
         """
@@ -321,12 +325,16 @@ class SqliteMemoryStorage(MemoryStorage):
             query = session.query(self.memory_converter.model_class)
             if conditions:
                 query = query.where(and_(*conditions))
-            query = query.order_by(model_class.timestamp.asc())
-
-            # Execute the query and fetch the results
-            records = query.all()
-
-            records = records[-top_k:]
+            if isinstance(top_k, int) and top_k > 0:
+                order = [model_class.timestamp.desc()]
+                order.extend(column.desc() for column in inspect(model_class).primary_key)
+                # SQLite binds LIMIT as a signed 64-bit integer.
+                records = query.order_by(*order).limit(min(top_k, 2**63 - 1)).all()
+                records.reverse()
+            else:
+                query = query.order_by(model_class.timestamp.asc())
+                records = query.all()
+                records = records[-top_k:]
 
             messages = []
             for record in records:

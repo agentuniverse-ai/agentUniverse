@@ -141,3 +141,14 @@ metadata:
 ```
 
 其中db_uri为数据库连接地址，engine_args为sqlalchemy的engine参数。
+
+### SQLite 对话历史
+
+对话记忆实现
+`agentuniverse.agent.memory.conversation_memory.memory_storage.sqlite_conversation_memory_storage`
+中的 `SqliteMemoryStorage` 会按时间顺序返回最近的消息。对于正整数 `top_k`，
+数据库查询会先限制返回的行数，再由 SQLAlchemy 创建消息行对象。例如，调用
+`storage.get(session_id="chat", top_k=20)` 时，即使该会话包含数千条消息，也最多
+加载 20 个匹配的消息行对象。时间戳相同的消息按映射表的主键排序，默认转换器使用
+数据库行 id，自定义转换器可以使用其他主键或复合主键。已有的会话、智能体、链路
+和消息类型条件均在限制数量前生效。
