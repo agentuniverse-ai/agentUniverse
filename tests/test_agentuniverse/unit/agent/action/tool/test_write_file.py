@@ -115,6 +115,26 @@ class WriteFileToolTest(unittest.TestCase):
         with open(file_path, 'r', encoding='utf-8') as f:
             self.assertEqual(f.read(), 'old content')
 
+    def test_failed_overwrite_preserves_existing_file(self):
+        """A failed UTF-8 write must not truncate the existing destination."""
+        file_path = os.path.join(self.temp_dir, 'test_atomic_overwrite.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+
+        result = json.loads(self.tool.execute(
+            file_path=file_path,
+            content='invalid surrogate: \ud800',
+        ))
+
+        self.assertEqual(result['status'], 'error')
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'old content')
+        self.assertEqual(
+            [name for name in os.listdir(self.temp_dir)
+             if name.startswith('.test_atomic_overwrite.txt.')],
+            [],
+        )
+
     def test_non_binary_numeric_append_value_returns_error_without_writing(self):
         """Verify a non-binary numeric append value errors without writing."""
         file_path = os.path.join(self.temp_dir, 'test_append_numeric.txt')
