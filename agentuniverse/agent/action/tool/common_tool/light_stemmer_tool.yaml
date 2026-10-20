@@ -1,0 +1,61 @@
+name: light_stemmer_tool
+description: Deterministic English light word stemmer — pure Python stdlib, no NLTK, no network. Porter-inspired light rule set (NOT full Porter; divergences documented). mode='stem' stems one word or a list of words; mode='stem_text' tokenizes a text (or list of texts) into alphabetic runs and returns original/stem pairs; mode='group' groups a word list by stem for vocabulary collapsing. Optional lowercase=True lowercases input before stemming.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.light_stemmer_tool
+  class: LightStemmerTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Stemming mode — stem (one word or a word list), stem_text (tokenize text(s) into original/stem pairs) or group (group words by stem).
+    required: true
+  word:
+    type: string
+    description: stem mode only — a single word to stem (ASCII English letters; hyphenated compounds are rejected with a note to split on '-').
+    required: false
+  words:
+    type: array
+    description: stem/group modes — a non-empty list of words to stem or group (max 10,000 items).
+    required: false
+  text:
+    type: string
+    description: stem_text mode only — a single text; tokens are maximal runs of ASCII letters, punctuation and digits act as separators.
+    required: false
+  texts:
+    type: array
+    description: stem_text mode only — a non-empty list of texts; the result is a list of per-text original/stem pair lists.
+    required: false
+  lowercase:
+    type: boolean
+    description: Lowercase every input word before stemming (default false). Suffix rules are defined over lowercase text, so enable this for mixed-case vocabulary.
+    required: false
+    default: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["stem", "stem_text", "group"]
+      description: Stemming mode.
+    word:
+      type: string
+      description: Single word to stem (stem mode).
+    words:
+      type: array
+      items: {type: string}
+      description: List of words to stem or group (stem/group modes).
+    text:
+      type: string
+      description: Text to tokenize and stem (stem_text mode).
+    texts:
+      type: array
+      items: {type: string}
+      description: List of texts to tokenize and stem (stem_text mode).
+    lowercase:
+      type: {type: boolean}
+      default: false
+      description: Lowercase input words before stemming.
+  required: ["mode"]
