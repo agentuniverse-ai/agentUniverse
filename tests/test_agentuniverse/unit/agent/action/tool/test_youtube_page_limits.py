@@ -40,7 +40,7 @@ def test_channel_pages_keep_total_limit(limit, expected_sizes):
         start = int(kwargs.get("pageToken") or 0)
         count = min(kwargs["maxResults"], 50)
         items = [{
-            "contentDetails": {"videoId": str(index)},
+            "contentDetails": {"videoId": str(index), "videoPublishedAt": "2023-12-01T00:00:00Z"},
             "snippet": {"title": str(index), "publishedAt": "2024-01-01T00:00:00Z"},
         } for index in range(start, start + count)]
         return Mock(execute=Mock(return_value={"items": items, "nextPageToken": str(start + count)}))
@@ -51,5 +51,6 @@ def test_channel_pages_keep_total_limit(limit, expected_sizes):
     )
     assert len(result["latest_video_list"]) == limit
     assert [entry["id"] for entry in result["latest_video_list"]] == [str(i) for i in range(limit)]
+    assert {entry["published_at"] for entry in result["latest_video_list"]} == {"2023-12-01T00:00:00Z"}
     assert [call["maxResults"] for call in calls] == expected_sizes
     assert [call["pageToken"] for call in calls] == [None] + [str(sum(expected_sizes[:i])) for i in range(1, len(calls))]
