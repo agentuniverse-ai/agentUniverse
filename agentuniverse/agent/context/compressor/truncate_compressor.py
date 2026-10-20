@@ -17,6 +17,7 @@ Use cases:
 """
 
 import time
+from copy import deepcopy
 from typing import List, Optional
 
 from agentuniverse.agent.context.compressor.context_compressor import (
@@ -222,21 +223,18 @@ class TruncateCompressor(ContextCompressor):
         # Truncate content
         truncated_content = segment.content[:target_chars] + self.truncate_marker
 
-        # Create new segment with truncated content
-        truncated_seg = ContextSegment(
-            type=segment.type,
-            priority=segment.priority,
-            content=truncated_content,
-            tokens=target_tokens,
-            session_id=segment.session_id,
-            parent_id=segment.parent_id,
-            related_ids=segment.related_ids.copy(),
-        )
-
-        # Preserve metadata reference (mark as compressed)
-        truncated_seg.metadata = segment.metadata.model_copy()
+        # Copy the complete segment so identity, scope, relationships, and
+        # nested metadata remain attached to the compressed context item.
+        # ``update_content`` also refreshes the content hash used for change
+        # detection instead of leaving the copy with a stale identity state.
+        truncated_seg = deepcopy(segment)
+        truncated_seg.update_content(truncated_content, target_tokens)
         truncated_seg.metadata.compressed = True
-        truncated_seg.metadata.version += 1
+        truncated_seg.metadata.original_tokens = segment.tokens
+        truncated_seg.metadata.compression_ratio = (
+            target_tokens / segment.tokens if segment.tokens > 0 else 0.0
+        )
+        truncated_seg.metadata.compression_method = "truncate"
 
         return truncated_seg
 
