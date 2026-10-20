@@ -634,3 +634,67 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Sequence Analyzer Tool
+
+`SequenceAnalyzerTool` classifies numeric sequences and extends or
+repairs them, built purely on the Python standard library `decimal`
+module — no network access. It fills the analysis gap left by the
+range generator: where `RangeGeneratorTool` produces ranges, this
+tool looks at an existing list of 3-100 finite numbers and answers
+what pattern it follows, what comes next, and which value is missing
+— the core needs of math-education agents. `classify` mode detects
+every type the sequence satisfies — `arithmetic` (constant first
+difference), `geometric` (constant ratio > 0, verified by exact
+Decimal cross-multiplication `t[i+1]^2 == t[i]*t[i+2]` so division
+rounding can never fake a match), `fibonacci-like` (each term is the
+sum of the previous two), `quadratic` (constant non-zero second
+difference — a zero one is just arithmetic), `constant`, and `primes`
+(all terms integer primes by 6k±1 trial division with the documented
+bound n < 10^12, skipped for sequences containing an integer outside
+[2, 10^12)) — multiple types can hold at once (a constant sequence is
+also arithmetic with difference 0 and, when non-zero, geometric with
+ratio 1), reports the `difference` / `ratio` / `second_difference`
+parameters, and predicts `next_term` via the strongest type with
+priority quadratic > fibonacci-like > geometric > arithmetic >
+constant, with a deterministic `next_term_confidence`
+(`min(0.99, 0.60 + 0.10 * extra_terms)`); an unmatched sequence
+returns `types: ["none"]` with a null next term. `next_n` mode
+extends the sequence by k=1-10 terms of the strongest type.
+`missing` mode takes a sequence holding exactly one null (`None` or
+the string `"null"`) and recovers the value in two tiers: first the
+types the *remaining terms satisfy on their own* (the classify
+predicates applied to the known terms as a flat sequence, scanned in
+priority order — so `[null, 16, 64, 256]` -> 4 geometric, not the
+vacuous quadratic completion 112 that any three numbers would
+admit), then bridging fits that only hold position-aware across the
+gap; in both tiers the candidate is derived from the known runs
+(gap arithmetic / signed geometric mean / recurrence bridges) and
+the completed sequence is re-verified with the exact classifiers,
+so the returned value always makes the whole sequence fit the
+reported type (e.g. `[1, 1, 2, 3, null, 8]` -> 5 via fibonacci-like
+although the remaining terms alone are not fibonacci-like, and
+`[3, 6, 9, null]` -> 15 because the remaining terms are both
+arithmetic and fibonacci-like and the priority prefers the latter);
+when no type fits, a `ValueError` is raised.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.sequence_analyzer_tool import SequenceAnalyzerTool
+
+tool = SequenceAnalyzerTool()
+report = tool.execute(mode="classify", sequence=[2, 4, 8, 16, 32])   # geometric, next 64
+nxt = tool.execute(mode="next_n", sequence=[1, 4, 9, 16], k=3)["next_terms"]  # [25, 36, 49]
+fill = tool.execute(mode="missing", sequence=[1, 1, 2, 3, None, 8])["missing_value"]  # 5
+```
+
+All arithmetic is exact `Decimal` in a fixed 50-significant-digit
+context (`[0.1, 0.2, 0.3]` is exactly arithmetic with difference
+0.1), and the tool reads no clock, randomness, or network, so
+identical input yields identical output. Validation is strict and
+happens before any computation: an unknown mode, a non-list sequence,
+fewer than 3 or more than 100 numbers, boolean elements (rejected
+even though `bool` subclasses `int`), NaN/inf floats, a `missing`
+sequence without exactly one null or with fewer than 3 numeric
+terms, a `k` outside 1-10 or supplied outside `next_n`, extending a
+typeless sequence, and an unsolvable missing value all raise a
+`ValueError`.
