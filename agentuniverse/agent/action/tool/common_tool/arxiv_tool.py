@@ -66,12 +66,14 @@ class ArxivTool(Tool):
         processed_words: List[str] = []
         current_length: int = 0
         for word in words:
-            word_length = len(word) + 1 
+            word_length = len(word) + (1 if processed_words else 0)
             if current_length + word_length <= self.MAX_QUERY_LENGTH:
                 processed_words.append(word)
                 current_length += word_length
             else:
                 break
+        if not processed_words and words and self.MAX_QUERY_LENGTH > 0:
+            return words[0][:self.MAX_QUERY_LENGTH]
         return ' '.join(processed_words)
 
     @retry(3, 1.0)
