@@ -12,12 +12,16 @@ from agentuniverse.base.config.configer import Configer
 
 
 def _build_configer(value: dict, path: str = "config/test_service.yaml") -> Configer:
+    """Build and return configer.
+    """
     configer = Configer(path)
     configer.value = value
     return configer
 
 
 def test_service_configer_requires_agent():
+    """Test that service configer requires agent.
+    """
     configer = _build_configer({
         "name": "test_service",
         "description": "service without agent",
@@ -33,6 +37,8 @@ def test_service_configer_requires_agent():
 
 
 def test_service_configer_reports_missing_agent_context():
+    """Test that service configer reports missing agent context.
+    """
     mock_agent_manager = MagicMock()
     mock_agent_manager.get_instance_obj.return_value = None
     mock_agent_manager.get_instance_name_list.return_value = [

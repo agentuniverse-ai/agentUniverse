@@ -1,6 +1,8 @@
 import unittest
 
-from agentuniverse.agent.action.knowledge.doc_processor.hierarchical_regex_text_splitter import HierarchicalRegexTextSplitter
+from agentuniverse.agent.action.knowledge.doc_processor.hierarchical_regex_text_splitter import (
+    HierarchicalRegexTextSplitter,
+)
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 
@@ -15,11 +17,21 @@ class TestHierarchicalSplitterContentPreservation(unittest.TestCase):
         original = Document(text='Plain text without a chapter', metadata={'source': 'file'})
         self.assertEqual(self.processor._process_docs([original]), [original])
 
+    def test_empty_input_returns_empty_list(self):
+        self.assertEqual(self.processor._process_docs([]), [])
+
     def test_preamble_before_first_heading_is_retained(self):
-        docs = self.processor._process_docs([Document(text='Introduction\nChapter One\nDetails')])
+        source = Document(
+            text='Introduction\nChapter One\nDetails',
+            metadata={'source': 'file'},
+        )
+        docs = self.processor._process_docs([source])
         self.assertEqual(len(docs), 2)
         self.assertIn('Introduction', [doc.text.strip() for doc in docs])
         self.assertTrue(any('Details' in doc.text for doc in docs))
+        preamble = next(doc for doc in docs if 'Introduction' in doc.text)
+        self.assertEqual(preamble.metadata['source'], 'file')
+        self.assertEqual(preamble.metadata['hierarchical_level'], -1)
 
     def test_merge_first_does_not_modify_input_on_repeated_calls(self):
         self.processor.merge_first = True
