@@ -45,6 +45,13 @@ DISCONNECTED = [
     {"source": "c", "target": "d"},
     {"source": "e", "target": "e"},
 ]
+# One undirected edge b-a plus one directed edge x->y: the graph as a
+# whole is directed, but the undirected edge must contribute in BOTH
+# directions (traversal, degrees, adjacency).
+MIXED = [
+    {"source": "b", "target": "a"},
+    {"source": "x", "target": "y", "directed": True},
+]
 
 
 class GraphToolTest(unittest.TestCase):
@@ -453,6 +460,84 @@ class GraphToolTest(unittest.TestCase):
         )
         self.assertEqual(result["component_count"], 1)
         self.assertEqual(result["components"][0]["members"], ["solo"])
+
+    # ------------------------------------------------------------------ #
+    # Mixed directed/undirected graphs (per-edge direction handling)
+    # ------------------------------------------------------------------ #
+
+    def test_mixed_undirected_edge_traversable_both_directions(self) -> None:
+        forward = self.tool.execute(mode="bfs", edges=MIXED, start="a")
+        self.assertEqual(forward["depths"], {"a": 0, "b": 1})
+        backward = self.tool.execute(mode="bfs", edges=MIXED, start="b")
+        self.assertEqual(backward["depths"], {"a": 1, "b": 0})
+        path = self.tool.execute(mode="path", edges=MIXED, start="b", end="a")
+        self.assertEqual(path["path"], ["b", "a"])
+        # The directed edge stays one-way: from y nothing is reachable.
+        sink = self.tool.execute(mode="bfs", edges=MIXED, start="y")
+        self.assertEqual(sink["depths"], {"y": 0})
+
+    def test_mixed_degree_counts_undirected_edge_in_and_out(self) -> None:
+        # totals: a=2, b=2, x=1, y=1 -> mean 1.5, pstdev 0.5, threshold 2.0;
+        # degree > threshold is strict, so nobody is a hub.
+        result = self.tool.execute(mode="degree", edges=MIXED)
+        by_node = {entry["node"]: entry for entry in result["degrees"]}
+        self.assertEqual(
+            by_node["b"],
+            {"node": "b", "in_degree": 1, "out_degree": 1, "total_degree": 2, "is_hub": False},
+        )
+        self.assertEqual(by_node["x"]["out_degree"], 1)
+        self.assertEqual(by_node["x"]["in_degree"], 0)
+        self.assertEqual(by_node["y"]["in_degree"], 1)
+        self.assertEqual(by_node["y"]["out_degree"], 0)
+
+    def test_per_edge_directed_false_overrides_global_directed(self) -> None:
+        edges = [{"source": "a", "target": "b", "directed": False}]
+        # The per-edge flag overrides the global option, so the edge is
+        # undirected and traversable from b back to a.
+        result = self.tool.execute(mode="bfs", edges=edges, directed=True, start="b")
+        self.assertEqual(result["depths"], {"a": 1, "b": 0})
+        build = self.tool.execute(mode="build", edges=edges, directed=True)
+        self.assertFalse(build["directed"])  # no edge resolves to directed
+        self.assertEqual(build["adjacency"], {"a": {"b": 1}, "b": {"a": 1}})
+
+    def test_directed_adjacency_keeps_both_direction_weights(self) -> None:
+        # a->b (weight 1) and b->a (weight 2) are distinct directed edges;
+        # the adjacency must not clobber one direction's weight with the
+        # other's.
+        result = self.tool.execute(
+            mode="build",
+            directed=True,
+            edges=[
+                {"source": "a", "target": "b", "weight": 1},
+                {"source": "b", "target": "a", "weight": 2},
+            ],
+        )
+        self.assertEqual(result["adjacency"], {"a": {"b": 1}, "b": {"a": 2}})
+        self.assertEqual(result["edge_count"], 2)
+
+    def test_directed_and_undirected_edges_on_same_pair_are_distinct_groups(self) -> None:
+        edges = [
+            {"source": "a", "target": "b", "weight": 1},
+            {"source": "a", "target": "b", "directed": True, "weight": 4},
+        ]
+        result = self.tool.execute(mode="build", edges=edges)
+        self.assertTrue(result["directed"])
+        self.assertEqual(result["edge_count"], 2)
+        # The a->b adjacency cell aggregates both parallel edges; the
+        # reverse cell only carries the undirected edge.
+        self.assertEqual(result["adjacency"], {"a": {"b": 5}, "b": {"a": 1}})
+
+    def test_directed_build_includes_sink_nodes_with_empty_adjacency(self) -> None:
+        result = self.tool.execute(
+            mode="build", directed=True, edges=[{"source": "a", "target": "b"}]
+        )
+        self.assertEqual(result["node_count"], 2)
+        self.assertEqual(result["adjacency"], {"a": {"b": 1}, "b": {}})
+
+    def test_mixed_graph_deterministic_across_runs(self) -> None:
+        first = self.tool.execute(mode="build", edges=MIXED)
+        second = self.tool.execute(mode="build", edges=MIXED)
+        self.assertEqual(first, second)
 
     # ------------------------------------------------------------------ #
     # Input validation (error matrix — all raise before computation)

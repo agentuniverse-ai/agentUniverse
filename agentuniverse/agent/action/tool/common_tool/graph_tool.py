@@ -255,11 +255,17 @@ class GraphTool(Tool):
         Returns a dict with:
 
         * ``directed`` — whether any edge resolves to directed;
-        * ``edge_weights`` — merged weights keyed by directed pair or
-          sorted undirected pair;
-        * ``out`` / ``sym`` — directed out-adjacency and its symmetric
-          closure, both ``{node: {neighbor: weight}}`` with sorted keys;
-        * ``raw_counts`` — occurrence count per merged edge key.
+        * ``directed_weights`` / ``directed_counts`` — merged weights and
+          occurrence counts keyed by the directed ``(source, target)``
+          pair, for edges that resolve to directed;
+        * ``undirected_weights`` / ``undirected_counts`` — merged weights
+          and occurrence counts keyed by the sorted pair, for edges that
+          resolve to undirected;
+        * ``out`` / ``sym`` — the direction-respecting adjacency (a
+          directed edge contributes one direction, an undirected edge
+          both) and its symmetric closure, both
+          ``{node: {neighbor: weight}}`` with sorted keys;
+        * ``nodes`` — every node id, sorted.
         """
         if edges is None or isinstance(edges, (str, bytes)) or not isinstance(
             edges, (list, tuple)
@@ -273,8 +279,14 @@ class GraphTool(Tool):
                 f"(got {len(edges):,})"
             )
 
-        edge_weights: dict[tuple[str, str], Any] = {}
-        raw_counts: dict[tuple[str, str], int] = {}
+        # Directed and undirected edges are merged separately: a directed
+        # ``a->b`` and an undirected ``{a, b}`` are distinct edge groups,
+        # so they must never share a key (summing them would silently
+        # drop one direction and clobber the other's weight).
+        directed_weights: dict[tuple[str, str], Any] = {}
+        directed_counts: dict[tuple[str, str], int] = {}
+        undirected_weights: dict[tuple[str, str], Any] = {}
+        undirected_counts: dict[tuple[str, str], int] = {}
         any_directed = False
         for index, edge in enumerate(edges):
             if edge is None or isinstance(edge, (str, bytes)) or not isinstance(
@@ -299,27 +311,59 @@ class GraphTool(Tool):
                     f"edges[{index}]: directed must be a boolean "
                     f"(got {edge_directed!r})"
                 )
-            effective_directed = is_directed or bool(edge_directed)
-            any_directed = any_directed or effective_directed
-            key = (source, target) if effective_directed else (
-                (source, target) if source <= target else (target, source)
+            # A per-edge ``directed`` flag overrides the global option.
+            effective_directed = (
+                bool(edge_directed) if edge_directed is not None else is_directed
             )
-            edge_weights[key] = edge_weights.get(key, 0) + weight
-            raw_counts[key] = raw_counts.get(key, 0) + 1
+            any_directed = any_directed or effective_directed
+            if effective_directed:
+                key = (source, target)
+                directed_weights[key] = directed_weights.get(key, 0) + weight
+                directed_counts[key] = directed_counts.get(key, 0) + 1
+            else:
+                key = (source, target) if source <= target else (target, source)
+                undirected_weights[key] = undirected_weights.get(key, 0) + weight
+                undirected_counts[key] = undirected_counts.get(key, 0) + 1
 
+        # ``out`` is the direction-respecting adjacency: a directed edge
+        # contributes its single direction, an undirected edge contributes
+        # both (so it stays traversable both ways even when the graph as a
+        # whole is directed). ``sym`` is the symmetric closure used for
+        # weak connectivity and undirected degrees.
         out: dict[str, dict[str, Any]] = {}
         sym: dict[str, dict[str, Any]] = {}
-        for (source, target) in edge_weights:
-            weight = edge_weights[(source, target)]
-            out.setdefault(source, {})[target] = weight
-            sym.setdefault(source, {})[target] = weight
+        for (source, target), weight in directed_weights.items():
+            out.setdefault(source, {})[target] = (
+                out.setdefault(source, {}).get(target, 0) + weight
+            )
+            sym.setdefault(source, {})[target] = (
+                sym.setdefault(source, {}).get(target, 0) + weight
+            )
             if source != target:
-                sym.setdefault(target, {})[source] = weight
+                sym.setdefault(target, {})[source] = (
+                    sym.setdefault(target, {}).get(source, 0) + weight
+                )
+        for (source, target), weight in undirected_weights.items():
+            out.setdefault(source, {})[target] = (
+                out.setdefault(source, {}).get(target, 0) + weight
+            )
+            sym.setdefault(source, {})[target] = (
+                sym.setdefault(source, {}).get(target, 0) + weight
+            )
+            if source != target:
+                out.setdefault(target, {})[source] = (
+                    out.setdefault(target, {}).get(source, 0) + weight
+                )
+                sym.setdefault(target, {})[source] = (
+                    sym.setdefault(target, {}).get(source, 0) + weight
+                )
         nodes = sorted(sym)
         return {
             "directed": any_directed,
-            "edge_weights": edge_weights,
-            "raw_counts": raw_counts,
+            "directed_weights": directed_weights,
+            "directed_counts": directed_counts,
+            "undirected_weights": undirected_weights,
+            "undirected_counts": undirected_counts,
             "out": {node: dict(sorted(out.get(node, {}).items())) for node in nodes},
             "sym": {node: dict(sorted(sym[node].items())) for node in nodes},
             "nodes": nodes,
@@ -331,8 +375,10 @@ class GraphTool(Tool):
 
     def _run_build(self, graph: dict[str, Any]) -> dict[str, Any]:
         """Adjacency dict plus counts and isolated/self-loop/duplicate reports."""
-        edge_weights = graph["edge_weights"]
-        raw_counts = graph["raw_counts"]
+        directed_weights = graph["directed_weights"]
+        directed_counts = graph["directed_counts"]
+        undirected_weights = graph["undirected_weights"]
+        undirected_counts = graph["undirected_counts"]
         sym = graph["sym"]
 
         isolated = [
@@ -341,27 +387,45 @@ class GraphTool(Tool):
             if not any(neighbor != node for neighbor in sym[node])
         ]
         self_loops = sorted(
-            source for (source, target) in edge_weights if source == target
+            {source for (source, target) in directed_weights if source == target}
+            | {source for (source, target) in undirected_weights if source == target}
         )
+        # One merged group per (pair, direction-kind); an undirected {a, b}
+        # and a directed a->b are distinct edge groups. Deterministic order:
+        # by (source, target), undirected group before the directed one.
+        merged_groups: list[tuple[str, str, bool, int, Any]] = []
+        for (source, target), count in undirected_counts.items():
+            merged_groups.append(
+                (source, target, False, count, undirected_weights[(source, target)])
+            )
+        for (source, target), count in directed_counts.items():
+            merged_groups.append(
+                (source, target, True, count, directed_weights[(source, target)])
+            )
+        merged_groups.sort(key=lambda group: (group[0], group[1], group[2]))
         duplicates = [
             {
                 "source": source,
                 "target": target,
-                "count": raw_counts[(source, target)],
-                "weight": edge_weights[(source, target)],
+                "count": count,
+                "weight": weight,
             }
-            for (source, target) in sorted(edge_weights)
-            if raw_counts[(source, target)] > 1
+            for (source, target, is_directed, count, weight) in merged_groups
+            if count > 1
         ]
+        # Direction-respecting adjacency: out-edges per node (for an
+        # undirected graph this is identical to the symmetric view; for a
+        # directed graph it keeps each direction's own merged weight).
         adjacency = {
-            node: dict(sorted(sym[node].items())) for node in graph["nodes"]
+            node: dict(sorted(graph["out"].get(node, {}).items()))
+            for node in graph["nodes"]
         }
         return {
             "mode": "build",
             "directed": graph["directed"],
             "adjacency": adjacency,
             "node_count": len(graph["nodes"]),
-            "edge_count": len(edge_weights),
+            "edge_count": len(merged_groups),
             "isolated_nodes": isolated,
             "self_loops": self_loops,
             "duplicate_edges": duplicates,
