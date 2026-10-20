@@ -1,9 +1,12 @@
 # !/usr/bin/env python3
-# -*- coding:utf-8 -*-
 
 # @Time    : 2026/10/18
 # @Author  : lljjcc426
 # @FileName: critic_agent_template.py
+
+# Configuration validation raises descriptive ValueError messages.
+# ruff: noqa: TRY003
+
 from queue import Queue
 
 from agentuniverse.agent.input_object import InputObject
@@ -26,7 +29,7 @@ class CriticAgentTemplate(AgentTemplate):
         Returns:
             list[str]: List of input keys
         """
-        return ['input', 'proposal_result', 'round_index', 'execution_context']
+        return ["input", "proposal_result", "round_index", "execution_context"]
 
     def output_keys(self) -> list[str]:
         """Define output keys produced by this agent.
@@ -34,7 +37,7 @@ class CriticAgentTemplate(AgentTemplate):
         Returns:
             list[str]: List of output keys ['output']
         """
-        return ['output']
+        return ["output"]
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         """Parse and prepare input for the critic agent.
@@ -46,16 +49,16 @@ class CriticAgentTemplate(AgentTemplate):
         Returns:
             dict: Updated agent input dictionary.
         """
-        agent_input['input'] = input_object.get_data('input')
-        agent_input['round_index'] = input_object.get_data('round_index', 1)
+        agent_input["input"] = input_object.get_data("input")
+        agent_input["round_index"] = input_object.get_data("round_index", 1)
 
         # Execution context
-        execution_context = input_object.get_data('execution_context', {})
-        agent_input['user_goal'] = execution_context.get('user_goal', '')
+        execution_context = input_object.get_data("execution_context", {})
+        agent_input["user_goal"] = execution_context.get("user_goal", "")
 
         # Proposal from the current round if available
-        proposal_result = input_object.get_data('proposal_result', None)
-        agent_input['proposal_result'] = proposal_result.get_data('output') if proposal_result else ''
+        proposal_result = input_object.get_data("proposal_result", None)
+        agent_input["proposal_result"] = proposal_result.get_data("output") if proposal_result else ""
 
         return agent_input
 
@@ -68,18 +71,18 @@ class CriticAgentTemplate(AgentTemplate):
         Returns:
             dict: Parsed result with output key.
         """
-        final_result = dict()
-        output = agent_result.get('output', '')
-        final_result['output'] = output
+        final_result = {}
+        output = agent_result.get("output", "")
+        final_result["output"] = output
 
         # Add critic agent log info
-        round_index = agent_result.get('round_index', 1)
+        round_index = agent_result.get("round_index", 1)
         logger_info = f"\nCritic agent round {round_index} result:\n{output}\n"
         LOGGER.info(logger_info)
 
         return final_result
 
-    def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'CriticAgentTemplate':
+    def initialize_by_component_configer(self, component_configer: AgentConfiger) -> "CriticAgentTemplate":
         """Initialize the critic agent template by component configer.
 
         Args:
@@ -89,7 +92,7 @@ class CriticAgentTemplate(AgentTemplate):
             CriticAgentTemplate: Initialized template instance.
         """
         super().initialize_by_component_configer(component_configer)
-        self.prompt_version = self.agent_model.profile.get('prompt_version', 'default_critic_agent.cn')
+        self.prompt_version = self.agent_model.profile.get("prompt_version", "default_critic_agent.cn")
         self.validate_required_params()
         return self
 
@@ -100,9 +103,11 @@ class CriticAgentTemplate(AgentTemplate):
             ValueError: If llm_name is not set.
         """
         if not self.llm_name:
-            raise ValueError(f'llm_name of the agent {self.agent_model.info.get("name")}'
-                             f' is not set, please go to the agent profile configuration'
-                             ' and set the `name` attribute in the `llm_model`.')
+            raise ValueError(
+                f'llm_name of the agent {self.agent_model.info.get("name")}'
+                f' is not set, please go to the agent profile configuration'
+                ' and set the `name` attribute in the `llm_model`.'
+            )
 
     def add_output_stream(self, output_stream: Queue, agent_output: str) -> None:
         """Add output to the stream for real-time feedback.
@@ -114,8 +119,6 @@ class CriticAgentTemplate(AgentTemplate):
         if not output_stream:
             return
         # Add critic agent final result into the stream output
-        stream_output(output_stream,
-                      {"data": {
-                          'output': agent_output,
-                          "agent_info": self.agent_model.info
-                      }, "type": "critic"})
+        stream_output(
+            output_stream, {"data": {"output": agent_output, "agent_info": self.agent_model.info}, "type": "critic"}
+        )

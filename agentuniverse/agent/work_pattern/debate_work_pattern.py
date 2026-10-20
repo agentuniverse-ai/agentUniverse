@@ -1,9 +1,12 @@
 # !/usr/bin/env python3
-# -*- coding:utf-8 -*-
 
 # @Time    : 2026/10/18
 # @Author  : lljjcc426
 # @FileName: debate_work_pattern.py
+
+# Configuration validation raises descriptive ValueError messages.
+# ruff: noqa: TRY003
+
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.critic_agent_template import CriticAgentTemplate
@@ -43,61 +46,45 @@ class DebateWorkPattern(WorkPattern):
         """
         self._validate_work_pattern_members()
 
-        debate_results = list()
-        debate_rounds = work_pattern_input.get('debate_rounds', 2)
-        consensus_threshold = work_pattern_input.get('consensus_threshold', 60)
+        debate_results = []
+        debate_rounds = work_pattern_input.get("debate_rounds", 2)
+        consensus_threshold = work_pattern_input.get("consensus_threshold", 60)
 
         # Track overall execution state
         execution_context = {
-            'user_goal': work_pattern_input.get('input'),
-            'debate_rounds': debate_rounds,
-            'rounds_completed': 0,
-            'consensus_reached': False,
-            'final_score': None
+            "user_goal": work_pattern_input.get("input"),
+            "debate_rounds": debate_rounds,
+            "rounds_completed": 0,
+            "consensus_reached": False,
+            "final_score": None,
         }
 
         for round_index in range(debate_rounds):
             debate_round_result = {}
 
             # Proposer agent drafts or revises the proposal
-            self._invoke_proposer(
-                input_object,
-                work_pattern_input,
-                round_index,
-                execution_context,
-                debate_round_result
-            )
+            self._invoke_proposer(input_object, work_pattern_input, round_index, execution_context, debate_round_result)
 
             # Critic agent reviews the proposal and provides feedback
-            self._invoke_critic(
-                input_object,
-                work_pattern_input,
-                round_index,
-                execution_context,
-                debate_round_result
-            )
+            self._invoke_critic(input_object, work_pattern_input, round_index, execution_context, debate_round_result)
 
             # Judge agent scores the round and issues a verdict
             judge_result = self._invoke_judge(
-                input_object,
-                work_pattern_input,
-                round_index,
-                execution_context,
-                debate_round_result
+                input_object, work_pattern_input, round_index, execution_context, debate_round_result
             )
 
-            execution_context['rounds_completed'] = round_index + 1
-            score = judge_result.get('score', 0)
-            execution_context['final_score'] = score
+            execution_context["rounds_completed"] = round_index + 1
+            score = judge_result.get("score", 0)
+            execution_context["final_score"] = score
 
             debate_results.append(debate_round_result)
 
             # Stop early once the judge confirms consensus
             if score is not None and score >= consensus_threshold:
-                execution_context['consensus_reached'] = True
+                execution_context["consensus_reached"] = True
                 break
 
-        return {'result': debate_results, 'execution_context': execution_context}
+        return {"result": debate_results, "execution_context": execution_context}
 
     async def async_invoke(self, input_object: InputObject, work_pattern_input: dict, **kwargs) -> dict:
         """Execute debate pattern asynchronously.
@@ -114,17 +101,17 @@ class DebateWorkPattern(WorkPattern):
         """
         self._validate_work_pattern_members()
 
-        debate_results = list()
-        debate_rounds = work_pattern_input.get('debate_rounds', 2)
-        consensus_threshold = work_pattern_input.get('consensus_threshold', 60)
+        debate_results = []
+        debate_rounds = work_pattern_input.get("debate_rounds", 2)
+        consensus_threshold = work_pattern_input.get("consensus_threshold", 60)
 
         # Track overall execution state
         execution_context = {
-            'user_goal': work_pattern_input.get('input'),
-            'debate_rounds': debate_rounds,
-            'rounds_completed': 0,
-            'consensus_reached': False,
-            'final_score': None
+            "user_goal": work_pattern_input.get("input"),
+            "debate_rounds": debate_rounds,
+            "rounds_completed": 0,
+            "consensus_reached": False,
+            "final_score": None,
         }
 
         for round_index in range(debate_rounds):
@@ -132,144 +119,162 @@ class DebateWorkPattern(WorkPattern):
 
             # Proposer agent drafts or revises the proposal
             await self._async_invoke_proposer(
-                input_object,
-                work_pattern_input,
-                round_index,
-                execution_context,
-                debate_round_result
+                input_object, work_pattern_input, round_index, execution_context, debate_round_result
             )
 
             # Critic agent reviews the proposal and provides feedback
             await self._async_invoke_critic(
-                input_object,
-                work_pattern_input,
-                round_index,
-                execution_context,
-                debate_round_result
+                input_object, work_pattern_input, round_index, execution_context, debate_round_result
             )
 
             # Judge agent scores the round and issues a verdict
             judge_result = await self._async_invoke_judge(
-                input_object,
-                work_pattern_input,
-                round_index,
-                execution_context,
-                debate_round_result
+                input_object, work_pattern_input, round_index, execution_context, debate_round_result
             )
 
-            execution_context['rounds_completed'] = round_index + 1
-            score = judge_result.get('score', 0)
-            execution_context['final_score'] = score
+            execution_context["rounds_completed"] = round_index + 1
+            score = judge_result.get("score", 0)
+            execution_context["final_score"] = score
 
             debate_results.append(debate_round_result)
 
             # Stop early once the judge confirms consensus
             if score is not None and score >= consensus_threshold:
-                execution_context['consensus_reached'] = True
+                execution_context["consensus_reached"] = True
                 break
 
-        return {'result': debate_results, 'execution_context': execution_context}
+        return {"result": debate_results, "execution_context": execution_context}
 
-    def _invoke_proposer(self, input_object: InputObject, agent_input: dict,
-                         round_index: int, execution_context: dict,
-                         debate_round_result: dict) -> dict:
+    def _invoke_proposer(
+        self,
+        input_object: InputObject,
+        agent_input: dict,
+        round_index: int,
+        execution_context: dict,
+        debate_round_result: dict,
+    ) -> dict:
         """Invoke proposer agent synchronously."""
         if not self.proposer:
-            proposal_result = OutputObject({"output": agent_input.get('input')})
+            proposal_result = OutputObject({"output": agent_input.get("input")})
         else:
             proposer_input = {
                 **input_object.to_dict(),
-                'round_index': round_index + 1,
-                'execution_context': execution_context
+                "round_index": round_index + 1,
+                "execution_context": execution_context,
             }
             proposal_result = self.proposer.run(**proposer_input)
-            debate_round_result['proposal_result'] = proposal_result.to_dict()
-        input_object.add_data('proposal_result', proposal_result)
+            debate_round_result["proposal_result"] = proposal_result.to_dict()
+        input_object.add_data("proposal_result", proposal_result)
         return proposal_result.to_dict()
 
-    async def _async_invoke_proposer(self, input_object: InputObject, agent_input: dict,
-                                     round_index: int, execution_context: dict,
-                                     debate_round_result: dict) -> dict:
+    async def _async_invoke_proposer(
+        self,
+        input_object: InputObject,
+        agent_input: dict,
+        round_index: int,
+        execution_context: dict,
+        debate_round_result: dict,
+    ) -> dict:
         """Invoke proposer agent asynchronously."""
         if not self.proposer:
-            proposal_result = OutputObject({"output": agent_input.get('input')})
+            proposal_result = OutputObject({"output": agent_input.get("input")})
         else:
             proposer_input = {
                 **input_object.to_dict(),
-                'round_index': round_index + 1,
-                'execution_context': execution_context
+                "round_index": round_index + 1,
+                "execution_context": execution_context,
             }
             proposal_result = await self.proposer.async_run(**proposer_input)
-            debate_round_result['proposal_result'] = proposal_result.to_dict()
-        input_object.add_data('proposal_result', proposal_result)
+            debate_round_result["proposal_result"] = proposal_result.to_dict()
+        input_object.add_data("proposal_result", proposal_result)
         return proposal_result.to_dict()
 
-    def _invoke_critic(self, input_object: InputObject, agent_input: dict,
-                       round_index: int, execution_context: dict,
-                       debate_round_result: dict) -> dict:
+    def _invoke_critic(
+        self,
+        input_object: InputObject,
+        agent_input: dict,
+        round_index: int,
+        execution_context: dict,
+        debate_round_result: dict,
+    ) -> dict:
         """Invoke critic agent synchronously."""
         if not self.critic:
             critic_result = OutputObject({"output": ""})
         else:
             critic_input = {
                 **input_object.to_dict(),
-                'round_index': round_index + 1,
-                'execution_context': execution_context
+                "round_index": round_index + 1,
+                "execution_context": execution_context,
             }
             critic_result = self.critic.run(**critic_input)
-            debate_round_result['critic_result'] = critic_result.to_dict()
-        input_object.add_data('critic_result', critic_result)
+            debate_round_result["critic_result"] = critic_result.to_dict()
+        input_object.add_data("critic_result", critic_result)
         return critic_result.to_dict()
 
-    async def _async_invoke_critic(self, input_object: InputObject, agent_input: dict,
-                                   round_index: int, execution_context: dict,
-                                   debate_round_result: dict) -> dict:
+    async def _async_invoke_critic(
+        self,
+        input_object: InputObject,
+        agent_input: dict,
+        round_index: int,
+        execution_context: dict,
+        debate_round_result: dict,
+    ) -> dict:
         """Invoke critic agent asynchronously."""
         if not self.critic:
             critic_result = OutputObject({"output": ""})
         else:
             critic_input = {
                 **input_object.to_dict(),
-                'round_index': round_index + 1,
-                'execution_context': execution_context
+                "round_index": round_index + 1,
+                "execution_context": execution_context,
             }
             critic_result = await self.critic.async_run(**critic_input)
-            debate_round_result['critic_result'] = critic_result.to_dict()
-        input_object.add_data('critic_result', critic_result)
+            debate_round_result["critic_result"] = critic_result.to_dict()
+        input_object.add_data("critic_result", critic_result)
         return critic_result.to_dict()
 
-    def _invoke_judge(self, input_object: InputObject, agent_input: dict,
-                      round_index: int, execution_context: dict,
-                      debate_round_result: dict) -> dict:
+    def _invoke_judge(
+        self,
+        input_object: InputObject,
+        agent_input: dict,
+        round_index: int,
+        execution_context: dict,
+        debate_round_result: dict,
+    ) -> dict:
         """Invoke judge agent synchronously."""
         if not self.judge:
             judge_result = OutputObject({"output": {}, "score": 0, "suggestion": ""})
         else:
             judge_input = {
                 **input_object.to_dict(),
-                'round_index': round_index + 1,
-                'execution_context': execution_context
+                "round_index": round_index + 1,
+                "execution_context": execution_context,
             }
             judge_result = self.judge.run(**judge_input)
-            debate_round_result['judge_result'] = judge_result.to_dict()
-        input_object.add_data('judge_result', judge_result)
+            debate_round_result["judge_result"] = judge_result.to_dict()
+        input_object.add_data("judge_result", judge_result)
         return judge_result.to_dict()
 
-    async def _async_invoke_judge(self, input_object: InputObject, agent_input: dict,
-                                  round_index: int, execution_context: dict,
-                                  debate_round_result: dict) -> dict:
+    async def _async_invoke_judge(
+        self,
+        input_object: InputObject,
+        agent_input: dict,
+        round_index: int,
+        execution_context: dict,
+        debate_round_result: dict,
+    ) -> dict:
         """Invoke judge agent asynchronously."""
         if not self.judge:
             judge_result = OutputObject({"output": {}, "score": 0, "suggestion": ""})
         else:
             judge_input = {
                 **input_object.to_dict(),
-                'round_index': round_index + 1,
-                'execution_context': execution_context
+                "round_index": round_index + 1,
+                "execution_context": execution_context,
             }
             judge_result = await self.judge.async_run(**judge_input)
-            debate_round_result['judge_result'] = judge_result.to_dict()
-        input_object.add_data('judge_result', judge_result)
+            debate_round_result["judge_result"] = judge_result.to_dict()
+        input_object.add_data("judge_result", judge_result)
         return judge_result.to_dict()
 
     def _validate_work_pattern_members(self):
@@ -293,7 +298,7 @@ class DebateWorkPattern(WorkPattern):
         debate_work_pattern_instance = self.__class__()
         debate_work_pattern_instance.name = self.name
         debate_work_pattern_instance.description = self.description
-        for key in ['proposer', 'critic', 'judge']:
+        for key in ["proposer", "critic", "judge"]:
             if key in kwargs:
                 setattr(debate_work_pattern_instance, key, kwargs[key])
         return debate_work_pattern_instance
