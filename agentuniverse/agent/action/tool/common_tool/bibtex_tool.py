@@ -21,7 +21,11 @@ directly and exposes four modes:
   (``"..."`` — a brace group inside quotes protects a literal ``"``),
   bare numbers, or ``#``-concatenations of those parts; ``@string``
   macros (case-insensitive names) are expanded wherever they are
-  referenced later in the file. ``@comment`` and ``@preamble`` blocks
+  referenced later in the file, and the twelve month macros
+  ``jan``..``dec`` are predefined to their full English month names
+  (as every standard BibTeX style defines them) so the ubiquitous
+  ``month = jan`` works out of the box — an explicit ``@string``
+  overrides a month default. ``@comment`` and ``@preamble`` blocks
   are skipped, as is any text between entries — including an
   ``@word`` that is not followed by ``{`` or ``(`` (an email address
   in comment text, for example), which BibTeX itself likewise skips.
@@ -31,9 +35,12 @@ directly and exposes four modes:
   (case-insensitive, brace depth 0, so ``{Barnes and Noble}`` stays
   one person), and each person honours both the ``Last, First`` order
   (including the ``Last, Jr, First`` three-comma form) and the
-  ``First Last`` order — in the latter the final whitespace token is
-  taken as the last name, and a lone token is treated as the last
-  name (typical for braced organisation names).
+  ``First von Last`` order with BibTeX's von rule — in the latter
+  the last name starts at the first token beginning with a lowercase
+  letter (``Ludwig van Beethoven`` → last ``van Beethoven``), a
+  brace-protected token never counts as a von particle, and with no
+  von particle the final token is the last name; a lone token is
+  treated as the last name (typical for braced organisation names).
 * ``summary`` — entry count, per-type counts, the numeric year range,
   and one ``"Author et al., Year, Title (venue)"`` line per entry
   (first author's last name plus ``et al.`` when there are several
@@ -74,6 +81,25 @@ _NUMBER_RE = re.compile(r"[0-9]+")
 _YEAR_RE = re.compile(r"\d{4}")
 _WHITESPACE_RUN_RE = re.compile(r"\s+")
 
+# The twelve month macros every standard BibTeX style defines (jan =
+# "January" ... dec = "December"). Real .bib files write `month = jan`
+# ubiquitously, so the parser seeds them alongside @string definitions;
+# an explicit @string{jan = ...} in the file overrides the default.
+_MONTH_MACROS: dict[str, str] = {
+    "jan": "January",
+    "feb": "February",
+    "mar": "March",
+    "apr": "April",
+    "may": "May",
+    "jun": "June",
+    "jul": "July",
+    "aug": "August",
+    "sep": "September",
+    "oct": "October",
+    "nov": "November",
+    "dec": "December",
+}
+
 # Citation-key characters: everything up to whitespace, ',', '{', '}',
 # '(', ')', '"', '#' or '='.
 _CITATION_KEY_STOP = set(",{}()\"" + _WHITESPACE + "#=")
@@ -96,7 +122,9 @@ class _BibtexScanner:
         self.text = text
         self.n = len(text)
         self.pos = 0
-        self.macros: dict[str, str] = {}
+        # Month macros are predefined (BibTeX styles define them all);
+        # @string definitions in the file extend and override these.
+        self.macros: dict[str, str] = dict(_MONTH_MACROS)
         self.entries: list[dict[str, Any]] = []
         self._seen_keys: set[str] = set()
 
@@ -360,31 +388,36 @@ class _BibtexScanner:
                 parts.append(self._read_braced())
             elif ch == '"':
                 parts.append(self._read_quoted())
-            elif ch is not None and ch.isdigit():
-                match = _NUMBER_RE.match(self.text, self.pos)
-                parts.append(match.group(0))
-                self.pos = match.end()
-            elif ch is not None and ch.isalpha():
-                match = _MACRO_NAME_RE.match(self.text, self.pos)
-                name = match.group(0)
-                macro = self.macros.get(name.lower())
-                if macro is None:
-                    self._fail(
-                        "undefined_macro",
-                        f"undefined @string macro {name!r} — define it "
-                        f"with @string{{{name} = ...}} before it is "
-                        f"referenced",
-                        self.pos,
-                    )
-                parts.append(macro)
-                self.pos = match.end()
             else:
-                self._fail(
-                    "syntax",
-                    f"expected a field value ({{...}}, \"...\", number "
-                    f"or macro name) but got {ch!r}",
-                    self.pos,
-                )
+                # Match the token regexes directly (never str.isdigit /
+                # str.isalpha, which are True for non-ASCII characters
+                # like '²' or '中' that the BibTeX token grammar then
+                # cannot consume): bare ASCII digits, else a macro name.
+                match = _NUMBER_RE.match(self.text, self.pos)
+                if match is not None:
+                    parts.append(match.group(0))
+                    self.pos = match.end()
+                else:
+                    match = _MACRO_NAME_RE.match(self.text, self.pos)
+                    if match is None:
+                        self._fail(
+                            "syntax",
+                            f"expected a field value ({{...}}, \"...\", "
+                            f"number or macro name) but got {ch!r}",
+                            self.pos,
+                        )
+                    name = match.group(0)
+                    macro = self.macros.get(name.lower())
+                    if macro is None:
+                        self._fail(
+                            "undefined_macro",
+                            f"undefined @string macro {name!r} — define "
+                            f"it with @string{{{name} = ...}} before it "
+                            f"is referenced",
+                            self.pos,
+                        )
+                    parts.append(macro)
+                    self.pos = match.end()
             self._skip_ws()
             if self._peek() == "#":
                 self.pos += 1
@@ -466,8 +499,10 @@ class BibtexTool(Tool):
         ".bib bibliography text into entries with type, citation key and "
         "fields (mode='parse', with brace-balanced values preserving "
         "nested braces, quoted values, '#'-concatenation and @string "
-        "macro expansion, @comment/@preamble skipped, author/editor "
-        "split into person lists), summarise a file (mode='summary', "
+        "macro expansion incl. predefined month macros jan..dec, "
+        "@comment/@preamble skipped, author/editor split into person "
+        "lists with BibTeX's Last, First and First von Last name "
+        "orders), summarise a file (mode='summary', "
         "with counts by type, year range and per-entry one-liners), "
         "filter entries (mode='filter', with entry_type / query "
         "substring / year range) and list citation keys in order "
@@ -797,6 +832,16 @@ class BibtexTool(Tool):
         parts.append("".join(buffer))
         return parts
 
+    @staticmethod
+    def _is_von_token(token: str) -> bool:
+        """True when a name token is a BibTeX ``von`` particle.
+
+        A von word starts with an ASCII lowercase letter; a
+        brace-protected token (``{van}``) starts with ``{`` and is
+        never a von word, exactly as in BibTeX.
+        """
+        return bool(token) and "a" <= token[0] <= "z"
+
     @classmethod
     def split_persons(cls, value: str) -> list[dict[str, str]]:
         """Split a name field into person objects.
@@ -806,8 +851,14 @@ class BibtexTool(Tool):
         one person). Each person is parsed into ``first`` / ``last`` /
         ``jr`` / ``raw``: two or more comma-separated parts mean
         ``Last, First`` (three parts: ``Last, Jr, First``); without a
-        top-level comma the final whitespace token is the last name
-        (``First Last``) and a lone token is a last name only.
+        top-level comma the name is in ``First von Last`` order with
+        BibTeX's von rule — the last name starts at the first token
+        that begins with a lowercase letter (``Ludwig van Beethoven``
+        → first ``Ludwig``, last ``van Beethoven``); with no such
+        token the final token is the last name and a lone token is a
+        last name only. Brace-protected tokens never count as von
+        particles (``{de la Cruz}, Maria`` keeps ``{de la Cruz}`` as
+        an unsplit last name).
         """
         segments: list[list[str]] = []
         current: list[str] = []
@@ -831,7 +882,25 @@ class BibtexTool(Tool):
                 elif len(tokens) == 1:
                     first, last, jr = "", tokens[0], ""
                 else:
-                    first, last, jr = " ".join(tokens[:-1]), tokens[-1], ""
+                    # First von Last: the last name absorbs the von
+                    # particles, so it starts at the first lowercase
+                    # (von) token — except the final token, which is
+                    # always part of the last name.
+                    von_index = next(
+                        (
+                            index
+                            for index, token in enumerate(tokens[:-1])
+                            if cls._is_von_token(token)
+                        ),
+                        None,
+                    )
+                    if von_index is None:
+                        first = " ".join(tokens[:-1])
+                        last = tokens[-1]
+                    else:
+                        first = " ".join(tokens[:von_index])
+                        last = " ".join(tokens[von_index:])
+                    jr = ""
             elif len(parts) == 2:
                 last, first, jr = parts[0], parts[1], ""
             else:

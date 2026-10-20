@@ -648,15 +648,23 @@ field values may be brace-delimited with nested braces preserved
 verbatim (`{B}ib{T}e{X}` capitalisation protection survives), quoted
 (a brace group inside `"..."` protects a literal quote), bare
 numbers, or `#`-concatenations of those, and `@string` macros
-(case-insensitive) are expanded wherever referenced later;
-`@comment` and `@preamble` blocks and any inter-entry text
-(including email-looking `@word`s) are skipped. The name fields
+(case-insensitive) are expanded wherever referenced later; the twelve
+month macros `jan`..`dec` are predefined to their full English month
+names (as every standard BibTeX style defines them), so the
+ubiquitous `month = jan` works out of the box, and an explicit
+`@string` overrides a month default. `@comment` and `@preamble`
+blocks and any inter-entry text (including email-looking `@word`s)
+are skipped. The name fields
 `author` and `editor` become lists of person objects
 `{"first", "last", "jr", "raw"}`: values are split on the standalone
 word `and` at brace depth 0 (`{Barnes and Noble}` stays one person),
 and each person honours both `Last, First` (including `Last, Jr,
-First`) and `First Last` order — the final token is taken as the
-last name. `summary` returns the entry count, per-type counts, the
+First`) and `First von Last` order with BibTeX's von rule — the last
+name starts at the first token beginning with a lowercase letter
+(`Ludwig van Beethoven` → last `van Beethoven`), a brace-protected
+token never counts as a von particle, and with no von particle the
+final token is the last name. `summary` returns the entry count,
+per-type counts, the
 four-digit year range, and one `Author et al., Year, Title (venue)`
 line per entry (venue = `journal` else `booktitle` else
 `publisher`; missing parts are omitted; entries without authors use

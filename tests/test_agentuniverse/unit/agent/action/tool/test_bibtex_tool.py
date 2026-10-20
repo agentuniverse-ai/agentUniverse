@@ -562,6 +562,141 @@ class BibtexToolValidationTest(unittest.TestCase):
         self.assert_invalid(mode="filter", bib=SAMPLE_BIB, year_to=1.5)
 
 
+class BibtexToolRegressionTest(unittest.TestCase):
+    """Regressions found by the hostile differential review (PR #3742)."""
+
+    def setUp(self) -> None:
+        self.tool = BibtexTool()
+
+    def test_unbraced_non_ascii_value_is_structured_error(self) -> None:
+        # str.isalpha()/str.isdigit() are True for '中' and '²', but the
+        # BibTeX token grammar cannot consume them; this used to raise
+        # AttributeError instead of returning a structured error.
+        for bib in (
+            "@article{c1, title = 中文, year = 2000}",
+            "@article{c2, volume = ²³, year = 2000}",
+            '@article{c3, note = Édition spéciale, year = 2000}',
+        ):
+            with self.subTest(bib=bib):
+                result = self.tool.execute(mode="parse", bib=bib)
+                self.assertEqual(result["error"]["type"], "syntax")
+                self.assertIn(
+                    "expected a field value", result["error"]["message"]
+                )
+
+    def test_unbraced_cjk_error_position(self) -> None:
+        bib = "@article{p, title = 中文, year = 2000}"
+        offset = bib.index("中文")
+        result = self.tool.execute(mode="parse", bib=bib)
+        self.assertEqual(
+            result["error"]["position"], expected_position(bib, offset)
+        )
+
+    def test_braced_cjk_value_parses_verbatim(self) -> None:
+        bib = "@article{cj, title = {中文 标题}, year = 2000}"
+        fields = self.tool.execute(mode="parse", bib=bib)["entries"][0][
+            "fields"
+        ]
+        self.assertEqual(fields["title"], "中文 标题")
+
+    def test_month_macros_are_predefined(self) -> None:
+        # Every standard BibTeX style defines jan..dec; a parser that
+        # hard-errors on `month = jan` rejects most real-world .bib files.
+        bib = (
+            "@article{m1, month = jan, year = 2000}\n"
+            "@article{m2, month = AUG, year = 2001}\n"
+            "@article{m3, month = Dec, year = 2002}\n"
+        )
+        entries = self.tool.execute(mode="parse", bib=bib)["entries"]
+        self.assertEqual(
+            [e["fields"]["month"] for e in entries],
+            ["January", "August", "December"],
+        )
+
+    def test_month_macro_used_in_concatenation(self) -> None:
+        bib = '@article{m4, month = feb # "uary", year = 2000}'
+        fields = self.tool.execute(mode="parse", bib=bib)["entries"][0][
+            "fields"
+        ]
+        self.assertEqual(fields["month"], "Februaryuary")
+
+    def test_month_macro_overridden_by_string(self) -> None:
+        bib = '@string{jan = "Jan."}\n@article{m5, month = jan, year = 1}'
+        fields = self.tool.execute(mode="parse", bib=bib)["entries"][0][
+            "fields"
+        ]
+        self.assertEqual(fields["month"], "Jan.")
+
+    def test_non_month_undefined_macro_still_errors(self) -> None:
+        bib = "@article{m6, month = january, year = 2000}"
+        result = self.tool.execute(mode="parse", bib=bib)
+        self.assertEqual(result["error"]["type"], "undefined_macro")
+
+    def test_first_von_last_order(self) -> None:
+        # Canonical BibTeX examples of the von rule: the last name
+        # starts at the first lowercase-initial token.
+        cases = [
+            ("Ludwig van Beethoven", "Ludwig", "van Beethoven"),
+            ("Maria von Trapp", "Maria", "von Trapp"),
+            (
+                "Jean de la Fontaine du Bois Joli",
+                "Jean",
+                "de la Fontaine du Bois Joli",
+            ),
+            (
+                "Charles Louis Xavier Joseph de la Vall{\\'e}e Poussin",
+                "Charles Louis Xavier Joseph",
+                "de la Vall{\\'e}e Poussin",
+            ),
+            # All-lowercase name: the last word stays in the last name.
+            ("jean de la fontaine", "", "jean de la fontaine"),
+            # No von particle: final token is the last name.
+            ("Leslie Lamport", "Leslie", "Lamport"),
+        ]
+        for value, first, last in cases:
+            with self.subTest(value=value):
+                bib = "@book{v, author = {%s}, year = 2000}" % value
+                fields = self.tool.execute(mode="parse", bib=bib)["entries"][
+                    0
+                ]["fields"]
+                self.assertEqual(fields["author"][0]["first"], first)
+                self.assertEqual(fields["author"][0]["last"], last)
+
+    def test_braced_von_token_is_protected(self) -> None:
+        # A brace-protected token never counts as a von particle.
+        bib = "@book{bp, author = {{de la Cruz}, Maria}, year = 2000}"
+        fields = self.tool.execute(mode="parse", bib=bib)["entries"][0][
+            "fields"
+        ]
+        self.assertEqual(fields["author"][0]["last"], "{de la Cruz}")
+        self.assertEqual(fields["author"][0]["first"], "Maria")
+
+    def test_von_comma_forms_unchanged(self) -> None:
+        bib = (
+            "@book{vc, author = {van Beethoven, Ludwig and "
+            "della Robbia, Luca}, year = 2000}"
+        )
+        fields = self.tool.execute(mode="parse", bib=bib)["entries"][0][
+            "fields"
+        ]
+        self.assertEqual(
+            fields["author"],
+            [
+                person("Ludwig", "van Beethoven", "van Beethoven, Ludwig"),
+                person("Luca", "della Robbia", "della Robbia, Luca"),
+            ],
+        )
+
+    def test_von_last_name_used_in_summary_label(self) -> None:
+        bib = "@book{sv, author = {Ludwig van Beethoven and Jane Roe}, " \
+              "title = {Symphonies}, year = 1824}"
+        result = self.tool.execute(mode="summary", bib=bib)
+        self.assertEqual(
+            result["entries"],
+            ["van Beethoven et al., 1824, Symphonies"],
+        )
+
+
 class BibtexToolPackagingTest(unittest.TestCase):
     """Class defaults and package registration."""
 
