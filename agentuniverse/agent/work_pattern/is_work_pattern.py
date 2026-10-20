@@ -72,11 +72,9 @@ class ISWorkPattern(WorkPattern):
                 checkpoint_result
             )
 
-            # Check if correction is needed
+            # Check if correction is needed and carry the corrected content forward.
             needs_correction = supervision_result.get('needs_correction', False)
-
             if needs_correction and execution_context['corrections_made'] < max_corrections:
-                # Execute correction
                 correction_result = self._invoke_correction(
                     input_object,
                     supervision_result,
@@ -85,14 +83,20 @@ class ISWorkPattern(WorkPattern):
                     checkpoint_count,
                     execution_context
                 )
-                execution_context['corrections_made'] += 1
+                implementation_result = self._adopt_correction(
+                    input_object,
+                    checkpoint_result,
+                    execution_context,
+                    implementation_result,
+                    correction_result
+                )
 
             # Store checkpoint history
             execution_context['checkpoint_history'].append({
                 'checkpoint': checkpoint_idx,
                 'implementation': implementation_result,
                 'supervision': supervision_result,
-                'corrected': needs_correction
+                'corrected': checkpoint_result.get('corrected', False)
             })
 
             is_results.append(checkpoint_result)
@@ -146,11 +150,9 @@ class ISWorkPattern(WorkPattern):
                 checkpoint_result
             )
 
-            # Check if correction is needed
+            # Check if correction is needed and carry the corrected content forward.
             needs_correction = supervision_result.get('needs_correction', False)
-
             if needs_correction and execution_context['corrections_made'] < max_corrections:
-                # Execute correction
                 correction_result = await self._async_invoke_correction(
                     input_object,
                     supervision_result,
@@ -159,14 +161,20 @@ class ISWorkPattern(WorkPattern):
                     checkpoint_count,
                     execution_context
                 )
-                execution_context['corrections_made'] += 1
+                implementation_result = self._adopt_correction(
+                    input_object,
+                    checkpoint_result,
+                    execution_context,
+                    implementation_result,
+                    correction_result
+                )
 
             # Store checkpoint history
             execution_context['checkpoint_history'].append({
                 'checkpoint': checkpoint_idx,
                 'implementation': implementation_result,
                 'supervision': supervision_result,
-                'corrected': needs_correction
+                'corrected': checkpoint_result.get('corrected', False)
             })
 
             is_results.append(checkpoint_result)
@@ -242,6 +250,21 @@ class ISWorkPattern(WorkPattern):
             checkpoint_result['supervision_result'] = supervision_result.to_dict()
         input_object.add_data('supervision_result', supervision_result)
         return supervision_result.to_dict()
+
+    def _adopt_correction(self, input_object: InputObject, checkpoint_result: dict,
+                          execution_context: dict, implementation_result: dict,
+                          correction_result: dict) -> dict:
+        """Use a correction result as the content later checkpoints continue from."""
+        execution_context['corrections_made'] += 1
+        checkpoint_result['corrected'] = False
+        if not correction_result:
+            return implementation_result
+
+        checkpoint_result['implementation_result'] = correction_result
+        checkpoint_result['corrected'] = True
+        if self.implementation:
+            input_object.add_data('implementation_result', OutputObject(correction_result))
+        return correction_result
 
     def _invoke_correction(self, input_object: InputObject, supervision_result: dict,
                           checkpoint_result: dict, checkpoint_idx: int,

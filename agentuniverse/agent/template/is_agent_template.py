@@ -260,8 +260,14 @@ class ISAgentTemplate(AgentTemplate):
         # Final result
         if is_results:
             last_checkpoint = is_results[-1]
-            final_impl = last_checkpoint.get('implementation_result', {})
-            final_output = final_impl.get('checkpoint_output', '')
+            final_impl = (
+                last_checkpoint.get('correction_result')
+                or last_checkpoint.get('implementation_result', {})
+            )
+            final_output = (
+                final_impl.get('checkpoint_output', '')
+                or final_impl.get('output', '')
+            )
             output_lines.append(f"\n\n=== Final Output ===\n{final_output}")
             final_result['output'] = final_output
         else:
