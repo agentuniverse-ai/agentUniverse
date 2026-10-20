@@ -1,0 +1,6 @@
+name: 'default_yaml_reader'
+description: 'default YAML and YML reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.yaml_reader'
+  class: 'YamlReader'
