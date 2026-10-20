@@ -176,7 +176,7 @@ class ExcelTool(Tool):
                 "file_path": file_path,
                 "sheet_name": sheet.title,
                 "rows_read": len(data),
-                "columns": len(data[0]) if data else 0,
+                "columns": max((len(row) for row in data), default=0),
                 "data": data,
                 "total_rows": sheet.max_row,
                 "total_columns": sheet.max_column
