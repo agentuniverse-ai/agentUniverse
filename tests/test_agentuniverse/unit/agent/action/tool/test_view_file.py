@@ -17,7 +17,9 @@ from agentuniverse.agent.action.tool.common_tool.view_file_tool import ViewFileT
 
 
 class ViewFileToolTest(unittest.TestCase):
+    """Unit tests for ViewFileTool line-range viewing and input validation."""
     def setUp(self):
+        """Create a temporary directory with a five-line sample file and a ViewFileTool backed by it."""
         self.temp_dir = tempfile.mkdtemp()
         self.tool = ViewFileTool(base_dir=self.temp_dir)
         self.temp_file_path = os.path.join(self.temp_dir, 'test.txt')
@@ -27,9 +29,11 @@ class ViewFileToolTest(unittest.TestCase):
             temp_file.write(test_content)
 
     def tearDown(self):
+        """Remove the temporary directory created in setUp."""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_view_entire_file(self):
+        """Verify viewing a file with no range returns the full content and total line count."""
         tool_input = ToolInput({
             'file_path': self.temp_file_path
         })
@@ -44,6 +48,7 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertEqual(result['total_lines'], 5)
 
     def test_view_specific_lines(self):
+        """Verify a 1-based start/end line range returns the requested lines."""
         tool_input = ToolInput({
             'file_path': self.temp_file_path,
             'start_line': 1,
@@ -59,6 +64,7 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertEqual(result['end_line'], 2)
 
     def test_view_specific_lines_with_string_numbers(self):
+        """Verify line numbers given as strings behave like their integer equivalents."""
         tool_input = ToolInput({
             'file_path': self.temp_file_path,
             'start_line': '1',
@@ -74,6 +80,7 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertEqual(result['end_line'], 2)
 
     def test_invalid_line_number_returns_error(self):
+        """Verify a non-numeric start_line yields an error."""
         result_json = self.tool.execute(
             file_path=self.temp_file_path,
             start_line='first'
@@ -84,6 +91,7 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertIn('start_line must be an integer', result['error'])
 
     def test_fractional_line_number_returns_error(self):
+        """Verify a fractional start_line yields an error."""
         result_json = self.tool.execute(
             file_path=self.temp_file_path,
             start_line=1.9
@@ -94,6 +102,7 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertIn('start_line must be an integer', result['error'])
 
     def test_fractional_line_number_string_returns_error(self):
+        """Verify a fractional line number given as a string yields an error."""
         result_json = self.tool.execute(
             file_path=self.temp_file_path,
             start_line='1.9'
@@ -104,6 +113,7 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertIn('start_line must be an integer', result['error'])
 
     def test_boolean_line_number_returns_error(self):
+        """Verify a boolean start_line is rejected as a non-integer."""
         result_json = self.tool.execute(
             file_path=self.temp_file_path,
             start_line=True
@@ -114,6 +124,7 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertIn('start_line must be an integer', result['error'])
 
     def test_non_canonical_integer_string_returns_error(self):
+        """Verify a non-canonical integer string such as "01" is rejected."""
         result_json = self.tool.execute(
             file_path=self.temp_file_path,
             start_line='01'
@@ -124,6 +135,7 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertIn('start_line must be a canonical integer string', result['error'])
 
     def test_invalid_file_path(self):
+        """Verify a missing file yields a File not found error."""
         tool_input = ToolInput({
             'file_path': 'nonexistent/file.txt'
         })
@@ -135,6 +147,7 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertIn('File not found', result['error'])
 
     def test_reject_path_traversal(self):
+        """Verify a file path escaping the allowed directory is rejected."""
         outside_file = tempfile.NamedTemporaryFile(delete=False)
         outside_file.write(b'secret')
         outside_file.close()

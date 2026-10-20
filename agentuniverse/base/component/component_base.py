@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/14 15:35
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_base.py
 from typing import Optional
@@ -54,5 +54,5 @@ class ComponentBase(BaseModel):
     def create_copy(self):
         try:
             return self.model_copy(deep=True)
-        except:
+        except Exception:
             return self.model_copy()

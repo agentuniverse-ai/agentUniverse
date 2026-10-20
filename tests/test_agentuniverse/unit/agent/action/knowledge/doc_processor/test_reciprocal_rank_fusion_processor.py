@@ -193,6 +193,8 @@ class TestTopNAndScoreField(unittest.TestCase):
         self.assertEqual([d.text for d in out], ["a", "b"])
 
     def test_top_n_zero_returns_empty(self) -> None:
+        """Test that top n zero returns empty.
+        """
         proc = ReciprocalRankFusionProcessor(top_n=0)
         out = proc._process_docs([_doc("a"), _doc("b")])
         self.assertEqual(out, [])
