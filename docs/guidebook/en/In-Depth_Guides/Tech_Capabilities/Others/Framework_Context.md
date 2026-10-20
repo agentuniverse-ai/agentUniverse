@@ -34,3 +34,27 @@ from agentuniverse.base.context.framework_context_manager import FrameworkContex
 FrameworkContextManager().get_context("context_var", default_value=None)
 ```
 The `default_value` is `None` by default. When there is no corresponding key in the context, the `default_value` will be returned.
+
+### Restoring a Snapshot
+
+`ContextCoordinator.save_context()` captures framework variables, tracing and MCP
+session state. `recover_context(pack)` replaces the framework variable names with
+those in the saved snapshot. An empty snapshot removes all framework names from
+the receiving context. This prevents a reused worker in
+`ThreadPoolExecutorWithReturnValue` from retaining names left by an earlier task
+after the caller clears its context or submits a different set of variables.
+
+For framework variables alone, `set_all_contexts(values)` merges by default.
+Use `set_all_contexts(values, replace=True)` to remove names absent from `values`.
+Replacement binds a new name registry in the current Python context, without
+changing a parent or sibling context's registry. Names present in both contexts
+retain their `ContextVar` identity, so their existing tokens remain usable in the
+same Python context. Returned tokens reset the assigned values; they do not
+recreate names removed by replacement.
+
+```python
+manager = FrameworkContextManager()
+manager.set_context("previous_request", "old")
+manager.set_all_contexts({"request_id": "next"}, replace=True)
+assert manager.get_all_contexts() == {"request_id": "next"}
+```

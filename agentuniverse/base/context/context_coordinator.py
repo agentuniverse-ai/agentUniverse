@@ -72,6 +72,8 @@ class ContextCoordinator:
 
                 This method restores framework variables, tracing context, MCP sessions,
                 and re-activates both OpenTracing and OpenTelemetry contexts if available.
+                Framework names absent from the snapshot are removed, including when
+                the saved framework context is empty.
 
                 Args:
                     context_pack: The snapshot previously created by `save_context()`.
@@ -85,8 +87,8 @@ class ContextCoordinator:
                     >>> if token is not None:
                     ...     otel_context.detach(token)
                 """
-        for var_name, var_value in context_pack.framework_context.items():
-            FrameworkContextManager().set_context(var_name, var_value)
+        FrameworkContextManager().set_all_contexts(
+            context_pack.framework_context, replace=True)
         AuTraceManager().recover_trace(context_pack.trace_context)
         MCPSessionManager().recover_mcp_session(**context_pack.mcp_session)
         if context_pack.opentracing_span:
