@@ -310,3 +310,29 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [CausalPhraseDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/causal_phrase_detector.yaml)
+
+该组件将文本中显式陈述的因果关系抽取进文档元数据，对应 issue #258 的*知识抽取*方向。风险报告与分析文章以因果链行文——"the storm caused the outage"、"因为预算不足所以项目延期"——在入库时把这些陈述结构化，知识库便无需在检索时再调用大模型即可回答"什么导致了什么"。组件在每个句子内（与 SentenceLengthFilter 同族的保守分句器，带缩写/首字母/小数点/省略号保护）匹配一组固定的中英文因果标记，将相邻的逗号分隔子句切分为原因与结果片段，并写入元数据。它与 `DiscourseConnectiveAnalyzer` 互补：后者统计各类连接词的出现次数，本组件抽取的是实际的关系片段（原因文本、结果文本、标记、匹配区域）。检测完全基于正则与规则——纯 Python、确定性、离线、无模型调用。
+
+支持的句式（X 为原因）：英文 "X because Y"（反向）、句首 "Because X, Y"、"because of X, Y"、"due to X, Y"、"as a result of X, Y"、"X, so Y"、"Y since X"（带时间义保护）、"X leads to / led to / leading to Y"、"X results in / resulted in / resulting in Y"、"X causes / cause / caused Y"、"X (was) caused by Y"（反向）、"A, therefore B" 与 "A, (and) as a result, B"；中文 "因为X所以Y"（在 所以 处切分）、"由于X，Y"、"X导致(了)Y"、"X造成Y"、"X引起Y"、"X使得Y"、"A，因此B"。每条记录为 `{cause, effect, marker, span, direction, cause_truncated, effect_truncated}`：片段为修剪后的子句文本，超过 `span_char_limit`（默认 200）字符被截断并置位 truncated 标记；`span` 为整个匹配区域；`direction` 记录区域内的语序（"forward" 表示原因子句在前，如 "X leads to Y"；"reverse" 表示标记左侧子句是结果，如 "X because Y"），`cause`/`effect` 字段本身始终按"原因在前"规范化。精确性保护（均为文档化的启发式）：时间义 "since" 仅在其后子句含动词性 token（助动词/情态动词，或长度 >= 4 且以 "ed"/"ing" 结尾的词）时匹配，因此 "offline since 2019" 被跳过而 "since demand had collapsed" 命中；名词短语被抑制——"the cause of"/"the result of" 不会命中，"results in"/"causes" 前紧邻限定词（如 "the results in the appendix"）时按名词解读跳过；", so that ..." 目的义被跳过；引号区域（直引号/弯引号/直角引号）内的标记不会命中，因此转述语不被挖掘——缩写撇号（如 "didn't"）不会开启引号。同一句内重叠的候选按确定性规则消解（起点靠前者优先、长度长者破平），因此 "A because B, so C" 恰好产出一条关系。每个文档的元数据新增 `causal_relations`（记录列表，上限 `max_relations`，默认 50）、`causal_count` 与 `causal_density`（每百句关系数，保留两位小数）；键名设为空字符串可单独停用对应写入。文本、id 及其余元数据字段不会被修改——写入前会复制元数据映射。
+
+组件定义文件如下：
+```yaml
+name: 'causal_phrase_detector'
+description: 'extract explicit causal relation spans (cause -> effect) from document text into metadata'
+max_relations: 50             # 每文档最多写入的关系数
+span_char_limit: 200          # 原因/结果片段最大字符数；超限截断并置位标记
+relations_key: 'causal_relations'  # 关系列表的元数据键；'' 停用
+count_key: 'causal_count'     # 数量的元数据键；'' 停用
+density_key: 'causal_density' # 每百句关系数的元数据键
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.causal_phrase_detector'
+  class: 'CausalPhraseDetector'
+```
+- max_relations：每文档写入 `causal_relations` 的关系数上限，超出部分丢弃。整数，范围 [1, 10000]。
+- span_char_limit：原因/结果片段的最大字符长度，超限截断并置位 `cause_truncated` / `effect_truncated`。整数，范围 [1, 10000]。
+- relations_key：关系列表（`{cause, effect, marker, span, direction, cause_truncated, effect_truncated}` 字典）的元数据键；空值停用写入。
+- count_key：写入的关系数量的元数据键；空值停用写入。
+- density_key：每百句关系数（两位小数；无句子的文档为 0.0）的元数据键；空值停用写入。
