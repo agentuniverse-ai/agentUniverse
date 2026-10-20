@@ -74,3 +74,12 @@ demo_sqldb_wrapper:SQLDBWrapper = SQLDBWrapperManager().get_instance_obj("demo_s
 sql_database_ins = demo_sqldb_wrapper.sql_database
 sql_alchemy_engine = sql_database_ins._engine
 ```
+
+### Concurrent Initialization
+
+Concurrent first access to one wrapper's `sql_database` and `get_session()`
+initializes a single cached database/engine and session factory in that process.
+Initialization stays lazy, and a supplied `db_session` is reused directly. If
+construction raises, a later call can retry. Uninitialized component copies,
+deep copies and pickle round trips retain independent initialization guards.
+Connection/thread suitability still depends on the driver and engine/pool settings.

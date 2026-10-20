@@ -7,9 +7,11 @@
 # @FileName: sqldb_wrapper.py
 
 import json
+import threading
 from typing import Optional, Sequence, Any, Dict
 
 from langchain_community.utilities.sql_database import SQLDatabase
+from pydantic import PrivateAttr
 from sqlalchemy.orm import sessionmaker
 
 from ..base.config.application_configer.application_config_manager import (
@@ -18,6 +20,31 @@ from ..base.config.application_configer.application_config_manager import (
 from ..base.config.component_configer.configers.sqldb_wrapper_config import SQLDBWrapperConfiger
 from ..base.component.component_base import ComponentBase
 from ..base.component.component_enum import ComponentEnum
+
+
+class _InitializationLock:
+    """Give copied or serialized cold wrappers an independent unlocked guard."""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+
+    def __enter__(self):
+        self._lock.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._lock.release()
+
+    def __deepcopy__(self, memo):
+        copied = type(self)()
+        memo[id(self)] = copied
+        return copied
+
+    def __getstate__(self):
+        return {}
+
+    def __setstate__(self, state):
+        self._lock = threading.RLock()
 
 
 class SQLDBWrapper(ComponentBase):
@@ -30,6 +57,7 @@ class SQLDBWrapper(ComponentBase):
     __sql_database: Optional[SQLDatabase] = None
     db_session: Optional[sessionmaker] = None
     db_wrapper_configer: Optional[SQLDBWrapperConfiger] = None
+    _initialization_lock: _InitializationLock = PrivateAttr(default_factory=_InitializationLock)
 
     class Config:
         arbitrary_types_allowed = True
@@ -77,21 +105,23 @@ class SQLDBWrapper(ComponentBase):
         Lazy init, to ensure that database engine can be init correctly in
         separate processes like gunicorn.
         """
-        if not self.__sql_database:
-            self.db_wrapper_configer.engine_args.setdefault(
-                "json_serializer", lambda x: json.dumps(x, ensure_ascii=False)
-            )
-            self.db_wrapper_configer.sql_database_args.setdefault(
-                "sample_rows_in_table_info", 3
-            )
-            self.db_wrapper_configer.sql_database_args.setdefault(
-                "max_string_length", -1
-            )
-            self.__sql_database = SQLDatabase.from_uri(
-                engine_args=self.db_wrapper_configer.engine_args,
-                database_uri=self.db_wrapper_configer.db_uri,
-                **self.db_wrapper_configer.sql_database_args
-            )
+        if self.__sql_database is None:
+            with self._initialization_lock:
+                if self.__sql_database is None:
+                    self.db_wrapper_configer.engine_args.setdefault(
+                        "json_serializer", lambda x: json.dumps(x, ensure_ascii=False)
+                    )
+                    self.db_wrapper_configer.sql_database_args.setdefault(
+                        "sample_rows_in_table_info", 3
+                    )
+                    self.db_wrapper_configer.sql_database_args.setdefault(
+                        "max_string_length", -1
+                    )
+                    self.__sql_database = SQLDatabase.from_uri(
+                        engine_args=self.db_wrapper_configer.engine_args,
+                        database_uri=self.db_wrapper_configer.db_uri,
+                        **self.db_wrapper_configer.sql_database_args
+                    )
         return self.__sql_database
 
 
@@ -99,8 +129,8 @@ class SQLDBWrapper(ComponentBase):
         """
            Get a sqlalchemy session, used for operating with orm.
         """
-        if self.db_session:
-            return self.db_session
-        # Create database engine
-        self.db_session = sessionmaker(bind=self.sql_database._engine)
+        if self.db_session is None:
+            with self._initialization_lock:
+                if self.db_session is None:
+                    self.db_session = sessionmaker(bind=self.sql_database._engine)
         return self.db_session

@@ -74,3 +74,11 @@ demo_sqldb_wrapper:SQLDBWrapper = SQLDBWrapperManager().get_instance_obj("demo_s
 sql_database_ins = demo_sqldb_wrapper.sql_database
 sql_alchemy_engine = sql_database_ins._engine
 ```
+
+### 并发初始化
+
+同一进程中并发首次访问同一个包装器的 `sql_database` 和 `get_session()` 时，
+只会初始化一份缓存的数据库、引擎和会话工厂。初始化仍按需进行，调用方预先提供的
+`db_session` 会直接复用。构造失败后，后续调用可以重试。尚未初始化的组件副本、
+深拷贝以及 pickle 往返结果均具有独立的初始化锁。连接能否跨线程使用，仍取决于
+数据库驱动及引擎、连接池配置。
