@@ -1,0 +1,38 @@
+name: fxmacrodata_tool
+description: Bounded, offline FXMacroData-shaped reference tool - indicator release history, release calendar, indicator catalogue and daily FX rates for USD, EUR and GBP over a fixed 2026 window (no network, no wall clock, no credentials).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.fxmacrodata_tool
+  class: FXMacroDataTool
+input_keys:
+  - mode
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [history, calendar, catalogue, fx]
+    currency:
+      type: string
+      description: Three-letter code (USD, EUR, GBP).
+    indicator:
+      type: string
+      enum: [inflation, policy_rate, unemployment]
+    base:
+      type: string
+    quote:
+      type: string
+    start_date:
+      type: string
+      description: YYYY-MM-DD.
+    end_date:
+      type: string
+      description: YYYY-MM-DD.
+    limit:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 20
+  required: [mode]
+  additionalProperties: false
