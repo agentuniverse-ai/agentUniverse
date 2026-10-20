@@ -309,3 +309,28 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [SectionRoleClassifier](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/section_role_classifier.yaml)
+
+This component classifies the sections of a document by their scholarly role — `intro` / `method` / `results` / `discussion` / `conclusion`, plus the non-core roles `abstract`, `references`, `acknowledgments` and `other` — and records the classification in the document's **metadata** without altering its text. The stamped metadata (`section_roles`, `role_counts`, `has_imrad`) lets academic QA routing target, say, `method` sections for questions about the experimental setup instead of retrieving against the whole paper. The component is pure stdlib, deterministic and offline.
+
+Sections are delimited by markdown ATX headings (`#` … `######`); heading detection is fence-immune, so a `#` line inside a fenced code block is never treated as a section title. Each heading is classified by:
+
+1. **Keyword match (high confidence)** — the heading text is matched case-insensitively against ordered keyword families covering English and Chinese (`introduction` / `引言` → intro, `method(s)` / `methodology` / `approach` / `experimental setup` / `materials` / `方法` / `实验` → method, `result(s)` / `evaluation` / `findings` / `analysis` / `结果` / `分析` → results, `discussion` / `limitations` / `威胁` → discussion, `conclusion(s)` / `summary` / `future work` / `结论` / `总结` → conclusion, `abstract` / `摘要` → abstract, `references` / `bibliography` / `参考文献` → references, `acknowledg*` → acknowledgments). When a heading matches several families (e.g. "Results and Discussion"), the first-listed family wins: intro > method > results > discussion > conclusion > abstract > references > acknowledgments. `related work` counts as intro context (it also appears as a secondary member of the references family).
+2. **Positional fallback (low confidence)** — headings with no keyword match are classified by position: the first section becomes `intro`, the last becomes `conclusion` (middle sections become `other`). Fallback can be disabled with `positional_fallback: false`.
+
+The component definition file is as follows:
+```yaml
+name: 'section_role_classifier'
+description: 'classify document sections by scholarly role into metadata'
+max_sections: 30
+positional_fallback: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.section_role_classifier'
+  class: 'SectionRoleClassifier'
+```
+- max_sections: Maximum number of section records kept in `metadata['section_roles']` (a list of `{heading, level, role, confidence, span, para_count}` entries). Sections beyond the cap are still counted in `role_counts` and `has_imrad`; they are just not listed. Must be >= 1.
+- positional_fallback: When true, the first unmatched section is classified `intro` and the last `conclusion` with low confidence; when false, every unmatched section becomes `other`.
+
+Each processed document receives three metadata keys (a document with no headings is passed through unmodified with a `section_roles_note`): `section_roles` — the per-section records (capped at `max_sections`), where `confidence` is `high` for keyword matches and `low` for positional ones, `span` is the `[start, end)` character range of the section, and `para_count` is the number of blank-line-separated paragraphs in the section body; `role_counts` — how many sections received each role (over all sections); `has_imrad` — true when all four core roles (`intro`, `method`, `results`, `conclusion`) are present.

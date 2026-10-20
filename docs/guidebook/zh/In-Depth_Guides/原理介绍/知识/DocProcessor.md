@@ -310,3 +310,28 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [SectionRoleClassifier](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/section_role_classifier.yaml)
+
+该组件按学术角色对文档的各章节进行分类——`intro`（引言）/ `method`（方法）/ `results`（结果）/ `discussion`（讨论）/ `conclusion`（结论），以及非核心角色 `abstract`（摘要）、`references`（参考文献）、`acknowledgments`（致谢）和 `other`（其他）——并将分类结果写入文档的**元数据**，不改动正文。写入的元数据（`section_roles`、`role_counts`、`has_imrad`）可用于学术问答路由，例如关于实验设置的问题只检索 `method` 章节，而不是对整篇论文统一召回。该组件纯标准库实现，确定性、离线运行。
+
+章节以 markdown ATX 标题（`#` … `######`）划分；标题识别对代码围栏免疫，围栏代码块中的 `#` 行不会被当作章节标题。每个标题按两级策略分类：
+
+1. **关键词匹配（高置信度）**——对标题文本做大小写不敏感的中英文关键词族匹配（`introduction`/`引言` → intro；`method(s)`/`methodology`/`approach`/`experimental setup`/`materials`/`方法`/`实验` → method；`result(s)`/`evaluation`/`findings`/`analysis`/`结果`/`分析` → results；`discussion`/`limitations`/`威胁` → discussion；`conclusion(s)`/`summary`/`future work`/`结论`/`总结` → conclusion；`abstract`/`摘要` → abstract；`references`/`bibliography`/`参考文献` → references；`acknowledg*` → acknowledgments）。当一个标题命中多个角色族（如 "Results and Discussion"）时，先列出的角色族优先：intro > method > results > discussion > conclusion > abstract > references > acknowledgments。`related work`（相关工作）视为 intro（引言）语境，同时作为 references 角色族的次级成员。
+2. **位置回退（低置信度）**——未命中关键词的标题按位置分类：第一个章节判为 `intro`，最后一个判为 `conclusion`（中间的判为 `other`）。可通过 `positional_fallback: false` 关闭回退。
+
+组件定义文件如下：
+```yaml
+name: 'section_role_classifier'
+description: 'classify document sections by scholarly role into metadata'
+max_sections: 30
+positional_fallback: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.section_role_classifier'
+  class: 'SectionRoleClassifier'
+```
+- max_sections：`metadata['section_roles']`（由 `{heading, level, role, confidence, span, para_count}` 记录组成的列表）最多保留的记录数。超出上限的章节仍计入 `role_counts` 和 `has_imrad`，只是不再逐条列出。必须 >= 1。
+- positional_fallback：为真时，第一个未匹配的章节判为 `intro`、最后一个判为 `conclusion`（低置信度）；为假时，所有未匹配章节一律判为 `other`。
+
+处理后的每个文档会得到三个元数据键（没有任何标题的文档原样通过，并附 `section_roles_note` 说明）：`section_roles`——各章节的记录（最多 `max_sections` 条），其中 `confidence` 对关键词匹配为 `high`、对位置回退为 `low`，`span` 为章节的 `[start, end)` 字符区间，`para_count` 为章节正文中以空行分隔的段落数；`role_counts`——每个角色分到的章节数（覆盖全部章节）；`has_imrad`——当四个核心角色（`intro`、`method`、`results`、`conclusion`）全部出现时为真。
