@@ -1,0 +1,22 @@
+name: structured_prompt_builder_tool
+description: Assemble named prompt sections in a stable order without rewriting their content.
+tool_type: api
+input_keys:
+  - sections
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.structured_prompt_builder_tool
+  class: StructuredPromptBuilderTool
+args_model_schema:
+  type: object
+  properties:
+    sections:
+      type: object
+    section_order:
+      type: array
+      items: {type: string}
+    required_sections:
+      type: array
+      items: {type: string}
+  required: [sections]
+  additionalProperties: false

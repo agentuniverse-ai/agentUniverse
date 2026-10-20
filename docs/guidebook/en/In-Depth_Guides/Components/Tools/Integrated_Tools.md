@@ -4,6 +4,22 @@ In the current agentUniverse's sample project, the following tools are integrate
 
 HTTP-based API tools use the SSRF proxy helper for outbound requests. See [SSRF proxy environment variables](./SSRF_Proxy.md) for `SSRF_PROXY_*` configuration.
 
+## Structured Prompt Builder
+
+`StructuredPromptBuilderTool` assembles named sections such as task, context,
+constraints, and output in a stable order. It omits empty optional sections and
+reports empty required sections without rewriting the supplied content.
+
+[Tool configuration](../../../../../../agentuniverse/agent/action/tool/common_tool/structured_prompt_builder_tool.yaml)
+
+```python
+result = tool.execute(
+    sections={"task": "Summarize the report.", "output": "Return JSON."},
+    section_order=["task", "context", "output"],
+    required_sections=["task", "output"],
+)
+```
+
 ## 1. Search Tools
 
 ### 1.1 Google Search
