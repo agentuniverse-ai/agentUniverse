@@ -25,9 +25,9 @@ def _async_runner_thread_target(coro: Coroutine[Any, Any, T], result_queue: Queu
     """
     try:
         result = asyncio.run(coro)
-        result_queue.put(result)
-    except Exception as e:
-        result_queue.put(e)
+        result_queue.put((True, result))
+    except BaseException as error:
+        result_queue.put((False, error))
 
 
 def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] = None) -> T:
@@ -71,13 +71,12 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
     worker_thread.start()
 
     try:
-        result = result_queue.get(timeout=timeout)
+        succeeded, result = result_queue.get(timeout=timeout)
     except queue.Empty:
         raise TimeoutError(f"Operation timed out after {timeout} seconds")
     finally:
         worker_thread.join(timeout=1.0)
 
-    if isinstance(result, Exception):
+    if not succeeded:
         raise result
-    else:
-        return result
+    return result
