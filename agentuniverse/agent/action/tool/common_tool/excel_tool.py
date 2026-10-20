@@ -247,7 +247,7 @@ class ExcelTool(Tool):
                 "file_path": file_path,
                 "sheet_name": sheet_name,
                 "rows_written": len(data),
-                "columns": len(data[0]) if data else 0,
+                "columns": max((len(row) for row in data), default=0),
                 "file_size": file_size,
                 "overwrite": overwrite
             }
@@ -302,7 +302,8 @@ class ExcelTool(Tool):
                 sheet = workbook.active
 
             # Append data
-            start_row = sheet.max_row + 1
+            # Match append's insertion cursor; max_row is 1 even on an empty sheet.
+            start_row = sheet._current_row + 1
             for row_data in data:
                 sheet.append(row_data)
 
