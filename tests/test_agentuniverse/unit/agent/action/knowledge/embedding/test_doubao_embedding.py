@@ -17,7 +17,7 @@ class EmbeddingTest(unittest.TestCase):
     Test cases for Embedding class
     """
 
-    def setUp(self) -> None:        
+    def setUp(self) -> None:
         self.embedding = DoubaoEmbedding()
         self.embedding.ark_api_key = "replace with your api key"
         self.embedding.endpoint_id = "replace with your endpoint id :)"
