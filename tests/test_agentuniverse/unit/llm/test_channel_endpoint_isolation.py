@@ -11,6 +11,7 @@ from openai.resources.chat.completions import AsyncCompletions
 import pytest
 
 from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
+from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
 
 
 BASE = 'https://configured.invalid/v1'
@@ -36,12 +37,19 @@ def transport_for(seen):
     return httpx.MockTransport(handle)
 
 
-def channel_for(client=None, async_client=None):
-    channel = LLMChannel(client=client, async_client=async_client,
-                         channel_api_base=BASE, channel_model_name='local-model')
-    channel.channel_model_config = {'streaming': False, 'temperature': 0.7,
-                                    'max_tokens': 32}
-    return channel
+@pytest.fixture(params=['channel', 'openai-style'])
+def component_factory(request):
+    def create(client=None, async_client=None):
+        if request.param == 'openai-style':
+            return OpenAIStyleLLM(client=client, async_client=async_client,
+                api_base=BASE, model_name='local-model', streaming=False,
+                temperature=0.7, max_tokens=32)
+        channel = LLMChannel(client=client, async_client=async_client,
+                             channel_api_base=BASE, channel_model_name='local-model')
+        channel.channel_model_config = {'streaming': False, 'temperature': 0.7,
+                                        'max_tokens': 32}
+        return channel
+    return create
 
 
 def sync_call(channel, endpoint, streaming=False, content='hello'):
@@ -74,13 +82,13 @@ def check_request(seen, endpoint, streaming):
 
 @pytest.mark.parametrize('endpoint', OPTIONS, ids=['omitted', 'none', 'empty', 'override'])
 @pytest.mark.parametrize('streaming', [False, True], ids=['completion', 'stream'])
-def test_sync_endpoint_options_do_not_mutate_the_cached_client(endpoint, streaming):
+def test_sync_endpoint_options_do_not_mutate_the_cached_client(component_factory, endpoint, streaming):
     seen = []
     with httpx.Client(transport=transport_for(seen)) as http_client:
         with OpenAI(api_key='offline-test', base_url=BASE, http_client=http_client,
                     default_headers={'x-offline-fixture': 'kept'},
                     default_query={'fixture': 'kept'}, max_retries=0) as sdk:
-            channel = channel_for(client=sdk)
+            channel = component_factory(client=sdk)
             original = sdk.base_url
             result = sync_call(channel, endpoint, streaming)
             assert result == ('override.invalid' if endpoint == OVERRIDE else 'configured.invalid')
@@ -92,14 +100,14 @@ def test_sync_endpoint_options_do_not_mutate_the_cached_client(endpoint, streami
 
 @pytest.mark.parametrize('endpoint', OPTIONS, ids=['omitted', 'none', 'empty', 'override'])
 @pytest.mark.parametrize('streaming', [False, True], ids=['completion', 'stream'])
-def test_async_endpoint_options_do_not_mutate_the_cached_client(endpoint, streaming):
+def test_async_endpoint_options_do_not_mutate_the_cached_client(component_factory, endpoint, streaming):
     async def run():
         seen = []
         async with httpx.AsyncClient(transport=transport_for(seen)) as http_client:
             async with AsyncOpenAI(api_key='offline-test', base_url=BASE, http_client=http_client,
                     default_headers={'x-offline-fixture': 'kept'},
                     default_query={'fixture': 'kept'}, max_retries=0) as sdk:
-                channel = channel_for(async_client=sdk)
+                channel = component_factory(async_client=sdk)
                 original = sdk.base_url
                 result = await async_call(channel, endpoint, streaming)
                 assert result == ('override.invalid' if endpoint == OVERRIDE else 'configured.invalid')
@@ -125,13 +133,13 @@ class CoordinatedOpenAI(OpenAI):
             self.route_gate.wait(timeout=5)
 
 
-def test_concurrent_sync_calls_use_their_own_endpoints():
+def test_concurrent_sync_calls_use_their_own_endpoints(component_factory):
     seen = []
     with httpx.Client(transport=transport_for(seen)) as http_client:
         with CoordinatedOpenAI(api_key='offline-test', base_url=BASE,
                                 http_client=http_client, max_retries=0) as sdk:
             sdk.route_gate = Barrier(2)
-            channel = channel_for(client=sdk)
+            channel = component_factory(client=sdk)
             with ThreadPoolExecutor(max_workers=2) as executor:
                 first = executor.submit(sync_call, channel, 'https://alpha.invalid/v1', False, 'alpha')
                 second = executor.submit(sync_call, channel, 'https://beta.invalid/v1', False, 'beta')
@@ -164,14 +172,14 @@ class CoordinatedAsyncCompletions(AsyncCompletions):
         return await super().create(*args, **kwargs)
 
 
-def test_concurrent_async_calls_use_their_own_endpoints():
+def test_concurrent_async_calls_use_their_own_endpoints(component_factory):
     async def run():
         seen = []
         async with httpx.AsyncClient(transport=transport_for(seen)) as http_client:
             async with AsyncOpenAI(api_key='offline-test', base_url=BASE,
                                     http_client=http_client, max_retries=0) as sdk:
                 sdk.chat.completions = CoordinatedAsyncCompletions(sdk, AsyncGate())
-                channel = channel_for(async_client=sdk)
+                channel = component_factory(async_client=sdk)
                 results = await asyncio.gather(
                     async_call(channel, 'https://alpha.invalid/v1', content='alpha'),
                     async_call(channel, 'https://beta.invalid/v1', content='beta'))

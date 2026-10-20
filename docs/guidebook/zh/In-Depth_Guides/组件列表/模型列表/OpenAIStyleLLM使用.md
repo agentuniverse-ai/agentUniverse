@@ -21,6 +21,14 @@ metadata:
     api_key_env: api key的env变量名
     api_base_env: api base的env变量名
 上述参数必须配置,服务启动时会从环境变量中加载相关的值
+## 单次调用接口地址
+
+`OpenAIStyleLLM` 的 `api_base` 参数只指定本次调用的接口地址。不传、传入
+`None` 或空字符串时，使用模型配置的 `api_base`。同步、异步以及流式、非流式
+请求都会在调用 SDK 前消耗这一参数。请求使用 SDK `with_options()` 选择地址，
+缓存客户端的地址、HTTP 传输、请求头、查询参数和其他配置保持不变，并发调用
+可以分别选择不同地址。
+
 ## 2. 环境设置
 必须配置：$api_key_env, $api_base_env
 配置文件中api_key_env与api_base_env分别为DEEPSEEK_API_KEY、DEEPSEEK_API_BASE，所以配置如下：
