@@ -5,13 +5,20 @@
 # @Author : veteran
 # @FileName : aws_bedrock_llm.py
 
-from typing import Optional, Any, Union, Iterator, AsyncIterator
+import asyncio
 import json
+from collections.abc import AsyncIterator, Iterator
+from functools import partial
+from threading import Lock
+from typing import Any, Optional, Union
 
 from pydantic import Field
 
 from agentuniverse.base.util.env_util import get_from_env
+from agentuniverse.llm.default._bedrock_stream import BedrockStream, async_bedrock_stream
 from agentuniverse.llm.llm import LLM, LLMOutput
+
+_CLIENT_CREATION_LOCK = Lock()
 
 # Define maximum context lengths for different AWS Bedrock models
 AWS_BEDROCK_MAX_CONTEXT_LENGTH = {
@@ -80,7 +87,10 @@ class AWSBedrockLLM(LLM):
             if self.aws_session_token:
                 session_kwargs['aws_session_token'] = self.aws_session_token
             
-            self._client = boto3.client('bedrock-runtime', **session_kwargs)
+            with _CLIENT_CREATION_LOCK:
+                if self._client is None:
+                    # A private session avoids boto3's shared default session in worker threads.
+                    self._client = boto3.Session().client('bedrock-runtime', **session_kwargs)
         return self._client
 
     def _convert_messages_format(self, messages: list) -> list:
@@ -138,7 +148,7 @@ class AWSBedrockLLM(LLM):
                     messages=bedrock_messages,
                     inferenceConfig=inference_config,
                 )
-                return self._generate_stream_result(response)
+                return BedrockStream(self._generate_stream_result(response), response['stream'])
             else:
                 # Non-streaming response
                 response = client.converse(
@@ -157,23 +167,12 @@ class AWSBedrockLLM(LLM):
             raise RuntimeError(f"Error calling AWS Bedrock: {e}")
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
-        """Async call to AWS Bedrock LLM.
-        
-        Note: boto3 doesn't support async natively, so this is a sync call wrapped.
-        For true async, consider using aioboto3.
-        """
+        """Run blocking SDK work off-loop; streaming opens on first iteration."""
         streaming = kwargs.get("streaming", self.streaming)
-        result = self._call(messages, **kwargs)
-        
-        # If streaming, wrap the generator in an async generator
+        kwargs["streaming"] = streaming
         if streaming:
-            return self._async_generator_wrapper(result)
-        return result
-    
-    async def _async_generator_wrapper(self, sync_generator):
-        """Wrap a sync generator to make it async."""
-        for item in sync_generator:
-            yield item
+            return async_bedrock_stream(partial(self._call, messages, **kwargs))
+        return await asyncio.to_thread(self._call, messages, **kwargs)
 
     def _generate_stream_result(self, stream) -> Iterator[LLMOutput]:
         """Generate streaming results from Bedrock response."""
