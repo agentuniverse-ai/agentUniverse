@@ -13,6 +13,8 @@ from agentuniverse_product.service.model.message_dto import MessageDTO
 
 
 class SessionDTO(BaseModel):
+    """DTO model describing a session.
+    """
     id: str = Field(description="ID")
     agent_id: str = Field(description="session agent id")
     messages: Optional[list[MessageDTO]] = Field(description="session messages", default=[])
