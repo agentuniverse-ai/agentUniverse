@@ -30,9 +30,11 @@ Three modes are supported:
   ``(?s)``.  Constructs outside this subset (lookbehind, numbered or
   named backreferences, ``\\p`` Unicode classes, ``\\A`` / ``\\Z``,
   scoped flag groups, comments, conditionals, ``\\x`` / ``\\u`` / octal
-  escapes, ...) are each flagged with their position in a structured
-  ``unsupported`` list instead of silently mis-explaining them — the
-  subset is documented, and honest about its limits.
+  escapes, possessive quantifiers such as ``*+``, atomic groups
+  ``(?>...)`` and POSIX classes ``[:alpha:]``, ...) are each flagged
+  with their position in a structured ``unsupported`` list instead of
+  silently mis-explaining them — the subset is documented, and honest
+  about its limits.
 * ``validate`` — compile check via ``re.compile``.  Compilation
   failures are the *payload* here: the ``re.error`` message, position,
   line and column are returned in a structured ``error`` object.
@@ -174,6 +176,8 @@ _NEGATED_CANDIDATES = "aAXqZ9_ !-"
 # {n} / {n,} / {n,m} / {,m} quantifier bodies.
 _BRACES = re.compile(r"\{(\d+)?(?:,(\d*))?\}")
 
+_POSIX_CLASS_SHAPE = re.compile(r"\[:[a-z]+:\]")
+
 # Python 3.11 started treating "{,m}" as {0,m}; earlier versions keep it
 # a literal brace.  Gate the tokenizer on the same behaviour.
 _BRACE_COMMA_MIN_SUPPORTED = sys.version_info >= (3, 11)
@@ -271,7 +275,7 @@ class RegexExplainerTool(Tool):
         if mode == "explain":
             return self._run_explain(clean_pattern, tokens, unsupported,
                                      compile_error)
-        return self._run_examples(clean_pattern, tokens)
+        return self._run_examples(clean_pattern, tokens, unsupported)
 
     # ------------------------------------------------------------------ #
     # Input validation (pure — raises before any computation)
@@ -407,8 +411,12 @@ class RegexExplainerTool(Tool):
                 })
                 i += 1
             elif char in "*+?":
-                i = cls._scan_quantifier(pattern, i, tokens)
-                i = cls._skip_lazy(pattern, i, tokens)
+                if char == "+" and tokens \
+                        and tokens[-1]["kind"] == "quantifier":
+                    i = cls._flag_possessive(pattern, i, tokens, flag)
+                else:
+                    i = cls._scan_quantifier(pattern, i, tokens)
+                    i = cls._skip_lazy(pattern, i, tokens)
             elif char == "{":
                 i = cls._scan_braces(pattern, i, tokens)
                 i = cls._skip_lazy(pattern, i, tokens)
@@ -494,8 +502,12 @@ class RegexExplainerTool(Tool):
             return i + 1
         # Alphanumeric escapes outside the supported subset.
         if letter.isdigit():
-            message = (f"backreference \\{letter} — outside the supported "
-                       "subset")
+            if letter == "0":
+                message = ("octal character escape \\0 — outside the "
+                           "supported subset")
+            else:
+                message = (f"backreference \\{letter} — outside the "
+                           "supported subset")
         elif letter == "p":
             message = ("Unicode property class \\p — outside the supported "
                        "subset (Python 're' does not support \\p at all)")
@@ -586,8 +598,17 @@ class RegexExplainerTool(Tool):
             meaning = f"{prefix} {rendered}"
         else:
             meaning = f"unterminated character class — {prefix} {rendered}"
+        text = pattern[start:i]
+        posix = _POSIX_CLASS_SHAPE.search(text)
+        if posix is not None:
+            message = (
+                f"POSIX character class {posix.group(0)} — outside the "
+                "supported subset (Python 're' does not support POSIX "
+                "classes; the brackets are matched as literal characters)"
+            )
+            flag(posix.group(0), start + posix.start(), message)
         tokens.append({
-            "token": pattern[start:i],
+            "token": text,
             "kind": "char_class",
             "meaning": meaning,
             "position": start,
@@ -698,6 +719,13 @@ class RegexExplainerTool(Tool):
             tokens.append({"token": token, "kind": "unsupported",
                            "meaning": message, "position": start})
             return i + len(token)
+        if rest.startswith("(?>"):
+            message = ("atomic group (?>...) — outside the supported "
+                       "subset")
+            flag("(?>", start, message)
+            tokens.append({"token": "(?>", "kind": "unsupported",
+                           "meaning": message, "position": start})
+            return i + 3
         if rest.startswith("(?#"):
             end = pattern.find(")", i)
             token = pattern[i:end + 1] if end != -1 else pattern[i:]
@@ -740,19 +768,40 @@ class RegexExplainerTool(Tool):
                 tokens.append({"token": token, "kind": "unsupported",
                                "meaning": message, "position": start})
                 return j + 1
-            stop = min(j + 1, len(pattern))
-            token = pattern[i:stop] if j > i + 2 else "(?"
+            stop = min(j + 1, len(pattern)) if j > i + 2 else i + 2
+            token = pattern[i:stop]
             message = ("unsupported group syntax (?...) — outside the "
                        "supported subset")
             flag(token, start, message)
             tokens.append({"token": token, "kind": "unsupported",
                            "meaning": message, "position": start})
-            return max(stop, i + 2)
+            return stop
         return emit(
             "(", "capturing",
             "start of a capturing group (the matched text is kept for "
             "backreferences)",
         )
+
+    @classmethod
+    def _flag_possessive(
+        cls,
+        pattern: str,
+        i: int,
+        tokens: List[Dict[str, Any]],
+        flag: Callable[[str, int, str], None],
+    ) -> int:
+        """Flag a possessive ``+`` suffix at ``pattern[i]``."""
+        message = ("possessive quantifier '+' — matches like the greedy "
+                   "quantifier but never gives up what it matched — "
+                   "outside the supported subset")
+        flag("+", i, message)
+        tokens.append({
+            "token": "+",
+            "kind": "unsupported",
+            "meaning": message,
+            "position": i,
+        })
+        return i + 1
 
     @classmethod
     def _scan_quantifier(
@@ -1050,8 +1099,19 @@ class RegexExplainerTool(Tool):
         cls,
         pattern: str,
         tokens: List[Dict[str, Any]],
+        unsupported: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         context = {"mode": "examples", "pattern": pattern}
+        if unsupported:
+            return {
+                **context,
+                "examples": [],
+                "note": ("examples are generated only for simple patterns "
+                         "built from literals, the class shorthands, "
+                         "bracket character classes and quantifiers; this "
+                         "pattern uses constructs outside the supported "
+                         "subset"),
+            }
         blocker = cls._examples_blocker(tokens)
         if blocker is not None:
             return {**context, "examples": [], "note": blocker}

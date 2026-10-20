@@ -745,5 +745,99 @@ class RegexValidateTest(unittest.TestCase):
             self.tool.execute(mode="validate", pattern="")["valid"])
 
 
+class RegexExplainRegressionTest(unittest.TestCase):
+    """Regressions for constructs that must be flagged, never guessed."""
+
+    def setUp(self) -> None:
+        self.tool = RegexExplainerTool()
+
+    def _explain(self, pattern):
+        return self.tool.execute(mode="explain", pattern=pattern)
+
+    @staticmethod
+    def _tiles(pattern, tokens):
+        position = 0
+        for token in tokens:
+            if token["position"] != position:
+                return False
+            position += len(token["token"])
+        return position == len(pattern)
+
+    def test_possessive_quantifiers_flagged(self) -> None:
+        for pattern, position in [("a*+", 2), ("a++", 2), ("a?+", 2),
+                                  ("a{2,4}+", 6)]:
+            result = self._explain(pattern)
+            self.assertTrue(result["valid"], pattern)
+            self.assertTrue(self._tiles(pattern, result["tokens"]), pattern)
+            self.assertEqual(
+                [(f["construct"], f["position"])
+                 for f in result["unsupported"]],
+                [("+", position)], pattern)
+            flagged = [t for t in result["tokens"]
+                       if t["kind"] == "unsupported"]
+            self.assertEqual(len(flagged), 1, pattern)
+            self.assertIn("possessive", flagged[0]["meaning"], pattern)
+
+    def test_atomic_group_flagged(self) -> None:
+        result = self._explain("(?>ab)")
+        self.assertTrue(result["valid"])
+        self.assertTrue(self._tiles("(?>ab)", result["tokens"]))
+        self.assertEqual(result["unsupported"][0]["construct"], "(?>")
+        self.assertEqual(result["unsupported"][0]["position"], 0)
+        self.assertIn("atomic group", result["unsupported"][0]["message"])
+
+    def test_unknown_group_letters_tile_exactly(self) -> None:
+        for pattern in ("(?x)", "(?a)", "(?q)", "(?>a)"):
+            result = self._explain(pattern)
+            self.assertTrue(self._tiles(pattern, result["tokens"]), pattern)
+            rendered = "".join(t["token"] for t in result["tokens"])
+            self.assertEqual(rendered, pattern, pattern)
+
+    def test_octal_zero_escape_message(self) -> None:
+        result = self._explain(r"\0")
+        self.assertEqual(result["unsupported"][0]["construct"], r"\0")
+        self.assertIn("octal", result["unsupported"][0]["message"])
+        self.assertNotIn("backreference",
+                         result["unsupported"][0]["message"])
+
+    def test_posix_class_flagged(self) -> None:
+        result = self._explain(r"[[:alpha:]]")
+        self.assertTrue(result["valid"])
+        self.assertTrue(self._tiles(r"[[:alpha:]]", result["tokens"]))
+        self.assertEqual(result["unsupported"][0]["construct"],
+                         "[:alpha:]")
+        self.assertEqual(result["unsupported"][0]["position"], 1)
+        self.assertIn("POSIX", result["unsupported"][0]["message"])
+
+    def test_posix_class_examples_blocked(self) -> None:
+        result = self.tool.execute(mode="examples", pattern=r"[[:alpha:]]")
+        self.assertEqual(result["examples"], [])
+        self.assertIn("outside the supported subset", result["note"])
+
+    def test_examples_blocked_by_unsupported_in_class(self) -> None:
+        for pattern in (r"[\d\x41]", r"[\d\D]"):
+            result = self.tool.execute(mode="examples", pattern=pattern)
+            self.assertEqual(result["examples"], [], pattern)
+            self.assertIn("outside the supported subset", result["note"],
+                          pattern)
+
+    def test_examples_mode_never_raises_re_error(self) -> None:
+        for pattern in (r"[\A]", r"[\d\e]", r"\p{L}", r"[\b]"):
+            result = self.tool.execute(mode="examples", pattern=pattern)
+            self.assertEqual(result["examples"], [], pattern)
+            self.assertIsNotNone(result["note"], pattern)
+
+    def test_possessive_examples_blocked(self) -> None:
+        result = self.tool.execute(mode="examples", pattern="a*+")
+        self.assertEqual(result["examples"], [])
+        self.assertIsNotNone(result["note"])
+
+    def test_supported_patterns_still_unflagged(self) -> None:
+        for pattern in (r"[.\d]", r"a+", r"[\d]", r"[a-z]+", r"\d{,5}"):
+            result = self._explain(pattern)
+            self.assertEqual(result["unsupported"], [], pattern)
+            self.assertTrue(self._tiles(pattern, result["tokens"]), pattern)
+
+
 if __name__ == "__main__":
     unittest.main()
