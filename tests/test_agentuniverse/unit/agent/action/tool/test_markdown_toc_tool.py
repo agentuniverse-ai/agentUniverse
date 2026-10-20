@@ -246,6 +246,69 @@ class MarkdownTocToolTest(unittest.TestCase):
             result["toc"], "- [\\[Brackets\\] everywhere](#brackets-everywhere)"
         )
 
+    def test_generate_reference_style_link_list_is_not_a_toc(self) -> None:
+        # A reference-style link list ("- [Intro][intro]") is not a TOC:
+        # its items are not inline local-anchor links, so neither the
+        # list nor the link definitions may be touched.
+        doc = (
+            "Related:\n"
+            "\n"
+            "- [Intro][intro]\n"
+            "- [Advanced][advanced]\n"
+            "\n"
+            "[intro]: #intro\n"
+            "[advanced]: #advanced\n"
+            "\n"
+            "## Intro\n"
+        )
+        result = self.tool.execute(mode="generate", markdown=doc)
+        self.assertFalse(result["existing_toc_found"])
+        self.assertEqual(result["action"], "appended")
+        self.assertIn("- [Intro][intro]\n- [Advanced][advanced]", result["markdown"])
+        self.assertIn("[intro]: #intro\n[advanced]: #advanced", result["markdown"])
+
+    def test_generate_external_link_list_is_not_a_toc(self) -> None:
+        doc = "## Links\n\n- [Google](https://google.com)\n- [Docs](/docs/)\n"
+        result = self.tool.execute(mode="generate", markdown=doc)
+        self.assertFalse(result["existing_toc_found"])
+        self.assertEqual(result["action"], "appended")
+        self.assertIn("- [Google](https://google.com)", result["markdown"])
+
+    def test_crlf_document_is_supported_in_all_modes(self) -> None:
+        # CRLF documents: headings are found, fences close on "\r\n"
+        # closers, check resolves links against the found slugs, and
+        # the generated TOC adopts the document's "\r\n" ending.
+        doc = "# Title\r\n\r\n## Setup\r\n\r\nSee [setup](#setup).\r\n"
+        anchors = self.tool.execute(mode="anchors", markdown=doc)
+        self.assertEqual(
+            [(h["level"], h["slug"]) for h in anchors["headings"]],
+            [(1, "title"), (2, "setup")],
+        )
+        check = self.tool.execute(mode="check", markdown=doc)
+        self.assertTrue(check["ok"])
+        self.assertEqual(check["links_checked"], 1)
+        fenced = "## Real\r\n\r\n```python\r\n## Fake\r\n```\r\n\r\nDone.\r\n"
+        fenced_anchors = self.tool.execute(mode="anchors", markdown=fenced)
+        self.assertEqual([h["slug"] for h in fenced_anchors["headings"]], ["real"])
+        generated = self.tool.execute(mode="generate", markdown=doc)
+        self.assertEqual(generated["action"], "appended")
+        self.assertTrue(
+            generated["markdown"].endswith("\r\n\r\n- [Setup](#setup)\r\n")
+        )
+
+    def test_crlf_existing_toc_is_replaced_with_crlf_and_idempotent(self) -> None:
+        doc = "# Title\r\n\r\n- [Old](#old)\r\n  * [Sub](#sub)\r\n\r\n## Alpha\r\n"
+        first = self.tool.execute(mode="generate", markdown=doc)
+        self.assertEqual(first["action"], "replaced")
+        self.assertEqual(
+            first["markdown"],
+            "# Title\r\n\r\n- [Alpha](#alpha)\r\n\r\n## Alpha\r\n",
+        )
+        second = self.tool.execute(mode="generate", markdown=first["markdown"])
+        self.assertEqual(second["action"], "unchanged")
+        self.assertFalse(second["changed"])
+
+
     def test_generate_no_headings_returns_structured_error(self) -> None:
         result = self.tool.execute(mode="generate", markdown="just text\n")
         self.assertEqual(result["status"], "error")
@@ -283,6 +346,37 @@ class MarkdownTocToolTest(unittest.TestCase):
                 "dup-2",                      # third occurrence
                 "foo",                        # link text used for the slug
                 "heading-with-spaces",        # spaces -> hyphens
+            ],
+        )
+
+    def test_anchors_match_github_slugger_exact_removal_table(self) -> None:
+        # Ground truths generated with the real github-slugger npm
+        # package (2.0.0): emoji, symbols (degree, numero, fractions),
+        # CJK ideographic punctuation and fullwidth forms are REMOVED —
+        # the vendored removal table matches the package exactly, not
+        # just the ASCII/Latin-1 subset.
+        doc = (
+            "## 🎉 Party time\n"
+            "## 90° turn\n"
+            "## № 5\n"
+            "## ½ off\n"
+            "## 日本語。テスト\n"
+            "## 全角！テスト\n"
+            "## 中文、标题\n"
+            "## snake_case\n"
+        )
+        result = self.tool.execute(mode="anchors", markdown=doc)
+        self.assertEqual(
+            [h["slug"] for h in result["headings"]],
+            [
+                "-party-time",
+                "90-turn",
+                "-5",
+                "-off",
+                "日本語テスト",
+                "全角テスト",
+                "中文标题",
+                "snake_case",
             ],
         )
 
@@ -382,6 +476,25 @@ class MarkdownTocToolTest(unittest.TestCase):
         result = self.tool.execute(mode="check", markdown=doc)
         self.assertTrue(result["ok"])
 
+    def test_check_ignores_inline_code_link_that_would_resolve(self) -> None:
+        # A local anchor link shown as literal code is not a real link —
+        # even when its target exists — so it is not counted or checked.
+        doc = "## Server\n\nSet `[server](#server)` in the config.\n"
+        result = self.tool.execute(mode="check", markdown=doc)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["links_checked"], 0)
+        self.assertEqual(result["broken_links"], [])
+
+    def test_check_crlf_document_links_resolve(self) -> None:
+        doc = "## Setup\r\n\r\nSee [setup](#setup) and [gone](#gone).\r\n"
+        result = self.tool.execute(mode="check", markdown=doc)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["links_checked"], 2)
+        self.assertEqual(
+            result["broken_links"],
+            [{"text": "gone", "anchor": "#gone", "line": 3}],
+        )
+
     # ------------------------------------------------------------------ #
     # Validation error matrix (strict, before any computation)
     # ------------------------------------------------------------------ #
@@ -407,6 +520,14 @@ class MarkdownTocToolTest(unittest.TestCase):
                 self.tool.execute(
                     mode="generate", markdown="## A\n", max_level=level
                 )
+
+    def test_non_ascii_digit_string_level_rejected(self) -> None:
+        # str.isdigit() accepts "²" but int("²") raises an unformatted
+        # error; the tool must reject it through its own validation.
+        with self.assertRaises(ValueError) as ctx:
+            self.tool.execute(mode="generate", markdown="## A\n", min_level="²")
+        self.assertIn("markdown_toc_tool:", str(ctx.exception))
+        self.assertIn("between 1 and 6", str(ctx.exception))
 
     def test_min_level_above_max_rejected(self) -> None:
         with self.assertRaises(ValueError):
