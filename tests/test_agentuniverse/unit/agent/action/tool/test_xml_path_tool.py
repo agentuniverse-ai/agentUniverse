@@ -477,6 +477,38 @@ class XmlPathToolTest(unittest.TestCase):
         located = self.tool.execute(mode="validate", xml_text=multiline)
         self.assertEqual(located["error"]["line"], 2)
 
+    def test_dtd_guard_column_counts_characters(self) -> None:
+        # The marker column must count characters, not UTF-8 bytes, so it
+        # stays consistent with the expat columns of not_well_formed errors
+        # ('<!DOCTYPE' starts at 0-based character index 5 -> column 6).
+        result = self.tool.execute(mode="validate", xml_text="<北京>x<!DOCTYPE y>")
+        self.assertEqual((result["error"]["line"], result["error"]["column"]), (1, 6))
+
+    def test_dtd_guard_rejects_entity_marker_in_attribute_value(self) -> None:
+        # Conservative direction: the literal '<!ENTITY' inside an attribute
+        # value is refused before any parsing rather than risk parsing it.
+        result = self.tool.execute(
+            mode="validate", xml_text='<a title="<!ENTITY x SYSTEM \'e\'>">t</a>'
+        )
+        self.assertEqual(result["error"]["type"], "dtd_not_allowed")
+
+    def test_size_caps_driven_by_fields(self) -> None:
+        # The limits come from the max_xml_chars / max_path_chars fields,
+        # not hardcoded constants.
+        class TunedXmlPathTool(XmlPathTool):
+            max_xml_chars: int = 20
+            max_path_chars: int = 8
+
+        tuned = TunedXmlPathTool()
+        self.assertEqual(
+            tuned.execute(mode="query", xml_text="<a><b/></a>", path="/a/b")["total"],
+            1,
+        )
+        with self.assertRaises(ValueError):
+            tuned.execute(mode="query", xml_text="<a>" + "x" * 20 + "</a>", path="/a")
+        with self.assertRaises(ValueError):
+            tuned.execute(mode="query", xml_text="<a><b/></a>", path="/a/b[1]/*")
+
     # ------------------------------------------------------------------ #
     # Structured error payloads: encoding, malformed XML, invalid paths
     # ------------------------------------------------------------------ #

@@ -66,12 +66,16 @@ document-order value winning a collision. ``text`` mode returns the
 element's own text block only — mixed-content tails and nested
 elements' text are not concatenated, unlike XPath ``string()``.
 
-Security — XXE protection: before ANY parsing, a byte-level pre-scan
-of the UTF-8 encoded input rejects documents containing ``<!DOCTYPE``
+Security — XXE protection: before ANY parsing, a character-level
+pre-scan of the input text rejects documents containing ``<!DOCTYPE``
 or ``<!ENTITY`` markup, mirroring the DTD guard used by XmlReader —
 DTDs and entities are the vehicle for XXE and entity-expansion
-(billion laughs) attacks. The scan is conservative: input that merely
-mentions those tokens inside comments is rejected too. No external
+(billion laughs) attacks. The scan is case-sensitive (those are the
+only spellings valid XML allows) and safe against UTF-8 smuggling:
+ASCII byte sequences never occur inside multi-byte UTF-8 sequences,
+so scanning the decoded text finds exactly the occurrences a byte
+scan would. It is also conservative: input that merely mentions those
+tokens inside comments or CDATA is rejected too. No external
 entities, DTDs or network fetches are ever processed.
 
 Input validation is strict and happens before any work: malformed
@@ -469,34 +473,32 @@ class XmlPathTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"xml_path_tool: {message}")
 
-    @classmethod
-    def _validate_xml_text(cls, xml_text: Any) -> str:
+    def _validate_xml_text(self, xml_text: Any) -> str:
         """Validate the ``xml_text`` input."""
         if (
             xml_text is None
             or isinstance(xml_text, bool)
             or not isinstance(xml_text, str)
         ):
-            cls._invalid(f"xml_text must be a non-empty string (got {xml_text!r})")
+            self._invalid(f"xml_text must be a non-empty string (got {xml_text!r})")
         if not xml_text:
-            cls._invalid("xml_text must be a non-empty string (got '')")
-        if len(xml_text) > 100_000:
-            cls._invalid(
-                f"xml_text exceeds the {100_000:,}-character limit "
+            self._invalid("xml_text must be a non-empty string (got '')")
+        if len(xml_text) > self.max_xml_chars:
+            self._invalid(
+                f"xml_text exceeds the {self.max_xml_chars:,}-character limit "
                 f"(got {len(xml_text):,} characters)"
             )
         return xml_text
 
-    @classmethod
-    def _validate_path(cls, path: Any) -> str:
+    def _validate_path(self, path: Any) -> str:
         """Validate the ``path`` input (syntax is checked later)."""
         if path is None or isinstance(path, bool) or not isinstance(path, str):
-            cls._invalid(f"path must be a non-empty string (got {path!r})")
+            self._invalid(f"path must be a non-empty string (got {path!r})")
         if not path:
-            cls._invalid("path must be a non-empty string (got '')")
-        if len(path) > 2_000:
-            cls._invalid(
-                f"path exceeds the {2_000:,}-character limit "
+            self._invalid("path must be a non-empty string (got '')")
+        if len(path) > self.max_path_chars:
+            self._invalid(
+                f"path exceeds the {self.max_path_chars:,}-character limit "
                 f"(got {len(path):,} characters)"
             )
         return path
@@ -518,19 +520,24 @@ class XmlPathTool(Tool):
             )
 
     @staticmethod
-    def _reject_dtd(payload: bytes) -> None:
+    def _reject_dtd(xml_text: str) -> None:
         """Reject DTD / ENTITY markup BEFORE any parsing (XXE guard).
 
-        The scan is byte-level and case-sensitive — ``<!DOCTYPE`` and
-        ``<!ENTITY`` are the only spellings valid XML allows — and
-        conservative: mentions inside comments are rejected too.
+        The scan is character-level and case-sensitive — ``<!DOCTYPE``
+        and ``<!ENTITY`` are the only spellings valid XML allows — and
+        conservative: mentions inside comments or CDATA are rejected
+        too. Scanning the decoded text (not the UTF-8 bytes) is
+        equivalent for detection — ASCII byte sequences never occur
+        inside multi-byte UTF-8 sequences — and keeps the reported
+        column counting characters, consistent with the expat columns
+        of :meth:`_parse`.
         """
-        for marker in (b"<!DOCTYPE", b"<!ENTITY"):
-            index = payload.find(marker)
+        for marker in ("<!DOCTYPE", "<!ENTITY"):
+            index = xml_text.find(marker)
             if index < 0:
                 continue
-            line = payload.count(b"\n", 0, index) + 1
-            column = index - (payload.rfind(b"\n", 0, index) + 1) + 1
+            line = xml_text.count("\n", 0, index) + 1
+            column = index - (xml_text.rfind("\n", 0, index) + 1) + 1
             raise _ContentError(
                 "dtd_not_allowed",
                 "the tool refuses XML containing '<!DOCTYPE' or "
@@ -571,7 +578,7 @@ class XmlPathTool(Tool):
         context = {"mode": "validate"}
         try:
             payload = self._encode(xml_text)
-            self._reject_dtd(payload)
+            self._reject_dtd(xml_text)
             root = self._parse(payload)
         except _ContentError as exc:
             return {**context, "valid": False, "error": exc.payload()}
@@ -592,7 +599,7 @@ class XmlPathTool(Tool):
         context = {"mode": mode, "path": path}
         try:
             payload = self._encode(xml_text)
-            self._reject_dtd(payload)
+            self._reject_dtd(xml_text)
             root = self._parse(payload)
             steps = _XmlPathParser(path).parse()
         except _ContentError as exc:

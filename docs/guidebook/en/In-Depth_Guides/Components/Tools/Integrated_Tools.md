@@ -678,11 +678,12 @@ match `creator`), so two namespaces reusing one local name are
 indistinguishable; `text` mode returns only the element's own text
 block, without concatenating mixed content or nested text.
 
-Before any parsing, a byte-level pre-scan of the UTF-8 encoded input
-rejects documents containing `<!DOCTYPE` or `<!ENTITY` markup — the
+Before any parsing, a character-level pre-scan of the input rejects
+documents containing `<!DOCTYPE` or `<!ENTITY` markup — the
 standard guard against XXE and entity-expansion (billion laughs)
 attacks, mirroring the DTD guard of `XmlReader`. The scan is
-conservative: mentions of those tokens inside comments are rejected
+case-sensitive (the only spellings valid XML allows) and conservative:
+mentions of those tokens inside comments or CDATA are rejected
 too, and no external entities, DTDs or network fetches are ever
 processed.
 
