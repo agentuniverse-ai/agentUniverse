@@ -47,7 +47,10 @@ strictly-validated façade over :mod:`configparser`, with five modes:
   the file are therefore preserved exactly — what is replaced is only
   the value portion of the target key line plus its continuation
   lines (which may themselves contain inline text, since inline
-  comments are disabled by default in configparser). When the key is
+  comments are disabled by default in configparser). Full-line
+  comments are never part of a value per configparser (whatever their
+  indentation), so even comments interleaved with a multiline value
+  survive the patch in place. When the key is
   missing it is appended after the last line of the section (never
   after a trailing comment that documents the *next* section), and
   when the section is missing ``[section]`` plus the key are appended
@@ -568,11 +571,19 @@ class IniConfigTool(Tool):
 
         Mirrors ``RawConfigParser._read`` line classification: blank and
         full-line ``#`` / ``;`` comment lines are skipped (they neither
-        open nor close a value); a line indented deeper than the last
-        option/header line continues that option's value; a stripped
-        line starting with ``[name]`` opens a section (exact name,
-        case-sensitive); anything else is an option line whose key runs
-        up to the first ``=`` / ``:`` delimiter.
+        open nor close a value — and, crucially, a full-line comment is
+        never part of a value, however deeply it is indented, so it must
+        survive value patches untouched); a line indented deeper than
+        the last option/header line continues that option's value; a
+        stripped line starting with ``[name]`` opens a section (exact
+        name, case-sensitive); anything else is an option line whose
+        key runs up to the first ``=`` / ``:`` delimiter.
+
+        Each option records the exact list of lines that make up its
+        value (the key line plus every continuation line): the deletion
+        range on patch is that member list, not a contiguous slice, so
+        blank lines and comments interleaved with a multiline value are
+        left in place instead of being silently dropped.
         """
         sections: list[dict[str, Any]] = []
         current: dict[str, Any] | None = None
@@ -582,12 +593,20 @@ class IniConfigTool(Tool):
             body, _ending = cls._split_line(raw)
             value = body.strip()
             if not value:
-                # Blank line or full-line comment: skipped entirely, the
-                # active option stays open for further continuations.
+                # Blank line: skipped entirely, the active option stays
+                # open for further continuations (configparser keeps
+                # the option open across blank lines as well).
+                continue
+            if value[0] in "#;":
+                # Full-line comment at any indentation: configparser
+                # strips it and never appends it to a value, so it is
+                # not a value member and must never be deleted by a
+                # value patch. Like blank lines it does not close the
+                # active option.
                 continue
             cur_indent = len(body) - len(body.lstrip())
             if current is not None and active_option is not None and cur_indent > indent_level:
-                current["options"][active_option]["last_line"] = index
+                current["options"][active_option]["member_lines"].append(index)
                 current["last_content"] = index
                 continue
             match = _SECTION_LINE_RE.match(value)
@@ -614,7 +633,7 @@ class IniConfigTool(Tool):
                 "index": index,
                 "prefix": body[:after],
                 "indent": cur_indent,
-                "last_line": index,
+                "member_lines": [index],
             }
             active_option = key_text.strip().lower()
             indent_level = cur_indent
@@ -650,9 +669,11 @@ class IniConfigTool(Tool):
         """Replace the value part of the existing key line in place.
 
         The original leading whitespace, key spelling and delimiter
-        style are preserved (string-level edit); any continuation lines
-        of the old value are dropped and re-rendered from the new
-        value.
+        style are preserved (string-level edit); the old value's member
+        lines (the key line plus its continuation lines) are dropped and
+        re-rendered from the new value. Full-line comments and blank
+        lines interleaved with the old value are not value members, so
+        they survive the patch in place.
         """
         option = target["options"][key.lower()]
         index = option["index"]
@@ -664,13 +685,16 @@ class IniConfigTool(Tool):
         patched_ending = ending or ("\n" if len(parts) > 1 else "")
         patched = option["prefix"] + parts[0] + patched_ending
         new_lines = list(lines)
-        # Drop the old continuation lines, then splice in the new ones.
-        del new_lines[index + 1 : option["last_line"] + 1]
+        # Drop exactly the lines that made up the old value (in reverse
+        # so the recorded indices stay valid), then splice in the new
+        # ones at the key line's position.
+        for member in reversed(option["member_lines"]):
+            del new_lines[member]
         extra = [
             (continuation + part if part else "") + (ending or "\n")
             for part in parts[1:]
         ]
-        new_lines[index : index + 1] = [patched, *extra]
+        new_lines[index:index] = [patched, *extra]
         return new_lines, "replaced", index + 1
 
     def _append_option(

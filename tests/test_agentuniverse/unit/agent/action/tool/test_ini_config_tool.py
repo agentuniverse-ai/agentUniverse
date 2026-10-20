@@ -451,6 +451,66 @@ class IniConfigToolSetTest(unittest.TestCase):
             result["result"], "[a]\nk = first\n\n  second\nnew = 1\n"
         )
 
+    def test_set_keeps_deep_comment_after_multiline_value(self) -> None:
+        # A full-line comment is never part of a value per configparser
+        # (however deeply indented), so patching the value must leave it
+        # in the file. Regression test: it used to be swallowed by the
+        # contiguous continuation-range deletion.
+        result = self.tool.execute(
+            mode="set", text="[a]\nk = v1\n  v2\n    # deep comment\n",
+            section="a", key="k", value="z",
+        )
+        self.assertEqual(
+            result["result"], "[a]\nk = z\n    # deep comment\n"
+        )
+
+    def test_set_keeps_comment_between_key_and_continuation(self) -> None:
+        # Comments do not close a multiline value either (configparser
+        # skips them without ending the option), but they are still not
+        # value members and must survive the patch.
+        result = self.tool.execute(
+            mode="set", text="[a]\nk = v1\n\n# interleaved\n  v2\n",
+            section="a", key="k", value="z",
+        )
+        self.assertEqual(result["result"], "[a]\nk = z\n\n# interleaved\n")
+
+    def test_set_keeps_comment_between_continuation_lines(self) -> None:
+        result = self.tool.execute(
+            mode="set",
+            text="[a]\nk = v1\n  v2\n;c1\n  v3\nj = 2\n",
+            section="a", key="k", value="z",
+        )
+        self.assertEqual(result["result"], "[a]\nk = z\n;c1\nj = 2\n")
+        # and the new value must read back exactly
+        parsed = self.tool.execute(mode="parse", text=result["result"])
+        self.assertEqual(parsed["result"]["a"], {"k": "z", "j": "2"})
+
+    def test_set_multiline_value_keeps_interleaved_blank_line(self) -> None:
+        # Interior blank lines belong to the old value in parsed form but
+        # are not deleted with it; the re-parsed structure stays correct
+        # (configparser rstrips trailing value whitespace).
+        result = self.tool.execute(
+            mode="set", text="[a]\nk = v1\n  v2\n\n  v3\n", section="a",
+            key="k", value="z",
+        )
+        self.assertEqual(result["result"], "[a]\nk = z\n\n")
+        parsed = self.tool.execute(mode="parse", text=result["result"])
+        self.assertEqual(parsed["result"]["a"]["k"], "z")
+
+    def test_set_multiline_replacement_is_idempotent(self) -> None:
+        text = "[a]\nk = v1\n  v2\n    # deep comment\n"
+        first = self.tool.execute(
+            mode="set", text=text, section="a", key="k", value="n1\nn2"
+        )
+        second = self.tool.execute(
+            mode="set", text=first["result"], section="a", key="k",
+            value="n1\nn2",
+        )
+        self.assertEqual(first["result"], second["result"])
+        self.assertEqual(
+            first["result"], "[a]\nk = n1\n n2\n    # deep comment\n"
+        )
+
     def test_set_value_that_cannot_round_trip_is_rejected(self) -> None:
         # Continuation lines lose their indentation on read, so a value
         # whose second line is padded can never round-trip.
