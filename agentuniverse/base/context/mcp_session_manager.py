@@ -440,7 +440,7 @@ class MCPSessionManager:
         # NOTE: execution commands (e.g., `uvx` / `npx`) require PATH envvar to be set.
         # To address this, we automatically inject existing PATH envvar into the `env` value,
         # if it's not already set.
-        env = env or {}
+        env = dict(env or {})
         if "PATH" not in env:
             env["PATH"] = os.environ.get("PATH", "")
 
@@ -495,7 +495,7 @@ class MCPSessionManager:
         # NOTE: execution commands (e.g., `uvx` / `npx`) require PATH envvar to be set.
         # To address this, we automatically inject existing PATH envvar into the `env` value,
         # if it's not already set.
-        env = env or {}
+        env = dict(env or {})
         if "PATH" not in env:
             env["PATH"] = os.environ.get("PATH", "")
 
