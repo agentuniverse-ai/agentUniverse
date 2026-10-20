@@ -634,3 +634,27 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## LineLengthTool
+
+`LineLengthTool` audits the line-length distribution of a text before it is pasted into terminals, pull requests, or documentation — the lint-style QA counterpart to string-shaping tools (WhitespaceAuditorTool checks whitespace; this tool checks width). It is pure standard library, read-only, and never modifies the input.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.line_length_tool import LineLengthTool
+
+tool = LineLengthTool()
+report = tool.execute(mode="audit", text=open("patch.diff").read(), limit=80)
+long_lines = tool.execute(mode="find", text=report_text, limit=80, direction="over")
+near_limit = tool.execute(mode="find", text=report_text, limit=80, direction="under", min_length=60)
+overview = tool.execute(mode="stats_only", text=report_text)
+impact = tool.execute(mode="wrap_preview", text=report_text, limit=80)
+```
+
+Four modes are supported:
+
+- `audit` — full report: `total_lines`, length stats (`min`, `mean` rounded to 2 decimals, `median`, `max`), an eight-bucket histogram (`0-20`, `21-40`, `41-60`, `61-80`, `81-100`, `101-120`, `121-160`, `161+`), the `over_limit` count with the first 50 offending lines (`line_no`, `length`, `preview`), and the longest line.
+- `find` — positions of lines either over `limit` (`direction="over"`) or within `[min_length, limit)` (`direction="under"`), capped at 100 matches.
+- `stats_only` — the distribution alone; no limit needed.
+- `wrap_preview` — count-only preview of how many lines a TextWrapTool-style wrap at `width=limit` would reflow (lines longer than `limit`). The wrap itself is not performed; use TextWrapTool (#3555) for actual wrapping.
+
+Measurement conventions: lines are split with `str.splitlines`, so `\n`, `\r\n`, and `\r` terminators are excluded from lengths and a trailing terminator does not create a final empty line (`"a\n"` is one line). Empty lines count toward `total_lines` and land in the `0-20` bucket. Lengths count code points by default; with `display_width=True` lines are measured in terminal columns using east-asian width (wide/fullwidth characters count as 2) so CJK text is judged the way a terminal renders it. Previews are truncated by code points to 60 characters plus an ellipsis. `limit` must be between 1 and 10000, and inputs are capped at 100000 lines.
