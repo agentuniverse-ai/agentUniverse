@@ -18,12 +18,10 @@ class RenderedWebPageReader(Reader):
     """
 
     def _load_data(self, url: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        print(f"debugging: RenderedWebPageReader start load url={url}")
         if not isinstance(url, str) or not url:
             raise ValueError("RenderedWebPageReader._load_data requires a non-empty url string")
 
         html = self._render_and_get_html(url)
-        print(f"debugging: RenderedWebPageReader rendered html length={len(html)}")
 
         # Reuse extraction logic from WebPageReader by importing on demand
         from .web_page_reader import WebPageReader
@@ -45,7 +43,6 @@ class RenderedWebPageReader(Reader):
                 "Install with `pip install playwright` and run `playwright install`"
             )
 
-        print("debugging: RenderedWebPageReader using playwright")
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             try:
