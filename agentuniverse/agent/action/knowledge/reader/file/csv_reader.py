@@ -52,14 +52,16 @@ class CSVReader(Reader):
                 elif isinstance(raw_content, str):
                     text_stream = io.StringIO(raw_content)
                 else:
-                    raise ValueError("Unsupported file object type")
+                    raise TypeError("Unsupported file object type")
                 should_close = True
             else:
                 raise TypeError("file must be a path string, Path, or file-like object")
 
             csv_content: List[str] = []
             try:
-                csv_reader = csv.reader(text_stream, delimiter=delimiter, quotechar=quotechar)
+                csv_reader = csv.reader(
+                    text_stream, delimiter=delimiter, quotechar=quotechar, strict=True
+                )
                 for row in csv_reader:
                     if any(cell.strip() for cell in row):
                         while row and not row[-1].strip():
@@ -81,5 +83,9 @@ class CSVReader(Reader):
                 metadata.update(ext_info)
 
             return [Document(text=final_content, metadata=metadata)]
-        except Exception as e:
-            raise ValueError(f"Failed to read CSV file: {str(e)}") from e
+        except (FileNotFoundError, IsADirectoryError, TypeError, OSError):
+            raise
+        except csv.Error as e:
+            raise ValueError(f"Failed to parse CSV file: {str(e)}") from e
+        except UnicodeError as e:
+            raise ValueError(f"Failed to decode CSV file: {str(e)}") from e
