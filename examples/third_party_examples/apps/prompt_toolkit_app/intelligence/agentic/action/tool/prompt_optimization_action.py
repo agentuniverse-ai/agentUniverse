@@ -16,25 +16,25 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 class PromptOptimizationAction(Tool):
     """Action for optimizing existing prompts using the prompt toolkit.
-    
+
     This action demonstrates how to use the PromptToolkit to optimize
     existing prompts and improve their quality.
     """
-    
+
     def __init__(self):
         """Initialize the PromptOptimizationAction."""
         super().__init__()
         self.toolkit = PromptToolkit()
-    
+
     def run(
-        self, 
-        introduction: str, 
-        target: str, 
+        self,
+        introduction: str,
+        target: str,
         instruction: str,
         **kwargs
     ) -> Dict[str, Any]:
         """Optimize an existing prompt.
-        
+
         Args:
             introduction: The introduction section of the prompt.
             target: The target section of the prompt.
@@ -42,7 +42,7 @@ class PromptOptimizationAction(Tool):
             **kwargs: Additional parameters including:
                 - strategies: List of optimization strategies to apply
                 - custom_rules: Custom optimization rules
-        
+
         Returns:
             Dict[str, Any]: Optimization result and suggestions.
         """
@@ -53,7 +53,7 @@ class PromptOptimizationAction(Tool):
                 target=target,
                 instruction=instruction
             )
-            
+
             # Get optimization strategies
             strategies = kwargs.get('strategies', [OptimizationStrategy.CLARITY, OptimizationStrategy.STRUCTURE])
             if isinstance(strategies, list):
@@ -65,13 +65,13 @@ class PromptOptimizationAction(Tool):
                     else:
                         strategy_enums.append(strategy)
                 strategies = strategy_enums
-            
+
             # Optimize prompt using toolkit
             result = self.toolkit.optimize_existing_prompt(prompt, strategies)
-            
+
             # Analyze quality
             quality_analysis = self.toolkit.analyze_prompt_quality(prompt)
-            
+
             # Format response
             response = {
                 "success": True,
@@ -97,23 +97,23 @@ class PromptOptimizationAction(Tool):
                     "recommendations": quality_analysis["recommendations"]
                 }
             }
-            
+
             return response
-            
+
         except Exception as e:
             return {
                 "success": False,
                 "error": str(e),
                 "message": "Failed to optimize prompt"
             }
-    
+
     def _extract_section(self, formatted_prompt: str, section_name: str) -> str:
         """Extract a specific section from formatted prompt.
-        
+
         Args:
             formatted_prompt: The formatted prompt string.
             section_name: The name of the section to extract.
-            
+
         Returns:
             str: The extracted section content.
         """
@@ -128,24 +128,24 @@ class PromptOptimizationAction(Tool):
                         idx = formatted_prompt.find(next_section, start_idx)
                         if idx != -1 and idx < next_section_idx:
                             next_section_idx = idx
-                
+
                 content = formatted_prompt[start_idx:next_section_idx].strip()
                 return content
             return ""
         except Exception:
             return ""
-    
+
     def get_description(self) -> str:
         """Get description of the action.
-        
+
         Returns:
             str: Description of the action.
         """
         return "Optimize existing prompts to improve their quality, clarity, and effectiveness."
-    
+
     def get_parameters(self) -> Dict[str, Any]:
         """Get parameters for the action.
-        
+
         Returns:
             Dict[str, Any]: Parameter definitions.
         """
