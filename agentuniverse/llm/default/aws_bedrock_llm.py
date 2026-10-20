@@ -12,6 +12,7 @@ from pydantic import Field
 
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.llm.llm import LLM, LLMOutput
+from agentuniverse.llm.llm_output import TokenUsage
 
 # Define maximum context lengths for different AWS Bedrock models
 AWS_BEDROCK_MAX_CONTEXT_LENGTH = {
@@ -211,8 +212,29 @@ class AWSBedrockLLM(LLM):
                     if 'text' in delta:
                         yield LLMOutput(text=delta['text'], raw=event)
                 elif 'messageStop' in event:
-                    # End of message
-                    break
+                    # messageStop precedes metadata; it is not the end of the stream.
+                    finish_reason = {
+                        "end_turn": "stop",
+                        "stop_sequence": "stop",
+                        "max_tokens": "length",
+                        "tool_use": "tool_calls",
+                        "guardrail_intervened": "content_filter",
+                        "content_filtered": "content_filter",
+                        "malformed_model_output": "error",
+                        "malformed_tool_use": "error",
+                        "model_context_window_exceeded": "length",
+                    }.get(event['messageStop'].get('stopReason'))
+                    yield LLMOutput(text="", finish_reason=finish_reason, raw=event)
+                elif 'metadata' in event:
+                    usage = event['metadata'].get('usage')
+                    yield LLMOutput(
+                        text="",
+                        usage=TokenUsage(
+                            text_in=usage['inputTokens'],
+                            text_out=usage['outputTokens'],
+                        ) if usage is not None else None,
+                        raw=event,
+                    )
         except Exception as e:
             raise RuntimeError(f"Error in streaming response: {e}")
 
