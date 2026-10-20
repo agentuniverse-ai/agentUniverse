@@ -1,5 +1,5 @@
 name: mime_type_tool
-description: MIME type tool — pure Python stdlib, no network required. Map a filename or extension (dot-optional, case-insensitive) to a MIME type, category and known flag (mode='lookup', embedded ~195-entry table first, stdlib mimetypes fallback beyond it); map a MIME type back to its common extensions ordered by popularity (mode='reverse'); list every extension of a category image/audio/video/text/binary/archive/code/font/model with its MIME type (mode='category'); or sniff a short text sample for JSON, XML, HTML, Markdown, CSV or Base64 signatures (mode='sniff', textual formats only).
+description: MIME type tool — pure Python stdlib, no network required. Map a filename or extension (dot-optional, case-insensitive) to a MIME type, category and known flag (mode='lookup', embedded ~200-entry table first, stdlib mimetypes fallback beyond it); map a MIME type back to its common extensions ordered by popularity (mode='reverse'); list every extension of a category image/audio/video/text/binary/archive/code/font/model with its MIME type (mode='category'); or sniff a short text sample for JSON (incl. newline-delimited), XML, HTML, Markdown, CSV or Base64 signatures (mode='sniff', textual formats only).
 tool_type: api
 metadata:
   type: TOOL
@@ -30,7 +30,7 @@ args_model:
     required: false
   sample:
     type: string
-    description: Sniff mode — the first part of the file content as a string (typically the first ~1 KB); only textual formats can be detected.
+    description: Sniff mode — the first part of the file content as a string (typically the first ~1 KB); only textual formats can be detected (JSON incl. newline-delimited, XML, HTML, Markdown, CSV, Base64).
     required: false
 args_model_schema:
   type: object

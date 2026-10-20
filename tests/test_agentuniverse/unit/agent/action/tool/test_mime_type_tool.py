@@ -119,6 +119,17 @@ class MimeTypeToolTest(unittest.TestCase):
         self.assertEqual(tsx["mime"], "application/typescript")
         self.assertEqual(tsx["category"], "code")
 
+    def test_3g2_follows_iana_video_3gpp2(self) -> None:
+        # IANA registers video/3gpp2 for .3g2 (consistent with .3gp ->
+        # video/3gpp); video/3g2 is not a registered type.
+        result = self.tool.execute(mode="lookup", extension="3g2")
+        self.assertEqual(result["mime"], "video/3gpp2")
+        self.assertEqual(result["category"], "video")
+        self.assertEqual(result["source"], "table")
+        reverse = self.tool.execute(mode="reverse", mime="video/3gpp2")
+        self.assertTrue(reverse["known"])
+        self.assertEqual(reverse["extensions"], [".3g2"])
+
     # ------------------------------------------------------------------ #
     # lookup mode
     # ------------------------------------------------------------------ #
@@ -189,6 +200,44 @@ class MimeTypeToolTest(unittest.TestCase):
         self.assertEqual(result["extension"], ".gz")
         self.assertEqual(result["mime"], "application/gzip")
         self.assertFalse(result["compound"])
+
+    def test_lookup_short_dual_suffix_spellings(self) -> None:
+        # The abbreviations GNU tar and common tools emit map to the
+        # same compressed archive types as their long forms.
+        for ext, mime in (
+            ("tbz", "application/x-bzip2"),
+            ("tbz2", "application/x-bzip2"),
+            ("txz", "application/x-xz"),
+            ("tzst", "application/zstd"),
+        ):
+            with self.subTest(extension=ext):
+                result = self.tool.execute(mode="lookup", extension=ext)
+                self.assertEqual(result["mime"], mime)
+                self.assertEqual(result["category"], "archive")
+                self.assertEqual(result["source"], "table")
+        bzip2 = self.tool.execute(mode="reverse", mime="application/x-bzip2")
+        self.assertEqual(
+            bzip2["extensions"], [".bz2", ".tar.bz2", ".tbz", ".tbz2"]
+        )
+        xz = self.tool.execute(mode="reverse", mime="application/x-xz")
+        self.assertEqual(xz["extensions"], [".xz", ".tar.xz", ".txz"])
+        zstd = self.tool.execute(mode="reverse", mime="application/zstd")
+        self.assertEqual(zstd["extensions"], [".zst", ".tar.zst", ".tzst"])
+
+    def test_lookup_dotfiles_follow_splitext_semantics(self) -> None:
+        # os.path.splitext: leading dots do not start an extension, so
+        # ".png" and "..png" have none, but a file literally named
+        # ".tar.gz" resolves to ".gz".
+        for name in (".png", "..png", ".gitignore"):
+            with self.subTest(filename=name):
+                result = self.tool.execute(mode="lookup", filename=name)
+                self.assertIsNone(result["extension"])
+                self.assertFalse(result["known"])
+        tar_gz = self.tool.execute(mode="lookup", filename=".tar.gz")
+        self.assertEqual(tar_gz["extension"], ".gz")
+        self.assertEqual(tar_gz["mime"], "application/gzip")
+        self.assertTrue(tar_gz["known"])
+        self.assertFalse(tar_gz["compound"])
 
     def test_lookup_unknown_extension(self) -> None:
         result = self.tool.execute(mode="lookup", extension="xyzunknown")
@@ -381,6 +430,22 @@ class MimeTypeToolTest(unittest.TestCase):
         self.assertEqual(result["analyzed_chars"], 1024)
         self.assertIn("shape", result["evidence"][0])
 
+    def test_sniff_ndjson_detected(self) -> None:
+        result = self.tool.execute(
+            mode="sniff", sample='{"n": 0}\n{"n": 1}\n{"n": 2}'
+        )
+        self.assertEqual(result["mime"], "application/x-ndjson")
+        self.assertEqual(result["category"], "text")
+        self.assertIn("standalone JSON value", result["evidence"][0])
+        self.assertFalse(result["is_base64"])
+
+    def test_sniff_ndjson_truncated_falls_back_to_json_shape(self) -> None:
+        lines = [f'{{"n": {i}}}' for i in range(300)]
+        result = self.tool.execute(mode="sniff", sample="\n".join(lines))
+        self.assertTrue(result["truncated"])
+        self.assertEqual(result["mime"], "application/json")
+        self.assertIn("shape", result["evidence"][0])
+
     def test_sniff_utf8_bom_plain_text(self) -> None:
         result = self.tool.execute(mode="sniff", sample="\ufeffhello world")
         self.assertEqual(result["mime"], "text/plain")
@@ -420,12 +485,46 @@ class MimeTypeToolTest(unittest.TestCase):
         )
         self.assertEqual(result["mime"], "text/html")
 
+    def test_sniff_html_tag_boundary_not_fooled_by_prose(self) -> None:
+        # <header> / <bodyguard> / <headmaster> are prose words, not
+        # the structural <head> / <body> tags.
+        for sample in (
+            "Text with <header> elements and prose",
+            "we mention <bodyguard> duty\nand <headmaster> notes",
+            "The <htmlparser> module is gone",
+        ):
+            with self.subTest(sample=sample[:24]):
+                result = self.tool.execute(mode="sniff", sample=sample)
+                self.assertEqual(result["mime"], "text/plain")
+        # Real tags with attributes still fire.
+        attributed = self.tool.execute(
+            mode="sniff", sample='<body class="doc">\np\n</body>'
+        )
+        self.assertEqual(attributed["mime"], "text/html")
+        self.assertIn("tags: <body", attributed["evidence"][0])
+
     def test_sniff_markdown_heading(self) -> None:
         result = self.tool.execute(
             mode="sniff", sample="# Title\n\nSome prose with, commas."
         )
         self.assertEqual(result["mime"], "text/markdown")
         self.assertIn("ATX heading", result["evidence"][0])
+
+    def test_sniff_markdown_fenced_code_blocks(self) -> None:
+        for sample in (
+            "```python\nx = 1\nprint(x)\n```",
+            "~~~js\nconst a = 1;\n~~~",
+            "intro line\n\n```\nraw block\n```",
+        ):
+            with self.subTest(sample=sample[:20]):
+                result = self.tool.execute(mode="sniff", sample=sample)
+                self.assertEqual(result["mime"], "text/markdown")
+                self.assertIn("fenced code block", result["evidence"][0])
+        # A single inline backtick pair is not a fence.
+        inline = self.tool.execute(
+            mode="sniff", sample="text with `code` spans, and more words"
+        )
+        self.assertEqual(inline["mime"], "text/plain")
 
     def test_sniff_csv_consistent_columns(self) -> None:
         result = self.tool.execute(
@@ -442,6 +541,23 @@ class MimeTypeToolTest(unittest.TestCase):
             mode="sniff", sample="name,age\nalice,30,ny\nbob"
         )
         self.assertEqual(result["mime"], "text/plain")
+
+    def test_sniff_csv_quoted_commas_and_traps(self) -> None:
+        # RFC 4180 quoted fields: naive comma counting would see three
+        # fields on the first line and two on the others.
+        quoted = self.tool.execute(
+            mode="sniff", sample='"a,b",c\n1,2\n3,4'
+        )
+        self.assertEqual(quoted["mime"], "text/csv")
+        self.assertIn("3 non-empty lines each with 2 fields", quoted["evidence"][0])
+        # Semicolon-separated data and single-column lists are
+        # indistinguishable from prose and stay plain text.
+        semicolons = self.tool.execute(
+            mode="sniff", sample="name;age;city\nalice;30;ny\nbob;25;sf"
+        )
+        self.assertEqual(semicolons["mime"], "text/plain")
+        single = self.tool.execute(mode="sniff", sample="only\nlist\nhere")
+        self.assertEqual(single["mime"], "text/plain")
 
     def test_sniff_base64_charset(self) -> None:
         result = self.tool.execute(mode="sniff", sample=BASE64_SAMPLE)
@@ -462,6 +578,20 @@ class MimeTypeToolTest(unittest.TestCase):
         result = self.tool.execute(mode="sniff", sample="word " * 40)
         self.assertEqual(result["mime"], "text/plain")
         self.assertFalse(result["is_base64"])
+
+    def test_sniff_base64_unpadded_stays_plain(self) -> None:
+        # Documented conservative tie-break: only padding-consistent
+        # samples (multiple of four after whitespace removal) are
+        # flagged, so unpadded Base64 is left as text/plain.
+        result = self.tool.execute(mode="sniff", sample="aGVsbG8gd29ybGQgZnJvbQ")
+        self.assertEqual(result["mime"], "text/plain")
+        self.assertFalse(result["is_base64"])
+
+    def test_sniff_base64_whitespace_wrapped(self) -> None:
+        wrapped = "\n".join(BASE64_SAMPLE[i:i + 24] for i in range(0, len(BASE64_SAMPLE), 24))
+        result = self.tool.execute(mode="sniff", sample=wrapped)
+        self.assertEqual(result["mime"], "application/octet-stream")
+        self.assertTrue(result["is_base64"])
 
     def test_sniff_plain_text_default(self) -> None:
         sample = "The quick brown fox jumps over 13 dogs."

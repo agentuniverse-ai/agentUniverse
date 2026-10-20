@@ -15,7 +15,7 @@ conservative text-format sniffer.
 
 Lookups are answered by two layers, in order:
 
-* Layer 1 — an embedded, curated table of roughly 195 extensions
+* Layer 1 — an embedded, curated table of roughly 200 extensions
   (``_TABLE_SPEC`` below) mapping each extension to a MIME type and a
   coarse category (``image`` / ``audio`` / ``video`` / ``text`` /
   ``binary`` / ``archive`` / ``code`` / ``font`` / ``model``). The
@@ -31,6 +31,14 @@ Lookups are answered by two layers, in order:
   ``.ts`` follows its IANA-registered media type ``video/mp2t`` (MPEG
   transport stream, also what the stdlib reports) rather than
   TypeScript, which keeps ``.tsx`` → ``application/typescript``.
+  Where the table deliberately overrides the stdlib it follows
+  IANA/common practice instead of stdlib quirks: ``.obj`` →
+  ``model/obj`` (not the stdlib's ``application/x-tgif``), ``.rs`` →
+  ``text/rust`` (not ``application/rls-services+xml``), ``.stl`` →
+  ``model/stl`` (not Microsoft's certificate trust list
+  ``application/vnd.ms-pki.stl``), and ``.3g2`` → ``video/3gpp2``
+  (the IANA-registered type, consistent with ``.3gp`` →
+  ``video/3gpp``).
 * Layer 2 — a fallback to the standard library ``mimetypes`` module
   for extensions beyond the table. The result is reported with
   ``source: "stdlib"`` and its category is derived from the media
@@ -47,7 +55,9 @@ Four modes are supported:
   flag and the ``source`` layer that answered. Unknown extensions
   return ``mime: None`` with ``known: False`` instead of raising.
   Filenames without an extension (including dotfiles such as
-  ``.gitignore``, following :func:`os.path.splitext` semantics) also
+  ``.gitignore``, following :func:`os.path.splitext` semantics — a
+  leading dot does not start an extension, so ``.png`` has none while
+  a file literally named ``.tar.gz`` resolves to ``.gz``) also
   return ``known: False``.
 * ``reverse`` — a MIME type resolves to the list of common
   extensions from the embedded table, ordered by popularity (the
@@ -60,15 +70,24 @@ Four modes are supported:
   nine categories together with its MIME type, sorted by extension.
 * ``sniff`` — a best-effort *text* format guess from a short sample
   (the first ~1 KB) of file content given as a string. Signals, in
-  priority order: JSON object/array shape (full ``json.loads`` parse
-  when possible, structural shape when the sample is truncated), XML
-  declaration, HTML markup tags, Markdown ATX headings, CSV with
-  consistent comma-separated columns, and the Base64 alphabet. A
-  UTF-8 BOM is reported as additional evidence whatever the verdict.
-  The sniffer is deliberately honest: it only distinguishes textual
-  formats — binary formats (images, archives, office documents)
-  cannot be identified from text heuristics, and Base64 content can
-  only be flagged, not decoded to its underlying type here.
+  priority order: JSON (full ``json.loads`` parse first; newline-
+  delimited JSON — every line a standalone value — reports
+  ``application/x-ndjson``; structural shape when the sample is
+  truncated), XML declaration, HTML markup tags (matched with a tag
+  boundary so prose such as ``<header>`` does not trigger the
+  ``<head>`` signal), Markdown ATX headings and fenced code blocks,
+  CSV with consistent comma-separated columns (RFC 4180 quoted
+  fields included, via the :mod:`csv` module), and the Base64
+  alphabet. A UTF-8 BOM is reported as additional evidence whatever
+  the verdict. The sniffer is deliberately honest about its limits:
+  it only distinguishes textual formats — binary formats (images,
+  archives, office documents) cannot be identified from text
+  heuristics; Base64 content can only be flagged, not decoded to its
+  underlying type here, and only padding-consistent samples (a
+  length that is a multiple of 4 after whitespace removal) are
+  flagged, so unpadded Base64 conservatively stays ``text/plain``;
+  single-column CSV and semicolon-separated data are
+  indistinguishable from prose and also stay ``text/plain``.
 
 Input validation is strict and happens before any computation:
 malformed parameters (wrong types, unknown mode or category, a
@@ -80,6 +99,7 @@ well-formed* extension or MIME type is not an error — it returns
 ``known: False`` so an agent can branch without catching exceptions.
 """
 
+import csv as csv_module
 import json as json_module
 import mimetypes
 import re
@@ -99,8 +119,21 @@ _MIME_RE = re.compile(r"\A[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+\Z")
 _BASE64_RE = re.compile(r"\A[A-Za-z0-9+/]+={0,2}\Z")
 # ATX heading: one to six '#' followed by whitespace or end of line.
 _ATX_RE = re.compile(r"\A#{1,6}(?:\s|\Z)")
+# Fenced code block start: three or more backticks or tildes.
+_FENCE_RE = re.compile(r"\A(?:`{3,}|~{3,})")
 # Whitespace collapsed out of a candidate Base64 sample.
 _WHITESPACE_RE = re.compile(r"\s+")
+# HTML structural tags, matched with a tag-name boundary so prose
+# such as "<header>" or "<bodyguard>" does not fire the signal.
+_HTML_TAG_RES: Tuple[Tuple[str, "re.Pattern[str]"], ...] = (
+    (
+        "<!doctype html",
+        re.compile(r"<!doctype\s+html", re.IGNORECASE),
+    ),
+    ("<html", re.compile(r"<html(?:\s|/|>|\Z)", re.IGNORECASE)),
+    ("<head", re.compile(r"<head(?:\s|/|>|\Z)", re.IGNORECASE)),
+    ("<body", re.compile(r"<body(?:\s|/|>|\Z)", re.IGNORECASE)),
+)
 
 # --------------------------------------------------------------------- #
 # Layer 1 — the embedded, curated extension table.
@@ -271,7 +304,9 @@ _TABLE_SPEC: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
             ("mpeg", "video/mpeg"),
             ("ogv", "video/ogg"),
             ("3gp", "video/3gpp"),
-            ("3g2", "video/3g2"),
+            # IANA registers video/3gpp2 for .3g2 (the stdlib agrees);
+            # video/3g2 is not a registered type.
+            ("3g2", "video/3gpp2"),
             ("ts", "video/mp2t"),
             ("m2ts", "video/mp2t"),
             ("vob", "video/mpeg"),
@@ -283,16 +318,22 @@ _TABLE_SPEC: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = (
             ("zip", "application/zip"),
             ("tar", "application/x-tar"),
             # Dual-suffix archives describe the outer compression
-            # container; a plain .tar is application/x-tar.
+            # container; a plain .tar is application/x-tar. The short
+            # spellings GNU tar and common tools emit (.tgz, .tbz,
+            # .tbz2, .txz, .tzst) map to the same compressed types.
             ("gz", "application/gzip"),
             ("tgz", "application/gzip"),
             ("tar.gz", "application/gzip"),
             ("bz2", "application/x-bzip2"),
             ("tar.bz2", "application/x-bzip2"),
+            ("tbz", "application/x-bzip2"),
+            ("tbz2", "application/x-bzip2"),
             ("xz", "application/x-xz"),
             ("tar.xz", "application/x-xz"),
+            ("txz", "application/x-xz"),
             ("zst", "application/zstd"),
             ("tar.zst", "application/zstd"),
+            ("tzst", "application/zstd"),
             ("7z", "application/x-7z-compressed"),
             ("rar", "application/vnd.rar"),
             ("lz", "application/x-lzip"),
@@ -430,13 +471,14 @@ class MimeTypeTool(Tool):
         "MIME type tool — pure Python stdlib, no network required. "
         "Map a filename or extension (dot-optional, case-insensitive) "
         "to a MIME type, category and known flag (mode='lookup', "
-        "embedded ~195-entry table first, stdlib mimetypes fallback "
+        "embedded ~200-entry table first, stdlib mimetypes fallback "
         "beyond it); map a MIME type back to its common extensions "
         "ordered by popularity (mode='reverse'); list every extension "
         "of a category image/audio/video/text/binary/archive/code/"
         "font/model with its MIME type (mode='category'); or sniff a "
-        "short text sample for JSON, XML, HTML, Markdown, CSV or "
-        "Base64 signatures (mode='sniff', textual formats only)."
+        "short text sample for JSON (incl. newline-delimited), XML, "
+        "HTML, Markdown, CSV or Base64 signatures (mode='sniff', "
+        "textual formats only)."
     )
 
     MODES: ClassVar[tuple] = ("lookup", "reverse", "category", "sniff")
@@ -610,22 +652,25 @@ class MimeTypeTool(Tool):
     def _extension_of(cls, basename: str) -> Optional[str]:
         """Extract the (possibly dual) lowercase extension of a basename.
 
-        Follows :func:`os.path.splitext` semantics: a leading dot does
-        not start an extension, so dotfiles such as ``.gitignore``
-        have no extension. Dual suffixes (``.tar.gz``) are returned
-        whole when the table knows the compound form.
+        Follows :func:`os.path.splitext` semantics: leading dots of the
+        final component do not start an extension, so dotfiles such as
+        ``.gitignore`` and ``.png`` have no extension, while a dot
+        after real characters does — a file literally named
+        ``.tar.gz`` resolves to ``.gz``. Dual suffixes (``.tar.gz``)
+        are returned whole when the table knows the compound form.
         """
-        if not basename or basename.startswith("."):
+        if not basename:
             return None
-        last = basename.rfind(".")
+        stem = basename.lstrip(".")
+        last = stem.rfind(".")
         if last <= 0:
             return None
-        ext = basename[last + 1:].strip().lower()
+        ext = stem[last + 1:].strip().lower()
         if not ext or not _EXT_RE.match(ext):
             return None
-        dual = basename.rfind(".", 0, last)
+        dual = stem.rfind(".", 0, last)
         if dual > 0:
-            compound = basename[dual + 1:].strip().lower()
+            compound = stem[dual + 1:].strip().lower()
             if compound in _EXTENSION_MAP:
                 return compound
         return ext
@@ -777,38 +822,58 @@ class MimeTypeTool(Tool):
         """Apply the sniff heuristics in priority order to the body."""
         stripped = body.strip()
 
-        # 1. JSON object / array — full parse when possible, else shape.
+        # 1. JSON object / array — full parse first; then newline-
+        #    delimited JSON (every non-empty line a standalone value);
+        #    finally a structural shape when the sample is truncated.
         if stripped and stripped[0] in "{[":
             try:
                 json_module.loads(stripped)
+            except ValueError:
+                pass
+            else:
                 kind = "object" if stripped[0] == "{" else "array"
                 return (
                     "application/json",
                     f"sample parses as a JSON {kind}",
                     False,
                 )
-            except ValueError:
-                ends_well = stripped[-1] in "}]"
-                if (ends_well or truncated) and '"' in stripped and (
-                    ":" in stripped or "," in stripped
-                ):
-                    return (
-                        "application/json",
-                        "JSON object/array shape (starts with '{' or "
-                        "'[' and ends with '}' or ']' or is truncated)",
-                        False,
-                    )
+            if not truncated:
+                value_lines = [
+                    line for line in stripped.splitlines() if line.strip()
+                ]
+                if len(value_lines) >= 2:
+                    try:
+                        for line in value_lines:
+                            json_module.loads(line)
+                    except ValueError:
+                        pass
+                    else:
+                        return (
+                            "application/x-ndjson",
+                            f"every one of {len(value_lines)} non-empty "
+                            "lines parses as a standalone JSON value "
+                            "(newline-delimited JSON)",
+                            False,
+                        )
+            ends_well = stripped[-1] in "}]"
+            if (ends_well or truncated) and '"' in stripped and (
+                ":" in stripped or "," in stripped
+            ):
+                return (
+                    "application/json",
+                    "JSON object/array shape (starts with '{' or "
+                    "'[' and ends with '}' or ']' or is truncated)",
+                    False,
+                )
 
         # 2. XML declaration.
         if body.lstrip().startswith("<?xml"):
             return "application/xml", "XML declaration '<?xml' at the start", False
 
-        # 3. HTML markup.
-        lowered = body.lower()
+        # 3. HTML markup — structural tags with a name boundary, so
+        #    prose such as "<header>" or "<bodyguard>" does not fire.
         tags = [
-            tag
-            for tag in ("<!doctype html", "<html", "<head", "<body")
-            if tag in lowered
+            name for name, pattern in _HTML_TAG_RES if pattern.search(body)
         ]
         if tags:
             return (
@@ -817,7 +882,7 @@ class MimeTypeTool(Tool):
                 False,
             )
 
-        # 4. Markdown ATX heading.
+        # 4. Markdown ATX heading or fenced code block.
         for line in body.splitlines():
             if _ATX_RE.match(line):
                 return (
@@ -825,13 +890,28 @@ class MimeTypeTool(Tool):
                     "Markdown ATX heading line ('# ...') found",
                     False,
                 )
+            if _FENCE_RE.match(line):
+                return (
+                    "text/markdown",
+                    "Markdown fenced code block start ('```' or '~~~') found",
+                    False,
+                )
 
         # 5. CSV — at least two non-empty lines with the same number
-        #    (>= 2) of comma-separated fields on every line.
+        #    (>= 2) of fields on every line, parsed with the csv
+        #    module so RFC 4180 quoted commas do not break the count.
         lines = [line for line in body.splitlines() if line.strip()]
         if len(lines) >= 2:
-            widths = {line.count(",") + 1 for line in lines}
-            if len(widths) == 1 and next(iter(widths)) >= 2:
+            try:
+                rows = list(csv_module.reader(lines))
+            except csv_module.Error:
+                rows = []
+            widths = {len(row) for row in rows} if rows else set()
+            if (
+                len(rows) == len(lines)
+                and len(widths) == 1
+                and next(iter(widths)) >= 2
+            ):
                 width = next(iter(widths))
                 return (
                     "text/csv",
@@ -843,7 +923,9 @@ class MimeTypeTool(Tool):
         # 6. Base64 alphabet (standard, not urlsafe). A candidate must
         #    also contain at least one digit, uppercase letter, '+'/'/'
         #    or '=' — squashed lowercase prose (e.g. "wordword...")
-        #    matches the bare alphabet but is not Base64 in practice.
+        #    matches the bare alphabet but is not Base64 in practice —
+        #    and be padding-consistent (a multiple of four characters
+        #    after whitespace removal), so unpadded Base64 stays plain.
         compact = _WHITESPACE_RE.sub("", body)
         if (
             len(compact) >= 16
