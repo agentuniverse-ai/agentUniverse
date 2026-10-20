@@ -310,3 +310,37 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [NumberConflictDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/number_conflict_detector.yaml)
+
+该组件标记同一数值论断被以不同数字复述的情况，对应 issue #258 的*知识抽取 / 数据质量*方向。文档在转写、翻译、复述的过程中数字会漂移：一段写 "revenue was 5 million"，下一段写 "revenue reached 6 million"，翻译节又把 "5万" 复述成 "60000"。一个与自身相矛盾的切片是应当在数字被向量化、被检索*之前*就暴露出来的质量信号。本组件用纯正则（无模型调用、无网络、无第三方依赖）扫描每个文档，把每处不一致记录进 `metadata[number_conflicts]`，形如 `{"anchor", "dimension", "values": [{value, text, span, sentence_index}...]（最多展示 5 条）, "relative_gap"}`。
+
+判定一次冲突分四步。**数值抽取**：在每个句子内定位数值形式——百分比（`45%`、`45.3 percent`、全角 `45％`、中文 `百分之四十五` → 45）、数量级词经精确 Decimal 运算折算进数值的金额（`5万` → 50000、`3 million` → 3000000、`1.5亿` → 150000000、`1.13万` → 11300）、带单位的计数（`1,200 users`、`5万次`）与裸数字（带千分位的 `1,234,567` 始终收录；无分隔符的数字仅从 1000 起收录）。每个数值属于一个*维度*——`percent` 或 `amount`——且只在同维度内比较，因此 "growth was 45%" 与 "growth hit 45 million" 是不同的论断，绝不构成冲突。**锚定**：把数字挂到论断主语上——直接粘在数字后的单位词优先（`1,200 users` 锚定 `user`），否则取数字前方 4 词元窗口内最近的名词性词（"revenue was 5 million" 与 "revenue reached 6 million" 都锚定 `revenue`，系词与计量动词被跳过），否则取后方 4 词元窗口内最近的名词性词。英文词小写化并轻度词干化（剥去词尾 s/es/ed/ing）；中文串先从尾部缩减（`营收达到` → `营收`），再从头部缩减（`2024年营收` → `营收`），且保护 日活 这类两字短词。任何窗口内都找不到名词的数字被丢弃。**分组**：同锚定同维度的提及按相邻句距不超过 `window_size`（默认 3，即滑动 3 句窗口）链接成链；第 1 句与第 4 句的提及分属不同的链，永不冲突。**冲突判定**：链内任意一对数值之差超过 `tolerance + near_conflict_ratio ×` 较大者量级即构成冲突——默认（`tolerance` 0、`near_conflict_ratio` 0.001）下，归一化后相同的数值与 0.1% 以内的舍入漂移算作一致，而 5 million 对 6 million、`5万` 对 `60000` 即为不一致；`relative_gap` 记录最严重一对的相对差距。
+
+抽取之前先排除误报：日期与 ISO 日历（`2026-10-19`、`10/19/2026`、中文 `2026年10月19日` 及孤立的 `2026年`/`10月`/`5日` 片段）、带明确年份语境的四位年份（`in 2024`、`fiscal 2024`、`FY2024`、`2024 years`）、版本号（`v1.2.3`、`1.2.3`、IP 地址）、序数词（`21st`、`1,000th`、`第3`）、URL 及其中的数字、以及倍数后缀（`5000x`、`5000倍`）。重复出现的相同数值*不是*冲突——它们计入 `metadata[consistent_repeats]`。除冲突列表（截断至 `max_conflicts`，默认 20）外，`metadata[numeric_consistency]` 收到 `consistent` 或 `conflicts_found`，`metadata[conflict_count]` 收到完整的冲突总数。文档在其他方面原样通过：text 与 id 从不修改，顺序保持，元数据映射先复制再写入。该组件完全确定性，与离线质量探针家族互补：`StatisticsExtractor` 只标记数值论断而不比较，词面级矛盾检测器看到 "however" 这类词却看不见数字——本组件比较的正是数字本身。
+
+组件定义文件如下：
+```yaml
+name: 'number_conflict_detector'
+description: 'flag the same measured claim repeated with different numbers (5万 vs 60000) as a data-quality signal for RAG ingestion'
+window_size: 3                # 参与比较的提及之间的最大句距，[1, 5]
+max_conflicts: 20             # 最多保留的冲突数；conflict_count 始终为完整计数
+tolerance: 0                  # 容忍的绝对差值（精确比较）
+near_conflict_ratio: 0.001    # 容忍的相对差值（舍入漂移）
+conflicts_key: 'number_conflicts'      # 冲突列表写入的元数据键；'' 表示禁用
+count_key: 'conflict_count'            # 完整计数写入的元数据键；'' 表示禁用
+consistency_key: 'numeric_consistency' # 结论写入的元数据键；'' 表示禁用
+repeats_key: 'consistent_repeats'      # 一致重复计数写入的元数据键；'' 表示禁用
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.number_conflict_detector'
+  class: 'NumberConflictDetector'
+```
+- window_size：同一锚定的两条提及参与比较的最大句距，取值 [1, 5]。默认 3 按滑动 3 句窗口分组；更远的提及分属不同分组，永不冲突。
+- max_conflicts：冲突列表最多保留的条数；必须是 >= 1 的整数。`conflict_count` 始终反映找到的全部冲突。
+- tolerance：判定两值不一致前容忍的绝对差值；>= 0 的数，默认 0（归一化后精确比较）。
+- near_conflict_ratio：判定两值不一致前容忍的相对差值（占较大者量级的比例）；>= 0 的数，默认 0.001，即舍入漂移保持一致。
+- conflicts_key：冲突列表写入的元数据键；空值表示禁用列表写入。
+- count_key：完整冲突计数写入的元数据键；空值表示禁用计数写入。
+- consistency_key：整体结论（`consistent` / `conflicts_found`）写入的元数据键；空值表示禁用结论写入。
+- repeats_key：同数值重复出现的锚定分组计数写入的元数据键；空值表示禁用该写入。
