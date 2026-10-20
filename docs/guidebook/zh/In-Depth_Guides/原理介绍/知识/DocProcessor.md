@@ -310,3 +310,33 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [QuestionTypeClassifier](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/question_type_classifier.yaml)
+
+该组件把检测到的问题归类到十类问题类型体系，对应 issue #258 的*问题类型挖掘*方向。知道一句话在提问只完成了一半："why" 问题要的是原因，"how many" 要的是数量，是非题要的是布尔值，FAQ 挖掘、意图路由和问答对排序都需要按问题类别切分语料。组件遍历每篇文档，用与 QuestionDetector 系列相同的保守分句方式切句，只保留疑问句，并把每句唯一地映射到 `what | who | when | where | why | how | quantity | which | yes_no | choice` 之一——纯 Python、离线、确定性、无需模型调用。
+
+一句话算作疑问句的条件是：句末标点带 `?`/`？`，或以英文疑问/助动词开头（不要求问号："How to configure this." 也算），或含中文疑问标记（为什么/什么/谁/何时/什么时候/哪里/哪儿/哪个/哪些/怎么/如何/多少/几/还是/是不是，或句末 吗）。陈述句一律不报告。每个疑问句按其首个疑问标记归类，优先级顺序如下（文档化）：（1）句内任意位置的英文 wh 词，整词匹配、大小写不敏感——"You did what?" 归为 `what`——"how" 后接 many/much 经两词前瞻提升为 `quantity`；（2）中文标记，同位取最长——什么时候 → `when`（优先于内嵌的 什么），为什么 → `why`，谁 → `who`，何时 → `when`，哪里/哪儿 → `where`，哪个/哪些 → `which`，怎么/如何 → `how`，多少/几 → `quantity`，还是 → `choice`；（3）无 wh 词的极性形态：英文助动词开头（is/are/do/does/did/can/could/would/should/will）、含 "do you think" 或中文"是不是" → `yes_no`；（4）空白分隔的备选项之间的独立 " or " → `choice`（助动词开头的备选问句如 "Would you like tea or coffee?" 依规则（3）归为 `yes_no`——靠前的规则优先）；（5）句末 吗 → `yes_no`；（6）仅凭句末问号成立的陈述形态问句（"She left?"）回退为 `yes_no`。中英混排句中英文证据优先于中文证据；词面匹配也继承了常见的启发式局限（"还是算了" 中的 还是、几乎 中的 几 这类陈述用法无法区分）。
+
+命中结果写入 `metadata['question_types']`，形如 `{'text'（前 100 字符）, 'span': (start, end), 'type'}`——span 是原文本的精确偏移——由 `max_question_types` 截断。旁边 `metadata['question_type_counts']` 给出每种类型在全文的**未截断**计数，`metadata['dominant_question_type']` 是出现最多的类型（并列按字母序，无疑问句时为 None）；两项聚合都基于全部问题计算，截断列表不会扭曲它们。text、id 及已有 metadata 条目绝不被修改。该组件与 QuestionDetector（只做*检测*）、SectionRoleClassifier（做标题角色）互补：本组件提供*类型*维度。
+
+组件定义文件如下：
+```yaml
+name: 'question_type_classifier'
+description: 'classify detected questions into a ten-type taxonomy'
+max_question_types: 50        # metadata['question_types'] 保留的命中数
+min_words: 1                 # 成句的最小词数
+preview_chars: 100           # 每条命中 text 字段的最大字符数
+question_types_key: 'question_types'      # '' 表示不写入
+counts_key: 'question_type_counts'        # '' 表示不写入
+dominant_key: 'dominant_question_type'    # '' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.question_type_classifier'
+  class: 'QuestionTypeClassifier'
+```
+- max_question_types：类型命中列表保留的最大条数，必须 >= 0。计数聚合始终不截断。
+- min_words：一个片段算作句子的最小词数（含至少一个字母数字字符的空白分隔词元），必须 >= 1。默认 1 保留 "Why?" 这类单词问句。
+- preview_chars：每条问题保留在 `text` 字段的最大字符数；span 仍指向完整句子。必须 >= 1。
+- question_types_key：截断命中列表写入的 metadata 键；为空则不写入。
+- counts_key：未截断的类型计数映射写入的 metadata 键；为空则不写入。
+- dominant_key：主导类型写入的 metadata 键；为空则不写入。

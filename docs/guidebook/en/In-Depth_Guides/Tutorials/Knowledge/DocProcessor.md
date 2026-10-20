@@ -309,3 +309,33 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [QuestionTypeClassifier](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/question_type_classifier.yaml)
+
+This component classifies detected questions into a ten-type taxonomy, addressing the *question-type mining* direction of issue #258. Knowing that a sentence asks is only half the win: a "why" question wants reasons, a "how many" question wants numbers, a yes/no question wants a boolean, and FAQ mining, intent routing and QA-pair ranking all slice corpora by question kind. The component walks every document, splits it into sentences with the same conservative segmentation as the QuestionDetector family, keeps only the interrogative ones and maps each to exactly one type of `what | who | when | where | why | how | quantity | which | yes_no | choice` — pure Python, offline, deterministic, no model call.
+
+A sentence counts as interrogative when its terminal punctuation carries `?`/`？`, when it opens with an English interrogative or auxiliary word (terminal punctuation not required: "How to configure this." still counts), or when it contains a Chinese interrogative marker (为什么/什么/谁/何时/什么时候/哪里/哪儿/哪个/哪些/怎么/如何/多少/几/还是/是不是, or a final 吗). Declarative sentences are never reported. Each interrogative sentence is typed by its first interrogative token, in this documented priority order: (1) earliest English wh word anywhere in the sentence, whole-word and case-insensitive — "You did what?" is typed `what` — with a two-word look-ahead promoting "how many"/"how much" to `quantity`; (2) earliest Chinese token, longest at equal positions — 什么时候 → `when` (outranking the nested 什么), 为什么 → `why`, 谁 → `who`, 何时 → `when`, 哪里/哪儿 → `where`, 哪个/哪些 → `which`, 怎么/如何 → `how`, 多少/几 → `quantity`, 还是 → `choice`; (3) polar shape with no wh token: English auxiliary opener (is/are/do/does/did/can/could/would/should/will), "do you think", or Chinese 是不是 → `yes_no`; (4) standalone " or " between whitespace-separated alternatives → `choice` (an auxiliary-initial alternative like "Would you like tea or coffee?" is `yes_no` by rule 3 — the earlier rule wins); (5) final 吗 → `yes_no`; (6) terminal fallback for statement-shaped questions with rising intonation ("She left?") → `yes_no`. English evidence outranks Chinese evidence in mixed sentences, and token matching inherits the usual heuristic limits (还是 in "还是算了" or 几 in 几乎 are declarative uses it cannot distinguish).
+
+Hits land in `metadata['question_types']` as `{'text' (first 100 chars), 'span': (start, end), 'type'}` — spans are exact offsets into the original text — capped by `max_question_types`. Next to them, `metadata['question_type_counts']` maps every type to its uncapped occurrence count over the whole document and `metadata['dominant_question_type']` is the most frequent type (ties alphabetical, None when nothing is asked); both aggregates are computed over all questions, so capping the list never skews them. Text, id and existing metadata entries are never modified. The component complements QuestionDetector (which only *detects*) and SectionRoleClassifier (which classifies headings): this one supplies the *type* dimension.
+
+The component definition file is as follows:
+```yaml
+name: 'question_type_classifier'
+description: 'classify detected questions into a ten-type taxonomy'
+max_question_types: 50        # hits kept in metadata['question_types']
+min_words: 1                 # min words for a segment to be a sentence
+preview_chars: 100           # max chars per hit's text field
+question_types_key: 'question_types'      # '' disables the stamp
+counts_key: 'question_type_counts'        # '' disables the stamp
+dominant_key: 'dominant_question_type'    # '' disables the stamp
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.question_type_classifier'
+  class: 'QuestionTypeClassifier'
+```
+- max_question_types: Maximum number of typed hits kept in the list; must be >= 0. The counts aggregate is always uncapped.
+- min_words: Minimum number of words (whitespace tokens with at least one alphanumeric character) for a segment to count as a sentence; must be >= 1. Default 1 keeps single-word questions such as "Why?".
+- preview_chars: Maximum characters of each question kept in its `text` field; spans still reference the full sentence. Must be >= 1.
+- question_types_key: Metadata key the capped hit list is written to; an empty value disables stamping.
+- counts_key: Metadata key the uncapped per-type count mapping is written to; an empty value disables stamping.
+- dominant_key: Metadata key the dominant type is written to; an empty value disables stamping.
