@@ -12,6 +12,8 @@ RAR Reader 演示
 """
 
 import os
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from agentuniverse.agent.action.knowledge.reader.file.rar_reader import RarReader
