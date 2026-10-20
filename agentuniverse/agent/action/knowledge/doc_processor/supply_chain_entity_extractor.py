@@ -620,7 +620,9 @@ Return results in JSON format:
                 r'{entity1}\s+delivers?\s+.{{0,30}}\s+(?:to\s+)?{entity2}',
                 r'{entity2}\s+receives?\s+(?:delivery|shipment)\s+from\s+{entity1}',
                 r'{entity1}\s+transports?\s+.{{0,30}}\s+(?:to\s+)?{entity2}',
-                r'shipped\s+to\s+(?:the\s+)?{entity2}',  # "shipped to the Los Angeles distribution center"
+                # Match both endpoints: a destination-only phrase must not
+                # assign the shipment to every other entity in the document.
+                r'{entity1}\s+(?:(?:was|were)\s+)?shipped\s+to\s+(?:the\s+)?{entity2}',
             ],
             'sells_to': [
                 r'{entity1}\s+sells?\s+.{{0,30}}\s+(?:to\s+)?{entity2}',
