@@ -13,7 +13,7 @@ class TestAWSBedrockLLM(unittest.TestCase):
 
         app_configer = AppConfiger()
         ApplicationConfigManager().app_configer = app_configer
-        
+
         self.llm = AWSBedrockLLM(
             model_name='amazon.nova-lite-v1:0',
             aws_access_key_id='AWS_ACCESS_KEY_ID',
@@ -21,7 +21,7 @@ class TestAWSBedrockLLM(unittest.TestCase):
             aws_region='us-east-1',
         )
 
-    
+
     def test_call(self) -> None:
         """Test synchronous call with real API."""
         messages = [
@@ -34,7 +34,7 @@ class TestAWSBedrockLLM(unittest.TestCase):
         print(output.__str__())
         self.assertIsNotNone(output.text)
 
-    
+
     def test_acall(self) -> None:
         """Test asynchronous call with real API."""
         messages = [
@@ -63,7 +63,7 @@ class TestAWSBedrockLLM(unittest.TestCase):
         print()
         self.assertGreater(len(chunks), 0)
 
-    
+
     def test_acall_stream(self):
         """Test async streaming call with real API."""
         messages = [
