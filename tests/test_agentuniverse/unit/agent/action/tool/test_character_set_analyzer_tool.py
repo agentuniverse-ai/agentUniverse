@@ -143,6 +143,54 @@ ANCHORS = [
 class BlockTableTest(unittest.TestCase):
     """Structural and identity checks of the compact block table."""
 
+    # Official Unicode block ranges (per the UCD Blocks.txt) for the 34
+    # blocks the compact table covers. Held independently here so the
+    # boundary tests below cannot silently follow a table typo: if a
+    # range in _BLOCK_RANGES drifts from the official values, this
+    # equality fails even though lookup_block stays self-consistent.
+    OFFICIAL_RANGES = [
+        (0x0000, 0x007F, "Basic Latin"),
+        (0x0080, 0x00FF, "Latin-1 Supplement"),
+        (0x0100, 0x017F, "Latin Extended-A"),
+        (0x0180, 0x024F, "Latin Extended-B"),
+        (0x0250, 0x02AF, "IPA Extensions"),
+        (0x02B0, 0x02FF, "Spacing Modifier Letters"),
+        (0x0300, 0x036F, "Combining Diacritical Marks"),
+        (0x0370, 0x03FF, "Greek and Coptic"),
+        (0x0400, 0x04FF, "Cyrillic"),
+        (0x0530, 0x058F, "Armenian"),
+        (0x0590, 0x05FF, "Hebrew"),
+        (0x0600, 0x06FF, "Arabic"),
+        (0x0900, 0x097F, "Devanagari"),
+        (0x0E00, 0x0E7F, "Thai"),
+        (0x2000, 0x206F, "General Punctuation"),
+        (0x20A0, 0x20CF, "Currency Symbols"),
+        (0x2100, 0x214F, "Letterlike Symbols"),
+        (0x2150, 0x218F, "Number Forms"),
+        (0x2190, 0x21FF, "Arrows"),
+        (0x2200, 0x22FF, "Mathematical Operators"),
+        (0x2300, 0x23FF, "Miscellaneous Technical"),
+        (0x2500, 0x257F, "Box Drawing"),
+        (0x2580, 0x259F, "Block Elements"),
+        (0x25A0, 0x25FF, "Geometric Shapes"),
+        (0x2600, 0x26FF, "Miscellaneous Symbols"),
+        (0x2700, 0x27BF, "Dingbats"),
+        (0x3000, 0x303F, "CJK Symbols and Punctuation"),
+        (0x3040, 0x309F, "Hiragana"),
+        (0x30A0, 0x30FF, "Katakana"),
+        (0x3400, 0x4DBF, "CJK Unified Ideographs Extension A"),
+        (0x4E00, 0x9FFF, "CJK Unified Ideographs"),
+        (0xAC00, 0xD7AF, "Hangul Syllables"),
+        (0xE000, 0xF8FF, "Private Use Area"),
+        (0xFF00, 0xFFEF, "Halfwidth and Fullwidth Forms"),
+    ]
+
+    def test_ranges_match_official_unicode_values(self) -> None:
+        self.assertEqual(
+            [(first, last, name) for first, last, name in _BLOCK_RANGES],
+            self.OFFICIAL_RANGES,
+        )
+
     def test_table_is_sorted_and_non_overlapping(self) -> None:
         self.assertEqual(len(_BLOCK_RANGES), 34)
         for (prev_first, prev_last, _), (first, last, _) in zip(
@@ -488,6 +536,22 @@ class ValidationAndDeterminismTest(unittest.TestCase):
         # Exactly at the cap is accepted.
         result = self.tool.execute(mode="summary", text="a" * 100_000)
         self.assertEqual(result["total_chars"], 100_000)
+
+    def test_max_text_chars_attribute_is_honored(self) -> None:
+        # The documented max_text_chars bound is enforced, not a
+        # hardcoded 100_000: a tighter configuration must reject text
+        # that the default would accept, and accept at its own cap.
+        configured = CharacterSetAnalyzerTool()
+        configured.max_text_chars = 10
+        with self.assertRaises(ValueError) as ctx:
+            configured.execute(mode="blocks", text="a" * 11)
+        self.assertIn("10-character limit", str(ctx.exception))
+        result = configured.execute(mode="summary", text="a" * 10)
+        self.assertEqual(result["total_chars"], 10)
+        # The default tool still accepts an 11-character string.
+        self.assertEqual(
+            self.tool.execute(mode="summary", text="a" * 11)["total_chars"], 11
+        )
 
     def test_deterministic_results(self) -> None:
         for mode in ("blocks", "categories", "summary"):
