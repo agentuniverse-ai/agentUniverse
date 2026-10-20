@@ -302,14 +302,20 @@ class TestDiscourseConnectiveAnalyzer(unittest.TestCase):
             ('narrative_max_density', -1),
             ('narrative_max_density', 'two'),
             ('narrative_max_density', True),
+            ('narrative_max_density', float('nan')),
+            ('narrative_max_density', float('inf')),
             ('argumentative_min_density', -0.5),
             ('argumentative_min_density', 'high'),
+            ('argumentative_min_density', float('nan')),
+            ('argumentative_min_density', float('-inf')),
             ('argumentative_min_share', 0),
             ('argumentative_min_share', 1.5),
             ('argumentative_min_share', True),
+            ('argumentative_min_share', float('nan')),
             ('procedural_min_share', 0),
             ('procedural_min_share', 2),
             ('procedural_min_share', False),
+            ('procedural_min_share', float('inf')),
             ('discourse_key', 5),
             ('profile_key', ['x']),
         ):
@@ -410,6 +416,54 @@ class TestDiscourseConnectiveAnalyzer(unittest.TestCase):
         self.assertEqual(discourse["total"], 2)
         self.assertEqual(discourse["sentence_count"], 2)
         self.assertEqual(discourse["density_per_100_sentences"], 100.0)
+
+    def test_but_after_quantifier_is_except_not_contrast(self):
+        """"but" directly after a universal quantifier is the preposition
+        "except" and does not count as contrast: "all but one passed",
+        "nothing but the truth", "everyone/anybody/anything but ...". A
+        comma, a sentence boundary or any other preceding word leaves
+        the contrastive reading intact."""
+        for text in (
+            "All but one test passed.",
+            "Nothing but the truth survives review.",
+            "Everyone but John agreed.",
+            "Anybody but the guard would have noticed.",
+            "It was anything but simple.",
+            "Nobody but her stayed.",
+            "She looked none the worse; still, all but two left.",
+        ):
+            with self.subTest(text=text):
+                discourse, _ = self._analyze(text)
+                self.assertEqual(
+                    discourse["contrast"], 0,
+                    f"except-but counted as contrast in {text!r}")
+
+        for text, expected in (
+            ("We invited all, but one declined.", 1),
+            ("But one declined.", 1),
+            ("The last but not least item matters.", 1),
+            ("Some agreed but most refused.", 1),
+            ("All hope was lost, BUT the team tried again.", 1),
+        ):
+            with self.subTest(text=text):
+                discourse, _ = self._analyze(text)
+                self.assertEqual(discourse["contrast"], expected, text)
+
+    def test_but_guard_does_not_disturb_other_categories(self):
+        """The guard only exempts "but"; other connectives in quantifier
+        sentences still count and density/profile arithmetic is intact."""
+        discourse, profile = self._analyze(
+            "All but one failed because the spec changed. "
+            "However, everyone but the lead then agreed to a fix, "
+            "since the data was clear."
+        )
+        self.assertEqual(discourse["sentence_count"], 2)
+        self.assertEqual(discourse["contrast"], 1)  # However only
+        self.assertEqual(discourse["cause"], 2)     # because + since
+        self.assertEqual(discourse["sequence"], 1)  # then
+        self.assertEqual(discourse["total"], 4)
+        self.assertEqual(discourse["density_per_100_sentences"], 200.0)
+        self.assertEqual(profile, "argumentative")
 
     def test_zh_substring_matching_semantics(self):
         """ZH matching is substring-based: 因为 fires glued inside a

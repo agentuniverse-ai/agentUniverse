@@ -4,6 +4,7 @@
 # @Time    : 2026/10/20
 # @FileName: discourse_connective_analyzer.py
 
+import math
 import re
 from typing import Dict, List, Optional, Tuple
 
@@ -114,6 +115,17 @@ _ZH_LOOKUP, _ZH_ALTERNATION = _combined_pattern(_ZH_PHRASES)
 _EN_RE = re.compile(r"(?<!\w)(?:" + _EN_ALTERNATION + r")(?!\w)")
 _ZH_RE = re.compile("(?:" + _ZH_ALTERNATION + ")")
 
+# "but" directly after a universal quantifier (whitespace only between) is
+# the preposition "except", not a contrast marker: "all but one passed",
+# "nothing but the truth", "everyone but John agreed". A comma or sentence
+# boundary in between ("We invited all, but one declined", "But one
+# declined") leaves the contrastive reading, so only the glued form is
+# exempted from the contrast count.
+_BUT_EXCEPT_RE = re.compile(
+    r"(?i)\b(?:all|any|anyone|anybody|anything|everyone|everybody|"
+    r"everything|nobody|none|nothing)\s+but\b"
+)
+
 
 class DiscourseConnectiveAnalyzer(DocProcessor):
     """Measure discourse-connective usage and classify a discourse profile.
@@ -135,7 +147,10 @@ class DiscourseConnectiveAnalyzer(DocProcessor):
     — so "Dr. Smith arrived. Ms. Lee left." is two sentences and "e.g."
     never splits). English connectives from the bundled lists are matched
     case-insensitively as whole words or phrases ("but" does not fire
-    inside "butter"); Chinese connectives are matched as substrings,
+    inside "butter"), except that "but" directly preceded by a universal
+    quantifier ("all but one", "nothing but the truth") is skipped —
+    that "but" is the preposition "except", not a contrast marker;
+    Chinese connectives are matched as substrings,
     which is the correct semantics for an unsegmented script. Within one
     script all phrases share a single longest-match-first pass, so nested
     phrases are counted once under their longest form: "even though"
@@ -266,7 +281,10 @@ class DiscourseConnectiveAnalyzer(DocProcessor):
 
         The sentence is lowercased once (Chinese is unaffected), then the
         combined English and Chinese matchers each make one longest-match
-        first pass; the two scripts cannot overlap.
+        first pass; the two scripts cannot overlap. The English pass
+        skips "but" directly preceded by a universal quantifier ("all but
+        one") — that "but" is the preposition "except", not a contrast
+        marker (see ``_BUT_EXCEPT_RE``).
 
         Args:
             sentence: One sentence of text.
@@ -276,7 +294,14 @@ class DiscourseConnectiveAnalyzer(DocProcessor):
         """
         counts = {category: 0 for category in _CATEGORIES}
         haystack = sentence.lower()
+        except_spans = [
+            match.span() for match in _BUT_EXCEPT_RE.finditer(haystack)
+        ]
         for match in _EN_RE.finditer(haystack):
+            if match.group(0) == "but" and any(
+                start <= match.start() < end for start, end in except_spans
+            ):
+                continue
             counts[_EN_LOOKUP[match.group(0)]] += 1
         for match in _ZH_RE.finditer(haystack):
             counts[_ZH_LOOKUP[match.group(0)]] += 1
@@ -462,7 +487,10 @@ class DiscourseConnectiveAnalyzer(DocProcessor):
 
         Validation happens eagerly at load time: thresholds that silently
         mislabeled every document would be far harder to notice in
-        production than a startup failure.
+        production than a startup failure. Non-finite numbers (NaN,
+        infinity) are rejected alongside out-of-range values — a NaN
+        threshold compares False against everything and would silently
+        disable a profile rule.
 
         Args:
             doc_processor_configer: Configuration object.
@@ -481,6 +509,10 @@ class DiscourseConnectiveAnalyzer(DocProcessor):
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError("narrative_max_density must be a number")
             self.narrative_max_density = float(value)
+            if not math.isfinite(self.narrative_max_density):
+                raise ValueError(
+                    "narrative_max_density must be finite (not NaN or"
+                    " infinity)")
             if self.narrative_max_density < 0:
                 raise ValueError("narrative_max_density must be >= 0")
 
@@ -491,6 +523,10 @@ class DiscourseConnectiveAnalyzer(DocProcessor):
                 raise ValueError(
                     "argumentative_min_density must be a number")
             self.argumentative_min_density = float(value)
+            if not math.isfinite(self.argumentative_min_density):
+                raise ValueError(
+                    "argumentative_min_density must be finite (not NaN or"
+                    " infinity)")
             if self.argumentative_min_density < 0:
                 raise ValueError("argumentative_min_density must be >= 0")
 
@@ -501,6 +537,10 @@ class DiscourseConnectiveAnalyzer(DocProcessor):
                 raise ValueError(
                     "argumentative_min_share must be a number")
             self.argumentative_min_share = float(value)
+            if not math.isfinite(self.argumentative_min_share):
+                raise ValueError(
+                    "argumentative_min_share must be finite (not NaN or"
+                    " infinity)")
             if not 0 < self.argumentative_min_share <= 1:
                 raise ValueError(
                     "argumentative_min_share must be in (0, 1]")
@@ -511,6 +551,10 @@ class DiscourseConnectiveAnalyzer(DocProcessor):
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError("procedural_min_share must be a number")
             self.procedural_min_share = float(value)
+            if not math.isfinite(self.procedural_min_share):
+                raise ValueError(
+                    "procedural_min_share must be finite (not NaN or"
+                    " infinity)")
             if not 0 < self.procedural_min_share <= 1:
                 raise ValueError("procedural_min_share must be in (0, 1]")
 
