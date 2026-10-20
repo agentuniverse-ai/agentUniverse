@@ -634,3 +634,80 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Grade Calculator Tool
+
+`GradeCalculatorTool` aggregates course scores with grading semantics —
+weighted means, drop-lowest, letter mapping and curving — built purely on
+the Python standard library (`json`, `math`) with zero network access.
+Where `CollectionStatsTool` covers plain descriptive statistics, this tool
+covers the education-scenario arithmetic: weights, thresholds and curves.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import GradeCalculatorTool
+
+tool = GradeCalculatorTool()
+assignments = [
+    {"name": "Quiz 1", "score": 85, "weight": 30},
+    {"name": "Midterm", "score": {"score": 42, "max": 50}, "weight": 30},
+    {"name": "Final", "score": 90, "weight": 40},
+]
+weighted = tool.execute(mode="weighted", assignments=assignments)
+dropped = tool.execute(mode="drop_lowest", assignments=assignments, drop_n=1)
+letter = tool.execute(mode="letter", score=89.99)
+curved = tool.execute(mode="curve", scores=[78, 96, 62], curve="flat_add", amount=5)
+rescaled = tool.execute(mode="curve", scores=[75, 60, 90], curve="scale_to_max")
+```
+
+Each assignment is `{name?, score, weight}`. A score is either a plain
+0-100 number or a raw mark with a maximum — a nested `{score, max}` pair
+or a sibling `max` key; the percent is `score / max * 100` rounded to two
+decimals. Weights are finite numbers `>= 0` on any scale: the weighted
+mean is `sum(percent * weight) / sum(weight)`, so percent-style weights
+(summing to 100) and fraction weights (summing to 1) give the same mean.
+The result carries the per-assignment contribution table (percent,
+weighted points `percent * weight`, and the contribution those points
+make to the final mean), the total weight, and an unweighted mean for
+comparison; a `weight_warning` field appears whenever the total weight is
+not 100 (tolerance 0.01) — the mean is unaffected, but only a total of
+exactly 100 makes each `weighted_points` entry read directly as
+final-grade points.
+
+`drop_lowest` removes the `drop_n` assignments with the lowest
+*weighted impact* `percent * weight` and recomputes the mean over the
+survivors (`1 <= drop_n < assignment count`, ties broken by input
+order). Impact ranking is deliberately different from raw-score ranking:
+`{score: 85, weight: 9}` (impact 765) is dropped before
+`{score: 60, weight: 90}` (impact 5400) even though 60 is the lower
+score, because the weighted mean moves more when a heavily weighted
+assignment stays. The result reports the dropped list with each impact,
+the before/after means and the change.
+
+`letter` maps a 0-100 score onto a threshold table. The default is the
+American scale A >= 90, B >= 80, C >= 70, D >= 60, F below 60; a custom
+table (a JSON array of `{letter, min_score}` objects, or an equivalently
+ordered mapping) must have 2 to 10 bands with unique letters and strictly
+descending `min_score` values in 0..100 — the lowest band is the
+catch-all for scores below its threshold. Grade points use a 4.0 scale
+spaced evenly from 4.0 for the highest band down to 0.0 for the lowest:
+with `K` bands the `i`-th earns `4.0 * (K - 1 - i) / (K - 1)`, which for
+the default five-band table is exactly A=4.0, B=3.0, C=2.0, D=1.0, F=0.0.
+
+`curve` curves a list of 0-100 scores. `flat_add` adds a positive
+`amount` to every score, capping each result at 100 (`curved =
+min(100, score + amount)`, with the count of capped scores reported);
+`scale_to_max` applies the linear rescale `curved = score * 100 /
+max(scores)` so the highest score becomes exactly 100. Curved scores are
+rounded to two decimals and the new mean is the mean of the reported
+values; an all-zero score list is a structured error because no positive
+rescale factor exists.
+
+All reported numbers are floats rounded to two decimal places (no
+`Decimal`); percents are rounded before entering the aggregate, so every
+contribution table is reproducible by hand. Assignments, scores and
+thresholds are accepted as JSON strings or Python sequences/mappings.
+Malformed parameters (unknown mode, missing collections, out-of-bounds
+`drop_n` or `amount`, a non-monotonic custom table) raise `ValueError`
+before any computation; content-level failures (malformed JSON, invalid
+assignment elements, raw scores above their max) return structured
+`error` payloads.
