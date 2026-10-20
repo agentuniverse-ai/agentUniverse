@@ -402,11 +402,15 @@ class RamContextStore(ContextStore):
         # Term matching in content
         content_terms = set(re.findall(r'\w+', content_lower))
         matching_terms = query_terms & content_terms
-        score += len(matching_terms) * 2.0
 
         # Keyword matching
         segment_keywords = set(k.lower() for k in segment.metadata.keywords)
         matching_keywords = query_terms & segment_keywords
+
+        if not matching_terms and not matching_keywords and query_lower not in content_lower:
+            return 0.0
+
+        score += len(matching_terms) * 2.0
         score += len(matching_keywords) * 5.0
 
         # Priority bonus
