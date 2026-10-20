@@ -23,6 +23,8 @@ class DefaultLLMConfiger(Configer):
     default_llm: Optional[str] = None
 
     def __init__(self, config_path: str = None):
+        """Initialize this instance.
+        """
         super().__init__(config_path)
         if config_path:
             try:
