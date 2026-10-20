@@ -1,0 +1,6 @@
+name: 'secure_rag_work_pattern'
+description: '安全闭环 RAG 工作模式（bounded 变体）：同步异步共用同一确定性控制流，retry/jump/阈值有界，越界以引用原值的 ValueError 报告。'
+metadata:
+  type: 'WORK_PATTERN'
+  module: 'agentuniverse.agent.work_pattern.secure_rag_work_pattern'
+  class: 'SecureRagWorkPattern'
