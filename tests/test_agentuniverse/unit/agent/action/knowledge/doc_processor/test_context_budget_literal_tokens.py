@@ -48,3 +48,20 @@ def test_keeps_plain_text_counting(encoder):
     with patch.object(cbc, "_tiktoken_encoder", return_value=encoder):
         result = processor.process_docs([Document(text="ordinary text")])
     assert result[0].text == "ordin"
+
+
+@pytest.mark.parametrize("text", ["中<|endoftext|>🙂tail", "<|fim_prefix|>é中tail"])
+@pytest.mark.parametrize("budget", [1, 4, 16])
+def test_literal_marker_truncation_preserves_unicode_budget(encoder, text, budget):
+    processor = cbc.ContextBudgetCompressor(counter="tiktoken", budget=budget)
+    original = Document(text=text, metadata={"source": "unicode.md"})
+    with patch.object(cbc, "_tiktoken_encoder", return_value=encoder):
+        result = processor.process_docs([original])
+        if result:
+            assert text.startswith(result[0].text)
+            assert "\ufffd" not in result[0].text
+            assert len(encoder.encode(result[0].text, disallowed_special=())) <= budget
+            assert result[0].id == original.id
+            assert result[0].metadata == {"source": "unicode.md", "truncated": True}
+    assert original.text == text
+    assert original.metadata == {"source": "unicode.md"}

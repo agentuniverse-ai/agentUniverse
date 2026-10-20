@@ -32,7 +32,7 @@ class ExpressingAgentTemplate(AgentTemplate):
         final_result = dict()
         final_result['output'] = agent_result['output']
         # add expressing agent log info.
-        logger_info = f"\nExpressing agent execution result is :\n"
+        logger_info = "\nExpressing agent execution result is :\n"
         logger_info += f"{final_result.get('output')}"
         LOGGER.info(logger_info)
 
