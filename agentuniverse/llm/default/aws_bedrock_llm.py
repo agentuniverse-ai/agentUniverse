@@ -41,10 +41,10 @@ AWS_BEDROCK_MAX_CONTEXT_LENGTH = {
 class AWSBedrockLLM(LLM):
     """
         AWS Bedrock LLM using boto3 client
-        
+
         This class provides integration with AWS Bedrock models using the native boto3 API.
         AWS Bedrock supports various foundation models including Claude, Llama, Mistral, Nova, and more.
-        
+
         Args:
             aws_access_key_id: AWS access key ID (optional, can use AWS credentials chain)
             aws_secret_access_key: AWS secret access key (optional, can use AWS credentials chain)
@@ -69,7 +69,7 @@ class AWSBedrockLLM(LLM):
                 import boto3
             except ImportError:
                 raise ImportError("boto3 is required for AWS Bedrock LLM. Install it with: pip install boto3")
-            
+
             session_kwargs = {
                 'region_name': self.aws_region,
             }
@@ -79,7 +79,7 @@ class AWSBedrockLLM(LLM):
                 session_kwargs['aws_secret_access_key'] = self.aws_secret_access_key
             if self.aws_session_token:
                 session_kwargs['aws_session_token'] = self.aws_session_token
-            
+
             self._client = boto3.client('bedrock-runtime', **session_kwargs)
         return self._client
 
@@ -89,23 +89,23 @@ class AWSBedrockLLM(LLM):
         for msg in messages:
             role = msg.get('role')
             content = msg.get('content')
-            
+
             # Bedrock uses 'user' and 'assistant' roles
             if role == 'system':
                 # System messages need to be converted to user messages in Bedrock
                 role = 'user'
-            
+
             # Convert content to Bedrock format
             if isinstance(content, str):
                 bedrock_content = [{"text": content}]
             else:
                 bedrock_content = content
-            
+
             bedrock_messages.append({
                 "role": role,
                 "content": bedrock_content
             })
-        
+
         return bedrock_messages
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
@@ -117,19 +117,19 @@ class AWSBedrockLLM(LLM):
         """
         streaming = kwargs.pop("streaming", self.streaming)
         client = self._get_client()
-        
+
         # Convert messages to Bedrock format
         bedrock_messages = self._convert_messages_format(messages)
-        
+
         # Prepare inference config
         inference_config = {
             "maxTokens": kwargs.pop("max_tokens", self.max_tokens or 512),
             "temperature": kwargs.pop("temperature", self.temperature or 0.7),
         }
-        
+
         if "top_p" in kwargs:
             inference_config["topP"] = kwargs.pop("top_p")
-        
+
         try:
             if streaming:
                 # Streaming response
@@ -146,30 +146,30 @@ class AWSBedrockLLM(LLM):
                     messages=bedrock_messages,
                     inferenceConfig=inference_config,
                 )
-                
+
                 # Extract response text
                 output_message = response['output']['message']
                 text = output_message['content'][0]['text']
-                
+
                 return LLMOutput(text=text, raw=response)
-        
+
         except Exception as e:
             raise RuntimeError(f"Error calling AWS Bedrock: {e}")
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         """Async call to AWS Bedrock LLM.
-        
+
         Note: boto3 doesn't support async natively, so this is a sync call wrapped.
         For true async, consider using aioboto3.
         """
         streaming = kwargs.get("streaming", self.streaming)
         result = self._call(messages, **kwargs)
-        
+
         # If streaming, wrap the generator in an async generator
         if streaming:
             return self._async_generator_wrapper(result)
         return result
-    
+
     async def _async_generator_wrapper(self, sync_generator):
         """Wrap a sync generator to make it async."""
         for item in sync_generator:
@@ -197,7 +197,7 @@ class AWSBedrockLLM(LLM):
 
     def get_num_tokens(self, text: str) -> int:
         """Get the number of tokens in the text.
-        
+
         Note: This is an approximation. For accurate token counting,
         you would need to use the specific tokenizer for each model.
         """
@@ -206,12 +206,12 @@ class AWSBedrockLLM(LLM):
 
     def as_langchain(self):
         """Convert to LangChain LLM.
-        
+
         Note: This requires langchain-aws package.
         """
         try:
             from langchain_aws import ChatBedrock
-            
+
             return ChatBedrock(
                 model_id=self.model_name,
                 region_name=self.aws_region,
