@@ -256,12 +256,22 @@ class ContextManager(ComponentBase):
         )
 
         # Store in hot storage
+        evicted_segments = []
         if self._hot_store:
-            self._hot_store.add([segment], session_id=session_id)
+            evicted_segments = self._hot_store.add([segment], session_id=session_id) or []
+
+        # Capacity eviction happens inside the write and can remove an existing
+        # segment or the new segment itself. Only subtract IDs already tracked.
+        evicted_ids = {evicted.id for evicted in evicted_segments}
+        for evicted in evicted_segments:
+            if evicted.id in window.segment_ids:
+                window.remove_segment_id(evicted.id)
+                window.update_total_tokens(evicted.tokens, operation="remove")
 
         # Update window tracking
-        window.add_segment_id(segment.id)
-        window.update_total_tokens(tokens, operation="add")
+        if segment.id not in evicted_ids:
+            window.add_segment_id(segment.id)
+            window.update_total_tokens(tokens, operation="add")
 
         return segment
 

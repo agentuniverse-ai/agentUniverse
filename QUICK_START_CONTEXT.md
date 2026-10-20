@@ -437,6 +437,25 @@ print(f"系统健康: {health}")  # HEALTHY, WARNING, CRITICAL
 
 ---
 
+## RAM 容量淘汰与窗口记账
+
+通过 `ContextManager.add_context()` 写入 RAM 存储时，超过 `max_segments` 的容量淘汰
+会同步移除窗口中对应的片段 ID 和 token 数。新写入的 EPHEMERAL 片段也可能立即被淘汰；
+此时 `add_context()` 仍返回该片段，但不会将其计入窗口。处理过程不额外调用检索，
+因此不会为了重算而改变 LRU 顺序。
+
+`RamContextStore.add()` 现在返回本次写入淘汰的 `ContextSegment` 列表；没有淘汰时返回空列表。
+直接调用且忽略返回值的代码不需要改变。没有容量淘汰的自定义存储仍可返回 `None`；
+有容量淘汰的存储应返回实际淘汰的片段及其 token 数，让管理器维护记账。
+通过其他路径直接修改存储、并发写入、TTL 清理和预算压缩不在本次记账修复的保证范围内。
+
+When writing through `ContextManager.add_context()`, RAM capacity evictions are
+reported back to the window without a second retrieval. `RamContextStore.add()`
+returns the evicted segments (an empty list when none); non-evicting stores may
+continue returning `None`. An incoming EPHEMERAL segment can evict itself and is
+then excluded from window accounting, although `add_context()` still returns it.
+This is a serial-write accounting contract, not a concurrency or transaction guarantee.
+
 ## 🚀 开始使用
 
 ```python

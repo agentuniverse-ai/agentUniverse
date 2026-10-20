@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/5/21 17:49
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: deep_seek_openai_style_llm.py
 
@@ -61,5 +61,7 @@ class DefaultDeepSeekLLM(OpenAIStyleLLM):
 
           The total length of input tokens and generated tokens is limited by the openai model's context length.
           """
+        if self._max_context_length:
+            return self._max_context_length
         return DEEpSEEkMAXCONTETNLENGTH.get(self.model_name, 4096)
 

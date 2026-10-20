@@ -48,15 +48,15 @@ def get_memory_string(messages: List[Message], agent_id=None) -> str:
     """Convert the given messages to a string.
 
     Args:
-        messages(List[Message]): The list of messages.
-
+        messages(List[Message]): The list of messages. Elements may also be
+            str or dict, matching the input contract of generate_messages.
 
     Returns:
         str: The string representation of the messages.
     """
     current_trace_id = FrameworkContextManager().get_context("trace_id")
     string_messages = []
-    for m in messages:
+    for m in generate_messages(messages):
         if m.type == ChatMessageEnum.SYSTEM.value:
             role = 'System'
         elif m.type == ChatMessageEnum.HUMAN.value:
@@ -64,13 +64,15 @@ def get_memory_string(messages: List[Message], agent_id=None) -> str:
         elif m.type == ChatMessageEnum.AI.value:
             role = "AI"
         elif m.type == ChatMessageEnum.INPUT.value or m.type == ChatMessageEnum.OUTPUT.value:
-            if current_trace_id == m.trace_id:
+            message_trace_id = getattr(m, 'trace_id', None)
+            if current_trace_id is not None and current_trace_id == message_trace_id:
                 continue
-            role: str = m.metadata.get('prefix', "")
+            metadata = m.metadata or {}
+            role: str = metadata.get('prefix', "")
             if agent_id:
                 role = role.replace(f"智能体 {agent_id}", " 你")
                 role = role.replace(f"Agent {agent_id}", " You")
-            m_str = f"{m.metadata.get('timestamp')} {role}:{m.content}"
+            m_str = f"{metadata.get('timestamp')} {role}:{m.content}"
             string_messages.append(m_str)
             continue
         else:
