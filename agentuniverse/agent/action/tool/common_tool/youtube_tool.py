@@ -139,7 +139,8 @@ class YouTubeTool(Tool):
                     video_list.append({
                         'id': item['contentDetails']['videoId'],
                         'title': item['snippet']['title'],
-                        'published_at': item['snippet']['publishedAt']
+                        'published_at': (item['contentDetails'].get('videoPublishedAt')
+                                         or item['snippet']['publishedAt'])
                     })
 
                 next_page_token = playlist_items.get('nextPageToken')
