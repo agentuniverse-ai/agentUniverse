@@ -27,7 +27,7 @@ class ConfluenceReader(Reader):
         try:
             from atlassian import Confluence  # type: ignore
         except Exception:
-            raise ImportError("Install atlassian-python-api: `pip install atlassian-python-api`")
+            raise ImportError("Install atlassian-python-api: `pip install atlassian-python-api`") from None
 
         conf = Confluence(url=site_url, username=username, password=token, cloud=True)
         page = conf.get_page_by_id(page_id, expand="body.view,version,metadata.labels")
@@ -68,7 +68,7 @@ class ConfluenceReader(Reader):
         try:
             from bs4 import BeautifulSoup  # type: ignore
         except Exception:
-            raise ImportError("Install beautifulsoup4 and lxml for ConfluenceReader")
+            raise ImportError("Install beautifulsoup4 and lxml for ConfluenceReader") from None
         soup = BeautifulSoup(html, "lxml")
         for tag in soup(["script", "style", "noscript"]):
             tag.extract()
