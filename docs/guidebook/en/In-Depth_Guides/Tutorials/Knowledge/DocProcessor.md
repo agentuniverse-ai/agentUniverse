@@ -309,3 +309,7 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### FinancialEventAggregator: embedding fallback
+
+An embedding batch must contain one non-empty, finite real-number vector per document, with a shared dimension. Invalid cardinality, ragged vectors, booleans and non-finite values use the existing text-overlap fallback without replacing any source embeddings. Embeddings are copied onto documents only after the full similarity matrix succeeds. Valid zero vectors have zero off-diagonal similarity; finite large/small vectors use scaled cosine calculation to avoid overflow/underflow. This preserves the existing embedding-error fallback regardless of `skip_on_error`; that option still governs cluster aggregation errors, not embedding fallback.
