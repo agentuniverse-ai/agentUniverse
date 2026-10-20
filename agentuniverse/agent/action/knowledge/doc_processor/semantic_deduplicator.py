@@ -8,6 +8,7 @@
 
 import hashlib
 import logging
+from copy import deepcopy
 from typing import List, Optional, Dict, Tuple
 from datetime import datetime
 
@@ -258,14 +259,18 @@ class SemanticDeduplicator(DocProcessor):
             return doc1
 
         # Merge metadata
-        merged_metadata = doc1.metadata.copy() if doc1.metadata else {}
+        merged_metadata = deepcopy(doc1.metadata) if doc1.metadata else {}
         if doc2.metadata:
             for key, value in doc2.metadata.items():
                 if key not in merged_metadata:
-                    merged_metadata[key] = value
+                    merged_metadata[key] = deepcopy(value)
                 elif isinstance(value, list) and isinstance(merged_metadata[key], list):
-                    # Merge lists
-                    merged_metadata[key] = list(set(merged_metadata[key] + value))
+                    # Merge JSON-compatible lists while preserving first-seen order.
+                    merged_values = []
+                    for item in merged_metadata[key] + value:
+                        if not any(item == existing for existing in merged_values):
+                            merged_values.append(deepcopy(item))
+                    merged_metadata[key] = merged_values
 
         # Merge keywords
         merged_keywords = doc1.keywords.union(doc2.keywords)
