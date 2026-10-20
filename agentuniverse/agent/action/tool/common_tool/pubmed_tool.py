@@ -322,7 +322,12 @@ class PubMedTool(Tool):
         error_message = self._element_text(error)
         if error_message:
             raise _PubMedAPIError(f"PubMed EFetch error: {error_message}")
-        return [self._parse_article(article) for article in root.findall(".//PubmedArticle")]
+        return [
+            self._parse_article(record) if record.tag == "PubmedArticle"
+            else self._parse_book_article(record)
+            for record in root
+            if record.tag in {"PubmedArticle", "PubmedBookArticle"}
+        ]
 
     def _common_params(self) -> Dict[str, str]:
         params = {"tool": self.ncbi_tool_name}
@@ -382,8 +387,73 @@ class PubMedTool(Tool):
         }
 
     @classmethod
+    def _parse_book_article(cls, article: ElementTree.Element) -> Dict[str, Any]:
+        """Normalize a book/chapter citation without reading nested references."""
+        pmid = cls._element_text(article.find("BookDocument/PMID"))
+        book_title = cls._element_text(article.find("BookDocument/Book/BookTitle"))
+        title = cls._element_text(article.find("BookDocument/ArticleTitle")) or book_title
+
+        authors = []
+        for path in ("BookDocument/AuthorList", "BookDocument/Book/AuthorList"):
+            for author_list in article.findall(path):
+                if author_list.get("Type", "authors") != "authors":
+                    continue
+                for author in author_list.findall("Author"):
+                    name = cls._element_text(author.find("CollectiveName"))
+                    if not name:
+                        name = " ".join(part for part in (
+                            cls._element_text(author.find("ForeName")),
+                            cls._element_text(author.find("LastName")),
+                        ) if part)
+                    if name:
+                        authors.append(name)
+            if authors:
+                break
+
+        abstract_parts = []
+        for abstract in article.findall("BookDocument/Abstract/AbstractText"):
+            text = cls._element_text(abstract)
+            if text:
+                label = abstract.get("Label")
+                abstract_parts.append(f"{label}: {text}" if label else text)
+
+        doi = ""
+        for path in ("BookDocument/ArticleIdList/ArticleId", "PubmedBookData/ArticleIdList/ArticleId"):
+            for article_id in article.findall(path):
+                if article_id.get("IdType") == "doi":
+                    doi = cls._element_text(article_id)
+                    if doi:
+                        break
+            if doi:
+                break
+
+        return {
+            "pmid": pmid,
+            "title": title,
+            "book_title": book_title,
+            "authors": authors,
+            "abstract": "\n".join(abstract_parts),
+            "journal": "",
+            "journal_issn": "",
+            "published": cls._format_publication_date(article.find("BookDocument/Book/PubDate")),
+            "publication_types": [text for element in article.findall("BookDocument/PublicationType")
+                                  if (text := cls._element_text(element))],
+            "keywords": [text for element in article.findall("BookDocument/KeywordList/Keyword")
+                         if (text := cls._element_text(element))],
+            "mesh_terms": [],
+            "languages": [text for element in article.findall("BookDocument/Language")
+                          if (text := cls._element_text(element))],
+            "doi": doi,
+            "entry_url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else "",
+        }
+
+    @classmethod
     def _publication_date(cls, article: ElementTree.Element) -> str:
         pub_date = article.find(".//Article/Journal/JournalIssue/PubDate")
+        return cls._format_publication_date(pub_date)
+
+    @classmethod
+    def _format_publication_date(cls, pub_date: Optional[ElementTree.Element]) -> str:
         if pub_date is None:
             return ""
         medline_date = cls._element_text(pub_date.find("MedlineDate"))

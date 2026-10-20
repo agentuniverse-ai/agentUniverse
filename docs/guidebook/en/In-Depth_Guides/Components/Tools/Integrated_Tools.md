@@ -157,6 +157,8 @@ The response contains query, paging, and result-count context plus a normalized 
 
 Network, HTTP, and parsing failures use a structured `error` field. Errors explicitly reported by NCBI in ESearch JSON or EFetch XML use the `api_error` type and retain NCBI's message so callers can distinguish an empty result from a failed request. You may set `NCBI_EMAIL` and `NCBI_API_KEY`; basic searches continue to work without an API key.
 
+EFetch book and chapter citations (`PubmedBookArticle`) are retained alongside journal articles in response order. These records include `book_title`; `title` uses the chapter title when available and otherwise the book title. Chapter authors take precedence over book authors, and editor lists are excluded. `published` uses the book publication date; journal/ISSN and MeSH fields remain empty for book records. Citation identifiers and metadata are read from their own XML paths rather than nested references.
+
 ### 1.5 Crossref Scholarly Metadata
 
 The Crossref tool uses the [Crossref REST API](https://www.crossref.org/documentation/retrieve-metadata/rest-api/) to search scholarly works across disciplines or retrieve publication metadata by DOI. The public API can be used without registration.
