@@ -70,6 +70,16 @@ EMPTY_VECTORS = {
 FLETCHER16_0102 = "0403"
 # Fletcher-16 of the byte sequence "abcde".
 FLETCHER16_ABCDE = "c8f0"
+# Published Fletcher-16 test vectors (8-bit data words, modulo-255
+# running sums) from the Fletcher's checksum reference literature:
+# "abcdef", "abcdefgh" and the check-byte completion property, where
+# appending the two derived check bytes to {0x01, 0x02} zeroes the
+# total checksum.
+PUBLISHED_FLETCHER16 = [
+    ("abcdef", "2057"),
+    ("abcdefgh", "0627"),
+]
+FLETCHER16_CHECKBYTE_ZERO = ("AQL4BA==", "0000")
 # CJK text "你好世界" — UTF-8 bytes e4bda0 e5a5bd e4b896 e7958c.
 CJK_TEXT = "你好世界"
 CJK_B64 = "5L2g5aW95LiW55WM"
@@ -175,6 +185,23 @@ class ChecksumToolTest(unittest.TestCase):
                     self.tool._fletcher16(data), reference_fletcher16(data)
                 )
 
+    def test_fletcher16_published_vectors(self) -> None:
+        for text, hex_str in PUBLISHED_FLETCHER16:
+            with self.subTest(text=text):
+                self.assertEqual(
+                    self.tool.execute(
+                        mode="compute", input=text, algorithm="fletcher16"
+                    )["hex"],
+                    hex_str,
+                )
+                self.assertEqual(reference_fletcher16(text.encode("ascii")), int(hex_str, 16))
+        b64, hex_str = FLETCHER16_CHECKBYTE_ZERO
+        result = self.tool.execute(
+            mode="compute", input=b64, algorithm="fletcher16",
+            input_encoding="base64",
+        )
+        self.assertEqual(result["hex"], hex_str)
+
     def test_fletcher16_mod_255_collision_documented(self) -> None:
         # 0xFF + 0xFF vanishes under mod 255: b"\xff\xff" and the empty
         # input share checksum 0x0000 — short checksums collide by design.
@@ -263,6 +290,46 @@ class ChecksumToolTest(unittest.TestCase):
             mode="compute", input="", input_encoding="base64", algorithm="adler32"
         )
         self.assertEqual(result["hex"], "00000001")
+
+    def test_base64_urlsafe_and_mime_whitespace_rejected(self) -> None:
+        for bad in ("-_8=", "aGVs bG8=", "aGVs\nbG8=", "aGVs\tbG8="):
+            with self.subTest(bad=bad):
+                result = self.tool.execute(
+                    mode="compute",
+                    input=bad,
+                    input_encoding="base64",
+                    algorithm="crc32",
+                )
+                self.assertEqual(result["error"]["type"], "invalid_base64")
+
+    def test_base64_exactly_at_cap_accepted(self) -> None:
+        payload = b"q" * MAX_BYTES
+        result = self.tool.execute(
+            mode="compute",
+            input=base64.b64encode(payload).decode("ascii"),
+            input_encoding="base64",
+            algorithm="crc32",
+        )
+        self.assertEqual(result["byte_length"], MAX_BYTES)
+        self.assertEqual(
+            result["hex"], f"{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+        )
+
+    def test_input_with_lone_surrogate_rejected_cleanly(self) -> None:
+        for bad in ("abc\ud800def", "\udfff", "a\ud800b\ud801c"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError) as ctx:
+                    self.tool.execute(
+                        mode="compute", input=bad, algorithm="crc32"
+                    )
+                message = str(ctx.exception)
+                self.assertTrue(message.startswith("checksum_tool:"))
+                self.assertIn("UTF-8", message)
+                self.assertIn("position", message)
+                result = self.tool.execute(
+                    mode="all", input=bad, input_encoding="base64"
+                )
+                self.assertEqual(result["error"]["type"], "invalid_base64")
 
     # ------------------------------------------------------------------ #
     # verify mode
@@ -385,6 +452,13 @@ class ChecksumToolTest(unittest.TestCase):
                         single["unsigned_int"],
                     )
 
+    def test_all_mode_repeated_calls_are_idempotent(self) -> None:
+        first = self.tool.execute(mode="all", input=CJK_TEXT)
+        second = self.tool.execute(mode="all", input=CJK_TEXT)
+        self.assertEqual(first, second)
+        self.assertEqual(list(first["results"]), list(second["results"]))
+        self.assertEqual(list(first["results"]), list(ChecksumTool.ALGORITHMS))
+
     # ------------------------------------------------------------------ #
     # Invalid inputs raise ValueError (strict validation)
     # ------------------------------------------------------------------ #
@@ -473,6 +547,23 @@ class ChecksumToolTest(unittest.TestCase):
         self.assert_invalid(
             mode="verify", input="x", algorithm="sum8", expected="014"
         )
+
+    def test_invalid_expected_wrong_width_cross_algorithm(self) -> None:
+        # A valid hex string of another algorithm's width must fail the
+        # width check rather than silently mismatch.
+        widths = ChecksumTool.HEX_WIDTHS
+        for algorithm in ChecksumTool.ALGORITHMS:
+            for other in ChecksumTool.ALGORITHMS:
+                if widths[other] == widths[algorithm]:
+                    continue
+                other_hex = "a" * widths[other]
+                with self.subTest(algorithm=algorithm, other=other):
+                    self.assert_invalid(
+                        mode="verify",
+                        input="123456789",
+                        algorithm=algorithm,
+                        expected=other_hex,
+                    )
 
     def test_invalid_expected_hex_reports_position(self) -> None:
         base = dict(mode="verify", input="123456789", algorithm="crc32")

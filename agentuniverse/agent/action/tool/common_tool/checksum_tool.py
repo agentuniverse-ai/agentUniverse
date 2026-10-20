@@ -224,7 +224,9 @@ class ChecksumTool(Tool):
         The checksum of the empty input is well-defined for every
         algorithm, so an empty string is accepted. Invalid Base64
         content is reported as a structured error payload by the
-        caller-facing wrapper instead of raising.
+        caller-facing wrapper instead of raising. Text containing
+        lone surrogate code points cannot be UTF-8 encoded and is
+        rejected like any other malformed parameter.
         """
         limit = self.max_input_bytes
         if input is None or isinstance(input, bool) or not isinstance(input, str):
@@ -252,7 +254,15 @@ class ChecksumTool(Tool):
                 f"input exceeds the {limit:,}-character limit "
                 f"(got {len(input):,} characters)"
             )
-        data = input.encode("utf-8")
+        try:
+            data = input.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            self._invalid(
+                "input contains text that cannot be UTF-8 encoded "
+                f"({exc.reason}; first offending character at position "
+                f"{exc.start}) — lone surrogate code points are not "
+                "valid UTF-8"
+            )
         if len(data) > limit:
             self._invalid(
                 f"input exceeds the {limit:,}-byte (1 MB) limit once "
