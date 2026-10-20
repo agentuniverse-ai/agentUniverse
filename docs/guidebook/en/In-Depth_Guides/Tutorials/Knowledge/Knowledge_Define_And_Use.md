@@ -92,5 +92,10 @@ knowledge.insert_knowledge(source_path="source_file")
 knowledge.query_knowledge()
 ```
 
+## Isolation when writing to multiple stores
+
+`insert_knowledge` and `update_knowledge` run their processors once, then give each selected store a deep copy of the resulting document batch. A store's embeddings, keywords, nested metadata and list mutations therefore cannot contaminate another store or the processed input. Document values and identifiers are preserved. This costs memory proportional to the number of target stores, and custom metadata objects must support deep copying. It does not make multi-store writes atomic: existing per-store failure logging and partial-success behavior remain unchanged.
+
 ## Learn More About Existing Knowledge
+
 [Legal Consultation Case](../../../Examples/Legal_Advice.md)
