@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 
 class PromptDTO(BaseModel):
+    """DTO model describing a prompt.
+    """
     introduction: Optional[str] = Field(description="prompt introduction", default="")
     target: Optional[str] = Field(description="prompt target", default="")
     instruction: Optional[str] = Field(description="prompt instruction", default="")
