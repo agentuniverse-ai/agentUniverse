@@ -12,8 +12,8 @@ def read_tables(tmp_path, rows, budget, *, paragraph=None, extra_table=False):
     if paragraph is not None:
         document.add_paragraph(paragraph)
     table = document.add_table(rows=len(rows), cols=len(rows[0]))
-    for cells, values in zip(table.rows, rows):
-        for cell, value in zip(cells.cells, values):
+    for cells, values in zip(table.rows, rows, strict=True):
+        for cell, value in zip(cells.cells, values, strict=True):
             cell.text = value
     if extra_table:
         document.add_table(rows=1, cols=1).cell(0, 0).text = "later"
