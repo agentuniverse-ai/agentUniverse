@@ -1,9 +1,6 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
-# @Time    : 2024/12/04 00:00
-# @Author  : AI Assistant
-# @FileName: test_participant_agent.py
 
 """Unit tests for the ParticipantAgent example agent."""
 
@@ -60,3 +57,18 @@ class TestParticipantAgent:
     def test_parse_result_returns_agent_result_unchanged(self):
         agent_result = {'output': 'final answer', 'extra': 1}
         assert self.agent.parse_result(agent_result) == agent_result
+
+
+    def test_parse_input_overwrites_stale_fields_and_preserves_falsy_values(self):
+        values = {
+            'input': '', 'agent_name': '', 'total_round': 0,
+            'cur_round': 0, 'participants': [],
+        }
+        agent_input = dict.fromkeys(values, 'stale')
+        result = self.agent.parse_input(InputObject(values), agent_input)
+        assert result is agent_input
+        assert result == values
+
+    def test_parse_result_preserves_identity_for_downstream_consumers(self):
+        agent_result = {'output': '', 'metadata': {'round': 0}}
+        assert self.agent.parse_result(agent_result) is agent_result
