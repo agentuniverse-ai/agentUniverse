@@ -183,6 +183,23 @@ class CsvJsonToJsonTest(unittest.TestCase):
             [{"column_1": "a", "column_2": 1}, {"column_1": "b"}],
         )
 
+    def test_bom_stripped_from_first_header(self) -> None:
+        # utf-8-sig convention: a leading BOM must not leak into the key.
+        result = self.tool.execute(mode="to_json", csv_text="\ufeffa,b\n1,2\n")
+        self.assertEqual(json.loads(result["result"]), [{"a": 1, "b": 2}])
+        # A BOM-only input has no content and is rejected.
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="to_json", csv_text="\ufeff")
+
+    def test_extra_column_key_collision_with_literal_header(self) -> None:
+        # A literal "column_3" header must not be overwritten by the
+        # generated key for an extra cell — the cell is suffixed instead.
+        result = self.tool.execute(mode="to_json", csv_text="a,column_3\n1,2,3\n")
+        self.assertEqual(
+            json.loads(result["result"]),
+            [{"a": 1, "column_3": 2, "column_3_2": 3}],
+        )
+
 
 class CsvJsonToCsvTest(unittest.TestCase):
     """to_csv mode: union keys, ragged rows, key order, rendering."""
@@ -273,6 +290,10 @@ class CsvJsonToCsvTest(unittest.TestCase):
             },
         )
 
+    def test_json_bom_stripped(self) -> None:
+        result = self.tool.execute(mode="to_csv", json_text='\ufeff[{"a": 1}]')
+        self.assertEqual(result["result"], "a\n1\n")
+
 
 class CsvJsonRoundTripTest(unittest.TestCase):
     """Round-trip guarantee on rectangular, uniform fixtures."""
@@ -314,6 +335,28 @@ class CsvJsonRoundTripTest(unittest.TestCase):
         self.assertEqual(json.loads(records["result"]), [{"a": 100000.0}])
         back = self.tool.execute(mode="to_csv", json_text=records["result"])
         self.assertEqual(back["result"], "a\n100000.0\n")
+
+    def test_unnecessary_quoting_normalized_values_preserved(self) -> None:
+        # Documented: canonical minimal quoting — cells the input quoted
+        # unnecessarily come back unquoted; the values are identical.
+        csv_text = 'a,b\n"abc","1"\n"xyz","2"\n'
+        records = self.tool.execute(mode="to_json", csv_text=csv_text)
+        self.assertEqual(json.loads(records["result"]), [{"a": "abc", "b": 1}, {"a": "xyz", "b": 2}])
+        back = self.tool.execute(mode="to_csv", json_text=records["result"])
+        self.assertEqual(back["result"], "a,b\nabc,1\nxyz,2\n")
+
+    def test_sniffing_stable_round_trip_on_uniform_data(self) -> None:
+        # Uniform comma-dominant data: values round-trip exactly even
+        # with semicolons / pipes / tabs inside cells (they do not
+        # trigger quoting under a comma delimiter, so the values are
+        # compared, and the sniffed delimiter stays comma).
+        csv_text = 'a,b\n"x;y",1\n"p|q",2\n"t\tu",3\n北京,4\n'
+        records = self.tool.execute(mode="to_json", csv_text=csv_text)
+        self.assertEqual(records["delimiter"], ",")
+        back = self.tool.execute(mode="to_csv", json_text=records["result"])
+        again = self.tool.execute(mode="to_json", csv_text=back["result"])
+        self.assertEqual(again["delimiter"], ",")
+        self.assertEqual(json.loads(again["result"]), json.loads(records["result"]))
 
 
 class CsvJsonErrorTest(unittest.TestCase):
@@ -362,9 +405,24 @@ class CsvJsonErrorTest(unittest.TestCase):
 
     def test_invalid_key_order(self) -> None:
         self.assert_value_error(mode="to_csv", json_text='[{"a":1}]', key_order="b")  # not a JSON array
+        self.assert_value_error(mode="to_csv", json_text='[{"a":1}]', key_order='"ab"')  # bare JSON string, not an array
+        self.assert_value_error(mode="to_csv", json_text='[{"a":1}]', key_order='{"a": 1}')  # JSON object, not an array
         self.assert_value_error(mode="to_csv", json_text='[{"a":1}]', key_order=[1, 2])  # entries must be strings
         self.assert_value_error(mode="to_csv", json_text='[{"a":1}]', key_order='["zzz"]')  # unknown key
         self.assert_value_error(mode="to_csv", json_text='[{"a":1}]', key_order=5)
+
+    def test_max_input_chars_attribute_respected(self) -> None:
+        # The limit is driven by the max_input_chars field, not a constant.
+        class TunedCsvJsonTool(CsvJsonTool):
+            max_input_chars: int = 10
+
+        tuned = TunedCsvJsonTool()
+        self.assertEqual(
+            json.loads(tuned.execute(mode="to_json", csv_text="a\n1\n")["result"]),
+            [{"a": 1}],
+        )
+        with self.assertRaises(ValueError):
+            tuned.execute(mode="to_json", csv_text="a\n12345678901\n")
 
     def test_invalid_json_returns_structured_error(self) -> None:
         result = self.tool.execute(mode="to_csv", json_text="not json")

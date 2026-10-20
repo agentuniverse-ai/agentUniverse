@@ -42,16 +42,19 @@ The tool is a thin, strictly-validated facade over the standard library
 The delimiter defaults to auto-sniffing among ``,`` ``;`` ``\\t`` ``|``
 by counting candidate occurrences *outside double-quoted sections* and
 preferring ``,`` on ties; an explicit ``delimiter`` option overrides
-sniffing.
+sniffing. A single leading UTF-8 BOM (``\\ufeff``) is stripped from the
+input text before any parsing or sniffing (the ``utf-8-sig``
+convention), so a BOM never leaks into the first header key.
 
 Round-trip guarantee: for rectangular, uniform CSV data (same fields
 in every row, ``has_header=True``), ``to_csv(to_json(csv))`` reproduces
-the original text — same headers, same cell values, same RFC 4180
-quoting — except for cells whose numeric spelling is non-canonical
-(e.g. ``1e5`` normalizes to ``100000.0``); the logical values always
-round-trip. ``to_json(to_csv(records))`` reproduces the original array
-of objects whenever ``type_inference`` matches how the values were
-encoded.
+the original values with canonical minimal RFC 4180 quoting — cells
+that the input quoted unnecessarily (``"abc"``) come back unquoted
+(``abc``), and cells whose numeric spelling is non-canonical (e.g.
+``1e5`` normalizes to ``100000.0``) change their textual form; the
+logical values always round-trip. ``to_json(to_csv(records))``
+reproduces the original array of objects whenever ``type_inference``
+matches how the values were encoded.
 
 Malformed parameters (wrong types, empty input text, unknown mode or
 delimiter, non-boolean ``has_header`` / ``type_inference``, invalid or
@@ -211,16 +214,23 @@ class CsvJsonTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"csv_json_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, text: Any, label: str) -> str:
-        """Validate the ``csv_text`` / ``json_text`` input."""
+    def _validate_text(self, text: Any, label: str) -> str:
+        """Validate the ``csv_text`` / ``json_text`` input.
+
+        A single leading UTF-8 BOM is stripped (the ``utf-8-sig``
+        convention) so it never leaks into the first header key or
+        breaks ``json.loads``.
+        """
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"{label} must be a non-empty string (got {text!r})")
-        if not text:
-            cls._invalid(f"{label} must be a non-empty string (got '')")
-        if len(text) > 100_000:
-            cls._invalid(f"{label} exceeds the {100_000:,}-character limit (got {len(text):,} characters)")
-        return text
+            self._invalid(f"{label} must be a non-empty string (got {text!r})")
+        clean = text.removeprefix("\ufeff")
+        if not clean:
+            self._invalid(f"{label} must be a non-empty string (got {text!r})")
+        if len(clean) > self.max_input_chars:
+            self._invalid(
+                f"{label} exceeds the {self.max_input_chars:,}-character limit (got {len(clean):,} characters)"
+            )
+        return clean
 
     @classmethod
     def _validate_delimiter(cls, delimiter: Any) -> Any:
@@ -279,6 +289,11 @@ class CsvJsonTool(Tool):
             except json.JSONDecodeError:
                 self._invalid(
                     f"key_order must be a list of key strings or a JSON array string (got {key_order[:64]!r})"
+                )
+            if not isinstance(parsed, list):
+                self._invalid(
+                    "key_order must be a JSON *array* of key strings (got "
+                    f"{type(parsed).__name__} from {key_order[:64]!r})"
                 )
         elif isinstance(key_order, (list, tuple)):
             parsed = key_order
@@ -357,7 +372,10 @@ class CsvJsonTool(Tool):
         With headers, cells map positionally to header keys: rows
         shorter than the header fill missing cells with empty strings
         (``null`` under inference) and longer rows append generated
-        ``column_{n}`` keys. Without headers every value gets a
+        ``column_{n}`` keys. A generated key that already exists as a
+        header key (a literal ``column_3`` header, say) is suffixed
+        ``_2`` / ``_3`` ... like duplicate headers, so no cell is
+        silently overwritten. Without headers every value gets a
         generated ``column_{n}`` key.
         """
         if headers is None:
@@ -365,7 +383,13 @@ class CsvJsonTool(Tool):
         else:
             record = {key: (row[index] if index < len(row) else "") for index, key in enumerate(headers)}
             for index in range(len(headers), len(row)):
-                record[f"column_{index + 1}"] = row[index]
+                key = f"column_{index + 1}"
+                if key in record:
+                    suffix = 2
+                    while f"{key}_{suffix}" in record:
+                        suffix += 1
+                    key = f"{key}_{suffix}"
+                record[key] = row[index]
         if infer:
             record = {key: cls._infer_value(v) for key, v in record.items()}
         return record

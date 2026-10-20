@@ -650,7 +650,9 @@ cell becomes `null`, and canonical numeric literals become numbers —
 while locale-ambiguous values deliberately stay strings: leading-zero
 values such as `007` or `007.5` are never coerced to numbers, and
 `NaN`/`Infinity` spellings are left alone. Cells are matched as-is
-without trimming. The delimiter is auto-sniffed among `,` `;` tab `|`
+without trimming, and a single leading UTF-8 BOM is stripped before
+parsing so it never leaks into the first header key. The delimiter is
+auto-sniffed among `,` `;` tab `|`
 by counting candidates outside double-quoted sections (ties prefer
 `,`), or set explicitly via the `delimiter` option. `to_csv` mode
 serializes a JSON array of objects back to CSV text: the header is the
@@ -671,8 +673,9 @@ csv_text = tool.execute(mode="to_csv", json_text=records)["result"]
 
 Round trip: for rectangular, uniform CSV data (same fields in every
 row, `has_header=true`), `to_csv(to_json(csv))` reproduces the original
-text — same headers, cell values and RFC 4180 quoting — except for
-cells with non-canonical numeric spellings (e.g. `1e5` normalizes to
+values with canonical minimal RFC 4180 quoting — cells the input
+quoted unnecessarily (`"abc"`) come back unquoted (`abc`) and cells
+with non-canonical numeric spellings (e.g. `1e5`) normalize (to
 `100000.0`); the logical values always round-trip. Inputs are
 validated strictly before any conversion: malformed parameters (wrong
 types, empty input text, unknown mode or delimiter, non-boolean
