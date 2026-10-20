@@ -634,3 +634,80 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Command Arg Lexer Tool
+
+`CommandArgLexerTool` parses command lines the way a POSIX-style shell
+would split them — without ever executing anything. It is built purely
+on the Python standard library, needs no network access, and
+complements `ContextEscapeTool`: that tool *quotes* text for a shell
+context, this tool *parses* a command line into `argv` words. It gives
+agents a safe way to inspect user-supplied commands: what words would
+a shell pass to the program, which of them are flags, and how to quote
+an `argv` list back into one safe line.
+
+Three modes:
+
+- `lex` — command line → `argv` list. Whitespace splitting on space,
+  tab, CR and LF runs; single quotes are fully literal; double quotes
+  collapse `\\`, `\"`, `\$` and `` \` `` per POSIX (a backslash before
+  any other character keeps both characters); a backslash outside
+  quotes escapes the next character; backslash-newline is a line
+  continuation; adjacent segments join into one word (`'a'b"c"` →
+  `abc`); an unterminated quote or trailing backslash is a structured
+  error carrying the 0-based position of the offender. Variable
+  expansion is OFF by default — `$VAR`, `${VAR}`, `$5`, `$?` stay
+  literal — and the opt-in `expand_vars` flag substitutes `$NAME` /
+  `${NAME}` from a caller-supplied `variables` dict (never from the
+  process environment), with `\$` and single quotes suppressing
+  expansion and an undefined name substituting the empty string.
+- `join` — `argv` list → a single safely-quoted line using the minimal
+  quoting needed: words with no separator whitespace, quote or
+  backslash stay bare, everything else is single-quoted with the
+  standard `'"'"'` idiom for embedded single quotes, and the empty word
+  becomes `''`. The transform is exactly invertible:
+  `lex(join(argv)) == argv`.
+- `count` — command line → `argv` count plus flags-versus-operands
+  classification: `argv[0]` is the program, leading-dash words before
+  the `--` separator are flags (with a `flag=value` split on the first
+  `=`), and everything else — a lone `-` and every dashed word after
+  `--` — is an operand.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.command_arg_lexer_tool import CommandArgLexerTool
+
+tool = CommandArgLexerTool()
+tool.execute(mode="lex", command_line="cp 'my file' \"a b\"")
+# {'mode': 'lex', 'expand_vars': False, 'argv': ['cp', 'my file', 'a b'], 'argc': 3}
+tool.execute(mode="lex", command_line="echo $HOME/x", expand_vars=True, variables={"HOME": "/root"})
+# {'mode': 'lex', 'expand_vars': True, 'argv': ['echo', '/root/x'], 'argc': 2}
+tool.execute(mode="join", argv=["echo", "it's", "a b"])
+# {'mode': 'join', 'result': "echo 'it'\"'\"'s' 'a b'"}
+tool.execute(mode="count", command_line="grep --color=auto -e pat -- --weird f")
+# {'mode': 'count', 'count': 7, 'program': 'grep', ..., 'separator_seen': True}
+```
+
+The tokenization is a deliberate POSIX subset: no glob expansion, no
+command substitution, no tilde expansion, no redirection syntax, no
+here-documents and no ANSI-C `$'...'` quoting — those characters are
+ordinary token characters, and an agent that needs them interpreted
+must hand the line to a real shell consciously. Relative to Python's
+`shlex.split` three divergences are deliberate: `\$` and `` \` ``
+inside double quotes collapse here (POSIX) while `shlex` keeps both
+characters; backslash-newline is a removed line continuation here
+while `shlex` keeps a literal newline; and unterminated quotes or a
+trailing backslash return a structured error with a position here
+while `shlex` raises. On command lines avoiding those constructs the
+two tokenizers agree exactly (verified by cross-check tests).
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, `argv` given as a bare string, NUL characters
+anywhere, unknown mode, `variables` without `expand_vars` or missing
+with it, invalid variable names, inputs over the size caps — 100,000
+characters for `command_line`, 10,000 items / 100,000 characters for
+`argv`, 200 `variables` entries) raise a `ValueError`. Content-level
+failures — unterminated quote, trailing backslash, unterminated
+`${`, invalid `${...}` name — are returned as a structured `error`
+payload (`{"type": ..., "message": ..., "position": ...}`) instead of
+raising. Everything is deterministic; no randomness, no clock, no
+network, and the process environment is never consulted.
