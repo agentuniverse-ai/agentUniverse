@@ -1,7 +1,7 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # @Time    : 2025/2/26 09:47
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: openai_protocol_template.py
 import datetime
