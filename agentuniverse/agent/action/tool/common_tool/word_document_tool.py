@@ -301,9 +301,11 @@ class WordDocumentTool(Tool):
         return paragraphs
 
     def _read_tables(self, document: Any, budget: "_ReadBudget") -> list[list[list[str]]]:
+        """Stop at the text budget, marking only omitted table data truncated."""
         tables: list[list[list[str]]] = []
-        for table in document.tables:
-            if not budget.allow_block():
+        source_tables = document.tables
+        for table_index, table in enumerate(source_tables):
+            if not budget.allow_block() or budget.chars_exhausted():
                 budget.mark_truncated()
                 break
             table_rows: list[list[str]] = []
@@ -312,15 +314,21 @@ class WordDocumentTool(Tool):
                     budget.mark_truncated()
                     break
                 values: list[str] = []
-                for column_index, cell in enumerate(row.cells):
+                cells = row.cells
+                for column_index, cell in enumerate(cells):
                     if column_index >= self.max_table_columns:
                         budget.mark_truncated()
                         break
-                    value, _cut = budget.consume_text(cell.text)
+                    value, cut = budget.consume_text(cell.text)
                     values.append(value)
+                    if budget.chars_exhausted():
+                        if (cut or column_index < len(cells) - 1
+                                or row_index < len(table.rows) - 1
+                                or table_index < len(source_tables) - 1):
+                            budget.mark_truncated()
+                        break
                 table_rows.append(values)
                 if budget.chars_exhausted():
-                    budget.mark_truncated()
                     break
             tables.append(table_rows)
             budget.used_block()
