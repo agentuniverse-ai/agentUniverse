@@ -634,3 +634,72 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Front Matter Tool
+
+`FrontMatterTool` handles markdown YAML front matter for document
+pipelines — reading metadata blocks, cleaning bodies, stamping keys
+onto generated documents, and combining metadata from two sources. It
+is built purely on the standard library plus the framework's existing
+PyYAML dependency (`tomllib` for TOML fences joined the stdlib in
+Python 3.11) with zero network access. `MarkdownTocTool` works on body
+text; front matter is a separate concern handled here. Four modes are
+supported: `parse` returns the front-matter mapping, the body (the
+remainder, preserved byte for byte), `has_front_matter` and
+`delimiters`; `strip` returns the body only (a text without front
+matter passes through unchanged); `set` sets one `key` / `value` pair
+— a dotted key such as `a.b.c` addresses a nested path, creating
+intermediate mappings — and returns the updated text; and `merge`
+merges the front matter of a first text over a second one's and
+returns the merged metadata plus the second text's body.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.front_matter_tool import FrontMatterTool
+
+tool = FrontMatterTool()
+parsed = tool.execute(mode="parse", text="---\ntitle: Hello\n---\n# Body\n")
+body = tool.execute(mode="strip", text=doc)["result"]
+updated = tool.execute(mode="set", text=doc, key="seo.description", value="A page")["result"]
+merged = tool.execute(mode="merge", text=doc_a, other_text=doc_b)["result"]
+```
+
+Three delimiter forms are supported: the YAML fences `---` ... `---`
+and `...` ... `...` (content parsed with `yaml.safe_load`; an empty
+block parses to `{}`), and the TOML fence `+++` ... `+++` (content
+parsed with `tomllib.loads` when it is valid TOML; otherwise the
+`parse` mode reports the block verbatim as `raw_string` with
+`format: "raw_string"` and `front_matter: null` — a documented
+fallback, not an error, because `+++` blocks in the wild are only
+TOML-ish). Other fences seen in the wild (`:::` used by some sites)
+are deliberately not supported; keeping to the three common forms
+keeps parsing unambiguous. Front matter must start at the very first
+line; the fence must be exactly three characters (`----` is a thematic
+break) and the closing fence must equal the opening one.
+
+The `set` mode patches existing keys at the line level — only the
+lines belonging to the key are replaced — so the order of the other
+keys and comment lines above the patched key survive; new keys are
+appended at the end of the block. Serialization uses
+`yaml.safe_dump(sort_keys=False)`. Setting a key in a `+++` block
+rewrites the block as a YAML `---` block (the stdlib can read TOML
+but not write it); the result reports the conversion via
+`converted_delimiters`. The `merge` mode documents both conflict
+directions: `precedence="second"` (default) keeps the second
+document's value for a key present in both, `precedence="first"`
+flips it; mapping values are merged recursively and the body always
+comes from the second document.
+
+Inputs are validated strictly before any computation: malformed
+parameters (unknown mode, missing or non-string `text` /
+`other_text`, missing or malformed `key`, wrong `value` type, unknown
+`precedence`, inputs over 100,000 characters) raise a `ValueError`.
+Errors that depend on the content being processed are returned as a
+structured `error` payload instead of raising: an unterminated
+front-matter block, YAML syntax errors (carrying the 1-based `line` /
+`column` PyYAML reports for the block), a front-matter block that
+parses to a non-mapping, TOML front matter that is needed by `set` /
+`merge` but not parseable, and a dotted key whose intermediate segment
+exists but is not a mapping. Duplicate top-level keys in a block are
+not supported (the first occurrence is patched). All outputs are
+deterministic for the same inputs, and the input newline style
+(CRLF/LF) is preserved.
