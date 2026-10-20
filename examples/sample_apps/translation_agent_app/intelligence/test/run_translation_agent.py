@@ -15,6 +15,8 @@ from agentuniverse.base.agentuniverse import AgentUniverse
 AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 def chat():
+    """Run a chat conversation with the agent and print the response.
+    """
     instance: Agent = AgentManager().get_instance_obj('translation_by_token_agent')
     with open('translation_data/long_text.txt', 'r') as f:
         data = f.read()
