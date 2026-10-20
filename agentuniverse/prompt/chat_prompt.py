@@ -56,6 +56,8 @@ class ChatPrompt(Prompt):
         result = []
         placeholder_pattern = re.compile(r'\{(.*?)}')
         for message in self.messages:
+            if not isinstance(message.content, str):
+                continue
             matches = placeholder_pattern.findall(message.content)
             result.extend(matches)
         return result
