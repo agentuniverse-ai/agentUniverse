@@ -51,6 +51,28 @@ Log context values that JSON cannot encode directly, such as `datetime`, `UUID`,
 inside lists and dictionaries. JSON-native values retain their types, and
 formatting leaves the original context objects unchanged.
 
+### Using the Default Configuration Programmatically
+
+The log configuration file is optional. When no `config_path` is supplied, the
+framework must still be able to initialize its loggers:
+
+```python
+from agentuniverse.base.util.logging.logging_util import init_loggers
+
+# No log config file: the defaults above are applied instead.
+init_loggers()
+```
+
+In this case the whole configuration is reset to the defaults documented above.
+Every optional extension module, for example the Aliyun SLS sink, stays
+disabled, and `log_path`, `log_level`, `log_rotation`, `log_retention`,
+`log_compression` plus the Aliyun SLS credentials all fall back to their default
+values rather than reusing whatever an earlier configuration file loaded in the
+same process had set. Only the built-in standard and error file handlers plus
+the stdout handler are registered. The same behaviour applies when calling
+`init_log_config()` or constructing `LoggingConfig()` directly without a path,
+or when the configured file cannot be found or parsed.
+
 ## Global Log Component
 agentUniverse provides a directly usable log component  `logging_util.Logger`, which you can integrate into your project as follows:
 ```python
