@@ -34,8 +34,8 @@ class NotionReader(Reader):
 
         try:
             from notion_client import Client  # type: ignore
-        except Exception:
-            raise ImportError("Install notion-client: `pip install notion-client`")
+        except Exception as e:
+            raise ImportError("Install notion-client: `pip install notion-client`") from e
 
         client = Client(auth=token)
         text_blocks: List[str] = []
@@ -55,7 +55,9 @@ class NotionReader(Reader):
                     row_id = row.get("id")
                     text_blocks.extend(self._export_page(client, row_id))
             except Exception as e_db:
-                raise RuntimeError(f"Failed to read Notion id={page_or_db_id}: {e_db}")
+                raise RuntimeError(
+                    f"Failed to read Notion id={page_or_db_id}: {e_db}"
+                ) from e_db
 
         text = "\n\n".join([b for b in text_blocks if b and b.strip()])
         if ext_info:
