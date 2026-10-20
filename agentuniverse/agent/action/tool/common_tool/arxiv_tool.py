@@ -7,6 +7,7 @@
 # @FileName: arxiv_tool.py
 from typing import Optional, Any, List
 import os
+import tempfile
 from dataclasses import dataclass
 from enum import Enum
 from pydantic import Field
@@ -111,19 +112,25 @@ class ArxivTool(Tool):
         paper = next(self.sch_engine.results(search), None)
         if paper is None:
             raise ValueError(f"No arXiv paper found for ID: {paper_id}")
-        paper.download_pdf(filename="downloaded-paper.pdf") 
-        
+        temporary_pdf = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        temporary_pdf.close()
         try:
-            import pypdf
-        except ImportError:
-            raise ImportError(
-                "pypdf is required to read PDF files: `pip install pypdf`"
-            )
-        reader = pypdf.PdfReader('downloaded-paper.pdf')
-        text_content = [page.extract_text() for page in reader.pages]
-        if os.path.exists("downloaded-paper.pdf"):
-            os.remove("downloaded-paper.pdf")
-        return "\n\n".join(text_content)
+            paper.download_pdf(filename=temporary_pdf.name)
+
+            try:
+                import pypdf
+            except ImportError:
+                raise ImportError(
+                    "pypdf is required to read PDF files: `pip install pypdf`"
+                )
+            reader = pypdf.PdfReader(temporary_pdf.name)
+            text_content = [page.extract_text() for page in reader.pages]
+            return "\n\n".join(text_content)
+        finally:
+            try:
+                os.remove(temporary_pdf.name)
+            except FileNotFoundError:
+                pass
 
     def _format_paper_results(self, papers: List[PaperSummary]) -> str:
         if not papers:
