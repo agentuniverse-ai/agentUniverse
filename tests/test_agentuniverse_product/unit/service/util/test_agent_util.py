@@ -1,6 +1,25 @@
+import sys
+import types
+
 import pytest
 
+from agentuniverse.agent.agent_model import AgentModel
+
+
+if "ruamel.yaml" not in sys.modules:
+    ruamel_module = types.ModuleType("ruamel")
+    yaml_module = types.ModuleType("ruamel.yaml")
+    yaml_module.YAML = object
+    ruamel_module.yaml = yaml_module
+    sys.modules["ruamel"] = ruamel_module
+    sys.modules["ruamel.yaml"] = yaml_module
+
 from agentuniverse_product.service.util import agent_util
+
+
+class MissingInstanceManager:
+    def get_instance_obj(self, *_args, **_kwargs):
+        return None
 
 
 class RecordingLogger:
@@ -11,7 +30,18 @@ class RecordingLogger:
         self.warnings.append(message)
 
 
-@pytest.mark.parametrize("expected_exception", [KeyError("missing"), TypeError("invalid type"), ValueError("invalid value")])
+def test_get_tool_dto_list_skips_unresolved_tool(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(agent_util, "ProductManager", MissingInstanceManager)
+    monkeypatch.setattr(agent_util, "ToolManager", MissingInstanceManager)
+    agent_model = AgentModel(action={"tool": ["missing_tool"]})
+
+    assert agent_util.get_tool_dto_list(agent_model) == []
+
+
+@pytest.mark.parametrize(
+    "expected_exception",
+    [KeyError("missing"), TypeError("invalid type"), ValueError("invalid value")],
+)
 def test_assemble_peer_planner_members_returns_empty_list_and_logs_expected_errors(
     monkeypatch, expected_exception
 ):
