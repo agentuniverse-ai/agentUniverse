@@ -13,11 +13,12 @@ from typing import Optional, List, Any
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
-from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, func, or_, create_engine, Engine, insert, inspect
+from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, func, or_, create_engine, Engine, insert
 
 from agentuniverse.agent.memory.conversation_memory.conversation_message import ConversationMessage
 from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageEnum, ConversationMessageSourceType
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
+from agentuniverse.agent.memory.memory_storage.sql_history import query_recent_records
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.database.sqldb_wrapper import SQLDBWrapper
@@ -325,16 +326,8 @@ class SqliteMemoryStorage(MemoryStorage):
             query = session.query(self.memory_converter.model_class)
             if conditions:
                 query = query.where(and_(*conditions))
-            if isinstance(top_k, int) and top_k > 0:
-                order = [model_class.timestamp.desc()]
-                order.extend(column.desc() for column in inspect(model_class).primary_key)
-                # SQLite binds LIMIT as a signed 64-bit integer.
-                records = query.order_by(*order).limit(min(top_k, 2**63 - 1)).all()
-                records.reverse()
-            else:
-                query = query.order_by(model_class.timestamp.asc())
-                records = query.all()
-                records = records[-top_k:]
+            records = query_recent_records(query, model_class,
+                                           model_class.timestamp, top_k)
 
             messages = []
             for record in records:

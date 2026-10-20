@@ -149,7 +149,7 @@ metadata:
 
 Here, `db_uri` is the database connection address, and `engine_args` are the engine parameters for SqlAlchemy.
 
-### SQLite Conversation History
+### Bounded SQL History
 
 The conversation-memory implementation `SqliteMemoryStorage` in
 `agentuniverse.agent.memory.conversation_memory.memory_storage.sqlite_conversation_memory_storage`
@@ -160,3 +160,7 @@ matching message objects even when the session contains thousands of messages.
 Rows with the same timestamp are ordered by the mapped primary key (the row id
 for the default converter). Custom converters may use other or composite primary
 keys. Existing session, agent, trace and message-type filters apply before the limit.
+
+The generic `SqlAlchemyMemoryStorage` described above uses the same bounded query
+path with its `gmt_created` timestamp and existing session/agent/source filters.
+Its default limit is 10 messages; the SQLite conversation store defaults to 20.

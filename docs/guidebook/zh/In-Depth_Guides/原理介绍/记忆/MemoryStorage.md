@@ -142,7 +142,7 @@ metadata:
 
 其中db_uri为数据库连接地址，engine_args为sqlalchemy的engine参数。
 
-### SQLite 对话历史
+### 限量读取 SQL 记忆
 
 对话记忆实现
 `agentuniverse.agent.memory.conversation_memory.memory_storage.sqlite_conversation_memory_storage`
@@ -152,3 +152,7 @@ metadata:
 加载 20 个匹配的消息行对象。时间戳相同的消息按映射表的主键排序，默认转换器使用
 数据库行 id，自定义转换器可以使用其他主键或复合主键。已有的会话、智能体、链路
 和消息类型条件均在限制数量前生效。
+
+上文介绍的通用 `SqlAlchemyMemoryStorage` 也使用同一条限量查询路径，按其
+`gmt_created` 字段排序，保留已有的会话、智能体和来源筛选条件。该存储器默认
+读取 10 条消息，SQLite 对话存储器默认读取 20 条。
