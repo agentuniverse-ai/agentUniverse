@@ -33,7 +33,7 @@ class PptxReader(Reader):
         document_list = []
         for slide_number, slide in enumerate(presentation.slides, start=1):
             for shape in slide.shapes:
-                if hasattr(shape, "text"):
+                if hasattr(shape, "text") and shape.text.strip():
                     metadata = {"slide_number": slide_number, "file_name": file.name}
                     if ext_info is not None:
                         metadata.update(ext_info)
