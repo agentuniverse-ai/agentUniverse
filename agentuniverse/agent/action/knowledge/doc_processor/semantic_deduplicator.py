@@ -163,6 +163,7 @@ class SemanticDeduplicator(DocProcessor):
                 # Add document to unique set
                 unique_docs.append(doc)
                 seen_indices.add(i)
+                best_doc = doc
 
                 # Check for semantic duplicates
                 for j in range(i + 1, len(docs)):
@@ -175,9 +176,10 @@ class SemanticDeduplicator(DocProcessor):
 
                         # Handle duplicate based on merge strategy
                         if self.merge_strategy == 'keep_best':
-                            if self._is_better_doc(docs[j], doc):
+                            if self._is_better_doc(docs[j], best_doc):
                                 # Replace with better document
                                 unique_docs[-1] = docs[j]
+                                best_doc = docs[j]
                         elif self.merge_strategy == 'merge':
                             # Merge metadata
                             unique_docs[-1] = self._merge_docs(unique_docs[-1], docs[j])
