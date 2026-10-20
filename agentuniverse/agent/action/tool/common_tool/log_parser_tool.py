@@ -32,12 +32,15 @@ and supports three modes:
 * ``parse`` — turn every line into a structured record using an
   explicitly given format (whitelisted) or the auto-detected dominant
   format. Combined records carry ``ip / ident / user / time / method /
-  path / protocol / status / bytes / referrer / agent``; syslog records
-  carry ``timestamp / host / proc / pid / message``; leveled records
-  carry ``timestamp / level / logger / message``; keyvalue records are
-  the flat ``key=value`` dictionary itself. Lines that do not match the
-  chosen format come back as ``{"raw": ..., "error": ...}`` entries and
-  are tallied in ``failed_count`` — parsing never raises on bad lines.
+  path / protocol / status / bytes / referrer / agent`` (quoted fields
+  follow the Apache escaping convention: ``\"`` inside the referrer or
+  agent is accepted and the record carries the unescaped value); syslog
+  records carry ``timestamp / host / proc / pid / message``; leveled
+  records carry ``timestamp / level / logger / message``; keyvalue
+  records are the flat ``key=value`` dictionary itself. Lines that do
+  not match the chosen format come back as ``{"raw": ..., "error":
+  ...}`` entries and are tallied in ``failed_count`` — parsing never
+  raises on bad lines.
 * ``filter`` — parse first (explicit or detected format), then keep the
   records whose fields satisfy every given predicate: ``level_min``
   (inclusive severity threshold; ordering TRACE < DEBUG < INFO < WARN <
@@ -72,12 +75,18 @@ _ISO_TS = (
 _LEVEL_TOKEN = r"(?:TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)"
 
 # Apache/Nginx combined access log: ... "REQ" status bytes "ref" "ua".
+# The referrer/agent strings follow the Apache escaping convention:
+# a literal quote is logged as \" and a backslash as \\, so the field
+# body accepts backslash-escaped quotes and the parsed record carries
+# the unescaped value (other backslashes pass through untouched).
+_QUOTED_FIELD = r'(?:[^"]|\\")*'
+_APACHE_UNESCAPE_RE = re.compile(r'\\(["\\])')
 COMBINED_RE = re.compile(
     r"^(?P<ip>\S+)\s+(?P<ident>\S+)\s+(?P<user>\S+)\s+"
     r"\[(?P<time>[^\]]+)\]\s+"
     r'"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+(?P<protocol>[^"\s]+)"\s+'
     r"(?P<status>\d{3})\s+(?P<bytes>\d+|-)\s+"
-    r'"(?P<referrer>[^"]*)"\s+"(?P<agent>[^"]*)"\s*$'
+    rf'"(?P<referrer>{_QUOTED_FIELD})"\s+"(?P<agent>{_QUOTED_FIELD})"\s*$'
 )
 # Apache common access log: same as combined minus the referrer/agent tail.
 COMMON_RE = re.compile(
@@ -612,8 +621,11 @@ class LogParserTool(Tool):
             else:
                 record["bytes"] = int(record["bytes"])
             if format == "combined":
-                record["referrer"] = match.group("referrer")
-                record["agent"] = match.group("agent")
+                # The quoted tail fields carry Apache escapes (\" for a
+                # literal quote, \\ for a backslash); records expose the
+                # true value.
+                record["referrer"] = _APACHE_UNESCAPE_RE.sub(r"\1", match.group("referrer"))
+                record["agent"] = _APACHE_UNESCAPE_RE.sub(r"\1", match.group("agent"))
             return record
         if format == "syslog":
             match = SYSLOG_RE.match(line)

@@ -269,6 +269,31 @@ class LogParserToolTest(unittest.TestCase):
             [COMBINED_RECORD_1, COMBINED_RECORD_2, COMBINED_RECORD_3],
         )
 
+    def test_parse_combined_apache_escaped_quotes_and_backslashes(self) -> None:
+        # Apache escapes a literal quote inside the logged referrer /
+        # agent as \" and a backslash as \\; such lines must parse and
+        # the records must carry the unescaped values. The field bodies
+        # below are written as raw strings so the escapes read exactly
+        # as they appear in the log file.
+        referrer_body = r'-\"Mozilla/5.0 (search; \"q=\" )\"'
+        agent_body = r'agent with \"escaped quotes\" and \\backslash\"'
+        text = (
+            '1.2.3.4 - - [19/Oct/2026:10:30:00 +0000] '
+            '"GET /search?q=\\"1\\" HTTP/1.1" 200 10 '
+            f'"{referrer_body}" "{agent_body}"\n'
+        )
+        result = self.tool.execute(mode="parse", text=text, format="combined")
+        self.assertEqual(result["failed_count"], 0)
+        record = result["records"][0]
+        self.assertEqual(record["referrer"], '-"Mozilla/5.0 (search; "q=" )"')
+        self.assertEqual(
+            record["agent"], 'agent with "escaped quotes" and \\backslash"'
+        )
+        # Detection recognizes the escaped-quote line as combined too.
+        detect = self.tool.execute(mode="detect", text=text)
+        self.assertEqual(detect["format_guess"], "combined")
+        self.assertEqual(detect["votes"]["combined"], 1)
+
     def test_parse_common_ground_truth(self) -> None:
         result = self.tool.execute(mode="parse", text=COMMON_TEXT)
         self.assertEqual(result["parsed_count"], 2)

@@ -670,7 +670,11 @@ the explicit or auto-detected format — combined records carry `ip`,
 dictionary — and lines that do not match come back as
 `{"raw": ..., "error": ...}` entries tallied in `failed_count`, never
 as exceptions. Apache `-` placeholders become `null` for `ident`,
-`user` and `bytes`; `status` and `bytes` are integers. `filter` parses
+`user` and `bytes`; `status` and `bytes` are integers. Quoted tail
+fields follow the Apache escaping convention — a literal quote inside
+the referrer or agent is logged as `\"` and a backslash as `\\`; such
+escapes are accepted and the record carries the unescaped value.
+`filter` parses
 first, then keeps records satisfying every given predicate: `level_min`
 (inclusive; ordering TRACE < DEBUG < INFO < WARN < ERROR < FATAL with
 `WARNING`/`CRITICAL` aliases), `status_min` (inclusive HTTP code),
