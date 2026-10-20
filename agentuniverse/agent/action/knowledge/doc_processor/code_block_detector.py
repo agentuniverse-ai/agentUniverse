@@ -16,6 +16,10 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 # indented by up to 3 spaces, captured together with the remainder of the
 # line (the info string candidate).
 _FENCE_RE = re.compile(r"^(`+|~+)(.*)$")
+# First word of an info string: everything up to the first ASCII space,
+# tab or carriage return (CRLF residue). Other Unicode whitespace is
+# part of the word, matching CommonMark's space/tab word separation.
+_INFO_WORD_RE = re.compile(r"[^ \t\r]*")
 # Maximum number of fenced blocks allowed in a document.
 _DEFAULT_MAX_BLOCKS = 50
 # Placeholder template used when mask=True: the detected language and the
@@ -44,14 +48,21 @@ class CodeBlockDetector(DocProcessor):
     at most 3 spaces whose remainder starts with a maximal run of 3 or
     more backticks or tildes; the rest of the line is the info string,
     whose first word (lowercased) is taken as the language (empty string
-    when absent). A backtick fence may not carry backticks in its info
-    string. A closing fence must be a line indented by at most 3 spaces
-    consisting solely of the same fence character repeated at least as
-    many times as the opener (trailing spaces allowed, no info text).
+    when absent; words are delimited by ASCII spaces, tabs and carriage
+    returns only, so other Unicode whitespace stays part of the word). A
+    backtick fence may not carry backticks in its info string. A closing
+    fence must be a line indented by at most 3 spaces consisting solely
+    of the same fence character repeated at least as many times as the
+    opener (only spaces, tabs or a trailing carriage return may follow
+    the run — not other Unicode whitespace — and no info text).
     Consequently a ````` fence does not close a `````` block and a tilde
     fence never closes a backtick fence — nested-looking fences simply
     remain content of the enclosing block. A fence left open runs to the
-    end of the document and is reported with ``unclosed: true``.
+    end of the document and is reported with ``unclosed: true``. One
+    deliberate deviation: CommonMark's inline normalization of the info
+    string (backslash escape and entity reference resolution) is not
+    applied — the raw first word is reported, so ````` ``foo\\+bar`` `````
+    yields ``foo\\+bar`` rather than ``foo+bar``.
 
     The scan is pure Python, deterministic and offline. Lines are counted
     by splitting on ``\\n`` (a trailing newline therefore yields one final
@@ -171,8 +182,10 @@ class CodeBlockDetector(DocProcessor):
             tuple | None: ``(fence_char, run_length, language, indent)``
             when the line opens a fence, else None. ``language`` is the
             lowercased first word of the info string ("" when the info
-            string is empty or whitespace). Backtick openers whose info
-            string contains a backtick are rejected per CommonMark.
+            string is empty or ASCII whitespace; words are delimited by
+            ASCII spaces, tabs and carriage returns only). Backtick
+            openers whose info string contains a backtick are rejected
+            per CommonMark.
         """
         stripped = line.lstrip(" ")
         indent = len(line) - len(stripped)
@@ -184,10 +197,11 @@ class CodeBlockDetector(DocProcessor):
         fence = match.group(1)
         if len(fence) < 3:
             return None
-        info = match.group(2).strip()
+        info = match.group(2).strip(" \t\r")
         if fence[0] == "`" and "`" in info:
             return None
-        language = info.split()[0].lower() if info else ""
+        language = (_INFO_WORD_RE.match(info).group(0).lower()
+                    if info else "")
         return fence[0], len(fence), language, indent
 
     @staticmethod
@@ -196,7 +210,9 @@ class CodeBlockDetector(DocProcessor):
 
         A closer must match the opener's fence character, repeat it at
         least ``length`` times, be indented by at most 3 spaces and carry
-        nothing but optional trailing whitespace after the fence run.
+        nothing but optional trailing spaces, tabs or carriage returns
+        after the fence run — other Unicode whitespace disqualifies, and
+        so does any info text.
 
         Args:
             lines: Document lines.
@@ -218,7 +234,7 @@ class CodeBlockDetector(DocProcessor):
             run, rest = match.group(1), match.group(2)
             # At least as long as the opener, and nothing but whitespace
             # after the run — an info string disqualifies.
-            if len(run) >= length and not rest.strip():
+            if len(run) >= length and not rest.strip(" \t\r"):
                 return index
         return None
 

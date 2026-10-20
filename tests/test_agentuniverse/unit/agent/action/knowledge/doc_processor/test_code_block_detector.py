@@ -163,6 +163,46 @@ class TestCodeBlockDetector(unittest.TestCase):
         self.assertEqual(summary["block_count"], 0)
         self.assertEqual(summary["blocks"], [])
 
+    def test_language_words_are_ascii_whitespace_delimited(self):
+        """Info-string words are delimited by ASCII spaces, tabs and
+        carriage returns only; other Unicode whitespace stays part of
+        the reported language."""
+        cases = {
+            "```go\u3000ideo\nx\n```": "go\u3000ideo",
+            "~~~py\u00a0nbsp\nx\n~~~": "py\u00a0nbsp",
+            "```x\u000b\nx\n```": "x\u000b",
+            "```py\tx\nx\n```": "py",
+            "```py x\nx\n```": "py",
+            "```sh\r\nx\n```": "sh",
+            "```  python\textra  \nx\n```": "python",
+        }
+        for text, language in cases.items():
+            summary = self._summary(text)
+            self.assertEqual(summary["blocks"][0]["language"], language,
+                             text)
+
+    def test_language_keeps_info_string_escapes_raw(self):
+        """CommonMark inline normalization (backslash escapes, entities)
+        is deliberately not applied to the info string."""
+        text = "```foo\\+bar\nx\n```"
+        summary = self._summary(text)
+        self.assertEqual(summary["blocks"][0]["language"], "foo\\+bar")
+        self.assertEqual(summary["languages"], {"foo\\+bar": 1})
+
+    def test_mask_with_unicode_whitespace_language_is_idempotent(self):
+        """A language containing Unicode whitespace still yields a
+        placeholder no second pass can mistake for a fence."""
+        detector = CodeBlockDetector()
+        detector.mask = True
+        doc = _doc("```go\u3000ideo\nx\n```")
+        detector.process_docs([doc], self.query)
+        once = doc.text
+        self.assertEqual(once, "\u27e6code:go\u3000ideo:3\u27e7")
+        detector.process_docs([doc], self.query)
+        self.assertEqual(doc.text, once)
+        self.assertEqual(
+            doc.metadata["code_blocks"]["block_count"], 0)
+
     def test_short_runs_are_not_fences(self):
         """Runs shorter than 3 characters never open a fence."""
         for text in ("``python\nx", "~~\nx", "before\n`\nafter"):
@@ -195,6 +235,30 @@ class TestCodeBlockDetector(unittest.TestCase):
         text = "```python\nx\n```   \ntail"
         summary = self._summary(text)
         self.assertEqual(summary["blocks"][0]["span"], [1, 3])
+
+    def test_closer_allows_tabs_and_carriage_returns_only(self):
+        """Only spaces, tabs and carriage returns may follow the closer
+        run; mixed ASCII trailing whitespace still closes, including in
+        CRLF documents."""
+        for closer in ("``` \t", "```\t\r", "```   \r"):
+            text = f"```py\r\nx\r\n{closer}\r\ntail"
+            summary = self._summary(text)
+            self.assertEqual(summary["blocks"][0]["span"], [1, 3], closer)
+            self.assertFalse(summary["blocks"][0]["unclosed"], closer)
+
+    def test_closer_rejects_non_ascii_trailing_whitespace(self):
+        """A fence run followed by Unicode whitespace (NBSP, vertical
+        tab, ideographic space) is content, not a closer, per CommonMark
+        ("may be followed only by spaces or tabs")."""
+        for ws in ("\u00a0", "\u000b", "\u3000", "\u2028"):
+            text = f"```py\nx\n```{ws}\ntail"
+            summary = self._summary(text)
+            self.assertTrue(summary["blocks"][0]["unclosed"], ws)
+            self.assertEqual(summary["blocks"][0]["span"], [1, 4], ws)
+            self.assertEqual(summary["block_count"], 1, ws)
+        text = "~~~py\nx\n~~~\u00a0 tail"
+        summary = self._summary(text)
+        self.assertTrue(summary["blocks"][0]["unclosed"])
 
     # ========== Indentation tests ==========
 
