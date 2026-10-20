@@ -548,6 +548,60 @@ class IsoWeekToolTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.tool.execute(**mode_and_args)
 
+    def test_from_week_week_53_of_final_iso_year(self) -> None:
+        self.assertFalse(
+            datetime.date(9999, 12, 28).isocalendar()[:2] == (9999, 53)
+        )
+        result = self.tool.execute(mode="from_week", iso_year=9999, week=53)
+        self.assertFalse(result["valid"])
+        self.assertEqual(result["iso_year"], 9999)
+        self.assertEqual(result["week"], 53)
+        self.assertIn("52 weeks", result["reason"])
+        self.assertNotIn("monday", result)
+        self.assertNotIn("sunday", result)
+
+    def test_error_week_53_of_final_iso_year_as_anchor(self) -> None:
+        for mode_and_args in (
+            {"mode": "week_bounds", "date": "9999-W53"},
+            {"mode": "add_weeks", "date": "9999-W53", "weeks": 1},
+            {"mode": "weeks_between", "start": "9999-W53", "end": "9999-W53"},
+            {"mode": "range_weeks", "start": "9999-W53", "end": "9999-W53"},
+            {"mode": "week_bounds", "date": "0001-W53"},
+        ):
+            with self.subTest(args=mode_and_args):
+                with self.assertRaises(ValueError) as ctx:
+                    self.tool.execute(**mode_and_args)
+                self.assertTrue(
+                    str(ctx.exception).startswith("iso_week_tool:")
+                )
+
+    def test_error_final_week_bounds_end_beyond_range(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            self.tool.execute(mode="week_bounds", date="9999-W52")
+        self.assertTrue(str(ctx.exception).startswith("iso_week_tool:"))
+
+    def test_error_week_spec_year_out_of_range(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            self.tool.execute(mode="week_bounds", date="0000-W01")
+        self.assertTrue(str(ctx.exception).startswith("iso_week_tool:"))
+
+    def test_error_non_ascii_digit_inputs(self) -> None:
+        arabic_year_week = "٢٠٢٦-W٤٢"
+        arabic_week_only = "2026-W٤٢"
+        arabic_date = "٢٠٢٦-١٠-٢٠"
+        for bad in (arabic_year_week, arabic_week_only):
+            with self.subTest(spec=bad):
+                with self.assertRaises(ValueError):
+                    self.tool.execute(mode="week_bounds", date=bad)
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="info", date=arabic_date)
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="from_week", iso_year="٢٠٢٦", week="٤٢")
+        with self.assertRaises(ValueError):
+            self.tool.execute(
+                mode="add_weeks", date="2026-W42", weeks="٤٢"
+            )
+
     def test_error_from_week_parameter_bounds(self) -> None:
         for bad_year in (0, -1, 10000, 1.5, "2026x", True, None):
             with self.subTest(iso_year=bad_year):

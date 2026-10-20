@@ -66,9 +66,9 @@ from pydantic import ConfigDict
 from agentuniverse.agent.action.tool.tool import Tool
 
 # Canonical ISO calendar date: exactly YYYY-MM-DD, zero-padded.
-_DATE_RE = re.compile(r"\A(\d{4})-(\d{2})-(\d{2})\Z")
+_DATE_RE = re.compile(r"\A(\d{4})-(\d{2})-(\d{2})\Z", re.ASCII)
 # Canonical ISO week spec: exactly YYYY-Www, zero-padded two-digit week.
-_WEEK_RE = re.compile(r"\A(\d{4})-W(\d{2})\Z")
+_WEEK_RE = re.compile(r"\A(\d{4})-W(\d{2})\Z", re.ASCII)
 
 WEEKDAY_NAMES = (
     "Monday",
@@ -221,7 +221,9 @@ class IsoWeekTool(Tool):
             cls._invalid(f"{label} must be an integer (got {value!r})")
         if isinstance(value, int):
             number = value
-        elif isinstance(value, str) and re.fullmatch(r"-?\d+", value.strip()):
+        elif isinstance(value, str) and re.fullmatch(
+            r"-?\d+", value.strip(), re.ASCII
+        ):
             number = int(value.strip())
         else:
             cls._invalid(f"{label} must be an integer (got {value!r})")
@@ -280,7 +282,11 @@ class IsoWeekTool(Tool):
         requested ISO year (for a short year, "week 53"'s Monday
         already falls into week 1 of the next ISO year).
         """
-        return cls._week_monday(iso_year, week).isocalendar()[0] == iso_year
+        try:
+            monday = cls._week_monday(iso_year, week)
+        except OverflowError:
+            return False
+        return monday.isocalendar()[0] == iso_year
 
     @classmethod
     def _parse_week_spec(cls, value: Any, label: str) -> datetime.date:
@@ -301,6 +307,10 @@ class IsoWeekTool(Tool):
         match = _WEEK_RE.match(value)
         if match:
             iso_year, week = int(match.group(1)), int(match.group(2))
+            if not 1 <= iso_year <= 9999:
+                cls._invalid(
+                    f"{label} ISO year must be 0001..9999 (got {value!r})"
+                )
             if not 1 <= week <= 53:
                 cls._invalid(
                     f"{label} week must be 01..53 (got {value!r})"
