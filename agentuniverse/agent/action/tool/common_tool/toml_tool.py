@@ -159,21 +159,33 @@ class TomlTool(Tool):
         clean_text = self._validate_text(text, allow_empty=(mode == "validate"))
         if mode == "get":
             segments = self._validate_path(path)
+        # Content-driven RecursionErrors (a document nested deeper than
+        # the interpreter recursion limit, whether rejected by tomllib
+        # or by the tool's own tree walks) are content-level failures
+        # and must not escape as bare exceptions.
+        try:
+            if mode == "get":
+                data = self._parse_or_error(clean_text)
+                if "error" in data:
+                    return {"mode": "get", "path": path, **data}
+                return self._run_get(path, data["data"], segments)
+            if mode == "parse":
+                data = self._parse_or_error(clean_text)
+                if "error" in data:
+                    return {"mode": "parse", **data}
+                return {"mode": "parse", "data": _to_json_safe(data["data"])}
+            if mode == "validate":
+                return {"mode": "validate", **self._run_validate(clean_text)}
             data = self._parse_or_error(clean_text)
             if "error" in data:
-                return {"mode": "get", "path": path, **data}
-            return self._run_get(path, data["data"], segments)
-        if mode == "parse":
-            data = self._parse_or_error(clean_text)
-            if "error" in data:
-                return {"mode": "parse", **data}
-            return {"mode": "parse", "data": _to_json_safe(data["data"])}
-        if mode == "validate":
-            return {"mode": "validate", **self._run_validate(clean_text)}
-        data = self._parse_or_error(clean_text)
-        if "error" in data:
-            return {"mode": "paths", **data}
-        return self._run_paths(data["data"])
+                return {"mode": "paths", **data}
+            return self._run_paths(data["data"])
+        except RecursionError:
+            return {
+                "mode": mode,
+                **({"path": path} if mode == "get" else {}),
+                "error": _nesting_error_payload(),
+            }
 
     # ------------------------------------------------------------------ #
     # Input validation (pure — raises before any computation)
@@ -236,6 +248,11 @@ class TomlTool(Tool):
                     "col": col,
                 }
             }
+        except RecursionError:
+            # tomllib itself recurses on nested arrays / inline tables;
+            # a document nested past the interpreter limit is a content
+            # failure, not a crash.
+            return {"error": _nesting_error_payload()}
         return {"data": data}
 
     # ------------------------------------------------------------------ #
@@ -355,6 +372,19 @@ class TomlTool(Tool):
 # ---------------------------------------------------------------------- #
 
 
+def _nesting_error_payload() -> dict[str, Any]:
+    """Build the structured error payload for over-deep documents."""
+    return {
+        "type": "nesting_too_deep",
+        "message": (
+            "document nesting exceeds the Python recursion limit and "
+            "cannot be inspected"
+        ),
+        "line": None,
+        "col": None,
+    }
+
+
 def _extract_position(message: str) -> tuple[Any, Any]:
     """Extract ``(line, col)`` from a tomllib error message.
 
@@ -465,11 +495,14 @@ def _iter_leaves(value: Any, prefix: list[str]):
     """Yield ``(dotted_path, toml_type)`` for every leaf, document order.
 
     A leaf is any scalar value, plus empty arrays / empty tables (a
-    container with no elements has nothing to descend into).
+    container with no elements has nothing to descend into). The root
+    table is never a leaf — an empty document has zero leaf paths, not
+    a bogus ``""`` entry the ``get`` mode could not resolve anyway.
     """
     if isinstance(value, dict):
         if not value:
-            yield _render_path(prefix), "table"
+            if prefix:
+                yield _render_path(prefix), "table"
             return
         for key, item in value.items():
             yield from _iter_leaves(item, prefix + [_render_key(key)])
@@ -537,8 +570,9 @@ def _read_quoted_key(path: str, pos: int, quote: str) -> tuple[str, int]:
             end += 2
             continue
         if char == quote:
-            if end == pos + 1:
-                _path_error(path, pos, "empty quoted key")
+            # Empty quoted keys are legal TOML (`"" = 1`), so they are
+            # accepted here too — `paths` renders them as `""` / `''`
+            # and `get` must be able to resolve its own rendering.
             return "".join(out), end + 1
         out.append(char)
         end += 1

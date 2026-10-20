@@ -192,6 +192,22 @@ class TomlToolTest(unittest.TestCase):
         self.assertIsNone(result["error"]["col"])
         self.assertIn("end of document", result["error"]["message"])
 
+    def test_over_deep_nesting_returns_structured_error(self) -> None:
+        # tomllib itself recurses on nested arrays; a document nested
+        # past the interpreter limit is a content failure and must come
+        # back as a payload, not as an uncaught RecursionError.
+        text = "a = " + "[" * 3000 + "]" * 3000 + "\n"
+        result = self.tool.execute(mode="parse", text=text)
+        self.assertEqual(result["mode"], "parse")
+        self.assertEqual(result["error"]["type"], "nesting_too_deep")
+        result = self.tool.execute(mode="validate", text=text)
+        self.assertFalse(result["valid"])
+        self.assertEqual(result["error"]["type"], "nesting_too_deep")
+        result = self.tool.execute(mode="get", text=text, path="a")
+        self.assertEqual(result["error"]["type"], "nesting_too_deep")
+        result = self.tool.execute(mode="paths", text=text)
+        self.assertEqual(result["error"]["type"], "nesting_too_deep")
+
     def test_parse_error_on_later_line(self) -> None:
         result = self.tool.execute(mode="parse", text="a = 1\nb = 2\nc = = 3")
         self.assertEqual(result["error"]["line"], 3)
@@ -318,6 +334,15 @@ class TomlToolTest(unittest.TestCase):
         result = self.tool.execute(mode="get", text='[a]\n"héllo" = 3\n', path='a."héllo"')
         self.assertEqual(result["value"], 3)
 
+    def test_get_empty_quoted_key_is_legal(self) -> None:
+        # Empty quoted keys are valid TOML ("" = 1, s.'' = 2); paths
+        # renders them quoted, so get must resolve its own rendering.
+        result = self.tool.execute(mode="get", text='"" = 1\nx."" = 2\n', path='""')
+        self.assertEqual(result["value"], 1)
+        self.assertEqual(result["type"], "integer")
+        result = self.tool.execute(mode="get", text='"" = 1\nx."" = 2\n', path="x.''")
+        self.assertEqual(result["value"], 2)
+
     # ------------------------------------------------------------------ #
     # get mode — content-level errors (structured payloads)
     # ------------------------------------------------------------------ #
@@ -403,6 +428,33 @@ class TomlToolTest(unittest.TestCase):
         self.assertEqual(result["paths"][0], {"path": "k000", "type": "integer"})
         self.assertEqual(result["paths"][499], {"path": "k499", "type": "integer"})
 
+    def test_paths_empty_document_has_no_leaves(self) -> None:
+        # The root table itself is never a leaf: a document with no
+        # key/value pairs has zero leaf paths, not a bogus "" entry.
+        for text in ("# comment only\n", "\n\n"):
+            result = self.tool.execute(mode="paths", text=text)
+            self.assertEqual(result["paths"], [])
+            self.assertEqual(result["count"], 0)
+            self.assertEqual(result["total"], 0)
+            self.assertFalse(result["truncated"])
+
+    def test_paths_listing_resolves_through_get(self) -> None:
+        # Round-trip contract: every path listed by paths mode must be
+        # resolvable by get mode — including empty quoted keys.
+        text = '"" = 1\nx."" = 2\ny."a.b" = 3\n'
+        result = self.tool.execute(mode="paths", text=text)
+        self.assertEqual(
+            result["paths"],
+            [
+                {"path": '""', "type": "integer"},
+                {"path": 'x.""', "type": "integer"},
+                {"path": 'y."a.b"', "type": "integer"},
+            ],
+        )
+        for entry in result["paths"]:
+            got = self.tool.execute(mode="get", text=text, path=entry["path"])
+            self.assertNotIn("error", got)
+
     def test_paths_invalid_toml_returns_error_payload(self) -> None:
         result = self.tool.execute(mode="paths", text="a = = 1")
         self.assertEqual(result["error"]["type"], "invalid_toml")
@@ -476,7 +528,7 @@ class TomlToolTest(unittest.TestCase):
             ("a[10", "expected ']'"),
             ('a."b', 'unterminated "-quoted key'),
             ("a.'b", "unterminated '-quoted key"),
-            ("a.''", "empty quoted key"),
+            ("a['0']", "non-negative integer array index"),
             ('a."b\\q"', "unsupported escape"),
             ('a."b\\', "dangling escape"),
             ("[0].a", "expected a bare key"),
