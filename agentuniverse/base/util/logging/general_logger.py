@@ -201,7 +201,7 @@ class GeneralLogger(Logger):
         ).critical(msg, *args, **kwargs)
 
     async def acritical(self, msg, *args, **kwargs):
-        self.error(msg, *args, **kwargs)
+        self.critical(msg, *args, **kwargs)
         await self._logger.complete()
 
     def trace(self, msg, *args, **kwargs):

@@ -47,3 +47,27 @@ def test_end_node_outputs_are_isolated_between_runs():
     assert first_workflow.workflow_end_params == {"result": "first"}
     assert first_workflow.workflow_parameters["end"][0].value == "first"
     assert second_workflow.workflow_end_params == {"result": "second"}
+
+
+def test_knowledge_outputs_preserve_separators_and_run_isolation(monkeypatch):
+    from types import SimpleNamespace
+    from agentuniverse.workflow.node import knowledge_node as module
+
+    responses = {'one': 'first', 'two': 'second'}
+
+    class Manager:
+        def get_instance_obj(self, identifier):
+            return SimpleNamespace(query_knowledge=lambda **kwargs: [SimpleNamespace(text=responses[identifier])])
+
+    monkeypatch.setattr(module, 'KnowledgeManager', Manager)
+    node = module.KnowledgeNode(id='knowledge', data={
+        'inputs': {'knowledge_param': [{'name': 'id', 'value': {'content': ['one', 'two']}}]},
+        'outputs': [{'name': 'result'}],
+    })
+    first = WorkflowOutput()
+    node.run(first)
+    responses.update(one='new first', two='new second')
+    second = WorkflowOutput()
+    node.run(second)
+    assert first.workflow_parameters['knowledge'][0].value == 'first\nsecond'
+    assert second.workflow_parameters['knowledge'][0].value == 'new first\nnew second'

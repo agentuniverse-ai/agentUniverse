@@ -43,6 +43,9 @@ class ArxivTool(Tool):
         if mode not in [m.value for m in SearchMode]:
             raise ValueError(f"Invalid mode: {mode}. Must be one of {[m.value for m in SearchMode]}")
 
+        if not isinstance(input, str) or not input.strip():
+            raise ValueError("input must be a non-empty string")
+
         try:
             import arxiv
         except ImportError:
@@ -105,7 +108,9 @@ class ArxivTool(Tool):
         except ImportError:
             raise ImportError("arxiv is required. Install with: pip install arxiv")
         search = arxiv.Search(id_list=[paper_id])
-        paper = next(self.sch_engine.results(search))
+        paper = next(self.sch_engine.results(search), None)
+        if paper is None:
+            raise ValueError(f"No arXiv paper found for ID: {paper_id}")
         paper.download_pdf(filename="downloaded-paper.pdf") 
         
         try:

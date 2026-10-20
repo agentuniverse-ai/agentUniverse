@@ -52,6 +52,6 @@ class ToolNode(Node):
             for output_param in output_params:
                 output_param.value = tool_output.get(output_param.name, None)
         else:
-            raise TypeError(f"The type of tool_output is not supported.")
+            raise TypeError("The type of tool_output is not supported.")
         workflow_output.workflow_parameters[self.id] = output_params
         return NodeOutput(node_id=self.id, status=NodeStatusEnum.SUCCEEDED, result=output_params)
