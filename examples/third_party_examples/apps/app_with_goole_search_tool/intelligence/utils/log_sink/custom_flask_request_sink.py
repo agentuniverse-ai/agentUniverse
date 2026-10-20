@@ -1,23 +1,3 @@
-# !/usr/bin/env python3
-# -*- coding:utf-8 -*-
+"""Use the package Flask request sink so example logs share its safe defaults."""
 
-# @Time    :
-# @Author  :
-# @Email   :
-# @FileName: custom_flask_request_sink.py
-
-from agentuniverse.base.util.logging.log_sink.flask_request_log_sink import \
-    FlaskRequestLogSink
-
-
-class CustomFlaskRequestSink(FlaskRequestLogSink):
-    def generate_log(self, flask_request) -> str:
-        log_string = (f"Request: {flask_request.method} {flask_request.path} "
-                      f"Headers: {dict(flask_request.headers)}")
-        if flask_request.data:
-            try:
-                log_string += f" Body: {flask_request.get_data(as_text=True)}"
-            except Exception as e:
-                pass
-
-        return log_string
+from agentuniverse_extension.logger.log_sink.custom_flask_request_sink import CustomFlaskRequestSink
