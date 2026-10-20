@@ -634,3 +634,70 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Byte Size Tool
+
+`ByteSizeTool` parses, formats, converts and compares byte-size strings
+using only the Python standard library (`re`, `decimal`) — no network and
+no extra dependencies. It is the inverse of a human-readable formatter:
+it turns agent- and user-facing strings such as `"10KB"` or `"1.5 MiB"`
+back into exact integer byte counts, formats byte counts into the
+shortest clean string, converts between the decimal and binary unit
+systems with exact decimal arithmetic, and compares two size
+expressions.
+
+The unit set is strict and closed:
+
+| Unit(s) | Meaning | Multiplier |
+| --- | --- | --- |
+| `B` (or a bare number) | bytes | 1 byte |
+| `KB`/`kB`, `MB`/`mB`, `GB`/`gB`, `TB`/`tB`, `PB`/`pB` | decimal byte units | 1000^n bytes |
+| `KiB`, `MiB`, `GiB`, `TiB`, `PiB` | binary byte units (case-sensitive) | 1024^n bytes |
+| `b`, `kb`/`Kb`, `mb`/`Mb`, `gb`/`Gb`, `tb`/`Tb`, `pb`/`Pb` | bit units | 1000^n bits |
+
+Byte units end in an uppercase `B` with a case-insensitive prefix (`KB`
+and `kB` are both 1000 bytes); the IEC/JEDEC binary forms must be spelled
+exactly `KiB` / `MiB` / `GiB` / `TiB` / `PiB` (`KIB`, `kib` and `Kib`
+are unknown units); every unit ending in a lowercase `b` is a *bit* unit,
+so `"2 gb"` is 2 gigabits. Bit amounts convert with `x / 8` — `"10kb"` is
+10,000 bits = 1250 bytes exactly — and a bit amount that is not a whole
+multiple of 8 is rejected instead of silently rounded. Results must be
+whole bytes: `"1.5 KiB"` is 1536, `"0.5 B"` is an error.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.byte_size_tool import ByteSizeTool
+
+tool = ByteSizeTool()
+tool.execute(mode="parse", size="1.5 MiB")["bytes"]                  # 1572864
+tool.execute(mode="parse", size="10kb")["bytes"]                     # 1250 (bits / 8)
+tool.execute(mode="format", value=999999)["result"]                 # "1 MB"
+tool.execute(mode="format", value=1536, system="binary")["result"]  # "1.5 KiB"
+tool.execute(mode="format", value=1250, as_bits=True)["result"]     # "10 kb"
+tool.execute(mode="convert", size="10 MiB", target_unit="MB")
+# {"result": "10.48576", "value": 10.48576, "exact": True, ...}
+tool.execute(mode="compare", size_a="10MB", size_b="10000000B")["equal"]  # True
+```
+
+`format` picks the largest unit that does not exceed the value, rounds
+half-up to `precision` decimals (default 1, range 0-9) with carry into
+the next unit (999999 bytes become `"1 MB"`), and trims trailing zeros.
+`system` is `decimal`, `binary` or `auto`; `auto` (the default) resolves
+to the decimal system — SI labels are the unambiguous, standards-preferred
+display — so pass `binary` explicitly when the 1024-based reading is
+wanted. `as_bits=True` emits a bit string (`1250` bytes become
+`"10 kb"`).
+
+`convert` divides with `decimal.Decimal` (never binary floats) and
+returns the exact decimal string as `result` alongside the nearest float
+as `value`; when the float cannot represent the exact value, a `note`
+says so (`"10 MiB"` to `MB` is exactly `10.48576`).
+
+Byte magnitudes are bounded to the signed 64-bit range (0 to 2^63 - 1).
+Malformed parameters — unknown mode / system / target unit, wrong types,
+negative format values, precision outside 0-9, oversized input strings —
+raise `ValueError` before any computation. Errors that depend on the
+parsed content — invalid size syntax, unknown units (the valid set is
+listed in the message), fractional bytes, bit amounts not divisible by 8,
+negatives without `allow_negative`, out-of-range magnitudes — are
+returned as a structured `error` payload (`{"type": ..., "message":
+...}`) instead of raising.

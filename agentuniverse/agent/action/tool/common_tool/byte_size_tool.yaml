@@ -1,0 +1,35 @@
+name: byte_size_tool
+description: Parse, format, convert and compare byte-size strings — pure Python stdlib, no network required. Parse size strings to exact integer bytes with a strict unit set (decimal KB..PB, binary KiB..PiB, bit units divided by 8), format byte counts to the shortest clean string in decimal/binary/auto systems with precision control, convert between units with exact Decimal arithmetic, and compare two size expressions.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.byte_size_tool
+  class: ByteSizeTool
+input_keys:
+  - mode
+max_input_chars: 200
+args_model_schema:
+  type: object
+  properties:
+    mode: {type: string, enum: [parse, format, convert, compare]}
+    size:
+      type: string
+      description: Size string for parse and convert modes (e.g. "10KB", "1.5 MiB", "2 gb" bits, "512" bare bytes).
+    target_unit:
+      type: string
+      description: Convert mode only — any supported unit, e.g. "MB" or "kb".
+    size_a:
+      type: string
+      description: Compare mode only — the first size string.
+    size_b:
+      type: string
+      description: Compare mode only — the second size string.
+    value:
+      description: Format mode only — non-negative integer byte count (int or digit string).
+      anyOf: [{type: integer, minimum: 0}, {type: string, pattern: '^\+?[0-9]+$'}]
+    system: {type: string, enum: [auto, decimal, binary], description: Format mode only — auto resolves to decimal.}
+    precision: {type: integer, minimum: 0, maximum: 9, description: Format mode only — maximum decimals, default 1, trailing zeros trimmed.}
+    as_bits: {type: boolean, description: Format mode only — emit a bit string (decimal bit units).}
+    allow_negative: {type: boolean, description: Permit negative magnitudes in parse/convert/compare, default false.}
+  required: [mode]
+  additionalProperties: false
