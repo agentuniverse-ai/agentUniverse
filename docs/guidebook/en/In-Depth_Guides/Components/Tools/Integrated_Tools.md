@@ -634,3 +634,49 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Word Shape Tool
+
+`WordShapeTool` implements the classic NER-style word-shape features built
+purely on the Python standard library (`unicodedata`) — zero network access
+and zero new dependencies. Every character maps to exactly one symbol:
+uppercase letter → `X`, lowercase letter → `x`, digit (`str.isdigit()`) →
+`d`, CJK ideograph / compatibility ideograph / radical / stroke (Unicode
+name starting with `CJK`) → `C`, punctuation → `p`, symbol → `s`, other
+letter (kana, hangul, iteration marks, titlecase) → `L`, and everything
+else (separators, combining marks, control characters, non-digit numerics
+like `½`) → `o`. So `"Apple"` → `"Xxxxx"`, `"APPLE"` → `"XXXXX"`,
+`"123"` → `"ddd"`, `"McDonald's"` → `"XxXxxxxxpx"` and `"北京2026"` →
+`"CCdddd"`; the exact character-to-symbol table is documented in the tool
+module docstring.
+
+Four modes: `shape` maps one word or a list of words to per-word shape
+strings, with a `collapsed` option that merges consecutive identical
+symbols into one (`"Apple"` → `"Xx"`, `"USA1"` → `"Xd"`); `normalize_digits`
+replaces every maximal digit run with a single `'0'` — the classic number
+normalization, `"iPhone 15 Pro"` → `"iPhone 0 Pro"`, `"2026-10-20"` →
+`"0-0-0"`; `analyze` returns the per-word feature dictionary (shape,
+collapsed shape, `is_capitalized`, `is_all_caps`, `digit_ratio`,
+`alpha_ratio`, `has_hyphen`, `length` and a `script` guess of `latin` /
+`cjk` / `mixed` / `unknown`); and `batch_shapes` profiles shape
+frequencies over the whitespace-separated tokens of a text, sorted by
+descending count with ties broken by ascending shape string and optionally
+truncated with `top_n`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.word_shape_tool import WordShapeTool
+
+tool = WordShapeTool()
+tool.execute(mode="shape", word="Apple")["result"]            # "Xxxxx"
+tool.execute(mode="shape", word="USA1", collapsed=True)["result"]  # "Xd"
+tool.execute(mode="normalize_digits", text="iPhone 15 Pro")["result"]  # "iPhone 0 Pro"
+tool.execute(mode="analyze", word="McDonald's")["result"]
+tool.execute(mode="batch_shapes", text="the Cat sat on the mat", top_n=3)["result"]
+```
+
+Inputs are validated strictly before any computation: unknown mode, both
+or neither of `word` / `words`, wrong types, empty strings or lists,
+non-boolean `collapsed`, invalid `top_n`, a text without any
+whitespace-separated token, and inputs over 100,000 characters (or word
+lists over 10,000 items) raise a `ValueError`. All outputs are
+deterministic.
