@@ -122,7 +122,9 @@ def detect_text_regions(image, east_model='frozen_east_text_detection.pb', min_c
             confidences.append(float(scoresData[x]))
 
     # Apply non-maxima suppression to suppress overlapping boxes
-    boxes = cv2.dnn.NMSBoxes(rects, confidences, min_confidence, 0.4)
+    # OpenCV expects (x, y, width, height), not opposite corner coordinates.
+    nms_rects = [(x1, y1, x2 - x1, y2 - y1) for x1, y1, x2, y2 in rects]
+    boxes = cv2.dnn.NMSBoxes(nms_rects, confidences, min_confidence, 0.4)
     regions = []
     if len(boxes) > 0:
         for i in boxes.flatten():
