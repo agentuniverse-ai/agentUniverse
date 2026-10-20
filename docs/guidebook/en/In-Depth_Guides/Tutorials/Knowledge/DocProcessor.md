@@ -309,3 +309,29 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [PassiveVoiceDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/passive_voice_detector.yaml)
+
+This component measures passive-voice density per document and records it as metadata, addressing the *pre-processing/analysis* direction of issue #258. Heavy passive voice is a classic writing-quality smell: documentation guides read better in the active voice, and regulatory or legal text leans on passives to leave the acting party unstated. The detector scans every document for passive constructions in English and Chinese, writes a per-document report into document metadata, and keeps every document — it is an analyzer, not a filter, so downstream agents (or a reviewer dashboard) can rank documents by writing quality without re-reading them. It is complementary to readability and emphasis components (such as ReadingLevelScorer or EmphasisMarkerDetector): those answer "how hard is the text" and "what does it stress", while this one answers "who does the text hide".
+
+The English matcher is token-based: a passive is a be-form (am/is/are/was/were/be/been/being, plus the contractions isn't/aren't/wasn't/weren't), optionally followed by one interposed adverb (not/never/often/...), followed by a past participle — either a regular `-ed` form of at least four letters or one of ~90 common irregular participles (done, given, taken, seen, ...). Progressive and perfect passives ("is being reviewed", "has been reviewed") are caught by their inner be-form + participle pair. Three adjectival guards keep state descriptions from counting: interested/tired/excited after a be-form are skipped outright, and used/supposed are skipped when immediately followed by "to" ("is used to convert files"), while "is used by the team" still counts. When the token "by" follows the participle within five tokens of the same sentence (and no fresh be-form intervenes), the following noun phrase of up to three words is recorded as the agent with original capitalization; hits without such an agent carry null. The Chinese matcher recognizes the markers 被, 受, 受到, 遭到 and the 由...所 construction, each followed by a bounded run of Han characters; the bare marker 受 is only matched at the start of a word — not directly after another Han character — so verbs merely ending in 受 (接受, 享受, ...) do not fire, and no agent is extracted for Chinese hits. The whole pipeline is pure standard library, deterministic, offline and dependency-free.
+
+The report written to `metadata[output_key]` contains `passive_count` (total constructions), `total_sentences` (segments split on Western and Chinese terminators and line breaks), `passive_ratio` (fraction of sentences containing at least one passive, rounded to four decimals), `passive_density_per_100` (constructions per 100 sentences), `style_flag` — `active` (ratio below `moderate_threshold`), `moderate` (in `[moderate_threshold, heavy_threshold]`) or `heavy` (above `heavy_threshold`; defaults 10% / 25%) — and `hits`, per-hit records `{text, span, lang, agent}` sorted by span and capped at `max_hits` entries (`hits_truncated` says whether the cap dropped any; counting itself is never capped). Metadata mappings are copied before mutation; text, id and all other fields are left untouched.
+
+The component definition file is as follows:
+```yaml
+name: 'passive_voice_detector'
+description: 'measure passive-voice density per document and record it as metadata'
+moderate_threshold: 0.10       # ratio at/above which style_flag is 'moderate'
+heavy_threshold: 0.25          # ratio strictly above which style_flag is 'heavy'
+max_hits: 50                   # cap on per-hit records in metadata; >= 1
+output_key: 'passive_voice'    # metadata key for the report; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.passive_voice_detector'
+  class: 'PassiveVoiceDetector'
+```
+- moderate_threshold: Fraction of sentences containing at least one passive at or above which style_flag becomes `moderate`; float in [0, 1], default 0.10.
+- heavy_threshold: Fraction strictly above which style_flag becomes `heavy`; float in [0, 1], default 0.25; must be strictly greater than moderate_threshold.
+- max_hits: Maximum number of per-hit records written into metadata (earliest spans kept); must be >= 1. Detection keeps counting past the cap and passive_count stays exact.
+- output_key: Metadata key the report dict is written to; an empty value disables stamping (documents pass through with metadata untouched).

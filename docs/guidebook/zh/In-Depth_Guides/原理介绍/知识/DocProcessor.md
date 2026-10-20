@@ -310,3 +310,29 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [PassiveVoiceDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/passive_voice_detector.yaml)
+
+该组件测量每篇文档的被动语态密度并写入 metadata，对应 issue #258 的*预处理/分析*方向。被动语态过重是典型的写作质量信号：技术文档用主动语态读起来更清楚，而法规或合同文本常借被动语态隐去行为主体。该检测器逐篇扫描文档中的中英文被动结构，把逐文档报告写入 metadata，并且保留全部文档——它是分析器而非过滤器，下游 Agent（或评审看板）无需重读原文即可按写作质量排序。它与可读性、强调标记类组件（如 ReadingLevelScorer、EmphasisMarkerDetector）互补：那些回答"文本有多难""文本在强调什么"，本组件回答"文本在隐藏谁"。
+
+英文匹配基于词元：被动结构 = be 动词（am/is/are/was/were/be/been/being，以及缩写 isn't/aren't/wasn't/weren't）+ 可选的一个间隔副词（not/never/often 等）+ 过去分词——分词要么是以 `-ed` 结尾且长度至少 4 的规则形式，要么是约 90 个常见不规则分词（done、given、taken、seen 等）之一。进行时被动与完成时被动（"is being reviewed"、"has been reviewed"）由内层 be 动词 + 分词对捕获。三组形容词护栏防止把状态描述误判为被动：be 动词后的 interested/tired/excited 直接跳过；used/supposed 紧跟 "to" 时跳过（"is used to convert files"），而 "is used by the team" 仍计为被动。当分词后 5 个词元内（同一句内，且中间没有新的 be 动词）出现 "by" 时，其后最多 3 个词的名词短语按原始大小写记为施事者；没有则记 null。中文匹配识别被、受、受到、遭到与"由……所"等标记加其后一段有界汉字串；裸标记"受"只在词首匹配——不紧跟在其他汉字之后——因此接受、享受等以"受"结尾的动词不会误报；中文命中不提取施事者。整个流程纯标准库、确定性、离线且零依赖。
+
+写入 `metadata[output_key]` 的报告包含：`passive_count`（被动结构总数）、`total_sentences`（按中西文句终符与换行切分的句子数）、`passive_ratio`（至少含一个被动的句子占比，保留 4 位小数）、`passive_density_per_100`（每百句被动结构数）、`style_flag`——`active`（低于 moderate_threshold）、`moderate`（落在 [moderate_threshold, heavy_threshold]）或 `heavy`（高于 heavy_threshold，默认 10% / 25%）——以及 `hits`：按 span 排序、封顶 `max_hits` 条的逐条记录 `{text, span, lang, agent}`（`hits_truncated` 标明封顶是否丢弃了记录；计数本身不封顶）。写入前会复制 metadata 映射，text、id 及其他字段绝不改动。
+
+组件定义文件如下：
+```yaml
+name: 'passive_voice_detector'
+description: 'measure passive-voice density per document and record it as metadata'
+moderate_threshold: 0.10       # 占比达到该值时 style_flag 为 'moderate'
+heavy_threshold: 0.25          # 占比严格超过该值时 style_flag 为 'heavy'
+max_hits: 50                   # metadata 中逐条记录的封顶数；>= 1
+output_key: 'passive_voice'    # 报告写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.passive_voice_detector'
+  class: 'PassiveVoiceDetector'
+```
+- moderate_threshold：至少含一个被动的句子占比达到该值时 style_flag 变为 `moderate`；取值 [0, 1]，默认 0.10。
+- heavy_threshold：占比严格超过该值时 style_flag 变为 `heavy`；取值 [0, 1]，默认 0.25；必须严格大于 moderate_threshold。
+- max_hits：写入 metadata 的逐条记录上限（保留最早的 span）；必须 >= 1。封顶之后检测继续计数，passive_count 保持精确。
+- output_key：报告字典写入的 metadata 键；为空则不写入（文档原样通过，metadata 不变）。
