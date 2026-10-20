@@ -44,7 +44,7 @@ class ExcelTool(Tool):
     Excel file manipulation tool with read, write, append, and info operations.
 
     Features:
-    - Read Excel files (.xlsx, .xls) with range support
+    - Read Excel files (.xlsx) with range support
     - Write data to new or existing files
     - Append rows to existing files
     - Get file information and structure
@@ -61,7 +61,7 @@ class ExcelTool(Tool):
 
     max_read_size: int = Field(50 * 1024 * 1024, description="Maximum file size for reading (50MB)")
     max_write_size: int = Field(10 * 1024 * 1024, description="Maximum file size for writing (10MB)")
-    allowed_extensions: List[str] = Field(default_factory=lambda: ['.xlsx', '.xls'], description="Allowed file extensions")
+    allowed_extensions: List[str] = Field(default_factory=lambda: ['.xlsx'], description="Allowed file extensions")
 
     def _validate_path(self, file_path: str) -> Dict[str, Any]:
         """
@@ -96,6 +96,11 @@ class ExcelTool(Tool):
 
         # 3. Check file extension
         _, ext = os.path.splitext(file_path)
+        if ext.lower() in {'.xls', '.xlsb'}:
+            return {
+                "valid": False,
+                "error": "Unsupported Excel format: Convert .xls or .xlsb files to .xlsx first"
+            }
         if ext.lower() not in self.allowed_extensions:
             return {
                 "valid": False,
