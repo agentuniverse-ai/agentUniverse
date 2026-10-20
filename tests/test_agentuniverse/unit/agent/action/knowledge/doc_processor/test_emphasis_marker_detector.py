@@ -239,6 +239,33 @@ class TestEmphasisMarkerDetector(unittest.TestCase):
         ):
             self.assertEqual(self._hits(text), [], text)
 
+    def test_unicode_intraword_underscore_inert(self):
+        """Word characters are Unicode alphanumerics, so underscores
+        inside CJK or Cyrillic word chains stay inert exactly as
+        CommonMark renders them (regression: ASCII-only word chars
+        used to false-positive here)."""
+        for text in (
+            "中文_斜体_中文",
+            "参数_说明_结束",
+            "прилив_и_отлив",
+            "中文__提示__中文",
+            "数据_value_结束",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(
+                    [h for h in self._hits(text)
+                     if h['kind'] in ('bold', 'italic')], [], text)
+
+    def test_cjk_boundary_underscore_still_emphasizes(self):
+        """Underscores at real boundaries (whitespace or punctuation on
+        the outer flank) still pair even with CJK content inside."""
+        hits = self._hits("说明 _重要_ 内容")
+        self.assertEqual([(h['kind'], h['text']) for h in hits],
+                         [('italic', '重要')])
+        hits = self._hits("（__重要__）")
+        self.assertEqual([(h['kind'], h['text']) for h in hits],
+                         [('bold', '重要')])
+
     def test_intraword_underscore_partial_cases(self):
         """'_a_b' cannot close on the intraword flank; nothing pairs."""
         self.assertEqual(self._hits("_a_b"), [])
@@ -258,6 +285,38 @@ class TestEmphasisMarkerDetector(unittest.TestCase):
         hits = self._hits(text)
         self.assertEqual([(h['kind'], h['text']) for h in hits],
                          [('italic', 'a *b* c'), ('italic', 'b')])
+
+    def test_documented_commonmark_deviations_frozen(self):
+        """The docstring's four documented deviations from full
+        CommonMark rendering stay exactly as documented."""
+        # 1. punctuation-only flanking still opens/closes
+        self.assertEqual([(h['kind'], h['text']) for h in
+                          self._hits("a*(foo)*")],
+                         [('italic', '(foo)')])
+        self.assertEqual([(h['kind'], h['text']) for h in
+                          self._hits("bar**=== word**")],
+                         [('bold', '=== word')])
+        # 2. backslash escapes are not honored: the backslash before the
+        #    opener stays outside the span, the one before the closer
+        #    stays inside the text
+        self.assertEqual([(h['kind'], h['text']) for h in
+                          self._hits("\\*foo\\*")],
+                         [('italic', 'foo\\')])
+        # 3. pairing is length-matched, not CommonMark cross-length
+        self.assertEqual([(h['kind'], h['text']) for h in
+                          self._hits("___ _world)__")], [])
+        self.assertEqual([(h['kind'], h['text']) for h in
+                          self._hits("**a *b**")],
+                         [('bold', 'a *b')])
+        # 4. runs of three or more markers are skipped (frozen above)
+
+    def test_link_inside_bold_keeps_link_syntax_as_content(self):
+        """Emphasis wrapping a markdown link reports the raw link text
+        as content: only emphasis markers are stripped, not inline
+        markup."""
+        self.assertEqual(
+            [(h['kind'], h['text']) for h in self._hits("**[x](y)**")],
+            [('bold', '[x](y)')])
 
     # ========== Code fence immunity ==========
 
@@ -348,6 +407,35 @@ class TestEmphasisMarkerDetector(unittest.TestCase):
         self.assertEqual(
             [h['text'] for h in self._hits(text) if h['kind'] == 'caps'],
             ['FAA'])
+
+    def test_caps_allowlist_case_insensitive_via_process_docs(self):
+        """Entries set directly on the attribute (not only via the
+        configer) are normalized case-insensitively on the public
+        process path too (regression: they used to match
+        case-sensitively there)."""
+        text = "NASA and GPS and FAA met"
+        detector = EmphasisMarkerDetector()
+        detector.caps_allowlist = ['nasa', 'Gps']
+        doc = _doc(text)
+        detector.process_docs([doc], self.query)
+        self.assertEqual(
+            [h['text'] for h in doc.metadata['emphasis']
+             if h['kind'] == 'caps'],
+            ['FAA'])
+        self.assertEqual(doc.metadata['emphasis_counts']['caps'], 1)
+
+    def test_caps_underscore_boundaries_report_both_fragments(self):
+        """Underscores act as token boundaries for caps detection, so
+        both fragments of 'FOO_BAR' report, and the caps run inside
+        '__IMPORTANT__' overlaps its bold hit exactly as the asterisk
+        spelling does (regression: '_' used to silence the adjacent
+        token)."""
+        self.assertEqual(
+            [(h['kind'], h['text']) for h in self._hits("FOO_BAR")],
+            [('caps', 'FOO'), ('caps', 'BAR')])
+        self.assertEqual(
+            [(h['kind'], h['text']) for h in self._hits("__IMPORTANT__")],
+            [('bold', 'IMPORTANT'), ('caps', 'IMPORTANT')])
 
     def test_caps_overlaps_marker_hits(self):
         """**IMPORTANT** yields both a bold hit and a caps hit."""

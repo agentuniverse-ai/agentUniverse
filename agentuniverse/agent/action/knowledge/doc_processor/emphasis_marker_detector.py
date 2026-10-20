@@ -30,9 +30,12 @@ _MARKER_RUN_RE = re.compile(r'\*+|_+|=+')
 # Fully-uppercase ASCII token: uppercase letters and digits, bounded by
 # lookarounds so tokens glued to lowercase letters or digits of a wider
 # mixed-case word (e.g. the 'SAPP' inside 'iOSAPP') never match. The
-# lookarounds are ASCII word characters only, so a caps run embedded
-# directly in CJK text (no spaces) is still detected.
-_CAPS_TOKEN_RE = re.compile(r'(?<![A-Za-z0-9_])[A-Z0-9]+(?![A-Za-z0-9_])')
+# lookarounds are ASCII alphanumerics only, so a caps run embedded
+# directly in CJK text (no spaces) is still detected, and underscore
+# separators act as token boundaries just like spaces: both fragments
+# of 'FOO_BAR' report, and the caps run inside '__IMPORTANT__'
+# overlaps its bold hit exactly as '**IMPORTANT**' does.
+_CAPS_TOKEN_RE = re.compile(r'(?<![A-Za-z0-9])[A-Z0-9]+(?![A-Za-z0-9])')
 
 # Opening code fence: three or more backticks or tildes after optional
 # indentation. The info string (e.g. 'python') is not inspected.
@@ -43,21 +46,25 @@ def _is_word_char(ch: str) -> bool:
     """Report whether a character counts as a word character for the
     simplified CommonMark intraword rule.
 
-    Word characters are ASCII alphanumerics plus the underscore itself,
-    mirroring CommonMark's Unicode punctuation/whitespace classes closely
-    enough for identifier guards: 'snake_case' underscores sit between
-    word characters and therefore can never open or close emphasis.
+    Word characters are Unicode alphanumerics plus the underscore
+    itself, mirroring CommonMark's intraword behaviour for non-Latin
+    scripts: 'snake_case' underscores sit between word characters and
+    therefore can never open or close emphasis, and neither do the
+    underscores inside CJK or Cyrillic word chains such as
+    '参数_说明_结束' or 'прилив_и_отлив', whose ideographs and letters
+    CommonMark counts as word characters just like ASCII ones.
 
     Args:
         ch: Single character, or '' / None for line boundaries.
 
     Returns:
-        bool: True for [A-Za-z0-9_]; False for anything else, including
-        line boundaries and non-ASCII characters.
+        bool: True for Unicode alphanumerics and '_'; False for
+        anything else, including line boundaries, whitespace and
+        punctuation.
     """
     if not ch:
         return False
-    return ch.isascii() and (ch.isalnum() or ch == '_')
+    return ch.isalnum() or ch == '_'
 
 
 class EmphasisMarkerDetector(DocProcessor):
@@ -102,22 +109,43 @@ class EmphasisMarkerDetector(DocProcessor):
     ``** padded **`` never matches), and content edges are therefore
     never whitespace. Per CommonMark's intraword rule — which applies to
     underscores only — an ``_`` run cannot open when preceded by a word
-    character nor close when followed by one, so ``snake_case_identifiers``
-    and ``foo_bar`` never produce italic hits, while ``__dunder__`` names
-    at word boundaries do parse as bold exactly as CommonMark renders
-    them. Delimiters pair per line in LIFO order within the same marker
-    character and run length; a closer first looks through openers of a
-    different length stacked above its match and discards them as stale
-    (a lone ``*`` opened inside what turns out to be a bold run), so
-    ``**a*b**`` stays one bold hit while ``*a**b*`` resolves to one
-    italic; a closing run that matches nothing is discarded, and
-    unmatched openers fall away at end of line, so ``**unclosed`` and
-    ``text *`` report nothing. Emphasis never spans a
-    line break under this simplified model, and constructs inside fenced
-    code blocks (``` or ~~~ fences, tracked by line, including unclosed
-    fences that immunize the rest of the text) are immune. Inline
-    backtick spans are not masked — only fences — which keeps the scan a
-    single deterministic pass.
+    character nor close when followed by one, where word characters are
+    Unicode alphanumerics and the underscore; so ``snake_case_identifiers``
+    and ``foo_bar`` never produce italic hits, and neither do the
+    underscores inside CJK or Cyrillic word chains such as
+    ``参数_说明_结束``, while ``__dunder__`` names at word boundaries do
+    parse as bold exactly as CommonMark renders them. Delimiters pair per
+    line in LIFO order within the same marker character and run length; a
+    closer first looks through openers of a different length stacked
+    above its match and discards them as stale (a lone ``*`` opened
+    inside what turns out to be a bold run), so ``**a*b**`` stays one
+    bold hit while ``*a**b*`` resolves to one italic; a closing run that
+    matches nothing is discarded, and unmatched openers fall away at end
+    of line, so ``**unclosed`` and ``text *`` report nothing. Emphasis
+    never spans a line break under this simplified model, and constructs
+    inside fenced code blocks (``` or ~~~ fences, tracked by line under
+    any leading indentation, including unclosed fences that immunize the
+    rest of the text) are immune. Inline backtick spans are not masked —
+    only fences — so `` `**code**` `` still reports its bold run; this
+    keeps the scan a single deterministic pass.
+
+    Beyond the simplifications above, four more deviations from full
+    CommonMark rendering are intentional and worth knowing when comparing
+    detector output against a renderer: (1) flanking ignores punctuation
+    classes, so a run separated from a word character only by punctuation
+    still opens or closes — ``a*(foo)*`` reports an italic hit and
+    ``bar**=== word**`` a bold hit where CommonMark renders both
+    literally; (2) backslash escapes are not honored, so ``\\*foo\\*``
+    reports the italic hit CommonMark would suppress, backslashes kept
+    as content; (3) pairing is
+    length-matched per marker character, so CommonMark's cross-length
+    resolutions — the em nested inside the leftover bold markers of
+    ``**a *b**``, or ``___ _world)__`` — resolve differently here (one
+    bold hit for the first, nothing for the second); and (4) runs of
+    three or more marker characters are skipped whole (already noted
+    under the kinds above). For ordinary prose emphasis — space-flanked
+    ``**bold**``, ``*italic*``, ``__bold__`` and ``_italic_`` — the
+    simplified rules agree with CommonMark.
 
     Detected hits land in metadata as a list of ``{kind, text, span}``
     mappings sorted by span and capped at ``max_hits`` (default 100):
@@ -141,7 +169,8 @@ class EmphasisMarkerDetector(DocProcessor):
     Attributes:
         caps_allowlist: Known acronyms exempt from caps detection.
             Entries are case-insensitive (normalized to uppercase at
-            load time); the default empty list reports every caps run.
+            load time and again at scan time); the default empty list
+            reports every caps run.
         max_hits: Maximum number of hits stamped into the emphasis list;
             must be >= 1. Counts and terms are derived from the capped
             list so the three stamps always agree.
@@ -177,7 +206,8 @@ class EmphasisMarkerDetector(DocProcessor):
                 completely untouched; the others carry the emphasis
                 metadata stamps.
         """
-        allowlist = set(self.caps_allowlist or [])
+        allowlist = {str(entry).upper()
+                     for entry in (self.caps_allowlist or [])}
         for doc in origin_docs or []:
             hits = self._scan(doc.text or '', allowlist)
             if not hits:
