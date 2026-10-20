@@ -27,6 +27,11 @@ class KnowledgeTest(unittest.TestCase):
             embedding_model_name='text-embedding-ada-002'))
         self.knowledge = Knowledge(**init_params)
 
+    def test_as_langchain_tool_appends_args_description(self) -> None:
+        tool = self.knowledge.as_langchain_tool()
+        assert 'test_knowledge_description' in tool.description
+        assert 'query_str' in tool.description
+
     def test_store_update_documents(self) -> None:
         store = self.knowledge.store
         store.update_document([Document(text='This is an iPhone', metadata={'type': 'Electronic products'}),
