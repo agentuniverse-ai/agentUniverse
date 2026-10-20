@@ -29,7 +29,8 @@ Supported modes:
 * ``lint`` — run a *basic sanity check* over a Mermaid source string:
   diagram declaration keyword present, unbalanced double quotes, the
   reserved ``end`` keyword used as a flowchart node id (a classic
-  Mermaid pitfall), and arrows without a source or target endpoint.
+  Mermaid pitfall), other Mermaid statement keywords used as node ids
+  or actor names, and arrows without a source or target endpoint.
   This is deliberately NOT a full Mermaid parser — it is a cheap
   line-oriented heuristic pass that catches the most common breakages;
   a clean lint result does not guarantee the source renders.
@@ -38,13 +39,22 @@ Determinism and escaping conventions (documented contract):
 
 * Node / participant identifiers are sanitized to ``[A-Za-z0-9_]``:
   every invalid character is mapped to ``_`` (one per character).
-  ``end`` is a reserved flowchart keyword, so an id that sanitizes to
-  exactly ``end`` is deterministically renamed to ``end_``. If two
+  Ids that collide with a Mermaid statement keyword are deterministically
+  renamed with a trailing underscore: ``end`` -> ``end_`` everywhere, plus
+  the flowchart keywords ``style``/``class``/``classDef``/``linkStyle``/
+  ``subgraph``/``graph``/``flowchart`` in flowchart mode (exact-case
+  match — capitalized variants such as ``Style`` are legal ids), and the
+  sequence keywords (``note``, ``over``, ``actor``, ``participant``,
+  ``autonumber``, ``loop``, ``alt``, ``opt``, ``par``, ``else``,
+  ``option``, ``critical``, ``break``, ``box``, ``rect``, ``activate``,
+  ``deactivate``, ``and``, ``end``) in sequence mode (case-insensitive
+  match — ``Note`` breaks a sequence diagram just like ``note``). If two
   distinct original ids still collide after sanitization, later ones
   (in input order) get ``_2``, ``_3``, ... suffixes. The full
   ``id_mapping`` (original -> sanitized, changed entries only) is
   reported in the result
-  whenever at least one id changed.
+  whenever at least one id changed. Renamed sequence participants
+  automatically keep their original spelling as the display alias.
 * A pipe ``|`` in any label is replaced by the look-alike character
   ``❘`` (U+2758 LIGHT VERTICAL BAR) per Mermaid convention, because a
   literal pipe would terminate ``|label|`` edge label syntax.
@@ -53,6 +63,15 @@ Determinism and escaping conventions (documented contract):
   ``"`` inside a quoted label is replaced by the Mermaid entity
   ``#quot;``. Labels without those characters (including Unicode text)
   are emitted bare.
+* Edge labels escape every character that terminates the ``|label|``
+  syntax or the line: ``"`` -> ``#quot;``, ``[``/``]`` -> ``#91;``/
+  ``#93;``, ``{``/``}`` -> ``#123;``/``#125;``, ``(``/``)`` ->
+  ``#40;``/``#41;``, pipes as above (Mermaid rejects the raw forms).
+* Sequence message text, note text and display aliases escape ``;`` as
+  ``#59;`` — a literal semicolon is a statement separator in sequence
+  diagrams and truncates the message; aliases also escape ``"`` as
+  ``#quot;``. Other characters (including ``:`` and ``#``) are emitted
+  as-is.
 * Output order is exactly the input order: nodes, then edges;
   participants, then messages, then notes. Lines are joined with a
   single ``\n`` (no trailing newline).
@@ -83,11 +102,52 @@ _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 _STANDALONE_END = re.compile(r"\bend\b")
 # Balanced "..." spans are masked before scanning for the `end` keyword.
 _QUOTED_SPANS = re.compile(r'"[^"]*"')
+# Balanced |...| edge-label spans, masked for the same reason.
+_PIPE_SPANS = re.compile(r"\|[^|]*\|")
 # Diagram declaration on the first meaningful line (case-insensitive).
 _DIAGRAM_DECL = re.compile(r"(?i)^(flowchart|graph|sequencediagram)\b")
 _SUBGRAPH_OPEN = re.compile(r"(?i)^subgraph\b")
 # Arrow tokens recognized by the dangling-endpoint lint check.
 _ARROW_TOKENS = ("-.->", "-->", "==>", "->")
+# Arrow tokens used to split a line into id slots for the reserved-id
+# lint check (covers the common flowchart / sequence link forms).
+_ID_SPLIT_ARROWS = re.compile(r"-->|-\.-|==>|---|--|->")
+# Innermost bracket groups, removed repeatedly to mask node labels.
+_BRACKET_GROUPS = (
+    re.compile(r"\(([^()]*)\)"),
+    re.compile(r"\[([^][]*)\]"),
+    re.compile(r"\{([^{}]*)\}"),
+)
+
+# Mermaid statement keywords that break a flowchart when used as node
+# ids (verified against the mermaid v11 parser: `style-->b` and even
+# `a-->style` fail to parse; capitalized variants such as `Style` are
+# legal, so the match is exact-case).
+_RESERVED_FLOWCHART_IDS = frozenset((
+    "end", "style", "class", "classDef", "linkStyle", "subgraph",
+    "graph", "flowchart",
+))
+# Mermaid statement keywords that break a sequence diagram when used as
+# actor names (verified against the mermaid v11 parser; the sequence
+# grammar matches these keywords case-insensitively, so `Note->A: hi`
+# fails just like `note->A: hi`).
+_RESERVED_SEQUENCE_IDS = frozenset((
+    "end", "note", "over", "actor", "participant", "autonumber", "loop",
+    "alt", "opt", "par", "else", "option", "critical", "break", "box",
+    "rect", "activate", "deactivate", "and",
+))
+# Edge-label characters escaped as Mermaid entities: a raw double quote
+# or any bracket terminates the |label| construct (verified against the
+# mermaid v11 parser).
+_EDGE_LABEL_ENTITIES = (
+    ("[", "#91;"),
+    ("]", "#93;"),
+    ("{", "#123;"),
+    ("}", "#125;"),
+    ("(", "#40;"),
+    (")", "#41;"),
+    ('"', "#quot;"),
+)
 
 
 class MermaidFlowTool(Tool):
@@ -120,8 +180,9 @@ class MermaidFlowTool(Tool):
         "flowchart TD/LR source from nodes/edges specs (mode='flowchart'), "
         "sequenceDiagram source from participants/messages/notes specs "
         "(mode='sequence'), and runs a basic sanity lint (declaration "
-        "keyword, unbalanced quotes, reserved 'end' node id, dangling "
-        "arrows) over a Mermaid source string (mode='lint')."
+        "keyword, unbalanced quotes, reserved keyword node ids such as "
+        "'end'/'style'/'note', dangling arrows) over a Mermaid source "
+        "string (mode='lint')."
     )
 
     MODES: ClassVar[tuple] = ("flowchart", "sequence", "lint")
@@ -150,6 +211,9 @@ class MermaidFlowTool(Tool):
     # Mermaid label conventions: pipe replacement and quote entity.
     PIPE_REPLACEMENT: ClassVar[str] = "❘"  # U+2758 LIGHT VERTICAL BAR
     QUOTE_ENTITY: ClassVar[str] = "#quot;"
+    # Mermaid entity for a literal semicolon in sequence text (a raw
+    # semicolon is a statement separator there and truncates the text).
+    SEMICOLON_ENTITY: ClassVar[str] = "#59;"
 
     MAX_NODES: ClassVar[int] = 500
     MAX_EDGES: ClassVar[int] = 1000
@@ -296,20 +360,32 @@ class MermaidFlowTool(Tool):
     # ------------------------------------------------------------------ #
 
     @classmethod
-    def _build_id_map(cls, raw_ids: list) -> dict[str, str]:
+    def _build_id_map(
+        cls,
+        raw_ids: list,
+        reserved: "frozenset[str]" = _RESERVED_FLOWCHART_IDS,
+        case_insensitive: bool = False,
+    ) -> dict[str, str]:
         """Sanitize identifiers deterministically.
 
         Every character outside ``[A-Za-z0-9_]`` becomes ``_`` (one per
-        character); the reserved flowchart keyword id ``end`` becomes
-        ``end_``; distinct raw ids that still collide get ``_2``,
-        ``_3``, ... suffixes in input order.
+        character); ids that collide with a Mermaid statement keyword
+        (see ``_RESERVED_FLOWCHART_IDS`` / ``_RESERVED_SEQUENCE_IDS``)
+        get a trailing underscore; distinct raw ids that still collide
+        get ``_2``, ``_3``, ... suffixes in input order. Flowchart
+        keyword collisions are exact-case (``Style`` is a legal id);
+        sequence keyword collisions are case-insensitive (``Note``
+        breaks a sequence diagram like ``note``).
         """
+        reserved_lower = {word.lower() for word in reserved} \
+            if case_insensitive else reserved
         mapping: dict[str, str] = {}
         used: set[str] = set()
         for raw in raw_ids:
             sanitized = _INVALID_ID_CHARS.sub("_", raw)
-            if sanitized == "end":
-                sanitized = "end_"
+            check = sanitized.lower() if case_insensitive else sanitized
+            if check in reserved_lower:
+                sanitized += "_"
             candidate = sanitized
             suffix = 2
             while candidate in used:
@@ -333,8 +409,23 @@ class MermaidFlowTool(Tool):
 
     @classmethod
     def _render_edge_label(cls, label: str) -> str:
-        """Render an edge label (pipes break the |label| syntax)."""
-        return label.replace("|", cls.PIPE_REPLACEMENT)
+        """Render an edge label (pipes and brackets break |label| syntax)."""
+        label = label.replace("|", cls.PIPE_REPLACEMENT)
+        for raw, entity in _EDGE_LABEL_ENTITIES:
+            label = label.replace(raw, entity)
+        return label
+
+    @classmethod
+    def _render_sequence_text(cls, text: str) -> str:
+        """Render free sequence text (a raw ';' splits statements)."""
+        return text.replace(";", cls.SEMICOLON_ENTITY)
+
+    @classmethod
+    def _render_alias(cls, alias: str) -> str:
+        """Render a display alias (quotes would break lint parity)."""
+        return cls._render_sequence_text(alias).replace(
+            '"', cls.QUOTE_ENTITY
+        )
 
     # ------------------------------------------------------------------ #
     # flowchart mode
@@ -422,7 +513,9 @@ class MermaidFlowTool(Tool):
                 + ", ".join(repr(item) for item in unknown)
             )
 
-        id_mapping = self._build_id_map(declared_ids)
+        id_mapping = self._build_id_map(
+            declared_ids, _RESERVED_FLOWCHART_IDS
+        )
         lines = [f"flowchart {direction}"]
         for node in node_specs:
             sanitized = id_mapping[node["id"]]
@@ -570,7 +663,9 @@ class MermaidFlowTool(Tool):
                 + ", ".join(repr(item) for item in note_unknown)
             )
 
-        id_mapping = self._build_id_map(names)
+        id_mapping = self._build_id_map(
+            names, _RESERVED_SEQUENCE_IDS, case_insensitive=True
+        )
         lines = ["sequenceDiagram"]
         for participant in participant_specs:
             name = participant["name"]
@@ -580,14 +675,17 @@ class MermaidFlowTool(Tool):
                 # Keep the original spelling visible in the diagram.
                 alias = name
             if alias is not None:
-                lines.append(f"    participant {sanitized} as {alias}")
+                lines.append(
+                    f"    participant {sanitized} as {self._render_alias(alias)}"
+                )
             else:
                 lines.append(f"    participant {sanitized}")
         for message in message_specs:
             arrow_token = self.MESSAGE_KINDS[message.get("kind") or "solid"]
             lines.append(
                 f"    {id_mapping[message['from']]}{arrow_token}"
-                f"{id_mapping[message['to']]}: {message['text']}"
+                f"{id_mapping[message['to']]}: "
+                f"{self._render_sequence_text(message['text'])}"
             )
         for note in note_specs:
             over = note["over"]
@@ -595,7 +693,10 @@ class MermaidFlowTool(Tool):
                 over_names = ",".join(id_mapping[t] for t in over)
             else:
                 over_names = id_mapping[over]
-            lines.append(f"    note over {over_names}: {note['text']}")
+            lines.append(
+                f"    note over {over_names}: "
+                f"{self._render_sequence_text(note['text'])}"
+            )
         result: dict[str, Any] = {
             "mode": "sequence",
             "result": "\n".join(lines),
@@ -617,10 +718,17 @@ class MermaidFlowTool(Tool):
 
         Checks: the diagram declaration keyword (flowchart / graph /
         sequenceDiagram) on the first meaningful line, per-line quote
-        balance, the reserved ``end`` keyword used as a flowchart node
-        id (``subgraph`` opens are tracked so legitimate block-closing
-        ``end`` lines are not flagged), and arrow tokens with a missing
-        source or target endpoint. Comment lines (``%%``) are skipped.
+        balance (for sequence diagrams only the part before the message
+        colon — quote parity in free text is not a Mermaid rule), the
+        reserved ``end`` keyword used as a flowchart node id
+        (``subgraph`` opens are tracked so legitimate block-closing
+        ``end`` lines are not flagged), other Mermaid statement keywords
+        used as node ids or actor names, and arrow tokens with a missing
+        source or target endpoint (for sequence diagrams the free text
+        after the message colon is ignored — `A->A: see -->` is valid).
+        Comment lines (``%%``) are skipped. Label text inside quotes,
+        ``|pipes|`` and shape brackets is masked before the keyword
+        checks so words like ``end`` inside labels do not false-positive.
         """
         if source is None or isinstance(source, bool) \
                 or not isinstance(source, str):
@@ -681,7 +789,13 @@ class MermaidFlowTool(Tool):
 
         subgraph_depth = 0
         for lineno, text in meaningful:
-            if text.count('"') % 2 == 1:
+            # Sequence text after the message colon is free-form: quote
+            # parity and trailing arrows there are valid Mermaid.
+            if diagram_type == "sequence":
+                structural = text.split(":", 1)[0]
+            else:
+                structural = text
+            if structural.count('"') % 2 == 1:
                 issues.append(
                     {
                         "line": lineno,
@@ -695,7 +809,7 @@ class MermaidFlowTool(Tool):
             if diagram_type == "flowchart" and _SUBGRAPH_OPEN.match(text):
                 subgraph_depth += 1
             if diagram_type == "flowchart":
-                masked = _QUOTED_SPANS.sub("", text)
+                masked = self._mask_label_spans(text)
                 flagged_end = False
                 for _ in _STANDALONE_END.finditer(masked):
                     if subgraph_depth > 0:
@@ -714,8 +828,46 @@ class MermaidFlowTool(Tool):
                             }
                         )
                         flagged_end = True
+            if diagram_type is not None:
+                reserved_ids, fold = (
+                    (_RESERVED_SEQUENCE_IDS, True)
+                    if diagram_type == "sequence"
+                    else (_RESERVED_FLOWCHART_IDS, False)
+                )
+                masked = self._mask_label_spans(text)
+                if diagram_type == "sequence":
+                    masked = masked.split(":", 1)[0]
+                # A bare `end` line legitimately closes alt/loop blocks
+                # in sequence diagrams and subgraphs in flowcharts (via
+                # the end_node_id check), and a bare `autonumber` line
+                # legitimately enables numbering; only those keywords
+                # mixed with other content — `end->A: hi`,
+                # `autonumber->A` — are actor-name misuse.
+                stripped_masked = masked.strip().strip(";").strip()
+                bare_keyword_line = stripped_masked in ("end", "autonumber")
+                for slot in _ID_SPLIT_ARROWS.split(masked):
+                    word = slot.strip().strip(";").strip()
+                    if not word:
+                        continue
+                    candidate = word.lower() if fold else word
+                    if candidate in reserved_ids and not (
+                        word in ("end", "autonumber")
+                        and (bare_keyword_line or diagram_type == "flowchart")
+                    ):
+                        issues.append(
+                            {
+                                "line": lineno,
+                                "check": "reserved_word_id",
+                                "message": (
+                                    f"{word!r} is a Mermaid statement "
+                                    "keyword and cannot be used as a "
+                                    "node id or actor name — rename it "
+                                    "(e.g. append an underscore)"
+                                ),
+                            }
+                        )
             for token in _ARROW_TOKENS:
-                if text.startswith(token):
+                if structural.startswith(token):
                     issues.append(
                         {
                             "line": lineno,
@@ -729,7 +881,7 @@ class MermaidFlowTool(Tool):
                     )
                     break
             for token in _ARROW_TOKENS:
-                if text.endswith(token):
+                if structural.endswith(token):
                     issues.append(
                         {
                             "line": lineno,
@@ -747,3 +899,22 @@ class MermaidFlowTool(Tool):
             "lines_checked": len(lines),
             "issues": issues,
         }
+
+    @staticmethod
+    def _mask_label_spans(text: str) -> str:
+        """Remove label text so only structural tokens remain.
+
+        Balanced ``"..."`` and ``|...|`` spans plus the contents of
+        shape brackets (``(...)``/``[...]``/``{...}``, nested included)
+        are stripped, leaving node ids, arrows and keywords in place.
+        Lint keyword checks run against the masked text so the word
+        ``end`` inside a node or edge label does not false-positive.
+        """
+        text = _QUOTED_SPANS.sub("", text)
+        text = _PIPE_SPANS.sub("", text)
+        previous = None
+        while previous != text:
+            previous = text
+            for pattern in _BRACKET_GROUPS:
+                text = pattern.sub("", text)
+        return text

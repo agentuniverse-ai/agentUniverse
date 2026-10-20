@@ -1,5 +1,5 @@
 name: mermaid_flow_tool
-description: Mermaid diagram source generation tool — pure Python stdlib, no rendering and no mermaid CLI dependency. Builds flowchart TD/LR source from nodes/edges specs (mode='flowchart'), sequenceDiagram source from participants/messages/notes specs (mode='sequence'), and runs a basic sanity lint (declaration keyword, unbalanced quotes, reserved 'end' node id, dangling arrows) over a Mermaid source string (mode='lint').
+description: Mermaid diagram source generation tool — pure Python stdlib, no rendering and no mermaid CLI dependency. Builds flowchart TD/LR source from nodes/edges specs (mode='flowchart'), sequenceDiagram source from participants/messages/notes specs (mode='sequence'), and runs a basic sanity lint (declaration keyword, unbalanced quotes, reserved keyword node ids such as 'end'/'style'/'note', dangling arrows) over a Mermaid source string (mode='lint').
 tool_type: api
 metadata:
   type: TOOL
@@ -18,19 +18,19 @@ args_model:
     required: false
   nodes:
     type: array
-    description: Flowchart nodes, each {id, label?, shape?} with shape one of rect (default), round, stadium, diamond, hexagon, circle, parallelogram. Ids are sanitized to [A-Za-z0-9_] deterministically and the mapping is reported. Required for the flowchart mode.
+    description: Flowchart nodes, each {id, label?, shape?} with shape one of rect (default), round, stadium, diamond, hexagon, circle, parallelogram. Ids are sanitized to [A-Za-z0-9_] deterministically, Mermaid statement keywords (end, style, class, classDef, linkStyle, subgraph, graph, flowchart) are renamed with a trailing underscore, and the mapping is reported. Required for the flowchart mode.
     required: false
   edges:
     type: array
-    description: Flowchart edges, each {from, to, label?, arrow?} with arrow one of arrow (--> default), dotted (-.->) or thick (==>); from/to must reference declared node ids. Optional for the flowchart mode.
+    description: Flowchart edges, each {from, to, label?, arrow?} with arrow one of arrow (--> default), dotted (-.->) or thick (==>); from/to must reference declared node ids; edge-label quotes and brackets are emitted as Mermaid entities. Optional for the flowchart mode.
     required: false
   participants:
     type: array
-    description: Sequence participants, each {name, as?}. Names are sanitized like flowchart ids; the original name becomes the display alias when sanitization changed it and no explicit 'as' is given. Required for the sequence mode.
+    description: Sequence participants, each {name, as?}. Names are sanitized like flowchart ids, with sequence statement keywords (note, over, actor, participant, autonumber, loop, alt, opt, par, else, option, critical, break, box, rect, activate, deactivate, and, end) renamed case-insensitively; the original name becomes the display alias when sanitization changed it and no explicit 'as' is given. Required for the sequence mode.
     required: false
   messages:
     type: array
-    description: Sequence messages, each {from, to, text, kind?} with kind solid (-> default) or dashed (-->); from/to must reference declared participants. Required for the sequence mode.
+    description: Sequence messages, each {from, to, text, kind?} with kind solid (-> default) or dashed (-->); from/to must reference declared participants; semicolons in text are emitted as the #59; Mermaid entity. Required for the sequence mode.
     required: false
   notes:
     type: array

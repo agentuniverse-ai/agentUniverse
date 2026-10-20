@@ -679,6 +679,310 @@ class MermaidFlowToolTest(unittest.TestCase):
         second = self.tool.execute(**kwargs)
         self.assertEqual(first, second)
 
+    def test_id_map_deterministic_across_200_seeded_sets(self) -> None:
+        import random
+        import re
+
+        rng = random.Random(20261020)
+        alphabet = "ab-_ .9éZ|[]{}\"'#;汉字"
+        for _ in range(200):
+            raw_ids = [
+                "".join(rng.choice(alphabet) for _ in range(rng.randint(1, 10)))
+                for _ in range(rng.randint(1, 12))
+            ]
+            raw_ids = [raw for raw in raw_ids if raw]
+            if not raw_ids:
+                continue
+            with self.subTest(raw_ids=raw_ids):
+                first = self.tool._build_id_map(raw_ids)
+                second = self.tool._build_id_map(raw_ids)
+                self.assertEqual(first, second)
+                targets = list(first.values())
+                self.assertEqual(len(set(targets)), len(targets))
+                for sanitized in targets:
+                    self.assertTrue(
+                        re.fullmatch(r"[A-Za-z0-9_]+", sanitized), sanitized
+                    )
+
+    # ------------------------------------------------------------------ #
+    # Reserved keyword ids (verified against the mermaid v11 parser)
+    # ------------------------------------------------------------------ #
+
+    def test_flowchart_reserved_keyword_ids_renamed(self) -> None:
+        result = self.tool.execute(
+            mode="flowchart",
+            nodes=[
+                {"id": "style", "label": "S"},
+                {"id": "class"},
+                {"id": "classDef"},
+                {"id": "linkStyle"},
+                {"id": "subgraph"},
+                {"id": "graph"},
+                {"id": "flowchart"},
+                {"id": "Style"},  # capitalized variants are legal ids
+            ],
+            edges=[
+                {"from": "style", "to": "class"},
+                {"from": "graph", "to": "flowchart"},
+            ],
+        )
+        self.assertEqual(
+            result["result"],
+            "flowchart TD\n"
+            "    style_[S]\n"
+            "    class_\n"
+            "    classDef_\n"
+            "    linkStyle_\n"
+            "    subgraph_\n"
+            "    graph_\n"
+            "    flowchart_\n"
+            "    Style\n"
+            "    style_-->class_\n"
+            "    graph_-->flowchart_",
+        )
+        self.assertEqual(
+            result["id_mapping"],
+            {
+                "style": "style_",
+                "class": "class_",
+                "classDef": "classDef_",
+                "linkStyle": "linkStyle_",
+                "subgraph": "subgraph_",
+                "graph": "graph_",
+                "flowchart": "flowchart_",
+            },
+        )
+
+    def test_sequence_reserved_keyword_names_renamed_case_insensitive(
+            self) -> None:
+        for name in ("note", "Note", "NOTE", "over", "loop", "actor",
+                     "participant", "autonumber", "alt", "opt", "par",
+                     "else", "option", "critical", "break", "box", "rect",
+                     "activate", "deactivate", "and", "end"):
+            with self.subTest(name=name):
+                result = self.tool.execute(
+                    mode="sequence",
+                    participants=[{"name": name}, {"name": "B"}],
+                    messages=[{"from": name, "to": "B", "text": "x"}],
+                )
+                # The sanitized id is the name plus an underscore and the
+                # original spelling is kept as the display alias.
+                lines = result["result"].split("\n")
+                self.assertEqual(
+                    lines[1], f"    participant {name}_ as {name}"
+                )
+                self.assertEqual(result["id_mapping"], {name: f"{name}_"})
+
+    def test_edge_label_entity_escaping_exact(self) -> None:
+        result = self.tool.execute(
+            mode="flowchart",
+            nodes=[{"id": "a"}, {"id": "b"}],
+            edges=[
+                {"from": "a", "to": "b", "label": 'say "hi"'},
+                {"from": "b", "to": "a", "label": "arr[0]"},
+                {"from": "a", "to": "b", "label": "{x}"},
+                {"from": "b", "to": "a", "label": "f(x)"},
+                {"from": "a", "to": "b", "label": "a|b"},
+            ],
+        )
+        self.assertEqual(
+            result["result"],
+            "flowchart TD\n"
+            "    a\n"
+            "    b\n"
+            "    a-->|say #quot;hi#quot;|b\n"
+            "    b-->|arr#91;0#93;|a\n"
+            "    a-->|#123;x#125;|b\n"
+            "    b-->|f#40;x#41;|a\n"
+            "    a-->|a❘b|b",
+        )
+
+    def test_sequence_semicolon_escaping_exact(self) -> None:
+        result = self.tool.execute(
+            mode="sequence",
+            participants=[{"name": "A", "as": "Foo;Bar"}],
+            messages=[{"from": "A", "to": "A", "text": "one; two"}],
+            notes=[{"over": "A", "text": "n; m"}],
+        )
+        self.assertEqual(
+            result["result"],
+            "sequenceDiagram\n"
+            "    participant A as Foo#59;Bar\n"
+            "    A->A: one#59; two\n"
+            "    note over A: n#59; m",
+        )
+
+    def test_sequence_alias_quote_escaping_exact(self) -> None:
+        result = self.tool.execute(
+            mode="sequence",
+            participants=[{"name": "A", "as": 'Bob "The"'}],
+            messages=[{"from": "A", "to": "A", "text": "x"}],
+        )
+        self.assertEqual(
+            result["result"],
+            "sequenceDiagram\n"
+            "    participant A as Bob #quot;The#quot;\n"
+            "    A->A: x",
+        )
+
+    def test_sequence_auto_alias_with_specials_escaped(self) -> None:
+        result = self.tool.execute(
+            mode="sequence",
+            participants=[{"name": 'Bob "X"; Y'}],
+            messages=[{"from": 'Bob "X"; Y', "to": 'Bob "X"; Y', "text": "x"}],
+        )
+        self.assertEqual(
+            result["result"],
+            "sequenceDiagram\n"
+            "    participant Bob__X___Y as Bob #quot;X#quot;#59; Y\n"
+            "    Bob__X___Y->Bob__X___Y: x",
+        )
+        self.assertEqual(
+            result["id_mapping"], {'Bob "X"; Y': "Bob__X___Y"}
+        )
+
+    def test_generated_output_with_reserved_and_special_lints_clean(
+            self) -> None:
+        generated = self.tool.execute(
+            mode="flowchart",
+            nodes=[
+                {"id": "style", "label": "The end"},
+                {"id": "end", "label": "a|b"},
+            ],
+            edges=[
+                {"from": "style", "to": "end", "label": 'the end "now"'},
+                {"from": "end", "to": "style", "label": "f(x) [y]"},
+            ],
+        )["result"]
+        result = self.tool.execute(mode="lint", source=generated)
+        self.assertEqual(result["issues"], [])
+        self.assertTrue(result["ok"])
+
+    def test_generated_sequence_output_with_specials_lints_clean(
+            self) -> None:
+        tricky = 'Bob "The'  # quote and no terminator: hostile alias text
+        generated = self.tool.execute(
+            mode="sequence",
+            participants=[{"name": "note"}, {"name": tricky}],
+            messages=[
+                {"from": "note", "to": tricky, "text": "see -->"},
+                {"from": tricky, "to": "note", "text": 'say "hi'},
+            ],
+            notes=[{"over": "note", "text": "one; two ->"}],
+        )["result"]
+        result = self.tool.execute(mode="lint", source=generated)
+        self.assertEqual(result["issues"], [])
+
+    # ------------------------------------------------------------------ #
+    # Lint: reserved keyword detection (beyond 'end')
+    # ------------------------------------------------------------------ #
+
+    def test_lint_reserved_flowchart_keyword_ids_flagged(self) -> None:
+        for source, line in (
+            ("flowchart TD\n    style-->b", 2),
+            ("flowchart TD\n    style[label]", 2),
+            ("flowchart TD\n    a-->class", 2),
+            ("flowchart TD\n    a-->subgraph", 2),
+            ("flowchart TD\n    graph-->b", 2),
+            ("flowchart TD\n    a-->linkStyle", 2),
+            ("flowchart TD\n    classDef-->b", 2),
+            ("flowchart TD\n    flowchart-->b", 2),
+        ):
+            with self.subTest(source=source):
+                result = self.tool.execute(mode="lint", source=source)
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["issues"][0]["line"], line)
+                self.assertEqual(
+                    result["issues"][0]["check"], "reserved_word_id"
+                )
+
+    def test_lint_capitalized_keyword_ids_not_flagged(self) -> None:
+        # Flowchart keyword matching is exact-case: capitalized variants
+        # such as 'Style'/'Class'/'End' are legal Mermaid node ids.
+        result = self.tool.execute(
+            mode="lint",
+            source="flowchart TD\n    Style-->b\n    a-->Class\n    End-->x",
+        )
+        self.assertEqual(result["issues"], [])
+
+    def test_lint_reserved_sequence_actor_names_flagged(self) -> None:
+        for source in (
+            "sequenceDiagram\n    note->A: hi",
+            "sequenceDiagram\n    Note->A: hi",
+            "sequenceDiagram\n    END->A: hi",
+            "sequenceDiagram\n    loop->A: hi",
+            "sequenceDiagram\n    actor->A: hi",
+            "sequenceDiagram\n    participant->A: hi",
+            "sequenceDiagram\n    autonumber->A: hi",
+        ):
+            with self.subTest(source=source):
+                result = self.tool.execute(mode="lint", source=source)
+                self.assertFalse(result["ok"])
+                self.assertEqual(
+                    result["issues"][0]["check"], "reserved_word_id"
+                )
+
+    def test_lint_legit_keyword_statements_not_flagged(self) -> None:
+        result = self.tool.execute(
+            mode="lint",
+            source=(
+                "sequenceDiagram\n"
+                "    autonumber\n"
+                "    participant A\n"
+                "    actor Bob\n"
+                "    note right of A: hi\n"
+                "    loop check\n"
+                "        A->Bob: ping\n"
+                "    end\n"
+                "    rect rgb(1,2,3)\n"
+                "        A->A: ok\n"
+                "    end"
+            ),
+        )
+        self.assertEqual(result["issues"], [])
+
+    def test_lint_flowchart_class_statements_not_flagged(self) -> None:
+        result = self.tool.execute(
+            mode="lint",
+            source=(
+                "flowchart TD\n"
+                "    a-->b\n"
+                "    class a,b fill:red\n"
+                "    classDef default fill:#f9f\n"
+                "    click a callback"
+            ),
+        )
+        self.assertEqual(result["issues"], [])
+
+    def test_lint_end_word_inside_labels_not_flagged(self) -> None:
+        for source in (
+            "flowchart TD\n    n1[The end]\n    n1 --> b2",
+            "flowchart TD\n    a-->|the end|b",
+            "flowchart TD\n    a[end label]\n    a-->|weekend trip|b",
+        ):
+            with self.subTest(source=source):
+                result = self.tool.execute(mode="lint", source=source)
+                self.assertEqual(result["issues"], [])
+
+    def test_lint_sequence_free_text_quote_and_arrow_not_flagged(self) -> None:
+        for source in (
+            'sequenceDiagram\n    participant A\n    A->A: he said "hi',
+            'sequenceDiagram\n    participant A\n    A->A: see -->',
+            "sequenceDiagram\n    participant A\n    A->A: upgrade ->",
+            'sequenceDiagram\n    participant A\n    note over A: so "called"',
+        ):
+            with self.subTest(source=source):
+                result = self.tool.execute(mode="lint", source=source)
+                self.assertEqual(result["issues"], [])
+
+    def test_lint_reserved_word_check_requires_keyword_slot(self) -> None:
+        # Words containing a keyword as a substring are fine.
+        result = self.tool.execute(
+            mode="lint",
+            source="flowchart TD\n    styles-->classification\n    noting-->b",
+        )
+        self.assertEqual(result["issues"], [])
+
     # ------------------------------------------------------------------ #
     # Packaging / registration
     # ------------------------------------------------------------------ #
