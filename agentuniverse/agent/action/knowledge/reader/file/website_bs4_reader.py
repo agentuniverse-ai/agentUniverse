@@ -20,22 +20,22 @@ from pydantic import Field
 
 class WebsiteBs4Reader(Reader):
     """Website content reader based on BeautifulSoup
-    
+
     Crawls website content and extracts main text, with support for limiting crawl depth and max links.
-    
+
     Note:
         Required packages:
             - beautifulsoup4: `pip install beautifulsoup4`
             - httpx: `pip install httpx`
-    
+
     Attributes:
         max_depth: Maximum crawl depth, defaults to 1
         max_links: Maximum number of links to crawl, defaults to 1
     """
-    
+
     max_depth: int = Field(default=1, description="Maximum crawl depth")
     max_links: int = Field(default=1, description="Maximum number of links to crawl")
-    
+
     def __init__(self, **data):
         super().__init__(**data)
         self._visited = set()  # Track visited URLs
@@ -43,14 +43,14 @@ class WebsiteBs4Reader(Reader):
 
     def _load_data(self, url: str, ext_info: Optional[Dict] = None) -> List[Document]:
         """Crawl website content and return list of documents
-        
+
         Args:
             url: Website URL to crawl
             ext_info: Optional metadata dict. Can contain max_depth and max_links to override defaults
-            
+
         Returns:
             List[Document]: List of documents containing webpage content
-            
+
         Raises:
             ValueError: If URL is invalid or empty
             ConnectionError: If network connection fails
@@ -59,7 +59,7 @@ class WebsiteBs4Reader(Reader):
         # Validate URL
         if not url or not isinstance(url, str):
             return []
-            
+
         if not url.startswith(('http://', 'https://')):
             raise ValueError("Invalid URL format")
 
@@ -72,19 +72,19 @@ class WebsiteBs4Reader(Reader):
                 self.max_depth = ext_info['max_depth']
             if 'max_links' in ext_info:
                 self.max_links = ext_info['max_links']
-                
+
         try:
             # Crawl website and create documents
             crawler_result = self._crawl_website(url)
             documents = []
-            
+
             for crawled_url, content in crawler_result.items():
                 metadata = {"source": crawled_url}
                 if ext_info:
                     metadata.update(ext_info)
                 documents.append(Document(text=content, metadata=metadata))
             return documents
-            
+
         except httpx.RequestError as e:
             raise ConnectionError(f"Network connection failed: {str(e)}")
         except Exception as e:
@@ -92,10 +92,10 @@ class WebsiteBs4Reader(Reader):
 
     def _get_primary_domain(self, url: str) -> str:
         """Extract primary domain from URL
-        
+
         Args:
             url: Full URL
-            
+
         Returns:
             str: Primary domain
         """
@@ -104,10 +104,10 @@ class WebsiteBs4Reader(Reader):
 
     def _extract_main_content(self, soup: BeautifulSoup) -> str:
         """Extract main content from webpage
-        
+
         Args:
             soup: BeautifulSoup object
-            
+
         Returns:
             str: Extracted text content
         """
@@ -138,21 +138,21 @@ class WebsiteBs4Reader(Reader):
                 key=len,
                 default=""
             )
-            
+
         return ""
-    
+
     def _crawl_website(self, url: str) -> Dict[str, str]:
         """Execute website crawling
-        
+
         Args:
             url: Starting URL
-            
+
         Returns:
             Dict[str, str]: Mapping of URLs to their content
         """
         num_links = 0
         crawler_result: Dict[str, str] = {}
-        
+
         # Initialize crawl with starting URL
         primary_domain = self._get_primary_domain(url)
         self._urls_to_crawl.append((url, 1))
@@ -185,10 +185,10 @@ class WebsiteBs4Reader(Reader):
                     for link in soup.find_all("a", href=True):
                         full_url = urljoin(current_url, link["href"])
                         parsed_url = urlparse(full_url)
-                        if (parsed_url.netloc.endswith(primary_domain) 
-                            and not any(parsed_url.path.endswith(ext) 
+                        if (parsed_url.netloc.endswith(primary_domain)
+                            and not any(parsed_url.path.endswith(ext)
                                       for ext in [".pdf", ".jpg", ".png"])
-                            and full_url not in self._visited 
+                            and full_url not in self._visited
                             and (full_url, current_depth + 1) not in self._urls_to_crawl):
                             self._urls_to_crawl.append((full_url, current_depth + 1))
 
