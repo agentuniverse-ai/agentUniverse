@@ -1,9 +1,6 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
-# @Time    : 2025/06/13 00:00
-# @Author  : Yue Wang
-# @FileName: test_product_info.py
 
 import unittest
 
