@@ -9,14 +9,17 @@ from pathlib import Path
 from typing import Dict, Type, List, Optional
 
 from agentuniverse.agent.action.knowledge.reader.file.docx_reader import DocxReader
+from agentuniverse.agent.action.knowledge.reader.file.bounded_eml_reader import BoundedEmlReader
 from agentuniverse.agent.action.knowledge.reader.file.epub_reader import EpubReader
 from agentuniverse.agent.action.knowledge.reader.file.markdown_reader import MarkdownReader
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
+from agentuniverse.agent.action.knowledge.reader.file.bounded_html_reader import BoundedHtmlReader
 from agentuniverse.agent.action.knowledge.reader.file.txt_reader import TxtReader
 from agentuniverse.agent.action.knowledge.reader.file.csv_reader import CSVReader
 from agentuniverse.agent.action.knowledge.reader.file.rar_reader import RarReader
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
+from agentuniverse.agent.action.knowledge.reader.file.bounded_xml_reader import BoundedXmlReader
 from agentuniverse.agent.action.knowledge.reader.file.zip_reader import ZipReader
 from agentuniverse.agent.action.knowledge.reader.file.sevenzip_reader import SevenZipReader
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
@@ -28,6 +31,9 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".pptx": PptxReader,
     ".xlsx": XlsxReader,
     ".epub": EpubReader,
+    ".html": BoundedHtmlReader,
+    ".htm": BoundedHtmlReader,
+    ".xml": BoundedXmlReader,
     ".txt": TxtReader,
     ".md": MarkdownReader,
     ".markdown": MarkdownReader,
@@ -35,6 +41,7 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".rar": RarReader,
     ".zip": ZipReader,
     ".7z": SevenZipReader,
+    ".eml": BoundedEmlReader,
 }
 
 

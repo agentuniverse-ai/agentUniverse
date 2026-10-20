@@ -1,0 +1,6 @@
+name: 'default_bounded_html_reader'
+description: 'default bounded HTML (.html/.htm) reader, stdlib-only'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.bounded_html_reader'
+  class: 'BoundedHtmlReader'
