@@ -184,6 +184,32 @@ class TestMojibakeDetector(unittest.TestCase):
         self.assertEqual(self._kinds(LATIN1_CURLY_TWICE),
                          {"utf8_as_latin1": 2})
 
+    def test_single_strong_cp1252_hit_qualifies_alone(self):
+        """A hit with at least two C1-mapped continuations (â€™, ðŸ˜€) is
+        unambiguous corruption and qualifies the signal on its own."""
+        self.assertEqual(self._kinds("donâ€™t"),
+                         {"utf8_as_cp1252": 1})
+        self.assertEqual(self._verdict("donâ€™t"), "corrupted")
+        self.assertEqual(self._kinds(EMOJI_MOJIBAKE),
+                         {"utf8_as_cp1252": 1})
+
+    def test_single_weak_cp1252_hit_stays_clean(self):
+        """A hit whose continuations include only one C1-mapped character
+        (â€¦, the shape of the ellipsis artifact) is ambiguous — French
+        «café»… prose produces the identical é»… shape — so a lone weak
+        hit does not flag, mirroring the Latin-1 two-hit guard."""
+        # Real corruption, single weak artifact: stays clean by design.
+        self.assertEqual(self._kinds("waitâ€¦ what"), {})
+        self.assertEqual(self._verdict("waitâ€¦ what"), "clean")
+        # Legitimate French typography with the same shape: clean.
+        french = "Il murmura «j’ai préféré ce café-là»… puis partit."
+        self.assertEqual(self._kinds(french), {})
+        self.assertEqual(self._verdict(french), "clean")
+        # Two weak hits — corruption or typography — do flag.
+        self.assertEqual(self._kinds("waitâ€¦ whatâ€¦ hmm"),
+                         {"utf8_as_cp1252": 2})
+        self.assertEqual(self._verdict("waitâ€¦ whatâ€¦ hmm"), "corrupted")
+
     def test_detects_replacement_characters(self):
         """U+FFFD replacement characters are counted 1:1 with the loudest
         weight."""
@@ -194,12 +220,20 @@ class TestMojibakeDetector(unittest.TestCase):
         self.assertEqual(self._verdict(text), "corrupted")
 
     def test_detects_percent_encoding_residue(self):
-        """Two percent-escape runs (>= 4 chars each) flag the document;
-        one URL-encoded path segment or lone %XX pairs stay silent."""
+        """Percent-escape runs (>= 4 chars) flag the document, one %XX
+        unit per hit; lone %XX pairs stay silent."""
         residue = "a=1&b=%E4%B8%AD&c=%E6%96%87"
-        self.assertEqual(self._kinds(residue), {"percent_encoding": 2})
+        # Two runs of three %XX units each -> six unit hits.
+        self.assertEqual(self._kinds(residue), {"percent_encoding": 6})
         self.assertEqual(self._score(residue),
-                         round(2 * 0.5 * 1000 / len(residue), 2))
+                         round(6 * 0.5 * 1000 / len(residue), 2))
+
+        # A single contiguous blob weighs the same evidence as the same
+        # bytes split across runs; it must not fall below the two-hit
+        # minimum just because it is contiguous.
+        blob = "error: %E5%8F%82%E6%95%B0%E9%94%99%E8%AF%AF fixed"
+        self.assertEqual(self._kinds(blob), {"percent_encoding": 12})
+        self.assertEqual(self._verdict(blob), "corrupted")
 
         single_url = "see https://example.com/wiki/%E4%B8%AD for details"
         self.assertEqual(self._kinds(single_url), {})
@@ -207,6 +241,28 @@ class TestMojibakeDetector(unittest.TestCase):
 
         stray = "battery at 45% E4ff and 3% OFF today"
         self.assertEqual(self._kinds(stray), {})
+
+    def test_urls_with_percent_escapes_never_score(self):
+        """Correctly escaped URLs are healthy text: percent runs inside
+        URL tokens (whitespace-delimited tokens containing '://') are
+        exempt no matter how many segments or parameters they escape."""
+        urls = [
+            "docs: https://example.com/wiki/%E4%B8%AD/%E6%96%87 end",
+            "compare https://a.io/%E4%B8%AD and https://b.io/%E8%8B%B1",
+            "search https://example.com/search?q=%E4%B8%AD&x=%E6%96%87",
+            "download http://files.io/a%20b%20c%20d%20e%20f.txt now",
+            "See [中文](https://zh.wikipedia.org/wiki/%E4%B8%AD%E6%96%87)",
+        ]
+        for text in urls:
+            with self.subTest(text=text):
+                self.assertEqual(self._kinds(text), {})
+                self.assertEqual(self._score(text), 0.0)
+                self.assertEqual(self._verdict(text), "clean")
+
+        # Residue outside a URL token still counts on the same document.
+        mixed = ("source: https://log.io/view?u=%2Ftmp body: "
+                 "%E5%8F%82%E6%95%B0 bad")
+        self.assertEqual(self._kinds(mixed), {"percent_encoding": 6})
 
     def test_detects_html_entity_residue(self):
         """Numeric character references and double-escaping runs are

@@ -52,7 +52,12 @@ _RE_UTF8_AS_LATIN1 = re.compile(
 # UTF-8 read as CP1252: same structure, but at least one continuation
 # character carries a CP1252-only identity (â€™ â€œ â€¦ Ã€ ...). Matches that
 # overlap a Latin-1 pattern hit are credited to the Latin-1 signal only, so
-# a sequence is never counted twice.
+# a sequence is never counted twice. A match is *strong* when at least two
+# of its continuation characters carry C1-mapped identities (â€™, â€œ, ðŸ˜€);
+# matches with only one such character (â€¦, and the é»… shape of French
+# «café»… prose) are *weak* and need a second occurrence before the signal
+# fires — the single-C1 shape is the one byte structure legitimate
+# typography can also produce.
 _RE_UTF8_AS_CP1252 = re.compile(
     "[\u00c2\u00c3][" + _CP1252_CONT + "]"
     "|[\u00e0-\u00ef][" + _CP1252_CONT + "]{2}"
@@ -61,9 +66,43 @@ _RE_UTF8_AS_CP1252 = re.compile(
 
 # Undecoded percent-encoding residue, e.g. %E4%B8%AD: consecutive %XX
 # units forming a run of at least four characters. A lone %XX (three
-# characters) is ignored; URLs exposing one encoded path segment
-# therefore stay silent.
+# characters) is ignored, and runs inside URL tokens (whitespace-delimited
+# tokens containing "://") never count at all — correctly escaped URLs
+# such as https://example.com/wiki/%E4%B8%AD/%E6%96%87 are healthy text,
+# not residue, no matter how many segments they escape.
 _RE_PERCENT = re.compile("(?:%[0-9A-Fa-f]{2})+")
+_RE_NONSPACE = re.compile(r"\S+")
+
+
+def _percent_evidence(text: str):
+    """Collect qualifying percent-encoding evidence from ``text``.
+
+    Percent runs inside URL tokens are skipped entirely (see
+    _RE_PERCENT); every remaining run of at least four characters
+    contributes one hit per %XX unit, so a single contiguous blob such
+    as %E5%8F%82%E6%95%B0 weighs as much evidence as the same bytes
+    split across several runs.
+
+    Args:
+        text: Document text.
+
+    Returns:
+        tuple: (unit_count, run_spans) where unit_count is the number of
+        qualifying %XX units and run_spans are the (start, end) spans of
+        the qualifying runs, in positional order.
+    """
+    units = 0
+    spans: List[tuple] = []
+    for token in _RE_NONSPACE.finditer(text):
+        if "://" in token.group():
+            continue
+        for match in _RE_PERCENT.finditer(token.group()):
+            run = match.group()
+            if len(run) >= 4:
+                units += len(run) // 3
+                spans.append((token.start() + match.start(),
+                              token.start() + match.end()))
+    return units, spans
 
 # Undecoded HTML entity residue: numeric character references such as
 # &#x4E2D; / &#20013; always count as residue, while a single named entity
@@ -99,7 +138,9 @@ _SIGNAL_WEIGHTS = {
 # Minimum hits before a signal is recorded at all. The two byte-structure
 # signals require two hits: one stray bigram can appear in legitimate
 # European text or in text *about* encodings, while genuine corruption
-# never stops at a single occurrence.
+# never stops at a single occurrence. The CP1252 signal admits a single
+# hit only when that hit is strong (see _RE_UTF8_AS_CP1252); weak hits
+# need this many occurrences.
 _SIGNAL_MIN_HITS = {
     "replacement_char": 1,
     "utf8_as_latin1": 2,
@@ -107,6 +148,7 @@ _SIGNAL_MIN_HITS = {
     "percent_encoding": 2,
     "html_entity": 2,
 }
+_CP1252_WEAK_MIN_HITS = 2
 
 _VERDICTS = ("clean", "suspect", "corrupted")
 
@@ -131,9 +173,13 @@ class MojibakeDetector(DocProcessor):
        (4-byte) followed by continuation-range characters (Ã©, Ã¼, the
        Latin-1 form of 中文, ...);
     3. utf8_as_cp1252 — the same structure where a continuation character
-       carries a CP1252-only identity (â€™ â€œ â€¦ Ã€ ...);
+       carries a CP1252-only identity (â€™ â€œ â€¦ Ã€ ...); a single hit
+       qualifies only when it is strong (at least two C1-mapped
+       continuations, like â€™ or ðŸ˜€), while weaker shapes need a second
+       occurrence;
     4. percent_encoding — percent-escape runs of at least four characters
-       (%E4%B8%AD);
+       (%E4%B8%AD) outside URLs: runs inside URL tokens never count,
+       because correctly escaped URLs are healthy text;
     5. html_entity — numeric character references (&#x4E2D; &#20013;) and
        repeated named-entity escaping (&amp;amp;).
 
@@ -259,7 +305,9 @@ class MojibakeDetector(DocProcessor):
         Returns:
             Dict[str, int]: Hits per signal kind, including signals below
             their minimum-hit threshold (filtered later, so callers of
-            this helper see raw evidence).
+            this helper see raw evidence). The one exception is
+            utf8_as_cp1252: a lone weak hit is already folded to zero
+            here, mirroring how a lone Latin-1 bigram is filtered later.
         """
         disabled = set(self.disabled_signals or [])
 
@@ -271,17 +319,27 @@ class MojibakeDetector(DocProcessor):
 
         cp1252_count = 0
         if "utf8_as_cp1252" not in disabled:
+            strong = False
             for match in _RE_UTF8_AS_CP1252.finditer(text):
                 start, end = match.span()
-                if not any(start < le and ls < end
-                           for ls, le in latin1_spans):
-                    cp1252_count += 1
+                if any(start < le and ls < end
+                       for ls, le in latin1_spans):
+                    continue
+                cp1252_count += 1
+                if sum(1 for ch in match.group()
+                       if ch in _CP1252_C1_CHARS) >= 2:
+                    strong = True
+            # Weak evidence (fewer than two C1-mapped continuations) is
+            # folded to zero unless a second occurrence backs it up: the
+            # single-C1 shape also arises from legitimate typography
+            # (é»… in French «café»… prose), exactly like the stray
+            # bigrams the Latin-1 signal already guards against.
+            if not strong and cp1252_count < _CP1252_WEAK_MIN_HITS:
+                cp1252_count = 0
 
         percent_count = 0
         if "percent_encoding" not in disabled:
-            for match in _RE_PERCENT.finditer(text):
-                if len(match.group()) >= 4:
-                    percent_count += 1
+            percent_count = _percent_evidence(text)[0]
 
         html_count = 0
         if "html_entity" not in disabled:
@@ -352,8 +410,7 @@ class MojibakeDetector(DocProcessor):
                        if not any(m.start() < le and ls < m.end()
                                   for ls, le in latin1_spans)]
         elif kind == "percent_encoding":
-            matches = [m.span() for m in _RE_PERCENT.finditer(text)
-                       if len(m.group()) >= 4]
+            matches = _percent_evidence(text)[1]
         else:
             matches = ([m.span() for m in _RE_HTML_NUMERIC.finditer(text)]
                        + [m.span() for m in
