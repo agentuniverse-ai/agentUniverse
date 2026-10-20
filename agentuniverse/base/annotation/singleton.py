@@ -14,6 +14,8 @@ def singleton(cls):
 
     @wraps(cls)
     def get_instance(*args, **kwargs):
+        """Return the singleton instance of the class.
+        """
         if cls not in instances:
             instances[cls] = cls(*args, **kwargs)
         return instances[cls]
