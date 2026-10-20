@@ -186,6 +186,8 @@ class GoogleScholarSearchTool(Tool):
         Returns:
             格式化的学术搜索结果字符串
         """
+        if not isinstance(query, str) or not query.strip():
+            return "搜索查询不能为空"
         if not self.serper_api_key:
             return self._get_mock_scholar_result(query)
             
@@ -210,6 +212,8 @@ class GoogleScholarSearchTool(Tool):
     async def async_execute(self, query: str, year: str = None, author: str = None,
                            journal: str = None, k: int = None, **kwargs) -> str:
         """异步执行Google学术搜索"""
+        if not isinstance(query, str) or not query.strip():
+            return "搜索查询不能为空"
         if not self.serper_api_key:
             return self._get_mock_scholar_result(query)
             
