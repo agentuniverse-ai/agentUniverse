@@ -634,3 +634,58 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Markdown Table Validator Tool
+
+`MarkdownTableValidatorTool` validates and repairs GitHub-flavoured
+Markdown pipe tables using only the Python standard library, with no
+network access. It complements the other table tools:
+`MarkdownTableExtractorTool` parses table content out of documents and
+`AsciiTableTool` renders matrices, while this tool checks that a table
+already written in Markdown has the correct pipe-table shape. Tables
+are detected as groups of consecutive non-blank lines containing at
+least one unescaped pipe; fenced code blocks are never treated as
+tables, and an escaped pipe (`\|`) counts as cell content, never as a
+separator.
+
+`validate` mode reports one finding list per table with a verdict of
+`valid`, `warnings` or `errors` plus a row/column summary. Error
+findings: `column_count_mismatch` (a row whose pipe-cell count differs
+from the header count, with the row number and both counts),
+`missing_alignment_row` (the header is not followed by a `|---|---|`
+delimiter row), `invalid_alignment_row` (a delimiter row cell using
+anything but an optional `:`, a dash run and an optional `:`) and
+`ragged_alignment` (delimiter row cell count differs from the header).
+Info findings that GFM tolerates but are still flagged:
+`unclosed_edge` (a row missing its leading or trailing pipe) and
+`empty_header_cell` / `empty_body_cell`. `fix` mode returns repaired
+markdown: `pad_short_rows` right-pads short rows with empty cells,
+`drop_mismatched_rows` deletes body rows that still mismatch the
+header count, and `add_missing_alignment_row` inserts a
+`| :--- | :--- |` delimiter row after a header that lacks one — all
+three are enabled by default and selectable via `fix_modes`; findings
+that no selected repair can fix are reported as unfixable issues, and
+untouched rows pass through byte-exact. `stats` mode reports the table
+count, per-table shapes (`rows x cols`), the maximum column count and
+the total cell count.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.markdown_table_validator_tool import MarkdownTableValidatorTool
+
+tool = MarkdownTableValidatorTool()
+report = tool.execute(mode="validate", markdown="| a | b |\n| --- |\n| 1 | 2 |\n")
+print(report["tables"][0]["verdict"])        # errors (ragged alignment)
+repaired = tool.execute(mode="fix", markdown="| a | b |\n| 1 |\n")["result"]
+stats = tool.execute(mode="stats", markdown=md_text)
+```
+
+Inputs are validated strictly before any computation: a wrong
+`markdown` type, blank or oversized text (over 100,000 characters), an
+unknown `mode`, and a wrongly typed, empty, unknown or duplicated
+`fix_modes` entry raise a `ValueError`. Problems found in the document
+itself never raise — they are the findings the tool reports. A second
+table row counts as the alignment row when it consists only of pipes,
+dashes, colons and whitespace; a row with any other character is
+ordinary body content, so `| 1 | 2 |` after a header yields
+`missing_alignment_row` while `| - - | --- |` yields
+`invalid_alignment_row`.
