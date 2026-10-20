@@ -130,10 +130,12 @@ def detect_text_regions(image, east_model='frozen_east_text_detection.pb', min_c
         for i in boxes.flatten():
             (startX, startY, endX, endY) = rects[i]
             # Scale the bounding box coordinates back to the original image dimensions
-            startX = int(startX * rW)
-            startY = int(startY * rH)
-            endX = int(endX * rW)
-            endY = int(endY * rH)
+            startX = max(0, min(origW, int(startX * rW)))
+            startY = max(0, min(origH, int(startY * rH)))
+            endX = max(0, min(origW, int(endX * rW)))
+            endY = max(0, min(origH, int(endY * rH)))
+            if endX <= startX or endY <= startY:
+                continue
             # Crop the detected text region from the original image
             region = orig[startY:endY, startX:endX]
             regions.append(region)

@@ -44,3 +44,41 @@ def test_east_nms_uses_rectangle_sizes(monkeypatch, rectangles, expected_indices
         left, top, right, bottom = rectangles[index]
         np.testing.assert_array_equal(
             region, image[top * scale:bottom * scale, left * scale:right * scale])
+
+
+@pytest.mark.parametrize(
+    "rectangle,scale,expected",
+    [
+        ((-12, -8, 20, 24), 1, (0, 0, 20, 24)),
+        ((-12, -8, 20, 24), 2, (0, 0, 40, 48)),
+        ((300, 304, 340, 344), 1, (300, 304, 320, 320)),
+        ((-40, -40, -20, -20), 1, None),
+        ((330, 330, 350, 350), 1, None),
+        ((20, 24, 40, 48), 1, (20, 24, 40, 48)),
+    ],
+)
+def test_east_crops_are_clipped_to_image_bounds(monkeypatch, rectangle, scale, expected):
+    """Out-of-frame predictions neither wrap around nor return empty OCR inputs."""
+    scores = np.zeros((1, 1, 80, 80), dtype=np.float32)
+    geometry = np.zeros((1, 5, 80, 80), dtype=np.float32)
+    left, top, right, bottom = rectangle
+    scores[0, 0, 0, 0] = 0.9
+    geometry[0, :, 0, 0] = [-top, right, bottom, -left, 0]
+
+    class Network:
+        def setInput(self, blob):
+            pass
+
+        def forward(self, layers):
+            return scores, geometry
+
+    monkeypatch.setattr(readimage_tool.cv2.dnn, "readNet", lambda path: Network())
+    image = np.arange((320 * scale) ** 2 * 3, dtype=np.uint8).reshape(
+        320 * scale, 320 * scale, 3)
+    regions = readimage_tool.detect_text_regions(image)
+    if expected is None:
+        assert regions == []
+    else:
+        assert len(regions) == 1
+        left, top, right, bottom = expected
+        np.testing.assert_array_equal(regions[0], image[top:bottom, left:right])
