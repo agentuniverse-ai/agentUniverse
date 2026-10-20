@@ -24,7 +24,16 @@ def get_project_root_path() -> Path:
     if PROJECT_ROOT_PATH:
         return PROJECT_ROOT_PATH
     current_work_directory = Path.cwd()
-    root_path = current_work_directory.parents[1]
+    # Applications may be started from the project root, ``app`` or a
+    # deeper working directory.  The fixed ``parents[1]`` assumption points
+    # outside the project in the first two cases.
+    candidates = (current_work_directory, *current_work_directory.parents)
+    root_path = next(
+        (candidate for candidate in candidates
+         if (candidate / 'config').is_dir() or (candidate / 'intelligence').is_dir()),
+        current_work_directory.parents[1] if len(current_work_directory.parents) > 1
+        else current_work_directory,
+    )
     PROJECT_ROOT_PATH = root_path
     return root_path
 
