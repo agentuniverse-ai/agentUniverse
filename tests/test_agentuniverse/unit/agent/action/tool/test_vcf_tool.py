@@ -322,6 +322,51 @@ class VcfToolTest(unittest.TestCase):
         result = self.tool.execute(mode="parse", text=card)
         self.assertEqual(result["contacts"][0]["fn"], "李四")
 
+    def test_parse_qp_soft_break_before_space_content(self) -> None:
+        # Regression test: the RFC space-folding rule used to be applied
+        # before the quoted-printable soft-break rule, so a continuation
+        # line starting with a space had that space eaten as a "fold
+        # marker" and the dangling '=' then broke decoding. Within a QP
+        # value a trailing '=' is by definition the soft break (RFC 2045
+        # 6.7), so it takes priority and the space stays value content.
+        card = (
+            "BEGIN:VCARD\n"
+            "VERSION:2.1\n"
+            "NOTE;ENCODING=QUOTED-PRINTABLE:for Bob=\n"
+            " Tanaka\n"
+            "END:VCARD\n"
+        )
+        result = self.tool.execute(mode="parse", text=card)
+        self.assertEqual(result["contacts"][0]["note"], "for Bob Tanaka")
+
+    def test_parse_qp_soft_break_splits_utf8_continuation_bytes(self) -> None:
+        # 王 is UTF-8 E7 8E 8B; each byte lands on its own physical line
+        # via soft breaks (and the final line carries further text).
+        card = (
+            "BEGIN:VCARD\r\n"
+            "VERSION:2.1\r\n"
+            "FN;ENCODING=QUOTED-PRINTABLE:=E7=\r\n"
+            "=8E=\r\n"
+            "=8B is Wang\r\n"
+            "END:VCARD\r\n"
+        )
+        result = self.tool.execute(mode="parse", text=card)
+        self.assertEqual(result["contacts"][0]["fn"], "王 is Wang")
+
+    def test_parse_qp_soft_break_joins_byte_exact(self) -> None:
+        # Consecutive soft breaks plus an =3D literal escape: the joined
+        # stream decodes with no re-interpretation of the decoded bytes.
+        card = (
+            "BEGIN:VCARD\n"
+            "VERSION:2.1\n"
+            "NOTE;QUOTED-PRINTABLE:a=3D=\n"
+            "=41=\n"
+            "=42\n"
+            "END:VCARD\n"
+        )
+        result = self.tool.execute(mode="parse", text=card)
+        self.assertEqual(result["contacts"][0]["note"], "a=AB")
+
     def test_parse_scalar_first_occurrence_wins(self) -> None:
         card = (
             "BEGIN:VCARD\n"

@@ -256,18 +256,23 @@ class VcfTool(Tool):
         character itself is removed. Quoted-printable soft line breaks:
         when the previous line carries a ``QUOTED-PRINTABLE`` parameter
         and ends with ``=``, the ``=`` is dropped and the next physical
-        line (which starts in column zero) is appended directly.
+        line is appended directly, byte for byte — within a
+        quoted-printable value a trailing ``=`` is by definition the
+        soft break (RFC 2045 section 6.7), so it takes priority over
+        the space-folding rule and a continuation that starts with a
+        space keeps that space as value content (2.1-era encoders
+        routinely soft-break right in front of one).
         """
         logical: list[str] = []
         for line in _NEWLINE_RE.split(text):
             if not logical:
                 logical.append(line)
-            elif line.startswith((" ", "\t")):
-                logical[-1] += line[1:]
             elif (
                 VcfTool._is_qp_line(logical[-1]) and logical[-1].endswith("=")
             ):
                 logical[-1] = logical[-1][:-1] + line
+            elif line.startswith((" ", "\t")):
+                logical[-1] += line[1:]
             else:
                 logical.append(line)
         return logical
