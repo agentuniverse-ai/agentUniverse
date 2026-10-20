@@ -146,6 +146,7 @@ class ExcelTool(Tool):
         except ImportError:
             raise ImportError("openpyxl is required. Install with: pip install openpyxl")
 
+        workbook = None
         try:
             workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
 
@@ -169,8 +170,6 @@ class ExcelTool(Tool):
                 data.append(list(row))
                 row_count += 1
 
-            workbook.close()
-
             return {
                 "status": "success",
                 "file_path": file_path,
@@ -189,6 +188,9 @@ class ExcelTool(Tool):
                 "error": f"Failed to read Excel file: {str(e)}",
                 "file_path": file_path
             }
+        finally:
+            if workbook is not None:
+                workbook.close()
 
     @retry(3, 1.0)
     def _write_excel(self, file_path: str, data: List[List[Any]],
