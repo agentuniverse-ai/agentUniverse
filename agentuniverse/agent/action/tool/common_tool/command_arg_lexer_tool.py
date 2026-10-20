@@ -5,7 +5,7 @@
 # @Author  : agentUniverse contributors
 # @FileName: command_arg_lexer_tool.py
 
-"""POSIX-shell-style argv tokenization tool — lexing only, never execution.
+r"""POSIX-shell-style argv tokenization tool — lexing only, never execution.
 
 Addresses the *other tools* item of issue #252 (tool plug-in
 integration) with a zero-network, zero-dependency command-line lexer
@@ -32,12 +32,12 @@ Three modes, all built purely on the standard library:
   - Single quotes: fully literal content, no escapes, cannot contain a
     single quote.
   - Double quotes: ``\\`` → ``\``, ``\"`` → ``"``, ``\$`` → ``$`` and
-    ``\\` `` → ``\\` `` collapse per POSIX; backslash-newline is a line
-    continuation (removed); a backslash before any other character
+    ``\` `` → `` ` `` collapse per POSIX; backslash-newline is a
+    line continuation (removed); a backslash before any other character
     keeps both characters; a lone ``$`` is handled by the variable
     rules below.
   - Backslash outside quotes: escapes the next character
-    (``\\x`` → ``x`` for any ``x``); backslash-newline is a line
+    (``\x`` → ``x`` for any ``x``); backslash-newline is a line
     continuation (removed, and not a token boundary).
   - Adjacent segments join into one word: ``'a'b"c"`` → ``abc``.
   - An unterminated quote or a trailing backslash is a structured
@@ -88,7 +88,7 @@ that needs them interpreted must hand the line to a real shell
 consciously, not accidentally.
 
 Divergences from Python's ``shlex.split`` (all deliberate): ``\$`` and
-``\\` `` inside double quotes collapse to the bare character here but
+``\` `` inside double quotes collapse to the bare character here but
 are kept as two characters by ``shlex`` (POSIX collapses them);
 backslash-newline is a removed line continuation here but a literal
 newline inside the word for ``shlex``; unterminated quotes and a
@@ -99,16 +99,21 @@ those three constructs the two tokenizers agree exactly.
 Input validation is strict and happens before any computation:
 malformed parameters (wrong types, ``argv`` given as a bare string,
 non-string ``argv`` items, NUL characters anywhere — a POSIX shell
-cannot represent them —, unknown mode, ``expand_vars`` that is not a
-boolean, ``variables`` supplied without ``expand_vars`` or missing
-with it, variable names outside ``[A-Za-z_][A-Za-z0-9_]*``,
-non-string variable values, inputs over the size caps) raise a
-``ValueError``, mirroring the other common tools. Errors that depend
-on the *content being processed* — unterminated quote, trailing
-backslash, unterminated ``${``, invalid ``${...}`` name — are
-returned as a structured ``error`` payload (``{"type": ...,
-"message": ..., "position": ...}``) so an agent can react without
-catching exceptions.
+cannot represent them —, unknown mode, a parameter supplied to a mode
+that does not accept it — ``command_line`` / ``expand_vars`` /
+``variables`` in ``join``, ``argv`` in ``lex``/``count`` —,
+``expand_vars`` that is not a boolean, ``variables`` supplied without
+``expand_vars`` or missing with it, variable names outside
+``[A-Za-z_][A-Za-z0-9_]*``, non-string variable values, inputs over
+the size caps) raise a ``ValueError``, mirroring the other common
+tools. The size caps are per-instance fields
+(``max_command_line_chars``, ``max_argv_items``,
+``max_argv_total_chars``, ``max_variables``) and validation enforces
+the configured values. Errors that depend on the *content being
+processed* — unterminated quote, trailing backslash, unterminated
+``${``, invalid ``${...}`` name — are returned as a structured
+``error`` payload (``{"type": ..., "message": ..., "position": ...}``)
+so an agent can react without catching exceptions.
 """
 
 import re
@@ -130,8 +135,8 @@ _VAR_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 # Inside double quotes a backslash only collapses before these chars
 # (POSIX); before any other character both characters are kept.
 _DQ_ESCAPE_CHARS = "$`\"\\"
-# Input size caps (referenced by classmethods, which cannot read the
-# pydantic instance fields through the class).
+# Default input size caps; each is also a pydantic instance field the
+# corresponding validation path enforces, so a deployment can tune them.
 _MAX_COMMAND_LINE_CHARS = 100_000
 _MAX_ARGV_ITEMS = 10_000
 _MAX_ARGV_TOTAL_CHARS = 100_000
@@ -143,13 +148,16 @@ class CommandArgLexerTool(Tool):
 
     Attributes:
         max_command_line_chars (int): Upper bound on the ``command_line``
-            input length for the ``lex`` and ``count`` modes.
+            input length for the ``lex`` and ``count`` modes; enforced
+            as configured on each instance.
         max_argv_items (int): Upper bound on the number of ``argv``
-            items for the ``join`` mode.
+            items for the ``join`` mode; enforced as configured on each
+            instance.
         max_argv_total_chars (int): Upper bound on the total number of
-            characters across all ``argv`` items for the ``join`` mode.
+            characters across all ``argv`` items for the ``join`` mode;
+            enforced as configured on each instance.
         max_variables (int): Upper bound on the number of ``variables``
-            entries.
+            entries; enforced as configured on each instance.
     """
 
     model_config = ConfigDict(
@@ -220,19 +228,45 @@ class CommandArgLexerTool(Tool):
 
         Raises:
             ValueError: If any parameter is malformed (before any
-                computation happens).
+                computation happens), including a parameter supplied to
+                a mode that does not accept it (``command_line`` /
+                ``expand_vars`` / ``variables`` with ``join``, ``argv``
+                with ``lex``/``count``).
         """
         if mode not in self.MODES:
             self._invalid(
                 f"mode must be one of: {', '.join(self.MODES)} (got {mode!r})"
             )
         if mode == "join":
-            clean_argv = self._validate_argv(argv)
+            if command_line is not None:
+                self._invalid(
+                    "command_line is only accepted in the lex and count "
+                    f"modes (got one in mode={mode!r})"
+                )
+            if expand_vars is not None:
+                self._invalid(
+                    "expand_vars is only accepted in the lex and count "
+                    f"modes (got {expand_vars!r} in mode={mode!r})"
+                )
+            if variables is not None:
+                self._invalid(
+                    "variables is only accepted in the lex and count "
+                    f"modes (got one in mode={mode!r})"
+                )
+            clean_argv = self._validate_argv(
+                argv, self.max_argv_items, self.max_argv_total_chars
+            )
             return {"mode": "join", "result": self._join_argv(clean_argv)}
 
-        clean_line = self._validate_command_line(command_line)
+        if argv is not None:
+            self._invalid(
+                f"argv is only accepted in the join mode (got one in mode={mode!r})"
+            )
+        clean_line = self._validate_command_line(
+            command_line, self.max_command_line_chars
+        )
         clean_expand, clean_variables = self._validate_expansion(
-            mode, expand_vars, variables
+            expand_vars, variables, self.max_variables
         )
         tokenized, error = self._tokenize(clean_line, clean_expand, clean_variables)
         if mode == "lex":
@@ -240,7 +274,7 @@ class CommandArgLexerTool(Tool):
             if error is not None:
                 return {**context, "error": error}
             return {**context, "argv": tokenized, "argc": len(tokenized)}
-        return self._run_count(clean_line, clean_expand, clean_variables, tokenized, error)
+        return self._run_count(tokenized, error)
 
     # ------------------------------------------------------------------ #
     # Input validation (pure — raises before any computation)
@@ -263,31 +297,30 @@ class CommandArgLexerTool(Tool):
             )
 
     @classmethod
-    def _validate_command_line(cls, command_line: Any) -> str:
+    def _validate_command_line(cls, command_line: Any, max_chars: int) -> str:
         """Validate the ``command_line`` input (lex and count modes)."""
         if command_line is None or isinstance(command_line, bool) or not isinstance(command_line, str):
             cls._invalid(
                 f"command_line must be a string (got {command_line!r})"
             )
         cls._reject_nul("command_line", command_line)
-        limit = _MAX_COMMAND_LINE_CHARS
-        if len(command_line) > limit:
+        if len(command_line) > max_chars:
             cls._invalid(
-                f"command_line exceeds the {limit:,}-character limit "
+                f"command_line exceeds the {max_chars:,}-character limit "
                 f"(got {len(command_line):,} characters)"
             )
         return command_line
 
     @classmethod
-    def _validate_argv(cls, argv: Any) -> List[str]:
+    def _validate_argv(cls, argv: Any, max_items: int, max_total_chars: int) -> List[str]:
         """Validate the ``argv`` input (join mode)."""
         if argv is None or isinstance(argv, (str, bool)) or not isinstance(argv, (list, tuple)):
             cls._invalid(
                 f"argv must be a list of strings (got {argv!r})"
             )
-        if len(argv) > _MAX_ARGV_ITEMS:
+        if len(argv) > max_items:
             cls._invalid(
-                f"argv exceeds the {_MAX_ARGV_ITEMS:,}-item limit "
+                f"argv exceeds the {max_items:,}-item limit "
                 f"(got {len(argv):,} items)"
             )
         total = 0
@@ -296,16 +329,16 @@ class CommandArgLexerTool(Tool):
                 cls._invalid(f"every argv item must be a string (got {item!r})")
             cls._reject_nul("argv items", item)
             total += len(item)
-        if total > _MAX_ARGV_TOTAL_CHARS:
+        if total > max_total_chars:
             cls._invalid(
-                f"argv items total more than {_MAX_ARGV_TOTAL_CHARS:,} "
+                f"argv items total more than {max_total_chars:,} "
                 f"characters (got {total:,})"
             )
         return list(argv)
 
     @classmethod
     def _validate_expansion(
-        cls, mode: str, expand_vars: Any, variables: Any
+        cls, expand_vars: Any, variables: Any, max_variables: int
     ) -> Tuple[bool, Dict[str, str]]:
         """Validate the ``expand_vars`` / ``variables`` pair (lex/count)."""
         if expand_vars is None:
@@ -330,9 +363,9 @@ class CommandArgLexerTool(Tool):
             )
         if isinstance(variables, bool) or not isinstance(variables, dict):
             cls._invalid(f"variables must be a dict of name -> string (got {variables!r})")
-        if len(variables) > _MAX_VARIABLES:
+        if len(variables) > max_variables:
             cls._invalid(
-                f"variables exceeds the {_MAX_VARIABLES:,}-entry limit "
+                f"variables exceeds the {max_variables:,}-entry limit "
                 f"(got {len(variables):,} entries)"
             )
         for key, value in variables.items():
@@ -512,9 +545,6 @@ class CommandArgLexerTool(Tool):
 
     def _run_count(
         self,
-        command_line: str,
-        expand_vars: bool,
-        variables: Dict[str, str],
         tokenized: Optional[List[str]],
         error: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:

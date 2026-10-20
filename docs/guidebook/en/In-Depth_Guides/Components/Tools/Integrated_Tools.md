@@ -702,12 +702,17 @@ two tokenizers agree exactly (verified by cross-check tests).
 
 Inputs are validated strictly before any computation: malformed
 parameters (wrong types, `argv` given as a bare string, NUL characters
-anywhere, unknown mode, `variables` without `expand_vars` or missing
-with it, invalid variable names, inputs over the size caps — 100,000
-characters for `command_line`, 10,000 items / 100,000 characters for
-`argv`, 200 `variables` entries) raise a `ValueError`. Content-level
-failures — unterminated quote, trailing backslash, unterminated
-`${`, invalid `${...}` name — are returned as a structured `error`
-payload (`{"type": ..., "message": ..., "position": ...}`) instead of
+anywhere, unknown mode, a parameter supplied to a mode that does not
+accept it — `command_line` / `expand_vars` / `variables` with `join`,
+`argv` with `lex`/`count` —, `variables` without `expand_vars` or
+missing with it, invalid variable names, inputs over the size caps)
+raise a `ValueError`. The caps are per-instance fields
+(`max_command_line_chars`, default 100,000 characters;
+`max_argv_items`, default 10,000 items; `max_argv_total_chars`,
+default 100,000 characters; `max_variables`, default 200 entries) and
+validation enforces the configured values. Content-level failures —
+unterminated quote, trailing backslash, unterminated `${`, invalid
+`${...}` name — are returned as a structured `error` payload
+(`{"type": ..., "message": ..., "position": ...}`) instead of
 raising. Everything is deterministic; no randomness, no clock, no
 network, and the process environment is never consulted.

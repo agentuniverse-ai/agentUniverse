@@ -7,6 +7,10 @@ metadata:
   class: CommandArgLexerTool
 input_keys:
   - mode
+max_command_line_chars: 100000
+max_argv_items: 10000
+max_argv_total_chars: 100000
+max_variables: 200
 args_model:
   mode:
     type: string

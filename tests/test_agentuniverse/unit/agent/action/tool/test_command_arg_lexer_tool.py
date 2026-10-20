@@ -25,6 +25,7 @@ import random
 import shlex
 import sys
 import unittest
+import warnings
 
 import yaml
 
@@ -86,6 +87,56 @@ SHLEX_SAFE_CORPUS = [
 # whitespace, dollar, unicode.
 ROUND_TRIP_ALPHABET = "ab-'\"\\ \t=/$.;xé🌍"
 
+# Alphabets for the seeded shlex differential fuzz. Lines are assembled
+# from plain / single-quoted / double-quoted / backslash-escape segments
+# joined by separator whitespace, avoiding the three documented
+# divergences: no bare backslash inside double quotes (only \" and \\),
+# no escape pair formed from a backslash, and no backslash-newline
+# outside quotes (newline joins are skipped after a word ending in a
+# backslash).
+FUZZ_PLAIN = "abx12=-#*?[]~;|&<>!%^,.:+_e\x0b\x0c{}$`\u00e9\u4e2d\u6587\U0001f30d"
+FUZZ_SQ_INNER = "ab ='\"\\$#\t\n{}e\u00e9\u4e2d\u6587\U0001f30d"
+FUZZ_DQ_INNER = "ab ='$#`{}\t\ne\u00e9\u4e2d\u6587\U0001f30d"
+FUZZ_ESCAPED = "ab='\"\\#* \t}{e\u00e9"
+
+
+def _fuzz_segment(rng: random.Random) -> str:
+    kind = rng.randrange(4)
+    if kind == 0:
+        return "".join(rng.choice(FUZZ_PLAIN) for _ in range(rng.randrange(0, 7)))
+    if kind == 1:
+        return "'" + "".join(
+            rng.choice(FUZZ_SQ_INNER) for _ in range(rng.randrange(0, 7))
+        ) + "'"
+    if kind == 2:
+        parts = []
+        for _ in range(rng.randrange(0, 7)):
+            if rng.randrange(6) == 0:
+                parts.append(rng.choice(('\\"', '\\\\')))
+            else:
+                parts.append(rng.choice(FUZZ_DQ_INNER))
+        return '"' + "".join(parts) + '"'
+    return "\\" + rng.choice(FUZZ_ESCAPED)
+
+
+def _fuzz_line(rng: random.Random) -> str:
+    words = [
+        "".join(_fuzz_segment(rng) for _ in range(rng.randrange(1, 5)))
+        for _ in range(rng.randrange(0, 7))
+    ]
+    line = ""
+    for index, word in enumerate(words):
+        line += word
+        if index < len(words) - 1:
+            pool = " \t\r" if word.endswith("\\") else " \t\r\n"
+            line += "".join(
+                rng.choice(pool) for _ in range(rng.randrange(1, 4))
+            )
+    if words and rng.randrange(3) == 0:
+        pool = " \t\r" if words[-1].endswith("\\") else " \t\r\n"
+        line += "".join(rng.choice(pool) for _ in range(rng.randrange(1, 4)))
+    return line
+
 
 class CommandArgLexerToolTest(unittest.TestCase):
     """Offline deterministic test cases for CommandArgLexerTool."""
@@ -122,6 +173,34 @@ class CommandArgLexerToolTest(unittest.TestCase):
         )
         self.assertEqual(config["metadata"]["class"], "CommandArgLexerTool")
         self.assertEqual(config["args_model_schema"]["required"], ["mode"])
+        self.assertEqual(
+            config["max_command_line_chars"],
+            DirectCommandArgLexerTool.model_fields[
+                "max_command_line_chars"
+            ].default,
+        )
+        self.assertEqual(
+            config["max_argv_items"],
+            DirectCommandArgLexerTool.model_fields["max_argv_items"].default,
+        )
+        self.assertEqual(
+            config["max_argv_total_chars"],
+            DirectCommandArgLexerTool.model_fields[
+                "max_argv_total_chars"
+            ].default,
+        )
+        self.assertEqual(
+            config["max_variables"],
+            DirectCommandArgLexerTool.model_fields["max_variables"].default,
+        )
+
+    def test_module_source_has_no_invalid_escape_sequences(self) -> None:
+        module = sys.modules[DirectCommandArgLexerTool.__module__]
+        with open(module.__file__, "r", encoding="utf-8") as handle:
+            source = handle.read()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            compile(source, module.__file__, "exec")
 
     def test_deterministic_output(self) -> None:
         first = self.tool.execute(mode="lex", command_line="a 'b c' d")
@@ -356,6 +435,30 @@ class CommandArgLexerToolTest(unittest.TestCase):
                 shlex.split(line),
                 msg=line,
             )
+
+    def test_lex_matches_shlex_on_seeded_fuzz_lines(self) -> None:
+        rng = random.Random(2523835)
+        compared = 0
+        both_rejected = 0
+        for _ in range(250):
+            line = _fuzz_line(rng)
+            result = self.tool.execute(mode="lex", command_line=line)
+            try:
+                expected = shlex.split(line)
+            except ValueError:
+                both_rejected += 1
+                self.assertIn("error", result, msg=repr(line))
+                self.assertEqual(
+                    result["error"]["type"],
+                    "unterminated_quote",
+                    msg=repr(line),
+                )
+                continue
+            self.assertNotIn("error", result, msg=repr(line))
+            self.assertEqual(result["argv"], expected, msg=repr(line))
+            compared += 1
+        self.assertGreater(compared, 100)
+        self.assertGreater(both_rejected, 0)
 
     def test_lex_divergence_dollar_escape_in_double_quotes(self) -> None:
         # POSIX collapses \$ inside double quotes to a bare $; shlex
@@ -728,6 +831,78 @@ class CommandArgLexerToolTest(unittest.TestCase):
             variables={},
         )
         self.assertEqual(result["argv"], ["echo", ""])
+
+    def test_size_caps_are_instance_configurable(self) -> None:
+        tool = CommandArgLexerTool(
+            max_command_line_chars=8,
+            max_argv_items=2,
+            max_argv_total_chars=4,
+            max_variables=1,
+        )
+        self.assertEqual(tool.execute(mode="lex", command_line="a" * 8)["argc"], 1)
+        with self.assertRaises(ValueError):
+            tool.execute(mode="lex", command_line="a" * 9)
+        with self.assertRaises(ValueError):
+            tool.execute(mode="count", command_line="a" * 9)
+        self.assertEqual(
+            tool.execute(mode="join", argv=["ab", "cd"]),
+            {"mode": "join", "result": "ab cd"},
+        )
+        with self.assertRaises(ValueError):
+            tool.execute(mode="join", argv=["a", "b", "c"])
+        with self.assertRaises(ValueError):
+            tool.execute(mode="join", argv=["abc", "de"])
+        self.assertEqual(
+            tool.execute(
+                mode="lex",
+                command_line="$A",
+                expand_vars=True,
+                variables={"A": "x"},
+            )["argv"],
+            ["x"],
+        )
+        with self.assertRaises(ValueError):
+            tool.execute(
+                mode="lex",
+                command_line="$A",
+                expand_vars=True,
+                variables={"A": "x", "B": "y"},
+            )
+
+    def test_mode_mismatched_params_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="join", argv=["a"], command_line="ls")
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="join", argv=["a"], expand_vars=False)
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="join", argv=["a"], expand_vars=True)
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="join", argv=["a"], variables={})
+        for mode in ("lex", "count"):
+            with self.assertRaises(ValueError):
+                self.tool.execute(mode=mode, command_line="ls", argv=["x"])
+            with self.assertRaises(ValueError):
+                self.tool.execute(mode=mode, command_line="ls", argv=[])
+        self.assertEqual(
+            self.tool.execute(
+                mode="join",
+                argv=["a"],
+                command_line=None,
+                expand_vars=None,
+                variables=None,
+            ),
+            {"mode": "join", "result": "a"},
+        )
+        self.assertEqual(
+            self.tool.execute(
+                mode="lex",
+                command_line="ls",
+                argv=None,
+                expand_vars=None,
+                variables=None,
+            )["argv"],
+            ["ls"],
+        )
 
 
 if __name__ == "__main__":
