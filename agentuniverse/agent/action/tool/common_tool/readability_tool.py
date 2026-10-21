@@ -156,13 +156,21 @@ class ReadabilityTool(Tool):
     (``y`` included except word-initially), subtract one for a silent
     final ``e`` (kept for ``-ee`` endings), keep syllabic consonant-``le``
     endings (``table`` = 2), drop silent ``-ed`` unless preceded by ``t``
-    or ``d`` (``jumped`` = 1, ``wanted`` = 2), and never return less than
-    one syllable per word (numbers and vowel-less tokens count as 1). The
-    heuristic is transparent, not phonetic: per-word counts are exposed in
+    or ``d`` (``jumped`` = 1, ``wanted`` = 2), drop a silent final ``-es``
+    after a non-sibilant consonant (``makes`` = 1, ``files`` = 1) while
+    keeping it after sibilants (``boxes`` = 2, ``services`` = 3) and in
+    consonant-``l``-``es`` endings whose ``-les`` stays syllabic
+    (``handles`` = 2), and never return less than one syllable per word
+    (numbers and vowel-less tokens count as 1). The heuristic is
+    transparent, not phonetic: per-word counts are exposed in
     ``word_syllables`` so users can verify every number, and known
-    divergence classes versus CMU-dictionary counters (words like
-    ``simile``, ``poem``, ``rhythm``, ``-ful`` derivatives, adjective
-    ``-ed`` forms such as ``wicked``) are documented here.
+    divergence classes versus CMU-dictionary counters are documented here:
+    adjacent vowels pronounced separately (``simile``, ``poem``,
+    ``creation``, ``various``), ``-ful`` derivatives (``carefully``),
+    adjective ``-ed`` forms (``wicked``), post-vowel ``-es``/``-ires``
+    verbs whose ``e`` stays pronounced (``creates``, ``requires``,
+    ``coordinates``), reduced vowels and ``-ue`` endings (``venue``), and
+    vowel-less or concatenated technical tokens (``rhythm``, ``github``).
 
     Modes
     -----
@@ -280,6 +288,18 @@ class ReadabilityTool(Tool):
             count -= 1  # silent final e
         elif len(w) >= 3 and w.endswith("ed") and w[-3] not in "td" and count > 1:
             count -= 1  # silent -ed unless preceded by t or d
+        elif (
+            len(w) >= 3
+            and w.endswith("es")
+            and w[-3] not in _VOWELS
+            and w[-3] not in "sxzcghj"
+            and not (w[-3] == "l" and len(w) >= 4 and w[-4] not in _VOWELS)
+            and count > 1
+        ):
+            # Silent -es after a non-sibilant consonant (makes, files, notes),
+            # kept after sibilants (boxes, services) and in consonant+l+es
+            # endings where the -les stays syllabic (handles, circles).
+            count -= 1
         return count if count >= 1 else 1
 
     @staticmethod

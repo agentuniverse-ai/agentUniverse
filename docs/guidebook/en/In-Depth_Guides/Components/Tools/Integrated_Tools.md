@@ -667,10 +667,12 @@ band description, e.g. the full Flesch table from `college graduate
 Transparency is the design goal: `flesch = 206.835 - 1.015*(W/S) -
 84.6*(Y/W)` and every input integer (words, sentences, syllables, complex
 words, characters, letters) is reported; the syllable heuristic (vowel
-groups with silent-e, syllabic `-le`, and silent `-ed` adjustments) lists
-per-word counts so users can audit every number, and its divergence
+groups with silent-e, syllabic `-le`, silent `-ed`, and silent `-es`
+adjustments — `makes`/`files` drop the `e`, `boxes`/`handles` keep it)
+lists per-word counts so users can audit every number, and its divergence
 classes versus CMU-dictionary counters (`simile`, `poem`, `-ful`
-derivatives, adjective `-ed` forms) are documented in the module. Sentence
+derivatives, adjective `-ed` forms, pronounced-e verbs like `creates` and
+`requires`) are documented in the module. Sentence
 segmentation handles a 91-entry abbreviation list (Mr., Dr., e.g., p.m.,
 U.S., Jan. ...), decimals (`3.14` never splits), ellipses (`...` never
 splits), and dotted initials, while semicolons terminate; the counting
