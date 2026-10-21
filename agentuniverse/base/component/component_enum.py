@@ -50,4 +50,7 @@ class ComponentEnum(Enum):
         for item in ComponentEnum:
             if item.value == value:
                 return item
-        raise ValueError(f"No enum member with value {value}")
+        raise ValueError(
+            f"No enum member with value {value!r} in ComponentEnum. "
+            f"Valid values: {sorted(ComponentEnum.to_value_list())}"
+        )

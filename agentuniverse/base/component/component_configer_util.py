@@ -112,7 +112,15 @@ class ComponentConfigerUtil(object):
         """
         component_config_clz = cls.__COMPONENT_CONFIGER_CLZ_MAP.get(component_type_enum)
         if component_config_clz is None:
-            raise Exception(f"Failed to get the ComponentConfiger class by the component type: {component_type_enum}")
+            registered_types = sorted(
+                str(key.value) if hasattr(key, "value") else str(key)
+                for key in cls.__COMPONENT_CONFIGER_CLZ_MAP
+            )
+            raise Exception(
+                f"Failed to get the ComponentConfiger class by the component type: "
+                f"{component_type_enum} is not registered. "
+                f"Registered types: {registered_types}"
+            )
         return component_config_clz
 
     @classmethod
