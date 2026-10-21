@@ -658,13 +658,17 @@ Five modes:
   limit ("Max string recursion exceeded"). Every error claim is
   *provable*: the tool calls the real `str.format` with inert
   sandboxed dummy arguments (plain `'x'`/`7`/`2.5` semantics for
-  value slots, digit-string or single-char candidates for
+  value slots, digit-string, single-char or plain-int candidates for
   spec-token slots, permissive attribute/index traversal, all
   exceptions caught) and vetoes every error finding whenever the
   real machinery renders the template. Specs that render only for
   some value types (`{:d}`) come back as info findings with the
   working kinds listed — exactly the real verdict — alongside
-  locale-`n`, nested-spec and whitespace field-name notes.
+  locale-`n`, nested-spec and whitespace field-name notes. Field
+  names are classified exactly like the real machinery: only
+  Unicode decimal digits are positional indices (`{٠}` is index 0,
+  `{²}` is a keyword), and the verdict always reflects the full
+  scan even when the findings list is capped.
 * `fields` extracts every field in order with
   `{field_name, index_or_key, auto_numbered, attribute_chain,
   index_parts, conversion, format_spec, position_span}`, including
@@ -686,13 +690,17 @@ Five modes:
   conversions are reported as `not_translatable` findings rather
   than miscompiled; the round-trip equivalence to the original %
   rendering is test-enforced on 300 seeded template/value pairs.
-* `check_fstring` parses a full f-string literal or bare inner
-  source with the runtime's own `ast` parser and extracts every
+* `check_fstring` parses and compiles a full f-string literal or
+  bare inner source with the runtime's own `ast` parser and
+  compiler — compiling also catches symtable-level errors such as
+  `yield` outside a function — and extracts every
   expression with its conversion, format spec (including nested
   `{width}` parts) and position span; unbalanced braces/quotes,
   backslashes in expressions (pre-3.12) and invalid conversions
-  come back as findings carrying the parser's own message. Results
-  honestly follow the runtime Python version (PEP 701).
+  come back as findings carrying the parser's own message.
+  Pathologically deep expression nesting is reported as an
+  `analysis_depth_exceeded` info finding instead of crashing.
+  Results honestly follow the runtime Python version (PEP 701).
 
 Inputs are validated strictly before any computation: unknown mode,
 non-string template, templates over 4,000 characters or 200

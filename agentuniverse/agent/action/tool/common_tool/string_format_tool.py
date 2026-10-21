@@ -22,9 +22,9 @@ single job.
 Every error claim is provable: the ``lint`` mode never trusts the
 static scanner alone. After parsing, it calls the real
 ``str.format`` machinery on inert, sandboxed dummy arguments — plain
-``'x'`` / ``7`` / ``2.5`` semantics for value fields, digit-string
-or single-char candidates for fields nested inside format specs
-(width/precision/fill tokens), each wrapped in a permissive node
+``'x'`` / ``7`` / ``2.5`` semantics for value fields, digit-string,
+single-char or plain-int candidates for fields nested inside format
+specs (width/precision/fill tokens), each wrapped in a permissive node
 that also survives arbitrary attribute/index paths — and catches
 every exception. An error finding is emitted only when the failure
 is value-independent: a structural parse-stage ``ValueError``
@@ -95,22 +95,31 @@ Five modes:
   precision above.
 * ``check_fstring`` — f-string source analysis: given a full
   f-string literal (``f"...{name!r:>10}..."``) or bare inner source,
-  it wraps, parses with the runtime's own ``ast`` parser and
+  it wraps, parses and compiles with the runtime's own machinery
+  (``ast.parse`` plus ``compile``, which also surfaces
+  symtable-level errors such as ``yield`` outside a function) and
   extracts every expression with its conversion, format spec
   (including nested ``{width}`` parts) and position span; syntax
   problems — unbalanced braces or quotes, backslashes in expressions
   (pre-3.12), invalid conversions — come back as findings carrying
-  the parser's own message and position. The parser is the oracle,
-  so results honestly follow the runtime Python version (PEP 701
-  relaxed several 3.11 restrictions).
+  the parser's own message and position. The compiler is the
+  oracle, so results honestly follow the runtime Python version
+  (PEP 701 relaxed several 3.11 restrictions); pathologically deep
+  expression nesting is reported as an ``analysis_depth_exceeded``
+  info finding instead of crashing the walk.
 
 Input validation is strict and happens before any computation:
 unknown mode, non-string template, a template over 4,000 characters,
 more than 200 replacement fields, a missing/non-dict mapping (or one
 with non-string keys or more than 200 keys), a ``mapping`` outside
 render mode, a bad ``direction``, or a rendered result over 100,000
-characters raises ``ValueError``. All output is deterministic for a
-given runtime version and input.
+characters raises ``ValueError``. The size caps are real pydantic
+fields (constructor kwargs and attribute assignment honor them), the
+findings list is capped at ``max_findings`` while the lint verdict
+always reflects the uncapped scan, field names are classified as
+positional indices exactly like the real machinery (Unicode decimal
+digits only — ``'{٠}'`` is index 0, ``'{²}'`` is a keyword), and all
+output is deterministic for a given runtime version and input.
 """
 
 import ast
@@ -444,7 +453,13 @@ def _field_first_segment(name: str) -> str:
 
 
 def _numbering(parts: list[dict[str, Any]]) -> dict[str, Any]:
-    """Classify auto/manual numbering and keyword names (nested included)."""
+    """Classify auto/manual numbering and keyword names (nested included).
+
+    A name is a manual index only when it consists of Unicode decimal
+    digits (``str.isdecimal``) — the real machinery converts such names
+    with ``int()`` and treats everything else (``'²'`` is ``isdigit``
+    but not a decimal digit) as a keyword.
+    """
     auto = 0
     manual_max = -1
     keywords: list[str] = []
@@ -454,7 +469,7 @@ def _numbering(parts: list[dict[str, Any]]) -> dict[str, Any]:
         if name == "":
             auto += 1
             order.append("auto")
-        elif name.isdigit():
+        elif name.isdecimal():
             manual_max = max(manual_max, int(name))
             order.append("manual")
         else:
@@ -531,8 +546,9 @@ class StringFormatTool(Tool):
         "right-aligns on width); * widths and precision-on-%s are "
         "reported as not_translatable findings; round-trip equivalence "
         "to the original % rendering is test-enforced on 300 seeded "
-        "cases. mode='check_fstring' parses a full f-string literal or "
-        "bare inner source with the runtime ast parser, extracting "
+        "cases. mode='check_fstring' parses and compiles a full f-string "
+        "literal or bare inner source with the runtime ast parser and "
+        "compiler, extracting "
         "expressions, conversions, format specs and spans, reporting "
         "unbalanced braces/quotes and syntax issues as findings. Strict "
         "validation, size caps, deterministic output."
@@ -543,12 +559,17 @@ class StringFormatTool(Tool):
     )
     DIRECTIONS: ClassVar[tuple] = ("to_format", "to_percent")
     PROBE_KINDS: ClassVar[tuple] = ("str", "int", "float")
+    # Inert candidates for slots referenced from inside a format spec.
+    # Includes a plain int: a nested ``{y!r}`` renders an int argument
+    # as its bare decimal digits, which a digit *string* never does
+    # (repr('7') is "'7'" and is an invalid spec).
+    NESTED_PROBE_VALUES: ClassVar[tuple] = ("7", "x", 7)
 
-    max_template_chars: ClassVar[int] = 4_000
-    max_fields: ClassVar[int] = 200
-    max_findings: ClassVar[int] = 50
-    max_mapping_keys: ClassVar[int] = 200
-    max_render_chars: ClassVar[int] = 100_000
+    max_template_chars: int = 4_000
+    max_fields: int = 200
+    max_findings: int = 50
+    max_mapping_keys: int = 200
+    max_render_chars: int = 100_000
 
     # ------------------------------------------------------------------ #
     # Public entry point
@@ -676,12 +697,14 @@ class StringFormatTool(Tool):
 
         Value fields get one plain kind (``'x'`` / ``7`` / ``2.5``);
         fields nested inside format specs (width/precision/fill/
-        alignment tokens) get digit-string or single-char candidates,
-        because that is what spec slots accept. A combination is
-        "ok" when the real machinery renders with it. An
-        ``IndexError`` (rendering out-ran the dummy count because
-        parse and render interleave) triggers one deterministic
-        count bump and retry.
+        alignment tokens) get digit-string, single-char or plain-int
+        candidates — a bare int matters for nested conversions
+        (``{x:{y!r}}`` renders ``repr(7)`` as the usable spec ``7``,
+        while every string candidate yields an unusable quoted
+        repr). A combination is "ok" when the real machinery renders
+        with it. An ``IndexError`` (rendering out-ran the dummy count
+        because parse and render interleave) triggers one
+        deterministic count bump and retry.
         """
         roles = self._slot_roles(template, numbering)
         ok_kinds: list[str] = []
@@ -690,7 +713,7 @@ class StringFormatTool(Tool):
         combos = [
             (kind, nested)
             for kind in ("str", "int", "float")
-            for nested in ("7", "x")
+            for nested in self.NESTED_PROBE_VALUES
         ]
         for kind, nested_value in combos:
             plain = {"str": "x", "int": 7, "float": 2.5}[kind]
@@ -720,7 +743,7 @@ class StringFormatTool(Tool):
                         count = count + 10
                         bumped = True
                         continue
-                    failures[f"{kind}/{nested_value}"] = {
+                    failures[f"{kind}/{nested_value!r}"] = {
                         "exception": "IndexError",
                         "message": "replacement index beyond dummy count",
                         "family": "path_or_value",
@@ -728,7 +751,7 @@ class StringFormatTool(Tool):
                     break
                 except Exception as exc:  # noqa: BLE001 - sandbox
                     message = str(exc)
-                    failures[f"{kind}/{nested_value}"] = {
+                    failures[f"{kind}/{nested_value!r}"] = {
                         "exception": type(exc).__name__,
                         "message": message,
                         "family": (
@@ -762,7 +785,7 @@ class StringFormatTool(Tool):
                 slot = auto_index
                 auto_index += 1
                 key: Any = ("pos", slot)
-            elif name.isdigit():
+            elif name.isdecimal():
                 key = ("pos", int(name))
             else:
                 key = ("kw", _field_first_segment(name))
@@ -802,7 +825,8 @@ class StringFormatTool(Tool):
         unrenderable by the real machinery with plain values, which
         is an error.
         """
-        expected = len(StringFormatTool.PROBE_KINDS) * 2  # kinds x spec tokens
+        expected = len(StringFormatTool.PROBE_KINDS) * \
+            len(StringFormatTool.NESTED_PROBE_VALUES)
         if len(failures) != expected:
             return None
         sample = next(iter(failures.values()))
@@ -969,11 +993,13 @@ class StringFormatTool(Tool):
                     "info",
                 )
 
+        # The verdict always reflects the FULL findings list; the
+        # max_findings cap only limits what is echoed back. (Errors
+        # appended late — e.g. behind a run of info findings — must
+        # not be silently truncated into a false "ok".)
+        has_error = any(f["severity"] == "error" for f in findings)
         findings = findings[: self.max_findings]
-        verdict = (
-            "error" if any(f["severity"] == "error" for f in findings)
-            else "ok"
-        )
+        verdict = "error" if has_error else "ok"
         return {
             "template": template,
             "verdict": verdict,
@@ -999,11 +1025,11 @@ class StringFormatTool(Tool):
         attribute_chain: list[str] = []
         index_parts: list[dict[str, Any]] = []
         index_or_key: Any = None
-        if name.isdigit():
+        if name.isdecimal():
             index_or_key = int(name)
         elif name != "":
             first = _field_first_segment(name)
-            index_or_key = int(first) if first.isdigit() else first
+            index_or_key = int(first) if first.isdecimal() else first
         remainder = name
         cursor = 0
         while cursor < len(remainder):
@@ -1026,7 +1052,7 @@ class StringFormatTool(Tool):
                     raw = remainder[cursor + 1:close]
                     entry: dict[str, Any] = {
                         "raw": raw,
-                        "type": "int" if raw.isdigit() else "str",
+                        "type": "int" if raw.isdecimal() else "str",
                     }
                     if entry["type"] == "int":
                         entry["value"] = int(raw)
@@ -1093,7 +1119,7 @@ class StringFormatTool(Tool):
 
         positional_span = None
         for field in _iter_fields(scan.parts):
-            if field["name"] == "" or field["name"].isdigit():
+            if field["name"] == "" or field["name"].isdecimal():
                 positional_span = field["span"]
                 break
         if positional_span is not None:
@@ -1110,7 +1136,7 @@ class StringFormatTool(Tool):
         missing: list[dict[str, Any]] = []
         for field in _iter_fields(scan.parts):
             name = field["name"]
-            if name == "" or name.isdigit():
+            if name == "" or name.isdecimal():
                 continue
             key = _field_first_segment(name)
             if key not in mapping:
@@ -1543,7 +1569,7 @@ class StringFormatTool(Tool):
                 slot = str(auto_index)
                 auto_index += 1
                 percent_name = None
-            elif name.isdigit():
+            elif name.isdecimal():
                 if int(name) != expected_manual:
                     reasons.append(
                         "manual field indices out of order — % consumes "
@@ -1686,9 +1712,29 @@ class StringFormatTool(Tool):
                                   f"{sys.version_info.minor}",
             }
 
+        # ast.parse alone accepts sources the real compiler rejects —
+        # symtable-level errors such as 'yield'/'await' outside a
+        # function only surface at compile() time. compile() is the
+        # closer oracle for "would this f-string survive real code".
+        try:
+            compile(source, "<fstring>", "eval")
+        except SyntaxError as exc:
+            return syntax_payload(exc, source, prefix_len, kind)
+        except RecursionError:
+            add((0, len(template)), "analysis_depth_exceeded",
+                "expression nesting too deep for the compiler to "
+                "verify — analysis continues from the parse tree only",
+                "info")
+
         expressions: list[dict[str, Any]] = []
         literal_parts: list[str] = []
         nested_seen = False
+
+        def safe_unparse(node: ast.AST) -> str:
+            try:
+                return ast.unparse(node)
+            except RecursionError:
+                return "<deep expression>"
 
         def spec_text(spec_node: ast.expr) -> str:
             parts: list[str] = []
@@ -1696,7 +1742,7 @@ class StringFormatTool(Tool):
                 if isinstance(value, ast.Constant):
                     parts.append(str(value.value))
                 elif isinstance(value, ast.FormattedValue):
-                    inner_expr = ast.unparse(value.value)
+                    inner_expr = safe_unparse(value.value)
                     conversion = ""
                     if getattr(value, "conversion", -1) > 0:
                         conversion = "!" + chr(value.conversion)
@@ -1741,12 +1787,12 @@ class StringFormatTool(Tool):
                 if value.format_spec is not None:
                     spec = spec_text(value.format_spec)
                     nested_spec_fields = [
-                        ast.unparse(v.value)
+                        safe_unparse(v.value)
                         for v in ast.walk(value.format_spec)
                         if isinstance(v, ast.FormattedValue)
                     ]
                 expressions.append({
-                    "expression": ast.unparse(value.value),
+                    "expression": safe_unparse(value.value),
                     "conversion": conversion,
                     "format_spec": spec,
                     "position_span": [span[0], span[1]],
@@ -1762,7 +1808,15 @@ class StringFormatTool(Tool):
                 # inner f-string): spans fall back to this field's span
                 visit_expr(value.value, depth + 1, span)
 
+        # Expression ASTs can nest arbitrarily deep (a 4000-char
+        # template allows ~2000 levels); the walk and ast.unparse are
+        # recursive, so both the descent and unparse are bounded /
+        # guarded to keep RecursionError from escaping the tool.
+        MAX_EXPR_WALK_DEPTH = 12
+
         def visit_expr(node: ast.AST, depth: int, outer_span: tuple) -> None:
+            if depth > MAX_EXPR_WALK_DEPTH:
+                return
             if isinstance(node, ast.JoinedStr):
                 visit(node, depth, outer_span, None, False)
                 return
@@ -1770,7 +1824,12 @@ class StringFormatTool(Tool):
                 visit_expr(child, depth, outer_span)
 
         top_fields = [part for part in scan.parts if part["kind"] == "field"]
-        visit(tree.body, 1, (0, len(template)), top_fields, True)
+        try:
+            visit(tree.body, 1, (0, len(template)), top_fields, True)
+        except RecursionError:
+            add((0, len(template)), "analysis_depth_exceeded",
+                "expression nesting exceeded the analysis recursion "
+                "limit — extracted expressions are partial", "info")
         if nested_seen:
             add((0, len(template)), "nested_fstring_in_expression",
                 "an f-string appears inside an expression — before "

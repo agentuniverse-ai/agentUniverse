@@ -124,14 +124,16 @@ def oracle_roles(template):
 def oracle_renders(template):
     """True iff the real str.format renders the template with some
     inert dummy combination (oracle-local policy): value slots get
-    one of 'x'/7/2.5 uniformly, spec-token slots get '7' or 'x'."""
+    one of 'x'/7/2.5 uniformly, spec-token slots get '7'/'x'/7 (the
+    bare int matters for nested conversions: repr(7) is the usable
+    spec '7' while repr('7') is quoted and unusable)."""
     try:
         pos_roles, kw_roles, auto, manual = oracle_roles(template)
     except ValueError:
         return False
     count = max(auto, manual + 1)
     for plain in ("x", 7, 2.5):
-        for nested in ("7", "x"):
+        for nested in ("7", "x", 7):
             args = [
                 OracleValue(nested if pos_roles.get(i) == "nested" else plain)
                 for i in range(count)
@@ -303,6 +305,59 @@ class StringFormatLintMatrixTest(unittest.TestCase):
         self.assertEqual(result["probe"]["positional_slots"], 0)
         result = self.tool.execute("lint", template="{} {0} {name}")
         self.assertEqual(result["probe"]["positional_slots"], 1)
+
+    def test_verdict_survives_findings_cap(self):
+        # 51 info findings push the lone error finding past the
+        # max_findings cap; the verdict must still be error because
+        # the real machinery raises (unknown conversion) for any
+        # argument values.
+        template = "{ x}" * 51 + "{!q}"
+        result = self.tool.execute("lint", template=template)
+        self.assertLessEqual(len(result["findings"]), 50)
+        self.assertEqual(result["verdict"], "error",
+                         f"{result['findings'][:3]}")
+        self.assertFalse(oracle_renders(template))
+
+    def test_nested_conversion_in_spec_renders(self):
+        # repr(int) is a usable spec ('7') while every digit *string*
+        # candidate produces a quoted, unusable one — the real
+        # machinery renders these, so the verdict must be ok.
+        for template in ("{x:{y!r}}", "{0:{1!r}}", "{x:{y!s}}"):
+            with self.subTest(template=template):
+                result = self.tool.execute("lint", template=template)
+                self.assertEqual(
+                    result["verdict"], "ok",
+                    f"{template!r}: {result['findings']}")
+                self.assertEqual(error_codes_of(result), [])
+                self.assertTrue(oracle_renders(template))
+        self.assertEqual("{x:{y!r}}".format(x=5, y=6), "     5")
+
+    def test_unicode_digit_names_match_real_machinery(self):
+        # '²' is str.isdigit() but not a decimal digit: the real
+        # machinery treats it as a keyword ('int' would raise, and a
+        # crash in the tool is not acceptable). '٠' (Arabic-Indic
+        # zero) is a decimal digit and is a real positional index.
+        self.assertEqual("{٠}".format(*range(10)), "0")
+        self.assertEqual("{²}".format(**{"²": "kw"}), "kw")
+        lint = self.tool.execute("lint", template="{²}")
+        self.assertEqual(lint["verdict"], "ok")
+        fields = self.tool.execute("fields", template="{²}")
+        self.assertEqual(fields["scan_errors"], [])
+        self.assertEqual(fields["fields"][0]["index_or_key"], "²")
+        self.assertEqual(fields["keyword_names"], ["²"])
+        indexed = self.tool.execute("fields", template="{٠}")
+        self.assertEqual(indexed["max_manual_index"], 0)
+        bracket = self.tool.execute("fields", template="{a[²]}")
+        self.assertEqual(bracket["fields"][0]["index_parts"][0]["type"],
+                         "str")
+        rendered = self.tool.execute(
+            "render", template="{²}", mapping={"²": "kw"})
+        self.assertTrue(rendered["ok"])
+        self.assertEqual(rendered["rendered"], "kw")
+        # to_percent classifies the name the same way
+        percent = self.tool.execute(
+            "translate_percent", template="{²}", direction="to_percent")
+        self.assertIn("%(²)s", percent["translation"])
 
 
 # --------------------------------------------------------------------- #
@@ -808,6 +863,28 @@ class StringFormatFStringTest(unittest.TestCase):
                     error_codes_of(result), ["fstring_syntax_error"])
                 self.assertTrue(result["findings"][0]["message"])
 
+    def test_compile_level_syntax_errors(self):
+        # ast.parse accepts these; the real compiler rejects them
+        # ('yield'/'await' outside a function only surfaces at
+        # compile() time), so the tool must compile, not just parse.
+        cases = ['f"{yield}"', 'f"{await z}"', 'f"{x} {yield}"',
+                 'f"{(yield)}"']
+        for template in cases:
+            with self.subTest(template=template):
+                with self.assertRaises(SyntaxError):
+                    compile(template, "<case>", "eval")
+                result = self.tool.execute("check_fstring", template=template)
+                self.assertFalse(result["ok"])
+                self.assertIn("fstring_syntax_error", error_codes_of(result))
+
+    def test_deep_expression_no_crash(self):
+        # a ~2000-deep expression AST must not raise RecursionError
+        template = "{" + "1+" * 1000 + "1}"
+        result = self.tool.execute("check_fstring", template=template)
+        self.assertTrue(result["ok"])
+        self.assertIn("analysis_depth_exceeded", codes_of(result))
+        self.assertTrue(len(result["expressions"]) >= 1)
+
     def test_empty_spec_ok(self):
         result = self.tool.execute("check_fstring", template="f'{x:}'")
         self.assertTrue(result["ok"])
@@ -895,6 +972,22 @@ class StringFormatToolSurfaceTest(unittest.TestCase):
         tool = StringFormatTool()
         self.assertEqual(tool.name, "string_format_tool")
         self.assertTrue(tool.description.startswith("String format tool"))
+
+    def test_config_fields_are_real_pydantic_fields(self):
+        # the documented Attributes must be real fields: constructor
+        # kwargs are honored and instance assignment works (as a
+        # ClassVar the knobs were dead config).
+        capped = StringFormatTool(max_template_chars=8)
+        self.assertEqual(capped.max_template_chars, 8)
+        with self.assertRaises(ValueError):
+            capped.execute("lint", template="x" * 9)
+        tool = StringFormatTool()
+        tool.max_findings = 2
+        result = tool.execute("lint", template="{ x}" * 6)
+        self.assertEqual(len(result["findings"]), 2)
+        tool.max_template_chars = 4
+        with self.assertRaises(ValueError):
+            tool.execute("lint", template="xxxxx")
 
 
 if __name__ == "__main__":
