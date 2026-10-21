@@ -73,7 +73,25 @@ the verification oracle of the test suite:
   string ``name`` and ``display_name`` (verified: missing
   ``display_name`` raises); ``language_info`` when present must be an
   object with string ``name`` (the one required field of that
-  definition — verified); ``orig_nbformat`` integer >= 1;
+  definition — verified) plus typed sub-fields (string-or-object
+  ``codemirror_mode``, string ``file_extension``/``mimetype``/
+  ``pygments_lexer`` — all verified); ``orig_nbformat`` integer >= 1;
+  notebook ``title`` (string) and ``authors`` (array) are typed since
+  4.2 only — before that any value is schema-legal (verified:
+  validate accepts ``title: 5`` on a 4.1 notebook, rejects it on
+  4.2+; and ``authors`` elements are unconstrained because the
+  official schema definition says ``item`` instead of ``items`` —
+  validate accepts ``[1, 2]``); cell-level metadata fields are typed
+  per (cell type, minor) matrix — ``name`` non-empty string,
+  ``tags`` unique strings without commas, ``collapsed`` boolean,
+  ``scrolled`` true/false/"auto" (code cells), ``format`` string (raw
+  cells), ``jupyter`` object (4.3+), ``execution`` object of string
+  values (4.4+, code cells; verified: validate rejects
+  ``tags: "x"``, ``tags: ["a","a"]``, ``name: true``,
+  ``collapsed: "yes"``, ``scrolled: "nope"``, ``execution: "fast"``
+  and ``execution: {"shell.execute_reply": 5}``); a field is only
+  judged when the given (cell type, minor) schema defines it —
+  anything else rides on ``additionalProperties: true``;
   ``metadata.widgets`` is free-form per the schema (no definition
   constrains it) so widget quirks stay info-only;
 * cell ids — the real pattern of the v4.5 schema is
@@ -209,6 +227,43 @@ _IMAGE_MIME_RE = re.compile(r"\Aimage/[a-z0-9.+-]+\Z")
 # Base64 alphabet + padding + embedded whitespace (joinable arrays).
 _B64_RE = re.compile(r"\A[A-Za-z0-9+/=\s]+\Z")
 
+# Typed CELL metadata fields, hand-embedded from the per-minor schemas
+# (nbformat.v4.{0..5}.schema.json definitions {code,markdown,raw}_cell
+# → properties.metadata). Every field sits under
+# additionalProperties: true, so a field is only checked when the
+# given (cell_type, minor) schema actually defines it — collapsed/
+# scrolled belong to code cells alone, format to raw cells alone, and
+# jupyter (4.3+) / execution (4.4+) arrived mid-series. name (string,
+# pattern "^.+$") and tags (array of unique strings matching
+# "^[^,]+$") exist on every cell type in every minor. Patterns are
+# applied with re.search — jsonschema's exact semantics for the
+# pattern keyword (so "a\n" passes "^.+$" the same way it does for
+# validate). Verified one by one against nbformat.validate.
+_CELL_META_FIELDS: Dict[str, Dict[str, int]] = {
+    # field -> {cell_type -> first minor defining it}
+    "name": {"code": 0, "markdown": 0, "raw": 0},
+    "tags": {"code": 0, "markdown": 0, "raw": 0},
+    "collapsed": {"code": 0},
+    "scrolled": {"code": 0},
+    "format": {"raw": 0},
+    "jupyter": {"code": 3, "markdown": 3, "raw": 3},
+    "execution": {"code": 4},
+}
+_NAME_PATTERN = re.compile(r"^.+$")          # schema: metadata_name
+_TAG_PATTERN = re.compile(r"^[^,]+$")        # schema: metadata_tags
+
+# Typed NOTEBOOK metadata fields: language_info sub-fields are typed
+# in every 4.x schema (name/codemirror_mode/file_extension/mimetype/
+# pygments_lexer); title (string) and authors (array) arrived in 4.2.
+# The authors definition carries the schema's own typo — "item"
+# instead of "items" — so ELEMENTS are unconstrained (verified:
+# validate accepts [1, 2]); only array-ness is enforceable. The
+# jupyter metadata object's nested source_hidden/outputs_hidden keys
+# sit outside "properties" (another schema quirk) and are enforced
+# nowhere — only object-ness is (verified).
+_NB_META_TITLE_MINOR = 2
+_TAG_SEP = ","
+
 # Findings whose codes mirror exactly what the nbformat schema (and
 # therefore nbformat.validate) rejects. Only these drive the
 # ``schema_conformant`` verdict and the test-suite oracle agreement;
@@ -242,6 +297,7 @@ _SCHEMA_CODES: FrozenSet[str] = frozenset({
     "attachments_invalid",
     "attachment_value_invalid",
     "cell_id_invalid",
+    "cell_metadata_invalid",
     "kernelspec_invalid",
     "language_info_invalid",
     "orig_nbformat_invalid",
@@ -320,7 +376,7 @@ class _LineIndex:
     def __init__(self, text: str) -> None:
         self._text = text
         self._pos: Dict[Tuple[Any, ...], int] = {}
-        self._walk(0, (), first=True)
+        self._walk(0, ())
         # Root object position is always derivable for parsed JSON.
         self._pos.setdefault((), 0)
 
@@ -354,15 +410,19 @@ class _LineIndex:
             j += 1
         return j
 
-    def _walk(self, i: int, path: Tuple[Any, ...], first: bool = False) -> int:
+    def _walk(self, i: int, path: Tuple[Any, ...]) -> int:
         i = self._skip_ws(i)
         text = self._text
         if i >= len(text):
             return i
         c = text[i]
         if c == '"':
-            if first:
-                self._pos[path] = i  # scalar root
+            # Record EVERY scalar (the docstring's "every key token,
+            # scalar value and container opener"): array elements
+            # resolve to their own line, and an object value's
+            # position refines its key's (same line in indented JSON;
+            # "line of the offending value" is the contract).
+            self._pos[path] = i
             return self._scan_string(i)
         if c == "{":
             self._pos[path] = i
@@ -395,9 +455,8 @@ class _LineIndex:
                 if j < len(text) and text[j] == ",":
                     j = self._skip_ws(j + 1)
             return j + 1
-        # true / false / null / number
-        if first:
-            self._pos[path] = i
+        # true / false / null / number — recorded like strings above.
+        self._pos[path] = i
         return self._scan_literal(i)
 
     # -- lookup -------------------------------------------------------
@@ -440,9 +499,12 @@ class NotebookLintTool(Tool):
         "output shapes (stream/display_data/execute_result/error), "
         "mime bundle validity, cell id pattern (the real "
         "^[a-zA-Z0-9-_]+$ 1..64 rule of the v4.5 schema) with "
-        "duplicate detection, kernelspec/language_info metadata, "
-        "and the 4.0-4.5 version matrix (ids introduced in 4.5, "
-        "rejected before it). Summarize a notebook (mode='summary': "
+        "duplicate detection, kernelspec/language_info metadata "
+        "and the typed cell-metadata fields (tags/name/collapsed/"
+        "scrolled/jupyter/execution/format, per the per-minor "
+        "schema matrix), and the 4.0-4.5 version matrix (ids "
+        "introduced in 4.5, rejected before it). Summarize a "
+        "notebook (mode='summary': "
         "cell counts by type, executed/unexecuted code cells, "
         "output totals and error outputs, max execution count with "
         "monotonicity regression detection, mime types used, id "
@@ -552,7 +614,7 @@ class NotebookLintTool(Tool):
 
         minor = self._check_top_level(root, index, findings)
         cells = self._check_cells(root, index, minor, findings)
-        self._check_metadata(root, index, findings)
+        self._check_metadata(root, index, minor, findings)
         self._check_style(root, index, cells, findings)
 
         return self._lint_result(findings, notebook)
@@ -687,7 +749,7 @@ class NotebookLintTool(Tool):
                 continue
             dict_cells.append(cell)
             ctype = self._check_one_cell(
-                cell, path, index, ids_required, findings)
+                cell, path, index, minor, findings)
             cell_id = cell.get("id")
             if isinstance(cell_id, str):
                 seen_ids.setdefault(cell_id, []).append(i)
@@ -717,12 +779,13 @@ class NotebookLintTool(Tool):
         cell: Dict[str, Any],
         path: Tuple[Any, ...],
         index: "_LineIndex",
-        ids_required: bool,
+        minor: Optional[int],
         findings: List[Dict[str, Any]],
     ) -> Optional[str]:
         """Validate one dict cell; return its cell_type if known."""
         i = path[1]
         ctype = cell.get("cell_type")
+        ids_required = minor is not None and minor >= 5
 
         if "cell_type" not in cell:
             findings.append(_finding(
@@ -821,19 +884,20 @@ class NotebookLintTool(Tool):
                 f"cells[{i}] metadata must be an object, got "
                 f"{type(cell['metadata']).__name__}",
             ))
+        elif "metadata" in cell and ctype in _CELL_TYPES:
+            self._check_cell_metadata(
+                cell, ctype, path, index, minor, findings)
 
         # source: multiline string.
         if "source" in cell:
             src = cell["source"]
             src_path = path + ("source",)
-            if not _is_multiline(src):
-                findings.append(_finding(
-                    "source_invalid_type", "error",
-                    index.line(src_path, path),
-                    f"cells[{i}] source must be a string or an array "
-                    f"of strings, got {type(src).__name__}",
-                ))
+            if isinstance(src, str):
+                pass
             elif isinstance(src, list):
+                # Per-item check FIRST so a mixed list points at the
+                # exact offending line item (source_item_not_string)
+                # instead of collapsing into the coarse type error.
                 for j, item in enumerate(src):
                     if not isinstance(item, str):
                         findings.append(_finding(
@@ -843,6 +907,13 @@ class NotebookLintTool(Tool):
                             f"string, got {type(item).__name__}",
                         ))
                         break
+            else:
+                findings.append(_finding(
+                    "source_invalid_type", "error",
+                    index.line(src_path, path),
+                    f"cells[{i}] source must be a string or an array "
+                    f"of strings, got {type(src).__name__}",
+                ))
 
         # execution_count: null-or-non-negative-int, bool excluded.
         if "execution_count" in cell:
@@ -912,6 +983,115 @@ class NotebookLintTool(Tool):
                 cell["attachments"], path + ("attachments",),
                 index, findings)
         return ctype
+
+    # -- cell metadata fields ------------------------------------------
+
+    def _check_cell_metadata(
+        self,
+        cell: Dict[str, Any],
+        ctype: str,
+        path: Tuple[Any, ...],
+        index: "_LineIndex",
+        minor: Optional[int],
+        findings: List[Dict[str, Any]],
+    ) -> None:
+        """Typed cell-metadata fields (schema layer).
+
+        A field is only judged when the (cell_type, minor) schema
+        actually defines it — cell metadata allows additional
+        properties, so e.g. ``collapsed`` on a markdown cell or
+        ``jupyter`` on a 4.2 notebook are schema-legal extras
+        (verified against nbformat.validate). An underivable minor
+        checks only the all-minors fields; minors above the newest
+        embedded schema fall back to 4.5 rules, matching validate.
+        """
+        i = path[1]
+        meta = cell["metadata"]
+        # None (underivable) -> all-minors fields only; >5 -> 4.5.
+        eff_minor = 0 if minor is None else min(minor, _KNOWN_MINOR_MAX)
+
+        def flag(field: str, msg: str, sub: Any = None) -> None:
+            mpath = path + ("metadata",)
+            if sub is not None:
+                mpath = mpath + (field, sub)
+            findings.append(_finding(
+                "cell_metadata_invalid", "error",
+                index.line(mpath, path + ("metadata",)),
+                f"cells[{i}] metadata.{field} {msg}",
+            ))
+
+        for field, per_type in _CELL_META_FIELDS.items():
+            if field not in meta:
+                continue
+            first_minor = per_type.get(ctype)
+            if first_minor is None or eff_minor < first_minor:
+                continue  # not defined for this cell type / minor
+            value = meta[field]
+            if field == "name":
+                if not isinstance(value, str) \
+                        or _NAME_PATTERN.search(value) is None:
+                    flag(field, "must be a non-empty string "
+                         "(schema pattern \"^.+$\"), got "
+                         f"{json.dumps(value) if isinstance(value, str) else repr(value)}")
+            elif field == "tags":
+                if not isinstance(value, list):
+                    flag(field, "must be an array of strings, got "
+                         f"{type(value).__name__}")
+                    continue
+                for k, tag in enumerate(value):
+                    if not isinstance(tag, str) \
+                            or _TAG_PATTERN.search(tag) is None:
+                        flag(field, f"[{k}] must be a string without "
+                         f"commas (schema \"^[^,]+$\"), got "
+                         f"{json.dumps(tag) if isinstance(tag, str) else repr(tag)}",
+                         k)
+                        break
+                else:
+                    if len(set(value)) != len(value):
+                        flag(field, "must have unique items "
+                             "(schema uniqueItems) — duplicates: "
+                             + ", ".join(sorted(
+                                 {t for t in value
+                                  if value.count(t) > 1},
+                                 key=value.index)))
+            elif field == "collapsed":
+                if not isinstance(value, bool):
+                    flag(field, "must be a boolean, got "
+                         f"{json.dumps(value)}")
+            elif field == "scrolled":
+                # enum [true, false, "auto"] — bool identity, not
+                # equality (Python's 1 == True must NOT pass).
+                if not (isinstance(value, bool)
+                        or (isinstance(value, str)
+                            and value == "auto")):
+                    flag(field, "must be true, false or \"auto\" "
+                         "(schema enum), got "
+                         f"{json.dumps(value)}")
+            elif field == "format":
+                if not isinstance(value, str):
+                    flag(field, "must be a string, got "
+                         f"{json.dumps(value)}")
+            elif field == "jupyter":
+                # The nested source_hidden/outputs_hidden keys sit
+                # outside the schema's "properties" (a schema quirk)
+                # and are enforced nowhere — object-ness only.
+                if not isinstance(value, dict):
+                    flag(field, "must be an object, got "
+                         f"{type(value).__name__}")
+            elif field == "execution":
+                # patternProperties "^.*$" -> every value a string.
+                if not isinstance(value, dict):
+                    flag(field, "must be an object of ISO-8601 "
+                         "timestamp strings, got "
+                         f"{type(value).__name__}")
+                    continue
+                for k, v in sorted(value.items()):
+                    if not isinstance(v, str):
+                        flag(field, f"{json.dumps(k)} must be a "
+                             "string (schema patternProperties "
+                             "\"^.*$\" type string), got "
+                             f"{json.dumps(v)}", k)
+                        break
 
     # -- outputs -----------------------------------------------------------
 
@@ -1158,6 +1338,7 @@ class NotebookLintTool(Tool):
         self,
         root: Dict[str, Any],
         index: "_LineIndex",
+        minor: Optional[int],
         findings: List[Dict[str, Any]],
     ) -> None:
         if "metadata" not in root:
@@ -1211,20 +1392,71 @@ class NotebookLintTool(Tool):
                     f"language_info must be an object, got "
                     f"{type(li).__name__}",
                 ))
-            elif "name" not in li:
+            else:
+                if "name" not in li:
+                    findings.append(_finding(
+                        "language_info_invalid", "error",
+                        index.line(lpath, ("metadata",)),
+                        "language_info is missing required field "
+                        "\"name\" — the only required field of the "
+                        "language_info schema definition",
+                    ))
+                elif not isinstance(li["name"], str):
+                    findings.append(_finding(
+                        "language_info_invalid", "error",
+                        index.line(lpath + ("name",), lpath),
+                        "language_info name must be a string, got "
+                        f"{type(li['name']).__name__}",
+                    ))
+                # Typed sub-fields (defined in every 4.x schema,
+                # verified against nbformat.validate): string-or-
+                # object codemirror_mode; string file_extension /
+                # mimetype / pygments_lexer.
+                for field in ("codemirror_mode", "file_extension",
+                              "mimetype", "pygments_lexer"):
+                    if field not in li:
+                        continue
+                    value = li[field]
+                    ok = isinstance(value, str) or (
+                        field == "codemirror_mode"
+                        and isinstance(value, dict))
+                    if not ok:
+                        want = ("a string or an object"
+                                if field == "codemirror_mode"
+                                else "a string")
+                        findings.append(_finding(
+                            "language_info_invalid", "error",
+                            index.line(lpath + (field,), lpath),
+                            f"language_info {field} must be {want}"
+                            f", got {json.dumps(value)}",
+                        ))
+
+        # title (string) and authors (array) — typed since 4.2 only;
+        # before that they fall under additionalProperties and any
+        # value is schema-legal (verified: validate ACCEPTS title: 5
+        # on a 4.1 notebook and REJECTS it on 4.2+). authors elements
+        # are unconstrained — the schema definition says "item", not
+        # "items" (a typo in the official schema, verified: validate
+        # accepts [1, 2]) — so only array-ness is enforced.
+        eff_minor = 0 if minor is None else min(
+            minor, _KNOWN_MINOR_MAX)
+        if eff_minor >= _NB_META_TITLE_MINOR:
+            if "title" in meta and not isinstance(meta["title"], str):
                 findings.append(_finding(
-                    "language_info_invalid", "error",
-                    index.line(lpath, ("metadata",)),
-                    "language_info is missing required field "
-                    "\"name\" — the only required field of the "
-                    "language_info schema definition",
+                    "metadata_invalid", "error",
+                    index.line(("metadata", "title"), ("metadata",)),
+                    f"notebook metadata title must be a string "
+                    f"(typed since nbformat 4.2), got "
+                    f"{json.dumps(meta['title'])}",
                 ))
-            elif not isinstance(li["name"], str):
+            if "authors" in meta and not isinstance(
+                    meta["authors"], list):
                 findings.append(_finding(
-                    "language_info_invalid", "error",
-                    index.line(lpath + ("name",), lpath),
-                    "language_info name must be a string, got "
-                    f"{type(li['name']).__name__}",
+                    "metadata_invalid", "error",
+                    index.line(("metadata", "authors"), ("metadata",)),
+                    f"notebook metadata authors must be an array "
+                    f"(typed since nbformat 4.2), got "
+                    f"{type(meta['authors']).__name__}",
                 ))
 
         if "orig_nbformat" in meta:

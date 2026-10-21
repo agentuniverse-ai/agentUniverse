@@ -626,6 +626,141 @@ def test_attachments():
     assert "attachments_invalid" in codes(lint(json.dumps(nb)))
 
 
+def test_spec_cell_metadata_fields():
+    """Typed cell-metadata fields, hand-embedded from the per-minor
+    schema matrix ({code,markdown,raw}_cell -> properties.metadata;
+    verified against nbformat.validate): name non-empty string, tags
+    unique comma-free strings, collapsed boolean, scrolled enum
+    true/false/"auto" (code cells), format string (raw cells),
+    jupyter object (4.3+), execution object of string values (4.4+,
+    code cells). A field not defined for the (cell type, minor) sits
+    under additionalProperties: true and must NOT be judged."""
+    def meta_cell(md, minor=5, ctype="code"):
+        cell = {"cell_type": ctype, "metadata": md, "source": "x"}
+        if ctype == "code":
+            cell.update(outputs=[], execution_count=1)
+        if minor >= 5:
+            cell["id"] = "a1"
+        return make_nb(minor=minor, cells=[cell])
+
+    rejects = [
+        {"tags": "x"},                       # not an array
+        {"tags": ["a,b"]},                   # comma inside a tag
+        {"tags": ["a", "a"]},                # uniqueItems
+        {"tags": [1]},                       # item not a string
+        {"name": 7}, {"name": ""},           # pattern ^.+$
+        {"collapsed": "yes"}, {"collapsed": 1},   # bool identity
+        {"scrolled": "nope"}, {"scrolled": 1},    # enum, 1 != True
+        {"execution": "fast"},
+        {"execution": {"shell.execute_reply": 5}},
+        {"jupyter": 3},
+    ]
+    for md in rejects:
+        result = lint(json.dumps(meta_cell(md)))
+        assert "cell_metadata_invalid" in codes(result), md
+        assert result["schema_conformant"] is False, md
+
+    accepts = [
+        {"tags": []}, {"tags": ["a", "b", "gämma"]},
+        {"name": " "}, {"name": "cell name"},
+        {"collapsed": True}, {"collapsed": False},
+        {"scrolled": True}, {"scrolled": False}, {"scrolled": "auto"},
+        {"jupyter": {"source_hidden": "yes"}},  # schema quirk: nested
+        {"execution": {"iopub.status.busy": "2026-01-01T00:00:00Z"}},
+    ]
+    for md in accepts:
+        result = lint(json.dumps(meta_cell(md)))
+        assert result["schema_conformant"] is True, md
+
+    # fields on the WRONG cell type ride on additionalProperties —
+    # code-only fields on a markdown cell are schema-legal extras.
+    wrong_type = {"collapsed": "yes", "format": 5, "execution": "fast"}
+    nb = make_nb(minor=5, cells=[
+        {"cell_type": "markdown", "metadata": wrong_type,
+         "source": "x", "id": "m1"}])
+    assert lint(json.dumps(nb))["schema_conformant"] is True
+
+    # per-minor gates: jupyter typed from 4.3, execution from 4.4.
+    for minor, md, want in ((2, {"jupyter": 5}, "accept"),
+                            (3, {"jupyter": 5}, "reject"),
+                            (3, {"execution": "fast"}, "accept"),
+                            (4, {"execution": "fast"}, "reject")):
+        result = lint(json.dumps(meta_cell(md, minor=minor)))
+        got = "reject" if result["schema_conformant"] is False \
+            else "accept"
+        assert got == want, (minor, md)
+
+    # format belongs to raw cells only — on raw it is enforced.
+    nb = make_nb(minor=5, cells=[
+        {"cell_type": "raw", "metadata": {"format": 5},
+         "source": "x", "id": "r1"}])
+    assert "cell_metadata_invalid" in codes(lint(json.dumps(nb)))
+    nb = make_nb(minor=5, cells=[
+        {"cell_type": "raw", "metadata": {"format": "text/plain"},
+         "source": "x", "id": "r1"}])
+    assert lint(json.dumps(nb))["schema_conformant"] is True
+
+
+def test_spec_notebook_metadata_fields():
+    """Notebook-level typed fields: language_info sub-fields in every
+    minor; title (string) / authors (array) only since 4.2 — the same
+    wrong value is schema-legal before 4.2 (verified against
+    nbformat.validate); authors ELEMENTS are unconstrained (the
+    official schema says "item", not "items")."""
+    good_cells = [code_cell(id="a1")]
+    rejects = [
+        {"language_info": {"name": "py", "codemirror_mode": 5}},
+        {"language_info": {"name": "py", "file_extension": 7}},
+        {"language_info": {"name": "py", "mimetype": []}},
+        {"language_info": {"name": "py", "pygments_lexer": True}},
+        {"title": 5},
+        {"authors": "x"},
+    ]
+    for meta in rejects:
+        nb = make_nb(minor=5, cells=good_cells, metadata=meta)
+        result = lint(json.dumps(nb))
+        assert result["schema_conformant"] is False, meta
+        assert codes(result) == [
+            "language_info_invalid" if "language_info" in meta
+            else "metadata_invalid"], meta
+    accepts = [
+        {"language_info": {"name": "py",
+                           "codemirror_mode": {"mode": "python"}}},
+        {"language_info": {"name": "py", "pygments_lexer": "ipython3"}},
+        {"authors": [1, 2]},      # item typo: elements unconstrained
+        {"title": "My notebook"},
+    ]
+    for meta in accepts:
+        nb = make_nb(minor=5, cells=good_cells, metadata=meta)
+        assert lint(json.dumps(nb))["schema_conformant"] is True, meta
+    # the pre-4.2 trap: title/authors untyped before 4.2
+    old = make_nb(minor=1, cells=[code_cell()], metadata={"title": 5,
+                                                          "authors": "x"})
+    assert lint(json.dumps(old))["schema_conformant"] is True
+    # 4.2 is exactly where they become typed
+    edge = make_nb(minor=2, cells=[code_cell()], metadata={"title": 5})
+    assert lint(json.dumps(edge))["schema_conformant"] is False
+
+
+def test_source_mixed_list_reports_item():
+    """A mixed source list must point at the exact offending item
+    (source_item_not_string), not collapse into the coarse
+    source_invalid_type at the source key line."""
+    nb = make_nb(minor=5, cells=[code_cell(
+        id="a1", source=["first\n", 2, "third\n"])])
+    text = json.dumps(nb, indent=2)
+    result = lint(text)
+    got = codes(result)
+    assert "source_item_not_string" in got
+    assert "source_invalid_type" not in got
+    assert result["schema_conformant"] is False
+    finding = next(f for f in result["findings"]
+                   if f["code"] == "source_item_not_string")
+    item_line = next(k + 1 for k, l in enumerate(text.splitlines())
+                     if l.strip() == "2,")
+    assert finding["line"] == item_line
+
+
 def test_widget_metadata_info_only():
     nb = make_nb(minor=5, metadata={"widgets": {"state": {"x": "y"}}},
                  cells=[code_cell(id="a")])
@@ -992,3 +1127,82 @@ def test_oracle_strictness_gap_is_only_ids():
     nb = make_nb(minor=5, cells=[code_cell(id="d"), code_cell(id="d")])
     assert _oracle_validate(nb) is True
     assert "cell_id_duplicate" in codes(lint(json.dumps(nb)))
+
+
+# ---------------------------------------------------------------------- #
+# self-review oracle: 200 FRESH seeds over the metadata-field layer
+# (found missing by a hostile re-probe; seeds deliberately disjoint
+# from the 252/252_000 corpus above)
+# ---------------------------------------------------------------------- #
+
+_META_FIELDS = ("name", "tags", "collapsed", "scrolled", "jupyter",
+                "execution", "format")
+
+
+def _meta_field_value(rng):
+    """A typed-field value: usually schema-VALID, sometimes a wrong
+    type/pattern/enemy (the class the re-probe caught), plus
+    bool-identity traps where Python 1 == True must NOT pass."""
+    return rng.choice([
+        # valid
+        "cell name", " ", ["a", "b-2"], [], True, False, "auto",
+        {"source_hidden": True}, {"iopub.status.busy": "t"},
+        # hostile
+        "", 7, ["a,b"], ["a", "a"], [1], "yes", "nope",
+        {"zzz": 5}, "fast", {"k": {"deep": 1}}, 3,
+    ])
+
+
+def test_nbformat_oracle_metadata_layer_200_fresh_seeds():
+    """Second differential corpus, hostile to the typed metadata
+    layer: verdicts must agree with nbformat.validate exactly.
+
+    (Found and fixed by the hostile re-probe: the first version of
+    this tool validated NO cell-metadata field — 38 of 200 fresh
+    seeds disagreed with validate; this test pins the fixed layer.)"""
+    total = 200
+    valid_count = 0
+    for seed in range(total):
+        rng = random.Random(515_000 + seed * 3)
+        minor = rng.choice([5, 5, 4, 3, 2, 1, 0, 6])
+        cells = []
+        for i in range(rng.randrange(1, 4)):
+            ctype = rng.choice(["code", "markdown", "raw"])
+            md = {}
+            for field in rng.sample(
+                    _META_FIELDS, rng.randrange(0, len(_META_FIELDS))):
+                md[field] = _meta_field_value(rng)
+            cell = {"cell_type": ctype, "metadata": md,
+                    "source": rng.choice(["x", ["a\n", "b"]])}
+            if minor >= 5:
+                cell["id"] = f"c{i}"
+            if ctype == "code":
+                cell["outputs"] = []
+                cell["execution_count"] = 1
+            cells.append(cell)
+        meta = rng.choice([
+            {},
+            {"kernelspec": {"name": "python3",
+                            "display_name": "Python 3"}},
+            {"language_info": {
+                "name": "python",
+                rng.choice(["codemirror_mode", "file_extension",
+                            "mimetype", "pygments_lexer"]):
+                    _meta_field_value(rng)}},
+            {"title": rng.choice(["t", 5, []])},
+            {"authors": rng.choice([[{"name": "a"}], [1, 2], "x"])},
+        ])
+        nb = {"cells": cells, "metadata": meta, "nbformat": 4,
+              "nbformat_minor": minor}
+        text = json.dumps(nb, indent=rng.randrange(0, 3))
+
+        oracle_ok = _oracle_validate(json.loads(text))
+        tool_ok = lint(text)["schema_conformant"]
+        if oracle_ok:
+            valid_count += 1
+        assert tool_ok == oracle_ok, (
+            f"seed {seed}: tool={tool_ok} oracle={oracle_ok} "
+            f"minor={minor} meta={meta} cells={json.dumps(cells)} "
+            f"findings={codes(lint(text))}"
+        )
+    assert valid_count >= 15  # the corpus contains real clean docs
