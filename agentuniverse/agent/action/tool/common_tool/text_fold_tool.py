@@ -54,6 +54,13 @@ The fold pipeline (order matters and is documented with its reason):
    letter. Spacing combining marks (``Mc`` — Indic and Thai vowel
    signs) are deliberately KEPT: they carry lexical meaning, and
    stripping them would corrupt words rather than normalize them.
+   Format characters (category ``Cf`` — the zero-width joiner and
+   non-joiner, LRM / RLM, the word joiner, the soft hyphen) are not
+   marks either: NFKD does not decompose them, so ``fold`` KEEPS
+   them verbatim (an emoji ZWJ sequence survives intact) while
+   ``search_key`` counts them as plain separators. A text made only
+   of combining marks folds to the empty key, like a whitespace-only
+   text — ``is_empty_after_fold`` reports both.
 3. **Symbol map** — a small, fully enumerated table applied AFTER
    NFKD: ``×`` -> ``x``, ``÷`` -> ``/``, ``’`` -> ``'``,
    ``“`` / ``”`` -> ``"``, ``–`` / ``—`` -> ``-``, ``…`` -> ``...``.
@@ -72,9 +79,12 @@ The fold pipeline (order matters and is documented with its reason):
    but folding after the strip makes "no combining marks in the
    output" a structural guarantee instead of an accident). Case
    folding is locale-independent: Turkish dotless ``ı`` stays ``ı``.
-5. **Whitespace collapse** — every run of whitespace (which stage 1
-   has already turned into plain spaces) collapses to one single
-   space, with the ends trimmed.
+5. **Whitespace collapse** — every run of whitespace collapses to one
+   single space, with the ends trimmed. Compatibility spaces (NBSP,
+   the U+2000..U+200A typographic family, the ideographic space)
+   were already turned into plain spaces by stage 1; ASCII
+   whitespace (tabs, newlines) NFKD passes through untouched and is
+   handled directly here.
 
 Idempotence holds for the composition: the folded output contains no
 compatibility characters (stage 1 destroyed them), no combining
@@ -256,8 +266,10 @@ class TextFoldTool(Tool):
         Alphanumeric is Unicode-aware (``str.isalnum``): Han
         ideographs, kana and Hangul Jamo count as word characters and
         survive intact; only separators / punctuation / symbols are
-        squashed. Leading and trailing separators are trimmed, so a
-        punctuation-only input folds to the empty key.
+        squashed. Leading and trailing separators are trimmed, so any
+        text without a single alphanumeric character — punctuation,
+        symbols, whitespace, combining marks or emoji only — folds to
+        the empty key.
         """
         folded = cls.fold_text(text)
         pieces: List[str] = []
@@ -428,10 +440,15 @@ class TextFoldTool(Tool):
 
     @classmethod
     def _rule_for(cls, ch: str) -> Optional[str]:
-        """The first pipeline rule that transforms ``ch`` (or None)."""
-        if ch.isspace():
-            # Stage 5 collapses every whitespace run to one space.
-            return "whitespace_collapsed" if ch != " " else None
+        """The first pipeline rule that transforms ``ch`` (or None).
+
+        Checks run in the documented stage order (1 NFKD, 2 marks,
+        3 map, 4 casefold, 5 whitespace), so a character reachable
+        by an earlier stage is never attributed to a later one:
+        NBSP and the ideographic space transform at stage 1 and
+        report ``nfkd_decomposition``, while tabs / newlines (which
+        NFKD passes through) report ``whitespace_collapsed``.
+        """
         if unicodedata.normalize("NFKD", ch) != ch:
             return "nfkd_decomposition"
         if unicodedata.category(ch) in cls.MARK_CATEGORIES:
@@ -440,6 +457,8 @@ class TextFoldTool(Tool):
             return "symbol_mapped"
         if ch.casefold() != ch:
             return "case_folded"
+        if ch.isspace() and ch != " ":
+            return "whitespace_collapsed"
         return None
 
     # ------------------------------------------------------------------ #

@@ -79,6 +79,23 @@ def _independent_fold(text: str) -> str:
     return " ".join(mapped.casefold().split())
 
 
+def _independent_rules(text: str) -> dict:
+    """The first transforming pipeline rule per character, rebuilt."""
+    rules = {}
+    for index, ch in enumerate(text):
+        if unicodedata.normalize("NFKD", ch) != ch:
+            rules[index] = "nfkd_decomposition"
+        elif unicodedata.category(ch) in ("Mn", "Me"):
+            rules[index] = "mark_stripped"
+        elif ch in TextFoldTool.SYMBOL_MAP:
+            rules[index] = "symbol_mapped"
+        elif ch.casefold() != ch:
+            rules[index] = "case_folded"
+        elif ch.isspace() and ch != " ":
+            rules[index] = "whitespace_collapsed"
+    return rules
+
+
 class TextFoldToolFoldTest(unittest.TestCase):
     """The fold mode — ground truths of the five-stage pipeline."""
 
@@ -398,6 +415,14 @@ class TextFoldToolCompareTest(unittest.TestCase):
         self.assertEqual(result["key1"], "strasse")
 
 
+    def test_compare_nbsp_equals_plain_space(self) -> None:
+        result = self.tool.execute(
+            mode="compare", text_1="a\u00A0b", text_2="a b"
+        )
+        self.assertTrue(result["equal_after_fold"])
+        self.assertTrue(result["equal_after_search_key"])
+
+
 class TextFoldToolReverseMapTest(unittest.TestCase):
     """The reverse_map mode — the per-character mapping evidence."""
 
@@ -426,9 +451,10 @@ class TextFoldToolReverseMapTest(unittest.TestCase):
 
     def test_reverse_map_every_rule_fires(self) -> None:
         # mark, whitespace(tab), symbol, casefold, ligature — a plain
-        # space maps to itself and stays unchanged by design; only
-        # whitespace that literally changes (tab, NBSP, ideographic
-        # space, or any collapsed-run member ≠ ' ') fires the rule.
+        # space maps to itself and stays unchanged by design; ASCII
+        # whitespace that changes (tab) fires whitespace_collapsed,
+        # while NBSP / the ideographic space transform at stage 1 and
+        # fire nfkd_decomposition instead.
         text = "é́\t× ß ﬁ  x"  # also a standalone combining acute
         key = self.tool.execute(mode="fold", text=text)["folded"]
         self.assertEqual(key, "e x ss fi x")
@@ -486,6 +512,71 @@ class TextFoldToolReverseMapTest(unittest.TestCase):
         self.assertEqual(result["evidence_count"], 250)
         self.assertEqual(len(result["evidence"]), 200)
         self.assertTrue(result["truncated"])
+
+    def test_reverse_map_rule_follows_pipeline_order(self) -> None:
+        for ch in ("\u00A0", "\u2000", "\u2003", "\u202F", "\u3000"):
+            result = self.tool.execute(
+                mode="reverse_map",
+                text=ch,
+                folded_key=TextFoldTool.fold_text(ch),
+            )
+            self.assertEqual(result["folded_key"], "")
+            self.assertTrue(result["matches"], msg=repr(ch))
+            entry = result["evidence"][0]
+            self.assertEqual(entry["rule"], "nfkd_decomposition")
+            self.assertEqual(entry["folded_to"], " ")
+        for ch in ("\t", "\n", "\x0b", "\u0085", "\u1680"):
+            result = self.tool.execute(
+                mode="reverse_map",
+                text=ch,
+                folded_key=TextFoldTool.fold_text(ch),
+            )
+            self.assertEqual(
+                result["evidence"][0]["rule"], "whitespace_collapsed"
+            )
+        result = self.tool.execute(mode="reverse_map", text=" ", folded_key="")
+        self.assertEqual(result["evidence"], [])
+        self.assertEqual(result["evidence_count"], 0)
+
+    def test_reverse_map_format_characters_kept_by_fold(self) -> None:
+        for ch in ("\u200D", "\u200C", "\u200E", "\u200F", "\u00AD", "\u2060"):
+            self.assertEqual(TextFoldTool.fold_text(ch), ch)
+            self.assertEqual(
+                self.tool.execute(
+                    mode="search_key", text="a" + ch + "b"
+                )["search_key"],
+                "a-b",
+            )
+        family = "\U0001F469\u200D\U0001F4BB"
+        self.assertEqual(TextFoldTool.fold_text(family), family)
+        result = self.tool.execute(
+            mode="reverse_map", text=family, folded_key=family
+        )
+        self.assertTrue(result["matches"])
+        self.assertEqual(result["unchanged_count"], 3)
+
+    def test_reverse_map_marks_only_text_folds_to_empty_key(self) -> None:
+        text = "̧́̈"
+        folded = self.tool.execute(mode="fold", text=text)
+        self.assertEqual(folded["folded"], "")
+        self.assertTrue(folded["is_empty_after_fold"])
+        result = self.tool.execute(
+            mode="reverse_map", text=text, folded_key=""
+        )
+        self.assertTrue(result["matches"])
+        self.assertEqual(result["rule_counts"], {"mark_stripped": 3})
+        self.assertEqual(result["unchanged_count"], 0)
+
+    def test_reverse_map_compatibility_clones_reach_symbol_map(self) -> None:
+        for ch in ("\uFE31", "\uFE32", "\uFE58"):
+            result = self.tool.execute(
+                mode="reverse_map",
+                text=ch,
+                folded_key=TextFoldTool.fold_text(ch),
+            )
+            entry = result["evidence"][0]
+            self.assertEqual(entry["rule"], "nfkd_decomposition")
+            self.assertEqual(entry["folded_to"], "-")
 
     def test_reverse_map_fragments_sum_to_the_key(self) -> None:
         # The transparency invariant: concatenating the per-character
@@ -559,6 +650,36 @@ class TextFoldToolIdempotenceTest(unittest.TestCase):
                 self.assertNotIn(
                     unicodedata.category(out_char), ("Mn", "Me")
                 )
+
+    def test_invariants_over_adversarial_alphabet(self) -> None:
+        rng = random.Random(3993)
+        alphabet = list(
+            "abcABCéèﬁﬀＡ×÷’“”–—…ßςσΙİı汉カ가 \t\n-.,!"
+        ) + [
+            "\u0301", "\u0308", "\u035C", "\u00A0", "\u2000", "\u3000",
+            "\u200D", "\u200C", "\u00AD", "\uFE31", "\uFE32",
+            "\U0001F4BB",
+        ]
+        for _ in range(500):
+            text = "".join(
+                rng.choice(alphabet) for _ in range(rng.randint(1, 30))
+            )
+            folded = TextFoldTool.fold_text(text)
+            self.assertEqual(TextFoldTool.fold_text(folded), folded)
+            self.assertEqual(folded, _independent_fold(text))
+            fragments = [TextFoldTool._fragment(ch) for ch in text]
+            self.assertEqual(
+                " ".join("".join(fragments).split()), folded
+            )
+            expected = _independent_rules(text)
+            result = self.tool.execute(
+                mode="reverse_map", text=text, folded_key=folded
+            )
+            listed = {
+                entry["index"]: entry["rule"]
+                for entry in result["evidence"]
+            }
+            self.assertEqual(listed, expected, msg=repr(text))
 
 
 class TextFoldToolValidationTest(unittest.TestCase):
