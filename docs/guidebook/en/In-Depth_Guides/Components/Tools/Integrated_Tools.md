@@ -634,3 +634,65 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Time Range Tool
+
+`TimeRangeTool` is a time-of-DAY range arithmetic tool built purely on
+the Python standard library — no network access, no wall-clock reads.
+It covers the clock-time layer the date/workday/duration tools leave
+open: ranges given as strict 24-hour `HH:MM` pairs such as
+`"09:00"`-`"12:00"` or the overnight shift `"22:00"`-`"06:00"`.
+Ranges are half-open intervals `[start, end)` — the **end is
+exclusive** — and a start later than its end crosses midnight
+natively in every mode. `overlap` measures the shared minutes of two
+ranges (`22:00-06:00` vs `05:00-07:00` = exactly 60, the overlap
+`05:00-06:00`; touching ranges share 0 because ends are exclusive);
+`contains` tests a single time with the half-open boundary rule
+(`09:00` is inside `09:00-12:00`, `12:00` is not); `subtract`
+removes range B from range A into 0-2 remaining sub-ranges
+(`22:00-06:00` minus `05:00-07:00` = `22:00-05:00`);
+`merge` coalesces a list of ranges — items are `["HH:MM", "HH:MM"]`
+pairs or `"HH:MM-HH:MM"` strings — into a sorted, non-overlapping
+cover in which overlapping *and merely touching* ranges join;
+`gap` returns the idle minutes between two ranges (0 when they
+overlap or touch, otherwise the smaller of the two circular gaps:
+`09:00-12:00` / `13:00-17:00` = 60) plus the full complement of
+their union; and `info` reports a range's duration in minutes, its
+`crosses_midnight` flag and its day-local segments.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.time_range_tool import TimeRangeTool
+
+tool = TimeRangeTool()
+shared = tool.execute(mode="overlap", start="22:00", end="06:00",
+                      start2="05:00", end2="07:00")["overlap_minutes"]  # 60
+open_now = tool.execute(mode="contains", start="09:00", end="12:00",
+                        time="12:00")["contains"]                        # False
+cover = tool.execute(mode="merge", ranges=["22:00-06:00", "23:00-07:00",
+                                           "09:00-12:00"])["ranges"]
+idle = tool.execute(mode="gap", start="09:00", end="12:00",
+                    start2="13:00", end2="17:00")["gap_minutes"]        # 60
+shift = tool.execute(mode="info", start="22:00", end="06:00")
+```
+
+Wraparound is resolved deterministically: each range is treated as a
+circular arc (start + forward length) and every operation runs as
+interval arithmetic on a normalized day-local `[0, 1440)` timeline.
+For `merge`, wraparound inputs are normalized to possibly-two
+day-local segments (`22:00-06:00` -> `[22:00, 24:00)` + `[00:00,
+06:00)`) and a tail ending at 24:00 that meets a head starting at
+00:00 is re-joined into one wraparound output range; the result
+carries a `note` whenever this applies, because "merge across
+midnight" is otherwise ambiguous. A merged cover of the full 24h day
+is reported as `full_day: true` with an empty `ranges` list — no
+single pair can encode it, since `start == end` is rejected as an
+empty range.
+
+Inputs are validated strictly before any computation and every result
+is deterministic: an unknown mode, times outside the strict
+zero-padded `HH:MM` form (`9:00`, `09:0`, `24:00`, `12:60`, padded
+whitespace, non-strings, booleans), `start` equal to `end`, missing
+required parameters, and a `ranges` list that is not a list, is
+empty, is over the 100-item cap, or holds items that are neither
+2-element lists/tuples of strict times nor `HH:MM-HH:MM` strings all
+raise a `ValueError`.
