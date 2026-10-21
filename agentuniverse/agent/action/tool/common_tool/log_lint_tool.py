@@ -91,6 +91,7 @@ exceptions.
 """
 
 import re
+from bisect import bisect_left, bisect_right
 from datetime import datetime, timedelta, timezone
 from typing import Any, ClassVar
 
@@ -100,11 +101,16 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 # ---------------------------------------------------------------------------
 # Shared detection language (mirrors LogParserTool, PR #3731; keep in sync).
+# Digits in every format position are ASCII-only ([0-9], never \d): RFC 3164,
+# the Apache CLF and ISO 8601 all define decimal digits as %x30-39, so lines
+# carrying non-ASCII decimal digits (Arabic-Indic, Devanagari, ...) in a
+# timestamp, status, size or pid field are format drift in every format —
+# never silently reparsed via int(), which accepts those digits.
 # ---------------------------------------------------------------------------
 _MONTHS = "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
 _ISO_TS = (
-    r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}"
-    r"(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:[.,][0-9]+)?(?:Z|[+-][0-9]{2}:?[0-9]{2})?"
 )
 _LEVEL_TOKEN = r"(?:TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)"
 
@@ -113,18 +119,19 @@ COMBINED_RE = re.compile(
     r"^(?P<ip>\S+)\s+(?P<ident>\S+)\s+(?P<user>\S+)\s+"
     r"\[(?P<time>[^\]]+)\]\s+"
     r'"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+(?P<protocol>[^"\s]+)"\s+'
-    r"(?P<status>\d{3})\s+(?P<bytes>\d+|-)\s+"
+    r"(?P<status>[0-9]{3})\s+(?P<bytes>[0-9]+|-)\s+"
     rf'"(?P<referrer>{_QUOTED_FIELD})"\s+"(?P<agent>{_QUOTED_FIELD})"\s*$'
 )
 COMMON_RE = re.compile(
     r"^(?P<ip>\S+)\s+(?P<ident>\S+)\s+(?P<user>\S+)\s+"
     r"\[(?P<time>[^\]]+)\]\s+"
     r'"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+(?P<protocol>[^"\s]+)"\s+'
-    r"(?P<status>\d{3})\s+(?P<bytes>\d+|-)\s*$"
+    r"(?P<status>[0-9]{3})\s+(?P<bytes>[0-9]+|-)\s*$"
 )
 SYSLOG_RE = re.compile(
-    rf"^(?P<timestamp>(?:{_MONTHS})\s+\d{{1,2}}\s+\d{{2}}:\d{{2}}:\d{{2}})\s+"
-    r"(?P<host>\S+)\s+(?P<proc>[^\s:\[\]]+)(?:\[(?P<pid>\d+)\])?:\s*"
+    rf"^(?P<timestamp>(?:{_MONTHS})\s+[0-9]{{1,2}}\s+"
+    r"[0-9]{2}:[0-9]{2}:[0-9]{2})\s+"
+    r"(?P<host>\S+)\s+(?P<proc>[^\s:\[\]]+)(?:\[(?P<pid>[0-9]+)\])?:\s*"
     r"(?P<message>.*)$"
 )
 LEVELED_ISO_RE = re.compile(
@@ -172,14 +179,14 @@ _MONTH_NUMBERS = {
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
 }
 _APACHE_TIME_RE = re.compile(
-    r"^(\d{1,2})/([A-Za-z]{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2})"
-    r"\s+([+-])(\d{2})(\d{2})$"
+    r"^([0-9]{1,2})/([A-Za-z]{3})/([0-9]{4}):([0-9]{2}):([0-9]{2}):([0-9]{2})"
+    r"\s+([+-])([0-9]{2})([0-9]{2})$"
 )
 _SYSLOG_TIME_RE = re.compile(
-    r"^([A-Za-z]{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})$"
+    r"^([A-Za-z]{3})\s+([0-9]{1,2})\s+([0-9]{2}):([0-9]{2}):([0-9]{2})$"
 )
-_ISO_OFFSET_NO_COLON_RE = re.compile(r"([+-]\d{2})(\d{2})$")
-_ISO_COMMA_FRACTION_RE = re.compile(r"(\d),(\d)")
+_ISO_OFFSET_NO_COLON_RE = re.compile(r"([+-][0-9]{2})([0-9]{2})$")
+_ISO_COMMA_FRACTION_RE = re.compile(r"([0-9]),([0-9])")
 
 # Preview hygiene: cap length, then mask secret-looking values.
 _SECRET_KEY_RE = re.compile(
@@ -193,12 +200,15 @@ class LogLintTool(Tool):
     """Whole-file log consistency linter built purely on the stdlib.
 
     Attributes:
-        max_input_chars (int): Upper bound on the ``text`` input length.
-        max_lines (int): Upper bound on non-blank lines processed.
+        max_input_chars (int): Upper bound on the ``text`` input length
+            (a real pydantic field — settable per instance or via the
+            constructor; default 10,000,000).
+        max_lines (int): Upper bound on non-blank lines processed
+            (default 100,000).
         max_line_chars (int): Sanity upper bound for a single raw line
             (two orders of magnitude above the 10,000-character
             ``very_long_line`` lint threshold, which reports rather
-            than rejects).
+            than rejects; default 1,000,000).
     """
 
     model_config = ConfigDict(
@@ -235,11 +245,13 @@ class LogLintTool(Tool):
         "keyvalue",
     )
 
-    # Size caps are class constants so validating classmethods can read
-    # them off ``cls``.
-    max_input_chars: ClassVar[int] = 10_000_000
-    max_lines: ClassVar[int] = 100_000
-    max_line_chars: ClassVar[int] = 1_000_000
+    # Size caps are real pydantic fields (documented Attributes): they
+    # can be set per instance or through the constructor, so validation
+    # must read them off ``self`` — a classmethod here would silently
+    # keep using the class defaults.
+    max_input_chars: int = 10_000_000
+    max_lines: int = 100_000
+    max_line_chars: int = 1_000_000
 
     # Audit constants (documented, not options).
     long_line_threshold: ClassVar[int] = 10_000
@@ -327,9 +339,23 @@ class LogLintTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"log_lint_tool: {message}")
 
-    @classmethod
+    @staticmethod
+    def _repr_bounded(value: Any, limit: int = 120) -> str:
+        """A short, safe-to-echo repr of a rejected parameter value.
+
+        Validation errors must never echo an unbounded amount of the
+        caller's (possibly secret-bearing) input: secret-looking
+        assignments are masked first (the same policy as line
+        previews), then the repr is cut at ``limit`` characters.
+        """
+        rendered = _SECRET_KEY_RE.sub(r"\1***", repr(value))
+        rendered = _BEARER_RE.sub(r"\1***", rendered)
+        if len(rendered) > limit:
+            rendered = rendered[:limit] + "..."
+        return rendered
+
     def _validate_text(
-        cls, text: Any
+        self, text: Any
     ) -> tuple[
         list[tuple[int, str]], list[tuple[int, str]], int, dict[str, int]
     ]:
@@ -339,25 +365,30 @@ class LogLintTool(Tool):
         1-based ``str.splitlines()`` number; non-blank entries carry
         the stripped line and drop blanks. Line-ending kinds (LF /
         CRLF / lone CR) are counted on the original text because
-        ``splitlines()`` consumes the separators.
+        ``splitlines()`` consumes the separators. An instance method
+        on purpose: the caps are per-instance pydantic fields.
         """
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"text must be a non-empty string (got {text!r})")
+            self._invalid(
+                "text must be a non-empty string (got "
+                f"{self._repr_bounded(text)})"
+            )
         if not text:
-            cls._invalid("text must be a non-empty string (got '')")
-        if len(text) > cls.max_input_chars:
-            cls._invalid(
-                f"text exceeds the {cls.max_input_chars:,}-character limit "
+            self._invalid("text must be a non-empty string (got '')")
+        if len(text) > self.max_input_chars:
+            self._invalid(
+                f"text exceeds the {self.max_input_chars:,}-character limit "
                 f"(got {len(text):,} characters)"
             )
         raw_lines: list[tuple[int, str]] = []
         lines: list[tuple[int, str]] = []
         blank_count = 0
         for number, raw_line in enumerate(text.splitlines(), start=1):
-            if len(raw_line) > cls.max_line_chars:
-                cls._invalid(
-                    f"line {number} exceeds the {cls.max_line_chars:,}-"
-                    f"character limit (got {len(raw_line):,} characters)"
+            if len(raw_line) > self.max_line_chars:
+                self._invalid(
+                    f"line {number} exceeds the "
+                    f"{self.max_line_chars:,}-character limit "
+                    f"(got {len(raw_line):,} characters)"
                 )
             raw_lines.append((number, raw_line))
             line = raw_line.strip()
@@ -366,10 +397,10 @@ class LogLintTool(Tool):
                 continue
             lines.append((number, line))
         if not lines:
-            cls._invalid("text contains no non-blank lines to process")
-        if len(lines) > cls.max_lines:
-            cls._invalid(
-                f"text exceeds the {cls.max_lines:,}-line limit "
+            self._invalid("text contains no non-blank lines to process")
+        if len(lines) > self.max_lines:
+            self._invalid(
+                f"text exceeds the {self.max_lines:,}-line limit "
                 f"(got {len(lines):,} non-blank lines)"
             )
         crlf = text.count("\r\n")
@@ -947,6 +978,11 @@ class LogLintTool(Tool):
         escalation trail is suspicious (info finding). A WARN, another
         ERROR/FATAL, or a stack trace between the two clears the
         suspicion — the stack explains the drop back to INFO.
+
+        ``stack_lines`` is ascending (built in line order), so the
+        between-test is two bisections — a linear scan per candidate
+        would make an ERROR/INFO-heavy log with many stack lines
+        quadratic in the tool's 100,000-line budget.
         """
         i = 0
         total = len(parsed)
@@ -958,30 +994,29 @@ class LogLintTool(Tool):
             j = i + 1
             while j < total and parsed[j]["level"] is None:
                 j += 1
-            if (
-                j < total
-                and parsed[j]["level"] == "INFO"
-                and not any(
-                    entry["line"] < stack_line < parsed[j]["line"]
-                    for stack_line in stack_lines
+            if j < total and parsed[j]["level"] == "INFO":
+                # A stack line strictly between the pair clears it.
+                first_after = bisect_right(stack_lines, entry["line"])
+                first_at_or_after = bisect_left(
+                    stack_lines, parsed[j]["line"]
                 )
-            ):
-                findings.append(
-                    {
-                        "code": "level_sequence_anomaly",
-                        "severity": "info",
-                        "line": parsed[j]["line"],
-                        "message": (
-                            f"{entry['level']} at line {entry['line']} is "
-                            f"immediately followed by INFO at line "
-                            f"{parsed[j]['line']} with no WARN (or stack "
-                            "trace) in between"
-                        ),
-                    }
-                )
-                i = j
-            else:
-                i += 1
+                if first_after >= first_at_or_after:
+                    findings.append(
+                        {
+                            "code": "level_sequence_anomaly",
+                            "severity": "info",
+                            "line": parsed[j]["line"],
+                            "message": (
+                                f"{entry['level']} at line {entry['line']} "
+                                f"is immediately followed by INFO at line "
+                                f"{parsed[j]['line']} with no WARN (or stack "
+                                "trace) in between"
+                            ),
+                        }
+                    )
+                    i = j
+                    continue
+            i += 1
 
     # ------------------------------------------------------------------ #
     # timeline mode

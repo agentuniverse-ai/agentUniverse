@@ -619,5 +619,125 @@ class LevelSummaryModeTest(unittest.TestCase):
         self.assertEqual(result["format"], "syslog")
 
 
+class HostileReviewRegressionTest(unittest.TestCase):
+    """Regressions for defects found in the hostile self-review."""
+
+    def setUp(self):
+        self.tool = LogLintTool()
+
+    def test_non_ascii_digits_never_parse_as_timestamps(self):
+        # Arabic-Indic decimal digits are not valid digits in RFC 3164,
+        # the Apache CLF or ISO 8601 (all define DIGIT as %x30-39).
+        # Previously int() happily converted them, so a syslog line like
+        # the one below was accepted with silently reinterpreted values
+        # while the same digits in a leveled timestamp were rejected.
+        text = "\n".join(
+            [
+                "2026-10-19T10:00:00 INFO a.b one",
+                "Oct ١٩ 10:00:00 host app: two",
+                "2026-10-19T11:00:00 INFO a.b three",
+            ]
+        )
+        result = self.tool.execute(mode="audit", text=text)
+        self.assertEqual(result["format"], "leveled")
+        self.assertIn(
+            "format_drift", [c for c, _, _ in codes(result)]
+        )
+        # The unicode-digit syslog line is never a parseable timestamp.
+        result = self.tool.execute(
+            mode="timeline", text="Oct ١٩ 10:00:00 host app: a\n"
+            "Oct ١٩ 10:00:01 host app: b"
+        )
+        self.assertTrue(result["skipped"])
+        self.assertEqual(result["parsed_timestamps"], 0)
+        # Unicode digits in an Apache bracket time are rejected at
+        # parse time too (no silent int() reinterpretation).
+        result = self.tool.execute(
+            mode="timeline",
+            text='1.2.3.4 - - [١٩/Oct/٢٠٢٦:10:00:00 +0000] "GET /'
+            ' HTTP/1.1" 200 100 "-" "curl"\n'
+            '1.2.3.4 - - [١٩/Oct/٢٠٢٦:10:00:01 +0000] "GET /'
+            ' HTTP/1.1" 200 100 "-" "curl"',
+        )
+        self.assertTrue(result["skipped"])
+        self.assertEqual(result["parsed_timestamps"], 0)
+        # ...and in a leveled ISO timestamp the line is drift, not a
+        # format match with a dropped timestamp.
+        result = self.tool.execute(
+            mode="audit",
+            text="٢٠٢٦-١٠-١٩T١٠:٠٠:٠٠ INFO a.b x\nnot a log line at all",
+        )
+        self.assertIn("error", result)
+        self.assertEqual(result["error"]["type"], "unrecognized_format")
+
+    def test_size_caps_are_real_configurable_fields(self):
+        # The documented Attributes used to be ClassVars: constructor
+        # kwargs were silently swallowed by pydantic's extra=ignore and
+        # instance assignment raised AttributeError.
+        capped = LogLintTool(max_lines=3)
+        self.assertEqual(capped.max_lines, 3)
+        with self.assertRaises(ValueError) as ctx:
+            capped.execute(
+                mode="audit",
+                text="\n".join(
+                    f"2026-10-19T10:00:0{i} INFO a.b x{i}" for i in range(5)
+                ),
+            )
+        self.assertIn("3-line limit", str(ctx.exception))
+        assigned = LogLintTool()
+        assigned.max_line_chars = 50
+        with self.assertRaises(ValueError) as ctx:
+            assigned.execute(mode="audit", text="2026-10-19T10:00:00Z INFO a.b " + "x" * 60)
+        self.assertIn("50-character limit", str(ctx.exception))
+        # Fresh instances keep the class defaults.
+        self.assertEqual(LogLintTool().max_lines, 100_000)
+        self.assertEqual(LogLintTool().max_line_chars, 1_000_000)
+        self.assertEqual(LogLintTool().max_input_chars, 10_000_000)
+
+    def test_validation_error_does_not_echo_huge_input(self):
+        # A non-str text (a list of log lines is a plausible agent
+        # mistake) used to be echoed verbatim into the ValueError —
+        # megabytes of possibly secret-bearing content.
+        huge = ["password=hunter2 " + "s" * 40] * 50_000
+        with self.assertRaises(ValueError) as ctx:
+            self.tool.execute(mode="audit", text=huge)
+        message = str(ctx.exception)
+        self.assertLess(len(message), 500)
+        self.assertNotIn("hunter2", message)
+
+    def test_level_sequence_with_trailing_stack_lines(self):
+        # Stack-trace lines AFTER an ERROR/INFO pair must not exempt the
+        # pair; the between-test is bisect-based so this shape (many
+        # stack lines, all comparisons false) stays fast and exact.
+        lines = []
+        pairs = 500
+        for i in range(pairs):
+            lines.append(f"2026-10-19T10:00:00Z ERROR app.x boom {i}")
+            lines.append(f"2026-10-19T10:00:01Z INFO app.x ok {i}")
+        lines.extend(
+            f"Traceback (most recent call last): {i}" for i in range(500)
+        )
+        result = self.tool.execute(mode="audit", text="\n".join(lines))
+        anomalies = [
+            f for f in result["findings"]
+            if f["code"] == "level_sequence_anomaly"
+        ]
+        self.assertEqual(len(anomalies), pairs)
+        # A stack line strictly between one pair still exempts it.
+        result = self.tool.execute(
+            mode="audit",
+            text="\n".join(
+                [
+                    "2026-10-19T10:00:00Z ERROR app.db down",
+                    "Traceback (most recent call last):",
+                    "2026-10-19T10:00:01Z INFO app.w fine",
+                ]
+            ),
+        )
+        self.assertNotIn(
+            "level_sequence_anomaly", [c for c, _, _ in codes(result)]
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
