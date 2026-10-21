@@ -59,8 +59,8 @@ class LoggingConfig(object):
                 the path of the toml file
         """
         self.__config = None
+        self._use_default_config()
         if config_path is None:
-            self._use_default_config()
             return
 
         try:
@@ -128,9 +128,22 @@ class LoggingConfig(object):
 
     @staticmethod
     def _use_default_config():
-        """Disable optional log modules while retaining default settings."""
-        for log_module in LoggingConfig.log_extend_module_list:
-            LoggingConfig.log_extend_module_switch[log_module] = False
+        """Reset all effective settings to the documented defaults."""
+        LoggingConfig.log_level = "INFO"
+        LoggingConfig.log_extend_module_switch = {
+            log_module: False for log_module in LoggingConfig.log_extend_module_list
+        }
+        LoggingConfig.log_path = None
+        LoggingConfig.log_rotation = "10 MB"
+        LoggingConfig.log_retention = "3 days"
+        LoggingConfig.log_compression = "zip"
+        LoggingConfig.sls_endpoint = ""
+        LoggingConfig.sls_project = ""
+        LoggingConfig.sls_log_store = ""
+        LoggingConfig.access_key_id = ""
+        LoggingConfig.access_key_secret = ""
+        LoggingConfig.sls_log_queue_max_size = 1000
+        LoggingConfig.sls_log_send_interval = 3.0
 
     def _get_config_or_default(self, section, key, default_value=None):
         """Get config attribute from toml data, return default_value if no such
