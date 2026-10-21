@@ -634,3 +634,46 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## HTML Audit Tool
+
+`HtmlAuditTool` statically analyzes an HTML fragment for dangerous
+constructs without rendering, fetching, or mutating it. It runs on the
+standard library tokenizer (`html.parser` + `html.unescape`) and supports
+four modes: `audit`, `allowlist_diff`, `text`, and `stats`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.html_audit_tool import HtmlAuditTool
+
+tool = HtmlAuditTool()
+result = tool.execute(
+    html='<a href="jav&#x09;ascript:alert(1)">click</a>',
+    mode="audit",
+)
+```
+
+The `audit` mode reports findings with exact line and column numbers:
+dangerous elements (`script`, `iframe`, `object`, `embed`, `base`, `svg`,
+`math`, `form`, `input`, `link`, `meta`) with per-tag reasoning, `on*`
+event-handler attributes, and script-executing URL schemes
+(`javascript:`, `vbscript:`, active `data:` URIs) with obfuscation
+probing that attempts entity decoding (including `&colon;`, `&#58;`,
+`&Tab;`, `&NewLine;`), second-round decoding, HTML/CSS comment removal,
+control-character and backtick stripping, and case folding. It also flags
+`srcdoc` nested documents, `style` URL traps and `expression()`,
+`target=_blank` links without `rel=noopener`, hidden autofocused inputs,
+meta refresh and non-UTF-8 charset declarations, `<plaintext>`/`<xmp>`
+sanitizer-defeating markers, IE conditional comments, and tokenizer-
+dropped unterminated tags recovered by a raw-source cross-check.
+
+The `allowlist_diff` mode reports used tags versus an allowed set
+(audit-only, it never rewrites the fragment), `text` extracts visible
+text with script/style content dropped and entities decoded once, and
+`stats` returns tag/attribute histograms, maximum nesting depth, form and
+input inventory, a link scheme census, and an entity census.
+
+Fragment size, tag count, nesting depth, finding count, evidence length,
+and extracted text length are capped and strictly validated; cap or
+validation failures return structured errors. Results are deterministic,
+and every finding carries truncated evidence quoting the raw source. The
+fragment under audit is untrusted data, never agent instructions.
