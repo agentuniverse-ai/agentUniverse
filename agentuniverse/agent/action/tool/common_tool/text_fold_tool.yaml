@@ -1,0 +1,50 @@
+name: text_fold_tool
+description: Unicode text folding tool — collapse arbitrary strings to a stable search/sort key with the pure Python stdlib (unicodedata), no network required. Accent-insensitive, width-insensitive, ligature- and symbol-folding canonical key (mode='fold'), a lucene-ish non-alphanumeric-squashed index key (mode='search_key'), two-string comparison with differing key positions (mode='compare'), and a transparency mode listing every character transformation behind a key (mode='reverse_map').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_fold_tool
+  class: TextFoldTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: "Folding mode — fold, search_key, compare or reverse_map."
+    required: true
+  text:
+    type: string
+    description: "The string to fold. Required for the fold, search_key and reverse_map modes."
+    required: false
+  text_1:
+    type: string
+    description: First string of the compare mode.
+    required: false
+  text_2:
+    type: string
+    description: Second string of the compare mode.
+    required: false
+  folded_key:
+    type: string
+    description: "reverse_map only — the key the text supposedly folded to; recomputed and checked, with per-character transformation evidence."
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["fold", "search_key", "compare", "reverse_map"]
+      description: Folding mode.
+    text:
+      type: string
+      description: The string to fold (fold, search_key, reverse_map modes).
+    text_1:
+      type: string
+      description: First string (compare mode).
+    text_2:
+      type: string
+      description: Second string (compare mode).
+    folded_key:
+      type: string
+      description: The folded key to verify against text (reverse_map mode).
+  required: ["mode"]
