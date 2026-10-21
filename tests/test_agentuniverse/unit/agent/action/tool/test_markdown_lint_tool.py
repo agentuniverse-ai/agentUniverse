@@ -621,6 +621,25 @@ class MixedDocTest(unittest.TestCase):
         self.assertEqual(result["finding_count"], 249)
         self.assertTrue(result["findings_truncated"])
 
+    def test_ok_false_when_warning_sits_beyond_cap(self) -> None:
+        text = "\n".join(
+            [f"see http://bare{i}.example.com now" for i in range(210)]
+            + ["", "[text]()"]
+        )
+        result = self.tool.execute(mode="lint", markdown_text=text)
+        self.assertTrue(result["findings_truncated"])
+        self.assertEqual(result["finding_count"], 211)
+        self.assertFalse(result["ok"])
+
+    def test_ok_true_when_only_info_beyond_cap(self) -> None:
+        text = "\n".join(
+            f"see http://bare{i}.example.com now" for i in range(210)
+        )
+        result = self.tool.execute(mode="lint", markdown_text=text)
+        self.assertTrue(result["findings_truncated"])
+        self.assertEqual(result["finding_count"], 210)
+        self.assertTrue(result["ok"])
+
 
 class ProfileModeTest(unittest.TestCase):
     """Profile arithmetic verified by hand."""

@@ -684,7 +684,7 @@ def _run_lint(tool: Any, lines: list, max_line_length: int,
     truncated = total > tool.MAX_FINDINGS
     ok = not any(
         finding["severity"] in ("error", "warning")
-        for finding in findings[: tool.MAX_FINDINGS]
+        for finding in findings
     )
     return {
         "mode": "lint",
