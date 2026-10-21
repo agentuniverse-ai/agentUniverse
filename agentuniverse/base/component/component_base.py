@@ -59,14 +59,25 @@ class ComponentBase(BaseModel):
         """Return an isolated copy of this component instance.
 
         Prefer pydantic ``model_copy(deep=True)``. If that fails, fall back
-        to ``copy.deepcopy`` (never a shallow alias). If both fail, the
-        exception propagates — there is no shallow fallback.
+        to ``copy.deepcopy`` (never a shallow alias that shares mutable
+        sub-objects with the original).
+
+        Note:
+            Behavior change: previously, when the deep copy failed, a shallow
+            ``model_copy()`` was returned silently. Now, if both
+            ``model_copy(deep=True)`` and ``copy.deepcopy`` fail (e.g. the
+            component holds a lock, socket, client or other runtime resource
+            that cannot be deep-copied), the exception from
+            ``copy.deepcopy`` is raised. Such components should override
+            ``create_copy`` to decide which resources are shared, or callers
+            should catch the exception.
+
+        Raises:
+            Exception: if neither deep-copy path can copy this component.
         """
         try:
             return self.model_copy(deep=True)
         except Exception as e:
             # Broad catch: deep model_copy can fail for varied field types.
-            logger.warning(
-                "deep model_copy failed (%s); using deepcopy fallback", e
-            )
+            logger.warning("deep model_copy failed (%s); using deepcopy fallback", e)
             return copy.deepcopy(self)

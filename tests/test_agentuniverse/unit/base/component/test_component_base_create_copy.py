@@ -1,5 +1,4 @@
 # !/usr/bin/env python3
-# -*- coding:utf-8 -*-
 
 """Regression tests for #1189: ComponentBase.create_copy() isolation.
 
@@ -8,7 +7,9 @@ fell back to a shallow ``model_copy()``, so mutable sub-objects were shared
 with the original. The fallback must use ``copy.deepcopy`` instead.
 """
 
+import threading
 import unittest
+from typing import Any
 from unittest.mock import patch
 
 from pydantic import Field
@@ -22,6 +23,28 @@ class _DummyComponent(ComponentBase):
 
     name: str = "dummy"
     tags: list = Field(default_factory=list)
+
+
+class _LockHoldingComponent(ComponentBase):
+    """Component holding a runtime resource that cannot be deep-copied."""
+
+    name: str = "lock_holder"
+    tags: list = Field(default_factory=list)
+    lock: Any = Field(default_factory=threading.Lock)
+
+
+class _SharedLockComponent(_LockHoldingComponent):
+    """Compatibility pattern: override create_copy to share the runtime resource."""
+
+    def create_copy(self):
+        lock = self.lock
+        self.lock = None
+        try:
+            copied = super().create_copy()
+        finally:
+            self.lock = lock
+        copied.lock = lock
+        return copied
 
 
 class TestComponentBaseCreateCopyIsolation(unittest.TestCase):
@@ -51,12 +74,8 @@ class TestComponentBaseCreateCopyIsolation(unittest.TestCase):
         original_model_copy = ComponentBase.model_copy
 
         def flaky_model_copy(self, *args, **kwargs):
-            deep = kwargs.get("deep", False)
-            if args:
-                # pydantic may pass update as positional; deep is keyword-only
-                pass
-            if deep:
-                raise RuntimeError("simulated deep model_copy failure")
+            if kwargs.get("deep", False):
+                raise RuntimeError("simulated")
             return original_model_copy(self, *args, **kwargs)
 
         with patch.object(ComponentBase, "model_copy", flaky_model_copy):
@@ -74,16 +93,41 @@ class TestComponentBaseCreateCopyIsolation(unittest.TestCase):
 
         def fail_deep_model_copy(self, *args, **kwargs):
             if kwargs.get("deep", False):
-                raise RuntimeError("simulated deep model_copy failure")
+                raise RuntimeError("simulated")
             return ComponentBase.model_copy(self, *args, **kwargs)
 
-        with patch.object(ComponentBase, "model_copy", fail_deep_model_copy):
-            with patch(
+        with (
+            patch.object(ComponentBase, "model_copy", fail_deep_model_copy),
+            patch(
                 "agentuniverse.base.component.component_base.copy.deepcopy",
                 side_effect=TypeError("simulated deepcopy failure"),
-            ):
-                with self.assertRaises(TypeError):
-                    component.create_copy()
+            ),
+            self.assertRaises(TypeError),
+        ):
+            component.create_copy()
+
+    def test_create_copy_raises_for_non_deep_copyable_runtime_resource(self):
+        """A lock cannot be deep-copied, so create_copy raises instead of returning a shallow copy."""
+        component = _LockHoldingComponent(component_type=ComponentEnum.DEFAULT, tags=["alpha"])
+        with self.assertRaises(TypeError):
+            component.create_copy()
+
+    def test_caller_handles_create_copy_failure(self):
+        """Callers that can tolerate a shared instance catch the exception explicitly."""
+        component = _LockHoldingComponent(component_type=ComponentEnum.DEFAULT, tags=["alpha"])
+        try:
+            instance = component.create_copy()
+        except TypeError:
+            instance = component
+        self.assertIs(instance, component)
+
+    def test_override_create_copy_shares_resource_and_isolates_data(self):
+        """Subclass override keeps the runtime resource shared but nested data isolated."""
+        component = _SharedLockComponent(component_type=ComponentEnum.DEFAULT, tags=["alpha"])
+        copied = component.create_copy()
+        self.assertIs(copied.lock, component.lock)
+        copied.tags.append("beta")
+        self.assertEqual(component.tags, ["alpha"])
 
 
 if __name__ == "__main__":
