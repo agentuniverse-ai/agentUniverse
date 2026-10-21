@@ -1,0 +1,45 @@
+name: cron_humanizer_tool
+description: Cron humanizer tool — renders cron expressions as natural-language descriptions, pure Python stdlib, no network. Parses standard five-field cron expressions (minute hour day-of-month month day-of-week) with '*', lists, ranges, steps, month/day names and @macros using the CronExpressionTool family grammar. mode='describe' renders one sentence (locale en|zh, style short|full|verbose) plus warnings for smells such as a day 31 that never occurs in the restricted months, the day-of-month/day-of-week OR quirk, redundant */1 steps and steps wider than the field span; mode='describe_fields' returns a per-field {field, raw, description} breakdown. Invalid expressions are never described — they return a structured error payload.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.cron_humanizer_tool
+  class: CronHumanizerTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — describe (one natural-language sentence) or describe_fields (per-field {field, raw, description} breakdown).
+    required: true
+  expression:
+    type: string
+    description: The cron expression — five whitespace-separated fields (minute hour day-of-month month day-of-week) or one of the @daily/@midnight/@hourly/@weekly/@monthly/@yearly/@annually macros.
+    required: false
+  locale:
+    type: string
+    description: Language of the rendered text, field descriptions and warning messages — en (default) or zh.
+    required: false
+  style:
+    type: string
+    description: describe mode only — detail level of the sentence. full (default, e.g. "At minute 30 of every hour"), short (e.g. "Hourly at :30") or verbose (full plus a parenthesised per-field raw annotation).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["describe", "describe_fields"]
+      description: Operation mode.
+    expression:
+      type: string
+      description: Cron expression (five fields or an @ macro).
+    locale:
+      type: string
+      enum: ["en", "zh"]
+      description: Output language.
+    style:
+      type: string
+      enum: ["short", "full", "verbose"]
+      description: Sentence detail level (describe mode).
+  required: ["mode"]
