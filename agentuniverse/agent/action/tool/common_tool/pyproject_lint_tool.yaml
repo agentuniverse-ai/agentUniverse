@@ -1,0 +1,38 @@
+name: pyproject_lint_tool
+description: "Pyproject.toml project-metadata linting tool — pure Python stdlib (tomllib), no network required. Lint the [project] table (PEP 621) into structured findings (mode='lint': missing or invalid name per PEP 508 grammar, missing or non-PEP 440 version, invalid requires-python specifier clauses (packaging-aligned: wildcards only with ==/!=, local only with ==/===/!=, ~= needs two release components), PEP 639 deprecated license table form, dangling readme / license.file references against a supplied available_files listing, authors/maintainers entry shapes with email syntax, keywords / classifiers / urls shapes, dependencies and optional-dependencies validated as loose PEP 508 requirement strings with duplicate and dependencies-optional overlap rules after PEP 503 normalization, dynamic fields also statically set (PEP 621 conflict), scripts / gui-scripts names and entry-points dotted targets, missing build-system — each info / warning / error; Poetry-style [tool.poetry] projects get documented best-effort mapping notes, never errors) and get the quick-look summary (mode='project_summary': layout, name, version, requires-python with parsed min/max bounds, dependency count, optional groups, entry-points count, dynamic fields). TOML syntax/style is TomlLintTool's layer; requirements.txt is RequirementsTool's — this tool reads the parsed project metadata only."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.pyproject_lint_tool
+  class: PyprojectLintTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lint or project_summary.
+    required: true
+  pyproject:
+    type: string
+    description: The pyproject.toml text (capped at 10000 lines).
+    required: false
+  available_files:
+    type: array
+    description: Optional list of project-root-relative paths that exist (the caller's file listing); enables the readme / license dangling checks. None skips them.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "project_summary"]
+      description: Operation mode.
+    pyproject:
+      type: string
+      description: The pyproject.toml text.
+    available_files:
+      type: array
+      items:
+        type: string
+      description: Project files that exist (enables the dangling-reference checks).
+  required: ["mode"]
