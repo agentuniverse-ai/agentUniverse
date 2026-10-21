@@ -488,6 +488,29 @@ class MacAddressToolParseTest(unittest.TestCase):
                 bare_bad.index("g") + 1,
             )
 
+    def test_prefixed_position_base_is_the_input_string(self) -> None:
+        # Positions must be 1-based within the input string for every
+        # notation, including the lenient '0x' + separated hybrid —
+        # the prefixed bare form already offsets by the two prefix
+        # characters, so the grouped forms must agree with it.
+        rendered = "0xAA:BB:CC:DD:EE:FG"
+        verdict = self.tool.execute(mode="parse", address=rendered)
+        self.assertFalse(verdict["valid"])
+        finding = verdict["findings"][0]
+        self.assertEqual(finding["code"], "bad_hex_digit")
+        self.assertEqual(finding["position"], rendered.index("G") + 1)
+        rendered = "0xAA:BB-CC:DD:EE:FF"
+        verdict = self.tool.execute(mode="parse", address=rendered)
+        finding = verdict["findings"][0]
+        self.assertEqual(finding["code"], "mixed_separators")
+        self.assertEqual(finding["position"], rendered.index("-") + 1)
+        # The prefixed bare form keeps its raw-relative position.
+        rendered = "0x" + "aabbccddeefg"
+        verdict = self.tool.execute(mode="parse", address=rendered)
+        self.assertEqual(
+            verdict["findings"][0]["position"], rendered.index("g") + 1
+        )
+
     def test_mutation_mixed_separators(self) -> None:
         for index in range(100):
             bytes_hex = seeded_eui48(index)
@@ -799,6 +822,23 @@ class MacAddressToolDeriveTest(unittest.TestCase):
         )
         self.assertEqual(result["error"]["type"], "invalid_ipv6")
 
+    def test_mac_from_ipv6_zone_index_round_trip(self) -> None:
+        # The standard Linux link-local notation carries a zone index;
+        # it must not break the inverse check (the zone names the
+        # interface, not address bits).
+        result = self.tool.execute(
+            mode="derive",
+            address="fe80::211:22ff:fe33:4455%eth0",
+            derivation="mac_from_ipv6",
+        )
+        self.assertNotIn("error", result)
+        self.assertEqual(result["eui48_canonical"], "00:11:22:33:44:55")
+        self.assertTrue(result["inverse_check"]["matches"])
+        self.assertEqual(
+            result["inverse_check"]["recomputed_address"],
+            "fe80::211:22ff:fe33:4455",
+        )
+
     def test_eui64_markers(self) -> None:
         base = "00:11:22:33:44:55"
         for derivation, marker in (
@@ -1033,6 +1073,34 @@ class MacAddressToolCompareTest(unittest.TestCase):
         )
         self.assertEqual(result["relation"], "same_vendor_family")
         self.assertIn("Cisco Systems, Inc", result["relation_detail"])
+
+    def test_special_block_relations_wording(self) -> None:
+        # Two addresses inside the 33-33/16 IPv6 multicast mapping
+        # block with different 24-bit prefixes are a same-block
+        # family — the detail must not claim a vendor line.
+        result = self.tool.execute(
+            mode="compare",
+            address_a="33:33:aa:00:00:01",
+            address_b="33:33:bb:00:00:02",
+        )
+        self.assertEqual(result["relation"], "same_vendor_family")
+        self.assertIn(
+            "IANA special multicast mapping block",
+            result["relation_detail"],
+        )
+        self.assertNotIn("vendors own", result["relation_detail"])
+        # NIC-only difference inside a special block is also not a
+        # vendor line.
+        result = self.tool.execute(
+            mode="compare",
+            address_a="33:33:00:00:00:01",
+            address_b="33:33:00:00:00:02",
+        )
+        self.assertEqual(result["relation"], "differs_in_nic_only")
+        self.assertIn("IANA special block", result["relation_detail"])
+        self.assertNotIn(
+            "from the embedded OUI table", result["relation_detail"]
+        )
 
     def test_unrelated(self) -> None:
         result = self.tool.execute(

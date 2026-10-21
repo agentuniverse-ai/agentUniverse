@@ -463,8 +463,8 @@ class MacAddressTool(Tool):
         """Normalize one address string from any of the six notations.
 
         Returns ``bytes_hex`` (12 lowercase hex digits), the detected
-        notation, the groups as written, and the canonical forms of
-        every notation.
+        notation, the groups as written (lower-cased), and the
+        canonical forms of every notation.
 
         Raises:
             _MacAddressError: If the string is not a valid EUI-48 in
@@ -488,12 +488,17 @@ class MacAddressTool(Tool):
                     )
                 ])
 
-        # 1. 0x/0X prefix handling.
+        # 1. 0x/0X prefix handling. Finding positions are always
+        #    1-based within the input string (after whitespace
+        #    stripping), so positions computed inside the body shift
+        #    by the two prefix characters when one is present.
         prefixed = False
         body = text
+        prefix_offset = 0
         if body[:2] in ("0x", "0X"):
             prefixed = True
             body = body[2:]
+            prefix_offset = 2
 
         separators = {char for char in body if char in ":.-"}
 
@@ -506,7 +511,7 @@ class MacAddressTool(Tool):
             deviating_char = None
             for index, char in enumerate(body):
                 if char in ":.-" and char != first_sep:
-                    deviating_position = index + 1
+                    deviating_position = prefix_offset + index + 1
                     deviating_char = char
                     break
             raise _MacAddressError([
@@ -539,7 +544,7 @@ class MacAddressTool(Tool):
                 raise _MacAddressError(
                     cls._grouped_defects(groups, separator)
                 )
-            cls._require_hex_groups(groups)
+            cls._require_hex_groups(groups, prefix_offset)
             notation = "colon" if separator == ":" else "hyphen"
             return cls._assemble("".join(groups), notation, groups)
 
@@ -549,14 +554,14 @@ class MacAddressTool(Tool):
                 raise _MacAddressError(
                     cls._grouped_defects(groups, separator)
                 )
-            cls._require_hex_groups(groups)
+            cls._require_hex_groups(groups, prefix_offset)
             return cls._assemble("".join(groups), "cisco_dotted", groups)
         if len(groups) == 6:
             if any(len(group) != 2 for group in groups):
                 raise _MacAddressError(
                     cls._grouped_defects(groups, separator)
                 )
-            cls._require_hex_groups(groups)
+            cls._require_hex_groups(groups, prefix_offset)
             return cls._assemble("".join(groups), "dotted_pairs", groups)
         raise _MacAddressError(cls._grouped_defects(groups, separator))
 
@@ -634,13 +639,19 @@ class MacAddressTool(Tool):
         ]
 
     @classmethod
-    def _require_hex_groups(cls, groups: List[str]) -> None:
-        """Raise on the first non-hex character with its position."""
-        offset = 0
+    def _require_hex_groups(
+        cls, groups: List[str], offset: int = 0
+    ) -> None:
+        """Raise on the first non-hex character with its position.
+
+        ``offset`` shifts positions from the group body to the whole
+        input string (2 when a ``0x``/``0X`` prefix was stripped).
+        """
+        position_offset = offset
         for index, group in enumerate(groups):
             for inner, char in enumerate(group):
                 if char not in _ASCII_HEX:
-                    position = offset + inner + 1
+                    position = position_offset + inner + 1
                     raise _MacAddressError([
                         _finding(
                             "bad_hex_digit",
@@ -650,7 +661,7 @@ class MacAddressTool(Tool):
                             position=position,
                         )
                     ])
-            offset += len(group) + 1
+            position_offset += len(group) + 1
 
     @staticmethod
     def _assemble(
@@ -1014,7 +1025,11 @@ class MacAddressTool(Tool):
     def _derive_mac_from_ipv6(
         self, context: Dict[str, Any], raw: str
     ) -> Dict[str, Any]:
-        """Recover an EUI-48 from a link-local IPv6 address."""
+        """Recover an EUI-48 from a link-local IPv6 address.
+
+        A zone index suffix (``%eth0``) is accepted and ignored for the
+        math — the scope names the interface, not address bits.
+        """
         text = raw.strip()
         try:
             address = ipaddress.IPv6Address(text)
@@ -1065,6 +1080,10 @@ class MacAddressTool(Tool):
                 format(unflipped ^ 0x02, "02x") + iid_hex[2:16], 16
             )
         )
+        # Zone indexes (%eth0) are interface context, not address
+        # bits — compare against the input with any zone stripped so
+        # scoped link-local addresses round-trip truthfully.
+        unscoped = ipaddress.IPv6Address(int(address))
         recovered_octets = [
             recovered[i : i + 2] for i in range(0, 12, 2)
         ]
@@ -1095,7 +1114,7 @@ class MacAddressTool(Tool):
                     "compare with the input address"
                 ),
                 "recomputed_address": str(check),
-                "matches": str(check) == address.compressed,
+                "matches": str(check) == unscoped.compressed,
             },
             "findings": [],
         }
@@ -1182,28 +1201,48 @@ class MacAddressTool(Tool):
         elif bytes_a[:6] == bytes_b[:6]:
             relation = "differs_in_nic_only"
             vendor_line = side_a["organization"] or side_b["organization"]
-            detail = (
-                "the OUI (first three octets) is identical and only the "
-                "NIC part differs — same vendor line"
-                + (
-                    f" ({vendor_line}, from the embedded OUI table)"
-                    if vendor_line
-                    else " (OUI not in the embedded curated table)"
+            if vendor_line is None:
+                detail = (
+                    "the OUI (first three octets) is identical and only the "
+                    "NIC part differs — same vendor line "
+                    "(OUI not in the embedded curated table); within one "
+                    "OUI block, distinct NIC values are distinct "
+                    "interfaces, not one device"
                 )
-                + "; within one OUI block, distinct NIC values are "
-                "distinct interfaces, not one device"
-            )
+            elif side_a["organization_source"] == "iana_special":
+                detail = (
+                    "the OUI (first three octets) is identical and only "
+                    "the NIC part differs — same IANA special block "
+                    f"({vendor_line}); within one OUI block, distinct NIC "
+                    "values are distinct interfaces, not one device"
+                )
+            else:
+                detail = (
+                    "the OUI (first three octets) is identical and only "
+                    "the NIC part differs — same vendor line "
+                    f"({vendor_line}, from the embedded OUI table); "
+                    "within one OUI block, distinct NIC values are "
+                    "distinct interfaces, not one device"
+                )
         elif (
             side_a["organization"]
             and side_a["organization"] == side_b["organization"]
         ):
             relation = "same_vendor_family"
-            detail = (
-                "the OUIs differ but both resolve to the same "
-                f"organization in the embedded table ({side_a['organization']}) "
-                "— vendors own multiple OUI blocks, so this is a "
-                "same-vendor-family signal, not a same-device signal"
-            )
+            if side_a["organization_source"] == "iana_special":
+                detail = (
+                    "the OUIs differ but both fall inside the same IANA "
+                    "special multicast mapping block — a protocol "
+                    "reservation family, not a vendor line; this is a "
+                    "same-block signal, not a same-device signal"
+                )
+            else:
+                detail = (
+                    "the OUIs differ but both resolve to the same "
+                    f"organization in the embedded table ({side_a['organization']}) "
+                    "— vendors own multiple OUI blocks, so this is a "
+                    "same-vendor-family signal, not a same-device signal"
+                )
         else:
             relation = "unrelated"
             detail = (
