@@ -1,0 +1,31 @@
+name: http_header_tool
+description: Validate, parse, and audit HTTP header fields (RFC 7230/7231/6265, OWASP secure headers) offline.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.http_header_tool
+  class: HttpHeaderTool
+input_keys:
+  - mode
+max_name_len: 1024
+max_value_len: 16384
+max_list_elements: 1000
+max_audit_bytes: 65536
+max_audit_lines: 200
+max_cookie_len: 8192
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [validate, parse_list, security_audit, parse_cookie]
+    name: {type: string}
+    value: {type: string}
+    which:
+      type: string
+      enum: [request, response, both]
+      default: both
+    header: {type: string}
+    headers: {type: string}
+  required: [mode]
+  additionalProperties: false
