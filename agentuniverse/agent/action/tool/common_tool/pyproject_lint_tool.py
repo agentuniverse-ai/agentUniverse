@@ -78,10 +78,10 @@ Two modes, both offline and deterministic:
   - ``urls_shape`` (error — the ``[project.urls]`` table must map
     every key to a string).
   - ``dependencies_shape`` (error) / ``dependency_invalid``
-    (error — each entry is checked as a loose PEP 508 requirement
-    string with exactly the RequirementsTool grammar: name /
-    extras / verbatim specifier clauses / environment markers and
-    ``name @ url`` direct references).
+    (error — each entry is checked as a PEP 508 requirement
+    string with packaging-23.x-aligned clause rules (see the
+    grammar notes below): name / extras / specifier clauses /
+    environment markers and ``name @ url`` direct references.
   - ``optional_dependencies_shape`` (error) /
     ``optional_group_shape`` (error — a group value is not a list
     of strings) / ``optional_dependency_invalid`` (error).
@@ -166,10 +166,21 @@ Grammar notes (deliberate, documented choices):
   wildcard ``.*`` token only after ``==`` / ``!=``; a local
   ``+local`` segment only after ``==`` / ``===`` / ``!=``; ``~=``
   needs two release components.
-* Requirement strings accept the loose RequirementsTool grammar
-  (operators with flexible spacing, wildcard clauses on any
-  operator, trailing commas, empty extras, ``===anything``,
-  shape-checked markers) so the two tools agree by construction.
+* Requirement strings (dependencies / optional groups) validate
+  their clause lists with the same packaging-23.x rules as
+  ``requires-python`` — wildcards only after ``==`` / ``!=`` with
+  a valid version prefix, local segments only after ``==`` /
+  ``===`` / ``!=``, ``~=`` needing two release components, PEP
+  440 tokens — plus the PEP 508 forms pip accepts: the clause
+  list may sit in parentheses (``name (>=1.0, <2)`` — the
+  spelling old setuptools emitted), a single trailing comma is
+  tolerated (``foo >=1.0,``), ``===`` takes any non-empty token
+  verbatim, extras use the letters / digits / '.' '_' '-'
+  charset (the empty bracket ``[]`` included) and markers are
+  shape-checked only, never evaluated. One deliberate
+  divergence: packaging quirk-accepts a bare ``===`` (arbitrary
+  equality against the EMPTY string, unusable — it raises on
+  any real comparison); per PEP 440 this tool rejects it.
 * The README / license existence check compares
   ``./``-stripped, backslash-normalized path strings
   case-sensitively — no filesystem access, deterministic on
@@ -179,14 +190,19 @@ Input validation is strict and happens before any parsing: wrong
 parameter types raise ``ValueError``; the pyproject text is
 capped at 10,000 lines, 10,000 characters per line and 4,000,000
 characters total; ``available_files`` at 5,000 entries of 4,096
-characters. Content-level problems (unparseable TOML, a bad
-version, a dangling readme) are findings, never exceptions.
+characters — all five caps are live per-instance configuration
+fields (``max_lines`` … ``max_file_entry_chars``) wired into the
+validation, not just module constants. Error messages never echo
+a whole parameter value back (reprs are cut at ~96 characters).
+Content-level problems (unparseable TOML — including
+recursion-limit-deep nesting — a bad version, a dangling readme)
+are findings, never exceptions.
 """
 
 import re
 from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 try:  # Python >= 3.11 ships tomllib in the stdlib.
     import tomllib
@@ -214,6 +230,10 @@ _NAME_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?")
 # PEP 503 canonicalization (the RequirementsTool #4021 rule):
 # collapse runs of -_. to a single -, lower.
 _NAME_COLLAPSE_RE = re.compile(r"[-_.]+")
+# PEP 508 extra name: letters / digits / '.' '_' '-' (the charset
+# packaging.requirements accepts; whitespace allowed around the
+# separators only).
+_EXTRA_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 # The canonical PEP 440 version grammar (separator-tolerant spellings
 # accepted, matching packaging 23.x acceptance).
 _VERSION_RE = re.compile(
@@ -260,8 +280,6 @@ _DOTTED_TARGET_RE = re.compile(
 _SCRIPT_NAME_RE = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"
 )
-# Leading release components of a version token (the ~= rule).
-_LEADING_RELEASE_RE = re.compile(r"^\d+(?:\.\d+)*")
 # Poetry caret python constraint: ^X.Y.Z
 _POETRY_CARET_RE = re.compile(r"^\s*\^(\d+(?:\.\d+)*)\s*$")
 
@@ -354,7 +372,9 @@ _NOTE_DIVISION = (
     "syntax / style generically and RequirementsTool (#4021) the "
     "requirements.txt file, so neither sees metadata semantics; "
     "dependency names normalize with the RequirementsTool PEP 503 "
-    "rule and requirement strings use its loose PEP 508 grammar; "
+    "rule and requirement clauses use packaging-aligned PEP 508 "
+    "rules (wildcards only with ==/!=, local versions only with "
+    "==/===/!=, ~= needs two release components); "
     "constraint-set solving stays with VersionConstraintTool "
     "(#3995) — bounds are parsed here, never judged for "
     "satisfiability"
@@ -382,6 +402,15 @@ def _normalize_name(name: str) -> str:
     Lowercase, runs of ``-_.`` collapsed to a single ``-``.
     """
     return _NAME_COLLAPSE_RE.sub("-", name).lower()
+
+
+def _short_repr(value: Any, limit: int = 96) -> str:
+    """A bounded ``repr`` for error messages — never echo a whole
+    (possibly huge / secret-bearing) parameter value."""
+    text = repr(value)
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
 
 
 def _parse_version(text: str) -> Optional[Dict[str, Any]]:
@@ -564,19 +593,45 @@ def _python_bounds(
 # ------------------------------------------------------------------ #
 
 def _validate_clauses(specifier: str) -> Optional[str]:
-    """Loosely validate a comma-separated PEP 440 clause list.
+    """Validate a comma-separated PEP 440 clause list (dependency
+    form), aligned with ``packaging`` 23.x — the parser pip uses
+    at build time.
 
-    Exactly the RequirementsTool rule: each clause is ``operator
-    + version-token`` (flexible spacing, any token including the
-    ``==1.2.*`` wildcard), a trailing comma is tolerated, ``~=``
-    needs two release components.
+    The list may sit in parentheses (``name (>=1.0, <2)`` — the
+    PEP 508 spelling old setuptools emitted); a single trailing
+    comma is tolerated (packaging accepts ``foo >=1.0,``); empty
+    segments between commas are errors (packaging rejects
+    ``foo>=1.0,,<2``); ``===`` takes any non-empty token verbatim;
+    a ``.*`` wildcard only after ``==`` / ``!=`` with a valid
+    version prefix; a ``+local`` segment only after ``==`` /
+    ``===`` / ``!=``; ``~=`` needs two release components; every
+    other token must be PEP 440. One deliberate divergence:
+    packaging quirk-accepts a bare ``===`` (arbitrary equality
+    against the EMPTY string — unusable, it raises on any real
+    comparison); per PEP 440 this tool rejects it.
     """
     text = specifier.strip()
+    parenthesized = text.startswith("(") and text.endswith(")")
+    if parenthesized:
+        text = text[1:-1].strip()
+    elif text.startswith("(") or text.endswith(")"):
+        return (
+            f"the specifier {specifier.strip()[:64]!r} mixes "
+            f"parentheses with a bare clause list — the PEP 508 "
+            f"forms are 'name >=1.0' or 'name (>=1.0)'"
+        )
     if text.endswith(","):
         text = text[:-1].rstrip()
     if not text:
+        if parenthesized:
+            return None  # 'name ()' — no specifier at all.
         return "an empty specifier is not a specifier (drop the commas)"
     for clause in text.split(","):
+        if not clause.strip():
+            return (
+                f"the specifier {specifier.strip()[:64]!r} has an "
+                f"empty clause between commas"
+            )
         match = _CLAUSE_RE.match(clause)
         if match is None:
             return (
@@ -584,11 +639,39 @@ def _validate_clauses(specifier: str) -> Optional[str]:
                 f"expected '<op><version>'"
             )
         operator, version = match.group(1), match.group(2)
-        if operator == "~=":
-            leading = _LEADING_RELEASE_RE.match(version)
-            components = (
-                leading.group(0).split(".") if leading is not None else []
+        if operator == "===":
+            # Arbitrary equality takes any token verbatim — but
+            # not the empty token (the packaging quirk; see above).
+            continue
+        if version.endswith(".*"):
+            if operator not in ("==", "!="):
+                return (
+                    f"the wildcard token {version!r} is only valid "
+                    f"with '==' or '!=' (got {operator!r} in "
+                    f"{clause.strip()!r})"
+                )
+            if _parse_version(version[:-2]) is None:
+                return (
+                    f"the wildcard token {version!r} has an invalid "
+                    f"version prefix"
+                )
+            continue
+        parsed = _parse_version(version)
+        if parsed is None:
+            return (
+                f"the version {version!r} of clause "
+                f"{clause.strip()!r} is not PEP 440"
             )
+        if parsed["local"] is not None and operator not in (
+            "==", "===", "!="
+        ):
+            return (
+                f"a local version segment is only valid with "
+                f"'==' / '===' / '!=' (got {operator!r} in "
+                f"{clause.strip()!r})"
+            )
+        if operator == "~=":
+            components = parsed["release"].split(".")
             if len(components) < 2:
                 return (
                     f"the compatible-release clause {clause.strip()!r} "
@@ -642,14 +725,17 @@ def _validate_markers(markers: str) -> Optional[str]:
 def _parse_requirement_string(text: str) -> Tuple[
     Optional[str], Optional[str]
 ]:
-    """Parse one PEP 508 requirement string (loose, #4021 rule).
+    """Parse one PEP 508 requirement string.
 
-    Accepts ``name``, ``name[extras] specifier ; markers`` and
-    ``name[extras] @ url`` direct references; returns the PEP 503
-    normalized name (or None for a nameless failure) and an error
-    message (or None). Editable / hash / requirements-file option
-    syntax does not exist in the [project] array form and is an
-    error here.
+    Accepts ``name``, ``name[extras] specifier ; markers`` (the
+    specifier list optionally parenthesized — ``name (>=1.0)``)
+    and ``name[extras] @ url`` direct references; clause lists
+    follow the packaging-23.x rules (see ``_validate_clauses``);
+    extras entries use the PEP 508 identifier charset (an empty
+    bracket is allowed). Returns the PEP 503 normalized name (or
+    None for a nameless failure) and an error message (or None).
+    Editable / hash / requirements-file option syntax does not
+    exist in the [project] array form and is an error here.
     """
     stripped = text.strip()
     if not stripped:
@@ -677,6 +763,21 @@ def _parse_requirement_string(text: str) -> Tuple[
         close = rest.find("]")
         if close < 0:
             return None, f"the extras bracket of {name_raw!r} is never closed"
+        inner = rest[1:close]
+        if inner.strip():  # 'name[]' / 'name[ ]' — no extras (accepted).
+            for extra in inner.split(","):
+                extra_name = extra.strip()
+                if not extra_name:
+                    return None, (
+                        f"the extras of {name_raw!r} contain an "
+                        f"empty name — {name_raw + '[' + inner + ']'!r}"
+                    )
+                if not _EXTRA_NAME_RE.match(extra_name):
+                    return None, (
+                        f"the extra {extra_name!r} of {name_raw!r} "
+                        f"uses characters outside letters / digits / "
+                        f"'.' '_' '-'"
+                    )
         rest = rest[close + 1:].lstrip()
 
     if rest.startswith("@"):
@@ -1574,16 +1675,26 @@ class PyprojectLintTool(Tool):
 
     Attributes:
         max_lines (int): Upper bound on the line count of the
-            pyproject.toml text.
-        max_line_chars (int): Upper bound on any single line.
-        max_text_chars (int): Upper bound on the whole text input.
-        max_files (int): Upper bound on the available_files list.
-        max_file_entry_chars (int): Upper bound on one file entry.
+            pyproject.toml text (default 10,000).
+        max_line_chars (int): Upper bound on any single line
+            (default 10,000).
+        max_text_chars (int): Upper bound on the whole text input
+            (default 4,000,000).
+        max_files (int): Upper bound on the available_files list
+            (default 5,000).
+        max_file_entry_chars (int): Upper bound on one file entry
+            (default 4,096).
     """
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True, protected_namespaces=()
     )
+
+    max_lines: int = Field(default=_MAX_LINES, ge=1)
+    max_line_chars: int = Field(default=_MAX_LINE_CHARS, ge=1)
+    max_text_chars: int = Field(default=_MAX_TEXT_CHARS, ge=1)
+    max_files: int = Field(default=_MAX_FILES, ge=1)
+    max_file_entry_chars: int = Field(default=_MAX_FILE_ENTRY_CHARS, ge=1)
 
     name: str = "pyproject_lint_tool"
     description: str = (
@@ -1595,8 +1706,11 @@ class PyprojectLintTool(Tool):
         "table form, dangling readme/license file references against "
         "a supplied file listing, authors/maintainers entry shapes "
         "and email syntax, keywords/classifiers/urls shapes, "
-        "dependencies and optional-dependencies checked as loose "
-        "PEP 508 strings with duplicate and overlap rules after PEP "
+        "dependencies and optional-dependencies checked as PEP 508 "
+        "strings (packaging-aligned clause rules — wildcards only "
+        "with ==/!=, local versions only with ==/===/!=, ~= needs "
+        "two release components, parenthesized clause lists "
+        "accepted) with duplicate and overlap rules after PEP "
         "503 normalization, dynamic fields statically set (PEP 621 "
         "conflict), scripts/entry-points names and dotted targets, "
         "missing build-system — each info / warning / error; "
@@ -1653,6 +1767,19 @@ class PyprojectLintTool(Tool):
         try:
             doc = tomllib.loads(text)
         except tomllib.TOMLDecodeError as error:
+            reason = f"the text is not parseable TOML: {error}"
+        except RecursionError:
+            # tomllib is a recursive-descent parser: ~500-level-deep
+            # nested arrays / inline tables overflow the interpreter
+            # recursion limit. The contract says content-level
+            # problems are findings, never exceptions — so report.
+            reason = (
+                "the TOML nesting is too deep for the parser "
+                "(recursion limit exceeded)"
+            )
+        else:
+            reason = None
+        if reason is not None:
             if mode == "project_summary":
                 return {
                     "mode": mode,
@@ -1666,8 +1793,7 @@ class PyprojectLintTool(Tool):
                     "entry_points_count": 0,
                     "dynamic_fields": [],
                     "note": (
-                        f"the text is not parseable TOML "
-                        f"({error}); a summary needs a parseable "
+                        f"{reason}; a summary needs a parseable "
                         f"file — see the lint mode's "
                         f"toml_parse_error finding"
                     ),
@@ -1680,9 +1806,9 @@ class PyprojectLintTool(Tool):
                         "severity": "error",
                         "field": None,
                         "message": (
-                            f"the text is not parseable TOML: {error} "
-                            f"(syntax-level checking is TomlLintTool's "
-                            f"layer, #4012; nothing else runs)"
+                            f"{reason} (syntax-level checking is "
+                            f"TomlLintTool's layer, #4012; nothing "
+                            f"else runs)"
                         ),
                     }
                 ],
@@ -1731,51 +1857,56 @@ class PyprojectLintTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"pyproject_lint_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, value: Any, name: str) -> str:
-        """Validate a pyproject-text parameter (type and caps)."""
+    def _validate_text(self, value: Any, name: str) -> str:
+        """Validate a pyproject-text parameter (type and caps).
+
+        The caps are the instance's live ``max_*`` configuration
+        fields (defaults per the module constants).
+        """
         if (
             value is None
             or isinstance(value, bool)
             or not isinstance(value, str)
         ):
-            cls._invalid(f"{name} must be a string (got {value!r})")
-        if len(value) > _MAX_TEXT_CHARS:
-            cls._invalid(
-                f"{name} exceeds the {_MAX_TEXT_CHARS:,}-character "
+            self._invalid(
+                f"{name} must be a string "
+                f"(got {_short_repr(value)})"
+            )
+        if len(value) > self.max_text_chars:
+            self._invalid(
+                f"{name} exceeds the {self.max_text_chars:,}-character "
                 f"limit (got {len(value):,} characters)"
             )
         lines = value.splitlines()
-        if len(lines) > _MAX_LINES:
-            cls._invalid(
-                f"{name} exceeds the {_MAX_LINES:,}-line limit (got "
-                f"{len(lines):,} lines)"
+        if len(lines) > self.max_lines:
+            self._invalid(
+                f"{name} exceeds the {self.max_lines:,}-line limit "
+                f"(got {len(lines):,} lines)"
             )
         for number, line in enumerate(lines, start=1):
-            if len(line) > _MAX_LINE_CHARS:
-                cls._invalid(
+            if len(line) > self.max_line_chars:
+                self._invalid(
                     f"line {number} of {name} exceeds the "
-                    f"{_MAX_LINE_CHARS:,}-character limit (got "
+                    f"{self.max_line_chars:,}-character limit (got "
                     f"{len(line):,} characters)"
                 )
         return value
 
-    @classmethod
-    def _validate_files(cls, value: Any) -> Optional[set]:
+    def _validate_files(self, value: Any) -> Optional[set]:
         """Validate the available_files listing; None passes."""
         if value is None:
             return None
         if isinstance(value, (str, bytes, bool)) or not isinstance(
             value, (list, tuple, set, frozenset)
         ):
-            cls._invalid(
+            self._invalid(
                 f"available_files must be a list of path strings or "
-                f"None (got {value!r})"
+                f"None (got {_short_repr(value)})"
             )
         items = list(value)
-        if len(items) > _MAX_FILES:
-            cls._invalid(
-                f"available_files exceeds the {_MAX_FILES:,}-entry "
+        if len(items) > self.max_files:
+            self._invalid(
+                f"available_files exceeds the {self.max_files:,}-entry "
                 f"limit (got {len(items):,} entries)"
             )
         normalized: set = set()
@@ -1785,15 +1916,15 @@ class PyprojectLintTool(Tool):
                 or not isinstance(item, str)
                 or not item.strip()
             ):
-                cls._invalid(
+                self._invalid(
                     f"every available_files entry must be a "
-                    f"non-empty path string (got {item!r})"
+                    f"non-empty path string (got {_short_repr(item)})"
                 )
-            if len(item) > _MAX_FILE_ENTRY_CHARS:
-                cls._invalid(
+            if len(item) > self.max_file_entry_chars:
+                self._invalid(
                     f"the available_files entry {item[:32]!r}… "
-                    f"exceeds the {_MAX_FILE_ENTRY_CHARS:,}-character "
-                    f"limit"
+                    f"exceeds the {self.max_file_entry_chars:,}-"
+                    f"character limit"
                 )
             normalized.add(_normalize_path(item))
         return normalized

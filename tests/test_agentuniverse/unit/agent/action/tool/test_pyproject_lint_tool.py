@@ -680,7 +680,7 @@ class LintGroundTruths(unittest.TestCase):
         self.assertEqual(codes(result), ["dependency_invalid"])
 
     def test_dependencies_valid_matrix(self):
-        """The loose PEP 508 grammar (RequirementsTool rule)."""
+        """PEP 508 forms pip accepts (packaging-aligned clauses)."""
         result = run_lint(
             BS + '[project]\nname = "demo"\nversion = "1.0"\n'
             'description = "d"\n'
@@ -691,9 +691,79 @@ class LintGroundTruths(unittest.TestCase):
             '  "bar===whatever!!",\n'
             '  "direct @ https://example.com/x.whl",\n'
             '  "plain",\n'
+            '  "old-setuptools (>=1.0, <2)",\n'
+            '  "no-clauses ()",\n'
+            '  "empty-extras[]",\n'
+            '  "spaced-extras[ e1 , e2 ]",\n'
+            '  "local-pin==1.0+abc.def",\n'
             ']\n'
         )
         self.assertEqual(result["findings"], [])
+
+    def test_dependency_parenthesized_clause_list(self):
+        """PEP 508's parenthesized specifier spelling (regression:
+        previously reported dependency_invalid)."""
+        base = (
+            BS + '[project]\nname = "demo"\nversion = "1.0"\n'
+            'description = "d"\n'
+        )
+        for dep in (
+            "Cython (>=0.29)",
+            "pip ( >=1.0, <2 )",
+            "foo (); python_version < '4'",
+            "foo(>=1.0,)",
+        ):
+            result = run_lint(
+                base + f'dependencies = ["{dep}"]\n'
+            )
+            self.assertEqual(result["findings"], [], dep)
+        # Unbalanced parentheses stay invalid.
+        result = run_lint(base + 'dependencies = ["foo(>=1.0"]\n')
+        self.assertEqual(codes(result), ["dependency_invalid"])
+        result = run_lint(base + 'dependencies = ["foo>=1.0)"]\n')
+        self.assertEqual(codes(result), ["dependency_invalid"])
+
+    def test_dependency_clauses_packaging_aligned(self):
+        """Clause rules pip enforces (regression: previously all
+        accepted by the loose grammar)."""
+        base = (
+            BS + '[project]\nname = "demo"\nversion = "1.0"\n'
+            'description = "d"\n'
+        )
+        for dep in (
+            "foo>=1.*",       # wildcard on >=
+            "foo~=1.0.*",     # wildcard on ~=
+            "foo==abc",       # non-PEP 440 token on ==
+            "foo!=abc",
+            "foo<1.0+local",  # local segment on <
+            "foo~=1.0+local",  # local segment on ~=
+            "foo>=1.0,,<2",   # empty clause between commas
+            "foo ===",        # bare === — packaging's empty-string
+                              # arbitrary-equality quirk, rejected
+        ):
+            result = run_lint(base + f'dependencies = ["{dep}"]\n')
+            self.assertEqual(codes(result), ["dependency_invalid"], dep)
+        # The adjacent legal forms stay clean.
+        for dep in (
+            "foo==1.*", "foo!=1.0.*", "foo==1.0+local",
+            "foo!=1.0+local", "foo===whatever!!", "foo>=1.0,",
+            "foo==1!2.0", "foo~=1.0rc1",
+        ):
+            result = run_lint(base + f'dependencies = ["{dep}"]\n')
+            self.assertEqual(result["findings"], [], dep)
+
+    def test_extras_grammar(self):
+        """Extras entries: PEP 508 charset, no empty names."""
+        base = (
+            BS + '[project]\nname = "demo"\nversion = "1.0"\n'
+            'description = "d"\n'
+        )
+        for dep in ("foo[e1,]", "foo[e1,,e2]", "foo[,x]", "foo[e1!x]"):
+            result = run_lint(base + f'dependencies = ["{dep}"]\n')
+            self.assertEqual(codes(result), ["dependency_invalid"], dep)
+        for dep in ("foo[]", "foo[ ]", "foo[e1,e2]", "foo[a-b_c.d]"):
+            result = run_lint(base + f'dependencies = ["{dep}"]\n')
+            self.assertEqual(result["findings"], [], dep)
 
     def test_duplicate_dependency_after_normalization(self):
         result = run_lint(
@@ -1076,6 +1146,78 @@ class ErrorMatrix(unittest.TestCase):
                 mode="project_summary", pyproject=1
             )
 
+    def test_deep_nesting_is_a_finding_not_a_crash(self):
+        """Regression: ~500-level-deep TOML nesting used to raise
+        RecursionError out of execute (tomllib's recursive-descent
+        parser overflows the interpreter recursion limit and the
+        except clause only caught TOMLDecodeError)."""
+        deep_arrays = "a = " + "[" * 2_000 + "]" * 2_000
+        result = run_lint(deep_arrays)
+        self.assertEqual(codes(result), ["toml_parse_error"])
+        self.assertIn("too deep", result["findings"][0]["message"])
+        self.assertEqual(result["counts"]["errors"], 1)
+        deep_tables = "a = " + "{x = " * 1_500 + "1" + "}" * 1_500
+        result = run_lint(deep_tables)
+        self.assertEqual(codes(result), ["toml_parse_error"])
+        # The summary mode degrades to the none layout, no raise.
+        result = run_summary(deep_arrays)
+        self.assertEqual(result["layout"], "none")
+        self.assertIn("too deep", result["note"])
+        # Shallow nesting still parses normally.
+        result = run_lint("a = [[1], [2]]\n")
+        self.assertEqual(
+            codes(result), ["build_system_missing", "missing_project_table"]
+        )
+
+    def test_cap_fields_are_live_configuration(self):
+        """Regression: max_lines & co were documented Attributes but
+        not model fields — setting them raised (pydantic) and the
+        validation silently used the module constants only."""
+        tool = PyprojectLintTool()
+        self.assertEqual(tool.max_lines, 10_000)
+        self.assertEqual(tool.max_line_chars, 10_000)
+        self.assertEqual(tool.max_text_chars, 4_000_000)
+        self.assertEqual(tool.max_files, 5_000)
+        self.assertEqual(tool.max_file_entry_chars, 4_096)
+        tool = PyprojectLintTool(max_lines=5, max_line_chars=50)
+        # 6 lines / 51 chars exceed the configured caps...
+        with self.assertRaises(ValueError):
+            tool.execute(mode="lint", pyproject="x\n" * 6)
+        with self.assertRaises(ValueError):
+            tool.execute(mode="lint", pyproject="y" * 51)
+        # ...while 5 x 50 chars passes input validation.
+        result = tool.execute(mode="lint", pyproject="z" * 50 + "\n" * 4)
+        self.assertIn("findings", result)
+        tool = PyprojectLintTool(max_files=2, max_file_entry_chars=8)
+        with self.assertRaises(ValueError):
+            tool.execute(
+                mode="lint", pyproject="[project]\n",
+                available_files=["a", "b", "c"],
+            )
+        with self.assertRaises(ValueError):
+            tool.execute(
+                mode="lint", pyproject="[project]\n",
+                available_files=["abcdefghi"],
+            )
+        result = tool.execute(
+            mode="lint", pyproject="[project]\n",
+            available_files=["a", "b"],
+        )
+        self.assertIn("findings", result)
+        with self.assertRaises(ValueError):
+            PyprojectLintTool(max_lines=0)  # caps must be >= 1
+
+    def test_validation_errors_echo_is_bounded(self):
+        """Regression: malformed-parameter errors echoed the whole
+        value back via {value!r} (potentially megabytes / secrets)."""
+        huge = ["x" * 500 for _ in range(500)]
+        with self.assertRaises(ValueError) as ctx:
+            PyprojectLintTool().execute(
+                mode="lint", pyproject=huge
+            )
+        self.assertLess(len(str(ctx.exception)), 400)
+        self.assertIn("…", str(ctx.exception))
+
 
 # ------------------------------------------------------------------ #
 # Differential vs packaging (when importable)
@@ -1084,6 +1226,7 @@ class ErrorMatrix(unittest.TestCase):
 try:
     from packaging.version import InvalidVersion, Version
     from packaging.specifiers import InvalidSpecifier, SpecifierSet
+    from packaging.requirements import InvalidRequirement, Requirement
 
     _PACKAGING = True
 except ImportError:  # pragma: no cover - optional dependency
@@ -1184,8 +1327,86 @@ class PackagingDifferential(unittest.TestCase):
             _clauses, error = _parse_specifier(seed)
             if (error is None) != expected:
                 disagreements.append((seed, expected, error))
-        self.assertEqual(
-            disagreements, [], f"grammar diverged: {disagreements[:10]}"
+        # The single allowed divergence: packaging quirk-accepts a
+        # bare '===' as arbitrary equality against the EMPTY string
+        # (any real comparison raises InvalidVersion); per PEP 440
+        # the token must be non-empty, so the tool rejects it.
+        quirk = [d for d in disagreements if d[0].strip() == "==="]
+        other = [d for d in disagreements if d not in quirk]
+        self.assertEqual(other, [], f"grammar diverged: {other[:10]}")
+
+    @staticmethod
+    def _requirement_seeds():
+        rng = random.Random(2525)
+        names = [
+            "foo", "Foo_bar", "baz.qux", "a1", "x-y", "x_y", "zope",
+            "old-setuptools",
+        ]
+        specs = [
+            "", ">=1.0", ">=1.0,<2", " (>=1.0, <2)", "()", "( >=1.0 )",
+            "==1.2.*", "!=3.9.*", "~=5.0", "~=1.0rc1", "===whatever!!",
+            ">=1.0,", "(>=1.0,)", "==1.0+local", "==1!2.0", ">v1.0",
+            ">=1.*", "==abc", "<1.0+loc", "~=1.0.*", "~=1", ">=1.0,,<2",
+            "==1.0+local,<2", "===", ">= ,<2", "=== 1.0",
+        ]
+        extras = ["", "[]", "[security]", "[ e1 , e2 ]", "[e1,]"]
+        markers = ["", " ; python_version < '3.11'", " ; extra == 'x'"]
+        seeds = set()
+        for _ in range(400):
+            seeds.add(
+                rng.choice(names) + rng.choice(extras)
+                + rng.choice(specs) + rng.choice(markers)
+            )
+        seeds.update(
+            [
+                "direct @ https://example.com/x.whl",
+                "with-marker @ https://example.com/x.whl ; os_name"
+                " == 'nt'",
+                "foo (>=1.0); python_version<'4'", "foo(>=1.0",
+                "foo>=1.0)", "-foo", "foo-", "3foo", "foo bar",
+                "no name here ==", ">=1.0", "",
+            ]
+        )
+        return sorted(seeds)
+
+    def test_requirement_differential(self):
+        """Requirement accepts == _parse_requirement_string accepts.
+
+        Excludes only the documented bare-=== quirk (packaging
+        parses 'foo===' as arbitrary equality against the EMPTY
+        string — unusable; asserted separately below).
+        """
+        from agentuniverse.agent.action.tool.common_tool \
+            .pyproject_lint_tool import _parse_requirement_string
+        disagreements = []
+        for seed in self._requirement_seeds():
+            try:
+                Requirement(seed)
+                expected = True
+            except InvalidRequirement:
+                expected = False
+            _name, error = _parse_requirement_string(seed)
+            if (error is None) != expected:
+                disagreements.append((seed, expected, error))
+        quirk = [
+            d for d in disagreements
+            if d[0].partition(";")[0].strip().endswith("===")
+        ]
+        other = [d for d in disagreements if d not in quirk]
+        self.assertEqual(other, [], f"grammar diverged: {other[:10]}")
+
+    def test_bare_arbitrary_equality_quirk(self):
+        """The one deliberate divergence, pinned: packaging accepts
+        a bare '===' / 'foo ===' (empty arbitrary-equality token —
+        str(Specifier) round-trips but any comparison raises
+        InvalidVersion); PEP 440 requires a token, so we reject."""
+        from agentuniverse.agent.action.tool.common_tool \
+            .pyproject_lint_tool import _parse_requirement_string
+        self.assertIsNotNone(
+            _parse_requirement_string("foo ===")[1]
+        )
+        self.assertIsNotNone(
+            _parse_requirement_string("foo === ")[1]
         )
 
 
