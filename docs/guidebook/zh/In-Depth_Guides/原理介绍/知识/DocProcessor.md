@@ -316,13 +316,15 @@ metadata:
 该组件从文档文本中抽取带单位的数值区间（价格区间、阈值、容量等），并写入文档元数据 `numeric_ranges` 与 `range_count`。该组件确定性地运行、完全离线（仅依赖标准库，使用 `decimal.Decimal` 精确计算，支持 万/亿 数级与逗号千分位），不修改文档正文。
 
 识别的形态（中英文）：
-- 闭区间：`X to Y`、`from X to Y`、`between X and Y`、`X-Y` / `X–Y` / `X—Y` / `X~Y`、`X至Y`、`X到Y`
-- 开下界（下限）：`over X`、`above X`、`X or above`、`X and above`、`超过X`、`X以上`、`X或以上`、`X及以上`
-- 开上界（上限）：`不超过Y`、`Y以下`、`Y及以下`、`Y or below`、`Y and below`
+- 闭区间：`X to Y`、`from X to Y`、`between X and Y`、`X up/down to Y`、`X-Y` / `X–Y` / `X—Y` / `X~Y`、`X至Y`、`X到Y`、`X降至Y` / `X升到Y`；词连接符两端可带正负号（如 `-10 to -5`）
+- 开下界（下限）：`over X`、`above X`、`at least X`、`no less than X`、`X or/and above`、`X or more`、`X at least`、`超过X`、`高于X`、`不低于X`、`X以上`、`X或以上`、`X及以上`
+- 开上界（上限）：`up to X`、`under X`、`below X`、`at most X`、`no more than X`、`X or/and below`、`X or less`、`X at most`、`不超过X`、`低于X`、`不高于X`、`X以下`、`X及以下`
 
-每个区间存储为 `{kind: closed|open_lower|open_upper, min, max, unit, text, span, notes}`：`min`/`max` 为精确归一化的十进制字符串（开边界为 `null`）；`unit` 为附着在区间端点上的单位词（`%`、`USD`、`元`、`个`、`users`、`ms`、`$` 等）；`text` 为命中片段，`span` 为其 `[start, end)` 字符区间。两个端点单位不同时，取第二个数字之后的单位，并附 `unit_mismatch(左|右)` 备注；闭区间前值大于后值时保留原样并附 `inverted_range` 备注。
+每个区间存储为 `{kind: closed|open_lower|open_upper, min, max, unit, text, span, notes}`：`min`/`max` 为精确归一化的十进制字符串（开边界为 `null`）；`unit` 为附着在区间端点上的单位词（`%`、`USD`、`元`、`个`、`users`、`ms`、`$` 等）；`text` 为命中片段，`span` 为其 `[start, end)` 字符区间。两个端点单位不同时，取第二个数字之后的单位，并附 `unit_mismatch(左|右)` 备注，但等效货币写法（`$`/`USD`、`€`/`EUR`、`£`/`GBP`、`¥`/`￥`/`元`）视为同一单位。闭区间仅一端带 万/亿 数级时，另一端按同一数级换算（`3到5万` 解析为 30000-50000）并附 `multiplier_inferred` 备注；闭区间前值大于后值时保留原样并附 `inverted_range` 备注。
 
-防护规则（命中以下形状的片段会被跳过）：URL、邮箱、IP 地址、版本号（`v?X.Y`、多点数字串，以及两端均带小数点的短横线区间——小数区间请用词连接符如 `1.5 to 2.5` 表达）、日期、电话样数字串，以及两端均为 1900-2100 裸年份的闭区间（交给 DateExtractor 处理）。
+防护规则（命中以下形状的片段会被跳过）：URL、邮箱、IP 地址、版本号（`v?X.Y`、多点数字串，以及两端均为裸小数且不带明确单位、数级或货币的短横线区间——此类小数区间请用词连接符如 `1.5 to 2.5` 表达）、日期、电话样数字串、紧贴前导 `.`、`/` 或 `:` 的数字（`p.3-5`、`f/2.8`、`1:2`），以及两端均为 1900-2100 裸年份的闭区间（交给 DateExtractor 处理）。
+
+已知限制：多字中文计量名词（`用户`、`公里`）不解析为单位（单字中文单位与英文单词单位可解析）；形如 `x = 1-2` 的算术表达仍会被抽取；符号连接符（`-`）不支持负数端点。
 
 组件定义文件如下：
 ```yaml

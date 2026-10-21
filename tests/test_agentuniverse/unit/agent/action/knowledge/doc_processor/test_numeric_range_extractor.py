@@ -483,6 +483,306 @@ class TestNumericRangeExtractor(unittest.TestCase):
                          doc2.metadata['numeric_ranges'])
         self.assertEqual(doc1.metadata['range_count'], 5)
 
+    # ------------------------------------------------------------------
+    # Hostile review regressions: negative endpoints
+    # ------------------------------------------------------------------
+
+    def test_negative_closed_en(self):
+        """Word-connector ranges with negative endpoints keep the sign."""
+        hit = self._single('Winter temps range -10 to -5°C.')
+        self.assertEqual(hit['kind'], 'closed')
+        self.assertEqual(Decimal(hit['min']), Decimal('-10'))
+        self.assertEqual(Decimal(hit['max']), Decimal('-5'))
+        self.assertEqual(hit['unit'], '°C')
+        self.assertEqual(hit['notes'], [])
+
+        hit = self._single('Scores ranged from -3 to 4 points.')
+        self.assertEqual(Decimal(hit['min']), Decimal('-3'))
+        self.assertEqual(Decimal(hit['max']), Decimal('4'))
+        self.assertEqual(hit['unit'], 'points')
+
+        hit = self._single('Loss between -2.5 and -1.5 billion.')
+        self.assertEqual(Decimal(hit['min']), Decimal('-2.5'))
+        self.assertEqual(Decimal(hit['max']), Decimal('-1.5'))
+
+    def test_negative_closed_zh(self):
+        """Chinese connector ranges with negative endpoints keep the sign."""
+        hit = self._single('温度降至-10到-5度')
+        self.assertEqual(Decimal(hit['min']), Decimal('-10'))
+        self.assertEqual(Decimal(hit['max']), Decimal('-5'))
+        self.assertEqual(hit['unit'], '度')
+
+        hit = self._single('失业率-5%到-3%')
+        self.assertEqual(Decimal(hit['min']), Decimal('-5'))
+        self.assertEqual(Decimal(hit['max']), Decimal('-3'))
+        self.assertEqual(hit['unit'], '%')
+
+    def test_negative_open_bounds(self):
+        """Open bounds with negative endpoints keep the sign."""
+        probes = (
+            ('Threshold crosses over -10 dB.', 'open_lower', '-10', 'dB'),
+            ('Keep it below -20°C.', 'open_upper', '-20', '°C'),
+            ('误差不超过-0.5%', 'open_upper', '-0.5', '%'),
+            ('no more than -2 delta', 'open_upper', '-2', 'delta'),
+            ('at least -10 margin', 'open_lower', '-10', 'margin'),
+        )
+        for text, kind, value, unit in probes:
+            hit = self._single(text)
+            self.assertEqual(hit['kind'], kind, text)
+            if kind == 'open_lower':
+                self.assertEqual(Decimal(hit['min']), Decimal(value), text)
+                self.assertIsNone(hit['max'], text)
+            else:
+                self.assertEqual(Decimal(hit['max']), Decimal(value), text)
+                self.assertIsNone(hit['min'], text)
+            self.assertEqual(hit['unit'], unit, text)
+
+    def test_glued_separator_numbers_never_start_a_range(self):
+        """Numbers glued to a preceding . / : are skipped (no wrong values)."""
+        for text in ('.5 to 1.5 liters',
+                     'shutter 1/250 to 1/500 s',
+                     'aperture f/2.8 to f/4',
+                     'ratio 1:2到1:4',
+                     'p.3-5'):
+            self.assertEqual(self._extract(text), [],
+                             'glued form should be skipped: {!r}'.format(
+                                 text))
+
+    def test_glued_guard_keeps_spaced_forms(self):
+        """Spaced page references still extract after the glued guard."""
+        hit = self._single('See manual p. 3-5 for wiring.')
+        self.assertEqual(Decimal(hit['min']), Decimal('3'))
+        self.assertEqual(Decimal(hit['max']), Decimal('5'))
+
+    # ------------------------------------------------------------------
+    # Hostile review regressions: currency equivalence and units
+    # ------------------------------------------------------------------
+
+    def test_currency_equivalence_no_mismatch_note(self):
+        """Equivalent currency symbols/codes on both endpoints unify."""
+        hit = self._single('价格¥3,000-5,000元')
+        self.assertEqual(Decimal(hit['min']), Decimal('3000'))
+        self.assertEqual(Decimal(hit['max']), Decimal('5000'))
+        self.assertEqual(hit['unit'], '元')
+        self.assertEqual(hit['notes'], [])
+
+        hit = self._single('from $5 to 10 USD')
+        self.assertEqual(hit['unit'], 'USD')
+        self.assertEqual(hit['notes'], [])
+
+        hit = self._single('￥3-5')
+        self.assertEqual(hit['unit'], '￥')
+        self.assertEqual(Decimal(hit['min']), Decimal('3'))
+        self.assertEqual(Decimal(hit['max']), Decimal('5'))
+
+    def test_additional_cjk_units_and_degree_symbol(self):
+        """Seat, electrical and bare-degree units are recognized."""
+        for text, unit in (('功率500-800瓦', '瓦'),
+                           ('转速3000-5000转', '转'),
+                           ('电流1到2安', '安'),
+                           ('座位数5到7座', '座'),
+                           ('angle 45° to 90°', '°')):
+            hit = self._single(text)
+            self.assertEqual(hit['unit'], unit, text)
+
+    def test_multichar_cjk_nouns_have_no_unit(self):
+        """Multi-character CJK count nouns resolve to no unit, not garbage."""
+        hit = self._single('The region counts 5万-10万用户.')
+        self.assertEqual(hit['unit'], None)
+        self.assertEqual(Decimal(hit['min']), Decimal('50000'))
+        self.assertEqual(Decimal(hit['max']), Decimal('100000'))
+
+    # ------------------------------------------------------------------
+    # Hostile review regressions: version guard refinements
+    # ------------------------------------------------------------------
+
+    def test_version_guard_spares_definite_units_and_multipliers(self):
+        """Dash decimal ranges with a multiplier, currency or unit extract."""
+        for text, lo, hi, unit in (
+                ('1.5万-2.5万', '15000', '25000', None),
+                ('价格1.5-2.5万元', '15000', '25000', '元'),
+                ('利率2.5%-3.5%', '2.5', '3.5', '%'),
+                ('dilute 1.5-2.5 L', '1.5', '2.5', 'L'),
+                ('range 2.0-3.0 m', '2.0', '3.0', 'm'),
+                ('$1.5-2.5', '1.5', '2.5', '$')):
+            hit = self._single(text)
+            self.assertEqual(Decimal(hit['min']), Decimal(lo), text)
+            self.assertEqual(Decimal(hit['max']), Decimal(hi), text)
+            self.assertEqual(hit['unit'], unit, text)
+
+    def test_version_guard_still_skips_prose_word_units(self):
+        """Dash decimal ranges followed by prose words stay version-shaped."""
+        for text in ('GPA 3.5-4.0 scale',
+                     'build 2.0-3.0 stable',
+                     'build 1.5-2.5'):
+            self.assertEqual(self._extract(text), [],
+                             'version-shaped range should be skipped: '
+                             '{!r}'.format(text))
+
+    # ------------------------------------------------------------------
+    # Hostile review regressions: inferred multiplier
+    # ------------------------------------------------------------------
+
+    def test_inferred_multiplier_scales_bare_endpoint(self):
+        """A lone 万/亿 scales the bare endpoint, with a note."""
+        for text, lo, hi in (('规模3到5万', '30000', '50000'),
+                             ('薪资20-30万', '200000', '300000'),
+                             ('融资1到2亿', '100000000', '200000000'),
+                             ('1.5-2.5万', '15000', '25000')):
+            hit = self._single(text)
+            self.assertEqual(Decimal(hit['min']), Decimal(lo), text)
+            self.assertEqual(Decimal(hit['max']), Decimal(hi), text)
+            self.assertIn('multiplier_inferred', hit['notes'], text)
+
+    def test_inferred_multiplier_skipped_when_it_would_invert(self):
+        """Scaling that would invert the range is not applied."""
+        hit = self._single('从100到3.5亿')
+        self.assertEqual(Decimal(hit['min']), Decimal('100'))
+        self.assertEqual(Decimal(hit['max']), Decimal('350000000'))
+        self.assertNotIn('multiplier_inferred', hit['notes'])
+
+    def test_both_multipliers_never_infer(self):
+        """Endpoints each carrying a multiplier produce no inference note."""
+        hit = self._single('收入3万至5万元')
+        self.assertEqual(hit['notes'], [])
+
+    # ------------------------------------------------------------------
+    # Hostile review regressions: additional open-bound phrasings
+    # ------------------------------------------------------------------
+
+    def test_open_prefix_bound_phrases(self):
+        """up to / under / below / at least / at most / no more|less than."""
+        probes = (
+            ('Capacity up to 100 TB.', 'open_upper', '100', 'TB'),
+            ('Children under 5 years.', 'open_upper', '5', 'years'),
+            ('Keep it below 100ms.', 'open_upper', '100', 'ms'),
+            ('Under 18 not admitted.', 'open_upper', '18', None),
+            ('At least 3 nodes required.', 'open_lower', '3', 'nodes'),
+            ('Allow at most 5 retries.', 'open_upper', '5', 'retries'),
+            ('No more than 10 items.', 'open_upper', '10', 'items'),
+            ('No less than 8 hours.', 'open_lower', '8', 'hours'),
+        )
+        for text, kind, value, unit in probes:
+            hit = self._single(text)
+            self.assertEqual(hit['kind'], kind, text)
+            if kind == 'open_lower':
+                self.assertEqual(Decimal(hit['min']), Decimal(value), text)
+            else:
+                self.assertEqual(Decimal(hit['max']), Decimal(value), text)
+            self.assertEqual(hit['unit'], unit, text)
+
+    def test_open_suffix_bound_phrases(self):
+        """X or more / X or less / X at most / X at least."""
+        probes = (
+            ('Valid for 5 or more days.', 'open_lower', '5'),
+            ('Limit 10 or less per user.', 'open_upper', '10'),
+            ('Queue of 5 at most.', 'open_upper', '5'),
+            ('Bring 2 at least.', 'open_lower', '2'),
+        )
+        for text, kind, value in probes:
+            hit = self._single(text)
+            self.assertEqual(hit['kind'], kind, text)
+            if kind == 'open_lower':
+                self.assertEqual(Decimal(hit['min']), Decimal(value), text)
+            else:
+                self.assertEqual(Decimal(hit['max']), Decimal(value), text)
+
+    def test_open_zh_lower_higher_forms(self):
+        """低于 / 高于 / 不高于 / 不低于 bounds with signs and multipliers."""
+        probes = (
+            ('延迟低于500ms', 'open_upper', '500', 'ms'),
+            ('误差高于0.5%', 'open_lower', '0.5', '%'),
+            ('薪资高于20万', 'open_lower', '200000', None),
+            ('不高于-2℃', 'open_upper', '-2', '℃'),
+            ('不低于-5%', 'open_lower', '-5', '%'),
+            ('流量低于10GB', 'open_upper', '10', 'GB'),
+        )
+        for text, kind, value, unit in probes:
+            hit = self._single(text)
+            self.assertEqual(hit['kind'], kind, text)
+            if kind == 'open_lower':
+                self.assertEqual(Decimal(hit['min']), Decimal(value), text)
+            else:
+                self.assertEqual(Decimal(hit['max']), Decimal(value), text)
+            self.assertEqual(hit['unit'], unit, text)
+
+    # ------------------------------------------------------------------
+    # Hostile review regressions: directional connectors
+    # ------------------------------------------------------------------
+
+    def test_directional_en_connectors(self):
+        """X up to Y closes a range; X down to Y keeps the inverted note."""
+        hit = self._single('Earn from 5 up to 10 points.')
+        self.assertEqual(hit['kind'], 'closed')
+        self.assertEqual(Decimal(hit['min']), Decimal('5'))
+        self.assertEqual(Decimal(hit['max']), Decimal('10'))
+        self.assertEqual(hit['unit'], 'points')
+
+        hit = self._single('usage 8GB down to 2GB')
+        self.assertEqual(Decimal(hit['min']), Decimal('8'))
+        self.assertEqual(Decimal(hit['max']), Decimal('2'))
+        self.assertIn('inverted_range', hit['notes'])
+
+    def test_directional_zh_connectors(self):
+        """降至/降到/升至/升到 connect; 升 is not read as a left unit."""
+        hit = self._single('产量由20升到30吨')
+        self.assertEqual(Decimal(hit['min']), Decimal('20'))
+        self.assertEqual(Decimal(hit['max']), Decimal('30'))
+        self.assertEqual(hit['unit'], '吨')
+        self.assertEqual(hit['notes'], [])
+
+        hit = self._single('效率从60升至90分')
+        self.assertEqual(Decimal(hit['min']), Decimal('60'))
+        self.assertEqual(Decimal(hit['max']), Decimal('90'))
+        self.assertEqual(hit['unit'], '分')
+
+        hit = self._single('从2000降到1000点')
+        self.assertEqual(Decimal(hit['min']), Decimal('2000'))
+        self.assertEqual(Decimal(hit['max']), Decimal('1000'))
+        self.assertIn('inverted_range', hit['notes'])
+
+    def test_up_to_standalone_is_open_upper(self):
+        """A standalone up to X is an upper bound, not part of a range."""
+        hit = self._single('Scales up to 10,000 requests.')
+        self.assertEqual(hit['kind'], 'open_upper')
+        self.assertEqual(Decimal(hit['max']), Decimal('10000'))
+        self.assertIsNone(hit['min'])
+        self.assertEqual(hit['unit'], 'requests')
+
+    # ------------------------------------------------------------------
+    # Hostile review regressions: adjacency and mixed corpus
+    # ------------------------------------------------------------------
+
+    def test_adjacent_ranges_sharing_endpoint(self):
+        """Two ranges sharing the middle number both extract."""
+        hits = self._extract('5 to 10 and 10 to 20')
+        self.assertEqual([(h['min'], h['max']) for h in hits],
+                         [('5', '10'), ('10', '20')])
+
+    def test_business_corpus_slice(self):
+        """Representative hostile-corpus sentences extract end to end."""
+        text = ('本套餐价格¥3,000-5,000元，覆盖5万-10万用户，'
+                '支持-10 to -5°C冷藏，延迟不超过500ms。')
+        hits = self._extract(text)
+        self.assertEqual([(h['min'], h['max'], h['unit'], h['kind'])
+                          for h in hits],
+                         [('3000', '5000', '元', 'closed'),
+                          ('50000', '100000', None, 'closed'),
+                          ('-10', '-5', '°C', 'closed'),
+                          (None, '500', 'ms', 'open_upper')])
+        for hit in hits:
+            self.assertEqual(hit['notes'], [], hit['text'])
+
+    def test_guard_corpus_slice(self):
+        """Version, phone and year guards hold on corpus sentences."""
+        self.assertEqual(
+            self._extract('Supports firmware v2.1-3 and later.'), [])
+        self.assertEqual(
+            self._extract('Operations ran 2020-2025 profitably.'), [])
+        hits = self._extract('Hotline 010-88886666 is staffed 9-5.')
+        self.assertEqual(len(hits), 1)
+        self.assertEqual((hits[0]['min'], hits[0]['max']), ('9', '5'))
+
 
 if __name__ == '__main__':
     unittest.main()
