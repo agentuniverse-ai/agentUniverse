@@ -681,5 +681,156 @@ class TokenizerToolAstralPlaneTest(unittest.TestCase):
         )
 
 
+class TokenizerToolAdversarialTest(unittest.TestCase):
+    """Pinned adversarial edge cases (all span-consistent by design)."""
+
+    def setUp(self):
+        self.tool = TokenizerTool()
+
+    def tokenize(self, text, strategy, **options):
+        return rows(
+            self.tool.execute(
+                mode="tokenize", text=text, strategy=strategy, **options
+            )["tokens"]
+        )
+
+    def test_rock_n_roll_is_one_token(self):
+        self.assertEqual(
+            self.tokenize("rock'n'roll", "word"), [("rock'n'roll", 0, 11)]
+        )
+        self.assertEqual(
+            self.tokenize("y'all'd've", "word"), [("y'all'd've", 0, 10)]
+        )
+
+    def test_curly_apostrophe_is_a_separator(self):
+        text = "don’t"
+        self.assertEqual(
+            self.tokenize(text, "word"), [("don", 0, 3), ("t", 4, 5)]
+        )
+
+    def test_underscore_separator_only_in_word_strategy(self):
+        self.assertEqual(
+            self.tokenize("snake_case_x", "word"),
+            [("snake", 0, 5), ("case", 6, 10), ("x", 11, 12)],
+        )
+        self.assertEqual(
+            self.tokenize("snake_case_x", "word_punct"),
+            [("snake_case_x", 0, 12)],
+        )
+
+    def test_fullwidth_digits_are_word_characters(self):
+        text = "共１２３个。Next"
+        self.assertEqual(
+            self.tokenize("１２３ＡＢ", "word"), [("１２３ＡＢ", 0, 5)]
+        )
+        self.assertEqual(
+            self.tokenize(text, "sentence"),
+            [("共１２３个。", 0, 6), ("Next", 6, 10)],
+        )
+        self.assertEqual(
+            self.tokenize("第１２３。Then go.", "sentence"),
+            [("第１２３。", 0, 5), ("Then go.", 5, 13)],
+        )
+
+    def test_fullwidth_digits_not_guarded_before_latin_period(self):
+        self.assertEqual(
+            self.tokenize("共１２３. Then go.", "sentence"),
+            [("共１２３.", 0, 5), ("Then go.", 6, 14)],
+        )
+        self.assertEqual(
+            self.tokenize("共1２3. Then go.", "sentence"),
+            [("共1２3. Then go.", 0, 14)],
+        )
+
+    def test_skin_tone_modifier_stays_in_word_punct_run(self):
+        text = "👍🏽"
+        self.assertEqual(len(text), 2)
+        self.assertEqual(self.tokenize(text, "word_punct"), [(text, 0, 2)])
+        self.assertEqual(
+            self.tokenize(text, "char"), [("👍", 0, 1), ("🏽", 1, 2)]
+        )
+
+    def test_rtl_with_embedded_ltr(self):
+        text = "قال hello‎ 世界"
+        for strategy in ALL_STRATEGIES:
+            result = self.tool.execute(
+                mode="tokenize", text=text, strategy=strategy
+            )
+            for entry in result["tokens"]:
+                self.assertEqual(
+                    text[entry["start"] : entry["end"]], entry["token"]
+                )
+        check = self.tool.execute(mode="span_check", text=text)
+        self.assertTrue(check["ok"])
+        self.assertEqual(
+            self.tokenize(text, "word"),
+            [("قال", 0, 3), ("hello", 4, 9), ("世界", 11, 13)],
+        )
+
+    def test_unicode_spaces_separate_runs(self):
+        for space in ("\xa0", "\u3000", "\u202f"):
+            text = "a" + space + "b"
+            self.assertEqual(self.tokenize(text, "whitespace"), [("a", 0, 1), ("b", 2, 3)])
+            self.assertEqual(self.tokenize(text, "word"), [("a", 0, 1), ("b", 2, 3)])
+            self.assertEqual(self.tokenize(text, "char_no_space"), [("a", 0, 1), ("b", 2, 3)])
+            self.assertTrue(
+                self.tool.execute(mode="span_check", text=text)["ok"]
+            )
+
+    def test_whitespace_tokens_match_str_split(self):
+        text = "The  cat\t sat\n on  the mat"
+        tokens = self.tokenize(text, "whitespace")
+        self.assertEqual([t[0] for t in tokens], text.split())
+        for token, start, end in tokens:
+            self.assertEqual(text[start:end], token)
+
+    def test_text_length_limit_boundary(self):
+        result = self.tool.execute(
+            mode="count", text="x" * 100_000, strategy="word"
+        )
+        self.assertEqual(result["token_count"], 1)
+        with self.assertRaises(ValueError):
+            self.tool.execute(
+                mode="count", text="x" * 100_001, strategy="word"
+            )
+
+    def test_terminal_run_extra_marks_dropped_by_sentence(self):
+        self.assertEqual(
+            self.tokenize("真的吗？！", "sentence"), [("真的吗？", 0, 4)]
+        )
+        self.assertEqual(
+            self.tokenize("Wow!!! Great.", "sentence"),
+            [("Wow!", 0, 4), ("Great.", 7, 13)],
+        )
+
+    def test_stopword_order_is_drop_on_comparison_form(self):
+        text = "The AND the"
+        self.assertEqual(
+            self.tokenize(text, "word", drop_stopwords=True),
+            [("The", 0, 3), ("AND", 4, 7)],
+        )
+        self.assertEqual(
+            self.tokenize(
+                text, "word", lowercase=True, drop_stopwords=True
+            ),
+            [],
+        )
+
+    def test_cjk_mixed_with_latin_and_digits(self):
+        self.assertEqual(
+            self.tokenize("abc123中文456def", "word"),
+            [("abc123中文456def", 0, 14)],
+        )
+        self.assertEqual(
+            self.tokenize("abc123中文456def", "cjk"),
+            [
+                ("abc123", 0, 6),
+                ("中", 6, 7),
+                ("文", 7, 8),
+                ("456def", 8, 14),
+            ],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

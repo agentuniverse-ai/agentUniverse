@@ -27,13 +27,21 @@ Three modes:
   never move). Strategies:
 
   - ``whitespace`` — maximal runs of non-whitespace (``str.split``
-    semantics, with offsets).
-  - ``word`` — the family word rule: maximal runs of alphanumeric
-    characters (Unicode ``str.isalnum``) with internal apostrophes so
-    English contractions stay together; leading/trailing apostrophes
-    are excluded from the span. Han-character runs stay whole here
-    because ``isalnum`` covers ideographs and no dictionary
-    segmentation is attempted (documented honestly).
+    semantics, with offsets); every Unicode whitespace character
+    separates runs, including NBSP (``\\xa0``) and the ideographic
+    space (``\\u3000``).
+  - ``word`` — the family's Latin word rule: maximal runs of
+    alphanumeric characters (Unicode ``str.isalnum``) with internal
+    apostrophes so English contractions and ``rock'n'roll`` stay one
+    token; leading/trailing apostrophes are excluded from the span.
+    Only the ASCII apostrophe ``'`` glues (the curly ``\\u2019`` of
+    typographic quotes is a separator, exactly as in
+    ``TextHistogramTool``), and the underscore is NOT a word character
+    here (``isalnum`` excludes it; ``word_punct`` keeps it). Han-
+    character runs stay whole because ``isalnum`` covers ideographs
+    and no dictionary segmentation is attempted (documented honestly);
+    the ``cjk`` strategy below is the histogram tool's exact word
+    stream.
   - ``word_punct`` — NLTK ``wordpunct_tokenize``-style: maximal runs
     of word characters (letters, digits, underscore — regex ``\\w``)
     or maximal runs of punctuation / symbol characters
@@ -43,20 +51,30 @@ Three modes:
     code points and therefore single tokens.
   - ``char_no_space`` — every character except whitespace.
   - ``sentence`` — the family's conservative segmentation with the
-    abbreviation guard: terminators are ``.`` ``!`` ``?``, the CJK
-    full-width forms ``。`` ``！`` ``？``, the ellipsis ``…`` and runs
-    of two or more ``.``; newlines end a segment. A latin ``.`` does
-    NOT terminate when followed by an alphanumeric character
-    (decimals ``3.14``, domains ``example.com``) or preceded by a
-    common abbreviation (``Dr.`` ``e.g.`` ``U.S.`` ...), a single
-    letter (initials) or an all-digit token. Segments without any
-    word character (bare punctuation) are dropped. The span covers
-    the sentence including its terminator, trimmed of surrounding
-    whitespace.
+    abbreviation guard, boundary-for-boundary identical to
+    ``TextSummarizerTool``'s segmentation (same terminator set, same
+    abbreviation list, same initial/decimal guards): terminators are
+    ``.`` ``!`` ``?``, the CJK full-width forms ``。`` ``！`` ``？``,
+    the ellipsis ``…`` and runs of two or more ``.``; newlines end a
+    segment. A latin ``.`` does NOT terminate when followed by an
+    alphanumeric character (decimals ``3.14``, domains
+    ``example.com``) or preceded by a common abbreviation (``Dr.``
+    ``e.g.`` ``U.S.`` ...), a single letter (initials) or an all-digit
+    token. The guard's word run covers ASCII letters, digits and the
+    ASCII apostrophe only, so purely fullwidth digits are not guarded
+    (``共１２３.`` ends a sentence there, exactly like the summarizer).
+    Segments without any word
+    character (bare punctuation, including the ``!`` left by
+    ``She left?!``) are dropped. The span covers the sentence
+    including its terminator, trimmed of surrounding whitespace;
+    dot runs stay in the original text (never rewritten to ``…``), so
+    spans always slice the input exactly.
   - ``cjk`` — per-ideograph fallback for Chinese text: every Han
     ideograph (Ext A, URO, compatibility blocks) is its own
     single-character token while Latin/alphanumeric runs stay whole
-    (``abc中def`` → ``abc``, ``中``, ``def``). Kana and Hangul are
+    (``abc中def`` → ``abc``, ``中``, ``def``). This is exactly
+    ``TextHistogramTool``'s word tokenizer (same isalnum runs, same
+    apostrophe rule, same ideograph blocks). Kana and Hangul are
     intentionally not split — this is a fallback, not segmentation.
 
   Options: ``lowercase`` (default off) lowercases the ``token``
@@ -400,13 +418,14 @@ class TokenizerTool(Tool):
 
     @classmethod
     def _tokenize_word(cls, text: str) -> List[Dict[str, Any]]:
-        """Alphanumeric runs with internal apostrophes (family rule).
+        """Alphanumeric runs with internal apostrophes (family Latin rule).
 
         A token is a maximal run of alphanumeric characters (Unicode
         ``str.isalnum``) plus internal apostrophes so English
         contractions stay together; leading/trailing apostrophes are
-        excluded from the span. Han runs stay whole (see the module
-        docstring for the honest scope).
+        excluded from the span. Han runs stay whole; ``_tokenize_cjk``
+        is this same scanner with the histogram tool's per-ideograph
+        fallback (see the module docstring for the honest scope).
         """
         return cls._alnum_runs(text, split_cjk=False)
 
