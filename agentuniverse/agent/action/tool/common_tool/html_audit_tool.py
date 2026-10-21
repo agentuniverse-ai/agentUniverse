@@ -3,6 +3,7 @@
 """Static HTML fragment safety analysis tool (stdlib-only tokenizer)."""
 
 import re
+from bisect import bisect_right
 from collections import Counter
 from html import unescape
 from html.parser import HTMLParser
@@ -26,17 +27,19 @@ _CSS_HEX_ESCAPE_RE = re.compile(r"\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?")
 _CSS_CHAR_ESCAPE_RE = re.compile(r"\\(.)", re.S)
 _IE_CONDITIONAL_RE = re.compile(r"\[\s*if\b|\[\s*endif", re.I)
 _RAW_TAG_RE = re.compile(r"<([a-zA-Z][a-zA-Z0-9-]*)")
-_SCRIPT_SPAN_RE = re.compile(r"(?is)<script\b[^>]*>.*?(?:</script\s*>|\Z)")
-_STYLE_SPAN_RE = re.compile(r"(?is)<style\b[^>]*>.*?(?:</style\s*>|\Z)")
-_COMMENT_SPAN_RE = re.compile(r"<!--.*?-->", re.S)
 _STYLE_SCHEME_RE = re.compile(r"(?:javascript|vbscript|livescript|mocha|jscript)\s*:")
 _STYLE_EXPRESSION_RE = re.compile(r"expression\s*\(")
+# Legacy script-executing CSS binding constructs (old Firefox -moz-binding,
+# IE behavior). Same historical class as expression().
+_STYLE_BINDING_RE = re.compile(r"(?:-moz-binding|behavior)\s*:")
 _EMBEDDED_TAG_RE = re.compile(r"<(?:script|iframe|object|embed|svg|math|base|form)\b", re.I)
 _EMBEDDED_HANDLER_RE = re.compile(r"\son[a-z]+\s*=", re.I)
 _SWALLOWED_HANDLER_RE = re.compile(r"(?i)^on[a-z]+\s*=")
 _DATA_MIME_RE = re.compile(r"data:\s*([^;,]*)")
 _URL_IN_REFRESH_RE = re.compile(r"(?i)url\s*=\s*(.*)$")
 _CHARSET_RE = re.compile(r"(?i)charset\s*=\s*([\w.\-]+)")
+_SCRIPT_CLOSE_RE = re.compile(r"</script\s*>", re.I)
+_STYLE_CLOSE_RE = re.compile(r"</style\s*>", re.I)
 
 # Elements html.parser treats as raw text (CDATA content elements).
 _RAW_TEXT_ELEMENTS = frozenset({"script", "style"})
@@ -72,6 +75,22 @@ _URL_ATTRS = frozenset({
 
 # Attributes on <param> elements whose value is a URL.
 _PARAM_URL_ATTRS = frozenset({"url", "src", "href", "data", "movie", "value"})
+
+# SVG animation elements that can retarget href/xlink:href at runtime.
+_ANIMATION_ELEMENTS = frozenset({"animate", "set", "animatetransform", "animatemotion", "animatecolor"})
+
+# href-like attribute names an <animate>/<set> attributeName may target.
+_HREF_ATTR_NAMES = frozenset({"href", "xlink:href"})
+
+# Value-bearing attributes of animation elements probed for dangerous URLs.
+_ANIMATION_VALUE_ATTRS = ("from", "to", "by", "values")
+
+# Maximum number of tokenizer-dropped tag occurrences reported per tag name
+# by the raw-source cross-check; more occurrences only inflate output.
+_RAW_EXTRA_REPORT_CAP = 50
+
+# Maximum nesting of abrupt-comment / srcdoc re-audit passes.
+_NESTED_AUDIT_DEPTH = 2
 
 _DANGEROUS_SCHEMES = frozenset({
     "javascript", "vbscript", "livescript", "mocha", "jscript",
@@ -112,9 +131,16 @@ def _probe(value: str) -> str:
     """
     text = unescape(value or "")
     for _ in range(3):
-        cleaned = _HTML_COMMENT_RE.sub("", text)
-        cleaned = _HTML_COMMENT_OPEN_RE.sub("", cleaned)
-        cleaned = _CSS_COMMENT_RE.sub("", cleaned)
+        cleaned = text
+        # The comment regexes are only applied when their closing delimiter
+        # is present; on delimiter-free input they cannot match, and the
+        # backtracking scan would be quadratic in the value length.
+        if "<!--" in cleaned and "-->" in cleaned:
+            cleaned = _HTML_COMMENT_RE.sub("", cleaned)
+        if "<!--" in cleaned:
+            cleaned = _HTML_COMMENT_OPEN_RE.sub("", cleaned)
+        if "/*" in cleaned and "*/" in cleaned:
+            cleaned = _CSS_COMMENT_RE.sub("", cleaned)
         cleaned = _css_unescape(cleaned)
         if cleaned == text:
             break
@@ -196,6 +222,10 @@ class _FragmentTokenizer(HTMLParser):
         line, col = self.getpos()
         return self._line_starts[line - 1] + col
 
+    def offset_at(self, line: int, col: int) -> int:
+        """Map an event's (line, col) back to a source offset."""
+        return self._line_starts[line - 1] + col
+
     def _decode_entity(self, prefix: str, name: str) -> str:
         """Decode an entity using its exact source form (semicolon-aware)."""
         offset = self._offset()
@@ -258,6 +288,7 @@ class _FragmentTokenizer(HTMLParser):
         raw_parent = self.stack[-1] if self.stack and self.stack[-1] in _RAW_TEXT_ELEMENTS else None
         self.events.append({
             "kind": "data", "text": data, "raw_parent": raw_parent,
+            "offset": self._offset(),
             "line": self.getpos()[0], "col": self.getpos()[1],
         })
 
@@ -276,8 +307,14 @@ class _FragmentTokenizer(HTMLParser):
         })
 
     def handle_comment(self, data):
+        offset = self._offset()
+        # HTML5 closes "<!-->" and "<!--->" as empty comments immediately.
+        # html.parser instead scans for the next "--!?>" and swallows the
+        # intervening markup into the comment; flag that here so audit mode
+        # can re-parse the hidden region as the live markup browsers see.
+        abrupt = self._source.startswith("<!-->", offset) or self._source.startswith("<!--->", offset)
         self.events.append({
-            "kind": "comment", "text": data,
+            "kind": "comment", "text": data, "abrupt": abrupt, "offset": offset,
             "line": self.getpos()[0], "col": self.getpos()[1],
         })
 
@@ -307,18 +344,83 @@ def _tokenize(html: str, max_tags: int, max_depth: int) -> _FragmentTokenizer:
     return tokenizer
 
 
+def _blank_raw_text_spans(source: str, word: str, close_re: re.Pattern) -> str:
+    """Blank ``<word ...>`` ... ``</word>`` (or EOF) spans, offsets preserved.
+
+    Linear-time equivalent of ``<word\\b[^>]*>.*?(?:</word\\s*>|\\Z)``: the
+    regex form backtracks quadratically when many ``<word`` starts never see
+    a ``>``. Semantics are identical: the open tag ends at the first ``>``
+    after the tag word (``[^>]*`` cannot cross one) and the span runs to the
+    first close tag or end of input.
+    """
+    open_needle = "<" + word
+    low = source.lower()
+    word_end = 1 + len(word)
+    out: list[str] = []
+    i = 0
+    n = len(source)
+    while True:
+        start = low.find(open_needle, i)
+        if start < 0:
+            out.append(source[i:])
+            return "".join(out)
+        # \b after the tag word: the next character must not be a word char.
+        following = source[start + word_end:start + word_end + 1]
+        if following and (following.isalnum() or following == "_"):
+            out.append(source[i:start + 1])
+            i = start + 1
+            continue
+        gt = source.find(">", start + word_end)
+        if gt < 0:
+            # No ">" anywhere ahead: no open tag can complete, so the regex
+            # would leave the remainder untouched.
+            out.append(source[i:])
+            return "".join(out)
+        match = close_re.search(source, gt + 1)
+        end = match.end() if match else n
+        out.append(source[i:start])
+        out.append(" " * (end - start))
+        i = end
+
+
+def _blank_comment_spans(source: str) -> str:
+    """Blank ``<!-- ... -->`` spans, offsets preserved (linear time)."""
+    out: list[str] = []
+    i = 0
+    while True:
+        start = source.find("<!--", i)
+        if start < 0:
+            out.append(source[i:])
+            return "".join(out)
+        close = source.find("-->", start + 4)
+        if close < 0:
+            # No "-->" anywhere ahead: no comment span can match, so the
+            # regex would leave the remainder untouched.
+            out.append(source[i:])
+            return "".join(out)
+        end = close + 3
+        out.append(source[i:start])
+        out.append(" " * (end - start))
+        i = end
+
+
 def _mask_raw_spans(source: str) -> str:
     """Blank out script/style/comment spans, preserving offsets."""
-    masked = _SCRIPT_SPAN_RE.sub(lambda m: " " * len(m.group(0)), source)
-    masked = _STYLE_SPAN_RE.sub(lambda m: " " * len(m.group(0)), masked)
-    masked = _COMMENT_SPAN_RE.sub(lambda m: " " * len(m.group(0)), masked)
+    masked = _blank_raw_text_spans(source, "script", _SCRIPT_CLOSE_RE)
+    masked = _blank_raw_text_spans(masked, "style", _STYLE_CLOSE_RE)
+    masked = _blank_comment_spans(masked)
     return masked
 
 
-def _line_of(source: str, offset: int) -> tuple[int, int]:
-    line = source.count("\n", 0, offset) + 1
-    line_start = source.rfind("\n", 0, offset) + 1
-    return line, offset - line_start
+def _line_starts_of(source: str) -> list[int]:
+    starts = [0]
+    starts.extend(i + 1 for i, char in enumerate(source) if char == "\n")
+    return starts
+
+
+def _line_col_at(starts: list[int], offset: int) -> tuple[int, int]:
+    index = bisect_right(starts, offset) - 1
+    return index + 1, offset - starts[index]
 
 
 class HtmlAuditTool(Tool):
@@ -403,7 +505,10 @@ class HtmlAuditTool(Tool):
                 raise ValueError("allowed_tags entries must be strings")
             tag = item.strip().lower()
             if not _TAG_NAME_RE.match(tag):
-                raise ValueError(f"invalid allowed_tags entry: {item!r}")
+                # Truncate the echoed entry: values can be arbitrarily long
+                # and the error must not become an unbounded echo.
+                raise ValueError(
+                    f"invalid allowed_tags entry: {_truncate(repr(item), 60)}")
             if tag not in normalized:
                 normalized.append(tag)
         if not normalized:
@@ -425,14 +530,28 @@ class HtmlAuditTool(Tool):
             "reason": reason,
         }
 
-    def _audit_events(self, events: list[dict[str, Any]], srcdoc_depth: int = 0) -> list[dict[str, Any]]:
-        """Core audit pass over one event stream (also used for srcdoc)."""
+    def _audit_events(self, source: str, events: list[dict[str, Any]],
+                      depth: int = 0) -> list[dict[str, Any]]:
+        """Core audit pass over one event stream (also used for srcdoc and
+        abrupt-comment re-audit)."""
         findings: list[dict[str, Any]] = []
+        starts: list[int] | None = None
         for event in events:
             kind = event["kind"]
             if kind == "start":
-                findings.extend(self._audit_start(event, srcdoc_depth))
+                findings.extend(self._audit_start(event, depth))
             elif kind == "comment":
+                if event.get("abrupt"):
+                    if starts is None:
+                        starts = _line_starts_of(source)
+                    evidence_end = min(len(source), event["offset"] + self.max_evidence_chars)
+                    findings.append(self._finding(
+                        "ABRUPT_COMMENT", "medium", "#comment", None,
+                        source[event["offset"]:evidence_end],
+                        "browsers close <!--> (or <!--->) as an empty comment immediately; "
+                        "the following markup is live and can smuggle payloads past filters",
+                        event["line"], event["col"]))
+                    findings.extend(self._audit_abrupt_hidden(source, event, starts, depth))
                 if _IE_CONDITIONAL_RE.search(event["text"]):
                     findings.append(self._finding(
                         "IE_CONDITIONAL_COMMENT", "medium", "#comment", None,
@@ -440,8 +559,44 @@ class HtmlAuditTool(Tool):
                         "comment contains an IE conditional hack that can smuggle markup past filters",
                         event["line"], event["col"]))
             elif kind == "data":
-                findings.extend(self._audit_data(event))
+                if starts is None:
+                    starts = _line_starts_of(source)
+                findings.extend(self._audit_data(event, starts))
         return findings
+
+    def _audit_abrupt_hidden(self, source: str, event: dict[str, Any],
+                             starts: list[int], depth: int) -> list[dict[str, Any]]:
+        """Re-audit the markup html.parser hid inside an abruptly-closed comment.
+
+        Browsers treat everything after ``<!-->``/``<!--->`` as live markup;
+        html.parser swallows it while scanning for the next ``-->``. The
+        hidden slice is re-tokenized and its findings are remapped to the
+        original source coordinates.
+        """
+        if depth >= _NESTED_AUDIT_DEPTH:
+            return []
+        offset = event["offset"]
+        prefix_len = 6 if source.startswith("<!--->", offset) else 5
+        close_at = offset + 4 + len(event["text"])
+        if source[close_at:close_at + 3] == "-->" or source[close_at:close_at + 4] == "--!>":
+            hidden_end = close_at
+        else:
+            hidden_end = len(source)
+        hidden = source[offset + prefix_len:hidden_end]
+        if not hidden.strip():
+            return []
+        try:
+            tokenizer = _tokenize(hidden, self.max_tags, self.max_depth)
+        except _CapViolation:
+            return []
+        inner = self._audit_events(hidden, tokenizer.events, depth + 1)
+        remapped: list[dict[str, Any]] = []
+        for finding in inner:
+            inner_offset = tokenizer.offset_at(finding["line"], finding["col"])
+            line, col = _line_col_at(starts, offset + prefix_len + inner_offset)
+            finding["line"], finding["col"] = line, col
+            remapped.append(finding)
+        return remapped
 
     def _audit_start(self, event: dict[str, Any], srcdoc_depth: int = 0) -> list[dict[str, Any]]:
         findings: list[dict[str, Any]] = []
@@ -520,16 +675,19 @@ class HtmlAuditTool(Tool):
 
         if tag == "meta":
             findings.extend(self._audit_meta(event, attr_map, line, col))
-        if tag in ("a", "area") and attr_map.get("target", "").strip().lower() == "_blank":
-            rel = " ".join(attr_map.get("rel", "").lower().split())
+        if tag in _ANIMATION_ELEMENTS and (attr_map.get("attributename") or "").strip().lower() in _HREF_ATTR_NAMES:
+            findings.extend(self._audit_animation_values(event, attr_map, line, col))
+        if tag in ("a", "area") and (attr_map.get("target") or "").strip().lower() == "_blank":
+            rel_value = attr_map.get("rel") or ""
+            rel = " ".join(rel_value.lower().split())
             tokens = set(rel.split()) - {""}
             if not ({"noopener", "noreferrer"} & tokens):
                 findings.append(self._finding(
                     "TARGET_NO_REL", "info", tag, "target",
-                    f'target="_blank" rel="{attr_map.get("rel", "")}"',
+                    f'target="_blank" rel="{rel_value}"',
                     "target=_blank link lacks rel=noopener/noreferrer; legacy browsers expose window.opener",
                     line, col))
-        if tag == "input" and attr_map.get("type", "").strip().lower() == "hidden" and "autofocus" in attr_map:
+        if tag == "input" and (attr_map.get("type") or "").strip().lower() == "hidden" and "autofocus" in attr_map:
             findings.append(self._finding(
                 "HIDDEN_AUTOFOCUS", "medium", tag, "autofocus",
                 raw,
@@ -537,9 +695,32 @@ class HtmlAuditTool(Tool):
                 line, col))
         return findings
 
+    def _audit_animation_values(self, event, attr_map, line, col) -> list[dict[str, Any]]:
+        """Flag <animate>/<set> elements that retarget href/xlink:href.
+
+        SVG animation elements assign their from/to/by/values attributes to
+        the attribute named by attributeName; targeting href turns the value
+        into a navigable URL (a published SVG XSS vector class).
+        """
+        findings: list[dict[str, Any]] = []
+        tag = event["tag"]
+        for name in _ANIMATION_VALUE_ATTRS:
+            value = attr_map.get(name) or ""
+            if not value:
+                continue
+            candidates = value.split(",") if name == "values" else [value]
+            for candidate in candidates:
+                result = _classify_url(candidate.strip())
+                if result:
+                    code, detail = result
+                    findings.append(self._finding(
+                        code, "high" if code == "DANGEROUS_URL_SCHEME" else "low",
+                        tag, name, f'{name}="{value}"', detail, line, col))
+        return findings
+
     def _audit_meta(self, event, attr_map, line, col) -> list[dict[str, Any]]:
         findings: list[dict[str, Any]] = []
-        http_equiv = attr_map.get("http-equiv", "").strip().lower()
+        http_equiv = (attr_map.get("http-equiv") or "").strip().lower()
         raw = event["raw"]
         if http_equiv == "refresh":
             content = attr_map.get("content", "") or ""
@@ -579,6 +760,11 @@ class HtmlAuditTool(Tool):
                 "STYLE_JS_URL", "high", tag, name, evidence,
                 "style value references a script-executing URL scheme",
                 line, col))
+        elif _STYLE_BINDING_RE.search(probed):
+            findings.append(self._finding(
+                "STYLE_BINDING", "medium", tag, name, evidence,
+                "style value uses -moz-binding or behavior, legacy script-executing CSS constructs",
+                line, col))
         elif _STYLE_EXPRESSION_RE.search(probed):
             findings.append(self._finding(
                 "STYLE_EXPRESSION", "medium", tag, name, evidence,
@@ -586,26 +772,37 @@ class HtmlAuditTool(Tool):
                 line, col))
         return findings
 
-    def _audit_data(self, event) -> list[dict[str, Any]]:
+    def _audit_data(self, event, starts: list[int]) -> list[dict[str, Any]]:
         findings: list[dict[str, Any]] = []
+        text = event["text"]
+        stripped = text.lstrip()
+        # Point data findings at the line/column where the quoted evidence
+        # actually begins (the raw data run may start lines earlier).
+        lead = len(text) - len(stripped)
+        line, col = _line_col_at(starts, event["offset"] + lead)
         if event["raw_parent"] == "style":
-            probed = _probe(event["text"])
-            evidence = event["text"]
+            probed = _probe(text)
+            evidence = text
             if _STYLE_SCHEME_RE.search(probed):
                 findings.append(self._finding(
                     "STYLE_JS_URL", "high", "style", None, evidence,
                     "style element content references a script-executing URL scheme",
-                    event["line"], event["col"]))
+                    line, col))
+            elif _STYLE_BINDING_RE.search(probed):
+                findings.append(self._finding(
+                    "STYLE_BINDING", "medium", "style", None, evidence,
+                    "style element content uses -moz-binding or behavior, legacy script-executing CSS constructs",
+                    line, col))
             elif _STYLE_EXPRESSION_RE.search(probed):
                 findings.append(self._finding(
                     "STYLE_EXPRESSION", "medium", "style", None, evidence,
                     "style element content uses expression()",
-                    event["line"], event["col"]))
-        elif event["raw_parent"] is None and re.search(r"<[a-zA-Z]", event["text"]):
+                    line, col))
+        elif event["raw_parent"] is None and re.search(r"<[a-zA-Z]", text):
             findings.append(self._finding(
-                "MALFORMED_MARKUP", "info", "#text", None, event["text"],
+                "MALFORMED_MARKUP", "info", "#text", None, text,
                 "text contains markup-like data that the tokenizer treated as text",
-                event["line"], event["col"]))
+                line, col))
         return findings
 
     def _audit_cdata_events(self, events) -> list[dict[str, Any]]:
@@ -630,25 +827,28 @@ class HtmlAuditTool(Tool):
 
         Recursion is bounded so srcdoc-in-srcdoc chains cannot loop.
         """
-        if depth > 2:
+        if depth > _NESTED_AUDIT_DEPTH:
             return ["SRCDOC_CHAIN_DEPTH"]
         try:
             tokenizer = _tokenize(value, self.max_tags, self.max_depth)
         except _CapViolation:
             return ["input_too_large"]
-        nested = self._audit_events(tokenizer.events, depth)
+        nested = self._audit_events(value, tokenizer.events, depth)
         return sorted({f["code"] for f in nested if f["severity"] in ("high", "medium")})
 
-    def _audit_raw_source(self, source: str, events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _audit_raw_source(self, source: str, events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
         """Cross-check the raw source for tags the tokenizer dropped.
 
         html.parser silently drops unterminated start tags at end of input,
         so every ``<tag`` occurrence outside script/style/comment spans is
         matched against recorded tag events; unmatched occurrences are
         reported and probed for dangerous schemes or event handlers.
+        Returns ``(findings, capped)`` where ``capped`` says whether more
+        occurrences existed than were reported.
         """
         findings: list[dict[str, Any]] = []
         masked = _mask_raw_spans(source)
+        starts = _line_starts_of(source)
         event_counts: Counter = Counter()
         for event in events:
             if event["kind"] == "start":
@@ -659,15 +859,22 @@ class HtmlAuditTool(Tool):
             name = match.group(1).lower()
             counts[name] += 1
             raw_occurrences.setdefault(name, []).append(match.start())
+        # Occurrences recovered per tag name are capped: probing thousands of
+        # identical dropped tags is quadratic work for no extra signal, and
+        # the returned findings list is capped by max_findings anyway.
+        report_cap = max(_RAW_EXTRA_REPORT_CAP, self.max_findings)
+        capped = False
         for name in sorted(counts):
             extra = counts[name] - event_counts.get(name, 0)
             if extra <= 0:
                 continue
-            for offset in raw_occurrences[name][-extra:]:
+            if extra > report_cap:
+                capped = True
+            for offset in raw_occurrences[name][-min(extra, report_cap):]:
                 end = masked.find(">", offset)
                 end = len(masked) if end < 0 else min(end + 1, offset + 300)
                 slice_text = source[offset:end]
-                line, col = _line_of(source, offset)
+                line, col = _line_col_at(starts, offset)
                 probed = _probe(slice_text)
                 scheme = _inline_danger(probed)
                 matched = False
@@ -694,12 +901,13 @@ class HtmlAuditTool(Tool):
                         "MALFORMED_MARKUP", "info", name, None, slice_text,
                         "tag-like sequence was dropped by the tokenizer (unterminated or malformed)",
                         line, col))
-        return findings
+        return findings, capped
 
     def _audit_mode(self, source: str, tokenizer: _FragmentTokenizer) -> dict[str, Any]:
-        findings = self._audit_events(tokenizer.events)
+        findings = self._audit_events(source, tokenizer.events)
         findings.extend(self._audit_cdata_events(tokenizer.events))
-        findings.extend(self._audit_raw_source(source, tokenizer.events))
+        raw_findings, raw_capped = self._audit_raw_source(source, tokenizer.events)
+        findings.extend(raw_findings)
         findings.sort(key=lambda f: (f["line"], f["col"]))
         counts = Counter(f["severity"] for f in findings)
         finding_counts = {
@@ -709,7 +917,7 @@ class HtmlAuditTool(Tool):
             "low": counts.get("low", 0),
             "info": counts.get("info", 0),
         }
-        truncated = len(findings) > self.max_findings
+        truncated = len(findings) > self.max_findings or raw_capped
         return {
             "status": "success",
             "mode": "audit",
@@ -802,8 +1010,11 @@ class HtmlAuditTool(Tool):
                     attr_histogram[name] += 1
                 attr_map = dict(event["attrs"])
                 if tag == "form":
+                    action = attr_map.get("action")
                     record = {
-                        "action": attr_map.get("action"),
+                        # Attribute values can be arbitrarily long; echo them
+                        # truncated like every other piece of evidence.
+                        "action": _truncate(action, self.max_evidence_chars) if action else action,
                         "method": (attr_map.get("method") or "get").strip().lower(),
                         "input_count": 0,
                         "inputs": [],
@@ -811,8 +1022,9 @@ class HtmlAuditTool(Tool):
                     forms.append(record)
                     open_forms.append(record)
                 elif tag == "input":
+                    name = attr_map.get("name")
                     snapshot = {"type": (attr_map.get("type") or "text").strip().lower(),
-                                "name": attr_map.get("name")}
+                                "name": _truncate(name, self.max_evidence_chars) if name else name}
                     if open_forms:
                         current = open_forms[-1]
                         current["input_count"] += 1
