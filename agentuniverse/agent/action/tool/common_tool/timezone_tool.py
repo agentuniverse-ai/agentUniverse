@@ -46,7 +46,12 @@ Five modes:
   time is ``ambiguous`` (occured twice — fall-back) or ``impossible``
   (never occurred — spring-forward gap): both folds of the naive
   time are converted to UTC and back; the wall time is ambiguous
-  when both folds round-trip and impossible when neither does.
+  when both folds round-trip and impossible when neither does. For
+  naive inputs the headline fields (``utc_offset`` / ``tzname`` /
+  ``dst`` / ``is_dst`` / ``local_datetime``) always describe the
+  fold=0 reading of the input wall time — for a gap time that is
+  the pre-gap offset, and ``local_datetime`` echoes the
+  (never-occurred) input wall time.
 * ``transitions`` — a zone plus a year (1970..2100) to its UTC
   offset transitions, each with ``at`` (the transition instant in
   zone wall time on the *new* offset side — the convention "clocks
@@ -54,14 +59,18 @@ Five modes:
   ``wall_after`` (both sides, explicit), ``from_offset``,
   ``to_offset``, ``delta_minutes`` and abbreviations. A coarse 6-hour
   scan across the year detects candidate windows, each refined by
-  bisection to one hour and then a minute-level scan; the honest
+  bisection to one hour, then a minute-level scan, then a final
+  second-level refinement; the honest
   granularity statement: this detects every pair of transitions at
   least 6 hours apart, and a sweep of the transition-dense tzdata
   zones (Ramadan-adjusting Casablanca/Cairo, Gaza/Hebron, Troll,
   Lord Howe, ...) shows the closest consecutive transitions between
-  1970 and 2100 are 7 days apart (Asia/Gaza, October 2040), so
-  nothing is missed; all post-1970 tzdata transitions are
-  minute-aligned, so the located instants are exact to the minute.
+  1970 and 2100 are just under 7 days apart (6 d 23 h, Asia/Gaza,
+  October 2040), so nothing is missed; post-1970 tzdata transitions
+  are second-aligned — a handful are not minute-aligned (e.g.
+  Africa/Monrovia's 1972 LMT handover fires at 00:44:30 UTC), which
+  the second refinement pins — so the located instants are exact to
+  the second.
   Southern/northern hemisphere inference comes from the month of the
   offset-increasing transition (Aug-Dec → southern, Feb-Jul →
   northern).
@@ -177,6 +186,7 @@ _MAX_WINDOW_ZONES = 8
 # verified minimum inter-transition gap (7 days, tzdata 1970-2100).
 _SCAN_STEP = datetime.timedelta(hours=6)
 _MINUTE = datetime.timedelta(minutes=1)
+_SECOND = datetime.timedelta(seconds=1)
 _HOUR = datetime.timedelta(hours=1)
 
 
@@ -227,8 +237,10 @@ class TimezoneTool(Tool):
         "interpreted in the zone, aware ones converted; utc_offset "
         "±HH:MM, tzname, dst delta, is_dst, utcoffset_seconds, and "
         "PEP 495 ambiguous/impossible wall-time detection via "
-        "two-fold UTC round-trips). List a year's DST transitions "
-        "(mode='transitions': 6-hour scan + bisection + minute "
+        "two-fold UTC round-trips; for naive inputs the headline "
+        "fields follow the fold=0 reading, pre-gap offsets for "
+        "spring-forward gap times). List a year's DST transitions "
+        "(mode='transitions': 6-hour scan + bisection + second "
         "refinement, wall time on the new-offset side, hemisphere "
         "inference). Compare two zones (mode='compare': fixed-"
         "reference offset diff, DST policy diff, working-band "
@@ -696,6 +708,15 @@ class TimezoneTool(Tool):
             ambiguous, impossible, o0, o1, moment_utc = self._fold_flags(
                 zone, naive
             )
+            # The headline fields always describe the fold=0 reading
+            # of the INPUT wall time. For a spring-forward gap time
+            # the round-tripped instant would land past the gap and
+            # silently report the post-gap offset — contradicting
+            # the documented "fold=0 (pre-gap)" semantics — so the
+            # fields are read off the fold=0 attach directly; for
+            # normal and ambiguous wall times this is bit-identical
+            # to the round-trip (the first occurrence).
+            primary = naive.replace(tzinfo=zone, fold=0)
         else:
             interpretation = "aware_converted"
             moment_utc = naive.replace(tzinfo=tz_in).astimezone(UTC)
@@ -706,7 +727,7 @@ class TimezoneTool(Tool):
             ambiguous, impossible, o0, o1, _ = self._fold_flags(
                 zone, wall.replace(tzinfo=None)
             )
-        primary = moment_utc.astimezone(zone)
+            primary = wall
         dst_delta = primary.dst()
         payload: Dict[str, Any] = {
             "mode": "offset",
@@ -752,9 +773,12 @@ class TimezoneTool(Tool):
 
         ``off_lo`` is the offset at ``lo`` (the invariant side).
         Bisection narrows the bracket to one hour, then a forward
-        minute scan finds the first minute carrying the new offset —
-        every post-1970 tzdata transition is minute-aligned, so the
-        result is exact.
+        minute scan finds the first minute carrying the new offset,
+        and a final second scan inside that minute pins the instant
+        exactly — post-1970 tzdata transitions are second-aligned,
+        and a handful are not minute-aligned (Africa/Monrovia's 1972
+        LMT handover fires at 00:44:30 UTC), so the second refinement
+        is what makes the result exact for every transition.
         """
         while hi - lo > _HOUR:
             mid = lo + (hi - lo) / 2
@@ -766,7 +790,13 @@ class TimezoneTool(Tool):
         while cls._offset_at(zone, step) == off_lo:
             lo = step
             step = step + _MINUTE
-        return step
+        # Whole-second base (bisection left microseconds on ``lo``);
+        # transition instants are whole seconds, so flooring keeps
+        # the old-offset invariant of the bracket.
+        moment = lo.replace(microsecond=0) + _SECOND
+        while cls._offset_at(zone, moment) == off_lo:
+            moment = moment + _SECOND
+        return moment
 
     def _run_transitions(self, key: str, year: int) -> Dict[str, Any]:
         zone = self._resolve_zone(key)
@@ -838,10 +868,13 @@ class TimezoneTool(Tool):
             "hemisphere_inference": hemisphere,
             "scan_note": (
                 f"coarse {int(_SCAN_STEP.total_seconds() // 3600)}-hour "
-                "scan across the year, then bisection to one hour and "
-                "a minute scan; the closest consecutive tzdata "
-                "transitions 1970-2100 are 7 days apart (verified "
-                "sweep), and post-1970 transitions are minute-aligned"
+                "scan across the year, then bisection to one hour, a "
+                "minute scan and a second refinement; the closest "
+                "consecutive tzdata transitions 1970-2100 are just "
+                "under 7 days apart (6 d 23 h, verified sweep), and "
+                "transitions are located exactly to the second "
+                "(sub-minute LMT handovers such as Africa/Monrovia "
+                "1972-01-07 00:44:30 UTC included)"
             ),
         }
 

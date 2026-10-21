@@ -659,14 +659,20 @@ resolves a zone at an ISO datetime — naive datetimes are interpreted
 naive time are converted to UTC and back: ambiguous when both folds
 round-trip, impossible when neither does — New York `2024-03-10
 02:30` is a gap, `2024-11-03 01:30` occurs twice, and Pacific/Apia
-`2011-12-30` never existed). `transitions` mode lists a year's
+`2011-12-30` never existed). For naive inputs the headline fields
+(`utc_offset`/`tzname`/`dst`/`is_dst`/`local_datetime`) always
+describe the fold=0 reading of the input wall time: for a gap time
+that is the pre-gap offset, and `local_datetime` echoes the
+never-occurred input wall time. `transitions` mode lists a year's
 offset transitions (1970-2100) with the instant in zone wall time on
 the new-offset side, both wall sides, from/to offsets, deltas and
 abbreviations, plus a southern/northern hemisphere inference; it
 scans coarsely at 6-hour steps, bisects to one hour and refines to
-the minute — the closest consecutive tzdata transitions 1970-2100
-are 7 days apart (verified sweep of the transition-dense zones), so
-nothing is missed, and post-1970 transitions are minute-aligned.
+the second — the closest consecutive tzdata transitions 1970-2100
+are just under 7 days apart (6 d 23 h, verified sweep of the
+transition-dense zones), so nothing is missed; sub-minute LMT
+handovers (e.g. Africa/Monrovia's 1972-01-07 00:44:30 UTC
+transition) are pinned exactly by the second refinement.
 `compare` mode contrasts two zones: a fixed-reference (2026-06-15
 12:00 UTC) offset difference, DST-policy difference, the UTC hours
 of a day on which both zones sit inside a 08:00-20:00 local working

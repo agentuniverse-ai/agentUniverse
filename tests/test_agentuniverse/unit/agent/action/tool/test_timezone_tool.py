@@ -516,6 +516,37 @@ class TimezoneToolTest(unittest.TestCase):
         self.assertEqual(kinds[4], "dst_end")
         self.assertEqual(kinds[9], "dst_start")
 
+    def test_transitions_sub_minute_lmt_monrovia_1972(self) -> None:
+        # Hostile regression: Africa/Monrovia's LMT handover
+        # (-00:44:30 -> +00:00) fires at 1972-01-07T00:44:30Z — a
+        # post-1970 transition that is NOT minute-aligned. The
+        # second-level refinement must locate it exactly, not round
+        # up to the next whole minute.
+        result = self.tool.execute(
+            mode="transitions", zone="Africa/Monrovia", year=1972
+        )
+        self.assertEqual(result["count"], 1)
+        item = result["transitions"][0]
+        self.assertEqual(item["at_utc"], "1972-01-07T00:44:30Z")
+        self.assertEqual(item["from_offset"], "-00:44:30")
+        self.assertEqual(item["to_offset"], "+00:00")
+        self.assertEqual(item["delta"], "+00:44:30")
+        self.assertEqual(item["wall_before"], "1972-01-07T00:00:00")
+        self.assertEqual(item["wall_after"], "1972-01-07T00:44:30")
+
+    def test_transitions_tehran_no_dst_after_2022(self) -> None:
+        # Iran abolished DST in 2022; every later year is flat
+        # +03:30 despite the zone's pre-2022 history.
+        for year in (2026, 2028, 2030):
+            result = self.tool.execute(
+                mode="transitions", zone="Asia/Tehran", year=year
+            )
+            with self.subTest(year=year):
+                self.assertEqual(result["count"], 0)
+                self.assertEqual(
+                    result["hemisphere_inference"], "no_dst_or_unknown"
+                )
+
     # ------------------------------------------------------------------ #
     # (c) ambiguous / impossible — hand-verified PEP 495 literals
     # ------------------------------------------------------------------ #
@@ -545,6 +576,74 @@ class TimezoneToolTest(unittest.TestCase):
         self.assertEqual(result["fold_offsets"],
                          {"fold_0": "-05:00", "fold_1": "-04:00"})
         self.assertIn("never existed", result["note"])
+        # The headline fields follow the fold=0 (pre-gap) reading —
+        # exactly what the note promises: EST, no DST, and the input
+        # wall time echoed back (it never occurred).
+        self.assertEqual(result["utc_offset"], "-05:00")
+        self.assertEqual(result["tzname"], "EST")
+        self.assertEqual(result["dst"], "+00:00")
+        self.assertFalse(result["is_dst"])
+        self.assertEqual(result["local_datetime"], "2024-03-10T02:30:00")
+        self.assertEqual(result["utc_datetime"], "2024-03-10T07:30:00Z")
+
+    def test_gap_time_headline_follows_fold0_semantics(self) -> None:
+        # Hostile regression: for spring-forward gap times the
+        # headline fields must describe the fold=0 (pre-gap) reading
+        # of the input, never the post-gap side of the round-tripped
+        # instant (Sydney 2026-10-04 02:00 -> 03:00; Havana
+        # 2026-03-08 00:00 -> 01:00).
+        sydney = self.tool.execute(
+            mode="offset", zone="Australia/Sydney",
+            datetime_str="2026-10-04T02:30",
+        )
+        self.assertTrue(sydney["impossible"])
+        self.assertEqual(sydney["fold_offsets"],
+                         {"fold_0": "+10:00", "fold_1": "+11:00"})
+        self.assertEqual(sydney["utc_offset"], "+10:00")
+        self.assertEqual(sydney["tzname"], "AEST")
+        self.assertEqual(sydney["dst"], "+00:00")
+        self.assertFalse(sydney["is_dst"])
+        self.assertEqual(sydney["local_datetime"], "2026-10-04T02:30:00")
+        self.assertEqual(sydney["utc_datetime"], "2026-10-03T16:30:00Z")
+
+        havana = self.tool.execute(
+            mode="offset", zone="America/Havana",
+            datetime_str="2026-03-08T00:30",
+        )
+        self.assertTrue(havana["impossible"])
+        self.assertEqual(havana["fold_offsets"],
+                         {"fold_0": "-05:00", "fold_1": "-04:00"})
+        self.assertEqual(havana["utc_offset"], "-05:00")
+        self.assertEqual(havana["tzname"], "CST")
+        self.assertEqual(havana["local_datetime"], "2026-03-08T00:30:00")
+        self.assertEqual(havana["utc_datetime"], "2026-03-08T05:30:00Z")
+
+    def test_ambiguous_southern_fall_back_boundaries(self) -> None:
+        # Southern-hemisphere fall-back boundaries to the second:
+        # Sydney 2026-04-05 03:00 -> 02:00 (02:xx repeats),
+        # Chatham 2026-04-05 03:45 -> 02:45, Havana 2026-11-01
+        # 01:00 -> 00:00 (00:xx repeats).
+        cases = [
+            ("Australia/Sydney", "2026-04-05T01:59:59", False),
+            ("Australia/Sydney", "2026-04-05T02:00:00", True),
+            ("Australia/Sydney", "2026-04-05T02:59:59", True),
+            ("Australia/Sydney", "2026-04-05T03:00:00", False),
+            ("Pacific/Chatham", "2026-04-05T03:00:00", True),
+            ("America/Havana", "2026-11-01T00:30:00", True),
+            ("America/Havana", "2026-11-01T01:00:00", False),
+        ]
+        for zone_key, dt_str, expect_ambiguous in cases:
+            result = self.tool.execute(
+                mode="offset", zone=zone_key, datetime_str=dt_str
+            )
+            with self.subTest(zone=zone_key, dt=dt_str):
+                self.assertEqual(result["ambiguous"], expect_ambiguous)
+                self.assertFalse(result["impossible"])
+                # fold=0 is the primary (first-occurrence) reading.
+                self.assertEqual(
+                    result["utc_offset"], result["fold_offsets"]["fold_0"]
+                )
+                self.assertEqual(result["local_datetime"], dt_str)
 
     def test_ambiguous_lord_howe_half_hour_fall_back(self) -> None:
         # Fall-back is 02:00 -> 01:30, so 01:45 happens twice.
