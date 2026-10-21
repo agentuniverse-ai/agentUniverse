@@ -1,0 +1,34 @@
+name: csv_injection_tool
+description: Detect, explain, and neutralize spreadsheet formula injection (OWASP CSV Injection) in CSV/TSV cell values.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.csv_injection_tool
+  class: CsvInjectionTool
+input_keys:
+  - mode
+  - csv_text
+max_csv_chars: 5000000
+max_cells: 200000
+max_findings: 2000
+max_snippet: 80
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [scan, neutralize, explain, headers]
+    csv_text:
+      type: string
+    cell_value: {type: string}
+    dialect:
+      type: string
+      enum: [excel, excel-tab, unix]
+      default: excel
+    delimiter: {type: string}
+    quotechar: {type: string}
+    has_header:
+      type: boolean
+      default: true
+  required: [mode]
+  additionalProperties: false
