@@ -30,19 +30,33 @@ is the upper-case verb, ``params_count`` is the *effective* merged
 parameter count (operation parameters plus path-item parameters the
 operation does not override — the OpenAPI override rule), and
 ``has_request_body`` honours both the 3.x ``requestBody`` object and
-the 2.0 ``in: body`` parameter. Both JSON and YAML document bodies
-are accepted (``json.loads`` first for precise errors, then
-``yaml.safe_load`` — the same document in either spelling produces
-the same inventory).
+the 2.0 ``in: body`` parameter. Path Items reached through a local
+``$ref`` (e.g. ``components/pathItems``) and 3.1 ``webhooks``
+entries (counted under ``counts.webhooks``, listed with the webhook
+name as ``path``) are endpoints like any other. Both JSON and YAML
+document bodies are accepted (``json.loads`` first for precise
+errors, then ``yaml.safe_load`` — the same document in either
+spelling produces the same inventory).
 
 ``lint`` — findings ``{code, severity, path, message}`` sorted by
 (severity, code, path) with severities ``error`` / ``warning`` /
-``info``:
+``info``. Path Items are honoured wherever they appear — directly
+under ``paths``, referenced through a local ``$ref`` (e.g. 3.1
+``components/pathItems``), or as 3.1 ``webhooks`` — and parameter /
+response objects may themselves be local ``$ref``s.
 
+* ``spec_version_invalid`` (error) — no usable ``openapi`` /
+  ``swagger`` version string at the root (absent, not a string — an
+  unquoted ``3.1`` YAML float — or not ``X.Y.Z``-shaped, e.g.
+  ``"3.1"``); nothing downstream can be validated without it.
 * ``missing_info_title`` / ``missing_info_version`` (error) — the
   required ``info.title`` / ``info.version`` are absent or empty.
-* ``paths_empty`` (error) — no ``paths`` at all (an API document
-  without endpoints).
+* ``paths_empty`` (warning) — neither ``paths`` nor ``webhooks``
+  carries an endpoint (the OpenAPI schema itself permits an empty
+  ``paths`` object, so this is advice, not a violation).
+* ``responses_missing`` (error) — an operation without a non-empty
+  ``responses`` object; REQUIRED on the Operation Object in every
+  OpenAPI version.
 * ``operation_id_missing`` (warning) — an operation without an
   ``operationId`` (clients and code generators rely on it).
 * ``operation_id_duplicate`` (error) — one ``operationId`` on two or
@@ -51,9 +65,11 @@ the same inventory).
 * ``path_param_undeclared`` (error) — the path template uses
   ``{name}`` but no effective ``in: path`` parameter declares it (the
   exact defect that makes request building crash at runtime).
-* ``path_param_defined_but_unused`` (warning) — an ``in: path``
-  parameter whose name never appears in the path template (dead
-  metadata; harmless but confusing).
+* ``path_param_defined_but_unused`` (error) — an ``in: path``
+  parameter whose name never appears in the path template (the
+  specification's MUST that ``in: path`` names correspond to a
+  template expression; Swagger 2.0 validators are lenient about it,
+  this tool is not).
 * ``response_without_description`` (error) — a response entry whose
   ``description`` is missing or empty (``description`` is REQUIRED on
   the Response Object in every OpenAPI version).
@@ -80,6 +96,11 @@ the same inventory).
   is **cycle-guarded** (self-referencing schemas are legal and do not
   hang the walk); refs to other documents (``http://…``, ``file.yaml``)
   cannot be verified offline and are skipped by design.
+
+Strictness beyond the JSON Schema (deliberate, documented): blank
+``info.title`` / ``info.version`` strings are treated as missing,
+and the ``in: path`` template MUST is enforced on 2.0 documents
+where the swagger tooling is lenient.
 
 ``diff`` — the version-drift mode over two spec texts (``document`` =
 the NEW version, ``document_old`` = the previous one): endpoints
@@ -109,6 +130,7 @@ modified, no filesystem or network access happens.
 """
 
 import json
+import re
 from typing import Any, ClassVar, Dict, List, Optional, Set, Tuple
 
 from pydantic import ConfigDict
@@ -132,8 +154,14 @@ _HTTP_METHODS: Tuple[str, ...] = (
 # Finding sort order: errors first, then warnings, then infos.
 _SEVERITY_RANK = {"error": 0, "warning": 1, "info": 2}
 
-# Guard for the cycle-safe $ref walk and parameter dereferencing.
-_MAX_DEREF_DEPTH = 8
+# Cycle safety for local $ref dereferencing is handled by a visited
+# set; the depth cap only bounds absurdly long legal chains.
+_MAX_DEREF_DEPTH = 200
+
+# Well-formed root version strings. OpenAPI is X.Y.Z (semver-style
+# pre-release/build suffixes allowed); Swagger 2.0 is X[.Y[.Z]].
+_OPENAPI_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$")
+_SWAGGER_VERSION_RE = re.compile(r"^\d+\.\d+(?:\.\d+(?:[-+][0-9A-Za-z.+-]+)?)?$")
 
 
 # ------------------------------------------------------------------ #
@@ -209,14 +237,31 @@ def _info_field(spec: Dict[str, Any], field: str) -> Optional[str]:
 
 
 def _path_items(spec: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
-    """(path, path-item) pairs in deterministic document order."""
+    """(path, path-item) pairs in deterministic document order.
+
+    A path item that is a local ``$ref`` (e.g. 3.1
+    ``components/pathItems``) is resolved first — sibling keys of the
+    referencing item are merged over the target (3.1 semantics).
+    """
     paths = spec.get("paths")
     if not isinstance(paths, dict):
         return []
     items: List[Tuple[str, Dict[str, Any]]] = []
     for path, item in paths.items():
         if isinstance(path, str) and isinstance(item, dict):
-            items.append((path, item))
+            items.append((path, _deref_local(item, spec)))
+    return items
+
+
+def _webhook_items(spec: Dict[str, Any]) -> List[Tuple[str, Dict[str, Any]]]:
+    """(name, path-item) pairs of 3.1 ``webhooks``, $ref-resolved."""
+    webhooks = spec.get("webhooks")
+    if not isinstance(webhooks, dict):
+        return []
+    items: List[Tuple[str, Dict[str, Any]]] = []
+    for name, item in webhooks.items():
+        if isinstance(name, str) and isinstance(item, dict):
+            items.append((name, _deref_local(item, spec)))
     return items
 
 
@@ -248,26 +293,55 @@ def _template_param_names(path: str) -> List[str]:
     return names
 
 
-def _deref_param(param: Any, spec: Dict[str, Any], depth: int = 0) -> Any:
-    """Resolve a Parameter Object ``$ref`` into ``components/parameters``.
+def _pointer_lookup(spec: Dict[str, Any], ref: str) -> Tuple[bool, Any]:
+    """RFC 6901 lookup of a ``#/…`` pointer inside the document.
 
-    Local (``#/…``) refs only, depth-capped so a parameters cycle
-    cannot recurse forever; an unresolvable ref is returned as-is and
-    left to the dangling-ref lint rule to report.
+    Tokens are unescaped (``~1`` → ``/``, ``~0`` → ``~``); both dict
+    keys and array indices are followed.
     """
-    if depth >= _MAX_DEREF_DEPTH or not isinstance(param, dict):
-        return param
-    ref = param.get("$ref")
-    if not (isinstance(ref, str) and ref.startswith("#/")):
-        return param
-    target: Any = spec
-    for part in ref[2:].split("/"):
-        part = part.replace("~1", "/").replace("~0", "~")
-        if isinstance(target, dict) and part in target:
-            target = target[part]
+    remainder = ref[1:]
+    node: Any = spec
+    tokens = remainder[1:].split("/") if remainder else []
+    for token in tokens:
+        token = token.replace("~1", "/").replace("~0", "~")
+        if isinstance(node, dict) and token in node:
+            node = node[token]
+        elif isinstance(node, list) and token.isdigit() and int(token) < len(node):
+            node = node[int(token)]
         else:
-            return param
-    return _deref_param(target, spec, depth + 1)
+            return False, None
+    return True, node
+
+
+def _deref_local(
+    node: Any, spec: Dict[str, Any],
+    depth: int = 0, visited: frozenset = frozenset(),
+) -> Any:
+    """Resolve a Reference Object (``$ref``) to a local ``#/…`` pointer.
+
+    Chained refs are followed with a visited set — cycles terminate
+    with the last resolved node, and legal chains of any realistic
+    length resolve exactly. Non-local refs and unresolvable pointers
+    are returned as-is (the dangling-ref lint rule reports the
+    latter). Sibling keys of the referencing object are merged over
+    the resolved target (3.1 Reference Object semantics).
+    """
+    if depth >= _MAX_DEREF_DEPTH or not isinstance(node, dict):
+        return node
+    ref = node.get("$ref")
+    if not (isinstance(ref, str) and ref.startswith("#/")) or ref in visited:
+        return node
+    found, target = _pointer_lookup(spec, ref)
+    if not found or target is node:
+        return node
+    resolved = _deref_local(target, spec, depth + 1, visited | {ref})
+    if not isinstance(resolved, dict):
+        return node
+    merged = dict(resolved)
+    for key, value in node.items():
+        if key != "$ref":
+            merged[key] = value
+    return merged
 
 
 # The spec currently being inspected; set by execute below. Kept
@@ -284,7 +358,7 @@ def _param_lists(
     def _deref_list(raw: Any) -> List[Any]:
         if not isinstance(raw, list):
             return []
-        return [_deref_param(entry, _SPEC_CONTEXT[0]) for entry in raw]
+        return [_deref_local(entry, _SPEC_CONTEXT[0]) for entry in raw]
 
     return _deref_list(path_item.get("parameters")), _deref_list(operation.get("parameters"))
 
@@ -349,17 +423,8 @@ def _resolve_local_pointer(spec: Dict[str, Any], ref: str) -> bool:
     remainder = ref[1:]
     if remainder and not remainder.startswith("/"):
         return False  # '#foo' is not a JSON pointer
-    node: Any = spec
-    tokens = remainder[1:].split("/") if remainder else []
-    for token in tokens:
-        token = token.replace("~1", "/").replace("~0", "~")
-        if isinstance(node, dict) and token in node:
-            node = node[token]
-        elif isinstance(node, list) and token.isdigit() and int(token) < len(node):
-            node = node[int(token)]
-        else:
-            return False
-    return True
+    found, _ = _pointer_lookup(spec, ref)
+    return found
 
 
 def _walk_dangling_refs(
@@ -420,15 +485,18 @@ class ApiDocTool(Tool):
         "(mode='inventory': openapi_version, title, endpoints with "
         "method/path/operation_id/summary/tags/params_count/"
         "has_request_body/responses_count sorted by path+method, plus "
-        "counts). Lint a spec (mode='lint') for rule findings "
-        "{code, severity, path, message}: missing info title/version, "
-        "empty paths, missing or duplicate operationIds, path "
-        "template params undeclared or declared-but-unused, responses "
-        "without description, duplicate parameter names per in-type, "
-        "security referencing undefined schemes, deprecated "
-        "operations without description, operations without error "
-        "responses, missing servers and dangling schema $refs "
-        "(cycle-guarded walk). Diff two spec versions "
+        "counts; path-item $refs resolved and 3.1 webhooks included). "
+        "Lint a spec (mode='lint') for rule findings "
+        "{code, severity, path, message}: invalid openapi/swagger "
+        "version string, missing info title/version, empty paths and "
+        "webhooks, missing responses, missing or duplicate "
+        "operationIds, path template params undeclared or "
+        "declared-but-unused, responses without description, "
+        "duplicate parameter names per in-type, security referencing "
+        "undefined schemes, deprecated operations without "
+        "description, operations without error responses, missing "
+        "servers and dangling schema $refs (cycle-guarded walk). "
+        "Diff two spec versions "
         "(mode='diff', document = new, document_old = previous): "
         "added/removed/changed endpoints with param and response "
         "deltas and a breaking flag true when endpoints, params or "
@@ -533,7 +601,8 @@ class ApiDocTool(Tool):
         if isinstance(definitions, dict):  # 2.0 best-effort
             schema_count += len(definitions)
 
-        for path, path_item in _path_items(spec):
+        webhook_items = _webhook_items(spec)
+        for path, path_item in _path_items(spec) + webhook_items:
             for method, operation in _operations(path_item):
                 _, order = _effective_params(path_item, operation)
                 responses = operation.get("responses")
@@ -559,6 +628,7 @@ class ApiDocTool(Tool):
                 params_total += len(order)
                 bodies_total += 1 if entry["has_request_body"] else 0
 
+        webhook_endpoints = sum(len(_operations(item)) for _, item in webhook_items)
         endpoints.sort(key=lambda e: _endpoint_key(e["method"], e["path"]))
         return {
             "openapi_version": version,
@@ -566,6 +636,7 @@ class ApiDocTool(Tool):
             "endpoints": endpoints,
             "counts": {
                 "paths": len(_path_items(spec)),
+                "webhooks": webhook_endpoints,
                 "endpoints": len(endpoints),
                 "methods": {m: method_counts[m] for m in sorted(method_counts)},
                 "parameters": params_total,
@@ -594,6 +665,27 @@ class ApiDocTool(Tool):
     def _lint(self, spec: Dict[str, Any]) -> Dict[str, Any]:
         findings: List[Dict[str, Any]] = []
 
+        # Rule: a usable openapi/swagger version string at the root.
+        version_field = (
+            "openapi" if "openapi" in spec else
+            "swagger" if "swagger" in spec else "openapi"
+        )
+        flavor, version = _spec_flavor(spec)
+        version_ok = (
+            flavor == "openapi" and bool(_OPENAPI_VERSION_RE.match(version))
+        ) or (
+            flavor == "swagger" and bool(_SWAGGER_VERSION_RE.match(version))
+        )
+        if not version_ok:
+            got = spec.get(version_field)
+            got = repr(got) if got is not None else "absent"
+            findings.append(self._finding(
+                "spec_version_invalid", "error", version_field,
+                f"{version_field} is not a usable version string (got "
+                f"{got}) — the root must carry e.g. openapi: 3.0.3 or "
+                "swagger: 2.0 before anything downstream can be checked",
+            ))
+
         # Rules: info.title / info.version (required fields).
         if _info_field(spec, "title") is None:
             findings.append(self._finding(
@@ -608,13 +700,15 @@ class ApiDocTool(Tool):
                 "OpenAPI specification; clients version against it",
             ))
 
-        # Rule: paths must exist and be non-empty.
+        # Rule: some endpoint must exist — in paths or webhooks.
         path_items = _path_items(spec)
-        if not path_items:
+        webhook_items = _webhook_items(spec)
+        if not path_items and not webhook_items:
             findings.append(self._finding(
-                "paths_empty", "error", "paths",
-                "paths is missing, empty or malformed — an API "
-                "document without endpoints describes nothing",
+                "paths_empty", "warning", "paths",
+                "neither paths nor webhooks carries an endpoint — an "
+                "API document without endpoints describes nothing (the "
+                "OpenAPI schema itself permits an empty paths object)",
             ))
 
         # Rule: servers (3.x) / host+basePath (2.0 best-effort).
@@ -636,125 +730,13 @@ class ApiDocTool(Tool):
         seen_operation_ids: Dict[str, str] = {}
         duplicate_ids: Set[str] = set()
 
-        for path, path_item in path_items:
-            template_names = set(_template_param_names(path))
-
-            # Duplicate parameter names at the path-item level.
-            self._lint_duplicate_params(
-                path_item.get("parameters"),
-                f"paths.{path}", findings,
-            )
-
-            for method, operation in _operations(path_item):
-                op_path = f"paths.{path}.{method}"
-                self._lint_duplicate_params(
-                    operation.get("parameters"), op_path, findings,
+        containers = (("paths", path_items), ("webhooks", webhook_items))
+        for container, items in containers:
+            for path, path_item in items:
+                self._lint_path_container(
+                    spec, container, path, path_item, findings,
+                    seen_operation_ids, duplicate_ids,
                 )
-
-                # Rule: operationId missing (warning).
-                operation_id = operation.get("operationId")
-                if not (isinstance(operation_id, str) and operation_id):
-                    findings.append(self._finding(
-                        "operation_id_missing", "warning",
-                        f"{op_path}.operationId",
-                        f"{method.upper()} {path} has no operationId — "
-                        "clients and code generators rely on it to "
-                        "name the call",
-                    ))
-                else:
-                    # Rule: operationId duplicated across operations (error).
-                    first_seen = seen_operation_ids.get(operation_id)
-                    if first_seen is None:
-                        seen_operation_ids[operation_id] = op_path
-                    else:
-                        if operation_id not in duplicate_ids:
-                            duplicate_ids.add(operation_id)
-                            findings.append(self._finding(
-                                "operation_id_duplicate", "error",
-                                f"{first_seen}.operationId",
-                                f"operationId '{operation_id}' is used "
-                                f"by more than one operation (first at "
-                                f"{first_seen}, again at {op_path}) — "
-                                "the spec demands uniqueness",
-                            ))
-                        else:
-                            findings.append(self._finding(
-                                "operation_id_duplicate", "error",
-                                f"{op_path}.operationId",
-                                f"operationId '{operation_id}' is used "
-                                f"by more than one operation (already "
-                                f"seen at {first_seen}) — the spec "
-                                "demands uniqueness",
-                            ))
-
-                # Rules around effective parameters and the path template.
-                effective, _ = _effective_params(path_item, operation)
-                path_params = {name for (name, loc) in effective if loc == "path"}
-                for name in sorted(template_names - path_params):
-                    findings.append(self._finding(
-                        "path_param_undeclared", "error", f"paths.{path}",
-                        f"path template uses {{{name}}} but no effective "
-                        f"in: path parameter declares it — request "
-                        f"building for {method.upper()} {path} cannot "
-                        "fill the placeholder",
-                    ))
-                for name in sorted(path_params - template_names):
-                    findings.append(self._finding(
-                        "path_param_defined_but_unused", "warning",
-                        f"{op_path}.parameters.{name}",
-                        f"in: path parameter '{name}' is defined but "
-                        f"the path template never uses {{{name}}} — "
-                        "dead metadata",
-                    ))
-
-                # Rules around responses.
-                responses = operation.get("responses")
-                has_error_response = False
-                if isinstance(responses, dict) and responses:
-                    for status, response in sorted(responses.items(), key=lambda kv: str(kv[0])):
-                        status_str = str(status)
-                        if status_str.startswith(("4", "5")) or status_str == "default":
-                            has_error_response = True
-                        if not (isinstance(response, dict)
-                                and isinstance(response.get("description"), str)
-                                and response["description"].strip()):
-                            findings.append(self._finding(
-                                "response_without_description", "error",
-                                f"{op_path}.responses.{status_str}",
-                                f"response '{status_str}' of {method.upper()} "
-                                f"{path} has no description — REQUIRED "
-                                "on the Response Object in every "
-                                "OpenAPI version",
-                            ))
-                if not has_error_response:
-                    findings.append(self._finding(
-                        "missing_error_responses", "warning",
-                        f"{op_path}.responses",
-                        f"{method.upper()} {path} documents no 4xx/5xx "
-                        "or default response — callers cannot learn "
-                        "the failure shapes",
-                    ))
-
-                # Rule: deprecated without a description saying why.
-                if operation.get("deprecated") is True:
-                    description = operation.get("description")
-                    if not (isinstance(description, str) and description.strip()):
-                        findings.append(self._finding(
-                            "deprecated_without_description", "info",
-                            f"{op_path}.description",
-                            f"{method.upper()} {path} is marked "
-                            "deprecated but has no description — "
-                            "consumers cannot learn why, or what to "
-                            "use instead",
-                        ))
-
-                # Rule: operation security referencing undefined schemes
-                # (operation security overrides the root entry).
-                if "security" in operation:
-                    self._lint_security(
-                        operation.get("security"), schemes,
-                        f"{op_path}.security", findings,
-                    )
 
         # Rule: dangling local $refs anywhere in the document.
         dangling: List[Tuple[str, str]] = []
@@ -784,6 +766,146 @@ class ApiDocTool(Tool):
             },
         }
 
+    def _lint_path_container(
+        self,
+        spec: Dict[str, Any],
+        container: str,
+        path: str,
+        path_item: Dict[str, Any],
+        findings: List[Dict[str, Any]],
+        seen_operation_ids: Dict[str, str],
+        duplicate_ids: Set[str],
+    ) -> None:
+        """Every per-path-item rule, run over ``paths`` or ``webhooks``."""
+        schemes = _security_schemes(spec)
+        template_names = set(_template_param_names(path))
+        item_path = f"{container}.{path}"
+
+        # Duplicate parameter names at the path-item level.
+        self._lint_duplicate_params(
+            path_item.get("parameters"), item_path, findings,
+        )
+
+        for method, operation in _operations(path_item):
+            op_path = f"{item_path}.{method}"
+            self._lint_duplicate_params(
+                operation.get("parameters"), op_path, findings,
+            )
+
+            # Rule: operationId missing (warning).
+            operation_id = operation.get("operationId")
+            if not (isinstance(operation_id, str) and operation_id):
+                findings.append(self._finding(
+                    "operation_id_missing", "warning",
+                    f"{op_path}.operationId",
+                    f"{method.upper()} {path} has no operationId — "
+                    "clients and code generators rely on it to "
+                    "name the call",
+                ))
+            else:
+                # Rule: operationId duplicated across operations (error).
+                first_seen = seen_operation_ids.get(operation_id)
+                if first_seen is None:
+                    seen_operation_ids[operation_id] = op_path
+                else:
+                    if operation_id not in duplicate_ids:
+                        duplicate_ids.add(operation_id)
+                        findings.append(self._finding(
+                            "operation_id_duplicate", "error",
+                            f"{first_seen}.operationId",
+                            f"operationId '{operation_id}' is used "
+                            f"by more than one operation (first at "
+                            f"{first_seen}, again at {op_path}) — "
+                            "the spec demands uniqueness",
+                        ))
+                    else:
+                        findings.append(self._finding(
+                            "operation_id_duplicate", "error",
+                            f"{op_path}.operationId",
+                            f"operationId '{operation_id}' is used "
+                            f"by more than one operation (already "
+                            f"seen at {first_seen}) — the spec "
+                            "demands uniqueness",
+                        ))
+
+            # Rules around effective parameters and the path template.
+            effective, _ = _effective_params(path_item, operation)
+            path_params = {name for (name, loc) in effective if loc == "path"}
+            for name in sorted(template_names - path_params):
+                findings.append(self._finding(
+                    "path_param_undeclared", "error", item_path,
+                    f"path template uses {{{name}}} but no effective "
+                    f"in: path parameter declares it — request "
+                    f"building for {method.upper()} {path} cannot "
+                    "fill the placeholder",
+                ))
+            for name in sorted(path_params - template_names):
+                findings.append(self._finding(
+                    "path_param_defined_but_unused", "error",
+                    f"{op_path}.parameters.{name}",
+                    f"in: path parameter '{name}' is defined but "
+                    f"the path template never uses {{{name}}} — "
+                    "the name of an in: path parameter MUST "
+                    "correspond to a template expression",
+                ))
+
+            # Rules around responses.
+            responses = operation.get("responses")
+            if not isinstance(responses, dict) or not responses:
+                findings.append(self._finding(
+                    "responses_missing", "error", f"{op_path}.responses",
+                    f"{method.upper()} {path} has no responses object — "
+                    "REQUIRED (and non-empty) on the Operation Object "
+                    "in every OpenAPI version",
+                ))
+            else:
+                has_error_response = False
+                for status, response in sorted(responses.items(), key=lambda kv: str(kv[0])):
+                    status_str = str(status)
+                    if status_str.startswith(("4", "5")) or status_str == "default":
+                        has_error_response = True
+                    resolved = _deref_local(response, spec)
+                    if not (isinstance(resolved, dict)
+                            and isinstance(resolved.get("description"), str)
+                            and resolved["description"].strip()):
+                        findings.append(self._finding(
+                            "response_without_description", "error",
+                            f"{op_path}.responses.{status_str}",
+                            f"response '{status_str}' of {method.upper()} "
+                            f"{path} has no description — REQUIRED "
+                            "on the Response Object in every "
+                            "OpenAPI version",
+                        ))
+                if not has_error_response:
+                    findings.append(self._finding(
+                        "missing_error_responses", "warning",
+                        f"{op_path}.responses",
+                        f"{method.upper()} {path} documents no 4xx/5xx "
+                        "or default response — callers cannot learn "
+                        "the failure shapes",
+                    ))
+
+            # Rule: deprecated without a description saying why.
+            if operation.get("deprecated") is True:
+                description = operation.get("description")
+                if not (isinstance(description, str) and description.strip()):
+                    findings.append(self._finding(
+                        "deprecated_without_description", "info",
+                        f"{op_path}.description",
+                        f"{method.upper()} {path} is marked "
+                        "deprecated but has no description — "
+                        "consumers cannot learn why, or what to "
+                        "use instead",
+                    ))
+
+            # Rule: operation security referencing undefined schemes
+            # (operation security overrides the root entry).
+            if "security" in operation:
+                self._lint_security(
+                    operation.get("security"), schemes,
+                    f"{op_path}.security", findings,
+                )
+
     def _lint_duplicate_params(
         self, raw_params: Any, location: str,
         findings: List[Dict[str, Any]],
@@ -799,7 +921,7 @@ class ApiDocTool(Tool):
         seen: Set[Tuple[str, str]] = set()
         reported: Set[Tuple[str, str]] = set()
         for param in raw_params:
-            param = _deref_param(param, _SPEC_CONTEXT[0])
+            param = _deref_local(param, _SPEC_CONTEXT[0])
             if not isinstance(param, dict):
                 continue
             name, loc = param.get("name"), param.get("in")
@@ -845,7 +967,7 @@ class ApiDocTool(Tool):
     def _endpoint_records(spec: Dict[str, Any]) -> Dict[Tuple[str, str], Dict[str, Any]]:
         """(METHOD, path) → the per-endpoint facts the diff compares."""
         records: Dict[Tuple[str, str], Dict[str, Any]] = {}
-        for path, path_item in _path_items(spec):
+        for path, path_item in _path_items(spec) + _webhook_items(spec):
             for method, operation in _operations(path_item):
                 effective, _ = _effective_params(path_item, operation)
                 responses = operation.get("responses")

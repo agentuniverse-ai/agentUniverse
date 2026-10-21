@@ -311,7 +311,7 @@ def test_master_lint_ground_truth():
         ("response_without_description", "error", "paths./users/{id}.get.responses.204"),
         ("missing_error_responses", "warning", "paths./users/{id}.delete.responses"),
         ("deprecated_without_description", "info", "paths./users/{id}.delete.description"),
-        ("path_param_defined_but_unused", "warning", "paths./status.get.parameters.zone"),
+        ("path_param_defined_but_unused", "error", "paths./status.get.parameters.zone"),
         ("missing_error_responses", "warning", "paths./status.get.responses"),
         ("operation_id_duplicate", "error", "paths./users/{id}.get.operationId"),
         ("missing_error_responses", "warning", "paths./legacy.get.responses"),
@@ -319,8 +319,8 @@ def test_master_lint_ground_truth():
     ])
     assert actual == expected
     assert result["summary"] == {
-        "error": 9,
-        "warning": 6,
+        "error": 10,
+        "warning": 5,
         "info": 2,
         "by_code": {
             "deprecated_without_description": 1,
@@ -398,9 +398,22 @@ def test_rule_missing_info_title_and_version():
 def test_rule_paths_empty():
     for paths in ({}, None):
         spec = _mini(paths=paths)
-        result = lint(as_json(spec))
-        assert "paths_empty" in codes(result)
+        findings = [
+            f for f in lint(as_json(spec))["findings"]
+            if f["code"] == "paths_empty"
+        ]
+        assert len(findings) == 1
+        # The OpenAPI schema permits an empty paths object — advice,
+        # not a violation.
+        assert findings[0]["severity"] == "warning"
     assert "paths_empty" not in codes(lint(as_json(_mini())))
+
+    # 3.1 webhooks alone carry the API — no empty-paths finding.
+    spec = _mini(paths={}, webhooks={"newUser": {"post": {
+        "operationId": "hookNewUser",
+        "responses": {"200": {"description": "ok"}, "default": {"description": "e"}},
+    }}})
+    assert "paths_empty" not in codes(lint(as_json(spec)))
 
 
 def test_rule_operation_id_duplicate_reports_once_with_both_paths():
@@ -452,7 +465,9 @@ def test_rule_path_param_defined_but_unused():
         if f["code"] == "path_param_defined_but_unused"
     ]
     assert len(findings) == 1
-    assert findings[0]["severity"] == "warning"
+    # The spec's MUST: an in: path name corresponds to a template
+    # expression — error, not cosmetic advice.
+    assert findings[0]["severity"] == "error"
     assert findings[0]["path"] == "paths./a.get.parameters.ghost"
 
 
@@ -674,6 +689,205 @@ def test_template_param_names_edges():
 
 
 # ------------------------------------------------------------------ #
+# $ref resolution semantics (regressions)
+# ------------------------------------------------------------------ #
+
+def _op_ok(oid, **extra):
+    op = {"operationId": oid, "responses": {"200": {"description": "ok"}, "default": {"description": "e"}}}
+    op.update(extra)
+    return op
+
+
+def test_response_ref_description_resolved():
+    # A Response Object written as a local $ref whose target carries
+    # the (required) description is LEGAL — no false positive.
+    spec = _mini()
+    spec["components"] = {"responses": {"OK": {"description": "created"}}}
+    spec["paths"]["/a"]["post"] = _op_ok(
+        "createA",
+        requestBody={"content": {"application/json": {"schema": {"type": "object"}}}},
+    )
+    spec["paths"]["/a"]["post"]["responses"]["201"] = {"$ref": "#/components/responses/OK"}
+    assert "response_without_description" not in codes(lint(as_json(spec)))
+
+    # A $ref whose target lacks the description is still flagged.
+    spec["components"]["responses"]["BAD"] = {}
+    spec["paths"]["/a"]["post"]["responses"]["201"] = {"$ref": "#/components/responses/BAD"}
+    findings = [f for f in lint(as_json(spec))["findings"] if f["code"] == "response_without_description"]
+    assert len(findings) == 1 and findings[0]["path"] == "paths./a.post.responses.201"
+
+
+def test_path_item_ref_resolved():
+    # A path item that IS a local $ref (e.g. 3.1 components/pathItems)
+    # carries real operations — they must be inventoried and linted.
+    spec = _mini()
+    spec["components"] = {"pathItems": {"A": {"get": _op_ok("getA"), "post": _op_ok("postA")}}}
+    spec["paths"] = {"/a": {"$ref": "#/components/pathItems/A"}}
+    result = inventory(as_json(spec))
+    assert [(e["method"], e["path"]) for e in result["endpoints"]] == [("GET", "/a"), ("POST", "/a")]
+
+    # Rules fire inside the referenced item (POST here lacks nothing,
+    # so break one: remove its default error response).
+    broken = json.loads(as_json(spec))
+    broken["components"]["pathItems"]["A"]["post"]["responses"] = {"200": {"description": "ok"}}
+    assert "missing_error_responses" in codes(lint(as_json(broken)))
+
+    # 3.1 semantics: siblings of the referencing item merge over the
+    # target — the local PUT wins over the referenced PUT.
+    spec["paths"]["/a"]["put"] = _op_ok("putALocal")
+    spec["components"]["pathItems"]["A"]["put"] = _op_ok("putARef")
+    result = inventory(as_json(spec))
+    by_method = {e["method"]: e for e in result["endpoints"]}
+    assert by_method["PUT"]["operation_id"] == "putALocal"
+
+    # Cycles between path items terminate instead of hanging.
+    cyc = _mini()
+    cyc["components"] = {"pathItems": {
+        "A": {"$ref": "#/components/pathItems/B"},
+        "B": {"$ref": "#/components/pathItems/A"},
+    }}
+    cyc["paths"] = {"/a": {"$ref": "#/components/pathItems/A"}}
+    assert inventory(as_json(cyc))["counts"]["endpoints"] == 0
+
+
+def test_webhooks_inventory_and_lint():
+    spec = {
+        "openapi": "3.1.0",
+        "info": {"title": "Hooks", "version": "1.0.0"},
+        "webhooks": {
+            "newUser": {"post": _op_ok("hookNewUser")},
+            "orderShipped": {
+                "post": {"operationId": "hookShipped", "responses": {"200": {"description": "ok"}}},
+            },
+        },
+    }
+    result = inventory(as_json(spec))
+    assert result["counts"]["webhooks"] == 2
+    assert [(e["method"], e["path"]) for e in result["endpoints"]] == [
+        ("POST", "newUser"), ("POST", "orderShipped"),
+    ]
+    findings = {f["code"]: f for f in lint(as_json(spec))["findings"]}
+    assert "paths_empty" not in findings            # webhooks carry the API
+    assert "spec_version_invalid" not in findings
+    assert findings["missing_error_responses"]["path"] == "webhooks.orderShipped.post.responses"
+
+    # diff sees webhook endpoints like any other.
+    old = json.loads(as_json(spec))
+    new = json.loads(as_json(spec))
+    del new["webhooks"]["newUser"]
+    result = diff(as_json(new), as_json(old))
+    assert result["removed"] == [{"method": "POST", "path": "newUser"}]
+    assert result["breaking"] is True
+
+
+def test_rule_spec_version_invalid():
+    cases = [
+        ("3.1", "two-part version"),          # openapi wants X.Y.Z
+        ("v3", "garbage"),
+        (3.1, "YAML float spelling"),
+        ("", "blank"),
+    ]
+    for bad, why in cases:
+        spec = _mini()
+        spec["openapi"] = bad
+        findings = [f for f in lint(as_json(spec))["findings"] if f["code"] == "spec_version_invalid"]
+        assert len(findings) == 1, why
+        assert findings[0]["severity"] == "error"
+        assert findings[0]["path"] == "openapi"
+
+    # Missing entirely: neither openapi nor swagger.
+    spec = _mini()
+    del spec["openapi"]
+    findings = [f for f in lint(as_json(spec))["findings"] if f["code"] == "spec_version_invalid"]
+    assert len(findings) == 1
+
+    # Well-formed versions pass (pre-release suffix included).
+    for good in ("3.0.0", "3.0.3", "3.1.0", "3.1.0-beta1"):
+        assert "spec_version_invalid" not in codes(lint(as_json(_mini(openapi=good))))
+    assert "spec_version_invalid" not in codes(lint(as_json({"swagger": "2.0", "info": {"title": "t", "version": "1"}, "host": "h", "paths": {}})))
+
+
+def test_rule_responses_missing():
+    spec = _mini()
+    del spec["paths"]["/a"]["get"]["responses"]
+    findings = [f for f in lint(as_json(spec))["findings"] if f["code"] == "responses_missing"]
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "error"
+    assert findings[0]["path"] == "paths./a.get.responses"
+    # Missing responses is the error itself — no redundant warning.
+    assert "missing_error_responses" not in codes(lint(as_json(spec)))
+
+    # An empty responses object is equally broken (minProperties 1).
+    spec = _mini()
+    spec["paths"]["/a"]["get"]["responses"] = {}
+    assert "responses_missing" in codes(lint(as_json(spec)))
+
+
+def test_deep_param_ref_chain_resolves():
+    # A legal chain of parameter $refs far beyond the old depth cap
+    # resolves exactly: id stays an effective path parameter.
+    spec = _mini()
+    chain = 12
+    params = {}
+    for i in range(chain):
+        if i == 0:
+            params["P0"] = {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}
+        else:
+            params[f"P{i}"] = {"$ref": f"#/components/parameters/P{i - 1}"}
+    spec["components"] = {"parameters": params}
+    spec["paths"] = {"/a/{id}": {"get": _op_ok("getId", parameters=[{"$ref": f"#/components/parameters/P{chain - 1}"}])}}
+    result = lint(as_json(spec))
+    assert "path_param_undeclared" not in codes(result)
+    inv = inventory(as_json(spec))
+    assert inv["endpoints"][0]["params_count"] == 1
+
+
+def test_param_override_semantics():
+    # Same (name, in) at both levels: the OPERATION parameter wins;
+    # same name different in: both survive. Verified on the merged
+    # content, not just the count.
+    from agentuniverse.agent.action.tool.common_tool.api_doc_tool import _effective_params
+    path_item = {"parameters": [
+        {"name": "limit", "in": "query", "schema": {"type": "integer"}},
+        {"name": "token", "in": "query", "schema": {"type": "string"}},
+    ]}
+    operation = {"parameters": [
+        {"name": "limit", "in": "query", "schema": {"type": "string", "maxLength": 5}},
+        {"name": "limit", "in": "header", "schema": {"type": "string"}},
+    ]}
+    merged, order = _effective_params(path_item, operation)
+    assert order == [("limit", "query"), ("token", "query"), ("limit", "header")]
+    assert merged[("limit", "query")]["schema"] == {"type": "string", "maxLength": 5}
+    assert merged[("token", "query")]["schema"] == {"type": "string"}
+
+    # And through inventory: the override counts once per (name, in).
+    spec = _mini()
+    spec["paths"]["/a"]["get"]["parameters"] = operation["parameters"]
+    spec["paths"]["/a"]["parameters"] = path_item["parameters"]
+    inv = inventory(as_json(spec))
+    assert inv["endpoints"][0]["params_count"] == 3
+
+
+def test_pointer_lookup_into_arrays():
+    # Pointers must follow array indices and ~0/~1 escapes exactly.
+    doc = {
+        "components": {"schemas": {"A": {"allOf": [
+            {"type": "object"},
+            {"$ref": "#/components/schemas/B"},
+        ]}}},
+    }
+    assert _resolve_local_pointer(doc, "#/components/schemas/A/allOf/0")
+    assert _resolve_local_pointer(doc, "#/components/schemas/A/allOf/0/type")
+    assert not _resolve_local_pointer(doc, "#/components/schemas/A/allOf/2")
+    assert not _resolve_local_pointer(doc, "#/components/schemas/A/anyOf/0")
+
+    # Escaped tokens: a schema literally named "a/b" and "m~n".
+    doc2 = {"components": {"schemas": {"a/b": {"m~n": 1}}}}
+    assert _resolve_local_pointer(doc2, "#/components/schemas/a~1b/m~0n")
+    assert not _resolve_local_pointer(doc2, "#/components/schemas/a/b")
+
+
+# ------------------------------------------------------------------ #
 # inventory — ground truth
 # ------------------------------------------------------------------ #
 
@@ -722,6 +936,7 @@ def test_master_inventory_ground_truth():
 
     assert result["counts"] == {
         "paths": 4,
+        "webhooks": 0,
         "endpoints": 6,
         "methods": {"DELETE": 1, "GET": 4, "POST": 1},
         # per-endpoint effective params: 0+1+2+1+2+1 (see above)
@@ -744,6 +959,7 @@ def test_clean_inventory_ground_truth():
     ]
     assert result["counts"] == {
         "paths": 2,
+        "webhooks": 0,
         "endpoints": 4,
         "methods": {"DELETE": 1, "GET": 2, "POST": 1},
         "parameters": 3,
