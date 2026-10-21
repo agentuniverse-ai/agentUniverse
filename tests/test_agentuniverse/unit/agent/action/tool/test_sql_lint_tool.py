@@ -243,6 +243,27 @@ class SqlLintToolRuleTest(unittest.TestCase):
         self.assertEqual(
             self._codes("SELECT DISTINCT a FROM t ORDER BY a DESC"), [])
 
+    def test_sql007_column_named_first(self) -> None:
+        self.assertEqual(
+            self._codes("SELECT DISTINCT a FROM t ORDER BY first"),
+            ["SQL007"])
+
+    def test_sql007_column_named_last(self) -> None:
+        self.assertEqual(
+            self._codes("SELECT DISTINCT a FROM t ORDER BY last"),
+            ["SQL007"])
+
+    def test_sql007_control_nulls_direction_suffixes(self) -> None:
+        self.assertEqual(self._codes(
+            "SELECT DISTINCT a FROM t ORDER BY a NULLS LAST"), [])
+        self.assertEqual(self._codes(
+            "SELECT DISTINCT a FROM t ORDER BY a ASC NULLS FIRST"), [])
+
+    def test_sql007_column_named_nulls(self) -> None:
+        self.assertEqual(
+            self._codes("SELECT DISTINCT a FROM t ORDER BY nulls"),
+            ["SQL007"])
+
     # -- SQL008 GROUP BY column not selected --------------------------------
 
     def test_sql008_trigger(self) -> None:
@@ -277,6 +298,32 @@ class SqlLintToolRuleTest(unittest.TestCase):
     def test_sql008_control_positional_group_by(self) -> None:
         self.assertEqual(
             self._codes("SELECT u.id, u.name FROM u GROUP BY 1"), [])
+
+    def test_sql008_control_aggregate_arithmetic_select(self) -> None:
+        self.assertEqual(
+            self._codes("SELECT COUNT(*) + 1 FROM u GROUP BY status"), [])
+        self.assertEqual(
+            self._codes(
+                "SELECT SUM(amount) * 2 AS total FROM u GROUP BY status"),
+            [],
+        )
+
+    def test_sql008_control_constant_select_item(self) -> None:
+        self.assertEqual(
+            self._codes("SELECT 1 FROM u GROUP BY status"), [])
+        self.assertEqual(
+            self._codes(
+                "SELECT 'k', COUNT(*) FROM u GROUP BY status"), [])
+
+    def test_sql008_qualified_star_select_is_nonaggregated(self) -> None:
+        self.assertEqual(
+            self._codes("SELECT u.* FROM u GROUP BY status"),
+            ["SQL001", "SQL008"])
+
+    def test_sql008_nonaggregate_function_call_select(self) -> None:
+        self.assertEqual(
+            self._codes(
+                "SELECT UPPER(name) FROM u GROUP BY status"), ["SQL008"])
 
     # -- SQL009 oversized literal IN list ----------------------------------
 
@@ -740,6 +787,49 @@ class SqlLintToolStructureTest(unittest.TestCase):
                 "columns"],
             ["u.id", "u.name AS n"],
         )
+
+    def test_lateral_subquery_is_not_a_table(self) -> None:
+        result = self._structure(
+            "SELECT a FROM t, LATERAL ("
+            "SELECT b FROM u WHERE u.id = t.id) x")
+        self.assertEqual(result["tables"], ["t", "u"])
+        self.assertEqual(result["subquery_count"], 1)
+
+    def test_lateral_after_cross_join(self) -> None:
+        result = self._structure(
+            "SELECT a FROM t CROSS JOIN LATERAL (SELECT 1) x")
+        self.assertEqual(result["tables"], ["t"])
+        self.assertEqual(result["join_kinds"], ["cross"])
+
+    def test_table_function_item_is_not_a_table(self) -> None:
+        result = self._structure(
+            "SELECT g FROM t, UNNEST(ids) AS g")
+        self.assertEqual(result["tables"], ["t"])
+        result = self._structure(
+            "SELECT a FROM GENERATE_SERIES(1, 10) AS s")
+        self.assertEqual(result["tables"], [])
+
+    def test_postgres_only_modifier_skipped(self) -> None:
+        result = self._structure("SELECT a FROM ONLY t")
+        self.assertEqual(result["tables"], ["t"])
+
+    def test_cte_names_collected_at_any_depth(self) -> None:
+        result = self._structure(
+            "SELECT * FROM (WITH z AS (SELECT 1 AS a) "
+            "SELECT a FROM z) q")
+        self.assertEqual(result["cte_names"], ["z"])
+        result = self._structure(
+            "WITH outer_c AS (SELECT 1) SELECT * FROM ("
+            "WITH inner_c AS (SELECT 2) SELECT * FROM inner_c) s")
+        self.assertEqual(result["cte_names"], ["outer_c", "inner_c"])
+
+    def test_unicode_identifiers(self) -> None:
+        result = self._structure(
+            "SELECT ä FROM üß WHERE ö = 'x'")
+        self.assertEqual(result["type"], "select")
+        self.assertEqual(result["tables"], ["üß"])
+        self.assertEqual(result["columns"], ["ä"])
+        self.assertTrue(result["has_where"])
 
 
 class SqlLintToolFormatTest(unittest.TestCase):

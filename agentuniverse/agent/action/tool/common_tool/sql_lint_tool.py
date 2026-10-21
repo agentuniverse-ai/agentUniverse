@@ -48,14 +48,16 @@ Supported modes
   UPDATE / DELETE); ``tables`` are the dotted names identified after
   FROM / JOIN (plus INSERT INTO and MERGE INTO targets and the UPDATE
   target, at any nesting depth, de-duplicated in order of appearance;
-  parenthesized subquery items are not tables); ``columns`` are the
+  parenthesized subqueries, ``LATERAL``-qualified items and table
+  function calls such as ``UNNEST(...)`` are not tables, and the
+  PostgreSQL ``ONLY`` modifier is skipped); ``columns`` are the
   top-level select-list items comma-split at depth 0 (normalized text,
   aliases included); ``limit_value`` is the literal LIMIT / FETCH
   FIRST row count or null (MySQL ``LIMIT o, c`` yields ``c``);
   ``join_kinds`` lists the join styles seen anywhere in order of first
   appearance (bare JOIN counts as inner); ``subquery_count`` counts
   parenthesized SELECT/WITH bodies; ``cte_names`` lists the
-  ``WITH name AS (...)`` names.
+  ``WITH name AS (...)`` names at any nesting depth.
 * ``format`` — deterministic pretty-print: a newline before every
   top-level major clause (SELECT / FROM / WHERE / GROUP BY / HAVING /
   ORDER BY / LIMIT / OFFSET / FETCH / UNION [ALL|DISTINCT] / EXCEPT /
@@ -99,10 +101,11 @@ SQL007 distinct_order    error   SELECT DISTINCT whose top-level ORDER    strict
                                  select list (item text, alias and bare   unselected expression under DISTINCT
                                  column name all match; an integer
                                  item counts as positional)
-SQL008 groupby_shape     warn.   GROUP BY present, the select list has     mixing grouping keys you never show with
-                                 non-aggregated items, and a simple       non-aggregated select items is misleading
-                                 GROUP BY column that is neither a        — align the two lists (heuristic, not a
-                                 selected bare column nor a select        syntax error)
+SQL008 groupby_shape     warn.   GROUP BY present, a select item           mixing grouping keys you never show with
+                                 references a column outside              non-aggregated select items is misleading
+                                 aggregate calls, and a simple GROUP      — align the two lists (heuristic, not a
+                                 BY column that is neither a              syntax error)
+                                 selected bare column nor a select
                                  alias
 SQL009 in_list_size      warn.   a literal-only IN (...) list longer       a huge literal IN list is N+1-prone when
                                  than the in_list_max option (def. 20)    built in a loop — load the values into a
@@ -142,7 +145,7 @@ from agentuniverse.agent.action.tool.tool import Tool
 # Static vocabulary
 # ---------------------------------------------------------------------------
 
-_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_$]*")
+_WORD = re.compile(r"[^\W\d][\w$]*")
 _NUM = re.compile(r"(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
 
 # Keywords recognized (case-insensitively) by the formatter.
@@ -661,6 +664,28 @@ def _statement_type(tokens: list) -> tuple:
     return "with", i
 
 
+_FROM_ITEM_MODIFIERS = frozenset({"LATERAL", "ONLY"})
+
+
+def _from_item_name(item: list) -> str:
+    """Table name of a FROM/JOIN list item, or "" when it is not a table.
+
+    Leading ``LATERAL`` / ``ONLY`` modifier words are skipped; an item
+    whose leading word is immediately followed by ``(`` is a table
+    function call (``UNNEST(...)``, ``GENERATE_SERIES(...)``, a
+    ``LATERAL`` subquery), not a table.
+    """
+    i = 0
+    while i < len(item) and item[i]["kind"] == "word" and \
+            item[i]["text"].upper() in _FROM_ITEM_MODIFIERS:
+        i += 1
+    rest = item[i:]
+    if len(rest) > 1 and rest[0]["kind"] == "word" and \
+            rest[1]["kind"] == "punct" and rest[1]["text"] == "(":
+        return ""
+    return _dotted_chain(rest)
+
+
 def _tables(tokens: list, regions: list, stmt_type: str) -> list:
     """Dotted table names from FROM/JOIN/INTO regions (+ UPDATE target)."""
     tables: list = []
@@ -670,7 +695,10 @@ def _tables(tokens: list, regions: list, stmt_type: str) -> list:
             continue
         body = tokens[region["start"] + region["kw_len"]:region["end"]]
         for item in _split_top_commas(body, region["depth"]):
-            name = _dotted_chain(item)
+            if region["name"] == "INTO":
+                name = _dotted_chain(item)
+            else:
+                name = _from_item_name(item)
             if name and name not in seen:
                 seen.add(name)
                 tables.append(name)
@@ -713,7 +741,7 @@ def _structure(tokens: list, regions: list, stmt_type: str) -> dict:
                          if _is_subquery_paren(tokens, i))
 
     cte_names: list = []
-    for r in depth0:
+    for r in regions:
         if r["name"] != "WITH":
             continue
         body = tokens[r["start"] + 1:r["end"]]
@@ -972,9 +1000,15 @@ def _rule_distinct_order(tokens: list, regions: list) -> list:
         body = tokens[region["start"] + region["kw_len"]:region["end"]]
         for item in _split_top_commas(body, region["depth"]):
             trimmed = list(item)
+            while len(trimmed) >= 2 and \
+                    trimmed[-1]["kind"] == "word" and \
+                    trimmed[-2]["kind"] == "word" and \
+                    trimmed[-2]["text"].upper() == "NULLS" and \
+                    trimmed[-1]["text"].upper() in ("FIRST", "LAST"):
+                trimmed.pop()
+                trimmed.pop()
             while trimmed and trimmed[-1]["kind"] == "word" and \
-                    trimmed[-1]["text"].upper() in (
-                        "ASC", "DESC", "NULLS", "FIRST", "LAST"):
+                    trimmed[-1]["text"].upper() in ("ASC", "DESC"):
                 trimmed.pop()
             if not trimmed:
                 continue
@@ -998,6 +1032,42 @@ def _rule_distinct_order(tokens: list, regions: list) -> list:
     return out
 
 
+def _has_nonagg_ref(span: list) -> bool:
+    """True when the item references a column outside aggregate calls.
+
+    A word inside parentheses opened right after an aggregate function
+    name is aggregated; an aggregate name directly followed by ``(``
+    does not count itself; every other word (column, alias-excluded —
+    callers strip ``AS`` aliases first via ``_is_agg_item``) is a
+    non-aggregated reference, and so is a select-star ``*`` at the
+    start of the item or after a qualifier dot (a mid-item ``*`` is
+    multiplication).
+    """
+    agg_opens: list = []
+    for idx, t in enumerate(span):
+        if t["kind"] == "punct" and t["text"] == "*" and (
+                idx == 0 or
+                (span[idx - 1]["kind"] == "punct" and
+                 span[idx - 1]["text"] == ".")):
+            return True
+        if t["kind"] == "punct" and t["text"] == "(":
+            prev = span[idx - 1] if idx else None
+            if prev is not None and prev["kind"] == "word" and \
+                    prev["text"].upper() in AGG_FUNCS:
+                agg_opens.append(t["depth"])
+        elif t["kind"] == "punct" and t["text"] == ")":
+            if agg_opens and t["depth"] == agg_opens[-1]:
+                agg_opens.pop()
+        elif t["kind"] == "word":
+            nxt = span[idx + 1] if idx + 1 < len(span) else None
+            if t["text"].upper() in AGG_FUNCS and nxt is not None and \
+                    nxt["kind"] == "punct" and nxt["text"] == "(":
+                continue
+            if not agg_opens or t["depth"] <= agg_opens[-1]:
+                return True
+    return False
+
+
 def _rule_groupby_shape(tokens: list, regions: list) -> list:
     out = []
     depth0 = [r for r in regions if r["depth"] == 0]
@@ -1013,11 +1083,13 @@ def _rule_groupby_shape(tokens: list, regions: list) -> list:
         for item in _select_items(tokens, last_select):
             if _is_agg_item(item):
                 continue
+            bare = _strip_alias(item)
+            if not _has_nonagg_ref(bare):
+                continue
             has_nonagg = True
             alias = _alias_of(item)
             if alias:
                 nonagg_names.add(alias.upper())
-            bare = _strip_alias(item)
             if _is_simple_col(bare):
                 nonagg_names.add(_col_name(bare))
         if not has_nonagg:
