@@ -17,7 +17,11 @@ input is a value supplied by the caller. Semantics follow POSIX chmod:
   bits from the mode as accumulated so far (earlier clauses count); copying
   sets only the nine permission bits of who and never clears setuid/setgid.
 - s maps to setuid/setgid for the u/g parts of who (a no-op for who=o),
-  t maps to the sticky bit (meaningful only when who includes o or a).
+  t maps to the sticky bit, which is addressed only when who is 'a' or
+  omitted; 'o+t' and 'ugo+t' alone are no-ops, as on BSD-derived chmod.
+- A u/g/o copy letter must stand alone as the whole permission list, per the
+  POSIX grammar; mixing it with other letters ('a=us') is a validation error
+  (BSD-derived chmod accepts such lists with sequential-copy semantics).
 - '=' sets the listed bits and clears every other bit owned by who,
   including the setuid/setgid bit of an explicitly listed class when s is
   absent from the permission list.
@@ -281,7 +285,10 @@ class PermissionsTool(Tool):
 
     def _parse_operand(self, value: Any) -> list[str]:
         text = self._text(value, "operation", self.max_operation_length)
-        clauses = [clause.strip() for clause in text.split(",")]
+        # No whitespace anywhere inside the operand, matching the real chmod
+        # grammar: 'u+x, g-w' is invalid exactly as 'u +x' is. Only the
+        # uniform outer input strip of _text applies.
+        clauses = text.split(",")
         if len(clauses) > self.max_clauses:
             raise ValueError(f"operation accepts at most {self.max_clauses} comma-separated clauses")
         for clause in clauses:
@@ -320,6 +327,8 @@ class PermissionsTool(Tool):
             return replicated & mask, mask & 0o0777
         if len(set(perms)) != len(perms):
             raise ValueError(f"duplicate permission letters in {perms!r}")
+        if len(perms) > 1 and any(letter in "ugo" for letter in perms):
+            raise ValueError(f"copy letters u/g/o must stand alone as the permission list, got {perms!r}")
         value = 0
         for letter in perms:
             if letter == "X":
@@ -339,7 +348,7 @@ class PermissionsTool(Tool):
         if "s" in perms and not value & 0o6000:
             notes.append("s ignored: who lists neither u nor g, so there is no setuid/setgid target")
         if "t" in perms and not value & 0o1000:
-            notes.append("t ignored: who lists neither o nor a, so the sticky bit is not addressed")
+            notes.append("t ignored: the sticky bit is addressed only when who is 'a' or omitted")
         return value, mask
 
     def _apply_operation(self, current: int, operand: str, is_dir: bool) -> tuple[int, list[dict[str, Any]], list[str]]:
@@ -432,8 +441,9 @@ class PermissionsTool(Tool):
             info["granted_bits"] = format(0o777 & ~mask, "03o")
             return mask, info
         text = self._text(value, "umask", self.max_operation_length)
+        # Whitespace inside a symbolic mask is rejected, as by the sh umask
+        # builtin; only the uniform outer input strip of _text applies.
         for clause in text.split(","):
-            clause = clause.strip()
             match = _CLAUSE_RE.match(clause)
             if not match:
                 raise ValueError(f"invalid umask clause {clause!r}: expected [ugoa]*[+-=][rwx] clauses")

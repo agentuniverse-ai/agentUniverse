@@ -315,6 +315,59 @@ class ChmodEdgeSemanticsTest(PermissionsToolTestBase):
         result = self.verify("u+t", 0o755)
         self.assertTrue(any("t ignored" in note for note in result["notes"]))
 
+    def test_sticky_bit_requires_who_a(self):
+        """The sticky bit is addressed only when who is 'a' or omitted.
+
+        The real BSD-derived chmod treats 'o+t', 'go+t', and 'ugo+t' as no-ops
+        (and 'ugo=' keeps the sticky bit while 'a=' clears it); the tool
+        mirrors that exact distinction, verified against the binary.
+        """
+        for operand, current in (("o+t", 0o755), ("go+t", 0o755), ("ugo+t", 0o755), ("u+t", 0o755), ("o-t", 0o1775), ("ugo-t", 0o1777)):
+            result = self.verify(operand, current)
+            self.assertEqual(result["new_mode"]["numeric"] & 0o1000, current & 0o1000, operand)
+        self.verify("a+t", 0o755)
+        self.verify("ugo=", 0o1777)  # real chmod keeps the sticky bit here; a= clears it
+        self.verify("ugo=rw", 0o1777)
+        result = self.tool.execute(mode="chmod", current_mode="0755", operation="o+t")
+        self.assertTrue(any("sticky bit is addressed only when who is 'a' or omitted" in note for note in result["notes"]))
+
+    def test_copy_letters_must_stand_alone(self):
+        """u/g/o mixed into a longer permission list is rejected per POSIX.
+
+        POSIX and GNU chmod allow a copy letter only as the entire permission
+        list; BSD-derived chmod (macOS) instead accepts mixed lists such as
+        'a=us' with sequential-copy semantics. Like the pinned '-X' case, the
+        tool follows the POSIX grammar: these operands are structured
+        validation errors, never an uncaught KeyError.
+        """
+        for bad in ("a=us", "+ru", "=ug", "u=xu", "u+rwxo", "a=rtu", "g=Xu", "a=uo", "=ou", "u=gr"):
+            with self.subTest(operand=bad):
+                result = self.tool.execute(mode="chmod", current_mode="0644", operation=bad)
+                self.assertEqual(result["status"], "error", bad)
+                self.assertEqual(result["error_type"], "validation_error")
+                self.assertIn("copy letters u/g/o must stand alone", result["error"])
+
+    def test_no_whitespace_inside_operand(self):
+        """Whitespace inside an operand or symbolic umask is invalid grammar.
+
+        The real chmod binary rejects 'u+x, g-w' and ' u+x '; the sh umask
+        builtin rejects 'u=rwx, g='. The tool accepts only the uniform outer
+        input strip and rejects any interior whitespace.
+        """
+        for bad in ("u+x, g-w", "u +x", "u+x ,g-w", " u+x , g-w ", "u+x,\tg-w"):
+            with self.subTest(operand=bad):
+                path, _ = self.fixture(0o644)
+                rejected = subprocess.run([CHMOD_BIN, bad, path], capture_output=True, text=True)
+                self.assertNotEqual(rejected.returncode, 0, f"real chmod accepted {bad!r}")
+                result = self.tool.execute(mode="chmod", current_mode="0644", operation=bad)
+                self.assertEqual(result["status"], "error", bad)
+        for bad in ("u=rwx, g=", "u=rx ,o=", "a= rx"):
+            result = self.tool.execute(mode="umask_apply", mode_value="0666", umask=bad)
+            self.assertEqual(result["status"], "error", bad)
+        trimmed = self.tool.execute(mode="chmod", current_mode="0644", operation="  u+x,go-w  ")
+        self.assertEqual(trimmed["status"], "success")
+        self.assertEqual(trimmed["new_mode"]["numeric"], 0o744)
+
     def test_multi_clause_ordering(self):
         """Clauses apply strictly left to right."""
         self.verify("u+x,g-w,o+r", 0o640)
