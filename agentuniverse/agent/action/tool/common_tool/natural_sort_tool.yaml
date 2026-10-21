@@ -1,0 +1,46 @@
+name: natural_sort_tool
+description: Natural human-aware ordering of string lists with embedded numbers.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.natural_sort_tool
+  class: NaturalSortTool
+input_keys:
+  - mode
+max_items: 10000
+max_item_length: 10000
+max_key_preview_items: 100
+max_violations: 100
+max_compare_chunks: 200
+preview_chunk_length: 200
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [sort, rank, compare, is_sorted]
+    items:
+      type: array
+      items: {type: string}
+    value: {type: string}
+    reference:
+      type: array
+      items: {type: string}
+    a: {type: string}
+    b: {type: string}
+    case_sensitive: {type: boolean, default: false}
+    number_mode:
+      type: string
+      enum: [chunked, whole]
+      default: chunked
+    decimal: {type: boolean, default: false}
+    unicode_digits:
+      type: string
+      enum: [text, normalize, reject]
+      default: text
+    leading_zeros:
+      type: string
+      enum: [stable, fewer_first]
+      default: stable
+  required: [mode]
+  additionalProperties: false
