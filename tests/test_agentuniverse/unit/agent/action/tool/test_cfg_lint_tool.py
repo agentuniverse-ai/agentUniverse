@@ -461,6 +461,22 @@ class CfgParseTest(CfgLintToolTestCase):
         self.assertEqual(values["user"], "bob")
         self.assert_no_secret_leak(result)
 
+    def test_secret_interpolation_ref_not_echoed(self) -> None:
+        # the interpolation_risk message quotes the reference token
+        # out of the value — never for a secret-ish key
+        result = self.tool.execute(
+            mode="lint", text="[auth]\npassword = %(hunter2-password)s\n"
+        )
+        self.assertIn(
+            ("interpolation_risk", 2),
+            [(f["code"], f["line"]) for f in result["findings"]],
+        )
+        self.assert_no_secret_leak(result)
+        # non-secret keys keep the diagnostic reference in the message
+        result = self.tool.execute(mode="lint", text="[s]\nurl = %(ghost)s\n")
+        messages = [f["message"] for f in result["findings"]]
+        self.assertTrue(any("'%(ghost)s'" in m for m in messages))
+
     def test_keys_keep_original_spelling_and_order(self) -> None:
         result = self.tool.execute(
             mode="parse", text="[s]\nZed = 1\nalpha : 2\nMiXeD = 3\n"

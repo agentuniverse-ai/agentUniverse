@@ -105,7 +105,9 @@ Three modes, all offline and deterministic:
   contains ``KEY``, ``SECRET``, ``PASSWORD`` or ``TOKEN``
   (case-insensitive substring) never has its value echoed — parse
   output renders it as ``***``. Finding *messages* never contain
-  values at all, only section / key names and line numbers.
+  values at all, only section / key names and line numbers — and for
+  a secret-ish key even the interpolation reference token inside its
+  value is masked out of the message.
 
 * ``check`` — evaluate named policy options against the text and
   return a pass / fail summary: ``require_section_header`` (default
@@ -639,11 +641,18 @@ class CfgLintTool(Tool):
                             break
                         ref = joined[index + 2 : close].lower()
                         if ref not in resolvable:
+                            # the reference token is a piece of the value —
+                            # never echo it for a secret-ish key
+                            shown = (
+                                "an interpolation token"
+                                if cls._is_secret(lowerkey)
+                                else f"'%({ref})s'"
+                            )
                             flag(
                                 "interpolation_risk",
                                 record["key_lines"].get(lowerkey, 1),
                                 f"value of '{lowerkey}' in section '{name}' "
-                                f"references '%({ref})s' which resolves neither "
+                                f"references {shown} which resolves neither "
                                 "in the section nor in [DEFAULT] — the default "
                                 "BasicInterpolation raises "
                                 "InterpolationMissingOptionError when the value "
@@ -666,10 +675,15 @@ class CfgLintTool(Tool):
     # ------------------------------------------------------------------ #
 
     @classmethod
+    def _is_secret(cls, key: str) -> bool:
+        """True when a key name looks secret-ish."""
+        upper = key.upper()
+        return any(marker in upper for marker in _SECRET_MARKERS)
+
+    @classmethod
     def _mask_if_secret(cls, key: str, value: str) -> str:
         """Mask a value when its key name looks secret-ish."""
-        upper = key.upper()
-        if any(marker in upper for marker in _SECRET_MARKERS):
+        if cls._is_secret(key):
             return _MASK
         return value
 
