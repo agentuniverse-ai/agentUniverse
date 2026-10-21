@@ -67,7 +67,7 @@ Matching is case-sensitive by default.
 
 The ``stemming`` option (default off) lowercases every token and
 applies the light Porter-1a-style stemmer of ``LightStemmerTool``
-(#3866) — steps 1a / 1b / 1c / 2-lite, embedded here so the tool is
+(#3867) — steps 1a / 1b / 1c / 2-lite, embedded here so the tool is
 standalone on master — to pure-ASCII-alphabetic tokens only (the rule
 set is defined over lowercase ASCII letters; CJK and other tokens are
 matched case-insensitively as-is). This mirrors the ROUGE ``-m`` flag
@@ -114,7 +114,7 @@ def _is_cjk(char: str) -> bool:
 
 
 class _LightStemmer:
-    """The LightStemmerTool (#3866) rule set, embedded for standalone use.
+    """The LightStemmerTool (#3867) rule set, embedded for standalone use.
 
     Steps 1a / 1b / 1c / 2-lite of the light Porter-inspired stemmer,
     operating on lowercase ASCII-letter words. The full rule set and
