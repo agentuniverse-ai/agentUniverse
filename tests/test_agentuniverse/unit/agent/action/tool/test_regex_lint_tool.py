@@ -74,6 +74,16 @@ EVIL_CORPUS = [
     (r"(a|b|ab)*c", "exponential"),
     (r"(a+|b+)*$", "exponential"),
     (r".*.*b", "polynomial"),
+    # Classic shapes from the ReDoS literature, added in review.
+    (r"(a|a?)+$", "exponential"),
+    (r"(a|a)*b", "exponential"),
+    (r"(a|)*", "exponential"),
+    (r"(.*|.*)*b", "exponential"),
+    (r"([a-zA-Z]+)*", "exponential"),
+    (r"(a+){2}b", "exponential"),
+    (r"(a|a|a|b)*z", "exponential"),
+    (r"(?:a|a?)*", "exponential"),
+    (r"x+x+y+", "polynomial"),
 ]
 
 # Patterns with pinned boundaries that must NOT be graded exponential
@@ -87,6 +97,13 @@ PRECISION_CONTROLS = [
     r"^\d{4}-\d{2}-\d{2}$",
     r"(ab+)+c",
     r"[\w.+-]+@[\w-]+\.[a-z]{2,}",
+    # Bounded-repetition shapes whose re-partitioning space is a
+    # constant (added in review): the ambiguity cannot compound with
+    # input length, so they must never grade exponential.
+    r"^(25[0-5]|2[0-4]\d|[01]?\d?\d)(\.(25[0-5]|2[0-4]\d|[01]?\d?\d)){3}$",
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    r"^[A-Za-z0-9+/]{4}={0,2}$",
+    r"^[a-zA-Z0-9_]+@[a-zA-Z0-9]+\.[a-z]{2,}$",
 ]
 
 # A diverse pool of valid patterns; mutations of these feed the
@@ -551,3 +568,197 @@ def test_lint_summary_and_order(tool):
     spans = [f["span"][0] for f in result["findings"]]
     assert spans == sorted(spans)
     assert result["truncated"] is False
+
+
+# --------------------------------------------------------------------- #
+# Review regression tests (hostile differential probes vs the live
+# ``re`` engine; every oracle claim is asserted live, not assumed).
+# --------------------------------------------------------------------- #
+
+def test_unicode_digits_in_braces_are_literal(tool):
+    """CPython's sre parser accepts only ASCII digits in {m,n}: the
+    tool must treat ``a{٢}`` as literal braces (not a quantifier) and
+    must not crash on ``a{²}`` where ``str.isdigit`` is True but
+    ``int('²')`` raises."""
+    pattern = "a{٢}"
+    assert re.compile(pattern).findall("a{٢}") == ["a{٢}"]  # oracle
+    result = tool.execute(mode="lint", pattern=pattern)
+    assert result["compiles"] is True
+    codes = [f["code"] for f in result["findings"]]
+    assert "brace_literal" in codes  # the {٢} run is literal text
+    tree = tool.execute(mode="structure", pattern=pattern)
+    quantified = [n for n in tree["nodes"] if "quantifier" in n]
+    assert quantified == []  # no node carries a {2} quantifier
+    # superscript two: isdigit() True, int() raises — no crash anywhere
+    for mode, kwargs in (("lint", {}), ("structure", {}),
+                         ("explain", {}), ("estimate", {"text_length": 5})):
+        out = tool.execute(mode=mode, pattern="a{²}", **kwargs)
+        assert out is not None
+
+
+def test_unicode_digits_after_backslash_are_not_references(tool):
+    """``\\1٢`` is the reference ``\\1`` plus the literal character
+    ``٢`` (sre consumes only ASCII digits), and ``\\١`` is a literal
+    escape — never a numeric reference."""
+    assert re.match(r"(a)\1٢", "aa٢") is not None  # oracle: \1 then ٢
+    assert re.fullmatch(r"\١", "١") is not None  # oracle: literal escape
+    walk = tool.execute(mode="explain", pattern=r"(a)\1٢")
+    backrefs = [a for a in walk["annotations"]
+                if a["kind"] == "backreference"]
+    assert backrefs == [
+        {"kind": "backreference", "span": [3, 5],
+         "text": "backreference to group 1"},
+    ]
+    literal = tool.execute(mode="explain", pattern="\\١")
+    assert "the text" in literal["alternatives"][0]
+    assert "group" not in literal["alternatives"][0]
+
+
+def test_deep_conditional_ladder_does_not_crash(tool):
+    """~500-deep ``(?(1)(?(1)…))`` ladders compile fine in the real
+    engine; every mode must answer (the recursive decomposition
+    degrades gracefully past the nesting cap while group numbering
+    stays correct)."""
+    for depth in (300, 500, 660):
+        pattern = ("(a)" + "(?(1)" * depth + "(b)" + ")" * depth + "(c)")
+        assert len(pattern) <= 4000
+        compiled = re.compile(pattern)  # oracle: compiles, 3 groups
+        assert compiled.groups == 3
+        lint = tool.execute(mode="lint", pattern=pattern)
+        assert lint["compiles"] is True
+        tree = tool.execute(mode="structure", pattern=pattern)
+        assert tree["compiles"] is True
+        # The deep (b) group survives as a placeholder node (its
+        # number consumed exactly once); the trailing group is 3 and
+        # every visible span points at real parentheses.
+        assert sorted(tree["group_map"], key=int) == ["1", "2", "3"]
+        for start, end in tree["group_spans"].values():
+            assert pattern[start] == "(", pattern
+            assert pattern[end - 1] == ")", pattern
+        assert tool.execute(mode="explain", pattern=pattern) is not None
+        est = tool.execute(mode="estimate", pattern=pattern,
+                           text_length=32)
+        assert est["backtracking_risk_class"] in (
+            "linear", "polynomial", "exponential", "unknown")
+
+
+def test_conditional_split_respects_nesting(tool):
+    """The yes/no split is the first ``|`` at the conditional body's
+    own depth — a bar inside a nested group or class does not split,
+    and every group span keeps pointing at real parentheses."""
+    pattern = (r"a{2,}(a)(?(1)\d??([a-c]{,2}x*(a)(?(1)\.*+|b)b{2,})"
+               r"\w?+([a-c]{,2}(?=b{0,}b+?)*+[^ab]*?){2}|b){1,3}[abc]{1,3}")
+    compiled = re.compile(pattern)  # oracle
+    tree = tool.execute(mode="structure", pattern=pattern)
+    assert tree["compiles"] is True
+    assert sorted(tree["group_map"], key=int) == [
+        str(n) for n in range(1, compiled.groups + 1)]
+    for number, (start, end) in tree["group_spans"].items():
+        assert pattern[start] == "(", pattern
+        assert pattern[end - 1] == ")", pattern
+    # a bar inside a character class does not split either
+    class_bar = tool.execute(mode="structure", pattern=r"(a)(?(1)b[x|y]c|d)")
+    assert class_bar["compiles"] is True
+    assert sorted(class_bar["group_map"], key=int) == ["1"]
+
+
+IPV4 = (r"^(25[0-5]|2[0-4]\d|[01]?\d?\d)"
+        r"(\.(25[0-5]|2[0-4]\d|[01]?\d?\d)){3}$")
+
+
+def test_ipv4_octet_not_exponential(tool):
+    """The canonical IPv4 regex fails fast on adversarial input (the
+    bounded {3} outer repetition cannot compound the octet ambiguity
+    with input length) — the tool must not grade it exponential."""
+    compiled = re.compile(IPV4)
+    assert compiled.match("9" * 60) is None  # oracle: fails fast
+    result = tool.execute(mode="lint", pattern=IPV4)
+    codes = [f["code"] for f in result["findings"]]
+    assert "redos_exponential" not in codes
+    assert all(not c.startswith("redos") for c in codes)
+    estimate = tool.execute(mode="estimate", pattern=IPV4, text_length=100)
+    assert estimate["backtracking_risk_class"] == "linear"
+
+
+def test_worst_case_patterns_lint_under_two_seconds(tool):
+    """Maximum-size legal inputs (4,000 chars) must lint in < 2 s —
+    the detectors are linear-horizon, not quadratic pair builders."""
+    import time
+    for pattern in ("a*" * 1999 + "b", ".*" * 1999 + "b",
+                    "(" + "|".join(["a"] * 1999) + ")+"):
+        assert len(pattern) <= 4000
+        start = time.perf_counter()
+        result = tool.execute(mode="lint", pattern=pattern)
+        elapsed = time.perf_counter() - start
+        assert elapsed < 2.0, (elapsed, pattern[:32])
+        assert result["compiles"] is True
+
+
+def test_estimate_risk_class_stable_under_rewrite(tool):
+    """Anchoring or wrapping a pattern must not flip its risk class."""
+    for base, expected in ((r"(a|aa)+", "exponential"),
+                           (r"a*a*b", "polynomial"),
+                           (r"\d+-\d+-\d+", "linear")):
+        for variant in (base, "^" + base, base + "$",
+                        "^" + base + "$", "(?:" + base + ")",
+                        "(?i)" + base):
+            estimate = tool.execute(mode="estimate", pattern=variant,
+                                    text_length=100)
+            assert estimate["backtracking_risk_class"] == expected, (
+                variant, estimate["backtracking_risk_class"])
+
+
+def test_explain_deterministic_on_random_patterns(tool):
+    rng = random.Random(97531)
+    alphabet = "abc|(){}[]*+?^$.\\dwxk12,9#<>:=!P- "
+    for _ in range(40):
+        pattern = "".join(rng.choice(alphabet)
+                          for _ in range(rng.randint(1, 24)))
+        try:
+            re.compile(pattern)
+        except re.error:
+            continue
+        first = tool.execute(mode="explain", pattern=pattern)
+        second = tool.execute(mode="explain", pattern=pattern)
+        assert first == second, pattern
+
+
+def test_config_fields_are_real_settable_model_fields(tool):
+    """Every documented Attributes limit is a live pydantic field:
+    per-instance values change behavior, and invalid values are
+    rejected at construction (previously they were ClassVar dead
+    config, silently ignored)."""
+    assert tool.max_findings == 200  # default
+    capped = RegexLintTool(max_findings=3)
+    assert capped.max_findings == 3
+    noisy = "a*" * 60 + "b"  # many polynomial findings
+    default = tool.execute(mode="lint", pattern=noisy)
+    trimmed = capped.execute(mode="lint", pattern=noisy)
+    assert len(default["findings"]) > 3
+    assert len(trimmed["findings"]) == 3
+    assert trimmed["truncated"] is True
+    assert default["truncated"] is False
+    short = RegexLintTool(max_pattern_chars=8)
+    with pytest.raises(ValueError, match="exceeds the 8-character limit"):
+        short.execute(mode="lint", pattern="a" * 9)
+    with pytest.raises(Exception):
+        RegexLintTool(max_findings=0)  # pydantic ge=1 validation
+
+
+def test_yaml_config_is_valid_and_in_sync():
+    """The bundled yaml must parse (it shipped invalid double-quoted
+    escapes) and its description must equal the class description."""
+    yaml = pytest.importorskip("yaml")
+    import os
+    module_path = os.path.abspath(
+        __import__("agentuniverse.agent.action.tool.common_tool."
+                   "regex_lint_tool", fromlist=["x"]).__file__)
+    path = os.path.join(os.path.dirname(module_path), "regex_lint_tool.yaml")
+    with open(path, encoding="utf-8") as handle:
+        data = yaml.safe_load(handle)
+    assert data["name"] == "regex_lint_tool"
+    assert data["tool_type"] == "api"
+    from agentuniverse.agent.action.tool.common_tool.regex_lint_tool import (
+        RegexLintTool as _RLT,
+    )
+    assert data["description"] == _RLT().description

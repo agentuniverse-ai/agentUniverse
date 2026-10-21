@@ -674,7 +674,12 @@ analyses: severity-graded ReDoS detection — `redos_exponential`
 (warning) for nested quantifiers over overlapping alphabets and
 overlapping-prefix alternations under a quantifier (`(a+)+`, `(a*)*b`,
 `(a?)+`, `(.*a){10}b`, `(a|aa)+$`, `(a|ab)*c`, the StackOverflow-2019
-shape `(\w+\s?)*$`) and `redos_polynomial` (info) for adjacent
+shape `(\w+\s?)*$`) — fired only when the ambiguity can compound
+with input length, i.e. an unbounded quantifier on the outer scope or
+the repeated inner element, so bounded shapes with a constant
+re-partitioning space (the canonical IPv4 octet
+`(25[0-5]|2[0-4]\d|[01]?\d?\d)` under `{3}`) stay quiet — and
+`redos_polynomial` (info) for adjacent
 unbounded overlapping quantifiers (`a*a*a*b`, `(.*a).*b`), with
 `redos_untrusted_input` info notes for unbounded dot runs — plus
 `nested_set_possible` warnings (`[[a][b]]` compiles with a CPython
@@ -699,4 +704,8 @@ is undecidable — and deliberately conservative.
 
 Inputs are validated strictly (mode, flag names, mode-specific
 options), the pattern is capped at 4,000 characters, output lists are
-capped, and results are deterministic.
+capped, and results are deterministic. Every documented limit
+(`max_pattern_chars`, `max_findings`, `max_nodes_out`,
+`analysis_depth_cap`, `huge_repeat_threshold`, `max_text_length`) is
+a real settable pydantic model field, e.g.
+`RegexLintTool(max_findings=50)`.

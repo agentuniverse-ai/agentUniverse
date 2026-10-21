@@ -62,14 +62,24 @@ Four modes:
   ``OverflowError`` at a bound below CPython's ``MAXREPEAT``) and
   ``pattern_too_deep`` (very deep nesting raises ``RecursionError``
   inside ``sre`` parsing; empirically depth 500 fails while 200
-  compiles). Compile-success findings are the static analyses:
+  compiles). The scanner mirrors CPython's ASCII-only digit rule:
+  ``{m,n}`` bounds and backslash references consume ``0-9`` only, so
+  ``a{٢}`` is literal brace text and ``\1٢`` is the reference ``\1``
+  followed by the character ``٢`` — exactly what the engine does
+  (``str.isdigit`` would accept both and even crash on ``'²'``).
+  Compile-success findings are the static analyses:
   catastrophic-backtracking detection severity-graded —
   ``redos_exponential`` (warning; nested quantifiers over
   overlapping alphabets ``(a+)+``, ``(a*)*b``, empty-matching inner
   ``(a?)+``, bounded-outer ``(.*a){10}b``, and overlapping-prefix
   alternations under a quantifier ``(a|aa)+$``, ``(a|ab)*c``,
   ``(a|a)*``) versus ``redos_polynomial`` (info; adjacent unbounded
-  overlapping quantifiers ``a*a*a*b``, ``(.*a).*b``);
+  overlapping quantifiers ``a*a*a*b``, ``(.*a).*b``). Exponential
+  grading requires the ambiguity to compound with input length —
+  an unbounded quantifier on the outer scope or on the repeated
+  inner element — so bounded shapes whose re-partitioning space is
+  a constant (the canonical IPv4 octet
+  ``(25[0-5]|2[0-4]\d|[01]?\d?\d)`` under ``{3}``) stay quiet;
   ``redos_untrusted_input`` info notes for unbounded dot runs that
   escaped the graded detectors; ``nested_set_possible`` warning;
   ``brace_literal`` info; ``huge_repeat_bound`` warning (match-time
@@ -83,7 +93,14 @@ Four modes:
   max, kind}`` and group metadata, capped output), a ``group_map``
   ``{number: name-or-null}`` that byte-agrees with the parser's own
   ``state.groupdict``, and ``group_spans`` ``{number: [start, end]}``
-  pointing at the real parentheses.
+  pointing at the real parentheses. A conditional's yes/no split is
+  the first ``|`` at the body's own nesting depth (CPython's rule);
+  conditional ladders nested deeper than 200 levels — deeper than
+  any consumer of the tree looks — are scanned opaquely with their
+  capture groups still counted, so numbering stays correct without
+  the recursive decomposition that would overflow the interpreter
+  stack on ~500-deep ``(?(1)(?(1)...))`` patterns the engine itself
+  compiles fine.
 * ``explain`` — a deterministic human-readable walk: one English
   fragment per top-level alternative, a group index table and
   backreference/lookaround annotations.
@@ -96,15 +113,16 @@ Four modes:
   docs state explicitly.
 
 Strict validation (types, flag names, mode-specific options, a
-4,000-character pattern cap, node-count caps), no network, no
-third-party imports, deterministic output.
+4,000-character pattern cap, node-count caps — every limit is a
+real settable pydantic model field, not a dead class constant),
+no network, no third-party imports, deterministic output.
 """
 
 import re
 import warnings
 from typing import Any, ClassVar, Iterator, Optional
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 from agentuniverse.agent.action.tool.tool import Tool
 
@@ -200,15 +218,47 @@ _LOOKBEHIND_KINDS = (G_LOOKBEHIND_POS, G_LOOKBEHIND_NEG)
 _LOOKAROUND_KINDS = (G_LOOKAHEAD_POS, G_LOOKAHEAD_NEG) + _LOOKBEHIND_KINDS
 
 
+# Nesting depth beyond which conditional bodies are scanned opaquely
+# (see ``RegexLintTool._scan_conditional``): the decomposition there is
+# recursive and would overflow the interpreter stack on ~500-deep
+# conditionals the real engine compiles fine, while every consumer of
+# the tree is depth-capped well below this bound anyway.
+_CONDITIONAL_NESTING_CAP = 200
+
+
 def _is_hex(ch: str) -> bool:
     return ch in "0123456789abcdefABCDEF"
+
+
+# CPython's sre parser accepts only ASCII digits inside ``{m,n}`` and
+# after a backslash (``re`` treats ``a{٢}`` as the literal text
+# ``a{٢}`` and ``\\٢`` as a literal-escape, while ``str.isdigit`` also
+# accepts ``'٢'``/``'²'`` and ``int('²')`` even raises) — the scanner
+# mirrors the ASCII-only rule.
+_ASCII_DIGITS = frozenset("0123456789")
+
+
+def _is_ascii_digit(ch: str) -> bool:
+    return ch in _ASCII_DIGITS
+
+
+# Sentinel for "alphabet not yet computed" (None is a valid alphabet).
+_ALPHA_UNSET = object()
+
+
+def _ascii_digit_span(text: str) -> int:
+    """Length of the leading run of ASCII digits in ``text``."""
+    k = 0
+    while k < len(text) and text[k] in _ASCII_DIGITS:
+        k += 1
+    return k
 
 
 class _Node:
     """One parse-tree node (kept lightweight; serialized on demand)."""
 
     __slots__ = ("kind", "start", "end", "literal", "class_info",
-                 "quant", "group", "branches", "parent")
+                 "quant", "group", "branches", "parent", "alpha_cache")
 
     def __init__(self, kind: str, start: int, end: int) -> None:
         self.kind = kind
@@ -220,6 +270,7 @@ class _Node:
         self.group: Any = None
         self.branches: list[list["_Node"]] = []
         self.parent: Optional["_Node"] = None
+        self.alpha_cache: Any = _ALPHA_UNSET
 
     def set_quant(self, quant: dict) -> None:
         self.quant = quant
@@ -238,7 +289,8 @@ class RegexLintTool(Tool):
     """Static regular-expression pattern analyzer built on stdlib ``re``.
 
     Attributes:
-        max_pattern_chars (int): Upper bound on the pattern length.
+        max_pattern_chars (int): Upper bound on the pattern length
+            (real settable model field, like every limit below).
         max_findings (int): Cap on the lint findings list.
         max_nodes_out (int): Cap on serialized structure nodes.
         analysis_depth_cap (int): Depth beyond which detectors treat a
@@ -273,7 +325,11 @@ class RegexLintTool(Tool):
         "compile-success analyses are severity-graded ReDoS detection "
         "(redos_exponential warning: (a+)+, (a*)*b, (a|aa)+$, (a|ab)*c, "
         "(.*a){10}b nested quantifiers and overlapping-prefix "
-        "alternations; redos_polynomial info: a*a*a*b, (.*a).*b "
+        "alternations — fired only when the ambiguity can compound with "
+        "input length, i.e. an unbounded quantifier on the outer scope "
+        "or the repeated inner element, so the canonical IPv4 octet "
+        "(25[0-5]|2[0-4]\\d|[01]?\\d?\\d) under {3} stays quiet; "
+        "redos_polynomial info: a*a*a*b, (.*a).*b "
         "adjacent unbounded overlapping quantifiers; redos_untrusted_"
         "input info notes), nested-set [[a][b]] warnings (CPython "
         "warns, POSIX engines diverge), literal-brace {name} format-"
@@ -292,18 +348,24 @@ class RegexLintTool(Tool):
         "mode='estimate' returns a documented basic_ops scan-work "
         "estimate plus a backtracking_risk_class of linear/polynomial/"
         "exponential/unknown with reasons (heuristic, conservative). "
+        "All documented limits (max_pattern_chars, max_findings, "
+        "max_nodes_out, analysis_depth_cap, huge_repeat_threshold, "
+        "max_text_length) are real settable model fields. "
         "Strict validation, size caps, deterministic output."
     )
 
     MODES: ClassVar[tuple] = ("lint", "structure", "explain", "estimate")
     FLAG_MODES: ClassVar[tuple] = ("lint", "estimate")
 
-    max_pattern_chars: ClassVar[int] = 4_000
-    max_findings: ClassVar[int] = 200
-    max_nodes_out: ClassVar[int] = 2_000
-    analysis_depth_cap: ClassVar[int] = 250
-    huge_repeat_threshold: ClassVar[int] = 100_000
-    max_text_length: ClassVar[int] = 10**9
+    # Real pydantic fields: every limit documented in the class
+    # docstring's Attributes section is settable per instance
+    # (``RegexLintTool(max_findings=5)``), validated at construction.
+    max_pattern_chars: int = Field(default=4_000, ge=1)
+    max_findings: int = Field(default=200, ge=1)
+    max_nodes_out: int = Field(default=2_000, ge=1)
+    analysis_depth_cap: int = Field(default=250, ge=1)
+    huge_repeat_threshold: int = Field(default=100_000, ge=2)
+    max_text_length: int = Field(default=10**9, ge=1)
 
     # ------------------------------------------------------------------ #
     # Public entry point
@@ -369,26 +431,23 @@ class RegexLintTool(Tool):
     # Input validation (pure — raises before any computation)
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _invalid(cls, message: str) -> None:
+    def _invalid(self, message: str) -> None:
         """Raise the standard input-validation error."""
         raise ValueError(f"regex_lint_tool: {message}")
 
-    @classmethod
-    def _validate_pattern(cls, pattern: Any) -> str:
+    def _validate_pattern(self, pattern: Any) -> str:
         """Validate the pattern (empty allowed, oversized rejected)."""
         if pattern is None or isinstance(pattern, bool) \
                 or not isinstance(pattern, str):
-            cls._invalid(f"pattern must be a string (got {pattern!r})")
-        if len(pattern) > cls.max_pattern_chars:
-            cls._invalid(
-                f"pattern exceeds the {cls.max_pattern_chars:,}-character "
+            self._invalid(f"pattern must be a string (got {pattern!r})")
+        if len(pattern) > self.max_pattern_chars:
+            self._invalid(
+                f"pattern exceeds the {self.max_pattern_chars:,}-character "
                 f"limit (got {len(pattern):,} characters)"
             )
         return pattern
 
-    @classmethod
-    def _validate_flags(cls, flags: Any) -> list[str]:
+    def _validate_flags(self, flags: Any) -> list[str]:
         """Validate and normalize the flag-name list."""
         if flags is None:
             return []
@@ -398,7 +457,7 @@ class RegexLintTool(Tool):
                 isinstance(f, str) for f in flags):
             items = list(flags)
         else:
-            cls._invalid(
+            self._invalid(
                 "flags must be a flag name or a list of flag names from "
                 "IGNORECASE, MULTILINE, DOTALL, ASCII, UNICODE, VERBOSE "
                 f"(or i, m, s, a, u, x) (got {flags!r})"
@@ -407,7 +466,7 @@ class RegexLintTool(Tool):
         for item in items:
             name = _FLAG_ALIASES.get(item.upper())
             if name is None:
-                cls._invalid(
+                self._invalid(
                     f"unknown flag {item!r}; valid flags: IGNORECASE, "
                     "MULTILINE, DOTALL, ASCII, UNICODE, VERBOSE "
                     "(or i, m, s, a, u, x)"
@@ -415,45 +474,42 @@ class RegexLintTool(Tool):
             if name not in resolved:
                 resolved.append(name)
         if "ASCII" in resolved and "UNICODE" in resolved:
-            cls._invalid(
+            self._invalid(
                 "flags ASCII and UNICODE are mutually exclusive "
                 "(re.compile rejects re.ASCII | re.UNICODE)"
             )
         return resolved
 
-    @classmethod
-    def _validate_text_length(cls, text_length: Any) -> int:
+    def _validate_text_length(self, text_length: Any) -> int:
         """Validate estimate's sample text length."""
         if isinstance(text_length, bool) or not isinstance(text_length, int):
-            cls._invalid(
+            self._invalid(
                 f"text_length must be an integer (got {text_length!r})"
             )
-        if text_length < 0 or text_length > cls.max_text_length:
-            cls._invalid(
-                f"text_length must be between 0 and {cls.max_text_length:,} "
+        if text_length < 0 or text_length > self.max_text_length:
+            self._invalid(
+                f"text_length must be between 0 and {self.max_text_length:,} "
                 f"(got {text_length:,})"
             )
         return text_length
 
-    @classmethod
-    def _reject_option(cls, name: str, value: Any,
+    def _reject_option(self, name: str, value: Any,
                        allowed_modes: tuple = ()) -> None:
         """Reject an option passed outside its allowed modes."""
         if value is not None:
             if allowed_modes:
-                cls._invalid(
+                self._invalid(
                     f"{name} is only accepted in {', '.join(allowed_modes)} "
                     "mode"
                 )
             else:
-                cls._invalid(f"{name} is not accepted in this mode")
+                self._invalid(f"{name} is not accepted in this mode")
 
     # ------------------------------------------------------------------ #
     # Compile oracle — the verdict mirrored byte-for-byte
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _compile_verdict(cls, pattern: str, flag_value: int) -> dict:
+    def _compile_verdict(self, pattern: str, flag_value: int) -> dict:
         """Run the real compile and mirror its outcome.
 
         Returns ``{"raises", "exc_type", "message", "position"}``.
@@ -493,14 +549,16 @@ class RegexLintTool(Tool):
     # Structural scanner — iterative, span-accurate
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _parse_tree(cls, pattern: str, flag_value: int) -> _Node:
+    def _parse_tree(self, pattern: str, flag_value: int,
+                    cond_depth: int = 0) -> _Node:
         """Scan the pattern into a span-accurate tree (iterative).
 
         The scanner never raises on malformed input: compile failures
         are the compile oracle's job; unterminated constructs simply
         end the scan gracefully. Group numbers follow CPython's rule
         (opening-paren order; only capturing and named groups count).
+        ``cond_depth`` tracks conditional nesting so absurdly deep
+        ``(?(1)(?(1)...))`` ladders degrade instead of recursing.
         """
         verbose = bool(flag_value & re.VERBOSE)
         root = _Node("root", 0, len(pattern))
@@ -524,13 +582,13 @@ class RegexLintTool(Tool):
                 i += 1
                 continue
             if ch == "\\":
-                node, i2 = cls._scan_escape(pattern, i)
+                node, i2 = self._scan_escape(pattern, i)
                 current.append(node)
                 i = i2
                 last_repeatable = None if node.kind == K_ANCHOR else node
                 continue
             if ch == "[":
-                node, i2 = cls._scan_class(pattern, i)
+                node, i2 = self._scan_class(pattern, i)
                 current.append(node)
                 i = i2
                 last_repeatable = node
@@ -555,7 +613,7 @@ class RegexLintTool(Tool):
                 last_repeatable = None
                 continue
             if ch == "(":
-                info = cls._scan_group_prefix(pattern, i)
+                info = self._scan_group_prefix(pattern, i)
                 if info["error"] is not None:
                     node = _Node(K_UNKNOWN, i, n)
                     node.literal = info["error"]
@@ -576,8 +634,9 @@ class RegexLintTool(Tool):
                     last_repeatable = node
                     continue
                 if info["kind"] == K_COND:
-                    node, i2, group_counter = cls._scan_conditional(
-                        pattern, info, group_counter)
+                    node, i2, group_counter = self._scan_conditional(
+                        pattern, info, group_counter,
+                        cond_depth=cond_depth)
                     current.append(node)
                     i = i2
                     last_repeatable = node
@@ -618,7 +677,7 @@ class RegexLintTool(Tool):
                 last_repeatable = node
                 continue
             if ch == "{":
-                quant, i2 = cls._scan_brace(pattern, i)
+                quant, i2 = self._scan_brace(pattern, i)
                 if quant is not None and last_repeatable is not None \
                         and last_repeatable.quant is None:
                     last_repeatable.set_quant(quant)
@@ -688,8 +747,7 @@ class RegexLintTool(Tool):
                 child.parent = root
         return root
 
-    @classmethod
-    def _scan_escape(cls, pattern: str, i: int) -> tuple[_Node, int]:
+    def _scan_escape(self, pattern: str, i: int) -> tuple[_Node, int]:
         """Scan one backslash escape starting at ``pattern[i] == '\'``."""
         n = len(pattern)
         start = i
@@ -724,9 +782,12 @@ class RegexLintTool(Tool):
             node = _Node(K_LITERAL, start, k)
             node.literal = pattern[start:k]
             return node, k
-        if c.isdigit():
+        if _is_ascii_digit(c):
+            # CPython consumes only ASCII digits into the reference;
+            # anything else is a separate literal (e.g. ``\\1٢`` is
+            # backref 1 followed by the character ``٢``).
             k = j + 1
-            while k < n and pattern[k].isdigit():
+            while k < n and _is_ascii_digit(pattern[k]):
                 k += 1
             node = _Node(K_BACKREF, start, k)
             node.literal = pattern[j:k]
@@ -773,8 +834,7 @@ class RegexLintTool(Tool):
                 return body
         return body if len(body) == 1 else body[:1]
 
-    @classmethod
-    def _scan_class(cls, pattern: str, i: int) -> tuple[_Node, int]:
+    def _scan_class(self, pattern: str, i: int) -> tuple[_Node, int]:
         """Scan one character class starting at ``pattern[i] == '['``."""
         n = len(pattern)
         start = i
@@ -803,12 +863,12 @@ class RegexLintTool(Tool):
                     pending = None
                 elif e == "x" and pattern[j + 3:j + 4] and \
                         _is_hex(pattern[j + 2]) and _is_hex(pattern[j + 3]):
-                    chars.append(cls._escape_char(pattern[j:j + 4]))
+                    chars.append(self._escape_char(pattern[j:j + 4]))
                     pending = chars[-1]
                     j += 4
                     continue
                 else:
-                    chars.append(cls._escape_char(pattern[j:j + 2]))
+                    chars.append(self._escape_char(pattern[j:j + 2]))
                     pending = chars[-1]
                 j += 2
                 continue
@@ -821,7 +881,7 @@ class RegexLintTool(Tool):
                     and pattern[j + 1] != "]":
                 hi_src = pattern[j + 1]
                 if hi_src == "\\" and j + 2 < n:
-                    hi = cls._escape_char(pattern[j + 1:j + 3])
+                    hi = self._escape_char(pattern[j + 1:j + 3])
                     j += 2
                 else:
                     hi = hi_src
@@ -845,8 +905,7 @@ class RegexLintTool(Tool):
         }
         return node, min(j + 1, n)
 
-    @classmethod
-    def _scan_group_prefix(cls, pattern: str, i: int) -> dict:
+    def _scan_group_prefix(self, pattern: str, i: int) -> dict:
         """Classify a ``(`` prefix; never raises."""
         n = len(pattern)
         info = {"start": i, "end": None, "body_start": None,
@@ -946,15 +1005,103 @@ class RegexLintTool(Tool):
         info["error"] = "unknown extension ?" + pattern[j]
         return info
 
-    @classmethod
-    def _scan_conditional(cls, pattern: str, info: dict,
-                          group_counter: int) -> tuple[_Node, int, int]:
+    def _scan_conditional(self, pattern: str, info: dict,
+                          group_counter: int,
+                          cond_depth: int = 0) -> tuple[_Node, int, int]:
         """Scan ``(?(ref)yes|no)``; sub-branches keep whole-pattern
-        spans and continue the outer group numbering."""
+        spans and continue the outer group numbering.
+
+        The yes/no separator is the first ``|`` at the conditional
+        body's own nesting depth (CPython semantics — a ``|`` inside a
+        nested group, class or comment does not split). Conditional
+        nesting deeper than ``_CONDITIONAL_NESTING_CAP`` levels is
+        scanned opaquely: capture groups inside the body are still
+        counted (so later group numbers stay correct) but the body is
+        not decomposed — beyond that depth the structure serializer
+        and every detector are depth-capped anyway, and the recursive
+        decomposition would otherwise overflow the interpreter stack
+        on patterns the real engine compiles fine.
+        """
         n = len(pattern)
         node = _Node(K_COND, info["start"], n)
         node.group = dict(info)
         body_start = info["body_start"]
+        k = self._find_conditional_end(pattern, body_start)
+        node.end = min(k + 1, n)
+
+        if cond_depth >= _CONDITIONAL_NESTING_CAP:
+            node.group["degraded"] = True
+            ranges = self._capture_group_ranges_raw(pattern, body_start, k)
+            # Each counted group becomes a placeholder node that rides
+            # the tree like any ordinary group: enclosing conditional
+            # parts renumber it span-ordered at every level, so the
+            # global numbering stays correct across sub-parse
+            # boundaries without any out-of-band accounting.
+            placeholders: list[_Node] = []
+            for gstart, gend in ranges:
+                group_counter += 1
+                ph = _Node(K_GROUP, gstart, gend)
+                ph.group = {"kind": G_CAPTURE, "number": group_counter,
+                            "name": None, "placeholder": True}
+                ph.parent = node
+                placeholders.append(ph)
+            node.branches = [placeholders]
+            return node, node.end, group_counter
+
+        # First '|' at the body's own depth splits yes from no.
+        sep = self._find_top_level_bar(pattern, body_start, k)
+        yes_src = pattern[body_start:sep] if sep != -1 \
+            else pattern[body_start:k]
+        no_src = pattern[sep + 1:k] if sep != -1 else ""
+        while len(node.branches) < 2:
+            node.branches.append([])
+
+        sub_yes = self._parse_tree(yes_src, 0, cond_depth + 1)
+        yes_branch = sub_yes.branches[0] if sub_yes.branches else []
+        group_counter = self._renumber_and_attach(
+            node, 0, sub_yes, yes_branch, body_start, group_counter)
+
+        sub_no = self._parse_tree(no_src, 0, cond_depth + 1)
+        if len(sub_no.branches) <= 1:
+            no_branch = sub_no.branches[0] if sub_no.branches else []
+            offset = sep + 1 if sep != -1 else k
+            group_counter = self._renumber_and_attach(
+                node, 1, sub_no, no_branch, offset, group_counter)
+        else:
+            # The no side keeps its own alternation (e.g. the ``c|d``
+            # of ``(?(1)b|c|d)``): wrap it in a synthetic non-capturing
+            # group so both alternatives survive the walk.
+            wrapper = _Node(K_GROUP, 0, len(no_src))
+            wrapper.group = {"kind": G_NONCAP, "number": None,
+                             "name": None}
+            wrapper.branches = sub_no.branches
+            for branch in wrapper.branches:
+                for child in branch:
+                    child.parent = wrapper
+            offset = sep + 1 if sep != -1 else k
+            group_counter = self._renumber_and_attach(
+                node, 1, sub_no, [wrapper], offset, group_counter)
+            wrapper.parent = node
+        return node, node.end, group_counter
+
+    def _renumber_and_attach(self, node: _Node, target: int, sub: _Node,
+                             branch: list[_Node], offset: int,
+                             group_counter: int) -> int:
+        """Renumber a parsed conditional part's groups onto the global
+        counter (span order is preserved by parsing yes before no),
+        shift it to whole-pattern coordinates and attach it."""
+        for _, gnode in self._groups_in_order(sub):
+            group_counter += 1
+            gnode.group["number"] = group_counter
+        self._shift_tree(branch, offset)
+        for child in branch:
+            child.parent = node
+        node.branches[target] = branch
+        return group_counter
+
+    def _find_conditional_end(self, pattern: str, body_start: int) -> int:
+        """Index of the ``)`` closing a conditional body (len == end)."""
+        n = len(pattern)
         depth = 1
         k = body_start
         while k < n:
@@ -963,48 +1110,106 @@ class RegexLintTool(Tool):
                 k += 2
                 continue
             if c == "[":
-                k = cls._skip_class(pattern, k)
+                k = self._skip_class(pattern, k)
+                continue
+            if c == "(" and pattern[k + 1:k + 2] == "?" \
+                    and pattern[k + 2:k + 3] == "#":
+                close = pattern.find(")", k + 3)
+                k = n if close == -1 else close + 1
                 continue
             if c == "(":
                 depth += 1
             elif c == ")":
                 depth -= 1
                 if depth == 0:
-                    break
+                    return k
             k += 1
-        node.end = min(k + 1, n)
-        body = pattern[body_start:k]
-        yes, _, no = body.partition("|")
-        for part, target in ((yes, 0), (no, 1)):
-            while len(node.branches) <= target:
-                node.branches.append([])
-            if not part:
-                continue
-            sub = cls._parse_tree(part, 0)
-            branch = sub.branches[0] if sub.branches else []
-            for number, gnode in cls._groups_in_order(sub):
-                group_counter += 1
-                gnode.group["number"] = group_counter
-            cls._shift_tree(branch, body_start + (0 if target == 0
-                                                  else len(yes) + 1))
-            for child in branch:
-                child.parent = node
-            node.branches[target] = branch
-        return node, node.end, group_counter
+        return n
 
-    @classmethod
-    def _groups_in_order(cls, root: _Node) -> list[tuple[int, _Node]]:
+    def _find_top_level_bar(self, pattern: str, start: int,
+                            end: int) -> int:
+        """Index of the first ``|`` at depth 0 in ``pattern[start:end]``
+        (-1 when absent), skipping escapes, classes and comments."""
+        depth = 0
+        j = start
+        while j < end:
+            c = pattern[j]
+            if c == "\\":
+                j += 2
+                continue
+            if c == "[":
+                j = self._skip_class(pattern, j)
+                continue
+            if c == "(" and pattern[j + 1:j + 2] == "?" \
+                    and pattern[j + 2:j + 3] == "#":
+                close = pattern.find(")", j + 3)
+                j = end if close == -1 else close + 1
+                continue
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+            elif c == "|" and depth == 0:
+                return j
+            j += 1
+        return -1
+
+    def _capture_group_ranges_raw(self, pattern: str, start: int,
+                                  end: int) -> list[tuple[int, int]]:
+        """``(start, end)`` spans of capture groups in
+        ``pattern[start:end]`` without recursion, in open-paren order
+        (used by the degraded deep-conditional path so group numbering
+        stays correct)."""
+        ranges: list[tuple[int, int]] = []
+        stack: list[tuple[int, bool]] = []
+        j = start
+        while j < end:
+            c = pattern[j]
+            if c == "\\":
+                j += 2
+                continue
+            if c == "[":
+                j = self._skip_class(pattern, j)
+                continue
+            if c == "(":
+                if pattern[j + 1:j + 2] == "?" \
+                        and pattern[j + 2:j + 3] == "#":
+                    close = pattern.find(")", j + 3)
+                    j = end if close == -1 else close + 1
+                    continue
+                sub = self._scan_group_prefix(pattern, j)
+                is_capture = sub["error"] is None and sub["kind"] in (
+                    G_CAPTURE, G_NAMED)
+                stack.append((j, is_capture))
+                if sub["body_start"] is not None:
+                    j = sub["body_start"]
+                elif sub["end"] is not None:
+                    j = sub["end"]
+                else:
+                    j += 1
+                continue
+            if c == ")" and stack:
+                opened, is_capture = stack.pop()
+                if is_capture:
+                    ranges.append((opened, j + 1))
+            j += 1
+        # Unbalanced groups (malformed input) keep open spans.
+        ranges.extend((opened, end) for opened, is_capture
+                      in reversed(stack) if is_capture)
+        ranges.sort()
+        return ranges
+
+    def _groups_in_order(self, root: _Node) -> list[tuple[int, _Node]]:
         """Capture groups of a tree in open-paren (span) order."""
         found = []
-        for node, _ in cls._walk(root):
+        for node, _ in self._walk(root):
             if node.is_group() and node.group.get("number"):
                 found.append((node.start, node))
         found.sort(key=lambda item: item[0])
         return [(g.start, g) for _, g in
                 sorted([(s, g) for s, g in found], key=lambda t: t[0])]
 
-    @classmethod
-    def _shift_tree(cls, nodes: list[_Node], offset: int) -> None:
+    def _shift_tree(self, nodes: list[_Node], offset: int) -> None:
         """Shift every span in a subtree by ``offset``."""
         for node in nodes:
             stack = [node]
@@ -1018,8 +1223,7 @@ class RegexLintTool(Tool):
                 for branch in cur.branches:
                     stack.extend(branch)
 
-    @classmethod
-    def _skip_class(cls, pattern: str, i: int) -> int:
+    def _skip_class(self, pattern: str, i: int) -> int:
         """Index just past a character class starting at ``[``."""
         n = len(pattern)
         j = i + 1
@@ -1031,8 +1235,7 @@ class RegexLintTool(Tool):
             j += 1
         return j + 1
 
-    @classmethod
-    def _scan_brace(cls, pattern: str, i: int) -> tuple[Optional[dict], int]:
+    def _scan_brace(self, pattern: str, i: int) -> tuple[Optional[dict], int]:
         """Scan a ``{...}`` run at ``i``.
 
         Returns ``(quantifier, end)`` when the run parses as a valid
@@ -1048,11 +1251,13 @@ class RegexLintTool(Tool):
         if not body:
             return None, close + 1
         lo, sep, hi = body.partition(",")
-        if not sep and not lo.isdigit():
+        # ASCII-only digits: ``a{٢}``/``a{²}`` are literal braces for
+        # the real engine even though ``str.isdigit`` accepts them.
+        if not sep and lo and _ascii_digit_span(lo) != len(lo):
             return None, close + 1
-        if sep and lo and not lo.isdigit():
+        if sep and lo and _ascii_digit_span(lo) != len(lo):
             return None, close + 1
-        if sep and hi and not hi.isdigit():
+        if sep and hi and _ascii_digit_span(hi) != len(hi):
             return None, close + 1
         if not lo and (not sep or not hi):
             # "{}" and "{,}" are literals for CPython.
@@ -1080,14 +1285,13 @@ class RegexLintTool(Tool):
     # Iterative tree walk
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _walk(cls, root: _Node) -> Iterator[tuple[_Node, int]]:
+    def _walk(self, root: _Node) -> Iterator[tuple[_Node, int]]:
         """Yield ``(node, depth)`` depth-first without recursion."""
         stack: list[tuple[_Node, int]] = [(root, 0)]
         while stack:
             node, depth = stack.pop()
             yield node, depth
-            if depth >= cls.analysis_depth_cap:
+            if depth >= self.analysis_depth_cap:
                 continue
             children: list[_Node] = []
             for branch in node.branches:
@@ -1095,10 +1299,9 @@ class RegexLintTool(Tool):
             for child in reversed(children):
                 stack.append((child, depth + 1))
 
-    @classmethod
-    def _groups_by_number(cls, root: _Node) -> dict[int, _Node]:
+    def _groups_by_number(self, root: _Node) -> dict[int, _Node]:
         groups: dict[int, _Node] = {}
-        for node, _ in cls._walk(root):
+        for node, _ in self._walk(root):
             if node.is_group() and node.group.get("number"):
                 groups[node.group["number"]] = node
         return groups
@@ -1107,21 +1310,19 @@ class RegexLintTool(Tool):
     # Width computation (lookbehind fixed-width mirror)
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _sequence_width(cls, branch: list[_Node],
+    def _sequence_width(self, branch: list[_Node],
                         ctx: dict) -> Optional[tuple[int, int]]:
         """Width of one sequence; None when variable/unknown."""
         lo = hi = 0
         for child in branch:
-            w = cls._node_width(child, ctx)
+            w = self._node_width(child, ctx)
             if w is None:
                 return None
             lo += w[0]
             hi += w[1]
         return lo, hi
 
-    @classmethod
-    def _node_width(cls, node: _Node,
+    def _node_width(self, node: _Node,
                     ctx: dict) -> Optional[tuple[int, int]]:
         """Compute ``(min, max)`` width or None (variable/unknown).
 
@@ -1136,11 +1337,11 @@ class RegexLintTool(Tool):
         while stack:
             current, phase = stack.pop()
             if phase == 1:
-                results[id(current)] = cls._eval_width(
+                results[id(current)] = self._eval_width(
                     current, results, ctx)
                 continue
             stack.append((current, 1))
-            if len(stack) > 4 * cls.analysis_depth_cap:
+            if len(stack) > 4 * self.analysis_depth_cap:
                 results[id(current)] = None
                 stack.pop()  # drop the eval frame just pushed
                 continue
@@ -1149,8 +1350,7 @@ class RegexLintTool(Tool):
                     stack.append((child, 0))
         return results.get(id(node))
 
-    @classmethod
-    def _eval_width(cls, node: _Node,
+    def _eval_width(self, node: _Node,
                     results: dict[int, Optional[tuple[int, int]]],
                     ctx: dict) -> Optional[tuple[int, int]]:
         """Evaluate one node's width from already-evaluated children."""
@@ -1171,8 +1371,9 @@ class RegexLintTool(Tool):
             return width, width
         if node.kind == K_BACKREF:
             ref = node.literal
-            if isinstance(ref, str) and ref.isdigit():
-                base = cls._group_width(int(ref), ctx)
+            if isinstance(ref, str) and ref \
+                    and _ascii_digit_span(ref) == len(ref):
+                base = self._group_width(int(ref), ctx)
             else:
                 base = None
             if base is None or node.quant is None:
@@ -1182,6 +1383,9 @@ class RegexLintTool(Tool):
             return (base[0] * node.quant["min"],
                     base[0] * node.quant["min"])
         if node.kind in (K_GROUP, K_COND):
+            if node.kind == K_COND and node.group \
+                    and node.group.get("degraded"):
+                return None  # opaque deep-conditional body
             widths = []
             for branch in node.branches:
                 lo = hi = 0
@@ -1205,8 +1409,7 @@ class RegexLintTool(Tool):
             return first
         return None
 
-    @classmethod
-    def _group_width(cls, number: int, ctx: dict) \
+    def _group_width(self, number: int, ctx: dict) \
             -> Optional[tuple[int, int]]:
         """Width of capture group ``number`` (memoized, cycle-safe)."""
         if number in ctx["widths"]:
@@ -1220,43 +1423,48 @@ class RegexLintTool(Tool):
         virtual = _Node(K_GROUP, node.start, node.end)
         virtual.branches = node.branches
         virtual.quant = None
-        width = cls._node_width(virtual, ctx)
+        width = self._node_width(virtual, ctx)
         ctx["computing"].discard(number)
         ctx["widths"][number] = width
         return width
 
-    @classmethod
-    def _width_context(cls, root: _Node) -> dict:
+    def _width_context(self, root: _Node) -> dict:
         return {"widths": {}, "computing": set(),
-                "groups": cls._groups_by_number(root)}
+                "groups": self._groups_by_number(root)}
 
-    @classmethod
-    def _lookbehind_fixed(cls, node: _Node, ctx: dict) -> bool:
+    def _lookbehind_fixed(self, node: _Node, ctx: dict) -> bool:
         """Structural verdict: is this lookbehind's width fixed?"""
         virtual = _Node(K_GROUP, node.start, node.end)
         virtual.branches = node.branches
         virtual.quant = None
-        return cls._node_width(virtual, ctx) is not None
+        return self._node_width(virtual, ctx) is not None
 
     # ------------------------------------------------------------------ #
     # Alphabet approximation for overlap tests
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _alphabet(cls, node: _Node) -> Any:
+    def _alphabet(self, node: _Node) -> Any:
         """Approximate a node's alphabet for overlap testing.
 
         Returns a ``frozenset`` of characters, a shorthand marker
         (``"d" "w" "s" "D" "W" "S"``), the dot marker ``"."``, or
         ``None`` = unknown/unbounded — assumed to overlap everything
         (ranges wider than 16, negated classes, complex units).
+        Results are memoized on the node so repeated pair probes over
+        large patterns stay cheap instead of quadratic.
         """
+        if node.alpha_cache is _ALPHA_UNSET:
+            node.alpha_cache = self._compute_alphabet(node)
+        return node.alpha_cache
+
+    def _compute_alphabet(self, node: _Node) -> Any:
+        """The uncached alphabet approximation (see ``_alphabet``)."""
         if node.quant is not None and node.quant["min"] > 1:
             pass  # repetition count does not change the alphabet
         if node.kind == K_LITERAL:
             text = str(node.literal)
             if text.startswith("\\"):
-                return frozenset(cls._escape_char(text))
+                return frozenset(self._escape_char(text))
             return frozenset(text) if text else frozenset()
         if node.kind == K_DOT:
             return "."
@@ -1284,7 +1492,7 @@ class RegexLintTool(Tool):
                 if len(branch) != 1:
                     single = False
                     break
-                alpha = cls._alphabet(branch[0])
+                alpha = self._alphabet(branch[0])
                 if alpha is None or alpha == "." or \
                         not isinstance(alpha, frozenset):
                     wildcard = True
@@ -1295,8 +1503,7 @@ class RegexLintTool(Tool):
             return None
         return None
 
-    @classmethod
-    def _overlaps(cls, alpha_a: Any, alpha_b: Any) -> bool:
+    def _overlaps(self, alpha_a: Any, alpha_b: Any) -> bool:
         """Conservative overlap test (True == assume overlap)."""
         if alpha_a is None or alpha_b is None:
             return True
@@ -1309,9 +1516,9 @@ class RegexLintTool(Tool):
                 return False
             return True
         if isinstance(alpha_a, frozenset):
-            return any(cls._char_in_category(c, alpha_b) for c in alpha_a)
+            return any(self._char_in_category(c, alpha_b) for c in alpha_a)
         if isinstance(alpha_b, frozenset):
-            return any(cls._char_in_category(c, alpha_a) for c in alpha_b)
+            return any(self._char_in_category(c, alpha_a) for c in alpha_b)
         return True
 
     @staticmethod
@@ -1322,18 +1529,17 @@ class RegexLintTool(Tool):
         except re.error:
             return True
 
-    @classmethod
-    def _node_covers_char(cls, node: _Node, ch: str) -> bool:
+    def _node_covers_char(self, node: _Node, ch: str) -> bool:
         """Might this node consume the character ``ch``? (conservative)"""
         if node.kind == K_LITERAL:
             text = str(node.literal)
             if text.startswith("\\"):
-                return ch == cls._escape_char(text)
+                return ch == self._escape_char(text)
             return ch in text
         if node.kind == K_DOT:
             return True
         if node.kind == K_SHORTHAND:
-            return cls._char_in_category(ch, str(node.literal))
+            return self._char_in_category(ch, str(node.literal))
         if node.kind == K_CLASS:
             info = node.class_info or {}
             if info.get("negated"):
@@ -1344,13 +1550,12 @@ class RegexLintTool(Tool):
                 if lo <= ch <= hi:
                     return True
             for cat in info.get("categories", ()):
-                if cls._char_in_category(ch, cat):
+                if self._char_in_category(ch, cat):
                     return True
             return False
         return True  # groups/backrefs/unknown — assume it can
 
-    @classmethod
-    def _pins(cls, mid: _Node, unit: _Node) -> bool:
+    def _pins(self, mid: _Node, unit: _Node) -> bool:
         """True when ``mid`` is a mandatory separator that provably
         cannot consume any character ``unit`` can — it pins the runs
         and disambiguates the split."""
@@ -1359,7 +1564,7 @@ class RegexLintTool(Tool):
         mid_chars: Optional[list[str]] = None
         if mid.kind == K_LITERAL:
             text = str(mid.literal)
-            mid_chars = [cls._escape_char(text)] if text.startswith("\\") \
+            mid_chars = [self._escape_char(text)] if text.startswith("\\") \
                 else list(text)
         elif mid.kind == K_CLASS and mid.class_info \
                 and not mid.class_info.get("negated") \
@@ -1373,30 +1578,26 @@ class RegexLintTool(Tool):
                                  range(ord(lo), ord(hi) + 1))
         if mid_chars is None:
             return False
-        return all(not cls._node_covers_char(unit, c) for c in mid_chars)
+        return all(not self._node_covers_char(unit, c) for c in mid_chars)
 
-    @classmethod
-    def _first_unit(cls, branch: list[_Node]) -> Optional[_Node]:
+    def _first_unit(self, branch: list[_Node]) -> Optional[_Node]:
         """The first consuming (non-zero-width) node of a sequence."""
         for child in branch:
             if child.kind != K_ANCHOR:
                 return child
         return None
 
-    @classmethod
-    def _is_unbounded(cls, quant: Optional[dict]) -> bool:
+    def _is_unbounded(self, quant: Optional[dict]) -> bool:
         return quant is not None and quant["max"] >= _MAXREPEAT
 
-    @classmethod
-    def _is_repeatable(cls, quant: Optional[dict]) -> bool:
+    def _is_repeatable(self, quant: Optional[dict]) -> bool:
         return quant is not None and quant["max"] >= 2
 
     # ------------------------------------------------------------------ #
     # Backtracking / ReDoS detectors (iterative, conservative)
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _detect_redos(cls, root: _Node) -> list[dict]:
+    def _detect_redos(self, root: _Node) -> list[dict]:
         """Run the severity-graded backtracking detectors.
 
         Returns entries carrying ``grade`` = ``"exponential"`` or
@@ -1405,7 +1606,7 @@ class RegexLintTool(Tool):
         be disproved is assumed.
         """
         findings: list[dict] = []
-        nodes = [node for node, _ in cls._walk(root)]
+        nodes = [node for node, _ in self._walk(root)]
         seen: set[tuple[str, int, int]] = set()
 
         def record(code: str, grade: str, span: tuple[int, int],
@@ -1423,9 +1624,9 @@ class RegexLintTool(Tool):
             if not (node.is_group() or node.kind in (K_DOT, K_SHORTHAND,
                                                      K_CLASS, K_LITERAL)):
                 continue
-            if not cls._is_repeatable(node.quant):
+            if not self._is_repeatable(node.quant):
                 continue
-            for desc, _ in cls._walk(node):
+            for desc, _ in self._walk(node):
                 if desc is node:
                     continue
                 if desc.quant is None:
@@ -1434,20 +1635,31 @@ class RegexLintTool(Tool):
                 # or can match the empty string (min==0) — an
                 # empty-matching inner element under a quantifier is
                 # the (a?)+ shape.
-                if not (cls._is_repeatable(desc.quant)
+                if not (self._is_repeatable(desc.quant)
                         or desc.quant["min"] == 0):
                     continue
-                if not cls._nested_related(desc, node):
+                if not self._nested_related(desc, node):
                     continue
-                inner_alpha = cls._alphabet(desc)
+                # Compounding gate: the ambiguity must be able to grow
+                # with the input — an unbounded quantifier either on
+                # the outer scope (2^n partitions) or on the repeated
+                # inner element (n^k splits). When both sides are
+                # bounded (the canonical IPv4 octet
+                # ``(25[0-5]|2[0-4]\d|[01]?\d?\d)`` under ``{3}``) the
+                # re-partitioning space is a constant independent of
+                # input length and the pattern is not catastrophic.
+                if not (self._is_unbounded(node.quant)
+                        or self._is_unbounded(desc.quant)):
+                    continue
+                inner_alpha = self._alphabet(desc)
                 can_empty = desc.quant["min"] == 0
-                follows = cls._follow_within(desc, node)
-                overlap = any(cls._overlaps(inner_alpha,
-                                            cls._alphabet(f))
+                follows = self._follow_within(desc, node)
+                overlap = any(self._overlaps(inner_alpha,
+                                            self._alphabet(f))
                               for f in follows)
-                body_solo = cls._body_is_only(node, desc)
+                body_solo = self._body_is_only(node, desc)
                 if can_empty or overlap or body_solo:
-                    outer_desc = "unbounded" if cls._is_unbounded(
+                    outer_desc = "unbounded" if self._is_unbounded(
                         node.quant) else f"{{...,{node.quant['max']}}}"
                     record(
                         "redos_exponential", "exponential",
@@ -1465,25 +1677,33 @@ class RegexLintTool(Tool):
 
         # --- Rule B: overlapping-prefix alternation under a quantifier --
         for node in nodes:
-            if not cls._is_repeatable(node.quant):
+            if not self._is_repeatable(node.quant):
+                continue
+            # Compounding gate (same principle as Rule A): only an
+            # unbounded outer repetition lets the per-iteration branch
+            # ambiguity compound with input length — a bounded
+            # repetition of an ambiguous alternation (the IPv4 octet
+            # shape under ``{3}``) re-partitions a constant number of
+            # ways and is left to the polynomial/untrusted notes.
+            if not self._is_unbounded(node.quant):
                 continue
             # The quantified unit's own branches …
             scopes: list[tuple[_Node, list[list[_Node]]]] = [
                 (node, node.branches)]
             # … plus descendant alternations without an intervening
             # quantified group.
-            for desc, _ in cls._walk(node):
+            for desc, _ in self._walk(node):
                 if desc is node or len(desc.branches) < 2:
                     continue
                 if not (desc.is_group() or desc.kind == K_COND):
                     continue
-                if cls._quantified_between(desc, node):
+                if self._quantified_between(desc, node):
                     continue
                 scopes.append((desc, desc.branches))
             for scope, branches in scopes:
                 if len(branches) < 2:
                     continue
-                units = [cls._first_unit(b) for b in branches]
+                units = [self._first_unit(b) for b in branches]
                 for a in range(len(units)):
                     for b in range(a + 1, len(units)):
                         ua, ub = units[a], units[b]
@@ -1498,8 +1718,8 @@ class RegexLintTool(Tool):
                                 "on failing input)"
                             )
                             continue
-                        if cls._overlaps(cls._alphabet(ua),
-                                         cls._alphabet(ub)):
+                        if self._overlaps(self._alphabet(ua),
+                                         self._alphabet(ub)):
                             record(
                                 "redos_exponential", "exponential",
                                 (scope.start, scope.start),
@@ -1513,32 +1733,32 @@ class RegexLintTool(Tool):
 
         # --- Rule C: adjacent unbounded overlapping quantifiers ------
         unbounded_nodes = [nd for nd in nodes
-                           if cls._is_unbounded(nd.quant) and
+                           if self._is_unbounded(nd.quant) and
                            nd.kind != K_ANCHOR]
         for node in unbounded_nodes:
-            alpha_node = cls._alphabet(node)
-            for follower, intermediates in cls._follow_chain(node):
-                if not cls._is_unbounded(follower.quant):
+            alpha_node = self._alphabet(node)
+            for follower, intermediates in self._follow_chain(node):
+                if not self._is_unbounded(follower.quant):
                     continue
                 if follower is node:
                     continue
-                if cls._is_ancestor(follower, node) or \
-                        cls._is_ancestor(node, follower):
+                if self._is_ancestor(follower, node) or \
+                        self._is_ancestor(node, follower):
                     continue  # nested pair — Rule A territory
-                if not cls._overlaps(alpha_node, cls._alphabet(follower)):
+                if not self._overlaps(alpha_node, self._alphabet(follower)):
                     continue
                 # Every consuming unit between the pair must also
                 # overlap both alphabets — a mandatory separator whose
                 # charset is disjoint from both (the '@' between
                 # [\w.+-]+ and [\w-]+) pins the runs and kills the pair.
-                alpha_follower = cls._alphabet(follower)
-                pinned = any(cls._pins(mid, node) and
-                             cls._pins(mid, follower)
+                alpha_follower = self._alphabet(follower)
+                pinned = any(self._pins(mid, node) and
+                             self._pins(mid, follower)
                              for mid in intermediates)
                 if pinned:
                     continue
-                if any(not (cls._overlaps(cls._alphabet(mid), alpha_node)
-                            and cls._overlaps(cls._alphabet(mid),
+                if any(not (self._overlaps(self._alphabet(mid), alpha_node)
+                            and self._overlaps(self._alphabet(mid),
                                               alpha_follower))
                        for mid in intermediates):
                     continue
@@ -1556,13 +1776,11 @@ class RegexLintTool(Tool):
                 break  # one finding per unbounded node is enough
         return findings
 
-    @classmethod
-    def _nested_related(cls, desc: _Node, outer: _Node) -> bool:
+    def _nested_related(self, desc: _Node, outer: _Node) -> bool:
         """True when ``desc`` sits inside ``outer``'s body."""
-        return cls._is_ancestor(outer, desc)
+        return self._is_ancestor(outer, desc)
 
-    @classmethod
-    def _can_match_empty(cls, node: _Node) -> bool:
+    def _can_match_empty(self, node: _Node) -> bool:
         """Can this element match the empty string?"""
         if node.kind == K_ANCHOR:
             return True
@@ -1570,18 +1788,16 @@ class RegexLintTool(Tool):
             return node.quant["min"] == 0
         return False
 
-    @classmethod
-    def _tail_can_empty(cls, parent: _Node, node: _Node) -> bool:
+    def _tail_can_empty(self, parent: _Node, node: _Node) -> bool:
         """Can everything after ``node`` in its branch match empty?"""
         for branch in parent.branches:
             if node not in branch:
                 continue
-            return all(cls._can_match_empty(child)
+            return all(self._can_match_empty(child)
                        for child in branch[branch.index(node) + 1:])
         return False
 
-    @classmethod
-    def _follow_within(cls, node: _Node, scope: _Node) -> list[_Node]:
+    def _follow_within(self, node: _Node, scope: _Node) -> list[_Node]:
         """Units that can follow ``node`` before leaving ``scope``.
 
         The immediately following sibling found while climbing toward
@@ -1595,7 +1811,7 @@ class RegexLintTool(Tool):
         ancestor = node.parent
         current = node
         while ancestor is not None and ancestor is not scope:
-            follower = cls._next_sibling(ancestor, current)
+            follower = self._next_sibling(ancestor, current)
             if follower is not None:
                 followers.append(follower)
                 break  # only the immediately-following unit matters
@@ -1604,23 +1820,31 @@ class RegexLintTool(Tool):
         # Loop-around: reachable only when the body tail can match
         # empty (otherwise a mandatory separator pins the boundary —
         # the reason ([0-9]+[a-z]+)+ is safe while (\w+\s?)* is not).
-        if node.parent is scope and cls._tail_can_empty(scope, node):
+        if node.parent is scope and self._tail_can_empty(scope, node):
             for branch in scope.branches:
-                unit = cls._first_unit(branch)
+                unit = self._first_unit(branch)
                 if unit is not None:
                     followers.append(unit)
         return followers
 
-    @classmethod
-    def _follow_chain(cls, node: _Node,
-                      max_hops: int = 12) -> list[tuple[_Node, list[_Node]]]:
-        """(follower, intermediates) pairs for consuming units on the
-        linear path after ``node``: the rest of its branch, then — as
-        each enclosing group completes — the units after that group,
-        plus loop-around first units of quantified ancestors.
+    def _follow_chain(self, node: _Node,
+                      max_hops: int = 12,
+                      max_followers: int = 48
+                      ) -> Iterator[tuple[_Node, list[_Node]]]:
+        """Yield ``(follower, intermediates)`` pairs for consuming units
+        on the linear path after ``node``: the rest of its branch, then
+        — as each enclosing group completes — the units after that
+        group, plus loop-around first units of quantified ancestors.
         Intermediates are the consuming units between ``node`` and the
-        follower."""
-        pairs: list[tuple[_Node, list[_Node]]] = []
+        follower.
+
+        Lazy on purpose: consumers stop at the first interesting
+        follower (Rule C records one finding per node), so pairs are
+        produced on demand and capped at ``max_followers`` — an eager
+        list made 4,000-character ``a*a*...a*b`` patterns spend seconds
+        building millions of pairs nobody reads.
+        """
+        pairs_yielded = 0
         intermediates: list[_Node] = []
         current = node
         ancestor = node.parent
@@ -1633,21 +1857,25 @@ class RegexLintTool(Tool):
                 for child in branch[branch.index(current) + 1:]:
                     if child.kind == K_ANCHOR:
                         continue
-                    pairs.append((child, list(intermediates)))
+                    yield child, list(intermediates)
+                    pairs_yielded += 1
+                    if pairs_yielded >= max_followers:
+                        return
                     intermediates.append(child)
                 break
             # The enclosing group completes; loop around if quantified.
             if current is not node and current.quant is not None:
                 for branch in current.branches:
-                    unit = cls._first_unit(branch)
+                    unit = self._first_unit(branch)
                     if unit is not None and unit is not node:
-                        pairs.append((unit, list(intermediates)))
+                        yield unit, list(intermediates)
+                        pairs_yielded += 1
+                        if pairs_yielded >= max_followers:
+                            return
             current = ancestor
             ancestor = ancestor.parent
-        return pairs
 
-    @classmethod
-    def _next_sibling(cls, parent: _Node, node: _Node) -> Optional[_Node]:
+    def _next_sibling(self, parent: _Node, node: _Node) -> Optional[_Node]:
         """The node right after ``node`` in its parent's branch."""
         for branch in parent.branches:
             if node not in branch:
@@ -1664,15 +1892,13 @@ class RegexLintTool(Tool):
             return None
         return None
 
-    @classmethod
-    def _body_is_only(cls, group_node: _Node, desc: _Node) -> bool:
+    def _body_is_only(self, group_node: _Node, desc: _Node) -> bool:
         """True when the group's body is just the repeated element."""
         consuming = [nd for branch in group_node.branches for nd in branch
                      if nd.kind != K_ANCHOR]
         return consuming == [desc]
 
-    @classmethod
-    def _quantified_between(cls, node: _Node, scope: _Node) -> bool:
+    def _quantified_between(self, node: _Node, scope: _Node) -> bool:
         """True when a quantified group sits between node and scope."""
         current = node.parent
         while current is not None and current is not scope:
@@ -1681,8 +1907,7 @@ class RegexLintTool(Tool):
             current = current.parent
         return False
 
-    @classmethod
-    def _is_ancestor(cls, maybe_ancestor: _Node, node: _Node) -> bool:
+    def _is_ancestor(self, maybe_ancestor: _Node, node: _Node) -> bool:
         current = node.parent
         while current is not None:
             if current is maybe_ancestor:
@@ -1694,10 +1919,9 @@ class RegexLintTool(Tool):
     # lint mode
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _run_lint(cls, pattern: str, flag_names: list[str],
+    def _run_lint(self, pattern: str, flag_names: list[str],
                   flag_value: int) -> dict[str, Any]:
-        verdict = cls._compile_verdict(pattern, flag_value)
+        verdict = self._compile_verdict(pattern, flag_value)
         findings: list[dict] = []
 
         if verdict["raises"]:
@@ -1717,7 +1941,7 @@ class RegexLintTool(Tool):
             span = [position, position + 1] if isinstance(position, int) \
                 else [0, len(pattern)]
             if code == "lookbehind_variable_width":
-                span = cls._locate_variable_lookbehind(pattern) or span
+                span = self._locate_variable_lookbehind(pattern) or span
             findings.append({
                 "code": code,
                 "message": f"re.compile raises {exc_type}: {message}",
@@ -1725,15 +1949,15 @@ class RegexLintTool(Tool):
                 "severity": "error",
             })
         else:
-            findings.extend(cls._static_findings(pattern, flag_value))
+            findings.extend(self._static_findings(pattern, flag_value))
 
         findings.sort(key=lambda f: (
             f["span"][0], f["span"][1], _SEVERITY_RANK[f["severity"]],
             f["code"],
         ))
         truncated = False
-        if len(findings) > cls.max_findings:
-            findings = findings[:cls.max_findings]
+        if len(findings) > self.max_findings:
+            findings = findings[:self.max_findings]
             truncated = True
         summary = {level: sum(1 for f in findings
                               if f["severity"] == level)
@@ -1752,26 +1976,24 @@ class RegexLintTool(Tool):
             "truncated": truncated,
         }
 
-    @classmethod
     def _locate_variable_lookbehind(
-            cls, pattern: str) -> Optional[list[int]]:
+            self, pattern: str) -> Optional[list[int]]:
         """Span of the first lookbehind whose width is not fixed."""
         try:
-            root = cls._parse_tree(pattern, 0)
+            root = self._parse_tree(pattern, 0)
         except Exception:  # pragma: no cover - scanner is total
             return None
-        ctx = cls._width_context(root)
-        for node, _ in cls._walk(root):
+        ctx = self._width_context(root)
+        for node, _ in self._walk(root):
             if not node.is_group():
                 continue
             if node.group.get("kind") not in _LOOKBEHIND_KINDS:
                 continue
-            if not cls._lookbehind_fixed(node, ctx):
+            if not self._lookbehind_fixed(node, ctx):
                 return [node.start, node.end]
         return None
 
-    @classmethod
-    def _static_findings(cls, pattern: str, flag_value: int) -> list[dict]:
+    def _static_findings(self, pattern: str, flag_value: int) -> list[dict]:
         """Findings for a pattern that compiles (static analyses)."""
         findings: list[dict] = []
         if pattern == "":
@@ -1784,13 +2006,13 @@ class RegexLintTool(Tool):
                 "severity": "info",
             })
             return findings
-        root = cls._parse_tree(pattern, flag_value)
-        nodes = [node for node, _ in cls._walk(root)]
+        root = self._parse_tree(pattern, flag_value)
+        nodes = [node for node, _ in self._walk(root)]
         ascii_flag = bool(flag_value & re.ASCII)
         dotall_flag = bool(flag_value & re.DOTALL)
 
         # Severity-graded ReDoS detection.
-        for entry in cls._detect_redos(root):
+        for entry in self._detect_redos(root):
             severity = "warning" if entry["grade"] == "exponential" \
                 else "info"
             findings.append({
@@ -1835,7 +2057,7 @@ class RegexLintTool(Tool):
                 shorthand_spans.setdefault("dot", []) \
                     .append([node.start, node.end])
             if node.quant is not None and node.quant["max"] < _MAXREPEAT \
-                    and node.quant["max"] > cls.huge_repeat_threshold:
+                    and node.quant["max"] > self.huge_repeat_threshold:
                 findings.append({
                     "code": "huge_repeat_bound",
                     "message": (
@@ -1948,7 +2170,7 @@ class RegexLintTool(Tool):
         # Unbounded dot runs that escaped the graded detectors still
         # deserve an untrusted-input note.
         dot_runs = [node for node in nodes
-                    if node.kind == K_DOT and cls._is_unbounded(node.quant)]
+                    if node.kind == K_DOT and self._is_unbounded(node.quant)]
         if dot_runs and not any(f["code"].startswith("redos_")
                                 for f in findings):
             findings.append({
@@ -1969,8 +2191,7 @@ class RegexLintTool(Tool):
     # structure mode
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _run_structure(cls, pattern: str, root: _Node,
+    def _run_structure(self, pattern: str, root: _Node,
                        flag_names: list[str], flag_value: int
                        ) -> dict[str, Any]:
         nodes_out: list[dict] = []
@@ -1979,7 +2200,7 @@ class RegexLintTool(Tool):
         stack: list[tuple[_Node, int]] = [(root, 0)]
         while stack:
             node, depth = stack.pop()
-            if len(nodes_out) >= cls.max_nodes_out:
+            if len(nodes_out) >= self.max_nodes_out:
                 truncated = True
                 break
             entry: dict[str, Any] = {
@@ -2005,7 +2226,7 @@ class RegexLintTool(Tool):
                     "name": node.group.get("name"),
                 }
             nodes_out.append(entry)
-            if depth >= cls.analysis_depth_cap:
+            if depth >= self.analysis_depth_cap:
                 continue
             children: list[_Node] = []
             for branch in node.branches:
@@ -2013,7 +2234,7 @@ class RegexLintTool(Tool):
             for child in reversed(children):
                 stack.append((child, depth + 1))
 
-        groups_by_number = cls._groups_by_number(root)
+        groups_by_number = self._groups_by_number(root)
         group_map: dict[str, Any] = {}
         group_spans: dict[str, list[int]] = {}
         for number in sorted(groups_by_number):
@@ -2023,7 +2244,7 @@ class RegexLintTool(Tool):
                 if node.group.get("kind") == G_NAMED else None)
             group_spans[str(number)] = [node.start, node.end]
 
-        verdict = cls._compile_verdict(pattern, flag_value)
+        verdict = self._compile_verdict(pattern, flag_value)
         return {
             "pattern": pattern,
             "flags": flag_names,
@@ -2039,16 +2260,15 @@ class RegexLintTool(Tool):
     # explain mode
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _run_explain(cls, pattern: str, root: _Node) -> dict[str, Any]:
+    def _run_explain(self, pattern: str, root: _Node) -> dict[str, Any]:
         fragments: list[str] = []
         for index, branch in enumerate(root.branches, start=1):
-            pieces = [cls._describe(child, 0) for child in branch]
+            pieces = [self._describe(child, 0) for child in branch]
             body = "; then ".join(pieces) if pieces \
                 else "match the empty string"
             fragments.append(f"alternative {index}: {body}")
         groups: list[dict] = []
-        for node, _ in cls._walk(root):
+        for node, _ in self._walk(root):
             if not node.is_group() or node.group.get("number") is None:
                 continue
             info = node.group
@@ -2071,11 +2291,12 @@ class RegexLintTool(Tool):
             })
         groups.sort(key=lambda g: (g["number"] or 0, g["span"][0]))
         annotations: list[dict] = []
-        for node, _ in cls._walk(root):
+        for node, _ in self._walk(root):
             if node.kind == K_BACKREF and isinstance(node.literal, str):
                 ref = node.literal
+                numeric = bool(ref) and _ascii_digit_span(ref) == len(ref)
                 text_ = (f"backreference to group {int(ref)}"
-                         if ref.isdigit()
+                         if numeric
                          else f"backreference to {ref}")
                 annotations.append({
                     "kind": "backreference",
@@ -2088,7 +2309,7 @@ class RegexLintTool(Tool):
                     annotations.append({
                         "kind": "lookaround",
                         "span": [node.start, node.end],
-                        "text": cls._describe(node, 0),
+                        "text": self._describe(node, 0),
                     })
                 elif kind == G_ATOMIC:
                     annotations.append({
@@ -2113,8 +2334,7 @@ class RegexLintTool(Tool):
             "annotations": annotations,
         }
 
-    @classmethod
-    def _quant_phrase(cls, quant: dict) -> str:
+    def _quant_phrase(self, quant: dict) -> str:
         """Deterministic English phrase for one quantifier."""
         qmin, qmax, kind = quant["min"], quant["max"], quant["kind"]
         if qmax >= _MAXREPEAT:
@@ -2144,12 +2364,11 @@ class RegexLintTool(Tool):
         }
         return phrases.get((shape, kind), f"{shape} ({kind})")
 
-    @classmethod
-    def _describe(cls, node: _Node, depth: int) -> str:
+    def _describe(self, node: _Node, depth: int) -> str:
         """Deterministic English description of one node."""
         if depth > 24:
             return "…(deeply nested)…"
-        quant_suffix = f" {cls._quant_phrase(node.quant)}" \
+        quant_suffix = f" {self._quant_phrase(node.quant)}" \
             if node.quant is not None else ""
         if node.kind == K_LITERAL:
             shown = str(node.literal)
@@ -2160,7 +2379,7 @@ class RegexLintTool(Tool):
             return f"any single character except newline{quant_suffix}"
         if node.kind == K_CLASS:
             info = node.class_info or {}
-            body = cls._class_text(info)
+            body = self._class_text(info)
             neg = "not " if info.get("negated") else ""
             return f"one {neg}of the characters in {body!r}{quant_suffix}"
         if node.kind == K_SHORTHAND:
@@ -2185,7 +2404,10 @@ class RegexLintTool(Tool):
             return meaning
         if node.kind == K_BACKREF:
             ref = str(node.literal)
-            target = int(ref) if ref.isdigit() else ref
+            if ref and _ascii_digit_span(ref) == len(ref):
+                target = int(ref)
+            else:
+                target = ref
             return f"the same text as group {target}{quant_suffix}"
         if node.kind == K_BRACE:
             return f"the literal text {node.literal!r}"
@@ -2194,7 +2416,7 @@ class RegexLintTool(Tool):
             inner_bits = []
             for branch in node.branches:
                 inner_bits.append("; then ".join(
-                    cls._describe(c, depth + 1) for c in branch))
+                    self._describe(c, depth + 1) for c in branch))
             inner = " OR ".join(inner_bits) if inner_bits else "empty"
             labels = {
                 G_CAPTURE: "a capturing group matching",
@@ -2235,14 +2457,13 @@ class RegexLintTool(Tool):
     # estimate mode
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _run_estimate(cls, pattern: str, root: _Node,
+    def _run_estimate(self, pattern: str, root: _Node,
                       flag_names: list[str],
                       text_length: int) -> dict[str, Any]:
-        redos = cls._detect_redos(root)
+        redos = self._detect_redos(root)
         codes = {entry["code"] for entry in redos}
         reasons: list[str] = []
-        unknown_reason = cls._unknown_risk_reason(root)
+        unknown_reason = self._unknown_risk_reason(root)
         if "redos_exponential" in codes:
             risk = "exponential"
             reasons.append(
@@ -2273,18 +2494,17 @@ class RegexLintTool(Tool):
             "pattern": pattern,
             "flags": flag_names,
             "text_length": text_length,
-            "basic_ops": cls._basic_ops(root, text_length),
+            "basic_ops": self._basic_ops(root, text_length),
             "backtracking_risk_class": risk,
             "reasons": reasons,
             "heuristic": True,
         }
 
-    @classmethod
-    def _unknown_risk_reason(cls, root: _Node) -> Optional[str]:
+    def _unknown_risk_reason(self, root: _Node) -> Optional[str]:
         """Why the risk class cannot be pinned down statically."""
         quantified_backref = False
         conditional = False
-        for node, _ in cls._walk(root):
+        for node, _ in self._walk(root):
             if node.kind == K_BACKREF and node.quant is not None:
                 quantified_backref = True
             if node.kind == K_COND:
@@ -2299,8 +2519,7 @@ class RegexLintTool(Tool):
                     "structure is not statically known")
         return None
 
-    @classmethod
-    def _basic_ops(cls, root: _Node, text_length: int) -> int:
+    def _basic_ops(self, root: _Node, text_length: int) -> int:
         """Scan-work estimate (documented heuristic).
 
         Every leaf atom costs 1 op per repetition actually performed.
@@ -2316,10 +2535,10 @@ class RegexLintTool(Tool):
         while stack:
             node, phase = stack.pop()
             if phase == 1:
-                values[id(node)] = cls._eval_ops(node, values, text_length)
+                values[id(node)] = self._eval_ops(node, values, text_length)
                 continue
             stack.append((node, 1))
-            if len(stack) > 4 * cls.analysis_depth_cap:
+            if len(stack) > 4 * self.analysis_depth_cap:
                 values[id(node)] = text_length
                 stack.pop()
                 continue
@@ -2328,8 +2547,7 @@ class RegexLintTool(Tool):
                     stack.append((child, 0))
         return values.get(id(root), 0)
 
-    @classmethod
-    def _eval_ops(cls, node: _Node, values: dict[int, int],
+    def _eval_ops(self, node: _Node, values: dict[int, int],
                   text_length: int) -> int:
         """One node's ops from already-evaluated children."""
         if node.kind in (K_LITERAL, K_CLASS, K_DOT, K_SHORTHAND,
@@ -2337,7 +2555,7 @@ class RegexLintTool(Tool):
             base = 1
             if node.quant is None:
                 return base
-            if cls._is_unbounded(node.quant):
+            if self._is_unbounded(node.quant):
                 return base * max(node.quant["min"], text_length, 1)
             return base * node.quant["min"]
         if node.kind in (K_ANCHOR, K_UNKNOWN):
@@ -2348,7 +2566,7 @@ class RegexLintTool(Tool):
             branch_ops.append(sum(values.get(id(c), 1) for c in branch))
         ops = max(branch_ops) if branch_ops else 0
         if node.quant is not None:
-            if cls._is_unbounded(node.quant):
+            if self._is_unbounded(node.quant):
                 return ops * max(node.quant["min"], text_length, 1)
             return ops * node.quant["min"]
         return ops
