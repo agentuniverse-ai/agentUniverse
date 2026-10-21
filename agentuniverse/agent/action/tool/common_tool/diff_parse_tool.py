@@ -22,7 +22,18 @@ Policies (documented, deterministic):
 - ``\\ No newline at end of file`` must immediately follow a ``' '``, ``'+'``
   or ``'-'`` body line and may not follow another marker. It may follow a
   context line (meaning both sides lack a final newline) or the ``-``/``+``
-  line of either side.
+  line of either side. Because a line without a trailing newline is by
+  definition the last line of its file, the marker may only annotate the
+  final ``' '``/``'-'`` line of the old side and the final ``' '``/``'+'``
+  line of the new side across the whole file section; a marker on any
+  earlier line (with same-side lines following in the same or a later hunk)
+  is rejected as semantically impossible (``patch(1)`` calls this a
+  malformed patch).
+- Hunk headers must be arithmetically consistent: the new-side position of
+  hunk N must equal its old-side position plus the net line change
+  accumulated by earlier hunks of the same file (``E_HUNK_OFFSET``). Real
+  ``diff -u``/``git diff``/``difflib`` output always satisfies this, and
+  ``patch(1)`` rejects diffs that do not.
 - Newline transport: when every physical line of the diff text ends with CRLF
   the CRs are treated as the diff's own line endings and stripped. When only
   some lines end with CR, the CRs are kept as line content and a
@@ -32,6 +43,13 @@ Policies (documented, deterministic):
 - An empty old range is written ``-0,0`` for new files or ``-N,0`` for pure
   insertions after line N; a start of 0 with a nonzero count is a grammar
   error. Counts of 1 may be omitted per POSIX.
+- Git header parsing follows real ``git diff`` behavior: ``old mode`` /
+  ``new mode`` prelude lines alone form a valid hunk-less section (a pure
+  permission-bit change produces exactly that), quoted paths use C escapes
+  where consecutive octal escapes are raw bytes decoded as UTF-8 (git's
+  ``core.quotePath`` octal form), and the ambiguous unquoted
+  ``diff --git a/<path with spaces> b/<path>`` form is split at the first
+  ``' b/'`` separator exactly like GNU patch does.
 - ``reverse`` is a textual transform: it swaps the ``---``/``+++`` paths,
   flips every hunk header range, and swaps ``+``/``-`` markers in place.
   Git-specific prelude lines (index, modes, rename/copy metadata) are dropped
@@ -49,7 +67,6 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
 _MARKER = "\\ No newline at end of file"
-_QUOTED_PAIR_RE = re.compile(r'^"((?:[^"\\]|\\.)*)" "((?:[^"\\]|\\.)*)"$')
 _ESCAPES = {
     "n": "\n",
     "t": "\t",
@@ -82,7 +99,7 @@ _MODES: ClassVar[tuple[str, ...]] = ("validate", "apply_check", "reverse", "stat
 class BodyLine:
     """One hunk body line: origin ' ', '+', '-' with optional no-newline mark."""
 
-    __slots__ = ("origin", "content", "line_no", "no_newline")
+    __slots__ = ("content", "line_no", "no_newline", "origin")
 
     def __init__(self, origin: str, content: str, line_no: int) -> None:
         self.origin = origin
@@ -96,14 +113,14 @@ class Hunk:
 
     __slots__ = (
         "line_no",
-        "old_start",
-        "old_count",
-        "new_start",
-        "new_count",
-        "section",
         "lines",
-        "old_used",
+        "new_count",
+        "new_start",
         "new_used",
+        "old_count",
+        "old_start",
+        "old_used",
+        "section",
     )
 
     def __init__(self, line_no: int, old_start: int, old_count: int, new_start: int, new_count: int, section: str) -> None:
@@ -135,15 +152,15 @@ class FileSection:
     """One file's portion of the diff: headers, git extras, and hunks."""
 
     __slots__ = (
-        "line_no",
-        "git_paths",
-        "extras",
-        "old_path",
-        "new_path",
-        "old_ts",
-        "new_ts",
         "binary",
+        "extras",
+        "git_paths",
         "hunks",
+        "line_no",
+        "new_path",
+        "new_ts",
+        "old_path",
+        "old_ts",
     )
 
     def __init__(self, line_no: int) -> None:
@@ -196,7 +213,7 @@ class FileSection:
 class ParsedDiff:
     """Parse result shared by every mode."""
 
-    __slots__ = ("files", "findings", "newline_style", "final_newline", "truncated", "cr_warned")
+    __slots__ = ("cr_warned", "files", "final_newline", "findings", "newline_style", "truncated")
 
     def __init__(self) -> None:
         self.files: list[FileSection] = []
@@ -343,33 +360,43 @@ class DiffParseTool(Tool):
 
     @staticmethod
     def _decode_quoted(path: str) -> tuple[str, bool]:
-        """Decode a GNU-style quoted path; unknown escapes stay literal."""
+        """Decode a GNU-style quoted path; unknown escapes stay literal.
+
+        Git's ``core.quotePath`` escapes non-ASCII filenames as sequences of
+        one-byte octal escapes (the UTF-8 bytes), so escapes and literal
+        characters are accumulated into a byte string first and decoded as
+        UTF-8 afterwards; undecodable bytes become U+FFFD.
+        """
         if not path.startswith('"'):
             return path, True
-        out: list[str] = []
+        out = bytearray()
         index = 1
         while index < len(path):
             char = path[index]
             if char == "\\" and index + 1 < len(path):
                 nxt = path[index + 1]
                 if nxt in _ESCAPES:
-                    out.append(_ESCAPES[nxt])
+                    out.append(ord(_ESCAPES[nxt]))
                     index += 2
                     continue
-                if nxt in "01234567" and index + 4 <= len(path):
-                    digits = path[index + 1 : index + 4]
-                    if all(d in "01234567" for d in digits):
-                        out.append(chr(int(digits, 8)))
-                        index += 4
+                if nxt in "01234567":
+                    digits = []
+                    scan = index + 1
+                    while scan < len(path) and len(digits) < 3 and path[scan] in "01234567":
+                        digits.append(path[scan])
+                        scan += 1
+                    if digits:
+                        out.append(int("".join(digits), 8) & 0xFF)
+                        index = scan
                         continue
-                out.append(nxt)
+                out.extend(nxt.encode("utf-8"))
                 index += 2
                 continue
             if char == '"':
-                return "".join(out), True
-            out.append(char)
+                return out.decode("utf-8", "replace"), True
+            out.extend(char.encode("utf-8"))
             index += 1
-        return "".join(out), False
+        return out.decode("utf-8", "replace"), False
 
     def _parse_path(
         self, parsed: ParsedDiff, rest: str, line_no: int
@@ -422,22 +449,67 @@ class DiffParseTool(Tool):
                 raise ValueError(f"diff exceeds max_files ({self.max_files})")
         return parsed
 
+    @staticmethod
+    def _quoted_end(text: str, start: int) -> int | None:
+        """Index of the closing quote of the token starting at ``start``, or None."""
+        index = start + 1
+        while index < len(text):
+            if text[index] == "\\":
+                index += 2
+                continue
+            if text[index] == '"':
+                return index
+            index += 1
+        return None
+
+    @classmethod
+    def _split_git_pair(cls, rest: str) -> tuple[str, str] | None:
+        """Split a ``diff --git`` tail into (left, right) tokens, quotes included.
+
+        Git quotes a side only when it contains characters octal/escape-quoted
+        by ``core.quotePath``, so mixed raw/quoted pairs occur, and raw paths
+        may contain spaces which git writes unquoted. The boundary is located
+        at the first ``' b/'`` separator when present (the same rule GNU
+        patch uses to disambiguate), otherwise at the first space.
+        """
+        if rest.startswith('"'):
+            return cls._split_quoted_git_pair(rest)
+        boundary = rest.find(" b/")
+        if boundary != -1:
+            return rest[:boundary], rest[boundary + 1 :]
+        if " " in rest:
+            left, right = rest.split(" ", 1)
+            if right:
+                return left, right
+        return None
+
+    @classmethod
+    def _split_quoted_git_pair(cls, rest: str) -> tuple[str, str] | None:
+        """Split a git header tail whose left token starts with a quoted path."""
+        end = cls._quoted_end(rest, 0)
+        if end is None or rest[end + 1 : end + 2] != " ":
+            return None
+        right = rest[end + 2 :]
+        if not right:
+            return None
+        if right.startswith('"') and cls._quoted_end(rest, end + 2) != len(rest) - 1:
+            return None
+        return rest[: end + 1], right
+
     def _git_paths(self, parsed: ParsedDiff, line: str, line_no: int) -> tuple[str, str]:
         rest = line[len("diff --git ") :]
-        if rest.startswith('"'):
-            match = _QUOTED_PAIR_RE.match(rest)
-            if match is not None:
-                return match.group(1), match.group(2)
-            self._add_finding(
-                parsed, line_no, "E_UNEXPECTED_LINE", f"malformed quoted git header: {line[:60]!r}"
-            )
-            return "", ""
-        if " " not in rest:
+        pair = self._split_git_pair(rest)
+        if pair is None:
             self._add_finding(
                 parsed, line_no, "E_UNEXPECTED_LINE", f"malformed git header: {line[:60]!r}"
             )
             return "", ""
-        left, right = rest.split(" ", 1)
+        left, closed_l = self._decode_quoted(pair[0])
+        right, closed_r = self._decode_quoted(pair[1])
+        if not closed_l or not closed_r:
+            self._add_finding(
+                parsed, line_no, "E_ESCAPE", "quoted path in git header is missing its closing quote"
+            )
         return left, right
 
     def _parse_git_section(
@@ -448,6 +520,7 @@ class DiffParseTool(Tool):
         index += 1
         total = len(lines)
         rename_like = False
+        mode_like = False
         while index < total:
             line = lines[index]
             if line.startswith("Binary files ") and line.rstrip().endswith(" differ"):
@@ -484,20 +557,33 @@ class DiffParseTool(Tool):
             if line.startswith("--- "):
                 return self._parse_plain_section(parsed, lines, index, section)
             if line.startswith("diff --git "):
-                if not rename_like:
+                if not rename_like and not mode_like:
                     self._add_finding(
                         parsed,
                         section.line_no,
                         "E_HEADER_MISSING",
-                        "git file header has no ---/+++ pair, no binary note, and no hunks",
+                        "git file header has no ---/+++ pair, no binary note, no rename/"
+                        "copy lines, no mode change, and no hunks",
                     )
                 return section, index
             matched = False
             for extra in _GIT_EXTRAS:
                 if line.startswith(extra + " "):
-                    section.extras.append((extra, line[len(extra) + 1 :].strip()))
+                    value = line[len(extra) + 1 :].strip()
+                    if value.startswith('"'):
+                        value, closed = self._decode_quoted(value)
+                        if not closed:
+                            self._add_finding(
+                                parsed,
+                                index + 1,
+                                "E_ESCAPE",
+                                "quoted rename/copy path is missing its closing quote",
+                            )
+                    section.extras.append((extra, value))
                     if extra in ("rename from", "rename to", "copy from", "copy to"):
                         rename_like = True
+                    if extra in ("old mode", "new mode"):
+                        mode_like = True
                     matched = True
                     break
             if not matched:
@@ -509,12 +595,13 @@ class DiffParseTool(Tool):
                 )
                 return section, index + 1
             index += 1
-        if not rename_like and not section.binary:
+        if not rename_like and not mode_like and not section.binary:
             self._add_finding(
                 parsed,
                 section.line_no,
                 "E_HEADER_MISSING",
-                "git file header has no ---/+++ pair, no binary note, and no hunks",
+                "git file header has no ---/+++ pair, no binary note, no rename/copy "
+                "lines, no mode change, and no hunks",
             )
         return section, index
 
@@ -541,6 +628,7 @@ class DiffParseTool(Tool):
         section.new_path, section.new_ts = self._parse_path(parsed, lines[index][4:], index + 1)
         index += 1
         prev_hunk: Hunk | None = None
+        net_lines = 0
         while index < total:
             line = lines[index]
             if line.startswith("@@"):
@@ -562,6 +650,19 @@ class DiffParseTool(Tool):
                             f"hunk old start {hunk.old_start} goes backwards or overlaps the "
                             f"previous hunk (which covers through old line {overlap_limit})",
                         )
+                pos_old = hunk.old_start - 1 if hunk.old_count > 0 else hunk.old_start
+                pos_new = hunk.new_start - 1 if hunk.new_count > 0 else hunk.new_start
+                if pos_new - pos_old != net_lines:
+                    expected = pos_old + net_lines + (1 if hunk.new_count > 0 else 0)
+                    self._add_finding(
+                        parsed,
+                        hunk.line_no,
+                        "E_HUNK_OFFSET",
+                        f"hunk new start {hunk.new_start} is inconsistent with the hunk "
+                        f"arithmetic: {net_lines} net line change(s) from earlier hunks "
+                        f"place it at {expected}",
+                    )
+                net_lines += hunk.new_count - hunk.old_count
                 prev_hunk = hunk
                 continue
             if line.startswith("diff --git ") or line.startswith("--- "):
@@ -590,7 +691,39 @@ class DiffParseTool(Tool):
                 "E_SECTION_EMPTY",
                 "file header has no hunks; identical files produce no diff at all",
             )
+        self._check_marker_placements(parsed, section)
         return section, index
+
+    def _check_marker_placements(self, parsed: ParsedDiff, section: FileSection) -> None:
+        """Enforce that no-newline markers annotate only each side's last line.
+
+        A file line without a trailing newline is necessarily the file's last
+        line, so a marker on an old-side line with old-side lines following
+        (in the same or a later hunk) is semantically impossible, and
+        likewise for the new side. patch(1) rejects such diffs as malformed.
+        """
+        last_of = {"old": (-1, -1), "new": (-1, -1)}
+        for hunk_index, hunk in enumerate(section.hunks):
+            for line_index, item in enumerate(hunk.lines):
+                if item.origin in (" ", "-"):
+                    last_of["old"] = (hunk_index, line_index)
+                if item.origin in (" ", "+"):
+                    last_of["new"] = (hunk_index, line_index)
+        for hunk_index, hunk in enumerate(section.hunks):
+            for line_index, item in enumerate(hunk.lines):
+                if not item.no_newline:
+                    continue
+                sides = ("old", "new") if item.origin == " " else (("old",) if item.origin == "-" else ("new",))
+                for side in sides:
+                    if last_of[side] != (hunk_index, line_index):
+                        self._add_finding(
+                            parsed,
+                            item.line_no,
+                            "E_NO_NEWLINE_MARKER",
+                            f"'\\ No newline at end of file' cannot mark this {side}-side "
+                            f"line: the {side} side continues afterwards, but a line "
+                            f"without a trailing newline must be the last line of the file",
+                        )
 
     def _parse_hunk(
         self, parsed: ParsedDiff, lines: list[str], index: int
@@ -627,13 +760,21 @@ class DiffParseTool(Tool):
         index += 1
         total = len(lines)
         prev_origin: str | None = None
+        prev_marker = False
         while hunk.old_used < hunk.old_count or hunk.new_used < hunk.new_count:
             if index >= total:
                 self._count_finding(parsed, hunk)
                 return hunk, index
             line = lines[index]
             if line.startswith("\\ No newline"):
-                if prev_origin not in (" ", "+", "-"):
+                if prev_marker:
+                    self._add_finding(
+                        parsed,
+                        index + 1,
+                        "E_NO_NEWLINE_MARKER",
+                        "duplicate '\\ No newline' marker for the same body line",
+                    )
+                elif prev_origin not in (" ", "+", "-"):
                     self._add_finding(
                         parsed,
                         index + 1,
@@ -642,9 +783,11 @@ class DiffParseTool(Tool):
                     )
                 elif hunk.lines:
                     hunk.lines[-1].no_newline = True
+                prev_marker = True
                 index += 1
                 continue
             origin = line[:1]
+            prev_marker = False
             if "\r" in line[1:] and parsed.newline_style != "crlf" and not parsed.cr_warned:
                 parsed.cr_warned = True
                 self._add_finding(
@@ -903,7 +1046,8 @@ class DiffParseTool(Tool):
                 "multi_file_diff",
                 "apply_check accepts single-file diffs only; this diff touches "
                 f"{len(parsed.files)} files",
-                files=paths,
+                files=paths[:20],
+                files_total=len(paths),
             )
         section = parsed.files[0]
         if section.binary:

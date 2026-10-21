@@ -16,6 +16,9 @@ The oracles are:
 import difflib
 import os
 import random
+import shutil
+import subprocess
+import tempfile
 import time
 import unittest
 
@@ -946,6 +949,422 @@ class DiffParseToolRegistrationTest(unittest.TestCase):
 
         self.assertIs(Exported, DiffParseTool)
         self.assertIn("DiffParseTool", exported_names)
+
+
+# Real `git diff` outputs captured with core.quotePath=true (git's default):
+# octal escapes are the UTF-8 bytes of the filename characters.
+REAL_MODE_ONLY = "diff --git a/mfile.txt b/mfile.txt\nold mode 100644\nnew mode 100755\n"
+
+REAL_GIT_MIXED_QUOTED = (
+    'diff --git a/uni.txt "b/\\303\\274\\303\\261\\303\\255\\342\\234\\223.txt"\n'
+    "similarity index 100%\n"
+    "rename from uni.txt\n"
+    'rename to "\\303\\274\\303\\261\\303\\255\\342\\234\\223.txt"\n'
+)
+
+REAL_GIT_UNICODE_MODIFY = (
+    'diff --git "a/f\\303\\251\\302\\247\\350\\267\\257\\345\\276\\204.txt" "b/f\\303\\251\\302\\247\\350\\267\\257\\345\\276\\204.txt"\n'
+    "index 7a13beb..1651ae8 100644\n"
+    '--- "a/f\\303\\251\\302\\247\\350\\267\\257\\345\\276\\204.txt"\n'
+    '+++ "b/f\\303\\251\\302\\247\\350\\267\\257\\345\\276\\204.txt"\n'
+    "@@ -1,2 +1,2 @@\n"
+    " unicode content\n"
+    "-second line\n"
+    "+second line changed\n"
+)
+
+# git writes paths containing spaces unquoted in the ambiguous
+# `diff --git a/a b.txt b/a b.txt` form; GNU patch splits at the ' b/'.
+REAL_SPACE_PATH_HEADER = "diff --git a/a b.txt b/a b.txt\nold mode 100644\nnew mode 100755\n"
+
+REAL_SPACE_RENAME = (
+    "diff --git a/plain1.txt b/plain one.txt\n"
+    "similarity index 100%\n"
+    "rename from plain1.txt\n"
+    "rename to plain one.txt\n"
+)
+
+
+class HostileReviewRegressionTest(unittest.TestCase):
+    """Regressions for defects found by hostile self-review (PR #4050).
+
+    Every case below was a provable disagreement with real `git diff`,
+    `diff -u`, `difflib`, or `patch(1)` behavior before the fix.
+    """
+
+    def setUp(self):
+        self.tool = DiffParseTool()
+
+    # -- real git output shapes -------------------------------------------
+
+    def test_mode_change_only_diff_is_valid(self):
+        """A pure permission change emits only old/new mode lines; no error."""
+        result = self.tool.execute(mode="validate", diff=REAL_MODE_ONLY)
+        self.assertTrue(result["valid"], result["findings"])
+        self.assertEqual(result["files"], 1)
+        self.assertEqual(result["hunks"], 0)
+        stats = self.tool.execute(mode="stats", diff=REAL_MODE_ONLY)["files"][0]
+        self.assertEqual((stats["path_old"], stats["path_new"]), ("mfile.txt", "mfile.txt"))
+        self.assertEqual(stats["status"], "modified")
+        reversed_result = self.tool.execute(mode="reverse", diff=REAL_MODE_ONLY)
+        self.assertEqual(reversed_result["status"], "error")
+        self.assertIn("no_hunks", reversed_result["error"])
+
+    def test_index_only_git_section_still_rejected(self):
+        """An index line alone is not a real git section and stays an error."""
+        text = "diff --git a/x b/x\nindex 0123456..89abcde 100644\n"
+        result = self.tool.execute(mode="validate", diff=text)
+        self.assertFalse(result["valid"])
+        self.assertIn("E_HEADER_MISSING", error_codes(result))
+
+    def test_octal_quoted_paths_decode_as_utf8_bytes(self):
+        """core.quotePath octal escapes are UTF-8 bytes, not latin-1 codepoints."""
+        result = self.tool.execute(mode="validate", diff=REAL_GIT_UNICODE_MODIFY)
+        self.assertTrue(result["valid"], result["findings"])
+        stats = self.tool.execute(mode="stats", diff=REAL_GIT_UNICODE_MODIFY)["files"][0]
+        self.assertEqual(stats["path_old"], "fé§路径.txt")
+        self.assertEqual(stats["path_new"], "fé§路径.txt")
+        applied = self.tool.execute(
+            mode="apply_check",
+            diff=REAL_GIT_UNICODE_MODIFY,
+            original_text="unicode content\nsecond line\n",
+        )
+        self.assertTrue(applied["applies"])
+
+    def test_mixed_quoted_git_header_and_rename_extras_decode(self):
+        """Quoted b-side and quoted rename-to values decode; unquoted a-side wins."""
+        result = self.tool.execute(mode="validate", diff=REAL_GIT_MIXED_QUOTED)
+        self.assertTrue(result["valid"], result["findings"])
+        stats = self.tool.execute(mode="stats", diff=REAL_GIT_MIXED_QUOTED)["files"][0]
+        self.assertEqual((stats["path_old"], stats["path_new"]), ("uni.txt", "üñí✓.txt"))
+        self.assertEqual(stats["status"], "renamed")
+
+    def test_space_in_git_header_paths_split_at_b_slash(self):
+        """`diff --git a/a b.txt b/a b.txt` resolves to ('a b.txt', 'a b.txt')."""
+        stats = self.tool.execute(mode="stats", diff=REAL_SPACE_PATH_HEADER)["files"][0]
+        self.assertEqual((stats["path_old"], stats["path_new"]), ("a b.txt", "a b.txt"))
+        rename = self.tool.execute(mode="stats", diff=REAL_SPACE_RENAME)["files"][0]
+        self.assertEqual((rename["path_old"], rename["path_new"]), ("plain1.txt", "plain one.txt"))
+        self.assertTrue(self.tool.execute(mode="validate", diff=REAL_SPACE_RENAME)["valid"])
+
+    # -- '\ No newline' semantics ------------------------------------------
+
+    def test_duplicate_marker_with_balanced_counts_is_rejected(self):
+        """Two markers for one body line are malformed even when counts balance."""
+        text = (
+            "--- a\n+++ b\n@@ -1,2 +1,2 @@\n a\n-b\n"
+            "\\ No newline at end of file\n\\ No newline at end of file\n+C\n"
+        )
+        result = self.tool.execute(mode="validate", diff=text)
+        self.assertFalse(result["valid"])
+        self.assertIn("E_NO_NEWLINE_MARKER", error_codes(result))
+
+    def test_marker_above_a_line_that_is_not_last_of_its_side(self):
+        """A no-newline line can never be followed by same-side lines."""
+        context_form = (
+            "--- a\n+++ b\n@@ -1,4 +1,4 @@\n a\n b\n"
+            "\\ No newline at end of file\n-c\n+C\n d\n"
+        )
+        result = self.tool.execute(mode="validate", diff=context_form)
+        self.assertFalse(result["valid"])
+        self.assertIn("E_NO_NEWLINE_MARKER", error_codes(result))
+        minus_form = (
+            "--- a\n+++ b\n@@ -1,4 +1,4 @@\n a\n-b\n"
+            "\\ No newline at end of file\n-c\n+C\n+D\n d\n"
+        )
+        result = self.tool.execute(mode="validate", diff=minus_form)
+        self.assertFalse(result["valid"])
+        self.assertIn("E_NO_NEWLINE_MARKER", error_codes(result))
+
+    def test_marker_in_earlier_hunk_with_later_hunk_rejected(self):
+        """The old side continues into a later hunk, so its marker is impossible."""
+        text = (
+            "--- a\n+++ b\n@@ -1,2 +1,2 @@\n a\n-b\n+B\n"
+            "\\ No newline at end of file\n@@ -4,3 +4,3 @@\n d\n-e\n+E\n f\n"
+        )
+        result = self.tool.execute(mode="validate", diff=text)
+        self.assertFalse(result["valid"])
+        self.assertIn("E_NO_NEWLINE_MARKER", error_codes(result))
+
+    def test_legal_marker_placements_still_validate(self):
+        """Final-line markers (one per side, context end, both sides) stay legal."""
+        both_sides = (
+            "--- a\n+++ b\n@@ -1 +1 @@\n-old\n\\ No newline at end of file\n"
+            "+new\n\\ No newline at end of file\n"
+        )
+        self.assertTrue(self.tool.execute(mode="validate", diff=both_sides)["valid"])
+        final_context = "--- a\n+++ b\n@@ -1,3 +1,3 @@\n a\n b\n c\n\\ No newline at end of file\n"
+        result = self.tool.execute(mode="validate", diff=final_context)
+        self.assertTrue(result["valid"], result["findings"])
+        # old-side marker while the new side gains lines afterwards is fine
+        old_only = (
+            "--- a\n+++ b\n@@ -1,2 +1,3 @@\n a\n-b\n\\ No newline at end of file\n+B\n+C\n"
+        )
+        result = self.tool.execute(mode="validate", diff=old_only)
+        self.assertTrue(result["valid"], result["findings"])
+
+    # -- hunk start arithmetic ---------------------------------------------
+
+    def test_tampered_new_start_is_rejected(self):
+        """patch(1) fails these; the offset invariant must catch them statically."""
+        tampered_second = (
+            "--- a\n+++ b\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"
+            "@@ -4,3 +5,3 @@\n d\n-e\n+E\n f\n"
+        )
+        result = self.tool.execute(mode="validate", diff=tampered_second)
+        self.assertFalse(result["valid"])
+        self.assertIn("E_HUNK_OFFSET", error_codes(result))
+        tampered_first = "--- a\n+++ b\n@@ -1,3 +2,3 @@\n a\n-b\n+B\n c\n"
+        self.assertIn(
+            "E_HUNK_OFFSET",
+            error_codes(self.tool.execute(mode="validate", diff=tampered_first)),
+        )
+
+    def test_tampered_old_start_forward_is_rejected(self):
+        """A forward old-start shift escapes E_HUNK_ORDER; offsets still catch it.
+
+        Hunk 2 claims the unchanged gap between the hunks is one line on the
+        old side but zero lines on the new side, which no real diff produces.
+        """
+        text = (
+            "--- a\n+++ b\n@@ -1,2 +1,2 @@\n a\n-b\n+B\n"
+            "@@ -4,2 +3,2 @@\n c\n-d\n+D\n"
+        )
+        result = self.tool.execute(mode="validate", diff=text)
+        self.assertFalse(result["valid"])
+        self.assertIn("E_HUNK_OFFSET", error_codes(result))
+
+    def test_consistent_zero_count_offsets_still_validate(self):
+        """Insertion/deletion/new-file zero-count forms keep exact arithmetic."""
+        for text in (
+            "--- a\n+++ b\n@@ -2,0 +3,2 @@\n+x\n+y\n",
+            "--- a\n+++ b\n@@ -1,2 +0,0 @@\n-a\n-b\n",
+            "--- a\n+++ b\n@@ -0,0 +1,3 @@\n+1\n+2\n+3\n",
+            "--- a\n+++ b\n@@ -1,3 +1,4 @@\n x\n-a\n+A\n y\n+z\n@@ -6,3 +7,3 @@\n p\n-q\n+Q\n r\n",
+        ):
+            result = self.tool.execute(mode="validate", diff=text)
+            self.assertTrue(result["valid"], (text, result["findings"]))
+
+    # -- bounded echo -------------------------------------------------------
+
+    def test_multi_file_paths_echo_is_bounded(self):
+        """The structured multi-file error lists at most 20 paths plus a total."""
+        lines = []
+        for i in range(30):
+            lines.append(f"--- a/f{i}.txt")
+            lines.append(f"+++ b/f{i}.txt")
+            lines.append("@@ -1 +1 @@")
+            lines.append(f"-x{i}")
+            lines.append(f"+y{i}")
+        result = self.tool.execute(mode="apply_check", diff="\n".join(lines) + "\n", original_text="x\n")
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "multi_file_diff")
+        self.assertEqual(len(result["files"]), 20)
+        self.assertEqual(result["files_total"], 30)
+
+    # -- fresh-seed differential batteries -----------------------------------
+
+    def test_fresh_difflib_battery_new_seed(self):
+        """150 fresh seeded difflib pairs validate, apply, and reverse exactly."""
+        rng = random.Random(777001)
+        words = ["alpha", "beta", "", " ", "üñí", "tab\there", "-dash", "+plus", "+++ t", "@@fake"]
+        checked = 0
+        for iteration in range(150):
+            a = [rng.choice(words) + "\n" for _ in range(rng.randint(0, 20))]
+            b = list(a)
+            for _ in range(rng.randint(1, 6)):
+                op = rng.choice(["edit", "ins", "del"])
+                if op == "edit" and b:
+                    b[rng.randrange(len(b))] = rng.choice(words) + "\n"
+                elif op == "ins":
+                    b.insert(rng.randint(0, len(b)), rng.choice(words) + "\n")
+                elif op == "del" and b:
+                    b.pop(rng.randrange(len(b)))
+            if iteration % 2:
+                a, b = b, a
+            diff = "".join(
+                difflib.unified_diff(a, b, fromfile="a/s.txt", tofile="b/s.txt", n=rng.choice([0, 1, 3]))
+            )
+            if not diff.strip():
+                continue
+            original, updated = "".join(a), "".join(b)
+            validated = self.tool.execute(mode="validate", diff=diff)
+            self.assertTrue(validated["valid"], f"iter {iteration}: {validated['findings']}")
+            applied = self.tool.execute(mode="apply_check", diff=diff, original_text=original)
+            self.assertTrue(applied["applies"], f"iter {iteration}: {applied}")
+            reversed_result = self.tool.execute(mode="reverse", diff=diff, new_text=updated)
+            self.assertTrue(reversed_result["valid"], f"iter {iteration}: {reversed_result}")
+            self.assertTrue(reversed_result["round_trip"], f"iter {iteration}: {reversed_result}")
+            twice = self.tool.execute(mode="reverse", diff=reversed_result["diff"])["diff"]
+            self.assertEqual(twice, diff, f"iter {iteration}: double reverse not identity")
+            checked += 1
+        self.assertGreater(checked, 100)
+
+    def test_real_diff_battery_with_no_newline_and_crlf(self):
+        """60 fresh real `diff -u` outputs (markers included) all pass."""
+        diff_bin = shutil.which("diff")
+        if diff_bin is None:  # pragma: no cover - diff ships everywhere
+            self.skipTest("system diff not available")
+        rng = random.Random(515253)
+        words = ["alpha", "beta", "gamma", "", "üñí", "tab\t", "line"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path_a = os.path.join(tmp, "a.txt")
+            path_b = os.path.join(tmp, "b.txt")
+            checked = 0
+            for iteration in range(60):
+                a = [rng.choice(words) for _ in range(rng.randint(0, 14))]
+                b = list(a)
+                for _ in range(rng.randint(1, 4)):
+                    op = rng.choice(["edit", "ins", "del"])
+                    if op == "edit" and b:
+                        b[rng.randrange(len(b))] = rng.choice(words)
+                    elif op == "ins":
+                        b.insert(rng.randint(0, len(b)), rng.choice(words))
+                    elif op == "del" and b:
+                        b.pop(rng.randrange(len(b)))
+                if iteration % 2:
+                    a, b = b, a
+                style = rng.choice(["lf", "nonl", "nonl_a", "nonl_b", "crlf"])
+
+                def render(lines, sep, terminated):
+                    if not lines:
+                        return ""
+                    text = sep.join(lines)
+                    return text + sep if terminated else text
+
+                sep = "\r\n" if style == "crlf" else "\n"
+                a_text = render(a, sep, style in ("lf", "crlf"))
+                b_text = render(b, sep, style in ("lf", "crlf") and style != "nonl_b")
+                if style == "nonl":
+                    b_text = render(b, sep, False)
+                if a_text == b_text:
+                    continue
+                with open(path_a, "w", newline="") as handle:
+                    handle.write(a_text)
+                with open(path_b, "w", newline="") as handle:
+                    handle.write(b_text)
+                proc = subprocess.run([diff_bin, "-u", path_a, path_b], capture_output=True)  # noqa: S603
+                if proc.returncode != 1:
+                    continue
+                diff = proc.stdout.decode("utf-8")
+                checked += 1
+                validated = self.tool.execute(mode="validate", diff=diff)
+                self.assertTrue(validated["valid"], f"iter {iteration} ({style}): {validated['findings']}")
+                applied = self.tool.execute(mode="apply_check", diff=diff, original_text=a_text)
+                self.assertTrue(applied["applies"], f"iter {iteration} ({style}): {applied}")
+                reversed_result = self.tool.execute(mode="reverse", diff=diff, new_text=b_text)
+                self.assertTrue(reversed_result["valid"], f"iter {iteration} ({style}): {reversed_result}")
+                self.assertTrue(reversed_result["round_trip"], f"iter {iteration} ({style}): {reversed_result}")
+                twice = self.tool.execute(mode="reverse", diff=reversed_result["diff"])["diff"]
+                self.assertEqual(twice, diff, f"iter {iteration}: double reverse not identity")
+            self.assertGreater(checked, 30)
+
+    def test_fresh_corruption_battery_new_seed(self):
+        """150 fresh corruptions are all caught by the correct layer."""
+        rng = random.Random(886688)
+        pool = []
+        base = random.Random(13579)
+        words = ["alpha", "beta", "gamma", "delta", "eps", "zeta"]
+        for _ in range(10):
+            a = [base.choice(words) + "\n" for _ in range(base.randint(8, 26))]
+            b = list(a)
+            for _ in range(base.randint(1, 5)):
+                op = base.choice(["edit", "ins", "del"])
+                if op == "edit" and b:
+                    b[base.randrange(len(b))] = base.choice(words).upper() + "\n"
+                elif op == "ins":
+                    b.insert(base.randint(0, len(b)), base.choice(words) + "\n")
+                elif len(b) > 1:
+                    b.pop(base.randrange(len(b)))
+            diff = "".join(difflib.unified_diff(a, b, fromfile="a/c.txt", tofile="b/c.txt", n=3))
+            if diff.strip():
+                pool.append((diff, "".join(a)))
+        caught = {"validate": 0, "apply_check": 0}
+        for step in range(150):
+            diff, original = rng.choice(pool)
+            lines = diff.split("\n")
+            headers = [i for i, item in enumerate(lines) if item.startswith("@@ ")]
+            minus = [i for i, item in enumerate(lines) if item.startswith("-") and not item.startswith("--- ")]
+            plus = [i for i, item in enumerate(lines) if item.startswith("+") and not item.startswith("+++ ")]
+            ctx = [i for i, item in enumerate(lines) if item.startswith(" ")]
+            kind = rng.choice(
+                ["new_start", "old_start", "count", "dup_marker", "marker_mid", "marker_early",
+                 "drop", "garbage", "drift"]
+            )
+            if kind in ("new_start", "old_start") and headers:
+                target = rng.choice(headers)
+                head = lines[target]
+                sign_pos = head.find("-" if kind == "old_start" else "+", head.find("@@"))
+                digit_pos = sign_pos + 1
+                while digit_pos < len(head) and head[digit_pos].isdigit():
+                    digit_pos += 1
+                value = int(head[sign_pos + 1 : digit_pos])
+                lines[target] = head[: sign_pos + 1] + str(max(0, value + 1)) + head[digit_pos:]
+            elif kind == "count" and headers:
+                target = rng.choice(headers)
+                head = lines[target]
+                comma = head.find(",", head.find("@@ -"))
+                if comma != -1 and head[comma + 1].isdigit():
+                    lines[target] = head[: comma + 1] + str((int(head[comma + 1]) + 1) % 10) + head[comma + 2 :]
+                else:
+                    lines[target] = head.replace(" +", " +1,0 ", 1)
+            elif kind == "dup_marker" and minus:
+                lines.insert(rng.choice(minus) + 1, "\\ No newline at end of file")
+                lines.insert(rng.choice(minus) + 2, "\\ No newline at end of file")
+            elif kind == "marker_mid" and ctx and headers:
+                candidates = [i for i in ctx if any(j > i for j in ctx + minus + plus)]
+                if not candidates:
+                    continue
+                lines.insert(rng.choice(candidates) + 1, "\\ No newline at end of file")
+            elif kind == "marker_early" and len(headers) >= 2:
+                lines.insert(headers[1], "\\ No newline at end of file")
+            elif kind == "drop" and (minus + plus + ctx):
+                del lines[rng.choice(minus + plus + ctx)]
+            elif kind == "garbage":
+                anchor = rng.choice(headers)
+                lines.insert(anchor + 1, "GARBAGE")
+            elif kind == "drift" and ctx:
+                target = rng.choice(ctx)
+                lines[target] = lines[target] + "?"
+            else:
+                continue
+            mutated = "\n".join(lines)
+            validated = self.tool.execute(mode="validate", diff=mutated)
+            applied = self.tool.execute(mode="apply_check", diff=mutated, original_text=original)
+            caught_layer = None
+            if not validated.get("valid", False):
+                caught_layer = "validate"
+            elif not applied.get("applies", False):
+                caught_layer = "apply_check"
+            self.assertIsNotNone(
+                caught_layer, f"step {step} ({kind}) escaped both layers: {mutated[:200]!r}"
+            )
+            if kind == "drift":
+                self.assertEqual(caught_layer, "apply_check", f"step {step} ({kind}): {validated}")
+                caught["apply_check"] += 1
+            else:
+                self.assertEqual(caught_layer, "validate", f"step {step} ({kind}): {mutated[:200]!r}")
+                caught["validate"] += 1
+        self.assertGreater(caught["validate"], 80)
+        self.assertGreater(caught["apply_check"], 3)
+
+    def test_twenty_thousand_hunk_diff_validates_fast(self):
+        """A 19,999-hunk diff (at the cap) validates well under two seconds."""
+        hunks = [f"@@ -{i} +{i} @@\n-l{i}\n+m{i}\n" for i in range(1, 20_000)]
+        diff = "--- a/h.txt\n+++ b/h.txt\n" + "".join(hunks)
+        start = time.perf_counter()
+        validated = self.tool.execute(mode="validate", diff=diff)
+        elapsed = time.perf_counter() - start
+        self.assertTrue(validated["valid"], validated["findings"][:3])
+        self.assertEqual(validated["hunks"], 19_999)
+        self.assertLess(elapsed, 2.0, f"validate took {elapsed:.2f}s")
+        oversized = diff + "@@ -20000 +20000 @@\n-lx\n+mx\n@@ -20001 +20001 @@\n-ly\n+my\n"
+        start = time.perf_counter()
+        rejected = self.tool.execute(mode="validate", diff=oversized)
+        elapsed = time.perf_counter() - start
+        self.assertEqual(rejected["status"], "error")
+        self.assertIn("max_hunks", rejected["error"])
+        self.assertLess(elapsed, 2.0)
 
 
 if __name__ == "__main__":

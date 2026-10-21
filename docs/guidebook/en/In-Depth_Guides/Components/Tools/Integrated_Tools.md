@@ -654,13 +654,22 @@ result = tool.execute(
 ```
 
 `validate` checks `---`/`+++` pairing and order, path forms (`a/`, `b/`,
-`/dev/null`, GNU-quoted paths with escapes, optional TAB timestamps), the
-`@@ -l,s +l,s @@` hunk grammar (counts default to 1 and `-0,0` new-file forms
-are legal), hunk body arithmetic (old lines must equal the `' '`/`'-'` sum and
-new lines the `' '`/`'+'` sum, reported per side as expected vs actual),
-`\ No newline at end of file` placement, empty versus blank context lines, git
-extras (index, mode, rename, similarity, and binary lines), hunk ordering, and
-CRLF transport. Findings carry a line number, a stable code such as
+`/dev/null`, GNU-quoted paths with escapes — consecutive octal escapes are
+decoded as the raw UTF-8 bytes git's `core.quotePath` writes — optional TAB
+timestamps), the `@@ -l,s +l,s @@` hunk grammar (counts default to 1 and
+`-0,0` new-file forms are legal), hunk body arithmetic (old lines must equal
+the `' '`/`'-'` sum and new lines the `' '`/`'+'` sum, reported per side as
+expected vs actual), hunk start arithmetic (each hunk's new start must equal
+its old start plus the net line change accumulated by earlier hunks,
+`E_HUNK_OFFSET`; `patch(1)` rejects diffs that violate this), `\ No newline
+at end of file` placement (immediately after a body line, never duplicated,
+and only on the final old-side and final new-side line, because a line
+without a trailing newline is necessarily the last line of its file), empty
+versus blank context lines, git extras (index, mode, rename, similarity, and
+binary lines; a mode-change-only section with no hunks is valid git output),
+hunk ordering, and CRLF transport. Git headers whose unquoted paths contain
+spaces (`diff --git a/a b.txt b/a b.txt`) are split at the ` b/` separator,
+as GNU patch does. Findings carry a line number, a stable code such as
 `E_HUNK_COUNT_OLD`, and a severity.
 
 `apply_check` requires exact context and removed-line matches at the positions
