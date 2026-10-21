@@ -634,3 +634,69 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Regex Lint Tool
+
+`RegexLintTool` statically analyzes regular-expression *patterns* with
+pure Python standard library — no network access, no third-party
+dependencies. The regex family's tools operate on values — `RegexTool`
+(#767) matches, extracts, replaces and splits with a caller-supplied
+pattern, `RegexExplainerTool` (#3804) narrates a pattern's pieces — but
+neither answers "is this pattern safe to compile, and what could it
+cost against untrusted input?" before an agent embeds it in a pipeline.
+This tool is that missing layer, grounded in the running CPython `re`
+engine (developed and oracle-tested against 3.11; 3.10 works through
+the deprecated `sre_parse` alias of `re._parser`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.regex_lint_tool import RegexLintTool
+
+tool = RegexLintTool()
+lint = tool.execute(mode="lint", pattern=r"(\w+\s?)*$")          # findings
+tree = tool.execute(mode="structure", pattern=r"(?P<y>\d{4})-(\d{2})")
+walk = tool.execute(mode="explain", pattern=r"(a|b)|c")          # English walk
+risk = tool.execute(mode="estimate", pattern=r"(a+)+$", text_length=100)
+```
+
+`lint` first mirrors the real `re.compile` verdict byte-for-byte:
+when the engine raises, the finding reproduces the actual exception
+message and its exact reported position (span `[pos, pos+1]`), with
+named codes such as `unterminated_group`, `unterminated_character_class`
+(`[]` raises in Python), `duplicate_group_name`,
+`undefined_group_reference`, `lookbehind_variable_width` (CPython
+reports no position for `(?<=a+)`-style errors — the span is located
+structurally), `bad_repeat_range` (`{2,1}`), `double_quantifier`
+(`a**`), `misplaced_global_flag` (`a(?i)b` raises on 3.11),
+`repeat_count_overflow` (`a{4294967296}` raises `OverflowError` below
+CPython's `MAXREPEAT`) and `pattern_too_deep` (nesting that exhausts
+the sre parser's recursion). Patterns that compile receive the static
+analyses: severity-graded ReDoS detection — `redos_exponential`
+(warning) for nested quantifiers over overlapping alphabets and
+overlapping-prefix alternations under a quantifier (`(a+)+`, `(a*)*b`,
+`(a?)+`, `(.*a){10}b`, `(a|aa)+$`, `(a|ab)*c`, the StackOverflow-2019
+shape `(\w+\s?)*$`) and `redos_polynomial` (info) for adjacent
+unbounded overlapping quantifiers (`a*a*a*b`, `(.*a).*b`), with
+`redos_untrusted_input` info notes for unbounded dot runs — plus
+`nested_set_possible` warnings (`[[a][b]]` compiles with a CPython
+warning but means something else on POSIX engines), `brace_literal`
+info when `{name}`-style braces are matched literally (format-template
+leak), `huge_repeat_bound` warnings for `{1,1000000}`-style bounds,
+`unicode_class_wide` info (`\w` matches `①` U+2460 and CJK, `\s`
+matches NBSP — verified live; `re.ASCII` suggested), `dot_not_dotall`
+reminders, `inline_flag_scope` notes and `py311_only_syntax` info for
+possessive/atomic/scoped-flag syntax that 3.10 rejects.
+
+`structure` returns a deterministic typed parse tree with spans and
+per-node quantifiers, a `group_map` that byte-agrees with the real
+parser's own `state.groupdict` (verified in the tests), and group
+spans pointing at the actual parentheses. `explain` returns one
+English fragment per top-level alternative, a group index table and
+backreference/lookaround annotations — deterministic. `estimate`
+returns a documented `basic_ops` scan-work estimate plus a
+`backtracking_risk_class` of linear/polynomial/exponential/unknown
+with reasons; the classification is heuristic — regex power analysis
+is undecidable — and deliberately conservative.
+
+Inputs are validated strictly (mode, flag names, mode-specific
+options), the pattern is capped at 4,000 characters, output lists are
+capped, and results are deterministic.

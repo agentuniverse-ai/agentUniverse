@@ -1,0 +1,45 @@
+name: regex_lint_tool
+description: "Regex lint tool — static analysis of regular-expression patterns: compile validity mirrored from the real re engine, severity-graded catastrophic-backtracking (ReDoS) risk detection and engine-portability flags, plus parse-tree structure, deterministic explanation and work estimation. Pure Python stdlib (re and the re._parser/sre_parse internal parser), no network. mode='lint' checks a pattern (with optional documented flags IGNORECASE/MULTILINE/DOTALL/ASCII/UNICODE/VERBOSE) and returns {code, message, span, severity} findings: compile failures mirror the actual exception (message and position, including [] raising 'unterminated character set', duplicate group names, undefined group references, (?<=a+) lookbehind fixed-width errors with the span located structurally, {2,1} min>max, a** multiple repeat, a(?i)b misplaced global flags, a{4294967296} OverflowError and very-deep-nesting RecursionError); compile-success analyses are severity-graded ReDoS detection (redos_exponential warning: (a+)+, (a*)*b, (a|aa)+$, (a|ab)*c, (.*a){10}b nested quantifiers and overlapping-prefix alternations; redos_polynomial info: a*a*a*b, (.*a).*b adjacent unbounded overlapping quantifiers; redos_untrusted_input info notes), nested-set [[a][b]] warnings (CPython warns, POSIX engines diverge), literal-brace {name} format-template leak info, huge {1,1000000} repeat bounds warning, unicode pitfalls info (\w matches ① and CJK, \s matches NBSP — verified on CPython 3.11 — re.ASCII suggested), dot-does-not-match-newline reminders, inline-flag scoping notes and py311_only_syntax info for possessive/atomic/scoped-flag syntax absent from 3.10. mode='structure' returns a deterministic parse-tree summary with typed nodes, per-node quantifiers, a group_map byte-agreeing with the real parser's state.groupdict and group spans pointing at real parentheses. mode='explain' returns deterministic English fragments per top-level alternative, a group index table and backreference/lookaround annotations. mode='estimate' returns a documented basic_ops scan-work estimate plus a backtracking_risk_class of linear/polynomial/exponential/unknown with reasons (heuristic, conservative). Strict validation, size caps, deterministic output."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.regex_lint_tool
+  class: RegexLintTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lint, structure, explain or estimate.
+    required: true
+  pattern:
+    type: string
+    description: The regular-expression pattern to analyze (up to 4,000 characters; the empty pattern is valid and reported honestly).
+    required: true
+  flags:
+    type: array
+    description: "Flag names for lint and estimate modes: IGNORECASE, MULTILINE, DOTALL, ASCII, UNICODE, VERBOSE (or i, m, s, a, u, x). Rejected in the other modes."
+    required: false
+  text_length:
+    type: integer
+    description: Estimate mode only — the sample input length (0..1000000000) the work estimate assumes. Rejected in the other modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "structure", "explain", "estimate"]
+      description: Operation mode.
+    pattern:
+      type: string
+      description: The regular-expression pattern to lint, structure, explain or estimate.
+    flags:
+      type: array
+      items:
+        type: string
+      description: Optional re flag names (lint and estimate only).
+    text_length:
+      type: integer
+      description: Optional sample text length for the estimate mode.
+  required: ["mode", "pattern"]
