@@ -634,3 +634,47 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## BCP 47 Language Tag Tool
+
+`Bcp47Tool` validates, canonicalizes, matches, and explains RFC 5646 (BCP 47)
+language tags entirely offline. It embeds curated tables from the IANA language
+subtag registry and ISO standards: about 400 language subtags (ISO 639-1/-2/-3
+plus registered 5-8 letter codes), the ISO 15924 script list, about 280 region
+codes (ISO 3166-1 alpha-2 plus common UN M.49 numeric regions and deprecated
+legacy codes), a curated variant subset, extlang records with macrolanguage
+prefixes, the complete RFC 5646 grandfathered tag list with preferred values,
+registered redundant tags, Suppress-Script pairs, and extension singletons
+(u, t). All tables are frozen at import time; the tool is standard-library
+only and deterministic.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.bcp47_tool import Bcp47Tool
+
+tool = Bcp47Tool()
+result = tool.execute(mode="validate", tag="hy-Latn-IT-arevela")
+matched = tool.execute(mode="match", tag="de-CH", range="de-de")
+canonical = tool.execute(mode="canonicalize", tag="i-klingon")
+explained = tool.execute(mode="explain", tag="fr-CA")
+```
+
+The `validate` mode returns the well-formed/valid verdicts, the structure
+decomposition (language, extlang, script, region, variants, extensions,
+private use), errors with character spans for each misplaced, unknown, or
+wrong-length subtag, and warnings such as redundant Suppress-Script pairs
+(`en-Latn`), deprecated subtags (`in`, `iw`), grandfathered tags with preferred
+values (`i-klingon` -> `tlh`), and case-form guidance. The `canonicalize`
+mode applies RFC 5646 case forms, preferred-value substitutions (`in`->`id`,
+`iw`->`he`, `ji`->`yi`, `sh`->`sr-Latn`), extlang folding (`zh-cmn-Hant` ->
+`cmn-Hant`), deprecated region/script/variant replacements, duplicate-variant
+removal, and alphabetical extension ordering. The `match` mode implements RFC
+4647 Basic Filtering (subtag-boundary prefix match, `*` matches any non-empty
+tag) and Lookup (progressive truncation, `*` ranges skipped), case-insensitive
+throughout. The `explain` mode maps every subtag to its registry meaning and
+suggests related tags.
+
+Unknown-but-well-formed subtags make a tag invalid while leaving it
+well-formed; grammar violations (empty parts, singletons in the language
+slot, duplicate variants or singletons, misplaced subtags) make it
+not-well-formed. Input length, subtag count, and finding counts are bounded,
+and every result is deterministic.
