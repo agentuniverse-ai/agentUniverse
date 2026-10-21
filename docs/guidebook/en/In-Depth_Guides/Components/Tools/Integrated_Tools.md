@@ -634,3 +634,47 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## CSV Injection Tool
+
+Detects and neutralizes spreadsheet formula injection (OWASP "CSV
+Injection") in CSV/TSV cell values: payloads that Excel, Google Sheets, or
+LibreOffice would auto-execute as formulas on import, such as DDE command
+references (`=cmd|' /C calc'!A0`), `HYPERLINK`, `WEBSERVICE`, and `IMPORTXML`
+calls, legacy `@`-prefixed formulas, and TAB/CR-obfuscated or homoglyph
+variants.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.csv_injection_tool import CsvInjectionTool
+
+tool = CsvInjectionTool()
+report = tool.execute(mode="scan", csv_text="name,note\nbob,=cmd|' /C calc'!A0\n")
+fixed = tool.execute(mode="neutralize", csv_text=open("export.csv").read())
+```
+
+The `scan` mode returns per-cell findings with row/column coordinates, A1
+cell references (including multi-letter columns), a code, the payload
+prefix, a truncated formula snippet, a risk level (high/medium/info), and a
+reason, plus a whole-file summary (cells scanned, unique payloads, per-column
+statistics, and the headers involved, weighted by data sensitivity).
+`neutralize` prefixes an apostrophe before every cell starting with `=`,
+`+`, `-`, `@`, TAB, or CR per the OWASP remediation, round-tripping through
+the csv module so embedded delimiters, quotes, and newlines in unchanged
+cells survive as identical parsed values. `explain` analyzes one cell value
+(decoded variants, what the spreadsheet would do, recommended
+neutralization) and `headers` ranks column names by data sensitivity
+(password/token/secret/IBAN/email first) to prioritize reporting.
+
+The trigger set follows OWASP exactly: `=`, `+`, `-`, `@`, TAB (U+0009), and
+CR (U+000D). Cells starting with `%` are deliberately not flagged because
+spreadsheets treat `%` as a number-format hint, never a formula start;
+pure numeric literals such as `-2` are also not flagged (they parse as
+numbers), though `neutralize` still prefixes them defensively. Fullwidth
+homoglyphs (U+FF1D etc.) are not executable and surface at info level only.
+
+The tool uses only the Python standard library, validates all inputs
+strictly, bounds input size, cell count, finding count, and snippet length,
+and returns deterministic results; scans of identical input are identical.
+A scan reports injection payloads in cell values; it is not a structural
+CSV linter and does not validate quoting, dialect consistency, or column
+alignment.
