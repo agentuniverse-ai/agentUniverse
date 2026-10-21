@@ -1,0 +1,35 @@
+name: diff_parse_tool
+description: Validate, apply-check, reverse, and summarize unified diff texts.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.diff_parse_tool
+  class: DiffParseTool
+input_keys:
+  - mode
+  - diff
+max_input_bytes: 2097152
+max_lines: 200000
+max_files: 2000
+max_hunks: 20000
+max_line_bytes: 1048576
+warn_line_bytes: 65536
+max_findings: 200
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [validate, apply_check, reverse, stats]
+      description: Operation to run on the diff text.
+    diff:
+      type: string
+      description: Unified diff text (diff -u, git diff, or difflib output).
+    original_text:
+      type: string
+      description: Original file content; required for apply_check.
+    new_text:
+      type: string
+      description: Post-patch file content; optional proof for reverse round-trip.
+  required: [mode, diff]
+  additionalProperties: false
