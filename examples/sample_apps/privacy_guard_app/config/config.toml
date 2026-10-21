@@ -1,0 +1,38 @@
+# Application Configuration / 应用配置
+# Privacy-guarded knowledge Q&A sample app / 隐私保护知识问答示例应用
+
+[BASE_INFO]
+appname = 'privacy_guard_app'
+
+[CORE_PACKAGE]
+default = ['privacy_guard_app.intelligence.agentic']
+agent = ['privacy_guard_app.intelligence.agentic.agent']
+knowledge = ['privacy_guard_app.intelligence.agentic.knowledge']
+llm = ['privacy_guard_app.intelligence.agentic.llm']
+planner = []
+tool = []
+memory = []
+service = []
+prompt = []
+store = ['privacy_guard_app.intelligence.agentic.knowledge.store']
+doc_processor = ['privacy_guard_app.intelligence.agentic.knowledge.doc_processor']
+
+[SUB_CONFIG_PATH]
+log_config_path = './log_config.toml'
+custom_key_path = './custom_key.toml'
+
+[DB]
+system_db_uri = ''
+
+[GUNICORN]
+activate = 'false'
+gunicorn_config_path = './gunicorn_config.toml'
+
+[GRPC]
+activate = 'false'
+max_workers = 10
+server_port = 50051
+
+[MONITOR]
+activate = false
+dir = './monitor'

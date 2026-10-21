@@ -1,0 +1,13 @@
+# !/usr/bin/env python3
+# -*- coding:utf-8 -*-
+
+name: 'deepseek_llm'
+description: 'DeepSeek chat LLM for the privacy guard agent / 隐私保护智能体使用的 DeepSeek 模型'
+model_name: 'deepseek-chat'
+max_tokens: 1000
+temperature: 0.3
+api_key: '${DEEPSEEK_API_KEY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.deep_seek_openai_style_llm'
+  class: 'DefaultDeepSeekLLM'

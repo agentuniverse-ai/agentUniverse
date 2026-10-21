@@ -1,0 +1,18 @@
+[LOG_CONFIG]
+[LOG_CONFIG.BASIC_CONFIG]
+log_level = "INFO"
+log_path = "./logs"
+log_rotation = "100 MB"
+log_retention = "7 days"
+
+[LOG_CONFIG.EXTEND_MODULE]
+sls_log = "False"
+
+[LOG_CONFIG.ALIYUN_SLS_CONFIG]
+sls_endpoint = ""
+sls_project = ""
+sls_log_store = ""
+access_key_id = ""
+access_key_secret = ""
+sls_log_queue_max_size = 1000
+sls_log_send_interval = 3.0
