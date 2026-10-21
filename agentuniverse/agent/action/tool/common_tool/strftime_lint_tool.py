@@ -287,6 +287,18 @@ LINT_EXEMPT = frozenset({"n", "t"})
 # Directives documented to vary with the locale.
 LOCALE_DEPENDENT = frozenset({"c", "x", "X"})
 
+# Fixed C-locale renderings of the locale-dependent directives at the
+# reference datetime (C locale: %c = '%a %b %e %H:%M:%S %Y',
+# %x = '%m/%d/%y', %X = '%H:%M:%S'). Hardcoded so lint never calls
+# strftime: its documented guarantee is byte-identical findings on
+# every platform and in every process locale (a live call would echo
+# the process's LC_TIME rendering while the text claims the C locale).
+C_LOCALE_EXAMPLES: dict[str, str] = {
+    "c": "Thu Feb 29 13:45:06 2024",
+    "x": "02/29/24",
+    "X": "13:45:06",
+}
+
 # ISO-trio weekday directives accepted by strptime next to %G/%V.
 _ISO_WEEKDAY = frozenset({"A", "a", "w", "u"})
 
@@ -677,7 +689,7 @@ class StrftimeLintTool(Tool):
                 token.start,
                 f"%{letter} output varies with the locale (and strptime "
                 f"expects the current locale's representation) — under the "
-                f"C locale it renders {REFERENCE_DATETIME.strftime('%' + letter)!r}",
+                f"C locale it renders {C_LOCALE_EXAMPLES[letter]!r}",
             )
             return
         if letter == "Z":

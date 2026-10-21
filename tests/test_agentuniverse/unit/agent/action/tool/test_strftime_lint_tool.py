@@ -140,6 +140,38 @@ class LintModeTest(unittest.TestCase):
         self.assertIn("'Thu Feb 29 13:45:06 2024'",
                       result["findings"][0]["message"])
 
+    def test_lint_messages_are_locale_independent(self):
+        """Lint must never echo the process locale (no strftime calls).
+
+        The locale_dependent message hardcodes the C-locale rendering:
+        under a different LC_TIME it must stay byte-identical instead of
+        quoting the active locale while claiming it is the C locale.
+        """
+        import locale
+        original = locale.setlocale(locale.LC_TIME)
+        baseline = self.tool.execute("lint", "%c %x %X")
+        candidates = [loc for loc in (
+            "de_DE.UTF-8", "fr_FR.UTF-8", "zh_CN.UTF-8", "en_GB.UTF-8",
+            "de_DE", "fr_FR",
+        ) if loc != original]
+        other = None
+        for candidate in candidates:
+            try:
+                locale.setlocale(locale.LC_TIME, candidate)
+                other = candidate
+                break
+            except locale.Error:
+                continue
+        if other is None:
+            self.skipTest("no other locale available on this platform")
+        try:
+            self.assertEqual(self.tool.execute("lint", "%c %x %X"),
+                             baseline)
+            message = self.tool.execute("lint", "%c")["findings"][0]["message"]
+            self.assertIn("'Thu Feb 29 13:45:06 2024'", message)
+        finally:
+            locale.setlocale(locale.LC_TIME, original)
+
     def test_dangling_percent_is_error(self):
         for fmt in ("abc%", "%", "%-", "%5", "%:"):
             result = self.tool.execute("lint", fmt)
