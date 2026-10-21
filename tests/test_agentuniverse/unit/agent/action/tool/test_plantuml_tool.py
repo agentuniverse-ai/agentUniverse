@@ -20,6 +20,7 @@ aliases, colors), and the validate mode against exact issue payloads
 The error matrix covers every strict-validation branch.
 """
 
+import re
 import unittest
 
 from agentuniverse.agent.action.tool.common_tool import PlantumlTool
@@ -384,6 +385,43 @@ class PlantumlToolClassDiagramTest(unittest.TestCase):
             self.tool.execute(**spec), self.tool.execute(**spec)
         )
 
+    def test_relation_orientation_triangle_and_diamond_on_from(self) -> None:
+        result = self.tool.execute(
+            mode="class_diagram",
+            classes=[{"name": "Parent"}, {"name": "Child"},
+                     {"name": "Whole"}, {"name": "Part"},
+                     {"name": "Dependent"}, {"name": "Provider"}],
+            relations=[
+                {"from": "Parent", "to": "Child", "kind": "extends"},
+                {"from": "Whole", "to": "Part", "kind": "composition"},
+                {"from": "Dependent", "to": "Provider",
+                 "kind": "dependency"},
+            ],
+        )
+        lines = result["result"].split("\n")
+        self.assertIn("Parent <|-- Child", lines)
+        self.assertIn("Whole *-- Part", lines)
+        self.assertIn("Dependent ..> Provider", lines)
+
+    def test_relation_label_with_colon_and_quotes_allowed(self) -> None:
+        result = self.tool.execute(
+            mode="class_diagram",
+            classes=[{"name": "A"}, {"name": "B"}],
+            relations=[{
+                "from": "A", "to": "B",
+                "label": 'ratio 1:2 say "hi"',
+            }],
+        )
+        self.assertIn('A -- B : ratio 1:2 say "hi"', result["result"])
+
+    def test_note_text_with_quotes_allowed(self) -> None:
+        result = self.tool.execute(
+            mode="class_diagram",
+            classes=[{"name": "A"}],
+            notes=[{"on": "A", "text": 'He said "no"'}],
+        )
+        self.assertIn('note right of A : He said "no"', result["result"])
+
 
 class PlantumlToolSequenceTest(unittest.TestCase):
     """Exact-source ground truths for the sequence mode."""
@@ -710,6 +748,41 @@ class PlantumlToolSequenceTest(unittest.TestCase):
             self.tool.execute(**spec), self.tool.execute(**spec)
         )
 
+    def test_message_text_with_quotes_and_colon_allowed(self) -> None:
+        result = self.tool.execute(
+            mode="sequence",
+            participants=[{"name": "A"}, {"name": "B"}],
+            messages=[{
+                "from": "A", "to": "B",
+                "text": 'charge 1: "total" @enduml',
+            }],
+        )
+        self.assertIn(
+            'A -> B : charge 1: "total" @enduml', result["result"]
+        )
+        linted = self.tool.execute(
+            mode="validate", source=result["result"]
+        )
+        self.assertEqual(linted["issues"], [])
+
+    def test_cjk_participant_names_quoted_alias(self) -> None:
+        result = self.tool.execute(
+            mode="sequence",
+            participants=[{"name": "用户服务"}, {"name": "网关"}],
+            messages=[{"from": "用户服务", "to": "网关", "text": "请求"}],
+        )
+        self.assertEqual(
+            result["result"],
+            '@startuml\n'
+            'participant "用户服务" as ____\n'
+            'participant "网关" as __\n'
+            '____ -> __ : 请求\n'
+            '@enduml',
+        )
+        self.assertEqual(
+            result["id_mapping"], {"用户服务": "____", "网关": "__"}
+        )
+
 
 class PlantumlToolValidateTest(unittest.TestCase):
     """Exact issue payloads for the validate mode."""
@@ -933,6 +1006,110 @@ class PlantumlToolValidateTest(unittest.TestCase):
         )
         self.assertEqual(self.tool.execute(
             mode="validate", source=source)["issues"], [])
+
+    def test_multiline_note_body_skipped(self) -> None:
+        source = (
+            "@startuml\n"
+            "participant A\n"
+            "participant B\n"
+            "note over A\n"
+            "A -> B : sketch inside the note body\n"
+            "end\n"
+            "end note\n"
+            "A -> B : real\n"
+            "@enduml"
+        )
+        self.assertEqual(self.tool.execute(
+            mode="validate", source=source)["issues"], [])
+
+    def test_note_body_frame_keyword_not_phantom_frame(self) -> None:
+        source = (
+            "@startuml\n"
+            "participant A\n"
+            "note over A\n"
+            "loop forever text\n"
+            "end note\n"
+            "A -> A : x\n"
+            "@enduml"
+        )
+        self.assertEqual(self.tool.execute(
+            mode="validate", source=source)["issues"], [])
+
+    def test_delimiter_literal_in_message_text_not_counted(self) -> None:
+        source = (
+            "@startuml\n"
+            "participant A\n"
+            "participant B\n"
+            "A -> B : the @enduml marker ends a diagram\n"
+            "@enduml"
+        )
+        self.assertEqual(self.tool.execute(
+            mode="validate", source=source)["issues"], [])
+
+    def test_named_startuml_delimiter_recognized(self) -> None:
+        source = (
+            "@startuml my-diagram\n"
+            "participant A\n"
+            "A -> A : x\n"
+            "@enduml"
+        )
+        self.assertEqual(self.tool.execute(
+            mode="validate", source=source)["issues"], [])
+
+    def test_inline_note_with_colon_not_treated_as_multiline(self) -> None:
+        source = (
+            "@startuml\n"
+            "participant A\n"
+            "note over A : quick memo\n"
+            "A -> Ghost : x\n"
+            "@enduml"
+        )
+        result = self.tool.execute(mode="validate", source=source)
+        issue = result["issues"][0]
+        self.assertEqual(issue["check"], "participant_before_use")
+        self.assertEqual(issue["line"], 4)
+
+    def test_unclosed_multiline_note_flagged(self) -> None:
+        source = (
+            "@startuml\n"
+            "participant A\n"
+            "note over A\n"
+            "body that never ends\n"
+            "A -> A : x\n"
+            "@enduml"
+        )
+        result = self.tool.execute(mode="validate", source=source)
+        self.assertEqual(len(result["issues"]), 1)
+        issue = result["issues"][0]
+        self.assertEqual(issue["check"], "note_containment")
+        self.assertEqual(issue["line"], 3)
+        self.assertIn("never closed", issue["message"])
+
+    def test_stray_end_note_flagged(self) -> None:
+        source = (
+            "@startuml\n"
+            "participant A\n"
+            "end note\n"
+            "A -> A : x\n"
+            "@enduml"
+        )
+        result = self.tool.execute(mode="validate", source=source)
+        issue = result["issues"][0]
+        self.assertEqual(issue["check"], "note_containment")
+        self.assertEqual(issue["line"], 3)
+        self.assertIn("'end note' without", issue["message"])
+
+    def test_second_delimiter_reported_on_its_line(self) -> None:
+        source = (
+            "@startuml\n"
+            "@startuml\n"
+            "@enduml\n"
+            "@enduml\n"
+        )
+        result = self.tool.execute(mode="validate", source=source)
+        by_check = [i for i in result["issues"]
+                    if i["check"] == "delimiter_balance"]
+        self.assertEqual([i["line"] for i in by_check], [2, 4])
 
     def test_round_trip_generated_source_passes_lint(self) -> None:
         generated = self.tool.execute(
@@ -1499,6 +1676,89 @@ class PlantumlToolErrorTest(unittest.TestCase):
             "exceeds the 100000-character limit",
             mode="validate", source="x" * 100_001,
         )
+
+
+class PlantumlToolSanitizationPropertyTest(unittest.TestCase):
+    """Seeded property checks over many hostile name sets."""
+
+    class _Lcg:
+        def __init__(self, seed: int) -> None:
+            self.state = seed
+
+        def randint(self, low: int, high: int) -> int:
+            self.state = (
+                self.state * 6364136223846793005
+                + 1442695040888963407
+            ) % (1 << 64)
+            return low + (self.state >> 33) % (high - low + 1)
+
+        def choice(self, items: list) -> str:
+            return items[self.randint(0, len(items) - 1)]
+
+    def setUp(self) -> None:
+        self.tool = PlantumlTool()
+        self.id_re = re.compile(r"^[A-Za-z0-9_]+$")
+
+    def _random_names(self, rng: "_Lcg") -> list[str]:
+        alphabet = [*"abZ_09 -.!@#$%^&*()+=[]<>?/\\|~`;,",
+                    "用户", "Интерфейс", "é", "日本語", "Δ", "note", "end",
+                    "as", "activate", "participant", "class", "loop"]
+        names: list[str] = []
+        seen: set[str] = set()
+        while len(names) < rng.randint(1, 8):
+            name = "".join(
+                rng.choice(alphabet) for _ in range(rng.randint(1, 12))
+            )
+            if name and name not in seen and '"' not in name:
+                seen.add(name)
+                names.append(name)
+        return names
+
+    def test_200_seeded_name_sets_deterministic_and_unique(self) -> None:
+        rng = self._Lcg(20261021)
+        for trial in range(200):
+            names = self._random_names(rng)
+            with self.subTest(trial=trial, names=names):
+                classes = [{"name": name} for name in names]
+                relations = [{"from": names[0], "to": names[-1]}]
+                first_class = self.tool.execute(
+                    mode="class_diagram", classes=classes,
+                    relations=relations,
+                )
+                second_class = self.tool.execute(
+                    mode="class_diagram", classes=classes,
+                    relations=relations,
+                )
+                first_seq = self.tool.execute(
+                    mode="sequence",
+                    participants=classes,
+                    messages=[{
+                        "from": names[0], "to": names[-1], "text": "m",
+                    }],
+                )
+                second_seq = self.tool.execute(
+                    mode="sequence",
+                    participants=classes,
+                    messages=[{
+                        "from": names[0], "to": names[-1], "text": "m",
+                    }],
+                )
+                self.assertEqual(first_class, second_class)
+                self.assertEqual(first_seq, second_seq)
+                for result in (first_class, first_seq):
+                    mapping = result.get("id_mapping", {})
+                    emitted = [mapping.get(n, n) for n in names]
+                    self.assertEqual(len(set(emitted)), len(emitted))
+                    for emitted_id in emitted:
+                        self.assertTrue(self.id_re.match(emitted_id))
+                mapping = first_class.get("id_mapping", {})
+                relation_line = first_class["result"].split("\n")[-2]
+                endpoints = relation_line.split(" -- ")
+                self.assertEqual(
+                    endpoints,
+                    [mapping.get(names[0], names[0]),
+                     mapping.get(names[-1], names[-1])],
+                )
 
 
 class PlantumlToolImportTest(unittest.TestCase):

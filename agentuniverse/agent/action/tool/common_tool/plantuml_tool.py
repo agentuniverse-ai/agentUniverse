@@ -34,7 +34,13 @@ Supported modes:
   with ``params`` a list of ``{name, type?}``. Relation kinds and their
   PlantUML arrows: ``extends`` ``<|--``, ``implements`` ``<|..``,
   ``composition`` ``*--``, ``aggregation`` ``o--``, ``association``
-  ``--``, ``dependency`` ``..>``. Optional ``notes`` (``{on, text}``)
+  ``--``, ``dependency`` ``..>``. Orientation: ``from`` renders on the
+  left of the arrow and carries the hollow triangle (``<|``) or the
+  composition / aggregation diamond (``*`` / ``o``), so for extends /
+  implements / composition / aggregation ``from`` is the parent,
+  interface or whole end and ``to`` the child / implementing / part
+  end; for dependency the ``..>`` arrowhead lands on ``to``, so
+  ``from`` is the dependent end. Optional ``notes`` (``{on, text}``)
   attach a note to a declared class (``note right of``).
 * ``sequence`` — build a sequence diagram from ``participants``
   (``{name, as?, type?}`` with type one of actor / boundary / control /
@@ -51,10 +57,15 @@ Supported modes:
   ``B --> A: reply`` / ``deactivate B``); activations are strictly
   pair-checked (see below).
 * ``validate`` — run a *basic sanity check* over a PlantUML source
-  string: ``@startuml`` / ``@enduml`` delimiter balance, use of a
-  message endpoint before its participant is declared, and interaction
-  frame containment (unclosed / stray ``end`` / frames that wrap zero
-  messages). This is deliberately NOT a full PlantUML parser — it is a
+  string: ``@startuml`` / ``@enduml`` delimiter balance (counted per
+  line, so literal delimiters inside message text do not count), use
+  of a message endpoint before its participant is declared,
+  interaction frame containment (unclosed / stray ``end`` / frames
+  that wrap zero messages) and multi-line note containment (a
+  ``note over ...`` block that is never closed with ``end note``, or a
+  stray ``end note``; note bodies themselves are skipped, so
+  arrow-like or ``end``-like note text does not trip the other
+  checks). This is deliberately NOT a full PlantUML parser — it is a
   cheap line-oriented heuristic pass; a clean result does not
   guarantee the source renders.
 
@@ -85,9 +96,11 @@ method signatures inside one class, relation endpoints or note targets
 that reference *undeclared* names, frame indexes out of range or not
 an ascending contiguous run, overlapping or out-of-order frames,
 activation lines that are not strictly paired, member names that are
-not plain identifiers, text fields containing control characters or
-double quotes, oversized inputs) raise a ``ValueError``, mirroring the
-other common tools.
+not plain identifiers, names containing double quotes, text fields
+containing control characters, oversized inputs) raise a
+``ValueError``, mirroring the other common tools. Free-text fields
+(labels, message and note text) may contain colons and double quotes:
+those are inert in PlantUML display text.
 """
 
 import re
@@ -108,8 +121,6 @@ _COLOR_WORD = re.compile(r"^[A-Za-z][A-Za-z0-9]*$")
 _COLOR_HEX = re.compile(r"^[0-9A-Fa-f]{6}$")
 
 # validate mode: participant / actor style declaration lines.
-_DECL_KEYWORDS = ("participant", "actor", "boundary", "control", "entity",
-                  "database")
 _DECL_LINE = re.compile(
     r"^(?:participant|actor|boundary|control|entity|database)\s+(.+)$"
 )
@@ -122,6 +133,7 @@ _FRAME_OPEN = re.compile(r"^(?:alt|loop|par|opt)\b")
 _FRAME_CLOSE = re.compile(r"^end\s*$")
 # 'end note' closes a multi-line note, not a frame.
 _END_NOTE = re.compile(r"^end\s+note\b")
+_NOTE_LINE = re.compile(r"^note\b")
 
 
 class PlantumlTool(Tool):
@@ -160,8 +172,8 @@ class PlantumlTool(Tool):
         "(mode='sequence') with autonumber, receiver-activation / "
         "sender-deactivation lines and alt/loop/par/opt frames, and "
         "runs a basic sanity lint (@startuml/@enduml balance, "
-        "participant-before-use, frame containment) over a PlantUML "
-        "source string (mode='validate')."
+        "participant-before-use, frame containment, multi-line note "
+        "containment) over a PlantUML source string (mode='validate')."
     )
 
     MODES: ClassVar[tuple] = ("class_diagram", "sequence", "validate")
@@ -234,7 +246,11 @@ class PlantumlTool(Tool):
                 (<|--), implements (<|..), composition (*--),
                 aggregation (o--), association (--), dependency (..>);
                 both endpoints must reference declared class names.
-                Optional.
+                ``from`` renders on the left of the arrow and carries
+                the triangle / diamond, so it is the parent, interface
+                or whole end for extends / implements / composition /
+                aggregation, while for dependency the arrowhead lands
+                on ``to`` (``from`` is the dependent end). Optional.
             notes (list[dict]): Class diagram notes, each ``{on, text}``
                 attaching a ``note right of`` to the declared class
                 ``on``. Optional. (For the sequence mode the note shape
@@ -268,9 +284,11 @@ class PlantumlTool(Tool):
                 string with the PlantUML source plus counts (and
                 ``id_mapping`` whenever any name was sanitized). For
                 the validate mode, ``ok``, ``lines_checked`` and a list
-                of ``issues`` (each ``{line, check, message}``). The
-                lint is a basic sanity pass, not a full PlantUML
-                parser.
+                of ``issues`` (each ``{line, check, message}``) with
+                checks named ``delimiter_balance``,
+                ``participant_before_use``, ``frame_containment`` and
+                ``note_containment``. The lint is a basic sanity pass,
+                not a full PlantUML parser.
 
         Raises:
             ValueError: If any parameter is malformed (before any
@@ -485,8 +503,7 @@ class PlantumlTool(Tool):
             if stereotype is not None:
                 if isinstance(stereotype, bool) \
                         or not isinstance(stereotype, str) \
-                        or stereotype not in self.STEREOTYPES \
-                        or stereotype is None:
+                        or stereotype not in self.STEREOTYPES:
                     self._invalid(
                         f"stereotype of class {name!r} must be one of: "
                         f"{', '.join(k for k in self.STEREOTYPES if k)} "
@@ -1054,50 +1071,75 @@ class PlantumlTool(Tool):
         lines = source.split("\n")
 
         # --- @startuml / @enduml delimiter balance ------------------- #
-        start_count = source.count("@startuml")
-        end_count = source.count("@enduml")
-        if start_count == 0:
+        startuml_lines = [
+            number for number, raw_line in enumerate(lines, start=1)
+            if raw_line.strip().startswith("@startuml")
+        ]
+        enduml_lines = [
+            number for number, raw_line in enumerate(lines, start=1)
+            if raw_line.strip().startswith("@enduml")
+        ]
+        if not startuml_lines:
             issues.append({
                 "line": 1,
                 "check": "delimiter_balance",
                 "message": "missing '@startuml' delimiter",
             })
-        if end_count == 0:
+        if not enduml_lines:
             issues.append({
                 "line": len(lines),
                 "check": "delimiter_balance",
                 "message": "missing '@enduml' delimiter",
             })
-        if start_count > 1:
+        if len(startuml_lines) > 1:
             issues.append({
-                "line": 1,
+                "line": startuml_lines[1],
                 "check": "delimiter_balance",
-                "message": f"'@startuml' appears {start_count} times "
+                "message": f"'@startuml' appears {len(startuml_lines)} "
+                           f"times (expected exactly 1)",
+            })
+        if len(enduml_lines) > 1:
+            issues.append({
+                "line": enduml_lines[1],
+                "check": "delimiter_balance",
+                "message": f"'@enduml' appears {len(enduml_lines)} times "
                            f"(expected exactly 1)",
             })
-        if end_count > 1:
-            issues.append({
-                "line": len(lines),
-                "check": "delimiter_balance",
-                "message": f"'@enduml' appears {end_count} times "
-                           f"(expected exactly 1)",
-            })
-        if start_count >= 1 and end_count >= 1 \
-                and source.index("@enduml") < source.index("@startuml"):
+        if startuml_lines and enduml_lines \
+                and enduml_lines[0] < startuml_lines[0]:
             issues.append({
                 "line": 1,
                 "check": "delimiter_balance",
                 "message": "'@enduml' appears before '@startuml'",
             })
 
-        # --- participant-before-use and frame containment ------------- #
+        # --- participant-before-use, frame and note containment ------- #
         declared: set[str] = set()
         frame_stack: list[tuple[int, str]] = []
+        in_note = False
+        note_open_line = 0
         for number, raw_line in enumerate(lines, start=1):
             stripped = raw_line.strip()
             if not stripped or stripped.startswith(("'", "/'")):
                 continue
             if stripped.startswith(("@startuml", "@enduml")):
+                continue
+            if in_note:
+                if _END_NOTE.match(stripped):
+                    in_note = False
+                continue
+            if _NOTE_LINE.match(stripped) and ":" not in stripped \
+                    and not stripped.startswith('note "'):
+                in_note = True
+                note_open_line = number
+                continue
+            if _END_NOTE.match(stripped):
+                issues.append({
+                    "line": number,
+                    "check": "note_containment",
+                    "message": "'end note' without a matching multi-line "
+                               "note",
+                })
                 continue
             match = _DECL_LINE.match(stripped)
             if match:
@@ -1119,8 +1161,6 @@ class PlantumlTool(Tool):
                 if frame_stack:
                     start_line, kind, _ = frame_stack[-1]
                     frame_stack[-1] = (start_line, kind, True)
-                continue
-            if _END_NOTE.match(stripped):
                 continue
             if _FRAME_OPEN.match(stripped):
                 frame_stack.append((number, stripped.split()[0], False))
@@ -1149,6 +1189,13 @@ class PlantumlTool(Tool):
                 "check": "frame_containment",
                 "message": f"{kind} frame starting here is never closed "
                            f"with 'end'",
+            })
+        if in_note:
+            issues.append({
+                "line": note_open_line,
+                "check": "note_containment",
+                "message": "multi-line note starting here is never closed "
+                           "with 'end note'",
             })
 
         return {

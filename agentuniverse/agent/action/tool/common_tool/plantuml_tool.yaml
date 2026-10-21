@@ -1,5 +1,5 @@
 name: plantuml_tool
-description: PlantUML diagram source generation tool — pure Python stdlib, no rendering and no plantuml jar/CLI dependency. Builds UML class diagram source from classes/relations/notes specs (mode='class_diagram') with interface/abstract/enum stereotypes, visibility-modified fields/methods and the six UML relation arrows (extends, implements, composition, aggregation, association, dependency), sequence diagram source from participants/messages/notes/frames specs (mode='sequence') with autonumber, activation lines and alt/loop/par/opt frames, and runs a basic sanity lint (@startuml/@enduml balance, participant-before-use, frame containment) over a PlantUML source string (mode='validate').
+description: PlantUML diagram source generation tool — pure Python stdlib, no rendering and no plantuml jar/CLI dependency. Builds UML class diagram source from classes/relations/notes specs (mode='class_diagram') with interface/abstract/enum stereotypes, visibility-modified fields/methods and the six UML relation arrows (extends, implements, composition, aggregation, association, dependency), sequence diagram source from participants/messages/notes/frames specs (mode='sequence') with autonumber, activation lines and alt/loop/par/opt frames, and runs a basic sanity lint (@startuml/@enduml balance, participant-before-use, frame containment, multi-line note containment) over a PlantUML source string (mode='validate').
 tool_type: api
 metadata:
   type: TOOL
@@ -18,7 +18,7 @@ args_model:
     required: false
   relations:
     type: array
-    description: Class diagram relations, each {from, to, kind?, label?} with kind one of extends (<|--), implements (<|..), composition (*--), aggregation (o--), association (-- default), dependency (..>); from/to must reference declared class names. Optional for the class_diagram mode.
+    description: Class diagram relations, each {from, to, kind?, label?} with kind one of extends (<|--), implements (<|..), composition (*--), aggregation (o--), association (-- default), dependency (..>); from/to must reference declared class names. 'from' renders left of the arrow and carries the triangle / diamond (the parent, interface or whole end for extends / implements / composition / aggregation); for dependency the ..> arrowhead lands on 'to' (from is the dependent end). Optional for the class_diagram mode.
     required: false
   notes:
     type: array
@@ -42,7 +42,7 @@ args_model:
     required: false
   source:
     type: string
-    description: The PlantUML source string to lint (basic sanity pass, not a full parser). Required for the validate mode.
+    description: The PlantUML source string to lint (basic sanity pass — delimiter balance, participant-before-use, frame and multi-line note containment; not a full parser). Required for the validate mode.
     required: false
 args_model_schema:
   type: object
@@ -117,13 +117,13 @@ args_model_schema:
         required: ["name"]
     relations:
       type: array
-      description: Relation specs ({from, to, kind?, label?}).
+      description: Relation specs ({from, to, kind?, label?}). 'from' renders on the left of the arrow and carries the triangle / diamond, so it is the parent, interface or whole end for extends / implements / composition / aggregation; for dependency the ..> arrowhead lands on 'to' (from is the dependent end).
       items:
         type: object
         properties:
           from:
             type: string
-            description: First endpoint class name (must be declared).
+            description: Left-endpoint class name carrying the triangle / diamond for extends / implements / composition / aggregation, or the dependent end for dependency (must be declared).
           to:
             type: string
             description: Second endpoint class name (must be declared).
@@ -191,7 +191,7 @@ args_model_schema:
             description: Activate the receiver on this message.
           deactivate_after:
             type: boolean
-            description: Deactivate the receiver right after this message.
+            description: Deactivate the sender (from) right after this message.
         required: ["from", "to", "text"]
     frames:
       type: array
