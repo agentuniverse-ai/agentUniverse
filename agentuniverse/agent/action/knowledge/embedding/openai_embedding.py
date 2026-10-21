@@ -13,6 +13,7 @@ from openai import OpenAI, AsyncOpenAI, BadRequestError
 from pydantic import Field
 
 from agentuniverse.agent.action.knowledge.embedding.embedding import Embedding
+from agentuniverse.agent.action.knowledge.embedding._openai_response import ordered_embeddings
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
@@ -41,7 +42,8 @@ class OpenAIEmbedding(Embedding):
              List[List[float]]: Each text gets a float list, and the result is a list of the results for each text.
 
          Raises:
-             ValueError: If texts exceed the embedding model token limit or missing some required parameters.
+             ValueError: If texts exceed the embedding model token limit, required
+                 parameters are missing, or response indices do not match inputs.
          """
         self.client = OpenAI(api_key=self.openai_api_key, **self.openai_client_args or {})
         if self.embedding_model_name is None:
@@ -53,11 +55,7 @@ class OpenAIEmbedding(Embedding):
             else:
                 response = self.client.embeddings.create(input=texts, model=self.embedding_model_name)
 
-            # Extract the embedding data from the response
-            data = response.data
-
-            # Return the embeddings as a list of lists of floats
-            return [embedding.embedding for embedding in data]
+            return ordered_embeddings(response.data, len(texts))
         except BadRequestError as e:
             raise ValueError(e.message)
 
@@ -74,7 +72,8 @@ class OpenAIEmbedding(Embedding):
          Returns:
              List[List[float]]: Each text gets a float list, and the result is a list of the results for each text.
          Raises:
-             ValueError: If texts exceed the embedding model token limit or missing some required parameters.
+             ValueError: If texts exceed the embedding model token limit, required
+                 parameters are missing, or response indices do not match inputs.
          """
         self.async_client = AsyncOpenAI(api_key=self.openai_api_key, **self.openai_client_args or {})
         if self.embedding_model_name is None:
@@ -85,11 +84,7 @@ class OpenAIEmbedding(Embedding):
                                                                      dimensions=self.dimensions)
             else:
                 response = await self.async_client.embeddings.create(input=texts, model=self.embedding_model_name)
-            # Extract the embedding data from the response
-            data = response.data
-
-            # Return the embeddings as a list of lists of floats
-            return [embedding.embedding for embedding in data]
+            return ordered_embeddings(response.data, len(texts))
         except BadRequestError as e:
             raise ValueError(e.message)
 
