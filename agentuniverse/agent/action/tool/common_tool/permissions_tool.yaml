@@ -1,0 +1,47 @@
+name: permissions_tool
+description: Unix file-permission mode math without filesystem access - parse octal/symbolic modes, evaluate chmod operands, apply umask, review mode bits, and invert modes into chmod commands.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.permissions_tool
+  class: PermissionsTool
+input_keys:
+  - mode
+max_mode_length: 16
+max_operation_length: 128
+max_clauses: 12
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [parse, chmod, umask_apply, review, invert]
+    mode_value:
+      description: Permission mode for parse, umask_apply, review, and invert (octal int/str like 754/'0754' or symbolic like 'rwxr-x---'/'rwsr-x--t').
+      oneOf:
+        - {type: string}
+        - {type: integer}
+    current_mode:
+      description: Starting permission mode for chmod.
+      oneOf:
+        - {type: string}
+        - {type: integer}
+    operation:
+      type: string
+      description: "chmod operand: full [ugoa]*[+-=][rwxXstugo]* grammar with comma-separated clauses ('u+x,go-w', 'a=rX', '=u') or an absolute 3-4 digit octal target ('754')."
+    umask:
+      description: File-creation mask for umask_apply (octal like 022 or symbolic like 'u=rwx,g=rx,o=').
+      oneOf:
+        - {type: string}
+        - {type: integer}
+    target_mode:
+      description: Desired permission mode for invert.
+      oneOf:
+        - {type: string}
+        - {type: integer}
+    is_dir:
+      type: boolean
+      default: false
+      description: Whether the mode describes a directory; governs X semantics and review findings.
+  required: [mode]
+  additionalProperties: false
