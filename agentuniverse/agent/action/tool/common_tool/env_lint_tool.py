@@ -231,13 +231,16 @@ class EnvLintTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"env_lint_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, text: Any) -> str:
+    def _validate_text(self, text: Any) -> str:
         """Validate the .env text input (may be empty, must be str)."""
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"text must be a string (got {text!r})")
-        if len(text) > _MAX_TEXT_CHARS:
-            cls._invalid(f"text exceeds the {_MAX_TEXT_CHARS:,}-character limit " f"(got {len(text):,} characters)")
+            self._invalid(f"text must be a string (got {text!r})")
+        limit = self.max_text_chars
+        if len(text) > limit:
+            self._invalid(
+                f"text exceeds the {limit:,}-character limit "
+                f"(got {len(text):,} characters)"
+            )
         return text
 
     # ------------------------------------------------------------------ #
@@ -437,10 +440,6 @@ class EnvLintTool(Tool):
         key_part = head.split("=", 1)[0]
         if cls._is_secret(key_part):
             return head + cls._mask_tail(core) + trailing
-        return line
-        key_part = head.split("=", 1)[0]
-        if cls._is_secret(key_part):
-            return head + cls._mask_tail(tail)
         return line
 
     @classmethod
@@ -866,12 +865,13 @@ class EnvLintTool(Tool):
         fixes: list[dict[str, Any]] = []
         lines = list(prepared["lines"])
         if prepared["bom"]:
+            first_line = lines[0] if lines else ""
             fixes.append(
                 {
                     "line": 1,
                     "fix": "strip_bom",
-                    "before": "\ufeff" + (lines[0] if lines else ""),
-                    "after": lines[0] if lines else "",
+                    "before": self._mask_line("\ufeff" + first_line),
+                    "after": self._mask_line(first_line),
                 }
             )
         if prepared["crlf_count"]:

@@ -488,6 +488,23 @@ class EnvLintSecretMaskingTest(EnvLintToolTestCase):
         self.assertIn("DB_PASSWORD=***", result["fixed_text"])
         self.assert_no_secret_leak(result)
 
+    def test_bom_snapshots_mask_secret_values(self) -> None:
+        result = self.tool.execute(
+            mode="fix_hints", text="\ufeffAPI_KEY=sk-live-abcdef123456\n"
+        )
+        self.assert_no_secret_leak(result)
+        strip = next(f for f in result["fixes"] if f["fix"] == "strip_bom")
+        self.assertEqual(strip["before"], "\ufeffAPI_KEY=***")
+        self.assertEqual(strip["after"], "API_KEY=***")
+
+    def test_bom_secret_masked_across_all_modes(self) -> None:
+        text = "\ufeffDB_PASSWORD=hunter2-secret\r\nPLAIN=ok\r\n"
+        for mode in ("lint", "fix_hints", "stats"):
+            with self.subTest(mode=mode):
+                self.assert_no_secret_leak(
+                    self.tool.execute(mode=mode, text=text)
+                )
+
     def test_non_secret_values_visible(self) -> None:
         result = self.tool.execute(mode="fix_hints", text="MSG=hello world\n")
         quote = result["fixes"][0]
@@ -734,6 +751,12 @@ class EnvLintErrorMatrixTest(EnvLintToolTestCase):
                 "very_long_line",
             ],
         )
+
+    def test_max_text_chars_attribute_enforced(self) -> None:
+        tool = EnvLintTool(max_text_chars=10)
+        with self.assertRaises(ValueError):
+            tool.execute(mode="lint", text="A=123456789")
+        self.assertTrue(tool.execute(mode="lint", text="A=1234567\n")["clean"])
 
     def test_error_names_the_tool(self) -> None:
         with self.assertRaises(ValueError) as ctx:
