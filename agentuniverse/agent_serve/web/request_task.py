@@ -215,9 +215,10 @@ class RequestTask:
                 result = await self.async_task
                 if isinstance(result, OutputObject):
                     result = result.to_dict()
+                self.__request_do__.result["result"] = result
+                self.next_state(TaskStateEnum.FINISHED)
                 yield "data:" + json.dumps({"result": result},
                                            ensure_ascii=False) + "\n\n"
-                self.__request_do__.result["result"] = result
             if self.saved:
                 self.update_request_do(force=True)
         except Exception as e:
