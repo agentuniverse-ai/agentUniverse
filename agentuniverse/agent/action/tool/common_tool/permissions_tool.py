@@ -7,9 +7,12 @@ or changes the filesystem and never runs subprocesses at runtime; every mode
 input is a value supplied by the caller. Semantics follow POSIX chmod:
 
 - Clauses are applied left to right; each clause is [ugoa]*[+-=][rwxXstugo]*.
-- An omitted who means all classes (a) and, unlike open(2) creation masks,
-  the process umask is NEVER consulted. (BSD-derived chmod utilities mask
-  omitted-who clauses by the umask; this tool follows the POSIX rule.)
+- An omitted who means all classes (a). POSIX specifies that omitted-who
+  clauses are masked by the process umask and BSD-derived chmod utilities
+  implement that; GNU chmod ignores the umask. This tool cannot see the
+  caller's umask, so omitted who is resolved exactly like who='a' with no
+  umask adjustment (the GNU rule); pass explicit who letters when the
+  POSIX/BSD umask-masked result is wanted.
 - X grants or removes execute only when the target is a directory or some
   execute bit is already set in the mode before the operation started.
   Without is_dir, X degenerates to execute-if-any-execute-present.
@@ -365,8 +368,9 @@ class PermissionsTool(Tool):
                 raise ValueError(f"duplicate who letters in {who!r}")
             if not who:
                 notes.append(
-                    "clause omits who: applies to all classes (a); the umask is never consulted "
-                    "(chmod is not open(2) creation)"
+                    "clause omits who: applies to all classes (a); the caller's umask is not visible "
+                    "to this tool, so no umask adjustment is applied (GNU chmod behavior; POSIX and "
+                    "BSD-derived chmod would mask these bits by the process umask)"
                 )
             if op in ("+", "-") and not perms:
                 raise ValueError(f"clause {clause!r} lists no permission after {op!r}; an empty permission list is valid only with '='")

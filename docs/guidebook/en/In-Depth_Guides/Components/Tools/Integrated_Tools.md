@@ -673,9 +673,11 @@ never executes. `invert` derives the deterministic simplest-form chmod command
 between a current and target mode.
 
 Semantics follow POSIX chmod: clauses apply left to right, an omitted who
-means all classes and never consults the umask (unlike open(2) creation
-masks), X means execute only for a directory or when some execute bit is
-already set before the operation, and ugo copy sources work only with '=' and
-copy the class bits as accumulated so far. The tool uses only the standard
-library, runs no subprocesses, applies strict validation with input length
-caps, and returns deterministic results.
+means all classes resolved like who='a' with no umask adjustment (the GNU
+chmod rule; POSIX specifies that omitted-who clauses are masked by the
+process umask and BSD-derived chmod implements that, but a tool caller
+cannot expose its umask), X means execute only for a directory or when some
+execute bit is already set before the operation, and ugo copy sources work
+only with '=' and copy the class bits as accumulated so far. The tool uses
+only the standard library, runs no subprocesses, applies strict validation
+with input length caps, and returns deterministic results.

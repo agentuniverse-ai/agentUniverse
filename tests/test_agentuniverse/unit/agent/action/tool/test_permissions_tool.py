@@ -178,9 +178,10 @@ class ChmodOracleTest(PermissionsToolTestBase):
     """300 seeded chmod operands evaluated against the real chmod binary.
 
     The oracle subprocess runs under umask 0 so a who-omitted clause means
-    'all classes' on both BSD-derived and GNU chmod (POSIX: chmod never
-    consults the umask; historical BSD utilities mask who-omitted clauses by
-    the invoking shell's umask). X with '-' is excluded from the generator
+    'all classes' on both BSD-derived and GNU chmod (POSIX specifies that
+    omitted-who clauses are masked by the process umask and BSD-derived
+    utilities implement that; GNU chmod and this tool apply no umask — under
+    umask 0 all of them agree). X with '-' is excluded from the generator
     because BSD-derived chmod (macOS) evaluates '-X' as '+X', which contradicts
     both POSIX and GNU; the tool follows POSIX and the divergence is pinned in
     ChmodEdgeSemanticsTest.
@@ -375,26 +376,44 @@ class ChmodEdgeSemanticsTest(PermissionsToolTestBase):
         self.verify("+x", 0o644)
 
     def test_x_with_minus_follows_posix(self):
-        """a-X removes execute from a 755 file per POSIX and GNU chmod.
+        """a-X removes execute where X's condition holds, per POSIX and GNU.
 
-        BSD-derived chmod (as on macOS) evaluates '-X' as '+X' instead; the
-        tool intentionally follows the POSIX rule, so this case is asserted
+        BSD-derived chmod (as on macOS) instead evaluates every X inside a
+        '-' clause as '+X' (re-adding execute that the same clause removed,
+        and treating X as plain '-x' when the condition is false); the tool
+        intentionally follows the POSIX rule, so these cases are asserted
         against the POSIX answer rather than the local binary.
         """
+        # File whose pre-operation mode has an execute bit: X is honored.
         result = self.tool.execute(mode="chmod", current_mode="0755", operation="a-X")
         self.assertEqual(result["new_mode"]["numeric"], 0o644)
         self.assertEqual(result["changes"][0]["x_condition_met"], True)
+        # Directory: the X condition always holds, so POSIX removes execute
+        # (the macOS binary leaves 0755 in place here).
+        result = self.tool.execute(mode="chmod", current_mode="0755", operation="a-X", is_dir=True)
+        self.assertEqual(result["new_mode"]["numeric"], 0o644)
+        # Mixed clause: POSIX clears every listed bit, X included (the macOS
+        # binary re-adds execute, producing 0111).
+        result = self.tool.execute(mode="chmod", current_mode="0755", operation="a-rwxX")
+        self.assertEqual(result["new_mode"]["numeric"], 0o000)
+        # Condition false (file, no execute before the operation): X is
+        # ignored and only the other letters act (here all sides agree).
+        result = self.tool.execute(mode="chmod", current_mode="0644", operation="go-rwxX")
+        self.assertEqual(result["new_mode"]["numeric"], 0o600)
+        self.assertEqual(result["changes"][0]["x_condition_met"], False)
 
-    def test_who_omission_never_consults_umask(self):
-        """A who-omitted clause applies to all classes regardless of umask.
+    def test_who_omission_resolves_as_a_without_umask(self):
+        """A who-omitted clause applies to all classes with no umask applied.
 
-        POSIX chmod ignores the umask entirely (unlike open(2) creation); the
-        oracle subprocess therefore runs with umask 0, under which BSD-derived
-        chmod agrees with POSIX for who-omitted clauses.
+        POSIX specifies that omitted-who clauses are masked by the process
+        umask and BSD-derived chmod implements that; GNU chmod applies no
+        umask. The caller's umask is not visible to the tool, so omitted who
+        is resolved exactly like who='a' (the GNU rule), and the oracle
+        subprocess runs under umask 0, where every implementation agrees.
         """
         result = self.tool.execute(mode="chmod", current_mode="0644", operation="=rw")
         self.assertEqual(result["new_mode"]["numeric"], 0o666)
-        self.assertTrue(any("umask is never consulted" in note for note in result["notes"]))
+        self.assertTrue(any("caller's umask is not visible" in note for note in result["notes"]))
         self.assertEqual(result["changes"][0]["who"], "a")
 
     def test_is_dir_false_x_note(self):
@@ -601,7 +620,16 @@ class PermissionsValidationTest(unittest.TestCase):
             self.assertEqual(result["status"], "error", bad)
 
     def test_operation_grammar(self):
-        for bad in ("u!", "x", "u++x", "g+u", "u+", "uu+x", ",u+x", "u+x,", "s", "t", "u+x,,g-w"):
+        for bad in (
+            "u!", "x", "u++x", "g+u", "u+", "uu+x", ",u+x", "u+x,", "s", "t", "u+x,,g-w",
+            # numeric and symbolic must not mix in one operand
+            "0754+x", "754+x", "754,u+x",
+            # five octal digits are beyond the supported 3-4 digit forms
+            "77755", "00755",
+            # non-ASCII digits never satisfy the octal or clause grammar
+            "0754\u0664", "\u0660\u0667\u0665\u0664", "75\u06f4",
+            "u+z",
+        ):
             result = self.tool.execute(mode="chmod", current_mode="644", operation=bad)
             self.assertEqual(result["status"], "error", bad)
 
