@@ -422,13 +422,12 @@ class CronHumanizerTool(Tool):
                     f"the {name} field has a '/' with no step value "
                     f"(got {part[:64]!r})"
                 )
-            try:
-                step = int(step_text)
-            except ValueError:
+            if not (step_text.isascii() and step_text.isdigit()):
                 return {}, (
                     f"the {name} field step must be a positive integer "
                     f"(got {step_text[:64]!r})"
                 )
+            step = int(step_text)
             if step < 1:
                 return {}, (
                     f"the {name} field step must be a positive integer, "
@@ -490,9 +489,7 @@ class CronHumanizerTool(Tool):
             )
         if names is not None and value_text.lower() in names:
             return names[value_text.lower()], None
-        try:
-            value = int(value_text)
-        except ValueError:
+        if not (value_text.isascii() and value_text.isdigit()):
             if names is MONTH_NAMES:
                 hint = " (month names jan-dec are also accepted)"
             elif names is DOW_NAMES:
@@ -503,6 +500,7 @@ class CronHumanizerTool(Tool):
                 f"the {name} field value {value_text[:64]!r} is not a "
                 f"valid integer{hint}"
             )
+        value = int(value_text)
         if not low <= value <= high:
             return None, (
                 f"the {name} field value {value} is out of range "

@@ -641,6 +641,34 @@ class CronHumanizerErrorTest(unittest.TestCase):
             "empty list element", error["field_errors"][0]["message"]
         )
 
+    def test_non_ascii_digit_forms_rejected(self) -> None:
+        for expression, field in (
+            ("+5 * * * *", "minute"),
+            ("*/+3 * * * *", "minute"),
+            ("* * 1_0 * *", "day-of-month"),
+            ("*/1_0 * * * *", "minute"),
+            ("0 0 1 １ *", "month"),
+            ("0 0 １ * *", "day-of-month"),
+            ("0 0 * * ７", "day-of-week"),
+            ("0 0 * * +7", "day-of-week"),
+            ("5-+10 * * * *", "minute"),
+            ("0 0 * * ０", "day-of-week"),
+        ):
+            error = self._error(expression)
+            self.assertEqual(
+                error["type"], "invalid_expression", expression
+            )
+            self.assertEqual(
+                error["field_errors"][0]["field"], field, expression
+            )
+
+    def test_ascii_zero_padded_forms_still_accepted(self) -> None:
+        for expression in ("05 * * * *", "*/05 * * * *", "0 09 * * *"):
+            result = self.tool.execute(
+                mode="describe", expression=expression
+            )
+            self.assertNotIn("error", result, expression)
+
     def test_unknown_macro(self) -> None:
         error = self._error("@fortnightly")
         self.assertEqual(error["field_errors"][0]["field"], "macro")
