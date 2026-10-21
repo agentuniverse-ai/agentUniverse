@@ -655,6 +655,8 @@ def _format(tokens: list, opts: dict) -> str:
     prev_sig: Optional[dict] = None
     between_active = False  # a BETWEEN whose AND has not been consumed
     leading_comma_pending = False  # current line starts with ', item'
+    wrap_break_pending = False  # wrapped comma awaits its line break
+    align_indent: Optional[int] = None  # indent owed at next line start
 
     i, n = 0, len(tokens)
     while i < n:
@@ -672,6 +674,8 @@ def _format(tokens: list, opts: dict) -> str:
                 cur.append(seg)
             if tok["line"]:
                 flush()  # a line comment must end its line
+                if leading_comma_pending:
+                    align_indent = len(depth_stack) + 1
             pending_no_space = False
             i += 1
             continue
@@ -692,11 +696,20 @@ def _format(tokens: list, opts: dict) -> str:
             prev_sig = None
             between_active = False
             leading_comma_pending = False
+            wrap_break_pending = False
+            align_indent = None
             i += length
             continue
 
         # --- subquery blocks
         if _is_sub_open(i):
+            if wrap_break_pending:
+                flush()
+                cur.append(indent_str(body_depth + 1))
+                wrap_break_pending = False
+            elif align_indent is not None and not has_content():
+                cur.append(indent_str(align_indent))
+                align_indent = None
             if has_content() and not cur[-1].endswith(" "):
                 cur.append(" ")
             cur.append("(")
@@ -740,6 +753,7 @@ def _format(tokens: list, opts: dict) -> str:
             pending_no_space = False
             prev_sig = tok
             between_active = False
+            wrap_break_pending = False
             i += 1
             continue
 
@@ -758,8 +772,7 @@ def _format(tokens: list, opts: dict) -> str:
                 continue
             cur.append(",")
             if select_start is not None and select_start in wrap_starts:
-                flush()
-                cur.append(indent_str(body_depth + 1))
+                wrap_break_pending = True
             pending_no_space = False
             prev_sig = tok
             between_active = False
@@ -772,6 +785,7 @@ def _format(tokens: list, opts: dict) -> str:
                 and tok["depth"] == body_depth and and_nl \
                 and region in _AND_OR_REGIONS \
                 and not between_active:
+            wrap_break_pending = False
             flush()
             cur.append(indent_str(body_depth + 1))
             cur.append(_cased_text(tok["text"], "word", opts))
@@ -781,6 +795,13 @@ def _format(tokens: list, opts: dict) -> str:
             continue
 
         # --- default emission with the family spacing rules
+        if wrap_break_pending:
+            flush()
+            cur.append(indent_str(body_depth + 1))
+            wrap_break_pending = False
+        elif align_indent is not None and not has_content():
+            cur.append(indent_str(align_indent))
+            align_indent = None
         text = _cased_text(tok["text"], tok["kind"], opts)
         space = True
         minus_glue = False

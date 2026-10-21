@@ -376,6 +376,79 @@ class FormatOptionGroundTruthTest(unittest.TestCase):
             f"SELECT {cols}\nFROM t",
         )
 
+    def test_select_wrap_keeps_trailing_comment_on_comma_line(self) -> None:
+        tail = ", ".join(chr(ord("c") + k) for k in range(24))
+        sql = f"select a, -- first\nb, /* mid */ {tail} from t"
+        expected = (
+            "SELECT a, -- first\n"
+            "  b, /* mid */\n"
+            + "".join(
+                f"  {ch},\n" for ch in "cdefghijklmnopqrstuvwxy")
+            + "  z\n"
+            + "FROM t"
+        )
+        self.assertEqual(
+            _fmt(self.tool, sql, select_wrap="at_width", wrap_column=80),
+            expected,
+        )
+        self.assertEqual(
+            _fmt(self.tool, expected, select_wrap="at_width",
+                 wrap_column=80),
+            expected,
+        )
+
+    def test_select_wrap_block_comment_after_comma(self) -> None:
+        items = ", ".join(chr(ord("a") + k) for k in range(26))
+        sql = f"select a, /* mid */ {items} from t"
+        expected = (
+            "SELECT a, /* mid */\n"
+            + "".join(
+                f"  {ch},\n" for ch in "abcdefghijklmnopqrstuvwxy")
+            + "  z\n"
+            + "FROM t"
+        )
+        self.assertEqual(
+            _fmt(self.tool, sql, select_wrap="at_width", wrap_column=80),
+            expected,
+        )
+        self.assertEqual(
+            _fmt(self.tool, expected, select_wrap="at_width",
+                 wrap_column=80),
+            expected,
+        )
+
+    def test_select_wrap_subquery_item_indent(self) -> None:
+        sql = ("select aaaaaaaaaa, (select max(x) from u) as mx, "
+               "bbbbbbbbbb, cccccccccc, dddddddddd from t")
+        expected = (
+            "SELECT aaaaaaaaaa,\n"
+            "  (\n"
+            "  SELECT max(x)\n"
+            "  FROM u\n"
+            ") AS mx,\n"
+            "  bbbbbbbbbb,\n"
+            "  cccccccccc,\n"
+            "  dddddddddd\n"
+            "FROM t"
+        )
+        self.assertEqual(
+            _fmt(self.tool, sql, select_wrap="at_width", wrap_column=80),
+            expected,
+        )
+        self.assertEqual(
+            _fmt(self.tool, expected, select_wrap="at_width",
+                 wrap_column=80),
+            expected,
+        )
+
+    def test_leading_comma_item_aligns_after_comment_break(self) -> None:
+        sql = "select a, -- c\nb, c from t"
+        expected = "SELECT a\n  , -- c\n  b\n  , c\nFROM t"
+        self.assertEqual(
+            _fmt(self.tool, sql, comma_style="leading"), expected)
+        self.assertEqual(
+            _fmt(self.tool, expected, comma_style="leading"), expected)
+
     def test_select_wrap_none_never_wraps(self) -> None:
         cols = ", ".join(f"column_number_{i}" for i in range(20))
         wide = f"select {cols} from t"
@@ -766,6 +839,10 @@ class IdempotenceCorpusTest(unittest.TestCase):
             "select a from t where (x between 1 and 2) and y = 3",
             "select a from t where x between 1 and 2 and y = 3 "
             "and z between 4 and 5 or w = 9",
+            "select a, -- first\nb, /* mid */ c, d, e, f, g, h, i, j, k, "
+            "l, m, n, o, p, q, r, s, t, u, v, w, x, y, z from t",
+            "select aaaaaaaaaa, (select max(x) from u) as mx, "
+            "bbbbbbbbbb, cccccccccc, dddddddddd from t",
         ]
         for base in bases:
             stmts.append(base)
