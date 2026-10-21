@@ -634,3 +634,49 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Natural Sort Tool
+
+`NaturalSortTool` orders lists of strings the way humans expect: embedded
+numbers compare numerically (`file2` before `file10`), with precise,
+locale-free rules and fully deterministic output.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.natural_sort_tool import NaturalSortTool
+
+tool = NaturalSortTool()
+result = tool.execute(
+    mode="sort",
+    items=["file10.txt", "file2.txt", "File1.txt", "file02.txt"],
+)
+# sorted: ["File1.txt", "file2.txt", "file02.txt", "file10.txt"]
+```
+
+Modes: `sort` (returns the ordered list plus `key_preview`, the chunk
+decomposition of each original string, and `swap_count`, the minimal number
+of adjacent swaps needed to sort the input), `rank` (insertion position and
+neighboring entries of one value against a reference list), `compare`
+(-1/0/1 for two strings with a chunk-by-chunk explanation and
+`first_difference`), and `is_sorted` (bool plus adjacent violation pairs).
+
+Documented chunking rules: maximal ASCII digit runs are number chunks
+compared by integer value with arbitrary precision (1,000+ digit runs never
+use floats); number chunks sort before text chunks at the same position;
+text chunks compare by Unicode code point; whitespace and embedded signs
+are plain text (`a-1` chunks as `a` / `-` / `1`); equal chunk prefixes order
+the shorter string first. `case_sensitive=False` (default) compares text via
+`str.casefold()`, so `Weiss` and `Weiß` are equal keys. `leading_zeros`
+defaults to `stable`: `002` and `2` are equal keys and keep input order;
+`fewer_first` breaks such ties toward fewer leading zeros. `decimal=True`
+merges `digits.digits` groups into exact `Decimal` values, so
+`["1.5", "1.10"]` sorts as `["1.10", "1.5"]` because 1.10 == 1.1
+numerically. `number_mode="whole"` recognizes only whole-string numbers.
+Non-ASCII decimal digits (Unicode Nd) are text by default; pass
+`unicode_digits="normalize"` to fold them to their values via
+`unicodedata.digit`, or `"reject"` to refuse them.
+
+The tool never mutates its input, Python's stable sort preserves input order
+for equal keys, and no locale, time, or randomness is consulted: the same
+input always produces a byte-identical result. Inputs are strictly validated
+(strings only) and bounded by `max_items` and `max_item_length`; preview,
+violation, and comparison counts are capped with explicit truncation flags.
