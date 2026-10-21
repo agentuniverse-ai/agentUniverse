@@ -135,6 +135,14 @@ metadata:
 
 Here, `sqldb_table_name` is the table name for SqlAlchemy, and `sqldb_wrapper_name` is the instance name of the sqldb_wrapper domain component.
 
+The storage keeps the message `type` in a dedicated column and filters on it in SQL, so
+`get(..., type='summarize')` and `get(..., type=['human', 'ai'])` only return messages of the
+requested kinds. `top_k` is applied to the filtered, time-ordered result, which means a limit of
+one returns the newest matching message rather than the newest message of any type. When the
+storage opens an existing `memory` table created before this column was available, it adds the
+missing column, creates the `idx_session_id_agent_id_type` index and backfills the type from the
+stored JSON payload so previously saved summaries remain retrievable.
+
 An example configuration for mysql_sqldb_wrapper is as follows:
 
 ```yaml
