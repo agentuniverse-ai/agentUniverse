@@ -1,0 +1,78 @@
+name: timezone_tool
+description: "IANA timezone intelligence tool — stdlib zoneinfo + tzdata, no network, fully deterministic. Validate zone names (mode='validate': valid flag from ZoneInfo lookup, in_available_timezones set difference, offsets/abbreviations at four fixed 2024 seasonal reference instants, has_dst). Query a zone at a datetime (mode='offset': naive datetimes interpreted in the zone, aware ones converted; utc_offset ±HH:MM, tzname, dst delta, is_dst, utcoffset_seconds, and PEP 495 ambiguous/impossible wall-time detection via two-fold UTC round-trips). List a year's DST transitions (mode='transitions': 6-hour scan + bisection + minute refinement, wall time on the new-offset side, hemisphere inference). Compare two zones (mode='compare': fixed-reference offset diff, DST policy diff, working-band overlap hours, 730-day worst-case diff, alias-level typically_same). Find cross-zone meeting windows (mode='window': per-zone UTC intervals, common overlap or null, per-participant local times, widest-overlap day recommendation)."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.timezone_tool
+  class: TimezoneTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — validate, offset, transitions, compare or window.
+    required: true
+  zone:
+    type: string
+    description: IANA zone key such as 'Europe/Berlin' or 'Etc/GMT+5'. Required for the validate, offset and transitions modes, and (with other_zone) for compare.
+    required: false
+  datetime_str:
+    type: string
+    description: ISO datetime YYYY-MM-DDTHH:MM[:SS] with an optional Z or ±HH:MM suffix. Required for the offset mode; naive values are interpreted in the zone, aware ones are converted as instants.
+    required: false
+  year:
+    type: integer
+    description: Year 1970..2100. Required for the transitions mode.
+    required: false
+  other_zone:
+    type: string
+    description: Second IANA zone key. Required for the compare mode.
+    required: false
+  zones:
+    type: list
+    description: List of 2..8 distinct IANA zone keys. Required for the window mode.
+    required: false
+  working_window:
+    type: string
+    description: Local working window HH:MM-HH:MM (e.g. '09:00-17:00'). Required for the window mode.
+    required: false
+  date:
+    type: string
+    description: Canonical ISO date (YYYY-MM-DD) the window applies to. Required for the window mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["validate", "offset", "transitions", "compare", "window"]
+      description: Timezone operation mode.
+    zone:
+      type: string
+      description: IANA zone key (validate, offset, transitions, compare modes).
+    datetime_str:
+      type: string
+      description: ISO datetime with optional Z or ±HH:MM suffix (offset mode).
+    year:
+      type: integer
+      minimum: 1970
+      maximum: 2100
+      description: Transition year (transitions mode).
+    other_zone:
+      type: string
+      description: Second IANA zone key (compare mode).
+    zones:
+      type: array
+      items:
+        type: string
+      minItems: 2
+      maxItems: 8
+      uniqueItems: true
+      description: Participant zone keys (window mode).
+    working_window:
+      type: string
+      description: Local working window HH:MM-HH:MM (window mode).
+    date:
+      type: string
+      description: ISO date YYYY-MM-DD the window applies to (window mode).
+  required: ["mode"]
