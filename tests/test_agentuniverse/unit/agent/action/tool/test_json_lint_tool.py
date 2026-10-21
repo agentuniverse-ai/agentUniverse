@@ -30,6 +30,8 @@ No network access, no fixtures on disk — everything is inline.
 import json
 import math
 import os
+import sys
+import time
 
 import pytest
 import yaml
@@ -289,6 +291,32 @@ def test_bom_only_document():
     assert sorted(codes(result)) == ["bom_not_allowed", "empty_document"]
 
 
+def test_bom_positions_address_the_original_text():
+    """Positions address the text the caller passed: the sigil occupies
+    line 1 column 1, so every other line-1 finding shifts right by one
+    column while the BOM finding itself does not move."""
+    doc = "﻿" + '{"a": 1, "a": 2}'
+    result = lint(doc)
+    dup = next(f for f in result["findings"] if f["code"] == "duplicate_key")
+    assert (dup["line"], dup["col"]) == (1, 11)
+    bom = next(f for f in result["findings"] if f["code"] == "bom_not_allowed")
+    assert (bom["line"], bom["col"]) == (1, 1)
+
+    r = fix_hints("﻿" + '{"a": NaN, "b": 1.0}')
+    by_code = {h["code"]: h for h in r["hints"]}
+    assert (by_code["non_rfc_number_literal"]["line"],
+            by_code["non_rfc_number_literal"]["col"]) == (1, 8)
+    assert (by_code["mixed_number_formats"]["line"],
+            by_code["mixed_number_formats"]["col"]) == (1, 18)
+    assert (by_code["bom_not_allowed"]["line"],
+            by_code["bom_not_allowed"]["col"]) == (1, 1)
+    assert r["fixed_text"] == '{"a": NaN, "b": 1.0}'
+
+    broken = fix_hints("﻿" + '{"a":}')
+    assert broken["error"]["code"] == "syntax_error"
+    assert (broken["error"]["line"], broken["error"]["col"]) == (1, 7)
+
+
 # ------------------------------------------------------------------ #
 # Empty and scalar-root documents
 # ------------------------------------------------------------------ #
@@ -480,6 +508,25 @@ def test_long_line_only_offending_line():
     assert result["findings"][0]["line"] == 2
 
 
+def test_line_convention_counts_newlines_only():
+    """Every position rule counts \\n only, exactly like
+    json.JSONDecodeError — so the line-length rule and the summary must
+    too: raw U+2028 inside a string is legal JSON (>= U+0020) and must
+    NOT split a line the way str.splitlines() would."""
+    sep = "\u2028"
+    doc = '["' + "x" * 3000 + sep + "y" * 3000 + '"]'
+    assert isinstance(json.loads(doc), list)  # parses; sep is in-string
+    assert len(doc.split("\n")) == 1
+    assert len(doc.splitlines()) == 2
+    result = lint(doc)
+    assert codes(result) == ["very_long_lines"]
+    assert result["findings"][0]["line"] == 1
+    assert "6005 characters" in result["findings"][0]["message"]
+    assert result["summary"]["lines"] == 1
+
+    assert lint('{"a": 1}\r\n')["summary"]["lines"] == 2
+
+
 # ------------------------------------------------------------------ #
 # Deep nesting
 # ------------------------------------------------------------------ #
@@ -502,6 +549,37 @@ def test_deep_nesting_threshold():
     arr_doc = "[" * 13 + "1" + "]" * 13
     assert codes(lint(arr_doc)) == ["deeply_nested"]
     assert lint("[" * 12 + "1" + "]" * 12)["findings"] == []
+
+
+def test_nesting_beyond_parser_limit_reported_not_raised():
+    """Ground truth: the C json scanner recurses per container level,
+    so past the interpreter recursion limit json.loads dies with
+    RecursionError (NOT JSONDecodeError). The tool reports that as a
+    classified finding/error payload in every mode — leaking
+    RecursionError out of execute() would crash the caller."""
+    depth = sys.getrecursionlimit() * 3
+    assert depth > 12
+
+    for doc in ("[" * depth + "1" + "]" * depth,
+                '{"a":' * depth + "1" + "}" * depth):
+        with pytest.raises(RecursionError):
+            json.loads(doc)
+
+        result = lint(doc)
+        assert result["valid_json"] is False
+        assert "nesting_exceeds_parser_limit" in codes(result)
+        finding = next(f for f in result["findings"]
+                       if f["code"] == "nesting_exceeds_parser_limit")
+        assert finding["severity"] == "error"
+        assert (finding["line"], finding["col"]) == (1, 1)
+
+        assert profile(doc)["error"]["code"] \
+            == "nesting_exceeds_parser_limit"
+        assert fix_hints(doc)["error"]["code"] \
+            == "nesting_exceeds_parser_limit"
+
+    ok_doc = "[" * 50 + "1" + "]" * 50
+    assert profile(ok_doc)["max_depth"] == 50
 
 
 # ------------------------------------------------------------------ #
@@ -648,6 +726,14 @@ def test_fix_hints_clean_and_broken():
     assert "fix the syntax error first" in r["error"]["message"]
 
 
+def test_fix_hints_empty_and_bom_only_mirror_profile():
+    """Empty and BOM-only documents are classified exactly like the
+    other two modes classify them — never as a bare syntax_error."""
+    for empty_doc in ("", "   ", "\n\t"):
+        assert fix_hints(empty_doc)["error"]["code"] == "empty_document"
+    assert fix_hints("﻿")["error"]["code"] == "bom_not_allowed"
+
+
 def test_fix_hints_deterministic_order():
     doc = '{"b": NaN, "a": 1.0, "c": NaN}'
     assert fix_hints(doc) == fix_hints(doc)
@@ -665,6 +751,28 @@ def test_unicode_values_and_escapes_clean():
     result = lint(doc)
     assert result["findings"] == []
     assert result["valid_json"] is True
+
+
+def test_scan_stays_linear_on_huge_single_line():
+    """The raw-text scan carries the current line incrementally; a
+    one-line document with hundreds of thousands of tokens must lint
+    in one pass, not recompute line/col from the text prefix per token
+    (the quadratic shape this regression pins out took tens of seconds
+    on 300k characters before the fix)."""
+    doc = "[" + ",".join("1" for _ in range(150_000)) + "]"
+    assert len(doc) == 300_001
+    start = time.monotonic()
+    result = lint(doc)
+    elapsed = time.monotonic() - start
+    assert codes(result) == ["very_long_lines"]
+    assert elapsed < 5.0
+
+    keys_doc = "{" + ",".join(f'"k{i}": {i}' for i in range(40_000)) + "}"
+    start = time.monotonic()
+    result = lint(keys_doc)
+    elapsed = time.monotonic() - start
+    assert result["valid_json"] is True
+    assert elapsed < 5.0
 
 
 def test_cjk_duplicate_key_across_escape_forms():

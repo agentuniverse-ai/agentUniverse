@@ -54,7 +54,9 @@ convention ``json.JSONDecodeError`` uses on this interpreter):
 * ``bom_not_allowed`` — a leading U+FEFF is illegal in JSON (RFC
   8259 §8.1); ``json.loads`` rejects it with "Unexpected UTF-8 BOM".
   The linter names the BOM precisely and keeps linting the rest of
-  the document after the sigil, so one run reports everything.
+  the document after the sigil, so one run reports everything; every
+  finding still addresses the original text, where the sigil itself
+  occupies line 1 column 1.
 * ``empty_document`` — empty or whitespace-only text.
 * ``duplicate_key`` — repeated key names inside one object (verified:
   ``json.loads`` silently keeps the last value). Detected across
@@ -76,6 +78,12 @@ convention ``json.JSONDecodeError`` uses on this interpreter):
 * ``deeply_nested`` — container nesting deeper than 12 levels (info;
   reported with the actual maximum depth at the first position that
   exceeds the threshold).
+* ``nesting_exceeds_parser_limit`` — nesting so deep the interpreter's
+  own ``json.loads`` parser raised ``RecursionError`` (the C scanner
+  recurses per container level, so around the default recursion limit
+  a parse failure arrives as RecursionError, not JSONDecodeError); the
+  tool reports it as a classified finding/error payload in every mode
+  instead of crashing.
 * ``inconsistent_key_case`` — one object mixing camelCase and
   snake_case keys (info heuristic; keys matching neither pattern are
   ignored).
@@ -104,10 +112,15 @@ the very defects the tool detects) of at most 1,000,000 characters;
 violations raise a ``ValueError``, mirroring the other common tools.
 For ``lint`` a document that does not parse is a *finding*, not an
 error; ``profile``/``fix_hints`` cannot proceed on a broken document
-and return a structured ``error`` payload instead. The tool is
-deterministic — output is a pure function of the input, findings
-sorted by (line, col, code) — and read-only: the input text is never
-modified.
+and return a structured ``error`` payload instead (the same holds for
+a document whose nesting overflowed the parser recursion limit). The
+tool is deterministic — output is a pure function of the input,
+findings sorted by (line, col, code) — and read-only: the input text
+is never modified. Line numbering counts ``\\n`` only, exactly like
+``json.JSONDecodeError``, on every rule including the line-length
+one. The text scan and the profile walk are iterative (explicit
+index / explicit stack), so a document that parses never hits the
+interpreter recursion limit inside the tool itself.
 """
 
 import json
@@ -178,6 +191,20 @@ def _strip_bom(text: str) -> Tuple[bool, str]:
     if text.startswith("﻿"):
         return True, text[1:]
     return False, text
+
+
+def _shift_after_bom(items: List[Dict[str, Any]]) -> None:
+    """Re-address line-1 positions to the BOM-prefixed original text.
+
+    Positions are computed on the sigil-stripped text, but the caller
+    only holds the original: on line 1 every column is one short while
+    the BOM occupies column 1. The BOM finding itself already points
+    at the sigil and must not move. Works for findings and for
+    fix_hints hints alike (both carry line/col/code).
+    """
+    for item in items:
+        if item["line"] == 1 and item["code"] != "bom_not_allowed":
+            item["col"] += 1
 
 
 def _classify_syntax_error(
@@ -252,11 +279,9 @@ class _Hook:
 
     def __init__(self) -> None:
         self.duplicates: List[List[str]] = []  # per object, in order
-        self.objects: List[List[str]] = []  # every object's key names
 
     def __call__(self, pairs: List[Tuple[str, Any]]) -> Dict[str, Any]:
         names = [name for name, _ in pairs]
-        self.objects.append(names)
         seen = set()
         dups = []
         for name in names:
@@ -283,6 +308,16 @@ def _scan_text(text: str) -> Dict[str, Any]:
       suggested int spelling;
     * ``max_depth`` — maximum container depth (scalar root = 0) and
       the first position exceeding the nesting threshold.
+
+    The scan is strictly O(len(text)): the current line and its start
+    offset are carried incrementally instead of being recomputed per
+    token, so a one-million-character single-line document costs one
+    pass. Newlines are counted in ``\\n`` only — the same convention
+    ``json.JSONDecodeError`` and every other rule of this tool use —
+    and in a parsed-OK text a raw ``\\n`` cannot occur inside a string
+    token (strict mode rejects control characters), so the invariant
+    holds by construction; the defensive recount below keeps it true
+    for any input regardless.
     """
     scopes: List[Dict[str, Any]] = []
     nan_tokens: List[Dict[str, Any]] = []
@@ -290,11 +325,15 @@ def _scan_text(text: str) -> Dict[str, Any]:
     stack: List[Dict[str, Any]] = []  # {'kind': 'obj'|'arr', ...}
     max_depth = 0
     deep_pos: Optional[Tuple[int, int]] = None
+    line, line_start = 1, 0
 
     i, n = 0, len(text)
     while i < n:
         c = text[i]
         if c in _WS:
+            if c == "\n":
+                line += 1
+                line_start = i + 1
             i += 1
             continue
 
@@ -309,7 +348,12 @@ def _scan_text(text: str) -> Dict[str, Any]:
                     break
                 j += 1
             raw = text[i:j + 1]
+            key_col = i - line_start + 1
+            key_line = line
             i = j + 1
+            if "\n" in raw:
+                line += raw.count("\n")
+                line_start = i - len(raw) + raw.rfind("\n") + 1
             # A string is a key iff the next non-ws character is the
             # member-colon (true only in objects, post-parse).
             k = i
@@ -320,7 +364,7 @@ def _scan_text(text: str) -> Dict[str, Any]:
                 scope = stack[-1]
                 scope["names"].append(name)
                 scope.setdefault("positions", {}).setdefault(name, []).append(
-                    _pos_to_line_col(text, i - len(raw))
+                    (key_line, key_col)
                 )
             continue
 
@@ -329,9 +373,9 @@ def _scan_text(text: str) -> Dict[str, Any]:
             if depth > max_depth:
                 max_depth = depth
             if depth > _DEEP_NESTING and deep_pos is None:
-                deep_pos = _pos_to_line_col(text, i)
+                deep_pos = (line, i - line_start + 1)
             stack.append({"kind": "obj", "names": [], "positions": {},
-                          "open": _pos_to_line_col(text, i)})
+                          "open": (line, i - line_start + 1)})
             i += 1
             continue
 
@@ -340,8 +384,8 @@ def _scan_text(text: str) -> Dict[str, Any]:
             if depth > max_depth:
                 max_depth = depth
             if depth > _DEEP_NESTING and deep_pos is None:
-                deep_pos = _pos_to_line_col(text, i)
-            stack.append({"kind": "arr", "open": _pos_to_line_col(text, i)})
+                deep_pos = (line, i - line_start + 1)
+            stack.append({"kind": "arr", "open": (line, i - line_start + 1)})
             i += 1
             continue
 
@@ -362,7 +406,7 @@ def _scan_text(text: str) -> Dict[str, Any]:
             i += 1
             continue
         token = m.group(0)
-        line, col = _pos_to_line_col(text, i)
+        col = i - line_start + 1
         if token in _NAN_LITERALS:
             nan_tokens.append(
                 {"token": token, "line": line, "col": col}
@@ -396,7 +440,10 @@ def _walk_profile(value: Any) -> Dict[str, Any]:
 
     Counts are exact; ``max_depth`` counts container levels (a
     scalar root is 0, ``{"a": 1}`` is 1, ``[[1]]`` is 2). All lists
-    are emitted sorted, keeping the output deterministic.
+    are emitted sorted, keeping the output deterministic. The walk
+    is iterative (explicit stack) so a document whose nesting the
+    parser accepted never overflows the interpreter recursion limit
+    inside this tool, however close to the limit the parse was.
     """
     counts = {
         "object": 0, "array": 0, "string": 0,
@@ -408,45 +455,44 @@ def _walk_profile(value: Any) -> Dict[str, Any]:
     all_keys: List[str] = []
     max_depth = 0
 
-    def walk(node: Any, depth: int) -> None:
-        nonlocal max_depth
+    stack: List[Tuple[Any, int]] = [(value, 0)]
+    while stack:
+        node, depth = stack.pop()
         if isinstance(node, bool):
             counts["boolean"] += 1
-            return
+            continue
         if isinstance(node, dict):
             counts["object"] += 1
             if depth + 1 > max_depth:
                 max_depth = depth + 1
             for key, child in node.items():
                 all_keys.append(key)
-                walk(child, depth + 1)
-            return
+                stack.append((child, depth + 1))
+            continue
         if isinstance(node, list):
             counts["array"] += 1
             if depth + 1 > max_depth:
                 max_depth = depth + 1
             array_lens.append(len(node))
             for child in node:
-                walk(child, depth + 1)
-            return
+                stack.append((child, depth + 1))
+            continue
         if node is None:
             counts["null"] += 1
-            return
+            continue
         if isinstance(node, str):
             counts["string"] += 1
             string_lens.append(len(node))
-            return
+            continue
         if isinstance(node, int):
             counts["number"] += 1
             numbers["int"] += 1
-            return
+            continue
         if isinstance(node, float):
             counts["number"] += 1
             numbers["float"] += 1
-            return
+            continue
         # Non-JSON scalars cannot occur (parse produced the value).
-
-    walk(value, 0)
 
     def lens_stat(lens: List[int]) -> Dict[str, Any]:
         if not lens:
@@ -515,7 +561,9 @@ class JsonLintTool(Tool):
         "raw control characters in strings, a leading BOM, the "
         "non-standard NaN/Infinity literals json.loads nonetheless "
         "accepts, integer-valued floats (1.0 vs 1), very long lines, "
-        "deep nesting, mixed camelCase/snake_case keys and scalar "
+        "deep nesting, nesting beyond the parser's own recursion "
+        "limit (reported as a finding, never crashing), mixed "
+        "camelCase/snake_case keys and scalar "
         "roots. Profile a document's structure (mode='profile': "
         "type counts, int/float split, max depth, key statistics, "
         "array and string length statistics) or get safe fix hints "
@@ -603,6 +651,8 @@ class JsonLintTool(Tool):
                 "Document is empty (or whitespace-only) — the JSON "
                 "text contains no value",
             ))
+            if had_bom:
+                _shift_after_bom(findings)
             return self._lint_result(text, findings)
 
         # Rule: syntax (classified) — a parse failure IS the finding.
@@ -613,6 +663,20 @@ class JsonLintTool(Tool):
             findings.append(_classify_syntax_error(text, exc))
             # Text-level rules that do not need a parse still apply.
             findings.extend(self._long_line_findings(text))
+            if had_bom:
+                _shift_after_bom(findings)
+            return self._lint_result(text, findings)
+        except RecursionError:
+            findings.append(_finding(
+                "nesting_exceeds_parser_limit", "error", 1, 1,
+                "Container nesting exceeds this interpreter's JSON "
+                "parser recursion limit — json.loads itself raised "
+                "RecursionError while parsing; split or flatten the "
+                "document",
+            ))
+            findings.extend(self._long_line_findings(text))
+            if had_bom:
+                _shift_after_bom(findings)
             return self._lint_result(text, findings)
 
         # Rule: scalar-only root (legal, info).
@@ -670,6 +734,8 @@ class JsonLintTool(Tool):
         # Rule: mixed key naming styles inside one object (info).
         findings.extend(self._key_case_findings(scan))
 
+        if had_bom:
+            _shift_after_bom(findings)
         return self._lint_result(text, findings)
 
     def _lint_result(
@@ -690,14 +756,21 @@ class JsonLintTool(Tool):
                 "findings": len(findings),
                 "severity_counts": severity_counts,
                 "rule_counts": dict(sorted(rule_counts.items())),
-                "lines": len(text.splitlines()),
+                "lines": len(text.split("\n")),
                 "chars": len(text),
             },
         }
 
     def _long_line_findings(self, text: str) -> List[Dict[str, Any]]:
+        """Info findings for lines longer than the threshold.
+
+        Lines are delimited by ``\\n`` alone — the convention every
+        other position rule and ``json.JSONDecodeError`` use — so a
+        raw U+2028/U+0085 inside a string (legal JSON, and one line
+        to this tool) can never split a line in half here.
+        """
         out = []
-        for idx, line in enumerate(text.splitlines(), start=1):
+        for idx, line in enumerate(text.split("\n"), start=1):
             if len(line) > self.long_line_threshold:
                 out.append(_finding(
                     "very_long_lines", "info", idx, 1,
@@ -804,6 +877,19 @@ class JsonLintTool(Tool):
             value = json.loads(text)
         except json.JSONDecodeError as exc:
             return _syntax_payload("profile", text, exc)
+        except RecursionError:
+            return {
+                "mode": "profile",
+                "error": {
+                    "code": "nesting_exceeds_parser_limit",
+                    "message": "Container nesting exceeds this "
+                    "interpreter's JSON parser recursion limit — "
+                    "json.loads itself raised RecursionError while "
+                    "parsing; nothing can be profiled",
+                    "line": 1,
+                    "col": 1,
+                },
+            }
         profile = _walk_profile(value)
         profile["mode"] = "profile"
         return profile
@@ -815,6 +901,23 @@ class JsonLintTool(Tool):
     def _fix_hints(self, text: str) -> Dict[str, Any]:
         had_bom, stripped = _strip_bom(text)
 
+        if not stripped.strip():
+            code = "bom_not_allowed" if had_bom else "empty_document"
+            return {
+                "mode": "fix_hints",
+                "error": {
+                    "code": code,
+                    "message": (
+                        "Document starts with a UTF-8 BOM and nothing "
+                        "else — strip the sigil, then provide a value"
+                        if had_bom else
+                        "Document is empty — nothing to hint"
+                    ),
+                    "line": 1,
+                    "col": 1,
+                },
+            }
+
         try:
             json.loads(stripped)
         except json.JSONDecodeError as exc:
@@ -824,7 +927,22 @@ class JsonLintTool(Tool):
                 "; fix the syntax error first — hinting beyond it "
                 "would guess"
             )
+            if had_bom:
+                _shift_after_bom([payload["error"]])
             return payload
+        except RecursionError:
+            return {
+                "mode": "fix_hints",
+                "error": {
+                    "code": "nesting_exceeds_parser_limit",
+                    "message": "Container nesting exceeds this "
+                    "interpreter's JSON parser recursion limit — "
+                    "json.loads itself raised RecursionError while "
+                    "parsing; no hint is safe past that point",
+                    "line": 1,
+                    "col": 1,
+                },
+            }
 
         hints: List[Dict[str, Any]] = []
 
@@ -865,6 +983,8 @@ class JsonLintTool(Tool):
             })
 
         hints.sort(key=lambda h: (h["line"], h["col"], h["code"]))
+        if had_bom:
+            _shift_after_bom(hints)
         result: Dict[str, Any] = {
             "mode": "fix_hints",
             "hints": hints,
