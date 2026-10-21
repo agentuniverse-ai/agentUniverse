@@ -114,7 +114,7 @@ class _UnDeepCopyableDict(dict):
     """Dict subclass that rejects deepcopy but still supports shallow copy."""
 
     def __deepcopy__(self, memo):
-        raise RuntimeError("simulated deepcopy failure")
+        raise RuntimeError("simulated")
 
 
 def test_get_all_contexts_snapshot_isolates_mutable_values():
@@ -154,6 +154,23 @@ def test_get_all_contexts_fallback_uses_shallow_copy_not_live_reference():
     snapshot["token_usage"].update({"tokens": 42})
     assert dict(context_manager.get_context("token_usage")) == {"tokens": 0}
     assert dict(snapshot["token_usage"]) == {"tokens": 42}
+
+    context_manager.clear_all_contexts()
+
+
+def test_get_all_contexts_fallback_shares_nested_mutables():
+    """Pin the documented fallback semantics: copy.copy isolates only the top level."""
+    context_manager.clear_all_contexts()
+    live_usage = _UnDeepCopyableDict(tokens=0, details={"calls": []})
+    context_manager.set_context("token_usage", live_usage)
+
+    snapshot = context_manager.get_all_contexts()
+    snapshot["token_usage"]["tokens"] = 1
+    snapshot["token_usage"]["details"]["calls"].append("llm")
+
+    assert context_manager.get_context("token_usage")["tokens"] == 0
+    assert snapshot["token_usage"]["details"] is live_usage["details"]
+    assert live_usage["details"] == {"calls": ["llm"]}
 
     context_manager.clear_all_contexts()
 
