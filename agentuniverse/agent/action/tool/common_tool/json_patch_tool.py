@@ -80,8 +80,11 @@ and deleting the root has no JSON meaning).
 Input validation is strict and happens before any computation:
 malformed parameters (wrong types, missing required arguments,
 oversized inputs — documents and patch texts are capped at
-1,000,000 characters, patches at 1,000 operations) raise a
-``ValueError``, mirroring the other common tools. Errors that
+1,000,000 characters, patches at 1,000 operations, nesting at 250
+levels; parsed documents must be genuine JSON values, so object
+keys must be strings) raise a ``ValueError``, mirroring the other
+common tools; a patch ``value`` that is not a JSON value fails its
+operation. Errors that
 depend on the *content being processed* — a document text that is
 not valid JSON, a patch text that does not decode to a list — are
 returned as a structured ``error`` payload so an agent can react
@@ -114,6 +117,7 @@ _OPS = ("add", "remove", "replace", "move", "copy", "test")
 # pathological inputs early; the limits are far above real payloads).
 _MAX_TEXT = 1_000_000
 _MAX_OPS = 1_000
+_MAX_DEPTH = 250
 # Arrays longer than this on either side fall back from the LCS
 # alignment to a single whole-array replace in diff mode.
 _MAX_LCS = 512
@@ -476,12 +480,57 @@ class JsonPatchTool(Tool):
         raise ValueError(f"json_patch_tool: {message}")
 
     @classmethod
+    def _check_json_value(cls, value: Any, name: str) -> None:
+        """Iterative type walk of one document (raises on the first
+        violation; never recurses, so nesting cannot blow the stack).
+
+        Accepts exactly what a JSON text can encode — ``None`` /
+        booleans / numbers / strings / lists, objects with string keys
+        — up to :data:`_MAX_DEPTH` nesting levels. Everything else
+        (non-string object keys, tuples, sets, datetimes, deeper
+        nesting) is a malformed parameter and raises ``ValueError``.
+        """
+        stack: List[Tuple[Any, int]] = [(value, 0)]
+        while stack:
+            item, depth = stack.pop()
+            if item is None or isinstance(item, (bool, int, float, str)):
+                continue
+            if isinstance(item, dict):
+                if depth >= _MAX_DEPTH:
+                    cls._invalid(
+                        f"{name} exceeds the {_MAX_DEPTH}-level nesting "
+                        f"depth limit"
+                    )
+                for key, sub in item.items():
+                    if not isinstance(key, str):
+                        cls._invalid(
+                            f"{name} must be a JSON value: object keys "
+                            f"must be strings (got {key!r})"
+                        )
+                    stack.append((sub, depth + 1))
+                continue
+            if isinstance(item, list):
+                if depth >= _MAX_DEPTH:
+                    cls._invalid(
+                        f"{name} exceeds the {_MAX_DEPTH}-level nesting "
+                        f"depth limit"
+                    )
+                for sub in item:
+                    stack.append((sub, depth + 1))
+                continue
+            cls._invalid(
+                f"{name} must be a JSON text or a parsed JSON value "
+                f"(got {_json_type_name(item)})"
+            )
+
+    @classmethod
     def _load_document(cls, value: Any, name: str, mode: str) -> Any:
         """Validate / decode one document parameter.
 
         A text is decoded (a decode failure raises :class:`_PatchError`
         — the caller turns it into the structured error payload); a
-        parsed JSON value is accepted as-is after a type walk.
+        parsed JSON value is accepted after a full type walk (string
+        object keys, JSON value types, bounded nesting depth).
         """
         if value is None:
             cls._invalid(f"{name} is required for the {mode} mode")
@@ -494,10 +543,15 @@ class JsonPatchTool(Tool):
             if not value.strip():
                 cls._invalid(f"{name} must not be an empty text")
             try:
-                return json.loads(value)
-            except ValueError as exc:
-                raise _PatchError(f"{name} is not valid JSON: {exc}") from None
+                decoded = json.loads(value)
+            except (ValueError, RecursionError) as exc:
+                raise _PatchError(
+                    f"{name} is not valid JSON: {exc}"
+                ) from None
+            cls._check_json_value(decoded, name)
+            return decoded
         if isinstance(value, (bool, int, float, dict, list)) or value is None:
+            cls._check_json_value(value, name)
             return value
         cls._invalid(
             f"{name} must be a JSON text or a parsed JSON value "
@@ -528,7 +582,7 @@ class JsonPatchTool(Tool):
             try:
                 value = json.loads(value)
                 decoded_from_text = True
-            except ValueError as exc:
+            except (ValueError, RecursionError) as exc:
                 raise _PatchError(
                     f"patch is not valid JSON: {exc}"
                 ) from None
@@ -709,6 +763,49 @@ class JsonPatchTool(Tool):
             return entry["path"]
         return None
 
+    @staticmethod
+    def _value_error(value: Any) -> Optional[str]:
+        """Why ``value`` cannot be a JSON patch value (``None`` if it can).
+
+        The same type walk as :meth:`_check_json_value`, as a
+        per-operation failure: an ``add`` / ``replace`` / ``test``
+        value must be a JSON value (string object keys, JSON types,
+        bounded nesting) or the operation is recorded as failed.
+        """
+        stack: List[Tuple[Any, int]] = [(value, 0)]
+        while stack:
+            item, depth = stack.pop()
+            if item is None or isinstance(item, (bool, int, float, str)):
+                continue
+            if isinstance(item, dict):
+                if depth >= _MAX_DEPTH:
+                    return (
+                        f"the 'value' exceeds the {_MAX_DEPTH}-level "
+                        f"nesting depth limit"
+                    )
+                for key, sub in item.items():
+                    if not isinstance(key, str):
+                        return (
+                            f"the 'value' must be a JSON value: object "
+                            f"keys must be strings (got {key!r})"
+                        )
+                    stack.append((sub, depth + 1))
+                continue
+            if isinstance(item, list):
+                if depth >= _MAX_DEPTH:
+                    return (
+                        f"the 'value' exceeds the {_MAX_DEPTH}-level "
+                        f"nesting depth limit"
+                    )
+                for sub in item:
+                    stack.append((sub, depth + 1))
+                continue
+            return (
+                f"the 'value' must be a JSON value (got "
+                f"{_json_type_name(item)})"
+            )
+        return None
+
     @classmethod
     def _apply_one(cls, document: Any, entry: Any) -> Any:
         """Apply one operation to ``document``.
@@ -720,6 +817,10 @@ class JsonPatchTool(Tool):
         op, path, reason = cls._op_structure_error(entry)
         if reason is not None:
             return _PatchError(reason)
+        if op in ("add", "replace", "test"):
+            value_error = cls._value_error(entry["value"])
+            if value_error is not None:
+                return _PatchError(value_error)
         tokens = _decode_pointer(path)
         try:
             if op == "add":
@@ -788,7 +889,8 @@ class JsonPatchTool(Tool):
                 f"prefix of the 'path' location"
             )
         try:
-            new_document, moved = _do_remove(document, source)
+            scratch = copy.deepcopy(document)
+            new_document, moved = _do_remove(scratch, source)
             return _do_add(new_document, tokens, moved), (
                 "move", path,
                 f"moved the value at {entry['from']!r} to {path!r}",

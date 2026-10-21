@@ -949,6 +949,226 @@ class TestToolWiring(unittest.TestCase):
         self.assertIn("RFC 6902", tool.description)
 
 
+class TestFailedOperationAtomicity(unittest.TestCase):
+    """A failing operation never leaves a partial effect behind."""
+
+    def test_failed_move_leaves_document_untouched(self):
+        document = {"a": [1, 2, 3], "keep": "x"}
+        result = run_apply(
+            document, [{"op": "move", "path": "/a/9", "from": "/a/0"}]
+        )
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(
+            result["document"], {"a": [1, 2, 3], "keep": "x"}
+        )
+
+    def test_failed_move_does_not_corrupt_later_operations(self):
+        document = {"a": [1, 2, 3]}
+        result = run_apply(
+            document,
+            [
+                {"op": "move", "path": "/a/9", "from": "/a/0"},
+                {"op": "add", "path": "/a/-", "value": 4},
+            ],
+        )
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["document"], {"a": [1, 2, 3, 4]})
+
+    def test_atomic_mode_unchanged_after_failed_move(self):
+        document = {"a": [1, 2, 3]}
+        result = run_apply(
+            document,
+            [{"op": "move", "path": "/a/9", "from": "/a/0"}],
+            atomic=True,
+        )
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["document"], {"a": [1, 2, 3]})
+
+    def test_failed_move_into_missing_parent_keeps_source(self):
+        document = {"src": {"n": 1}}
+        result = run_apply(
+            document,
+            [{"op": "move", "path": "/missing/x", "from": "/src"}],
+        )
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["document"], {"src": {"n": 1}})
+
+
+class TestMoveCycleDetection(unittest.TestCase):
+    """The descendant check works at every depth and on raw tokens."""
+
+    def test_cycle_rejected_at_every_depth(self):
+        pointers = [
+            "/root", "/root/l1", "/root/l1/l2", "/root/l1/l2/l3",
+            "/root/l1/l2/l3/l4", "/root/l1/l2/l3/l4/l5",
+            "/root/l1/l2/l3/l4/l5/l6", "/root/l1/l2/l3/l4/l5/l6/l7",
+        ]
+        for depth, source in enumerate(pointers, start=1):
+            target = pointers[min(depth, len(pointers) - 1)] + "/child"
+            document = {"root": {"l1": {"l2": {"l3": {"l4": {
+                "l5": {"l6": {"l7": 8}}}}}}}}
+            result = run_apply(
+                document, [{"op": "move", "path": target, "from": source}]
+            )
+            self.assertEqual(
+                result["failed_count"], 1, f"depth {depth}: {source}"
+            )
+            self.assertIn("descendant", result["failed"][0]["reason"])
+
+    def test_cycle_via_escaped_tokens(self):
+        document = {"a/b": {"c": 1}}
+        result = run_apply(
+            document,
+            [{"op": "move", "path": "/a~1b/c", "from": "/a~1b"}],
+        )
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["document"], {"a/b": {"c": 1}})
+
+    def test_escaped_pointer_may_still_be_a_rename(self):
+        result = run_apply(
+            {"a/b": {"c": 1}},
+            [{"op": "move", "path": "/a~1b~1c", "from": "/a~1b"}],
+        )
+        self.assertEqual(result["failed_count"], 0)
+        self.assertEqual(result["document"], {"a/b/c": {"c": 1}})
+
+    def test_sibling_with_string_prefix_is_not_a_cycle(self):
+        result = run_apply(
+            {"a": 1, "ab": 2}, [{"op": "move", "path": "/ab", "from": "/a"}]
+        )
+        self.assertEqual(result["failed_count"], 0)
+        self.assertEqual(result["document"], {"ab": 1})
+
+
+class TestSequentialOrdering(unittest.TestCase):
+    """Later operations see the state left by the earlier ones."""
+
+    def test_copy_from_removed_target_fails(self):
+        result = run_apply(
+            {"x": 1, "y": 2},
+            [
+                {"op": "remove", "path": "/x"},
+                {"op": "copy", "from": "/x", "path": "/y"},
+            ],
+        )
+        self.assertEqual(result["applied_count"], 1)
+        self.assertEqual(result["failed"][0]["index"], 1)
+        self.assertEqual(result["document"], {"y": 2})
+
+    def test_copy_from_moved_away_target_fails(self):
+        result = run_apply(
+            {"x": 1, "y": 2},
+            [
+                {"op": "move", "from": "/x", "path": "/z"},
+                {"op": "copy", "from": "/x", "path": "/y"},
+            ],
+        )
+        self.assertEqual(result["applied_count"], 1)
+        self.assertEqual(result["document"], {"y": 2, "z": 1})
+
+    def test_copy_then_remove_source_succeeds(self):
+        result = run_apply(
+            {"x": 1, "y": 2},
+            [
+                {"op": "copy", "from": "/x", "path": "/y"},
+                {"op": "remove", "path": "/x"},
+            ],
+        )
+        self.assertEqual(result["failed_count"], 0)
+        self.assertEqual(result["document"], {"y": 1})
+
+
+class TestParsedDocumentValidation(unittest.TestCase):
+    """Parsed documents must be genuine JSON values (no crashes)."""
+
+    def test_non_string_object_keys_rejected(self):
+        for bad in ({1: "a"}, {"a": {2: "b"}}, {"a": {3.5: "x"}}):
+            with self.assertRaises(ValueError):
+                run_diff(bad, {"z": 1})
+            with self.assertRaises(ValueError):
+                run_diff({"z": 1}, bad)
+            with self.assertRaises(ValueError):
+                run_apply(bad, [{"op": "add", "path": "/q", "value": 1}])
+
+    def test_non_json_types_rejected(self):
+        class Marker:
+            pass
+
+        for bad in (
+            {"a": (1, 2)}, {"a": {"b": {1, 2}}}, (1, 2),
+            {"a": Marker()},
+        ):
+            with self.assertRaises(ValueError):
+                run_diff(bad, {"z": 1})
+            with self.assertRaises(ValueError):
+                run_apply(bad, [])
+
+    def test_depth_limit_enforced_on_parsed_documents(self):
+        def build_deep(levels):
+            node = []
+            for _ in range(levels):
+                node = [node]
+            return node
+
+        with self.assertRaises(ValueError):
+            run_diff(build_deep(40000), [1])
+        with self.assertRaises(ValueError):
+            run_apply(build_deep(40000), [])
+        result = run_apply(
+            [1], [{"op": "test", "path": "", "value": build_deep(40000)}]
+        )
+        self.assertEqual(result["failed_count"], 1)
+        self.assertIn("nesting depth", result["failed"][0]["reason"])
+        self.assertEqual(result["document"], [1])
+
+    def test_reasonable_nesting_still_accepted(self):
+        node = {"leaf": True}
+        for _ in range(50):
+            node = {"child": [node]}
+        result = run_apply(
+            node, [{"op": "add", "path": "/extra", "value": 1}]
+        )
+        self.assertEqual(result["failed_count"], 0)
+        result = run_diff(node, {"other": 1})
+        self.assertTrue(result["patch"])
+
+    def test_over_deep_text_document_is_a_structured_error(self):
+        deep_text = "[" * 40000 + "]" * 40000
+        result = JsonPatchTool().execute(
+            mode="diff", document=deep_text, document_b=[1]
+        )
+        self.assertIn("error", result)
+        result = JsonPatchTool().execute(
+            mode="apply", document=deep_text, patch=[]
+        )
+        self.assertIn("error", result)
+
+    def test_depth_limit_boundary_accepted(self):
+        node = []
+        for _ in range(200):
+            node = [node]
+        result = run_apply(node, [{"op": "add", "path": "/0", "value": 1}])
+        self.assertEqual(result["failed_count"], 0)
+
+    def test_non_json_patch_value_fails_only_its_operation(self):
+        result = run_apply(
+            {"q": 0},
+            [{"op": "add", "path": "/w", "value": {1: "x"}},
+             {"op": "add", "path": "/ok", "value": 5}],
+        )
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["document"], {"q": 0, "ok": 5})
+        self.assertIn(
+            "keys must be strings", result["failed"][0]["reason"]
+        )
+
+    def test_validate_patch_checks_grammar_not_value_types(self):
+        result = run_validate(
+            [{"op": "add", "path": "/w", "value": {1: "x"}}]
+        )
+        self.assertTrue(result["valid"])
+
+
 # --------------------------------------------------------------------- #
 # Seeded document generator for the diff round-trip property
 # --------------------------------------------------------------------- #
