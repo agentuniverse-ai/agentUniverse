@@ -18,7 +18,8 @@ vLLM is a fast and easy-to-use library for LLM inference and serving, offering:
 For more information, visit: https://docs.vllm.ai/
 """
 
-from typing import Optional
+from collections.abc import Mapping
+from typing import Any, Optional
 
 from pydantic import Field
 
@@ -61,6 +62,13 @@ VLLM_MAX_CONTEXT_LENGTH = {
     # Default fallback
     "default": 4096,
 }
+
+VLLM_EXTRA_BODY_PARAMETERS = (
+    'use_beam_search',
+    'best_of',
+    'length_penalty',
+    'early_stopping',
+)
 
 
 class VLLMOpenAIStyleLLM(OpenAIStyleLLM):
@@ -111,10 +119,24 @@ class VLLMOpenAIStyleLLM(OpenAIStyleLLM):
         api_base (str): vLLM server endpoint URL (default: http://localhost:8000/v1)
         api_key (str): API key (default: "EMPTY" - vLLM doesn't require auth by default)
         model_name (str): Model identifier hosted on vLLM server
-        use_beam_search (bool): Enable beam search for generation (vLLM-specific)
-        best_of (Optional[int]): Number of sequences to generate and return the best
-        length_penalty (float): Length penalty for beam search
-        early_stopping (bool): Stop generation when all beams are finished
+        use_beam_search (bool): Enable beam search for generation (vLLM-specific).
+        best_of (Optional[int]): Number of sequences to generate and return the best.
+        length_penalty (float): Length penalty for beam search.
+        early_stopping (bool): Legacy beam-search option; server-version dependent.
+
+    vLLM-specific request parameters are sent through ``extra_body``. This
+    keeps them out of the OpenAI SDK method signature while preserving the
+    OpenAI-compatible request body expected by vLLM. Non-None per-call
+    parameters take precedence over a per-call ``extra_body``, then dedicated
+    values on this instance, then ``ext_params`` defaults. A per-call value
+    of None leaves the existing value unchanged.
+
+    Server Compatibility:
+        This adapter forwards extensions without detecting the server version.
+        Parameter support must be checked against the deployed vLLM release.
+        For example, ``early_stopping`` exists in the v0.5.5 chat request schema
+        but is absent in v0.6.6 and v0.10.2, where it may be ignored. Successful
+        client serialization does not guarantee that a server uses an option.
 
     Environment Variables:
         VLLM_API_BASE: Base URL for vLLM server (default: http://localhost:8000/v1)
@@ -149,6 +171,48 @@ class VLLMOpenAIStyleLLM(OpenAIStyleLLM):
     length_penalty: Optional[float] = None
     early_stopping: Optional[bool] = None
 
+    def _prepare_vllm_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Move vLLM-specific parameters into the OpenAI SDK extra body.
+
+        The OpenAI SDK rejects unknown keyword arguments before sending a
+        request. vLLM accepts its server extensions in the JSON request body,
+        so this method keeps the public per-call convenience parameters while
+        serializing them via ``extra_body``.
+
+        Args:
+            kwargs: Parameters supplied to a sync or async LLM call. A None
+                value for a vLLM parameter leaves its existing value unchanged.
+
+        Returns:
+            A copy of ``kwargs`` with vLLM-specific parameters in
+            ``extra_body``.
+
+        Raises:
+            TypeError: If ``extra_body`` is supplied and is not a mapping.
+        """
+        call_kwargs = dict(kwargs)
+        supplied_extra_body = call_kwargs.pop('extra_body', None)
+        if supplied_extra_body is None:
+            extra_body = {}
+        elif isinstance(supplied_extra_body, Mapping):
+            extra_body = dict(supplied_extra_body)
+        else:
+            raise TypeError('extra_body must be a mapping when using vLLM.')
+
+        for parameter in VLLM_EXTRA_BODY_PARAMETERS:
+            configured_value = getattr(self, parameter)
+            if configured_value is not None:
+                extra_body.setdefault(parameter, configured_value)
+
+            if parameter in call_kwargs:
+                call_value = call_kwargs.pop(parameter)
+                if call_value is not None:
+                    extra_body[parameter] = call_value
+
+        if extra_body:
+            call_kwargs['extra_body'] = extra_body
+        return call_kwargs
+
     def _call(self, messages: list, **kwargs):
         """
         Call the vLLM server.
@@ -163,22 +227,7 @@ class VLLMOpenAIStyleLLM(OpenAIStyleLLM):
         Returns:
             LLMOutput or Iterator[LLMOutput]: Response from vLLM server
         """
-        # Add vLLM-specific parameters if configured
-        extra_params = {}
-        if self.use_beam_search is not None:
-            extra_params['use_beam_search'] = self.use_beam_search
-        if self.best_of is not None:
-            extra_params['best_of'] = self.best_of
-        if self.length_penalty is not None:
-            extra_params['length_penalty'] = self.length_penalty
-        if self.early_stopping is not None:
-            extra_params['early_stopping'] = self.early_stopping
-
-        # Merge with user-provided kwargs (user kwargs take precedence)
-        kwargs = {**extra_params, **kwargs}
-
-        # Call parent implementation with merged parameters
-        return super()._call(messages, **kwargs)
+        return super()._call(messages, **self._prepare_vllm_kwargs(kwargs))
 
     async def _acall(self, messages: list, **kwargs):
         """
@@ -191,22 +240,7 @@ class VLLMOpenAIStyleLLM(OpenAIStyleLLM):
         Returns:
             LLMOutput or AsyncIterator[LLMOutput]: Response from vLLM server
         """
-        # Add vLLM-specific parameters if configured
-        extra_params = {}
-        if self.use_beam_search is not None:
-            extra_params['use_beam_search'] = self.use_beam_search
-        if self.best_of is not None:
-            extra_params['best_of'] = self.best_of
-        if self.length_penalty is not None:
-            extra_params['length_penalty'] = self.length_penalty
-        if self.early_stopping is not None:
-            extra_params['early_stopping'] = self.early_stopping
-
-        # Merge with user-provided kwargs (user kwargs take precedence)
-        kwargs = {**extra_params, **kwargs}
-
-        # Call parent implementation with merged parameters
-        return await super()._acall(messages, **kwargs)
+        return await super()._acall(messages, **self._prepare_vllm_kwargs(kwargs))
 
     def max_context_length(self) -> int:
         """

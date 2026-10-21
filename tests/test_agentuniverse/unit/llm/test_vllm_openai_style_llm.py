@@ -4,16 +4,21 @@
 """
 Unit tests for vLLM OpenAI-Style LLM implementation.
 
-These tests verify the functionality of the vLLM LLM integration.
-Note: Most tests are commented out by default since they require a running vLLM server.
-To run tests, ensure you have a vLLM server running locally or update the api_base.
+Request contract tests use the real OpenAI SDK with a mocked HTTP transport.
+They require no running vLLM server, GPU, or provider credentials.
+Commented examples below remain available for live-server validation.
 """
 
-import unittest
 import asyncio
-from unittest.mock import Mock, patch
+import json
+import unittest
+from unittest.mock import AsyncMock, patch, sentinel
+
+import httpx
+from openai import AsyncOpenAI, OpenAI
 
 from agentuniverse.llm.default.vllm_openai_style_llm import VLLMOpenAIStyleLLM
+from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
 
 
 class TestVLLMOpenAIStyleLLM(unittest.TestCase):
@@ -69,6 +74,118 @@ class TestVLLMOpenAIStyleLLM(unittest.TestCase):
         self.assertEqual(llm_with_params.best_of, 3)
         self.assertEqual(llm_with_params.length_penalty, 1.2)
         self.assertTrue(llm_with_params.early_stopping)
+
+    def test_call_moves_configured_vllm_parameters_to_extra_body(self) -> None:
+        """Configured vLLM extensions are not sent as OpenAI SDK keywords."""
+        llm = VLLMOpenAIStyleLLM(
+            model_name='meta-llama/Llama-3.1-8B-Instruct',
+            use_beam_search=False,
+            best_of=3,
+            length_penalty=1.2,
+            early_stopping=True,
+        )
+        messages = [{'role': 'user', 'content': 'Hello'}]
+
+        with patch.object(OpenAIStyleLLM, '_call', return_value=sentinel.result) as parent_call:
+            result = llm._call(messages)
+
+        self.assertIs(result, sentinel.result)
+        parent_call.assert_called_once_with(
+            messages,
+            extra_body={
+                'use_beam_search': False,
+                'best_of': 3,
+                'length_penalty': 1.2,
+                'early_stopping': True,
+            },
+        )
+
+    def test_call_parameters_override_extra_body_and_instance_configuration(self) -> None:
+        """Per-call vLLM parameters have the highest precedence."""
+        llm = VLLMOpenAIStyleLLM(
+            model_name='meta-llama/Llama-3.1-8B-Instruct',
+            best_of=3,
+            early_stopping=True,
+        )
+        messages = [{'role': 'user', 'content': 'Hello'}]
+        supplied_extra_body = {'best_of': 5, 'custom_sampling_option': 0.8}
+
+        with patch.object(OpenAIStyleLLM, '_call', return_value=sentinel.result) as parent_call:
+            llm._call(
+                messages,
+                best_of=7,
+                early_stopping=False,
+                extra_body=supplied_extra_body,
+            )
+
+        parent_call.assert_called_once_with(
+            messages,
+            extra_body={
+                'best_of': 7,
+                'early_stopping': False,
+                'custom_sampling_option': 0.8,
+            },
+        )
+        self.assertEqual(supplied_extra_body, {'best_of': 5, 'custom_sampling_option': 0.8})
+
+    def test_call_rejects_a_non_mapping_extra_body(self) -> None:
+        """Invalid extension payloads fail before a client request is made."""
+        with self.assertRaisesRegex(TypeError, 'extra_body must be a mapping'):
+            self.llm._call(
+                [{'role': 'user', 'content': 'Hello'}],
+                extra_body=['not', 'a', 'mapping'],
+            )
+
+    def test_none_call_parameter_keeps_existing_value(self) -> None:
+        """None does not erase either an instance or an extra-body default."""
+        self.llm.best_of = 3
+        self.llm.length_penalty = 1.2
+        supplied_extra_body = {'best_of': 5}
+
+        with patch.object(OpenAIStyleLLM, '_call', return_value=sentinel.result) as parent_call:
+            self.llm._call(
+                [],
+                best_of=None,
+                length_penalty=None,
+                extra_body=supplied_extra_body,
+            )
+
+        parent_call.assert_called_once_with([], extra_body={'best_of': 5, 'length_penalty': 1.2})
+        self.assertEqual(supplied_extra_body, {'best_of': 5})
+
+    def test_none_extra_body_keeps_instance_configuration(self) -> None:
+        """A None extra-body payload is equivalent to omitting it."""
+        self.llm.best_of = 3
+        with patch.object(OpenAIStyleLLM, '_call', return_value=sentinel.result) as parent_call:
+            self.llm._call([], extra_body=None)
+        parent_call.assert_called_once_with([], extra_body={'best_of': 3})
+
+    def test_acall_moves_runtime_vllm_parameters_to_extra_body(self) -> None:
+        """Async calls use the same request-body contract as sync calls."""
+        messages = [{'role': 'user', 'content': 'Hello'}]
+
+        async def run_test() -> None:
+            with patch.object(
+                OpenAIStyleLLM,
+                '_acall',
+                new=AsyncMock(return_value=sentinel.result),
+            ) as parent_acall:
+                result = await self.llm._acall(
+                    messages,
+                    length_penalty=0.0,
+                    use_beam_search=False,
+                )
+
+            self.assertIs(result, sentinel.result)
+            parent_acall.assert_awaited_once_with(
+                messages,
+                extra_body={
+                    'length_penalty': 0.0,
+                    'use_beam_search': False,
+                },
+            )
+
+        asyncio.run(run_test())
 
     def test_get_num_tokens(self) -> None:
         """Test token counting."""
@@ -172,6 +289,161 @@ class TestVLLMOpenAIStyleLLM(unittest.TestCase):
     #     res = llm_chain.predict(input='Say hello')
     #     print(f"\nLangChain response: {res}")
     #     self.assertIsNotNone(res)
+
+
+class TestVLLMRequestBody(unittest.IsolatedAsyncioTestCase):
+    """Exercise the adapter, parent implementation, SDK and HTTP serialization."""
+
+    def setUp(self) -> None:
+        self.requests = []
+        self.messages = [{'role': 'user', 'content': 'Hello'}]
+        self.llm = VLLMOpenAIStyleLLM(
+            model_name='test-model',
+            api_base='http://vllm.test/v1',
+            api_key='EMPTY',
+            use_beam_search=False,
+            best_of=3,
+            length_penalty=0.0,
+            ext_params={'top_k': 20, 'best_of': 5},
+        )
+
+    def _handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.assertEqual(request.url.path, '/v1/chat/completions')
+        body = json.loads(request.content)
+        self.requests.append(body)
+        if body['stream']:
+            chunk = {
+                'id': 'test-completion',
+                'object': 'chat.completion.chunk',
+                'created': 0,
+                'model': 'test-model',
+                'choices': [{'index': 0, 'delta': {'content': 'ok'}, 'finish_reason': 'stop'}],
+            }
+            return httpx.Response(
+                200,
+                headers={'content-type': 'text/event-stream'},
+                text=f'data: {json.dumps(chunk)}\n\ndata: [DONE]\n\n',
+            )
+        return httpx.Response(200, json={
+            'id': 'test-completion',
+            'object': 'chat.completion',
+            'created': 0,
+            'model': 'test-model',
+            'choices': [{
+                'index': 0,
+                'message': {'role': 'assistant', 'content': 'ok'},
+                'finish_reason': 'stop',
+            }],
+        })
+
+    def test_sync_sdk_serializes_extensions_and_existing_defaults(self) -> None:
+        with OpenAI(
+            api_key='EMPTY',
+            base_url=self.llm.api_base,
+            http_client=httpx.Client(transport=httpx.MockTransport(self._handle_request)),
+            max_retries=0,
+        ) as client:
+            self.llm.client = client
+            output = self.llm._call(self.messages, best_of=None)
+
+        self.assertEqual(output.text, 'ok')
+        self.assertEqual(len(self.requests), 1)
+        body = self.requests[0]
+        self.assertEqual(body['messages'], self.messages)
+        self.assertEqual(body['best_of'], 3)
+        self.assertIs(body['use_beam_search'], False)
+        self.assertEqual(body['length_penalty'], 0.0)
+        self.assertEqual(body['top_k'], 20)
+        self.assertNotIn('early_stopping', body)
+        self.assertNotIn('extra_body', body)
+        self.assertEqual(self.llm.ext_params, {'top_k': 20, 'best_of': 5})
+
+    def test_sync_sdk_applies_overrides_without_mutating_configuration(self) -> None:
+        supplied_extra_body = {'best_of': 7, 'top_k': 10}
+        with OpenAI(
+            api_key='EMPTY',
+            base_url=self.llm.api_base,
+            http_client=httpx.Client(transport=httpx.MockTransport(self._handle_request)),
+            max_retries=0,
+        ) as client:
+            self.llm.client = client
+            self.llm._call(self.messages, best_of=9, extra_body=supplied_extra_body)
+
+        self.assertEqual(self.requests[0]['best_of'], 9)
+        self.assertEqual(self.requests[0]['top_k'], 10)
+        self.assertEqual(supplied_extra_body, {'best_of': 7, 'top_k': 10})
+        self.assertEqual(self.llm.best_of, 3)
+        self.assertEqual(self.llm.ext_params, {'top_k': 20, 'best_of': 5})
+
+    def test_sync_sdk_omits_unconfigured_extensions(self) -> None:
+        llm = VLLMOpenAIStyleLLM(model_name='test-model', api_base=self.llm.api_base, api_key='EMPTY')
+        with OpenAI(
+            api_key='EMPTY',
+            base_url=llm.api_base,
+            http_client=httpx.Client(transport=httpx.MockTransport(self._handle_request)),
+            max_retries=0,
+        ) as client:
+            llm.client = client
+            output = llm._call(self.messages)
+
+        self.assertEqual(output.text, 'ok')
+        for parameter in ('use_beam_search', 'best_of', 'length_penalty', 'early_stopping'):
+            self.assertNotIn(parameter, self.requests[0])
+
+    async def test_async_sdk_serializes_extensions_and_call_overrides(self) -> None:
+        supplied_extra_body = {'best_of': 7, 'top_k': 10}
+        async with AsyncOpenAI(
+            api_key='EMPTY',
+            base_url=self.llm.api_base,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(self._handle_request)),
+            max_retries=0,
+        ) as client:
+            self.llm.async_client = client
+            output = await self.llm._acall(self.messages, best_of=9, extra_body=supplied_extra_body)
+
+        self.assertEqual(output.text, 'ok')
+        self.assertEqual(len(self.requests), 1)
+        body = self.requests[0]
+        self.assertEqual(body['best_of'], 9)
+        self.assertIs(body['use_beam_search'], False)
+        self.assertEqual(body['length_penalty'], 0.0)
+        self.assertEqual(body['top_k'], 10)
+        self.assertNotIn('early_stopping', body)
+        self.assertEqual(supplied_extra_body, {'best_of': 7, 'top_k': 10})
+        self.assertEqual(self.llm.ext_params, {'top_k': 20, 'best_of': 5})
+
+    def test_sync_streaming_sdk_preserves_extensions(self) -> None:
+        with OpenAI(
+            api_key='EMPTY',
+            base_url=self.llm.api_base,
+            http_client=httpx.Client(transport=httpx.MockTransport(self._handle_request)),
+            max_retries=0,
+        ) as client:
+            self.llm.client = client
+            output = self.llm._call(self.messages, streaming=True)
+            self.assertEqual(''.join(chunk.text for chunk in output), 'ok')
+
+        self.assertIs(self.requests[0]['stream'], True)
+        self.assertEqual(self.requests[0]['best_of'], 3)
+        self.assertEqual(self.requests[0]['top_k'], 20)
+        self.assertEqual(self.requests[0]['stream_options'], {'include_usage': True})
+        self.assertEqual(self.llm.ext_params, {'top_k': 20, 'best_of': 5})
+
+    async def test_async_streaming_sdk_preserves_extensions(self) -> None:
+        async with AsyncOpenAI(
+            api_key='EMPTY',
+            base_url=self.llm.api_base,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(self._handle_request)),
+            max_retries=0,
+        ) as client:
+            self.llm.async_client = client
+            output = await self.llm._acall(self.messages, streaming=True)
+            self.assertEqual(''.join([chunk.text async for chunk in output]), 'ok')
+
+        self.assertIs(self.requests[0]['stream'], True)
+        self.assertEqual(self.requests[0]['best_of'], 3)
+        self.assertEqual(self.requests[0]['top_k'], 20)
+        self.assertEqual(self.requests[0]['stream_options'], {'include_usage': True})
 
 
 class TestVLLMContextLengths(unittest.TestCase):
