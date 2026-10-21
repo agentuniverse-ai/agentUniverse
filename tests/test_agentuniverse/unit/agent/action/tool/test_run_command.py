@@ -160,6 +160,65 @@ class RunCommandToolTest(unittest.TestCase):
         self.assertIn('Line 2', result['stdout'])
         self.assertIn('Quote', result['stdout'])
 
+    def test_nonblocking_popen_exception(self) -> None:
+        """Popen exception in non-blocking mode returns the error directly,
+        never a 'started=running' acknowledgement."""
+        import subprocess as _real_subprocess
+        original_popen = _real_subprocess.Popen
+
+        def _failing_popen(*args, **kwargs):
+            raise OSError("fake_device_busy: resource temporarily unavailable")
+
+        # Patch Popen at the module level so RunCommandTool.__run sees it.
+        import agentuniverse.agent.action.tool.common_tool.run_command_tool as rct
+        rct.subprocess.Popen = _failing_popen
+        try:
+            result_json = self.tool.execute(ToolInput({
+                'command': 'echo should_not_run',
+                'cwd': os.getcwd(),
+                'blocking': False
+            }))
+        finally:
+            rct.subprocess.Popen = original_popen
+
+        result = json.loads(result_json)
+        self.assertEqual(result['status'], CommandStatus.ERROR.value,
+                         "Popen failure must surface as ERROR, not RUNNING")
+        self.assertIn('fake_device_busy', result.get('stderr', ''),
+                      "The OSError message must be propagated in stderr")
+        self.assertNotIn('started', result,
+                         "No 'started' key should appear on a Popen failure")
+        self.assertNotIn('thread_id', result,
+                         "No 'thread_id' key should appear on a Popen failure")
+
+    def test_nonblocking_successful_acknowledgement(self) -> None:
+        """Successful non-blocking start returns a proper acknowledgement:
+        status=running with thread_id."""
+        result_json = self.tool.execute(ToolInput({
+            'command': f'"{sys.executable}" -c "import time; time.sleep(0.3); print(\'done\')"',
+            'cwd': os.getcwd(),
+            'blocking': False
+        }))
+        result = json.loads(result_json)
+
+        self.assertEqual(result['status'], CommandStatus.RUNNING.value)
+        self.assertTrue(result.get('started'))
+        self.assertIn('thread_id', result)
+        self.assertIsInstance(result['thread_id'], int)
+
+        # The command should eventually complete
+        thread_id = result['thread_id']
+        for _ in range(5):
+            cmd_result = get_command_result(thread_id)
+            if cmd_result and cmd_result.status != CommandStatus.RUNNING:
+                break
+            time.sleep(0.5)
+
+        cmd_result = get_command_result(thread_id)
+        self.assertIsNotNone(cmd_result)
+        self.assertEqual(cmd_result.status, CommandStatus.COMPLETED)
+        self.assertIn('done', cmd_result.stdout)
+
 
 if __name__ == '__main__':
     unittest.main()
