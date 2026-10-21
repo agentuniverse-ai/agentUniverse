@@ -19,8 +19,9 @@ silently. TomlLintTool sits in front of the readers: lint the
 document, profile its shape, or ask for the safe textual fixes.
 
 Everything runs offline on the ``toml_text`` string. Syntax problems
-are delegated to the standard ``tomllib`` parser (the TOML 1.0 parser
-shipped with Python 3.11+); style and quality rules run on a
+are delegated to the ``tomllib`` parser (the TOML 1.0 parser shipped
+with Python 3.11+, provided by the ``tomli`` backport on Python 3.10);
+style and quality rules run on a
 same-length *masked* copy of the text in which string contents are
 replaced by a sentinel byte and comments by blanks — so raw-text
 checks never fire inside strings or comments, yet every character
@@ -156,15 +157,20 @@ another mode; a non-string, empty or oversized ``toml_text`` (over
 ``max_input_chars`` = 1,048,576 characters — 1 MiB); a malformed
 ``rules`` map (unknown code or non-boolean value); ``max_depth``
 outside 1..128; and, in ``profile`` mode only, a document tomllib
-cannot parse (the decode message is reported). ``lint`` and
-``fix_hints`` never raise on content — a broken document is a
-finding, not an exception. All findings and statistics are exact
-and the run is fully deterministic.
+cannot parse (the decode message is reported). A document whose
+nesting exceeds the Python recursion limit raises ``ValueError`` in
+every mode (tomllib cannot parse it, or the walk cannot descend it).
+``lint`` and ``fix_hints`` never raise on any other content — a
+broken document is a finding, not an exception. All findings and
+statistics are exact and the run is fully deterministic.
 """
 
 import datetime
 import re
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 from bisect import bisect_right
 from typing import Any, ClassVar, Optional
 
@@ -290,7 +296,9 @@ def _mask_text(text: str) -> str:
     the result therefore maps 1:1 to the original text, and no
     raw-text pattern can ever match inside a string or a comment. An
     unterminated string masks to the end of the text; tomllib reports
-    the syntax error itself.
+    the syntax error itself. In a multi-line string up to two quote
+    characters may sit in the content directly before the closing
+    delimiter — they are masked as content, never as a closer.
     """
     out: list = []
     i = 0
@@ -319,6 +327,15 @@ def _mask_text(text: str) -> str:
                     out.append(_SENTINEL)
                     i += 1
                 elif text.startswith(delim, i):
+                    if dlen == 3:
+                        run = i
+                        while run < n and text[run] == ch:
+                            run += 1
+                        extra = run - i - dlen
+                        if extra > 0:
+                            out.extend(_SENTINEL * extra)
+                            i += extra
+                            continue
                     out.append(delim)
                     i += dlen
                     break
@@ -643,25 +660,27 @@ def _iter_empty_tables(data: Any) -> list:
     is unique). Whether a table is header-declared is decided by the
     caller (the raw header map); inline ``x = {}`` values and
     dotted-key-created empty containers reach this walk too but are
-    filtered out there.
+    filtered out there. The walk is iterative so documents nested
+    deeper than the Python recursion limit still descend.
     """
     empties: list = []
-
-    def walk(node: Any, path: tuple, occurrence: Optional[int]) -> None:
+    stack: list = [(data, (), None)]
+    while stack:
+        node, path, occurrence = stack.pop()
         if isinstance(node, dict):
             if not node and path:
                 empties.append((path, occurrence if occurrence
                                 is not None else 0))
-            for key, value in node.items():
-                walk(value, path + (key,), None)
+            for key, value in reversed(node.items()):
+                stack.append((value, path + (key,), None))
         elif isinstance(node, list):
+            entries: list = []
             index = 0
             for element in node:
                 if isinstance(element, dict):
-                    walk(element, path, index)
+                    entries.append((element, path, index))
                     index += 1
-
-    walk(data, (), None)
+            stack.extend(reversed(entries))
     return empties
 
 
@@ -671,25 +690,25 @@ def _walk_depths(data: Any) -> tuple:
     Depth is the key-path length in segments: dotted keys
     (``a.b.c = 1``) and nested headers (``[x.y.z]``) both produce
     depth-3 leaves. Array-of-tables entries live at their array's
-    path; plain arrays are leaves of their key.
+    path; plain arrays are leaves of their key. The walk is iterative
+    so documents nested deeper than the Python recursion limit still
+    descend.
     """
     best_depth = 0
     best_path: tuple = ()
-
-    def walk(node: Any, path: tuple) -> None:
-        nonlocal best_depth, best_path
+    stack: list = [(data, ())]
+    while stack:
+        node, path = stack.pop()
         if len(path) > best_depth:
             best_depth = len(path)
             best_path = path
         if isinstance(node, dict):
-            for key, value in node.items():
-                walk(value, path + (key,))
+            for key, value in reversed(node.items()):
+                stack.append((value, path + (key,)))
         elif isinstance(node, list):
             for element in node:
                 if isinstance(element, dict):
-                    walk(element, path)
-
-    walk(data, ())
+                    stack.append((element, path))
     return best_depth, best_path
 
 
@@ -730,29 +749,34 @@ def _array_type(value: list) -> str:
 
 
 def _profile_stats(data: Any, aot_paths: frozenset) -> dict:
-    """Aggregate shape statistics for the parsed document."""
+    """Aggregate shape statistics for the parsed document.
+
+    The walk is iterative so documents nested deeper than the Python
+    recursion limit still descend.
+    """
     table_count = 0
     key_count = 0
     histogram: dict = {}
     max_depth = 0
     deepest_path: Optional[str] = None
+    stack: list = [(data, ())]
 
-    def walk(node: Any, path: tuple) -> None:
-        nonlocal table_count, key_count, max_depth, deepest_path
+    while stack:
+        node, path = stack.pop()
         if len(path) > max_depth:
             max_depth = len(path)
             deepest_path = _format_path(path)
+        children: list = []
         if isinstance(node, dict):
             if path:
                 table_count += 1
-            for key, value in node.items():
-                walk(value, path + (key,))
+            children = [(value, path + (key,))
+                        for key, value in node.items()]
         elif isinstance(node, list) and path in aot_paths:
             # Array of tables: every dict entry is a table at this
             # path and is walked so its keys are counted too.
-            for element in node:
-                if isinstance(element, dict):
-                    walk(element, path)
+            children = [(element, path) for element in node
+                        if isinstance(element, dict)]
         else:
             key_count += 1
             if isinstance(node, list):
@@ -760,8 +784,7 @@ def _profile_stats(data: Any, aot_paths: frozenset) -> dict:
             else:
                 label = _scalar_type(node)
             histogram[label] = histogram.get(label, 0) + 1
-
-    walk(data, ())
+        stack.extend(reversed(children))
     ordered: dict = {}
     for label in sorted(histogram, key=lambda name: (-histogram[name],
                                                      name)):
@@ -1170,6 +1193,11 @@ class TomlLintTool(Tool):
                     f"profile mode requires valid TOML — tomllib "
                     f"rejected the document: {_syntax_message(exc)}"
                 ) from exc
+            except RecursionError:
+                raise _err(
+                    "document nesting exceeds the Python recursion "
+                    "limit and cannot be linted"
+                )
             masked = _mask_text(scan_text)
             headers, _statements, _arrays = _scan_statements(
                 masked, scan_text)

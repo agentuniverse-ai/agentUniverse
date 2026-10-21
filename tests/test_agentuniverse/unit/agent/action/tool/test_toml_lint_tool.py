@@ -21,6 +21,7 @@ including per-mode option gating are all covered.
 """
 
 import re
+import sys
 import tomllib
 import unittest
 
@@ -805,6 +806,183 @@ class TomlLintErrorMatrixTest(unittest.TestCase):
         for mode in TomlLintTool.MODES:
             result = self.tool.execute(mode=mode, toml_text=text)
             self.assertEqual(result["mode"], mode)
+
+
+class TomlLintMultilineQuoteMaskTest(unittest.TestCase):
+    """A multi-line string may carry up to two quote characters in
+    its content directly before the closing delimiter — they must be
+    masked as content, never treated as a phantom string opener."""
+
+    def setUp(self) -> None:
+        self.tool = TomlLintTool()
+
+    def test_content_quote_does_not_open_phantom_string(self) -> None:
+        # """ab"""" is valid TOML for the value 'ab"' — the residual
+        # quote must not swallow the rest of the document.
+        result = self.tool.execute(
+            mode="lint", toml_text='a = """ab""""\nb = 2  \n')
+        self.assertTrue(result["valid"])
+        finding = _finding(result, "TOML005")
+        self.assertEqual((finding["line"], finding["col"]), (2, 6))
+
+    def test_two_content_quotes_masked_as_content(self) -> None:
+        result = self.tool.execute(
+            mode="lint", toml_text='a = """ab"""""\nb = 2  \n')
+        self.assertTrue(result["valid"])
+        self.assertIn("TOML005", _codes(result))
+
+    def test_literal_multiline_content_quote(self) -> None:
+        result = self.tool.execute(
+            mode="lint", toml_text="a = '''ab''''\nb = 2  \n")
+        self.assertTrue(result["valid"])
+        self.assertIn("TOML005", _codes(result))
+
+    def test_fix_hints_trims_after_content_quote(self) -> None:
+        result = self.tool.execute(
+            mode="fix_hints", toml_text='a = """ab""""\nb = 2  \n')
+        self.assertEqual(result["fixed_text"],
+                         'a = """ab""""\nb = 2\n')
+        self.assertEqual(result["applied"],
+                         [{"repair": "trailing_space_strip", "count": 1}])
+        self.assertEqual(tomllib.loads(result["fixed_text"])["a"],
+                         'ab"')
+
+    def test_fix_hints_two_content_quotes_value_preserved(self) -> None:
+        result = self.tool.execute(
+            mode="fix_hints", toml_text='a = """xy"""""\nb = 2  \n')
+        self.assertEqual(result["fixed_text"],
+                         'a = """xy"""""\nb = 2\n')
+        self.assertEqual(tomllib.loads(result["fixed_text"])["a"],
+                         'xy""')
+
+    def test_scanner_survives_content_quote_line(self) -> None:
+        # the array rule must still fire on a line after a multi-line
+        # string whose content ends with a quote
+        result = self.tool.execute(
+            mode="lint", toml_text='a = """x""""\nc = [1, "y"]\n')
+        self.assertTrue(result["valid"])
+        self.assertIn("TOML003", _codes(result))
+
+    def test_escaped_quote_run_before_closer(self) -> None:
+        # \" is content even in a run that reaches the closer
+        text = 'a = """p\\""""\nb = 2  \n'
+        result = self.tool.execute(mode="lint", toml_text=text)
+        self.assertTrue(result["valid"])
+        self.assertIn("TOML005", _codes(result))
+        self.assertEqual(tomllib.loads(text)["a"], 'p"')
+
+
+class TomlLintDeepNestingTest(unittest.TestCase):
+    """Documents nested deeper than the Python recursion limit are
+    parsed fine by tomllib via dotted keys or headers — the tool's
+    own walks must descend them iteratively and never leak a raw
+    RecursionError."""
+
+    DEEP = 2000
+
+    def setUp(self) -> None:
+        self.tool = TomlLintTool()
+
+    def test_deep_dotted_keys_lint(self) -> None:
+        path = ".".join(f"k{i}" for i in range(self.DEEP))
+        result = self.tool.execute(mode="lint",
+                                   toml_text=f"{path} = 1\n",
+                                   max_depth=128)
+        self.assertTrue(result["valid"])
+        finding = _finding(result, "TOML009")
+        self.assertEqual((finding["line"], finding["col"]), (1, 1))
+        self.assertIn(f"{self.DEEP} levels", finding["message"])
+
+    def test_deep_dotted_keys_profile(self) -> None:
+        path = ".".join(f"k{i}" for i in range(self.DEEP))
+        result = self.tool.execute(mode="profile",
+                                   toml_text=f"{path} = 1\n")
+        self.assertEqual(result["keys"], 1)
+        self.assertEqual(result["max_depth"], self.DEEP)
+        self.assertEqual(result["deepest_path"], path)
+
+    def test_deep_headers_lint(self) -> None:
+        path = ".".join(f"k{i}" for i in range(self.DEEP))
+        result = self.tool.execute(
+            mode="lint", toml_text=f"[{path}]\nx = 1\n", max_depth=128)
+        self.assertTrue(result["valid"])
+        finding = _finding(result, "TOML009")
+        self.assertIn(f"{self.DEEP + 1} levels", finding["message"])
+
+    def test_deep_empty_dotted_chain_lints(self) -> None:
+        # a deep chain ending in an empty table exercises the
+        # iterative empty-table walk
+        path = ".".join(f"k{i}" for i in range(self.DEEP))
+        result = self.tool.execute(
+            mode="lint", toml_text=f"[{path}]\n", max_depth=128,
+            rules={"TOML009": False})
+        self.assertIn("TOML008", _codes(result))
+
+    def test_deep_inline_table_profile_raises_value_error(self) -> None:
+        # nesting tomllib itself cannot descend: profile must raise
+        # the documented ValueError, not a raw RecursionError
+        text = "a = " + "{b = " * self.DEEP + "1" + "}" * self.DEEP + "\n"
+        with self.assertRaises(ValueError) as caught:
+            self.tool.execute(mode="profile", toml_text=text)
+        self.assertIn("recursion limit", str(caught.exception))
+
+    def test_deep_inline_table_lint_raises_value_error(self) -> None:
+        text = "a = " + "{b = " * self.DEEP + "1" + "}" * self.DEEP + "\n"
+        with self.assertRaises(ValueError) as caught:
+            self.tool.execute(mode="lint", toml_text=text)
+        self.assertIn("recursion limit", str(caught.exception))
+
+
+class TomlLintImportFallbackTest(unittest.TestCase):
+    """On Python 3.10 ``tomllib`` does not exist — the module must
+    fall back to the ``tomli`` backport instead of breaking the whole
+    ``common_tool`` package import."""
+
+    MODULE = "agentuniverse.agent.action.tool.common_tool.toml_lint_tool"
+
+    def test_stdlib_binding(self) -> None:
+        import importlib  # noqa: PLC0415
+        module = importlib.import_module(self.MODULE)
+        if sys.version_info >= (3, 11):
+            self.assertIs(module.tomllib, tomllib)
+
+    def test_tomli_fallback_when_tomllib_missing(self) -> None:
+        import importlib  # noqa: PLC0415
+        import importlib.abc  # noqa: PLC0415
+        try:
+            import tomli  # noqa: PLC0415
+        except ModuleNotFoundError:
+            self.skipTest("tomli backport not installed")
+
+        class _BlockTomllib(importlib.abc.MetaPathFinder):
+            blocked = False
+
+            def find_spec(self, fullname, path=None, target=None):
+                if fullname == "tomllib" and self.blocked:
+                    raise ModuleNotFoundError(
+                        "No module named 'tomllib' (simulated py3.10)")
+                return None
+
+        blocker = _BlockTomllib()
+        blocker.blocked = True
+        saved_module = sys.modules.pop(self.MODULE, None)
+        saved_tomllib = sys.modules.pop("tomllib", None)
+        sys.meta_path.insert(0, blocker)
+        try:
+            module = importlib.import_module(self.MODULE)
+            self.assertIs(module.tomllib, tomli)
+            result = module.TomlLintTool().execute(
+                mode="lint", toml_text="a = True\n")
+            self.assertFalse(result["valid"])
+        finally:
+            sys.meta_path.remove(blocker)
+            if saved_tomllib is not None:
+                sys.modules["tomllib"] = saved_tomllib
+            if saved_module is not None:
+                sys.modules[self.MODULE] = saved_module
+            else:
+                sys.modules.pop(self.MODULE, None)
+            importlib.import_module(self.MODULE)
 
 
 if __name__ == "__main__":
