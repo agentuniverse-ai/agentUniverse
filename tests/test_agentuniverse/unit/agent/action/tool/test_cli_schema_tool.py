@@ -967,6 +967,106 @@ class TestSuggestedSchema(unittest.TestCase):
         )
         self.assertTrue(verdict["passed"])
 
+    def test_eq_mixed_multiple_flag_rescue_default_is_list(self) -> None:
+        # A multiple flag with mixed =/valueless occurrences must get a
+        # LIST rescue default: a scalar default would make the suggestion
+        # a schema the tool's own validator rejects.
+        result = self.tool.execute(
+            mode="suggested_schema", samples=[["app", "--f=1", "--f"]]
+        )
+        self.assertEqual(result["schema"]["arguments"], [
+            {"name": "f", "kind": "flag", "type": "int", "required": False,
+             "has_value": True, "multiple": True, "default": [1]},
+        ])
+        verdict = self.tool.execute(
+            mode="check", argv=["app", "--f=1", "--f"],
+            schema=result["schema"],
+        )
+        self.assertTrue(verdict["passed"])
+        self.assertEqual(verdict["parsed"]["f"], [1])
+
+    def test_undeclarable_flag_tokens_left_as_positional_data(self) -> None:
+        # Tokens whose extracted name cannot legally be declared ('5x',
+        # '_y') must never become arguments: the suggestion stays valid
+        # and the tokens surface as positional data plus a note.
+        result = self.tool.execute(
+            mode="suggested_schema", samples=[["app", "--5x", "-_y", "1"]]
+        )
+        self.assertEqual(result["schema"]["arguments"], [
+            {"name": "arg1", "kind": "positional", "type": "string",
+             "required": True},
+            {"name": "arg2", "kind": "positional", "type": "string",
+             "required": True},
+            {"name": "arg3", "kind": "positional", "type": "int",
+             "required": True},
+        ])
+        self.assertEqual(len(result["notes"]), 2)
+        self.assertIn("'--5x'", result["notes"][0])
+        self.assertIn("'-_y'", result["notes"][1])
+        verdict = self.tool.execute(
+            mode="check", argv=["app", "--5x", "-_y", "1"],
+            schema=result["schema"],
+        )
+        self.assertFalse(verdict["passed"])
+        self.assertEqual(verdict["unknown"], ["--5x", "-_y"])
+        self.assertEqual(verdict["parsed"], {"arg1": "1"})
+
+    def test_undeclarable_unicode_and_overlong_names_do_not_crash(self) -> None:
+        for token in ("--caf\u00e9", "-" + "x" * 70, "---z"):
+            result = self.tool.execute(
+                mode="suggested_schema", samples=[["app", token]]
+            )
+            names = [arg["name"] for arg in result["schema"]["arguments"]]
+            self.assertTrue(names)
+            verdict = self.tool.execute(
+                mode="check", argv=["app", token], schema=result["schema"]
+            )
+            self.assertEqual(verdict["unknown"], [token])
+
+    def test_argument_limit_truncates_inferred_flags(self) -> None:
+        argv = ["app"] + [f"--f{i}" for i in range(101)]
+        result = self.tool.execute(mode="suggested_schema", samples=[argv])
+        arguments = result["schema"]["arguments"]
+        self.assertEqual(len(arguments), 100)
+        self.assertEqual(arguments[0]["name"], "f0")
+        self.assertEqual(arguments[-1]["name"], "f99")
+        self.assertEqual(len(result["notes"]), 1)
+        self.assertIn("100-argument", result["notes"][0])
+        kept = ["app"] + [f"--f{i}" for i in range(100)]
+        self.assertTrue(self.tool.execute(
+            mode="check", argv=kept, schema=result["schema"]
+        )["passed"])
+        verdict = self.tool.execute(
+            mode="check", argv=argv, schema=result["schema"]
+        )
+        self.assertEqual(verdict["unknown"], ["--f100"])
+
+    def test_argument_limit_truncates_positional_slots(self) -> None:
+        argv = ["app"] + [f"p{i}" for i in range(101)]
+        result = self.tool.execute(mode="suggested_schema", samples=[argv])
+        arguments = result["schema"]["arguments"]
+        self.assertEqual(len(arguments), 100)
+        self.assertEqual(arguments[-1]["name"], "arg100")
+        self.assertEqual(arguments[-1].get("multiple"), None)
+        self.assertIn("100-argument", result["notes"][0])
+        self.assertTrue(self.tool.execute(
+            mode="check", argv=["app"] + [f"p{i}" for i in range(100)],
+            schema=result["schema"],
+        )["passed"])
+        # Varying lengths mark the last slot multiple; truncation must
+        # strip it so the retained schema stays valid (a repeatable
+        # positional must be last).
+        result = self.tool.execute(mode="suggested_schema", samples=[
+            ["app"] + [f"p{i}" for i in range(102)], ["app", "only"],
+        ])
+        arguments = result["schema"]["arguments"]
+        self.assertEqual(len(arguments), 100)
+        self.assertFalse(any(arg.get("multiple") for arg in arguments))
+        verdict = self.tool.execute(
+            mode="check", argv=["app", "x"], schema=result["schema"]
+        )
+        self.assertIn("passed", verdict)
+
 
 class TestInputValidation(unittest.TestCase):
     """The strict ValueError matrix (raised before any computation)."""

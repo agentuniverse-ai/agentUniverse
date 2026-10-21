@@ -137,7 +137,10 @@ Three modes, all deterministic:
   with that alias set — correlating them with a separate long form is
   deliberately left to the human reviewing the suggestion. The
   suggestion is round-trip safe: every input sample passes ``check``
-  against it.
+  against it, except tokens no valid schema can declare (an extracted
+  name such as ``--5x`` or ``-_y``) — those are carried as positional
+  data and noted — and the suggestion never exceeds the schema
+  argument limit (overflow is truncated and noted).
 
 Input validation is strict and happens before any computation:
 malformed parameters (unknown mode, ``argv``/``samples`` not lists of
@@ -764,6 +767,19 @@ class CliSchemaTool(Tool):
         return bool(_INT_RE.match(token) or _FLOAT_RE.match(token))
 
     @staticmethod
+    def _declarable_name(text: str) -> bool:
+        """Can this extracted flag text become a schema argument name?
+
+        The suggestion never emits a name its own validator rejects,
+        so an illegal text (``5x``, ``üñî``, over the length cap) is
+        carried as positional data instead of declared.
+        """
+        return (
+            len(text) <= _MAX_NAME_CHARS
+            and _NAME_RE.fullmatch(text) is not None
+        )
+
+    @staticmethod
     def _basename(program_token: str) -> str:
         """The program token's basename (segment after the last /)."""
         head = program_token.rsplit("/", 1)[-1]
@@ -1119,6 +1135,7 @@ class CliSchemaTool(Tool):
         # consumption to collect per-name occurrence statistics.
         stats: Dict[str, Dict[str, Any]] = {}  # name -> merged statistics
         name_order: List[str] = []
+        undeclarable: List[str] = []
         for sample in samples:
             tokens = sample[1:]
             per_name_counts: Dict[str, int] = {}
@@ -1152,6 +1169,11 @@ class CliSchemaTool(Tool):
                     if eq:
                         value = value_part
                 if name is None:
+                    i += 1
+                    continue
+                if not self._declarable_name(name):
+                    if token not in undeclarable:
+                        undeclarable.append(token)
                     i += 1
                     continue
                 if value is None and i + 1 < len(tokens) and self._is_valueish(tokens[i + 1]):
@@ -1225,9 +1247,8 @@ class CliSchemaTool(Tool):
                     # the suggestion is itself a valid schema, and the
                     # argument becomes optional (a defaulted flag is
                     # never required).
-                    arg["default"] = self._coerce(
-                        arg["type"], entry["values"][0]
-                    )[1]
+                    rescue = self._coerce(arg["type"], entry["values"][0])[1]
+                    arg["default"] = [rescue] if multiple else rescue
                     arg["required"] = False
                 choices = self._infer_choices(arg["type"], entry["values"])
                 if choices is not None:
@@ -1267,6 +1288,31 @@ class CliSchemaTool(Tool):
                 arg["choices"] = choices
             positional_args.append(arg)
 
+        for token in undeclarable:
+            notes.append(
+                f"flag token {token!r} cannot be declared as an argument "
+                "name and was left as positional data — review"
+            )
+        if len(flag_args) > _MAX_ARGUMENTS:
+            omitted = len(flag_args) - _MAX_ARGUMENTS
+            flag_args = flag_args[:_MAX_ARGUMENTS]
+            positional_args = []
+            notes.append(
+                f"samples suggest more than the {_MAX_ARGUMENTS}-argument "
+                f"schema limit; {omitted} inferred flags omitted — review"
+            )
+        else:
+            slots_budget = _MAX_ARGUMENTS - len(flag_args)
+            if len(positional_args) > slots_budget:
+                omitted = len(positional_args) - slots_budget
+                positional_args = positional_args[:slots_budget]
+                if positional_args:
+                    positional_args[-1].pop("multiple", None)
+                notes.append(
+                    f"samples suggest more than the {_MAX_ARGUMENTS}-argument "
+                    f"schema limit; {omitted} positional slots omitted — "
+                    "review"
+                )
         arguments = flag_args + positional_args
         return {
             "mode": "suggested_schema",
@@ -1308,7 +1354,7 @@ class CliSchemaTool(Tool):
             ):
                 alias_part, eq, _value = token[1:].partition("=")
                 name = alias_part
-            if name is not None:
+            if name is not None and self._declarable_name(name):
                 if eq or not has_value_map.get(name, False):
                     # --name=value consumed here; a switch stands alone.
                     i += 1
