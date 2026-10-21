@@ -1,0 +1,71 @@
+name: sql_lint_tool
+description: Offline heuristic SQL statement linting tool — pure Python stdlib, no database, no execution, no schema access. Lints a single SQL statement against a documented ~12-rule table (mode='lint') covering SELECT *, DELETE/UPDATE without WHERE, missing LIMIT (gated by require_limit), cross/comma joins without WHERE, LIKE leading wildcards, DISTINCT with ORDER BY on non-selected columns, GROUP BY / select-list shape, oversized literal IN lists, OR chains vs UNION and mixed literal types, with exact offsets and 1-based line/column positions; extracts statement structure (mode='explain_structure' — type, tables, columns, where/group/order/limit flags, limit value, join kinds, subquery count, CTE names) and pretty-prints deterministically (mode='format' — newline before major clauses, 2-space subquery indent, optional keyword upper-casing, round-trip parse-stable). String-literal contents and comments are masked before keyword scanning; schema-dependent coercion checks are documented as out of scope.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.sql_lint_tool
+  class: SqlLintTool
+input_keys:
+  - mode
+  - sql
+args_model:
+  mode:
+    type: string
+    description: Tool mode — lint, explain_structure or format.
+    required: true
+  sql:
+    type: string
+    description: The single SQL statement to examine. Comments are ignored (--, #, /* */), one trailing semicolon is tolerated, anything beyond that violates the single-statement contract and raises ValueError. Required for every mode.
+    required: true
+  require_limit:
+    type: boolean
+    description: Turn rule SQL004 (top-level SELECT without LIMIT / FETCH FIRST) on. Default false. Lint mode only.
+    required: false
+  rules:
+    type: object
+    description: Map a rule code (SQL001..SQL011) to false to disable that single rule for the call, e.g. {"SQL001": false}. Unknown codes or non-boolean values raise ValueError. Lint mode only.
+    required: false
+  in_list_max:
+    type: integer
+    description: Rule SQL009 threshold — a literal-only IN (...) list longer than this fires a warning. Default 20, range 1..10000. Lint mode only.
+    required: false
+  or_chain_min:
+    type: integer
+    description: Rule SQL010 minimum — this many or more literal equality predicates on the same column connected only by OR fire an info finding. Default 3, range 2..1000. Lint mode only.
+    required: false
+  uppercase_keywords:
+    type: boolean
+    description: Uppercase recognized keywords in the format mode output (identifiers and string literals stay verbatim). Default true. Format mode only.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "explain_structure", "format"]
+      description: Tool mode.
+    sql:
+      type: string
+      description: Single SQL statement (single-statement contract).
+    require_limit:
+      type: boolean
+      description: Gate for rule SQL004 (default false).
+    rules:
+      type: object
+      description: Per-rule enable/disable map, code -> boolean.
+      additionalProperties:
+        type: boolean
+    in_list_max:
+      type: integer
+      minimum: 1
+      maximum: 10000
+      description: SQL009 literal IN list threshold (default 20).
+    or_chain_min:
+      type: integer
+      minimum: 2
+      maximum: 1000
+      description: SQL010 minimum OR-chain length (default 3).
+    uppercase_keywords:
+      type: boolean
+      description: Uppercase keywords when formatting (default true).
+  required: ["mode", "sql"]
