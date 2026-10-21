@@ -1,0 +1,43 @@
+name: log_lint_tool
+description: "Log lint tool — whole-file log consistency auditing with pure Python stdlib, no network required. Auto-detects the dominant format (shared per-line voting convention with LogParserTool: combined, common, syslog, leveled, key=value), then audits across lines for consistency anomalies (mode='audit': format drift, timestamp gaps over a configurable threshold (default 24h), timestamp regressions, ERROR-to-INFO level sequence anomalies, mixed line endings, U+FFFD encoding replacement chars, over-long lines with a stack-trace heuristic, duplicate line bursts, empty lines; stack-trace context lines are tallied, not flagged), summarizes the timestamp timeline (mode='timeline': min/max/span, largest gaps, monotonic run lengths, skipped cleanly without timestamps) and the level distribution (mode='level_summary': histogram with WARNING/CRITICAL aliasing plus optional ISO-hour buckets). Findings carry {code, severity, line, message}; line previews are capped at 60 chars with secret-looking values masked."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.log_lint_tool
+  class: LogLintTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — audit, timeline or level_summary.
+    required: true
+  text:
+    type: string
+    description: The log text; lines are split on universal newlines.
+    required: true
+  threshold_hours:
+    type: number
+    description: Audit and timeline modes — the gap threshold in hours (a jump strictly greater than this is a gap); positive, up to 87600, default 24. Rejected in level_summary mode.
+    required: false
+  per_hour:
+    type: boolean
+    description: Level_summary mode only — add per-hour buckets keyed YYYY-MM-DDTHH for lines carrying both a level and a timestamp. Default false; rejected in the other modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["audit", "timeline", "level_summary"]
+      description: Operation mode.
+    text:
+      type: string
+      description: The log text to lint.
+    threshold_hours:
+      type: number
+      description: Gap threshold in hours for audit/timeline modes (default 24).
+    per_hour:
+      type: boolean
+      description: Add per-hour level buckets in level_summary mode.
+  required: ["mode", "text"]
