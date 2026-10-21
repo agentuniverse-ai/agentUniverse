@@ -83,8 +83,12 @@ Four modes:
 * ``explain`` — one ``rule`` into its structure:
   ``{negated, anchored, dir_only, segments ([{kind: literal /
   wildcard / doublestar / class / negation, text, matches}]),
-  example_matches (3 deterministic, verified with the matcher),
-  example_misses (2, likewise verified non-matches)}``.
+  example_matches (up to 3 deterministic, each VERIFIED with the
+  matcher before it is returned), example_misses (2, likewise
+  verified non-matches)}``. A rule whose match space is empty at
+  the byte level (e.g. a class like ``[à-ÿ]`` that only single
+  UTF-8 bytes could satisfy) yields no examples and a note saying
+  so, never an example the matcher would reject.
 
 Semantics guaranteed (each pinned against the real git binary in
 the test suite): a leading ``/`` anchors to the .gitignore's own
@@ -103,11 +107,22 @@ and a UTF-8 BOM are handled like git handles them.
 
 Determinism: fixed scan orders, bounded detail lists, at most one
 finding per code per rule line — the same input always yields
-byte-identical output.
+byte-identical output. Rule text echoed in results (findings,
+dead-rule reports, decisive-rule ``rule_text``) is bounded to a
+120-character preview with an explicit ``...(+N chars)`` marker,
+so paths/rules carrying tokens or secrets are never echoed whole.
+The analyze reachability scans run under deterministic proof
+budgets that bind only on pathological rule counts; truncation is
+reported in the result notes (findings stay sound, just not
+exhaustive). The matcher itself is iterative — no recursion limit
+can be hit — with a memoized (pattern-index, text-index) state
+space under a bounded step budget (``ValueError`` on the rare
+adversarial pattern/path combination that would exceed it).
 
 Input validation is strict and happens before any work: wrong
 parameter types raise ``ValueError`` (echoed values are truncated
-to a bounded preview); ``rules`` is capped at ``max_rules_chars``
+to a bounded preview), as are strings containing lone surrogates
+(non-UTF-8-encodable text cannot appear in git paths/patterns); ``rules`` is capped at ``max_rules_chars``
 characters (default 65,536) and ``max_rule_lines`` lines (default
 4,096 — both real overridable fields on the tool instance);
 ``path`` must be relative, slash-separated, 1-``max_path_chars``
@@ -139,6 +154,15 @@ _MAX_RULE_LINES = 4_096
 _MAX_PATH_CHARS = 4_096
 _MAX_PATH_SEGMENTS = 64
 _MAX_RULE_CHARS = 1_024
+# Deterministic proof budgets for the analyze reachability scans
+# (full structural cover checks; rule examinations for ignored-
+# directory proofs). They bind only on pathological rule counts;
+# truncation is reported in the result notes, never silent.
+_MAX_COVER_CHECKS = 250_000
+_MAX_DIR_RULE_SCANS = 500_000
+# Bounded echo of rule text in results (paths and rules can carry
+# tokens/secrets; findings never echo more than this many chars).
+_ECHO_LIMIT = 120
 # How many list entries findings/messages echo before switching
 # to a bounded "+k more" (bounded output).
 _DETAIL_LIMIT = 12
@@ -200,179 +224,338 @@ def _posix_class_member(name: str, byte: int) -> bool:
     raise KeyError(name)
 
 
-def _dowild(pat: bytes, pi: int, text: bytes, ti: int, pathname: bool) -> int:
+_MAX_WM_STEPS = 4_000_000
+
+
+def _wm_too_complex() -> None:
+    raise ValueError(
+        "gitignore_tool: pattern/path combination too complex for "
+        "bounded matching (star backtracking budget exceeded; simplify "
+        "the pattern or shorten the path)"
+    )
+
+
+def _dowild(pat: bytes, pi0: int, text: bytes, ti0: int, pathname: bool) -> int:
     """Python translation of git wildmatch.c dowild() (no casefold).
 
-    ``pat``/``text`` are UTF-8 byte strings; ``pi``/``ti`` are the
-    current indices. Returns one of the four WM_* codes.
+    ``pat``/``text`` are UTF-8 byte strings; ``pi0``/``ti0`` are the
+    start indices. Returns one of the four WM_* codes.
+
+    Implemented iteratively — the ``*``/``**`` scan loops retry through
+    an explicit frame stack instead of recursion, so pathological star
+    counts cannot overflow the Python recursion limit — with a memo of
+    (pattern index, text index) results (the function is pure in those
+    two indices) so backtracking blow-ups collapse to one visit per
+    state, under a bounded step budget (``ValueError`` when exceeded).
     """
     plen = len(pat)
     tlen = len(text)
-    while pi < plen:
-        p_ch = pat[pi]
-        t_ch = text[ti] if ti < tlen else -1  # -1 stands for C NUL
-        if t_ch == -1 and p_ch != ord("*"):
+    STAR, QMARK, BSLASH, LBRACK, SLASH = 0x2A, 0x3F, 0x5C, 0x5B, 0x2F
+    memo: Dict[Tuple[int, int], int] = {}
+    steps = 0
+    # Frame layout: [scan_pi, trial_ti, match_slash, phase]
+    #   scan_pi   — pattern index the star scan retries at (the char
+    #               right after the star run)
+    #   trial_ti  — text index of the running (or just finished) trial
+    #   match_slash — stored as 1/0, the frame's match_slash flag
+    #   phase     — -1: a regular scan trial is running at trial_ti
+    #               -2: the scan loop was just entered and its FIRST
+    #                    trial still needs positioning (scan-head
+    #                    checks) starting from trial_ti
+    #               >= 0: the '/**/' zero-directory trial at pattern
+    #                    index `phase` is running at trial_ti; on any
+    #                    non-MATCH result the frame falls back to the
+    #                    scan loop (phase -2) from the same text index
+    stack: List[List[int]] = []
+
+    def _position(fr: List[int]) -> int:
+        """Scan-loop head for the next trial (mirrors the retry loop's
+        entry checks): text-exhaustion, then the literal skip-ahead.
+        Returns a WM code to pop the frame with, or _WM_MATCH (never
+        produced here) sentinel — ``-3`` — meaning "trial positioned:
+        fr[1]/fr[3] updated, run the linear phase at (scan_pi, t)"."""
+        nonlocal steps
+        scan_pi, ms = fr[0], bool(fr[2])
+        t = fr[1]
+        t_ch = text[t] if t < tlen else -1
+        if t_ch == -1:
             return _WM_ABORT_ALL
-        if p_ch == ord("\\"):
-            # Literal match with the following character.
-            pi += 1
-            p_ch = pat[pi] if pi < plen else -1
-            if t_ch != p_ch:
-                return _WM_NOMATCH
-            pi += 1
-            ti += 1
-            continue
-        if p_ch == ord("?"):
-            # Match anything but '/' under WM_PATHNAME.
-            if pathname and t_ch == ord("/"):
-                return _WM_NOMATCH
-            pi += 1
-            ti += 1
-            continue
-        if p_ch == ord("*"):
-            pi += 1
-            if pi < plen and pat[pi] == ord("*"):
-                prev_index = pi  # index of the SECOND star of the run
-                pi += 1
-                while pi < plen and pat[pi] == ord("*"):
-                    pi += 1
-                if not pathname:
-                    match_slash = True
-                else:
-                    prev_ok = prev_index < 2 or pat[prev_index - 2] == ord("/")
-                    cur = pat[pi] if pi < plen else -1
-                    nxt = pat[pi + 1] if pi + 1 < plen else -1
-                    after_ok = (
-                        cur == -1
-                        or cur == ord("/")
-                        or (cur == ord("\\") and nxt == ord("/"))
-                    )
-                    if prev_ok and after_ok:
-                        # '/**/' also matches zero directories.
-                        if cur == ord("/"):
-                            if _dowild(pat, pi + 1, text, ti, pathname) == _WM_MATCH:
-                                return _WM_MATCH
-                        match_slash = True
-                    else:
-                        match_slash = False
-            else:
-                match_slash = not pathname
-            if pi >= plen:
-                # Trailing '**' matches everything; trailing '*'
-                # only when no slash remains.
-                if not match_slash and b"/" in text[ti:]:
-                    return _WM_ABORT_TO_STARSTAR
-                return _WM_MATCH
-            if not match_slash and pat[pi] == ord("/"):
-                # One '*' followed by '/' consumes text up to the
-                # next '/' (the slash itself by the loop increment).
-                slash = text.find(b"/", ti)
-                if slash == -1:
-                    return _WM_ABORT_ALL
-                ti = slash
-                pi += 1
-                ti += 1
-                continue
-            while True:
-                if t_ch == -1:
+        if pat[scan_pi] not in _GLOB_SPECIAL:
+            lit = pat[scan_pi]
+            # Skip ahead to the next occurrence of the literal (a
+            # single '*' never matches '/').
+            while t_ch != -1 and (ms or t_ch != SLASH):
+                if t_ch == lit:
                     break
-                if pat[pi] not in _GLOB_SPECIAL:
-                    lit = pat[pi]
-                    # Skip ahead to the next occurrence of the
-                    # literal (a single '*' never matches '/').
-                    while t_ch != -1 and (match_slash or t_ch != ord("/")):
-                        if t_ch == lit:
-                            break
-                        ti += 1
-                        t_ch = text[ti] if ti < tlen else -1
-                    if t_ch != lit:
-                        return _WM_ABORT_ALL if match_slash else _WM_ABORT_TO_STARSTAR
-                matched = _dowild(pat, pi, text, ti, pathname)
-                if matched != _WM_NOMATCH:
-                    if not match_slash or matched != _WM_ABORT_TO_STARSTAR:
-                        return matched
-                elif not match_slash and t_ch == ord("/"):
-                    return _WM_ABORT_TO_STARSTAR
-                ti += 1
-                t_ch = text[ti] if ti < tlen else -1
-            return _WM_ABORT_ALL
-        if p_ch == ord("["):
-            pi += 1
-            p_ch = pat[pi] if pi < plen else -1
-            if p_ch == ord("^"):
-                p_ch = ord("!")
-            negated = p_ch == ord("!")
-            if negated:
-                pi += 1
-                p_ch = pat[pi] if pi < plen else -1
-            prev_ch = 0  # C's 0 means "no previous character"
-            matched = False
-            while True:  # C do-while over the class items
-                if p_ch == -1:
-                    return _WM_ABORT_ALL
-                if p_ch == ord("\\"):
+                t += 1
+                steps += 1
+                t_ch = text[t] if t < tlen else -1
+            if t_ch != lit:
+                return _WM_ABORT_ALL if ms else _WM_ABORT_TO_STARSTAR
+        fr[1] = t
+        fr[3] = -1
+        return -3  # sentinel: positioned
+
+    pi, ti = pi0, ti0
+    code = _WM_NOMATCH
+    while True:
+        # ---------------- linear phase: the code for the call-in (pi, ti)
+        key = (pi, ti)
+        cached = memo.get(key)
+        trial_pending = False
+        if cached is not None:
+            code = cached
+        else:
+            while pi < plen:
+                steps += 1
+                if steps > _MAX_WM_STEPS:
+                    _wm_too_complex()
+                p_ch = pat[pi]
+                t_ch = text[ti] if ti < tlen else -1  # -1 stands for C NUL
+                if t_ch == -1 and p_ch != STAR:
+                    code = _WM_ABORT_ALL
+                    break
+                if p_ch == BSLASH:
+                    # Literal match with the following character.
                     pi += 1
                     p_ch = pat[pi] if pi < plen else -1
-                    if p_ch == -1:
-                        return _WM_ABORT_ALL
-                    if t_ch == p_ch:
-                        matched = True
-                elif (
-                    p_ch == ord("-")
-                    and prev_ch != 0
-                    and pi + 1 < plen
-                    and pat[pi + 1] != ord("]")
-                ):
+                    if t_ch != p_ch:
+                        code = _WM_NOMATCH
+                        break
                     pi += 1
-                    p_ch = pat[pi]
-                    if p_ch == ord("\\"):
+                    ti += 1
+                    continue
+                if p_ch == QMARK:
+                    # Match anything but '/' under WM_PATHNAME.
+                    if pathname and t_ch == SLASH:
+                        code = _WM_NOMATCH
+                        break
+                    pi += 1
+                    ti += 1
+                    continue
+                if p_ch == STAR:
+                    pi += 1
+                    if pi < plen and pat[pi] == STAR:
+                        prev_index = pi  # index of the SECOND star of the run
+                        pi += 1
+                        while pi < plen and pat[pi] == STAR:
+                            pi += 1
+                        if not pathname:
+                            match_slash = True
+                        else:
+                            prev_ok = (
+                                prev_index < 2 or pat[prev_index - 2] == SLASH
+                            )
+                            cur = pat[pi] if pi < plen else -1
+                            nxt = pat[pi + 1] if pi + 1 < plen else -1
+                            after_ok = (
+                                cur == -1
+                                or cur == SLASH
+                                or (cur == BSLASH and nxt == SLASH)
+                            )
+                            if prev_ok and after_ok:
+                                # '/**/' also matches zero directories:
+                                # try the zero-directory trial first.
+                                if cur == SLASH:
+                                    stack.append([pi, ti, 1, pi + 1])
+                                    pi += 1
+                                    trial_pending = True
+                                    break
+                                match_slash = True
+                            else:
+                                match_slash = False
+                    else:
+                        match_slash = not pathname
+                    if pi >= plen:
+                        # Trailing '**' matches everything; trailing
+                        # '*' only when no slash remains.
+                        if not match_slash and text.find(b"/", ti) != -1:
+                            code = _WM_ABORT_TO_STARSTAR
+                        else:
+                            code = _WM_MATCH
+                        break
+                    if not match_slash and pat[pi] == SLASH:
+                        # One '*' followed by '/' consumes text up to
+                        # the next '/' (the slash itself included).
+                        slash = text.find(b"/", ti)
+                        if slash == -1:
+                            code = _WM_ABORT_ALL
+                            break
+                        ti = slash + 1
+                        pi += 1
+                        continue
+                    # Enter the scan loop: its first trial still needs
+                    # the scan-head positioning (phase -2).
+                    stack.append([pi, ti, 1 if match_slash else 0, -2])
+                    trial_pending = True
+                    break
+                if p_ch == LBRACK:
+                    pi += 1
+                    p_ch = pat[pi] if pi < plen else -1
+                    if p_ch == 0x5E:  # '^' is a synonym for '!'
+                        p_ch = 0x21
+                    negated = p_ch == 0x21
+                    if negated:
                         pi += 1
                         p_ch = pat[pi] if pi < plen else -1
+                    prev_ch = 0  # C's 0 means "no previous character"
+                    matched = False
+                    fail = 0
+                    while True:  # C do-while over the class items
                         if p_ch == -1:
-                            return _WM_ABORT_ALL
-                    if t_ch != -1 and t_ch <= p_ch and t_ch >= prev_ch:
-                        matched = True
-                    p_ch = 0  # resets prev_ch on the next tick
-                elif p_ch == ord("[") and pi + 1 < plen and pat[pi + 1] == ord(":"):
-                    s = pi + 2
-                    p2 = s
-                    while p2 < plen and pat[p2] != ord("]"):
-                        p2 += 1
-                    if p2 >= plen:
-                        return _WM_ABORT_ALL
-                    if p2 - 1 < s or pat[p2 - 1] != ord(":"):
-                        # No ':]' — treat like a normal set.
-                        pi = s - 2
-                        p_ch = ord("[")
-                        if t_ch == p_ch:
+                            fail = _WM_ABORT_ALL
+                            break
+                        if p_ch == BSLASH:
+                            pi += 1
+                            p_ch = pat[pi] if pi < plen else -1
+                            if p_ch == -1:
+                                fail = _WM_ABORT_ALL
+                                break
+                            if t_ch == p_ch:
+                                matched = True
+                        elif (
+                            p_ch == 0x2D
+                            and prev_ch != 0
+                            and pi + 1 < plen
+                            and pat[pi + 1] != 0x5D
+                        ):
+                            pi += 1
+                            p_ch = pat[pi]
+                            if p_ch == BSLASH:
+                                pi += 1
+                                p_ch = pat[pi] if pi < plen else -1
+                                if p_ch == -1:
+                                    fail = _WM_ABORT_ALL
+                                    break
+                            if t_ch != -1 and t_ch <= p_ch and t_ch >= prev_ch:
+                                matched = True
+                            p_ch = 0  # resets prev_ch on the next tick
+                        elif (
+                            p_ch == LBRACK
+                            and pi + 1 < plen
+                            and pat[pi + 1] == 0x3A
+                        ):
+                            s = pi + 2
+                            p2 = s
+                            while p2 < plen and pat[p2] != 0x5D:
+                                p2 += 1
+                            if p2 >= plen:
+                                fail = _WM_ABORT_ALL
+                                break
+                            if p2 - 1 < s or pat[p2 - 1] != 0x3A:
+                                # No ':]' — treat like a normal set.
+                                pi = s - 2
+                                p_ch = LBRACK
+                                if t_ch == p_ch:
+                                    matched = True
+                            else:
+                                name = pat[s:p2 - 1].decode("latin-1")
+                                if name not in _POSIX_CLASSES:
+                                    # malformed [:name:] — dead pattern
+                                    fail = _WM_ABORT_ALL
+                                    break
+                                if t_ch != -1 and _posix_class_member(
+                                    name, t_ch
+                                ):
+                                    matched = True
+                                pi = p2
+                                p_ch = 0
+                        elif t_ch == p_ch:
                             matched = True
-                    else:
-                        name = pat[s:p2 - 1].decode("latin-1")
-                        if name not in _POSIX_CLASSES:
-                            return _WM_ABORT_ALL  # malformed [:name:]
-                        if t_ch != -1 and _posix_class_member(name, t_ch):
-                            matched = True
-                        pi = p2
-                        p_ch = 0
-                elif t_ch == p_ch:
-                    matched = True
-                # C label 'next:'
-                prev_ch = p_ch
-                pi += 1
-                p_ch = pat[pi] if pi < plen else -1
-                if p_ch == ord("]"):
+                        # C label 'next:'
+                        prev_ch = p_ch
+                        pi += 1
+                        p_ch = pat[pi] if pi < plen else -1
+                        if p_ch == 0x5D:
+                            break
+                    if fail:
+                        code = fail
+                        break
+                    if matched == negated or (pathname and t_ch == SLASH):
+                        code = _WM_NOMATCH
+                        break
+                    pi += 1
+                    ti += 1
+                    continue
+                # default: literal character comparison (byte values)
+                if t_ch != p_ch:
+                    code = _WM_NOMATCH
                     break
-            if matched == negated or (pathname and t_ch == ord("/")):
-                return _WM_NOMATCH
-            pi += 1
-            ti += 1
-            continue
-        # default: literal character comparison (byte values)
-        if t_ch != p_ch:
-            return _WM_NOMATCH
-        pi += 1
-        ti += 1
-    return _WM_MATCH if ti >= tlen else _WM_NOMATCH
+                pi += 1
+                ti += 1
+            else:
+                code = _WM_MATCH if ti >= tlen else _WM_NOMATCH
+            if not trial_pending:
+                memo[key] = code
+        if trial_pending:
+            # Position the scan loop's first trial (phase -2). The
+            # zero-directory trial (phase >= 0) runs its linear phase
+            # directly at (pi, ti).
+            fr = stack[-1]
+            if fr[3] == -2:
+                verdict = _position(fr)
+                if verdict != -3:
+                    # The frame dies in the scan head; propagate its
+                    # code upward like a completed trial would.
+                    stack.pop()
+                    code = verdict
+                else:
+                    pi, ti = fr[0], fr[1]
+                    continue
+            else:
+                continue
+        # ---------------- dispatch: feed `code` to the topmost frame
+        while True:
+            if not stack:
+                return code
+            fr = stack[-1]
+            scan_pi, trial_ti, ms_flag, phase = fr
+            match_slash = bool(ms_flag)
+            if phase == -2:
+                # First scan trial: position it (no code consumed).
+                verdict = _position(fr)
+                if verdict != -3:
+                    stack.pop()
+                    code = verdict
+                    continue
+                pi, ti = fr[0], fr[1]
+                break  # run the linear phase for this trial
+            if phase >= 0:
+                # The '/**/' zero-directory trial just finished: only
+                # MATCH short-circuits; anything else falls back to
+                # the scan loop from the SAME text index.
+                if code == _WM_MATCH:
+                    return code
+                fr[3] = -2
+                verdict = _position(fr)
+                if verdict != -3:
+                    stack.pop()
+                    code = verdict
+                    continue
+                pi, ti = fr[0], fr[1]
+                break
+            # Regular scan trial at trial_ti finished with `code`.
+            t_ch = text[trial_ti] if trial_ti < tlen else -1
+            if code != _WM_NOMATCH:
+                if not match_slash or code != _WM_ABORT_TO_STARSTAR:
+                    # The frame returns this code upward.
+                    stack.pop()
+                    continue
+                # else: '**' absorbs ABORT_TO_STARSTAR — advance.
+            elif not match_slash and t_ch == SLASH:
+                stack.pop()
+                code = _WM_ABORT_TO_STARSTAR
+                continue
+            # Advance the scan to the next trial position.
+            fr[1] = trial_ti + 1
+            fr[3] = -2
+            verdict = _position(fr)
+            if verdict != -3:
+                stack.pop()
+                code = verdict
+                continue
+            pi, ti = fr[0], fr[1]
+            break  # run the linear phase for this trial
 
 
 def _wildmatch(pattern: str, text: str, pathname: bool) -> bool:
@@ -824,8 +1007,12 @@ class _SimpleClass:
 
 def _class_chars(text: str) -> Optional[_SimpleClass]:
     """Compute a class's character set; None when not computable
-    (POSIX class, escape-terminated body, reversed range or an
-    oversized set)."""
+    (POSIX class, escape-terminated body, reversed range, an
+    oversized set, or any non-ASCII content — git matches classes
+    per UTF-8 BYTE, so a str-level set would lie about membership
+    of multi-byte characters)."""
+    if not text.isascii():
+        return None
     body = text[1:-1] if text.startswith("[") else text
     negated = body.startswith("!") or body.startswith("^")
     if negated:
@@ -877,7 +1064,11 @@ def _atom_covers(q_atom: Tuple[str, str], p_atom: Tuple[str, str]) -> bool:
     if qk == "literal":
         return pk == "literal" and qt == pt
     if qk == "question":
-        return (pk == "literal" and len(pt) == 1) or pk == "question"
+        # '?' matches one BYTE in git's wildmatch, so it only provably
+        # covers a single-character literal when that char is ASCII.
+        return (
+            pk == "literal" and len(pt) == 1 and pt.isascii()
+        ) or pk == "question"
     if qk == "class":
         qc = _class_chars(qt)
         if qc is None or qc.negated:
@@ -987,11 +1178,32 @@ def _rule_covers(candidate: _Rule, target: _Rule) -> bool:
 # ------------------------------------------------------------------ #
 
 
+def _echo(text: str) -> str:
+    """Bounded echo of a rule/path fragment in results."""
+    if len(text) <= _ECHO_LIMIT:
+        return text
+    return text[:_ECHO_LIMIT] + f"...(+{len(text) - _ECHO_LIMIT} chars)"
+
+
+def _cover_profile(rule: _Rule) -> Any:
+    """Parse a rule once for the cover lattice: (normalized segments,
+    segment count, '**' segment count); None for dead shapes."""
+    if not rule.match_pat:
+        return None
+    segs = [_segment_atoms(p) for p in _split_unescaped(rule.match_pat)]
+    if any(s is None for s in segs):
+        return None
+    if rule.nodir:
+        segs = [[_DOUBLESTAR]] + segs
+    segs = [_norm_seg(s) for s in segs]
+    return (segs, len(segs), sum(1 for s in segs if s == [_DOUBLESTAR]))
+
+
 def _rule_ref(rule: _Rule) -> Dict[str, Any]:
     return {
         "index": rule.index,
         "line": rule.line,
-        "rule": rule.source,
+        "rule": _echo(rule.source),
         "negated": rule.negated,
         "dir_only": rule.mustbedir,
     }
@@ -1048,8 +1260,10 @@ class GitignoreTool(Tool):
         "positions, duplicate rules/negations, the /**/ "
         "zero-or-more-directories note, Windows \\-separator "
         "mistakes) and dissect one rule (mode='explain': "
-        "segments, anchored, dir_only, 3 verified example matches "
-        "and 2 verified misses). Case-sensitive "
+        "segments, anchored, dir_only, up to 3 matcher-verified "
+        "example matches (only examples the matcher accepts; a rule "
+        "that can match no path yields none plus a note) and 2 "
+        "verified misses). Case-sensitive "
         "(core.ignoreCase=false documented). PathLintTool (#4036) "
         "lints path strings; this tool implements ignore-rule "
         "semantics."
@@ -1152,6 +1366,13 @@ class GitignoreTool(Tool):
             )
         if "\x00" in rules:
             self._invalid("rules must not contain NUL characters")
+        try:
+            rules.encode("utf-8")
+        except UnicodeEncodeError:
+            self._invalid(
+                "rules must be UTF-8 encodable (lone surrogate code "
+                "points cannot appear in git paths or patterns)"
+            )
         return _parse_rules(rules)
 
     def _validated_path(self, path: Any, is_dir: Any) -> Tuple[str, bool]:
@@ -1166,6 +1387,13 @@ class GitignoreTool(Tool):
             )
         if "\x00" in path:
             self._invalid("path must not contain NUL characters")
+        try:
+            path.encode("utf-8")
+        except UnicodeEncodeError:
+            self._invalid(
+                "path must be UTF-8 encodable (lone surrogate code "
+                "points cannot appear in git paths)"
+            )
         if "\\" in path:
             self._invalid(
                 "path must use '/' separators only (gitignore paths are "
@@ -1219,6 +1447,13 @@ class GitignoreTool(Tool):
             )
         if "\x00" in rule:
             GitignoreTool._invalid("rule must not contain NUL characters")
+        try:
+            rule.encode("utf-8")
+        except UnicodeEncodeError:
+            GitignoreTool._invalid(
+                "rule must be UTF-8 encodable (lone surrogate code "
+                "points cannot appear in git patterns)"
+            )
         raw = rule[:-1] if rule.endswith("\r") else rule
         if raw == "" or raw.startswith("#"):
             GitignoreTool._invalid(
@@ -1309,7 +1544,7 @@ class GitignoreTool(Tool):
                 "matched": True,
                 "rule_index": rule.index,
                 "rule_line": rule.line,
-                "rule_text": rule.source,
+                "rule_text": _echo(rule.source),
                 "negated": negated,
                 "effective": effective,
                 "matched_on": verdict.via,
@@ -1372,7 +1607,7 @@ class GitignoreTool(Tool):
                 {
                     "indexes": [r.index for r in group],
                     "lines": [r.line for r in group],
-                    "rule": group[0].source,
+                    "rule": _echo(group[0].source),
                     "negated": negated,
                     "note": (
                         "earlier copies can never be the last matching rule "
@@ -1385,7 +1620,7 @@ class GitignoreTool(Tool):
                     {
                         "index": r.index,
                         "line": r.line,
-                        "rule": r.source,
+                        "rule": _echo(r.source),
                         "blocked_by": _rule_ref(group[-1]),
                         "reason": (
                             "duplicate negation: an identical later rule "
@@ -1396,34 +1631,53 @@ class GitignoreTool(Tool):
                         ),
                     }
                 )
-            # identical pattern, opposite polarity: they fight
-            mirror = groups.get((not key[0], key[1], key[2]))
-            if mirror and negated:
-                # report each unordered pair exactly once
-                contradictions.append(
-                    {
-                        "negated": _rule_ref(group[0]),
-                        "plain": _rule_ref(mirror[0]),
-                        "winner": (
-                            "the later of the two lines wins under "
-                            "last-match-wins for any path they both match"
-                        ),
-                    }
-                )
 
-        # negation killed by a later covering rule (sound lattice)
+        # negation killed by a later covering rule (sound lattice).
+        # Rule shapes are parsed once per rule and cheap necessary
+        # conditions (dtype compatibility, segment-count bounds under
+        # '**' absorption) reject most pairs before the full
+        # aligned-segment check; a deterministic proof budget keeps
+        # pathological rule counts bounded (truncation is reported
+        # in `notes`, never silently).
+        cover_budget = _MAX_COVER_CHECKS
+        profiles: Dict[int, Any] = {}
+        truncated_proofs = False
         for i, target in enumerate(rules):
             if not target.negated or not target.match_pat:
                 continue
+            t_prof = profiles.get(target.index, 0)
+            if t_prof == 0:
+                t_prof = _cover_profile(target)
+                profiles[target.index] = t_prof
+            if t_prof is None:
+                continue
+            t_segs, t_n = t_prof[0], t_prof[1]
             for later in rules[i + 1 :]:
-                if not later.match_pat:
+                if not later.match_pat or (
+                    later.mustbedir and not target.mustbedir
+                ):
                     continue
-                if _rule_covers(later, target):
+                c_prof = profiles.get(later.index, 0)
+                if c_prof == 0:
+                    c_prof = _cover_profile(later)
+                    profiles[later.index] = c_prof
+                if c_prof is None:
+                    continue
+                c_segs, c_n, c_ds = c_prof
+                if not c_ds and c_n != t_n:
+                    continue
+                if c_ds and t_n < c_n - c_ds:
+                    continue
+                if cover_budget <= 0:
+                    truncated_proofs = True
+                    break
+                cover_budget -= 1
+                if _segments_cover(c_segs, t_segs):
                     dead_rules.append(
                         {
                             "index": target.index,
                             "line": target.line,
-                            "rule": target.source,
+                            "rule": _echo(target.source),
                             "blocked_by": _rule_ref(later),
                             "reason": (
                                 "later rule provably matches every path "
@@ -1433,8 +1687,13 @@ class GitignoreTool(Tool):
                         }
                     )
                     break
+            if cover_budget <= 0:
+                truncated_proofs = True
+                break
 
-        # negation dead inside a provably ignored directory
+        # negation dead inside a provably ignored directory (same
+        # deterministic proof budget as the cover scan)
+        dir_budget = _MAX_DIR_RULE_SCANS
         for target in rules:
             if not target.negated or target.nodir or not target.match_pat:
                 continue
@@ -1449,13 +1708,17 @@ class GitignoreTool(Tool):
                 directory = "/".join(
                     "".join(a[1] for a in seg) for seg in prefix_atoms
                 )
+                if dir_budget <= 0:
+                    truncated_proofs = True
+                    break
+                dir_budget -= len(rules)  # each verdict scans the rule set
                 verdict = _check_ignore(rules, directory, True)
                 if verdict is not None and not verdict.rule.negated:
                     dead_rules.append(
                         {
                             "index": target.index,
                             "line": target.line,
-                            "rule": target.source,
+                            "rule": _echo(target.source),
                             "blocked_by": _rule_ref(verdict.rule),
                             "reason": (
                                 "every path this negation matches lies "
@@ -1484,8 +1747,8 @@ class GitignoreTool(Tool):
                     {
                         "line": r.line,
                         "index": r.index,
-                        "raw_line": r.raw_line,
-                        "effective_rule": r.source,
+                        "raw_line": _echo(r.raw_line),
+                        "effective_rule": _echo(r.source),
                         "note": (
                             "git drops unescaped trailing spaces, so the "
                             "rule is weaker than written; write '\\ ' to "
@@ -1501,7 +1764,7 @@ class GitignoreTool(Tool):
                     {
                         "line": r.line,
                         "index": r.index,
-                        "rule": r.source,
+                        "rule": _echo(r.source),
                         "problem": (
                             "dangling trailing backslash: it escapes the "
                             "line end, so the pattern can never match (and "
@@ -1514,7 +1777,7 @@ class GitignoreTool(Tool):
                     {
                         "line": r.line,
                         "index": r.index,
-                        "rule": r.source,
+                        "rule": _echo(r.source),
                         "problem": (
                             "'\\ ' at the end of the rule matches a literal "
                             "trailing space in the filename — usually not "
@@ -1550,7 +1813,7 @@ class GitignoreTool(Tool):
                     {
                         "index": r.index,
                         "line": r.line,
-                        "rule": r.source,
+                        "rule": _echo(r.source),
                         "note": (
                             "slash-free patterns match at ANY depth "
                             "(basename match); anchor with a leading '/' "
@@ -1581,6 +1844,13 @@ class GitignoreTool(Tool):
             "notes": (
                 "reachability computed honestly per last-match-wins and the "
                 "ignored-directory walk; only provable deaths are reported"
+                + (
+                    "; dead-rule proof scan truncated at the deterministic "
+                    "budget on this large rule set — reported deaths are "
+                    "still sound, the scan is just not exhaustive"
+                    if truncated_proofs
+                    else ""
+                )
             ),
         }
 
@@ -1605,7 +1875,7 @@ class GitignoreTool(Tool):
                         "severity": self._SEVERITY[code],
                         "message": (
                             f"rule duplicates line {first.line} "
-                            f"('{first.source}'); the earlier copy can never "
+                            f"('{_echo(first.source)}'); the earlier copy can never "
                             "be the last matching rule (last match wins)"
                         ),
                     }
@@ -1722,7 +1992,7 @@ class GitignoreTool(Tool):
         source = _trim_trailing_spaces(raw_rule)
         rule = _Rule(0, 1, raw_rule, source)
         segments = self._explain_segments(rule)
-        matches, misses = self._explain_examples(rule)
+        matches, misses, no_verifiable_example = self._explain_examples(rule)
         notes: List[str] = []
         if rule.negated:
             notes.append(
@@ -1749,6 +2019,13 @@ class GitignoreTool(Tool):
                 "the trailing '/' restricts the rule to directories; it "
                 "never matches files"
             )
+        if no_verifiable_example:
+            notes.append(
+                "no generated example verifies against the matcher: this "
+                "rule appears unable to match any path (git matches "
+                "character classes per UTF-8 byte, and some class/escape "
+                "combinations no path can satisfy)"
+            )
         return {
             "mode": "explain",
             "rule_text": raw_rule,
@@ -1760,6 +2037,23 @@ class GitignoreTool(Tool):
             "example_misses": misses,
             "notes": notes,
         }
+
+    @staticmethod
+    def _star_run_special(part: str, i: int, j: int) -> bool:
+        """Is the star run ``part[i:j]`` a special ``**``? Mirrors the
+        matcher: the run must sit at the START of a path segment (right
+        after '/' or at pattern start) and be followed by the segment
+        end (the '/' separator or end of pattern) or an escaped slash.
+        ``**foo`` / ``ab**`` (stars glued to literals) act as a single
+        '*' — verified against real git."""
+        run_len = j - i
+        if run_len < 2:
+            return False
+        prev_ok = i == 0
+        after_ok = j == len(part) or (
+            part[j] == "\\" and part[j + 1 : j + 2] == "/"
+        )
+        return prev_ok and after_ok
 
     def _explain_segments(self, rule: _Rule) -> List[Dict[str, Any]]:
         segments: List[Dict[str, Any]] = []
@@ -1793,18 +2087,31 @@ class GitignoreTool(Tool):
                     }
                 )
                 continue
+            # star-run spans in this part, aligned with its star atoms
+            spans = []
+            si = 0
+            while si < len(part):
+                if part[si] == "*":
+                    sj = si
+                    while sj < len(part) and part[sj] == "*":
+                        sj += 1
+                    spans.append((si, sj))
+                    si = sj
+                    continue
+                if part[si] == "\\" and si + 1 < len(part):
+                    si += 2
+                    continue
+                si += 1
+            star_pos = 0
             for kind, text in atoms:
                 if kind == "star":
-                    pure = part == text
+                    star_pos += 1
                     if len(text) == 1:
                         star_kind = "wildcard"
                         desc = "any run of characters (not crossing '/')"
                     else:
-                        special = (
-                            (pos == 0 and core.startswith("**"))
-                            or (pos == len(parts) - 1 and core.endswith("**"))
-                            or (pure and 0 < pos < len(parts) - 1)
-                        )
+                        span = spans[star_pos] if star_pos < len(spans) else (0, len(text))
+                        special = self._star_run_special(part, span[0], span[1])
                         star_kind = "doublestar" if special else "wildcard"
                         if special:
                             desc = (
@@ -1849,7 +2156,14 @@ class GitignoreTool(Tool):
                         )
                     else:
                         cf = _class_chars("[" + body + "]")
-                        if cf is not None and not neg and len(cf.items) <= _DETAIL_LIMIT:
+                        if cf is None and not body.isascii():
+                            desc = (
+                                "one character tested BYTE-WISE against the "
+                                "class (non-ASCII class content: git's "
+                                "wildmatch compares UTF-8 bytes, so the "
+                                "class can only match single-byte inputs)"
+                            )
+                        elif cf is not None and not neg and len(cf.items) <= _DETAIL_LIMIT:
                             members = "".join(sorted(cf.items))
                             desc = f"one character in the set '{members}'"
                         elif cf is not None and neg and len(cf.items) <= _DETAIL_LIMIT:
@@ -1914,13 +2228,7 @@ class GitignoreTool(Tool):
                     j = i
                     while j < n and part[j] == "*":
                         j += 1
-                    run_len = j - i
-                    pure = part == part[i:j]
-                    if run_len >= 2 and (
-                        (idx == 0 and rule.match_pat.startswith("**"))
-                        or (idx == len(parts) - 1 and rule.match_pat.endswith("**"))
-                        or (pure and 0 < idx < len(parts) - 1)
-                    ):
+                    if self._star_run_special(part, i, j):
                         built.append(filler * (depth + 1))
                     else:
                         built.append(filler)
@@ -2016,8 +2324,11 @@ class GitignoreTool(Tool):
                 and _rule_matches(rule, norm, is_dir)
             ):
                 matches.append(m)
-        if not matches:
-            matches = [base]  # generation guarantees at least this one
+        # Only VERIFIED examples are returned. When nothing verifies
+        # (e.g. a byte-range class like '[à-ÿ]' that no UTF-8 path can
+        # satisfy — git matches classes per byte), the caller reports
+        # that the rule appears to match nothing instead of emitting
+        # an example the matcher would reject.
 
         base_body = base[:-1] if base.endswith("/") else base
         # Deterministic miss candidates, in fixed priority order;
@@ -2043,4 +2354,4 @@ class GitignoreTool(Tool):
                 is_dir, norm = False, m
             if norm and not _rule_matches(rule, norm, is_dir):
                 misses.append(m)
-        return matches[:3], misses[:2]
+        return matches[:3], misses[:2], not matches

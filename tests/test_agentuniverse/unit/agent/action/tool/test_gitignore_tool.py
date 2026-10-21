@@ -725,14 +725,60 @@ def _materialize(rulesets, root):
     return pairs
 
 
+_GIT_C_ESCAPES = {"\\a": "\a", "\\b": "\b", "\\f": "\f",
+                  "\\n": "\n", "\\r": "\r", "\\t": "\t",
+                  "\\v": "\v", "\\\\": "\\", '\\"': '"'}
+
+
+def _git_unquote(path: str) -> str:
+    """Undo git's quote_c_style for control-character paths (git
+    C-quotes paths containing control chars even under
+    core.quotepath=false)."""
+    if not (path.startswith('"') and path.endswith('"')):
+        return path
+    body = path[1:-1]
+    out = []
+    i = 0
+    while i < len(body):
+        c = body[i]
+        if c == "\\" and i + 1 < len(body):
+            pair = c + body[i + 1]
+            if pair in _GIT_C_ESCAPES:
+                out.append(_GIT_C_ESCAPES[pair])
+                i += 2
+                continue
+            nxt = body[i + 1]
+            if nxt.isdigit():  # octal \NNN
+                oct_digits = body[i + 1 : i + 4]
+                take = ""
+                for d in oct_digits:
+                    if d in "01234567" and len(take) < 3:
+                        take += d
+                    else:
+                        break
+                if take:
+                    out.append(chr(int(take, 8)))
+                    i += 1 + len(take)
+                    continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def _git_verdicts(repo, queries):
     """Run git check-ignore -v --no-index once; return
-    {path: (line, negated)} for the matched paths."""
+    {path: (line, negated)} for the matched paths.
+
+    Byte-mode output (no universal-newline translation, so patterns
+    containing '\\r' survive) with core.quotepath=false (so non-ASCII
+    paths are echoed raw instead of octal-escaped)."""
     args = [GIT_BIN, "-C", repo, "-c", "core.ignoreCase=false",
-            "check-ignore", "-v", "--no-index", "--"] + queries
-    proc = subprocess.run(args, capture_output=True, text=True)
+            "-c", "core.quotepath=false", "check-ignore", "-v",
+            "--no-index", "--"] + queries
+    proc = subprocess.run(args, capture_output=True)
+    out = proc.stdout.decode("utf-8", "surrogateescape")
     verdicts = {}
-    for line in proc.stdout.splitlines():
+    for line in out.split("\n"):
         if "\t" not in line:
             continue
         head, path = line.split("\t", 1)
@@ -741,7 +787,7 @@ def _git_verdicts(repo, queries):
             continue
         lineno = int(parts[1])
         pattern = parts[2]
-        verdicts[path] = (lineno, pattern.startswith("!"))
+        verdicts[_git_unquote(path)] = (lineno, pattern.startswith("!"))
     return verdicts
 
 
@@ -830,6 +876,300 @@ class RealGitOracleTest(unittest.TestCase):
         self.assertIn("a/**/b\n", rules_texts)
         self.assertIn("foo \nbar\\ \n", rules_texts)
         self.assertIn("*.log\n!keep.log\n", rules_texts)
+
+
+# ------------------------------------------------------------------ #
+# Self-review regressions (PR #4041 hostile review): one vector per
+# provable defect found by differential probing against the real git
+# binary, plus a fresh-seed differential oracle round.
+# ------------------------------------------------------------------ #
+
+
+class SelfReviewRegressionTest(unittest.TestCase):
+    def test_contradiction_reported_exactly_once(self):
+        # analyze used to append the same contradiction twice when the
+        # negated group also had duplicates ("!a" twice + "a").
+        res = analyze("!a\n!a\na\n")
+        self.assertEqual(len(res["contradictions"]), 1)
+        res2 = analyze("!a\na\n")
+        self.assertEqual(len(res2["contradictions"]), 1)
+        res3 = analyze("!a\n!a\n")  # no plain mirror: no contradiction
+        self.assertEqual(res3["contradictions"], [])
+
+    def test_multibyte_question_cannot_cover_a_character(self):
+        # git wildmatch runs on BYTES: '?' matches one byte, never the
+        # two-byte character 'é'. The cover lattice must not claim the
+        # later "??x" covers "!é?x" — the negation stays decisive, and
+        # the real git binary agrees (see the oracle test below).
+        res = analyze("\u00e9?x\n!\u00e9?x\n??x\n")
+        self.assertEqual(dead_indexes(res), [])
+        m = match("\u00e9?x\n!\u00e9?x\n??x\n", "\u00e9ax")
+        self.assertTrue(m["matched"])
+        self.assertEqual(m["rule_line"], 2)
+        self.assertFalse(m["effective"])  # negation re-includes
+
+    def test_non_ascii_class_covers_nothing_soundly(self):
+        # "[à-ÿ]" cannot match ANY UTF-8 path (the class matches a
+        # single byte; both endpoints are multi-byte) — the lattice
+        # must stay silent rather than reason over str-level sets.
+        res = analyze("[\u00e0-\u00ff]\n![\u00e0-\u00ff]/x\n")
+        self.assertEqual(dead_indexes(res), [])
+
+    def test_explain_examples_never_lie(self):
+        # example_matches must ACTUALLY match; a rule with an empty
+        # byte-level match space returns no examples plus a note.
+        for rule in ["[\u00e0-\u00ff]", "[\u00e9]"]:
+            res = explain(rule)
+            rule_obj = _parse_rules(rule + "\n")[0]
+            for m in res["example_matches"]:
+                is_dir = m.endswith("/")
+                body = m[:-1] if is_dir else m
+                self.assertTrue(
+                    _rule_matches(rule_obj, body, is_dir),
+                    f"{rule}: example {m!r} must match",
+                )
+            self.assertEqual(res["example_matches"], [])
+            self.assertIn("unable to match any path", res["notes"][-1])
+
+    def test_explain_doublestar_specialness_uses_run_position(self):
+        # '**' glued to a literal ('**foo', 'ab**') is a SINGLE star in
+        # git — explain must not describe it as crossing '/'.
+        for rule in ["**foo/bar", "ab**", "a**b", "x/**y"]:
+            kinds = [(s["kind"], s["text"]) for s in explain(rule)["segments"]]
+            self.assertNotIn(
+                "doublestar", [k for k, _ in kinds],
+                f"{rule}: '**' glued to a literal is not a doublestar",
+            )
+        for rule in ["a/**/b", "**/x", "x/**", "**/x/**", "**"]:
+            kinds = [s["kind"] for s in explain(rule)["segments"]]
+            self.assertIn("doublestar", kinds, rule)
+
+    def test_star_heavy_patterns_do_not_crash(self):
+        # 3000-char star chains used to raise RecursionError; the
+        # iterative matcher decides them in milliseconds.
+        res = match("*a" * 1500 + "\n", "a" * 2000)
+        self.assertTrue(res["matched"])
+        res2 = match("*a" * 500 + "b\n", "a" * 3000)
+        self.assertFalse(res2["matched"])
+        res3 = match("*[ab]" * 500 + "c\n", "ab" * 1500)
+        self.assertFalse(res3["matched"])
+        res4 = match("a" * 9999 + "*\n", "a" * 100)
+        self.assertFalse(res4["matched"])
+
+    def test_wildmatch_step_budget_raises_cleanly(self):
+        # Adversarial pattern/path shapes that would exceed the bounded
+        # step budget raise a contract ValueError instead of hanging.
+        from agentuniverse.agent.action.tool.common_tool import (
+            gitignore_tool as mod,
+        )
+        old = mod._MAX_WM_STEPS
+        mod._MAX_WM_STEPS = 5
+        try:
+            with self.assertRaises(ValueError):
+                mod._dowild(b"*a*b*c*x", 0, b"abcabcabc", 0, True)
+        finally:
+            mod._MAX_WM_STEPS = old
+
+    def test_analyze_pathological_rule_count_is_bounded(self):
+        # 3900 rules used to take ~13s (quadratic cover scan); the
+        # deterministic proof budget keeps it under a couple of seconds
+        # and reports truncation honestly.
+        import time
+        rules = "".join(
+            "sub%d/**\n!sub%d/%d\n?x%d/a?c\n" % (i, i, i, i)
+            for i in range(1300)
+        )
+        t0 = time.time()
+        res = analyze(rules)
+        elapsed = time.time() - t0
+        self.assertLess(elapsed, 6.0)
+        self.assertIn("truncated", res["notes"])
+        # findings that ARE reported stay sound (no dead claims here)
+        self.assertEqual(res["dead_rules"], [])
+
+    def test_surrogate_inputs_rejected_at_validation(self):
+        # Lone surrogates used to surface as UnicodeEncodeError from
+        # deep inside the matcher; validation now rejects them first.
+        with self.assertRaises(ValueError):
+            match("a\n", "a\udcffb")
+        with self.assertRaises(ValueError):
+            analyze("a\ud800\n")
+        with self.assertRaises(ValueError):
+            explain("a\udcff")
+
+    def test_rule_text_echo_is_bounded(self):
+        # Long rule lines (paths/rules can carry tokens) are echoed as
+        # a bounded preview with an explicit marker.
+        long_rule = "x" * 300
+        res = match(long_rule + "\n", "x" * 300)
+        self.assertTrue(res["rule_text"].endswith("...(+180 chars)"))
+        self.assertLess(len(res["rule_text"]), 140)
+        res2 = analyze("!" + long_rule + "\n" + long_rule + "\n")
+        for d in res2["dead_rules"]:
+            self.assertLessEqual(len(d["rule"]), 140)
+        trap = analyze("secret_token_1234567890_" + "z" * 400 + "  \n")
+        for t in trap["trailing_space_traps"]:
+            self.assertLessEqual(len(t["raw_line"]), 140)
+
+
+@unittest.skipIf(GIT_BIN is None, "git binary not available")
+class FreshSeedOracleTest(unittest.TestCase):
+    """A fresh-seed differential round against the real git binary,
+    focused on the adversarial classes from the self-review: byte-level
+    character classes with non-ASCII patterns and paths, '**' glued to
+    literals, CR-only lines, '! '-only rules, escaped trailing spaces,
+    negation polarity reporting, and dtype-sensitive dir walks."""
+
+    @classmethod
+    def setUpClass(cls):
+        rng = random.Random(4041)  # fresh seed (differs from 20261021)
+        atoms = ["a", "b", "x", "y", "sub", "dir", "\u00e9", "\U0001f600",
+                 "*", "?", "**", "[a-z]", "[!a]", "[a-\u00e9]",
+                 "[\u00e0-\u00ff]", "[[:alpha:]]", "\\*", "\\ ",
+                 "\\!", "only", "q", "build", "doc", "test"]
+
+        def pattern():
+            parts = [rng.choice(atoms) for _ in range(rng.randint(1, 3))]
+            p = "/".join(parts)
+            if rng.random() < 0.12:
+                p = "**/" + p
+            if rng.random() < 0.12:
+                p += "/**"
+            if rng.random() < 0.2:
+                p += "/"
+            if rng.random() < 0.2:
+                p = "!" + p
+            return p
+
+        rulesets = []
+        for _ in range(14):
+            lines = [pattern() for _ in range(rng.randint(3, 8))]
+            rulesets.append(("\n".join(lines) + "\n", None))
+        cls.curated = [
+            # (rules, [query paths]) — dtype from disk where possible
+            ("\u00e9?x\n!\u00e9?x\n??x\n", ["\u00e9ax", "\u00e9xx", "abx"]),
+            ("[a-\u00e9]\n", ["b", "q", "\u00e9", "z"]),
+            ("[\u00e0-\u00ff]\n", ["\u00e0", "\u00e3", "b"]),
+            ("**foo/bar\n", ["foo/bar", "xfoo/bar", "a/xfoo/bar"]),
+            ("ab**\n", ["abx", "ab", "a/x"]),
+            ("x/**y\n", ["x/ay", "x/a/y", "xy"]),
+            ("foo\\ \n", ["foo ", "foo"]),
+            ("foo \n", ["foo", "foo "]),
+            ("!\n", ["a"]),
+            ("! \n", ["a"]),
+            ("\\\n", ["a"]),
+            ("a\rb\n", ["a", "b", "a\rb"]),  # CR mid-line: one pattern
+            ("\ufeffx\ny\n", ["x", "y"]),   # BOM: git skips it
+            ("\ufeff\nx\n", ["x"]),
+            ("x\n\ufeffy\n", ["x", "y"]),   # mid-file BOM is literal
+            ("build/\n!build/keep\n", ["build/f", "build/keep", "build"]),
+        ]
+        cls.rng_rules = rulesets
+        cls.paths = ["\u00e9ax", "\u00e9x", "abx", "a/b", "x/y", "b",
+                     "q/a", "sub/dir", "dir/x", "only", "build", "doc/f",
+                     "\u00e9", "\u00e0", "a", "x", "y", "test.log",
+                     "a/xfoo/bar", "foo/bar", "x/ay", "ab"]
+        cls.rng = rng
+
+    def test_fresh_seed_parity(self):
+        try:
+            root = tempfile.mkdtemp(prefix="git-oracle-fresh-4041-", dir="/tmp")
+        except OSError:
+            root = tempfile.mkdtemp(prefix="git-oracle-fresh-4041-")
+        try:
+            checked = 0
+            failures = []
+            # curated: one repo per rules text, files materialized so
+            # dtype resolution is real
+            for rules_text, _ in self.curated:
+                repo = os.path.join(root, "cur%d" % checked)
+                os.makedirs(repo)
+                subprocess.run(["git", "init", "-q", repo], check=True,
+                               capture_output=True)
+                with open(os.path.join(repo, ".gitignore"), "wb") as fh:
+                    fh.write(rules_text.encode("utf-8"))
+                queries = []
+                for query in [p for p in self.curated_paths(rules_text)]:
+                    full = os.path.join(repo, query)
+                    os.makedirs(os.path.dirname(full) or repo, exist_ok=True)
+                    if not os.path.exists(full):
+                        is_dir = query.endswith("/")
+                        if is_dir:
+                            os.makedirs(full, exist_ok=True)
+                        else:
+                            open(full, "wb").close()
+                    queries.append(query)
+                verdicts = _git_verdicts(repo, queries)
+                for query in queries:
+                    res = TOOL.execute(
+                        mode="match", rules=rules_text, path=query,
+                        is_dir=os.path.isdir(os.path.join(repo, query)),
+                    )
+                    git_line, git_negated = verdicts.get(query, (None, False))
+                    got = (res["matched"], res["rule_line"], res["negated"],
+                           res["effective"])
+                    want = (query in verdicts, git_line, git_negated,
+                            query in verdicts and not git_negated)
+                    checked += 1
+                    if got != want:
+                        failures.append(
+                            f"curated rules={rules_text!r} path={query!r}: "
+                            f"tool={got} git={want}")
+            # random: reuse the module's materializer
+            rulesets = []
+            for rules_text, _ in self.rng_rules:
+                paths = []
+                for _ in range(6):
+                    p = self.rng.choice(self.paths)
+                    paths.append((p, self.rng.random() < 0.2))
+                rulesets.append((rules_text, paths))
+            pairs = _materialize(rulesets, os.path.join(root, "rnd"))
+            by_repo = {}
+            for repo, rules_text, query, is_dir in pairs:
+                by_repo.setdefault(repo, []).append((rules_text, query, is_dir))
+            for repo, entries in sorted(by_repo.items()):
+                verdicts = _git_verdicts(repo, [e[1] for e in entries])
+                for rules_text, query, is_dir in entries:
+                    res = TOOL.execute(
+                        mode="match", rules=rules_text, path=query,
+                        is_dir=is_dir,
+                    )
+                    git_line, git_negated = verdicts.get(query, (None, False))
+                    got = (res["matched"], res["rule_line"], res["negated"],
+                           res["effective"])
+                    want = (query in verdicts, git_line, git_negated,
+                            query in verdicts and not git_negated)
+                    checked += 1
+                    if got != want:
+                        failures.append(
+                            f"random rules={rules_text!r} path={query!r} "
+                            f"is_dir={is_dir}: tool={got} git={want}")
+            self.assertGreaterEqual(checked, 80)
+            self.assertEqual(failures, [], "\n".join(failures[:12]))
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    @staticmethod
+    def curated_paths(rules_text):
+        table = {
+            "\u00e9?x\n!\u00e9?x\n??x\n": ["\u00e9ax", "\u00e9xx", "abx"],
+            "[a-\u00e9]\n": ["b", "q", "\u00e9", "z"],
+            "[\u00e0-\u00ff]\n": ["\u00e0", "\u00e3", "b"],
+            "**foo/bar\n": ["foo/bar", "xfoo/bar", "a/xfoo/bar"],
+            "ab**\n": ["abx", "ab", "a/x"],
+            "x/**y\n": ["x/ay", "x/a/y", "xy"],
+            "foo\\ \n": ["foo ", "foo"],
+            "foo \n": ["foo", "foo "],
+            "!\n": ["a"],
+            "! \n": ["a"],
+            "\\\n": ["a"],
+            "a\rb\n": ["a", "b", "a\rb"],
+            "\ufeffx\ny\n": ["x", "y"],
+            "\ufeff\nx\n": ["x"],
+            "x\n\ufeffy\n": ["x", "y"],
+            "build/\n!build/keep\n": ["build/f", "build/keep", "build"],
+        }
+        return table.get(rules_text, [])
 
 
 if __name__ == "__main__":
