@@ -530,6 +530,70 @@ class EnvSchemaCheckMaskingTest(EnvSchemaToolTestCase):
         self.assertFalse(result["passed"])
         self.assertEqual(result["violations"][0]["got"], "***")
 
+    def test_secret_default_masked_in_missing_and_applied(self) -> None:
+        result = self.tool.execute(
+            mode="check",
+            text="",
+            schema={"API_KEY": {"type": "string",
+                                "default": "sk-live-abcdef123456"}},
+        )
+        self.assertTrue(result["passed"])
+        self.assertEqual(
+            result["missing"],
+            [{"var": "API_KEY", "required": True, "has_default": True,
+              "suggestion": "API_KEY=***"}],
+        )
+        self.assertEqual(
+            result["applied_defaults"],
+            [{"var": "API_KEY", "default": "***"}],
+        )
+        self.assert_no_secret_leak(result)
+
+    def test_non_secret_default_stays_verbatim_even_when_long(self) -> None:
+        long_default = "d" * 40
+        result = self.tool.execute(
+            mode="check",
+            text="",
+            schema={"DESCRIPTION": {"type": "string",
+                                    "default": long_default}},
+        )
+        self.assertTrue(result["passed"])
+        self.assertEqual(
+            result["missing"][0]["suggestion"],
+            f"DESCRIPTION={long_default}",
+        )
+        self.assertEqual(
+            result["applied_defaults"],
+            [{"var": "DESCRIPTION", "default": long_default}],
+        )
+
+    def test_secret_enum_expected_masked_length_kept(self) -> None:
+        result = self.tool.execute(
+            mode="check",
+            text="AUTH_TOKEN=token-wrong-value\n",
+            schema={"AUTH_TOKEN": {"type": "string",
+                                   "enum": ["token-aaa", "token-bbb"]}},
+        )
+        self.assertFalse(result["passed"])
+        self.assertEqual(
+            result["violations"],
+            [{"var": "AUTH_TOKEN", "rule": "enum",
+              "expected": ["***", "***"], "got": "***"}],
+        )
+        self.assertNotIn("token-aaa", json.dumps(result))
+        self.assertNotIn("token-bbb", json.dumps(result))
+
+    def test_non_secret_enum_expected_verbatim(self) -> None:
+        result = self.tool.execute(
+            mode="check",
+            text="LOG_LEVEL=loud\n",
+            schema={"LOG_LEVEL": {"enum": ["debug", "info", "warn"]}},
+        )
+        self.assertEqual(
+            result["violations"][0]["expected"],
+            ["debug", "info", "warn"],
+        )
+
 
 class EnvSchemaSuggestTest(EnvSchemaToolTestCase):
     """suggest_schema mode: inference matrix + masking."""
@@ -750,6 +814,24 @@ class EnvSchemaParsingSemanticsTest(EnvSchemaToolTestCase):
         )
         self.assertEqual(result["schema"]["V"]["sample_masked"], "#c")
 
+    def test_whitespace_then_hash_is_an_inline_comment(self) -> None:
+        # Whitespace right after '=' separates the (empty) value from
+        # the comment — the EnvFileTool rule this tool mirrors.
+        for text, expected in (
+            ("V= # note\n", ""),
+            ("V=   # note\n", ""),
+            ("V=\t# note\n", ""),
+            ("V=x # note\n", "x"),
+            ("V= #\n", ""),
+        ):
+            with self.subTest(text=text):
+                result = self.tool.execute(
+                    mode="suggest_schema", text=text
+                )
+                self.assertEqual(
+                    result["schema"]["V"]["sample_masked"], expected
+                )
+
     def test_double_quote_escapes_and_trailing_junk(self) -> None:
         result = self.tool.execute(
             mode="suggest_schema",
@@ -865,6 +947,29 @@ class EnvSchemaErrorMatrixTest(EnvSchemaToolTestCase):
 
     def test_diff_requires_text_b(self) -> None:
         self.assert_invalid(mode="diff", text="A=1\n")
+
+    def test_text_b_type_error_names_text_b(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            self.tool.execute(mode="diff", text="A=1\n", text_b=123)
+        self.assertIn("text_b", str(ctx.exception))
+
+    def test_size_limit_attributes_are_honored(self) -> None:
+        tool = EnvSchemaTool()
+        tool.max_text_chars = 10
+        with self.assertRaises(ValueError) as ctx:
+            tool.execute(mode="suggest_schema", text="A=0123456789x\n")
+        self.assertIn("text", str(ctx.exception))
+        tool2 = EnvSchemaTool()
+        tool2.max_schema_vars = 2
+        with self.assertRaises(ValueError):
+            tool2.execute(
+                mode="check", text="A=1\n",
+                schema={"A": {}, "B": {}, "C": {}},
+            )
+        # equal to the limit passes
+        tool2.execute(
+            mode="check", text="A=1\nB=2\n", schema={"A": {}, "B": {}}
+        )
 
     def test_check_requires_schema(self) -> None:
         self.assert_invalid(mode="check", text="A=1\n")

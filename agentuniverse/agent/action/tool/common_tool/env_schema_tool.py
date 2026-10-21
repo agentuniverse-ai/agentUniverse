@@ -26,7 +26,8 @@ ask. Three modes, all offline and deterministic:
   - ``missing`` — schema-declared variables the file never defines.
     Each entry carries ``required``, ``has_default`` and a paste-ready
     ``suggestion`` line (``VAR=<default>`` when a default exists — the
-    default injection suggestion — otherwise a ``VAR=`` skeleton).
+    default injection suggestion, ``VAR=***`` when the name is
+    secret-ish — otherwise a ``VAR=`` skeleton).
   - ``applied_defaults`` — ``[{var, default}]`` for absent variables
     whose schema default became the effective value so the check can
     still pass; the default is itself type/enum/bounds-checked like a
@@ -65,7 +66,12 @@ value echoed. It becomes ``***`` in ``raw_value_preview``, diff
 entries and ``sample_masked``, and ``suggest_schema`` omits
 ``inferred_enum`` for it entirely (enumerating observed secret values
 would leak them). Numeric ``got`` fields in violations are masked the
-same way.
+same way, and so are the two places a *declared* value would surface:
+a secret-ish default is masked in ``missing`` suggestions and
+``applied_defaults``, and an enum ``expected`` list becomes one mask
+per entry (the length is kept, the allowed values are not). Masking is
+keyed on parsed variable names, so ``malformed_lines`` — lines with no
+parsable variable name — carry their content as written.
 
 Value parsing follows dotenv rules, consistent with ``EnvFileTool``:
 blank / ``#`` lines are skipped, an optional ``export`` prefix is
@@ -77,8 +83,10 @@ suggestion). Double-quoted values unescape ``\\n``, ``\\t``, ``\\r``,
 ignored); single-quoted values are fully literal; unquoted values end
 at the first ``#`` directly preceded by whitespace (a ``#`` glued
 directly after ``=`` or into text such as ``KEY=#c`` / ``a#b`` is
-data), with surrounding whitespace stripped. Lines that are neither
-blank, comment nor a well-formed assignment are reported in
+data, while ``V= # note`` is the empty value — the whitespace before
+the ``#`` separates), with surrounding whitespace stripped. Lines
+that are neither blank, comment nor a well-formed assignment are
+reported in
 ``malformed_lines`` instead of aborting; an unterminated quote is a
 structured ``unterminated_quote`` error payload with the line number.
 
@@ -267,7 +275,7 @@ class EnvSchemaTool(Tool):
             clean_text = self._validate_text(text)
             return self._run_suggest(clean_text)
         clean_text = self._validate_text(text)
-        clean_text_b = self._validate_text(text_b)
+        clean_text_b = self._validate_text(text_b, label="text_b")
         return self._run_diff(clean_text, clean_text_b)
 
     # ------------------------------------------------------------------ #
@@ -279,20 +287,18 @@ class EnvSchemaTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"env_schema_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, text: Any, label: str = "text") -> str:
+    def _validate_text(self, text: Any, label: str = "text") -> str:
         """Validate a ``.env`` text input (may be empty, must be str)."""
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"{label} must be a string (got {text!r})")
-        if len(text) > 100_000:
-            cls._invalid(
-                f"{label} exceeds the {100_000:,}-character limit "
-                f"(got {len(text):,} characters)"
+            self._invalid(f"{label} must be a string (got {text!r})")
+        if len(text) > self.max_text_chars:
+            self._invalid(
+                f"{label} exceeds the {self.max_text_chars:,}-character "
+                f"limit (got {len(text):,} characters)"
             )
         return text
 
-    @classmethod
-    def _validate_schema(cls, schema: Any) -> dict[str, dict[str, Any]]:
+    def _validate_schema(self, schema: Any) -> dict[str, dict[str, Any]]:
         """Validate the ``check``-mode schema shape, strictly.
 
         Every error names the offending variable so a broken rule can
@@ -302,32 +308,32 @@ class EnvSchemaTool(Tool):
         if schema is None or isinstance(schema, bool) or not isinstance(
             schema, dict
         ):
-            cls._invalid(
+            self._invalid(
                 f"schema must be a dict of variable name -> rule dict "
                 f"(got {schema!r})"
             )
-        if len(schema) > 1_000:
-            cls._invalid(
-                f"schema exceeds the {1_000:,}-variable limit "
-                f"(got {len(schema):,} variables)"
+        if len(schema) > self.max_schema_vars:
+            self._invalid(
+                f"schema exceeds the {self.max_schema_vars:,}-variable "
+                f"limit (got {len(schema):,} variables)"
             )
         for var, rule in schema.items():
             if var is None or isinstance(var, bool) or not isinstance(var, str):
-                cls._invalid(
+                self._invalid(
                     f"schema keys must be variable name strings (got {var!r})"
                 )
             if not _KEY_RE.match(var):
-                cls._invalid(
+                self._invalid(
                     "schema keys must match [A-Za-z_][A-Za-z0-9_]* "
                     f"(got {var!r})"
                 )
             if rule is None or isinstance(rule, bool) or not isinstance(
                 rule, dict
             ):
-                cls._invalid(
+                self._invalid(
                     f"schema rule for {var!r} must be a dict (got {rule!r})"
                 )
-            cls._validate_rule(var, rule)
+            self._validate_rule(var, rule)
         return schema
 
     @classmethod
@@ -474,11 +480,11 @@ class EnvSchemaTool(Tool):
         # by whitespace (an inline comment); a '#' glued directly after
         # '=' or into text is data.
         cut = None
-        for index in range(1, len(probe)):
-            if probe[index] == "#" and probe[index - 1] in " \t":
+        for index in range(1, len(value_part)):
+            if value_part[index] == "#" and value_part[index - 1] in " \t":
                 cut = index
                 break
-        data = probe if cut is None else probe[:cut]
+        data = value_part if cut is None else value_part[:cut]
         return data.strip()
 
     @classmethod
@@ -520,6 +526,15 @@ class EnvSchemaTool(Tool):
         if len(value) > _PREVIEW_CHARS:
             return value[:_PREVIEW_CHARS] + "..."
         return value
+
+    @classmethod
+    def _mask_default(cls, var: str, default: str) -> str:
+        """Render a schema default: masked for secret-ish names only.
+
+        Non-secret defaults stay verbatim so the ``missing`` suggestion
+        remains paste-ready; a secret default is never echoed.
+        """
+        return _MASK if cls._is_secret(var) else default
 
     # ------------------------------------------------------------------ #
     # Type coercion / inference
@@ -686,14 +701,19 @@ class EnvSchemaTool(Tool):
                         "required": required,
                         "has_default": default is not None,
                         "suggestion": (
-                            f"{var}={default}"
+                            f"{var}={self._mask_default(var, default)}"
                             if default is not None
                             else f"{var}="
                         ),
                     }
                 )
                 if default is not None:
-                    applied_defaults.append({"var": var, "default": default})
+                    applied_defaults.append(
+                        {
+                            "var": var,
+                            "default": self._mask_default(var, default),
+                        }
+                    )
                     effective = default
                 else:
                     if required:
@@ -739,11 +759,16 @@ class EnvSchemaTool(Tool):
 
             enum_values = rule.get("enum")
             if enum_values is not None and effective not in enum_values:
+                expected = (
+                    [_MASK] * len(enum_values)
+                    if self._is_secret(var)
+                    else list(enum_values)
+                )
                 violations.append(
                     {
                         "var": var,
                         "rule": "enum",
-                        "expected": list(enum_values),
+                        "expected": expected,
                         "got": self._display(var, effective),
                     }
                 )

@@ -679,8 +679,10 @@ tool.execute(mode="diff", text=prod_text, text_b=staging_text)["count"]
 
 Values of secret-ish variables (names containing `KEY`, `SECRET`,
 `PASSWORD` or `TOKEN`, case-insensitive) are never echoed: previews,
-diff entries and samples become `***`, and `suggest_schema` omits enum
-candidates for them entirely. Type coercion is a documented contract:
+diff entries and samples become `***`, `suggest_schema` omits enum
+candidates for them entirely, a secret default is masked in `missing`
+suggestions and `applied_defaults`, and an enum `expected` list keeps
+only its length (one `***` per entry). Type coercion is a documented contract:
 `int` accepts plain decimal (optional sign); `float` accepts plain
 decimal/exponent forms (no `inf`/`nan`/hex); `bool` accepts
 `true`/`false`/`1`/`0`/`yes`/`no` case-insensitively; `url` requires a
