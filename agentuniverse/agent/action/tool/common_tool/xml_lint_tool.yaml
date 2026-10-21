@@ -20,7 +20,9 @@ description: >-
   and processing-instruction/comment counts. fix_hints mode computes
   safe suggestions only, never applied (mode='fix_hints'): a BOM
   strip note and a canonical 2-space pretty-print re-serialization
-  via ET.indent with a unified-diff summary capped at 40 lines;
+  (an iterative, recursion-safe equivalent of ET.indent plus
+  ET.tostring, byte-identical to the stdlib output) with a
+  unified-diff summary capped at 40 lines;
   per-line whitespace stripping is deliberately not offered because
   trailing whitespace inside XML text content is literal.
 tool_type: api

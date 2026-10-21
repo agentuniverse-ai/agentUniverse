@@ -68,25 +68,31 @@ Supported modes
   element, the ten most frequent element tags, attribute count, text
   statistics (non-empty text/tail node count, total characters,
   longest single text node), distinct namespaces in use, and
-  processing-instruction / comment counts. Profile mode raises
+  processing-instruction / comment counts — counted document-wide by
+  the raw-expat pass, so comments and PIs outside the root element
+  (which a tree parse drops) are included. Profile mode raises
   ValueError on a DTD-bearing, unparseable or surrogate-broken
   document because it has nothing to report.
 * ``fix_hints`` — safe suggestions only, never applied: a BOM strip
   note (line 1, col 1 — the BOM is legal, stripping it is a choice),
   and a pretty-print suggestion — the canonical 2-space
-  re-serialization via ``ET.indent(tree, space="  ")`` plus
-  ``ET.tostring`` — with a unified-diff summary capped at 40 lines.
-  ``applied`` is always False; nothing is written back or executed.
-  Whitespace stripping per line is deliberately NOT offered:
-  trailing whitespace inside text content is *literal* in XML and
-  trimming it changes the document, so the tool refuses the
-  temptation. The canonical form renames namespace prefixes (ns0,
-  ns1, ...) and renders self-closing tags as ``<b />``; when
-  namespaces are in use or the source carries an XML declaration the
-  suggestion carries an explicit note about those rewrites. A comment
-  / PI preserving parse backs the suggestion, and mixed-content text
-  is left in place (``ET.indent`` only touches whitespace-only
-  nodes).
+  re-serialization (iterative equivalents of ``ET.indent(tree,
+  space="  ")`` and ``ET.tostring``, byte-identical to the stdlib
+  output but recursion-free, so documents thousands of levels deep
+  cannot hit the interpreter recursion limit) — with a unified-diff
+  summary capped at 40 lines. ``applied`` is always False; nothing is
+  written back or executed. Whitespace stripping per line is
+  deliberately NOT offered: trailing whitespace inside text content
+  is *literal* in XML and trimming it changes the document, so the
+  tool refuses the temptation. The canonical form renames namespace
+  prefixes (ns0, ns1, ...) and renders self-closing tags as
+  ``<b />``; when namespaces are in use or the source carries an XML
+  declaration the suggestion carries an explicit note about those
+  rewrites, and document-level comments / PIs outside the root —
+  which no tree serializer carries — are disclosed the same way. A
+  comment / PI preserving parse backs the suggestion, and
+  mixed-content text is left in place (indentation only touches
+  whitespace-only nodes).
 
 Rule table (mode ``lint``)
 --------------------------
@@ -260,10 +266,14 @@ _NAMESPACE_LIMIT: int = 10
 _FINDING_CAP: int = 200
 _DIFF_CAP: int = 40
 
-# The XML declaration must sit at offset 0 of the (post-BOM) text; the
-# encoding pseudo-attribute is lowercase per the XML specification.
+# The XML declaration must sit at offset 0 of the (post-BOM) text and
+# is always followed by whitespace (``<?xml version=...``); a PI whose
+# target merely starts with ``xml`` (``<?xml-stylesheet ...``) is not
+# a declaration. The encoding pseudo-attribute is lowercase per the
+# XML specification.
+_DECL_START_RE = re.compile(r"\A<\?xml\s")
 _DECL_ENCODING_RE = re.compile(
-    r"\A<\?xml\b[^>]*?encoding\s*=\s*(['\"])(.*?)\1", re.DOTALL)
+    r"\A<\?xml\s[^>]*?encoding\s*=\s*(['\"])(.*?)\1", re.DOTALL)
 
 # Comment / PI stripping used only to prove pi_or_comment_only.
 _COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
@@ -275,6 +285,18 @@ _ENTITY_AT_RE = re.compile(r"&([A-Za-z_:][A-Za-z0-9_.:\-]*);")
 
 # Encoding values that mean UTF-8 (label comparison is case-insensitive).
 _UTF8_LABELS: frozenset = frozenset({"utf-8", "utf8"})
+
+# Well-known namespace URIs that keep their conventional prefix in the
+# canonical re-serialization instead of an ns0/ns1/... one.
+_WELL_KNOWN_NAMESPACES: dict = {
+    "http://www.w3.org/XML/1998/namespace": "xml",
+    "http://www.w3.org/1999/xhtml": "html",
+    "http://www.w3.org/1999/02/22-rdf-syntax-ns#": "rdf",
+    "http://schemas.xmlsoap.org/wsdl/": "wsdl",
+    "http://www.w3.org/2001/XMLSchema": "xs",
+    "http://www.w3.org/2001/XMLSchema-instance": "xsi",
+    "http://purl.org/dc/elements/1.1/": "dc",
+}
 
 # Expat error codes mapped to dedicated rules; everything else is XML001.
 _EXPAT_NO_ELEMENTS = 3       # "no element found"
@@ -431,26 +453,39 @@ def _map_parse_error(text: str, exc: ET.ParseError) -> dict:
 # Position oracle (raw expat) and the tree walk
 # ---------------------------------------------------------------------------
 
-def _start_positions(payload: bytes) -> list:
-    """(line, 0-based col) of every start tag, in document order.
+def _start_positions(payload: bytes) -> tuple:
+    """(positions, comment_count, pi_count) from one raw expat pass.
 
         ElementTree does not expose source positions, so this drives
         expat — the very engine ET uses — purely to record
         ``CurrentLineNumber`` / ``CurrentColumnNumber`` for each start
         element. The bytes already parsed cleanly through ET, so this
-        pass cannot fail; its i-th entry aligns with the i-th real
+        pass cannot fail; the i-th position aligns with the i-th real
         element of the pre-order walk (comments and PIs never fire
-        StartElementHandler).
+        StartElementHandler). The comment and PI handlers fire for
+        every such node in the document, including document-level ones
+        before or after the root that ``ET.fromstring`` drops from the
+        tree — the XML declaration itself is not reported as a PI.
     """
     parser = expat.ParserCreate()
     positions: list = []
+    counts: dict = {"comment": 0, "pi": 0}
     parser.StartElementHandler = (
         lambda name, attrs: positions.append(
             (parser.CurrentLineNumber, parser.CurrentColumnNumber)
         )
     )
+
+    def _on_comment(text: str) -> None:
+        counts["comment"] += 1
+
+    def _on_pi(target: str, data: str) -> None:
+        counts["pi"] += 1
+
+    parser.CommentHandler = _on_comment
+    parser.ProcessingInstructionHandler = _on_pi
     parser.Parse(payload, True)
-    return positions
+    return positions, counts["comment"], counts["pi"]
 
 
 def _walk(root: ET.Element) -> list:
@@ -606,9 +641,10 @@ def _structure_findings(
         if not _is_element(node):
             continue
         ordinal += 1
+        has_element_child = any(_is_element(child) for child in node)
         if "XML010" not in disabled:
             text = node.text or ""
-            if len(node) == 0 and not text.strip():
+            if not has_element_child and not text.strip():
                 detail = (
                     "whitespace-only text" if text else "no text"
                 )
@@ -618,7 +654,7 @@ def _structure_findings(
                     f"element {node.tag!r} is empty ({detail}, no child "
                     "elements) — may be intentional",
                 ))
-        if "XML011" not in disabled and len(node) > 0:
+        if "XML011" not in disabled and has_element_child:
             mixed = bool((node.text or "").strip()) or any(
                 (child.tail or "").strip() for child in node
             )
@@ -728,7 +764,7 @@ def _run_lint(tool: Any, xml_text: str, max_depth: int,
         result.update(mode="lint", parsed=False)
         return result
 
-    positions = _start_positions(payload)
+    positions, _comments, _pis = _start_positions(payload)
     order = _walk(root)
     findings.extend(
         _structure_findings(order, positions, max_depth, disabled)
@@ -768,7 +804,7 @@ def _run_profile(xml_text: str) -> dict:
             f"{_message_only(exc)}"
         )
 
-    positions = _start_positions(payload)
+    positions, comment_count, pi_count = _start_positions(payload)
     order = _walk(root)
     stats, index_of = _collect(order)
 
@@ -799,9 +835,164 @@ def _run_profile(xml_text: str) -> dict:
         "text_length_max": stats["text_length_max"],
         "namespaces": sorted(stats["namespaces"]),
         "namespace_count": len(stats["namespaces"]),
-        "pi_count": stats["pi_count"],
-        "comment_count": stats["comment_count"],
+        "pi_count": pi_count,
+        "comment_count": comment_count,
     }
+
+
+# ---------------------------------------------------------------------------
+# recursion-safe re-serialization (fix_hints)
+# ---------------------------------------------------------------------------
+
+def _escape_cdata(text: str) -> str:
+    """Character-data escaping (the ET.tostring rules)."""
+    if "&" in text:
+        text = text.replace("&", "&amp;")
+    if "<" in text:
+        text = text.replace("<", "&lt;")
+    if ">" in text:
+        text = text.replace(">", "&gt;")
+    return text
+
+
+def _escape_attrib(text: str) -> str:
+    """Attribute-value escaping (the ET.tostring rules)."""
+    text = _escape_cdata(text)
+    if "\"" in text:
+        text = text.replace("\"", "&quot;")
+    if "\r" in text:
+        text = text.replace("\r", "&#13;")
+    if "\n" in text:
+        text = text.replace("\n", "&#10;")
+    if "\t" in text:
+        text = text.replace("\t", "&#09;")
+    return text
+
+
+def _qname_map(root: ET.Element) -> tuple:
+    """(qnames, namespaces) for serialization, ET.tostring's algorithm.
+
+        Walks the tree in document order assigning ``ns0``, ``ns1``, ...
+        prefixes to distinct namespace URIs as first used (well-known
+        URIs keep their conventional prefix, and the implicit ``xml``
+        prefix is never declared); every element tag and attribute name
+        ends up in ``qnames`` mapped to its serialized form. The whole
+        ``namespaces`` map is emitted as declarations on the root
+        element, exactly as ``ET.tostring`` does.
+    """
+    qnames: dict = {None: None}
+    namespaces: dict = {}
+
+    def add(qname: str) -> None:
+        if qname[:1] == "{":
+            uri, tag = qname[1:].rsplit("}", 1)
+            prefix = namespaces.get(uri)
+            if prefix is None:
+                prefix = _WELL_KNOWN_NAMESPACES.get(uri)
+                if prefix is None:
+                    prefix = "ns%d" % len(namespaces)
+                if prefix != "xml":
+                    namespaces[uri] = prefix
+            qnames[qname] = "%s:%s" % (prefix, tag) if prefix else tag
+        else:
+            qnames[qname] = qname
+
+    for node in root.iter():
+        if _is_element(node) and node.tag not in qnames:
+            add(node.tag)
+        for key in node.attrib:
+            if key not in qnames:
+                add(key)
+    return qnames, namespaces
+
+
+def _indent_tree(root: ET.Element, space: str = "  ") -> None:
+    """Iterative equivalent of ``ET.indent(root, space)``.
+
+        Produces the identical 2-space canonical form without the
+        interpreter recursion the stdlib helper uses, so documents
+        thousands of levels deep — the very documents XML012 flags —
+        cannot raise RecursionError here. Only whitespace-only text
+        and tail nodes are rewritten.
+    """
+    if not len(root):
+        return
+    indentations: list = ["\n"]
+    stack: list = [(root, 0)]
+    while stack:
+        elem, level = stack.pop()
+        child_level = level + 1
+        try:
+            child_indentation = indentations[child_level]
+        except IndexError:
+            child_indentation = indentations[level] + space
+            indentations.append(child_indentation)
+        if not elem.text or not elem.text.strip():
+            elem.text = child_indentation
+        last = None
+        for child in elem:
+            if len(child):
+                stack.append((child, child_level))
+            if not child.tail or not child.tail.strip():
+                child.tail = child_indentation
+            last = child
+        if last is not None and not last.tail.strip():
+            last.tail = indentations[level]
+
+
+def _serialize_tree(root: ET.Element) -> str:
+    """Iterative equivalent of ``ET.tostring(root, encoding="unicode")``.
+
+        Emits exactly what the stdlib serializer emits — namespace
+        declarations sorted by prefix on the root, attributes in
+        document order, ``<b />`` self-closing form, comments and PIs
+        retained — via an explicit stack, so arbitrarily deep trees
+        serialize without RecursionError.
+    """
+    qnames, namespaces = _qname_map(root)
+    emit_declarations = bool(namespaces)
+    out: list = []
+    stack: list = [(root, False)]
+    while stack:
+        node, closing = stack.pop()
+        if closing:
+            out.append("</%s>" % qnames[node.tag])
+            if node.tail:
+                out.append(_escape_cdata(node.tail))
+            continue
+        if node.tag is ET.Comment:
+            out.append("<!--%s-->" % node.text)
+            if node.tail:
+                out.append(_escape_cdata(node.tail))
+            continue
+        if node.tag is ET.ProcessingInstruction:
+            out.append("<?%s?>" % node.text)
+            if node.tail:
+                out.append(_escape_cdata(node.tail))
+            continue
+        out.append("<" + qnames[node.tag])
+        items = list(node.items())
+        if emit_declarations:
+            emit_declarations = False
+            for uri, prefix in sorted(
+                namespaces.items(), key=lambda item: item[1]
+            ):
+                suffix = ":" + prefix if prefix else ""
+                out.append(' xmlns%s="%s"' % (suffix, _escape_attrib(uri)))
+        for key, value in items:
+            out.append(' %s="%s"' % (qnames[key], _escape_attrib(value)))
+        if node.text or len(node):
+            out.append(">")
+            if node.text:
+                out.append(_escape_cdata(node.text))
+            stack.append((node, True))
+            for child in reversed(node):
+                stack.append((child, False))
+        else:
+            out.append(" />")
+            if node.tail:
+                out.append(_escape_cdata(node.tail))
+    return "".join(out)
 
 
 # ---------------------------------------------------------------------------
@@ -860,25 +1051,35 @@ def _run_fix_hints(xml_text: str) -> dict:
         )
         return result
 
-    # Canonical 2-space re-serialization (comments and PIs retained).
-    ET.indent(root, space="  ")
-    suggested = ET.tostring(root, encoding="unicode")
+    stats, _index_of = _collect(_walk(root))
+    _positions, doc_comment_count, doc_pi_count = _start_positions(payload)
+
+    # Canonical 2-space re-serialization (comments and PIs retained),
+    # iterative so that thousand-deep documents cannot RecursionError.
+    _indent_tree(root, space="  ")
+    suggested = _serialize_tree(root)
     changed = suggested != text
 
     notes: list = [
         "never applied automatically — adopt it manually and re-lint",
     ]
-    if text.startswith("<?xml"):
+    if _DECL_START_RE.match(text):
         notes.append(
             "the XML declaration is not part of the re-serialization; "
             "re-add it if the consumer needs one"
         )
-    stats, _index_of = _collect(_walk(_parse(payload)))
     if stats["namespaces"]:
         notes.append(
             "namespace prefixes are normalized (ns0, ns1, ...): the "
             "suggestion is semantically equivalent but textually "
             "different from prefixed sources"
+        )
+    if (doc_comment_count > stats["comment_count"]
+            or doc_pi_count > stats["pi_count"]):
+        notes.append(
+            "document-level comments and processing instructions "
+            "outside the root element are not carried into the "
+            "re-serialization"
         )
     notes.append(
         "the canonical form renders self-closing tags as <b /> and "

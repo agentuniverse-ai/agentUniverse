@@ -343,6 +343,18 @@ class XmlLintToolLintRuleGroundTruthsTest(unittest.TestCase):
         result = self.tool.execute(mode="lint", xml_text=text)
         self.assertNotIn("XML009", codes(result))
 
+    def test_stylesheet_pi_is_not_a_declaration(self) -> None:
+        # a PI whose target merely starts with 'xml' is not an XML
+        # declaration: its encoding text must not fire XML009 even
+        # with non-ASCII content
+        text = (
+            '<?xml-stylesheet type="text/xsl" encoding="ISO-8859-1"?>'
+            "<r>h\u00e9llo w\u00f6rld</r>"
+        )
+        result = self.tool.execute(mode="lint", xml_text=text)
+        self.assertNotIn("XML009", codes(result))
+        self.assertTrue(result["ok"])
+
     # -- XML010 empty_element ---------------------------------------------------------
 
     def test_empty_element_with_and_without_whitespace_text(self) -> None:
@@ -360,6 +372,18 @@ class XmlLintToolLintRuleGroundTruthsTest(unittest.TestCase):
             mode="lint", xml_text='<r><a x="1" y="2"/></r>'
         )
         self.assertEqual(len(by_code(result, "XML010")), 1)
+
+    def test_comment_or_pi_children_do_not_make_an_element_non_empty(
+        self,
+    ) -> None:
+        # the trigger is "no child elements and no text beyond
+        # whitespace" — comments and PIs are neither
+        result = self.tool.execute(
+            mode="lint", xml_text="<r><a><!-- c --></a><b><?pi d?></b></r>"
+        )
+        findings = by_code(result, "XML010")
+        # <r> col 1, <a> col 4, <b> col 21 (after </a> ends at col 20)
+        self.assertEqual([f["col"] for f in findings], [4, 21])
 
     # -- XML011 mixed_content_element ------------------------------------------------------
 
@@ -384,6 +408,14 @@ class XmlLintToolLintRuleGroundTruthsTest(unittest.TestCase):
             mode="lint", xml_text="<a>x<![CDATA[y]]>z<b/></a>"
         )
         self.assertEqual(len(by_code(result, "XML011")), 1)
+
+    def test_text_around_a_comment_is_not_mixed_content(self) -> None:
+        # the trigger requires child ELEMENTS mixed with text; a
+        # comment child plus text is not mixed content
+        result = self.tool.execute(
+            mode="lint", xml_text="<a>x<!-- c --></a>"
+        )
+        self.assertNotIn("XML011", codes(result))
 
     # -- XML012 deeply_nested -------------------------------------------------------------
 
@@ -688,6 +720,20 @@ class XmlLintToolProfileTest(unittest.TestCase):
         result = self.tool.execute(mode="profile", xml_text="\ufeff<a/>")
         self.assertEqual(result["element_count"], 1)
 
+    def test_profile_counts_document_level_comments_and_pis(self) -> None:
+        # comments and PIs outside the root element are dropped by a
+        # tree parse; the raw-expat pass counts them document-wide
+        text = "<!-- lead --><?pi d?><r><!-- in --></r><!-- trail -->"
+        result = self.tool.execute(mode="profile", xml_text=text)
+        self.assertEqual(result["comment_count"], 3)
+        self.assertEqual(result["pi_count"], 1)
+
+    def test_profile_does_not_count_the_declaration_as_a_pi(self) -> None:
+        result = self.tool.execute(
+            mode="profile", xml_text="<?xml version='1.0'?><r/><?pi?>"
+        )
+        self.assertEqual(result["pi_count"], 1)
+
     def test_profile_deep_document_does_not_recursion_overflow(self) -> None:
         depth = 5000
         text = "<a>" * depth + "</a>" * depth
@@ -863,6 +909,77 @@ class XmlLintToolFixHintsTest(unittest.TestCase):
         self.assertIn("kept   ", suggested)
         self.assertIn("inner  ", suggested)
         self.assertIn("tail   ", suggested)
+
+    def test_thousand_deep_document_never_recursion_errors(self) -> None:
+        # ET.indent and ET.tostring recurse per level; the tool's
+        # serializer is iterative so the deep documents XML012 exists
+        # for still get a suggestion instead of a RecursionError
+        depth = 5000
+        text = "<a>" * depth + "</a>" * depth
+        result = self.tool.execute(mode="fix_hints", xml_text=text)
+        self.assertFalse(result["parse_failed"])
+        pretty = result["pretty_print"]
+        self.assertTrue(pretty["changed"])
+        reparsed = ET.fromstring(pretty["suggested_text"])
+        seen = 0
+        node = reparsed
+        while node is not None:
+            seen += 1
+            node = node[0] if len(node) else None
+        self.assertEqual(seen, depth)
+
+    def test_iterative_serializer_matches_the_stdlib_output(self) -> None:
+        from agentuniverse.agent.action.tool.common_tool.xml_lint_tool \
+            import _indent_tree, _serialize_tree
+
+        documents = [
+            "<a><b x='1'/><c/></a>",
+            '<r xmlns:p="urn:p"><p:k p:a="1">t</p:k><k/></r>',
+            '<r xmlns="urn:d"><k/><k2>t</k2></r>',
+            "<a><!-- c --><?pi d?><b/>tail</a>",
+            "<a>keep<b/>this</a>",
+            '<a q="&quot;hi&quot;&amp;&lt;x&gt;" t="a&#10;b&#13;c&#9;d">'
+            "1 &lt; 2 &amp; 3</a>",
+            '<r xmlns:xhtml="http://www.w3.org/1999/xhtml">'
+            "<xhtml:div/></r>",
+            '<r xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+            ' xmlns:xs="http://www.w3.org/2001/XMLSchema">'
+            '<xs:a xsi:b="1"/></r>',
+            "<r><xml:a xml:l='1'/></r>",
+            "<empty/>",
+            "<a>text</a>",
+            "<a><?pi?></a>",
+        ]
+        for document in documents:
+            with self.subTest(document=document):
+                stdlib_tree = ET.fromstring(document.encode("utf-8"))
+                own_tree = ET.fromstring(document.encode("utf-8"))
+                ET.indent(stdlib_tree, space="  ")
+                expected = ET.tostring(stdlib_tree, encoding="unicode")
+                _indent_tree(own_tree, space="  ")
+                self.assertEqual(_serialize_tree(own_tree), expected)
+
+    def test_no_declaration_note_for_stylesheet_pi(self) -> None:
+        # only a real XML declaration at offset 0 earns the
+        # declaration note; an xml-stylesheet PI is not one
+        result = self.tool.execute(
+            mode="fix_hints",
+            xml_text='<?xml-stylesheet href="a.xsl"?><r><k/></r>',
+        )
+        notes = " ".join(result["pretty_print"]["notes"])
+        self.assertNotIn("XML declaration", notes)
+
+    def test_document_level_comment_loss_is_disclosed(self) -> None:
+        # comments and PIs outside the root are not carried into any
+        # re-serialization; the notes must say so
+        result = self.tool.execute(
+            mode="fix_hints",
+            xml_text="<!-- lead --><r><k/></r><!-- trail -->",
+        )
+        notes = " ".join(result["pretty_print"]["notes"])
+        self.assertIn("document-level", notes)
+        self.assertNotIn("<!-- lead -->",
+                         result["pretty_print"]["suggested_text"])
 
 
 class XmlLintToolValidationMatrixTest(unittest.TestCase):
