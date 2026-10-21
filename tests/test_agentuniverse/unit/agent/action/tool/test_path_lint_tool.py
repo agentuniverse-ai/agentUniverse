@@ -100,9 +100,11 @@ class LintCleanPathsTest(unittest.TestCase):
             self.assertEqual(lint(path)["findings"], [], path)
 
     def test_tolerated_forms_are_silent(self):
-        # One trailing separator, a leading POSIX pair, dot-free
-        # relative paths, plain Unicode NFC names: no findings.
-        for path in ["a/b/", "//posix_root_form", "café", "目录/文件.txt",
+        # One trailing separator, a single leading POSIX root slash,
+        # a complete two-segment forward-slash UNC, dot-free relative
+        # paths, plain Unicode NFC names: no findings.
+        for path in ["a/b/", "/posix_root_form", "//server/share",
+                     "café", "目录/文件.txt",
                      "C:\\x\\", "a/b/c/."[:0] or "plain"]:
             self.assertEqual(lint(path)["findings"], [], repr(path))
 
@@ -255,8 +257,11 @@ class LintCheckMatrixTest(unittest.TestCase):
         result = lint("a//b")
         self.assertEqual(codes(result), ["empty_segment"])
         self.assertEqual(result["findings"][0]["severity"], "info")
-        # Leading pair tolerated, extra leading reported.
-        self.assertEqual(lint("//x")["findings"], [])
+        # Leading pair tolerated by the empty-segment check, extra
+        # leading reported. (A two-segment-less '//x' additionally
+        # carries the windows-attributed unc_prefix error — see
+        # OracleRegressionTest — but never an empty_segment.)
+        self.assertEqual(codes(lint("//x")), ["unc_prefix"])
         self.assertIn("empty_segment", codes(lint("///x")))
         # One trailing separator silent, doubled reported.
         self.assertEqual(lint("a/b/")["findings"], [])
@@ -769,6 +774,77 @@ class PackagingTest(unittest.TestCase):
                 DirectPathLintTool.__module__, fromlist=["x"]).__file__
             ), "path_lint_tool.yaml"))
         self.assertTrue(os.path.exists(module_dir), module_dir)
+
+
+# ------------------------------------------------------------------ #
+# Hostile-review regressions (differential probes vs the
+# posixpath / ntpath oracles and the Microsoft naming docs)
+# ------------------------------------------------------------------ #
+
+
+class OracleRegressionTest(unittest.TestCase):
+    def test_forward_slash_unc_missing_share_flagged(self):
+        # ntpath.normpath('//server') == '\\\\server' — byte-identical
+        # to the backslash spelling the tool flags, so both spellings
+        # of a share-less UNC must produce the same windows error.
+        import ntpath
+        for path in ["//server", "//server/", "//"]:
+            self.assertEqual(
+                ntpath.normpath(path).startswith("\\\\"), True, path
+            )
+            self.assertEqual(codes(lint(path)), ["unc_prefix"], repr(path))
+            self.assertEqual(
+                lint(path)["findings"][0]["severity"], "error", repr(path)
+            )
+        # A complete forward-slash UNC stays silent.
+        self.assertEqual(lint("//server/share")["findings"], [])
+        self.assertEqual(lint("//server/share/x")["findings"], [])
+
+    def test_forward_slash_unc_windows_verdict(self):
+        result = validate("//server", "both")
+        self.assertFalse(result["platforms"]["windows"]["valid"])
+        self.assertIn("unc_prefix", result["platforms"]["windows"]["codes"])
+        # POSIX never sees the finding (single-attribution contract).
+        self.assertTrue(result["platforms"]["posix"]["valid"])
+        self.assertNotIn("unc_prefix", result["platforms"]["posix"]["codes"])
+
+    def test_volume_device_path_not_reserved_char(self):
+        # \\.\C: is the documented Win32 volume-device path; its colon
+        # is a structural drive colon, not a reserved-character hit.
+        for path in ["\\\\.\\C:", "\\\\.\\C:\\", "\\\\.\\c:"]:
+            self.assertEqual(codes(lint(path)), ["device_namespace"], repr(path))
+        # A colon elsewhere in a device path is still flagged.
+        self.assertIn("reserved_char", codes(lint("\\\\.\\x:y")))
+
+    def test_device_object_name_not_reserved_name(self):
+        # \\.\COM1 is the documented way to open the serial port;
+        # the reserved-name rule constrains file paths, not the
+        # device-namespace object name.
+        for path in ["\\\\.\\COM1", "\\\\.\\NUL", "\\\\.\\con"]:
+            self.assertEqual(codes(lint(path)), ["device_namespace"], repr(path))
+        # The same names as *file* components stay errors.
+        self.assertIn("reserved_name", codes(lint("C:\\COM1")))
+        self.assertIn("reserved_name", codes(lint("dir\\NUL.txt")))
+
+    def test_extended_unc_missing_share_flagged(self):
+        # \\?\UNC\server has a server but no share — Windows rejects
+        # it exactly like the non-extended spelling.
+        self.assertEqual(codes(lint("\\\\?\\UNC\\server")), ["unc_prefix"])
+        self.assertEqual(codes(lint("\\\\?\\UNC\\server\\")), ["unc_prefix"])
+        # Complete extended UNC forms stay clean.
+        self.assertEqual(lint("\\\\?\\UNC\\server\\share")["findings"], [])
+        self.assertEqual(lint("\\\\?\\UNC\\server\\share\\x")["findings"], [])
+
+    def test_trailing_dot_space_message_win32_accurate(self):
+        # Win32 strips trailing dots/spaces at segment end only, so
+        # 'foo .txt' is NOT rewritten to 'foo.txt' — the message must
+        # use a trailing-space example, not the false one.
+        message = lint("end. ")["findings"][0]["message"]
+        self.assertIn("'foo.txt ' silently becomes 'foo.txt'", message)
+        self.assertNotIn("'foo .txt'", message)
+        # Behavior agrees: 'foo .txt' is a legal name (no flag).
+        self.assertEqual(lint("foo .txt")["findings"], [])
+        self.assertIn("trailing_dot_space", codes(lint("foo.txt ")))
 
 
 if __name__ == "__main__":

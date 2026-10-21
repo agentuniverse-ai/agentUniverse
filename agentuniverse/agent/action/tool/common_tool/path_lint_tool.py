@@ -78,12 +78,15 @@ platforms where it bites — the attribution drives ``validate``):
   occur: each platform reads the other's separator as a literal
   filename character, so the path means different trees on
   different systems.
-* ``unc_prefix`` (error or warning, windows) — UNC and Win32
-  namespace prefix validation: ``\\?\`` requires an absolute
-  target (``\\?\C:\...`` or ``\\?\UNC\server\share\...``), does
-  not translate forward slashes, and disables the other checks'
+* ``unc_prefix`` (error, windows) — UNC and Win32 namespace
+  prefix validation: ``\\?\`` requires an absolute target
+  (``\\?\C:\...`` or ``\\?\UNC\server\share\...``), does not
+  translate forward slashes, and disables the other checks'
   reliance on translation; a UNC path needs both a server and a
-  share (``\\server`` or bare ``\\`` is flagged).
+  share, in either separator spelling (``\\server``, ``//server``
+  and the bare ``\\`` / ``//`` are flagged — ``ntpath.normpath``
+  folds ``//server`` to ``\\server`` — and ``\\?\UNC\server``
+  likewise needs its share).
 * ``device_namespace`` (info, windows) — ``\\.\`` device paths
   name device objects, not files.
 * ``drive_relative`` (warning, windows) — ``C:x`` (and bare
@@ -105,8 +108,9 @@ platforms where it bites — the attribution drives ``validate``):
   file. Knowledge hand-embedded from the Microsoft naming docs,
   not discovered at runtime.
 * ``trailing_dot_space`` (error, windows) — segments ending in
-  ``.`` or space: Win32 strips them, so ``foo.`` and ``foo``
-  collide and ``foo .txt`` silently becomes ``foo.txt``.
+  ``.`` or space: Win32 strips them (at the end of a segment
+  only), so ``foo.`` and ``foo`` collide and ``foo.txt ``
+  silently becomes ``foo.txt``.
 * ``dot_segment`` (info, both) — ``.`` segments are no-ops that
   normalization removes.
 * ``dot_dot_segment`` (info, both) — benign ``..`` segments that
@@ -311,8 +315,6 @@ class _Structure:
             removed (the prefixes carry characters — ``?`` and
             the drive colon — that are legal only in their slot,
             so they must not reach the content scans).
-        backslash_lead (bool): True when the leading separator
-            run uses a backslash (UNC on Windows).
     """
 
     def __init__(self, path: str) -> None:
@@ -346,8 +348,17 @@ class _Structure:
             rest = rest[len(_DEVICE_PREFIX_FWD):]
             self.kind = "device"
             self.prefix_fwd = True
-        # Drive letter (\\.\ device paths and \\?\UNC\ forms have none).
-        if self.kind not in ("device", "extended_unc"):
+        # Drive letter. \\?\UNC\ forms have none. A \\.\ device path
+        # carries one only as a volume designator (\\.\C: names the
+        # volume of drive C per the Win32 volume-device syntax), so
+        # for device paths the letter is stripped only when the
+        # colon ends the path or is followed by a separator.
+        if self.kind == "device":
+            match = _DRIVE_RE.match(rest)
+            if match and (len(rest) == 2 or rest[2] in _SEPARATORS):
+                self.drive = match.group(1)
+                rest = match.group(2)
+        elif self.kind != "extended_unc":
             match = _DRIVE_RE.match(rest)
             if match:
                 self.drive = match.group(1)
@@ -365,18 +376,16 @@ class _Structure:
                 self.lead += 1
             else:
                 break
-        self.backslash_lead = rest[:1] == "\\"
         if self.lead and self.kind in ("relative", "drive_relative"):
             # A separator after the drive colon makes it absolute;
             # bare separators make a root/UNC form.
             if self.kind == "drive_relative" and rest[:1] and rest[0] in _SEPARATORS:
                 self.kind = "drive_absolute"
             elif self.kind == "relative":
-                self.kind = (
-                    "unc" if self.lead >= 2 and self.backslash_lead else "posix_root"
-                )
-        elif self.lead >= 2 and self.kind == "posix_root":
-            self.kind = "unc" if self.backslash_lead else "posix_root"
+                # Either slash flavor: ntpath.normpath('//server') is
+                # '\\\\server' — Windows reads a doubled leading run of
+                # either separator as the UNC root.
+                self.kind = "unc" if self.lead >= 2 else "posix_root"
         self.body = rest
 
 
@@ -505,13 +514,15 @@ def _lint_path(path: str) -> List[Dict[str, Any]]:
             "translation, so forward slashes are not separators "
             "there and the path fails on Windows",
         )
-    elif structure.kind == "unc":
+    elif structure.kind in ("unc", "extended_unc"):
         segments = _segment_list(structure)
         if len(segments) < 2:
             add(
                 "unc_prefix",
                 "UNC path is missing its share: a UNC path needs "
-                "both a server and a share (\\\\server\\share\\...)",
+                "both a server and a share (\\\\server\\share\\...; "
+                "either separator spelling, and \\\\?\\UNC\\server\\"
+                "share likewise)",
             )
 
     # 7. device namespace ------------------------------------------ #
@@ -574,6 +585,12 @@ def _lint_path(path: str) -> List[Dict[str, Any]]:
     for index, segment in enumerate(segments, start=1):
         if segment in (".", ".."):
             continue
+        if structure.kind == "device" and index == 1:
+            # The device object itself: \\.\COM1 is the documented
+            # way to open the serial port, and \\.\NUL the null
+            # device — the reserved-name rule constrains file paths,
+            # not the device-namespace object name.
+            continue
         # Win32 strips trailing dots and spaces from every segment
         # before the name is interpreted, so the reserved-name
         # comparison must see the stripped stem ("PRN .dat" is
@@ -602,9 +619,9 @@ def _lint_path(path: str) -> List[Dict[str, Any]]:
         add(
             "trailing_dot_space",
             f"segment(s) ending in '.' or space in {_listing(trailing)}: "
-            "Win32 strips trailing dots and spaces, so 'foo.' "
-            "collides with 'foo' and 'foo .txt' silently becomes "
-            "'foo.txt'",
+            "Win32 strips trailing dots and spaces (at the end of a "
+            "segment only), so 'foo.' collides with 'foo' and "
+            "'foo.txt ' silently becomes 'foo.txt'",
         )
 
     # 12-13. dot segments / parent escapes ------------------------- #
