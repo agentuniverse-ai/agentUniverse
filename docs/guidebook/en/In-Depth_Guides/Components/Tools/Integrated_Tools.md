@@ -634,3 +634,79 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Json Schema Tool
+
+`JsonSchemaTool` validates a JSON document against a *schema* — the
+contract-checking layer for JSON structure: "does this document have
+the required fields with the right types, ranges, patterns and
+enums?". `JsonPathTool` queries values out of a document and
+`JsonPatchTool` mutates one; neither can say whether a document
+*conforms to a declared shape*. The tool implements a practical,
+honestly documented subset of JSON Schema draft 2020-12 purely on the
+Python standard library, with zero network access. `validate` mode
+takes a `document` (a native JSON value, or a string parsed as JSON
+text) plus a `schema` object and reports `valid`, `errors` as
+`[{path, schema_rule, message, actual}]` (`path` is a dot-path with
+`[index]` array segments, e.g. `user.email`, `tags[2].id`), an
+`applied_rules` count (keyword assertions evaluated against matching
+instance types), `unsupported_keywords` and `defaults_declared`.
+`infer_schema` derives a skeleton subset schema from a document
+(inferred types, string `format` detection via the family profiles,
+`examples` per scalar node — `***` under secret-ish keys).
+`simplify_errors` condenses a long error list into a grouped-by-path
+summary (`groups` with `{path, count, rules, messages}`, `rule_totals`,
+off-shape entries passed through as `unparseable`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.json_schema_tool import JsonSchemaTool
+
+tool = JsonSchemaTool()
+report = tool.execute(mode="validate", document='{"name": "au", "port": 70000}', schema={
+    "type": "object",
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+    },
+    "required": ["name", "port"],
+})
+report["valid"], report["errors"][0]["path"]     # False, "port"
+schema = tool.execute(mode='infer_schema', document='{"id": 1, "api_key": "sk-1"}')["schema"]
+tool.execute(mode="simplify_errors", errors=report["errors"])["groups"]
+```
+
+Supported subset: `type` (the seven JSON types, single or list),
+`properties` / `required` / `additionalProperties` (boolean),
+`items` (single schema), `minItems` / `maxItems` / `uniqueItems`,
+`minimum` / `maximum` / `exclusiveMinimum` / `exclusiveMaximum`,
+`minLength` / `maxLength`, `pattern` (Python `re.search` semantics,
+documented), `enum` / `const`, `format` (`email`, `date` (calendar-
+true), `date-time` (strict ISO-8601 subset), `uuid`, `url`, `ipv4`),
+nested `$defs` / `$ref` (local `#/$defs/<name>` pointers only,
+resolved against the root schema, cycle-guarded), `default`
+(report-only, never applied — JSON Schema treats it as an annotation)
+and annotation keywords (`title`, `description`, `examples`, ...)
+which are ignored gracefully. Boolean subschemas (`true` / `false`)
+are honored; the root schema must be an object. Documented semantics:
+`integer` follows draft 2020-12 — any number with a zero fractional
+part, so JSON `1.0` *is* an integer and `1.5` is not, `integer` also
+satisfies `number`, and `true` is never a number; equality (`enum`,
+`const`, `uniqueItems`) is deep JSON equality (numbers compare
+numerically, `true` never equals `1`, key order is irrelevant); a
+keyword whose instance type does not match simply does not apply.
+
+Out-of-subset keywords (`anyOf`, `allOf`, `oneOf`, `not`,
+`patternProperties`, `multipleOf`, the draft-07 array form of
+`items`, schema-valued `additionalProperties`, non-local `$ref`)
+never crash anything: they are collected in `unsupported_keywords`
+with a note and skipped while the rest of the schema is still fully
+validated. Invalid *values* of supported keywords (unknown type
+names, negative lengths, uncompilable patterns, empty enums, ...)
+raise `ValueError` naming the schema location before any validation
+runs — unknown-but-tolerated and invalid are always distinguished.
+Values under secret-ish property names (containing `KEY`, `SECRET`,
+`PASSWORD` or `TOKEN`, case-insensitive — the `EnvSchemaTool` rule)
+are never echoed: error `actual` fields, declared defaults and
+inferred examples become `***`. Unparseable JSON text documents are
+structured `error` payloads. The tool never touches the filesystem
+or the network, and every result is deterministic.
