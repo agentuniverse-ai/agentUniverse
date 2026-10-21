@@ -88,12 +88,16 @@ binding constraint, conflicts). This tool inspects the
 (names, extras, environment markers, specifiers kept verbatim),
 editable / VCS / direct-URL / path lines, hashes and pip options —
 and diffs two files. Constraint *solving* is explicitly NOT done
-here: the specifier grammar is validated loosely (each clause is
-``op + version-token``; whether the clauses can be satisfied
+here: the specifier grammar is validated against PEP 440 (each
+clause is ``op + version``, with operator/operand rules to match
+``packaging`` — a ``.*`` prefix-match only with ``==`` / ``!=``
+after plain release components, a local ``+label`` only with
+``==`` / ``!=`` / ``===``; whether the clauses can be satisfied
 together against a pool of versions is #3995's job), and markers
 are validated for shape (non-empty, balanced parentheses and
-quotes, a safe charset, at least one comparison) but never
-*evaluated*.
+quotes, a safe charset including the commas of ``in`` membership
+values, at least one comparison, no dangling operator or ``and`` /
+``or`` tail) but never *evaluated*.
 
 Grammar notes (deliberate, documented choices):
 
@@ -112,15 +116,28 @@ Grammar notes (deliberate, documented choices):
   accepts where it matters for structure: whitespace around
   operators (``>= 2.0``), a trailing comma, empty extras brackets
   (``foo[]``), wildcard clauses (``==1.2.*``, ``!=1.2.*``),
-  arbitrary-equality ``===anything`` and digit-leading names —
-  while ``~=1`` (compatible release needs two release components)
-  and a missing comma between clauses are errors, matching
-  ``packaging``. A ``name @ url`` direct reference requires no
-  scheme (``foo@1.0`` is accepted with ``url='1.0'``), matching
-  ``packaging`` 23.x literally.
+  arbitrary-equality ``===anything`` (any value at all, including
+  an empty one, any number of trailing commas after the clause,
+  and glued follow-up clauses — packaging restricts whitespace
+  around commas and operators after an ``===`` clause — matching
+  ``packaging`` 23.x literally) and
+  digit-leading names — while ``~=1`` (compatible release needs
+  two release components of its release segment, after any epoch
+  ``~=1!2.0`` is fine), non-PEP 440 versions (``==1..0``,
+  ``==x!y``), a local label under ``>`` / ``<`` / ``~=``, a
+  wildcard under ``>`` / ``<`` / ``~=``, invalid extra names
+  (``foo[a,]``, ``foo[a b]``) and a missing comma between clauses
+  are errors, matching ``packaging``. A ``name @ url`` direct
+  reference requires no scheme (``foo@1.0`` is accepted with
+  ``url='1.0'``), matching ``packaging`` 23.x literally.
 * Hash options may repeat and may carry comma-separated values
-  (``--hash=sha256:a,sha256:b``); any other ``--``-token inside a
-  requirement line is an error.
+  (``--hash=sha256:a,sha256:b``) and may sit after the environment
+  marker; any other ``--``-token inside a requirement line is an
+  error. Editable (``-e .[test] ; …``) and path
+  (``./pkg[extra] ; …``) lines support trailing extras brackets
+  and environment markers, and URL lines accept a trailing marker
+  that shape-validates as one; a leading UTF-8 BOM is dropped the
+  way pip's decoder does.
 
 Input validation is strict and happens before any parsing: wrong
 parameter types raise ``ValueError``; the text inputs are capped
@@ -165,22 +182,65 @@ _DIRECT_REF_RE = re.compile(
     r"\s*@\s*(\S+)"
     r"(?:\s*;\s*(.+))?$"
 )
-# One specifier clause: operator + version token (a version starts
-# with a letter or digit — '==1.0' fine, '>==1.0' and '== =1.0'
-# rejected, matching packaging).
-_CLAUSE_RE = re.compile(
-    r"^\s*(===|==|!=|<=|>=|~=|<|>)\s*([0-9A-Za-z][^\s,;#]*)\s*$"
+# One specifier clause split into operator + verbatim value; the
+# value grammar itself is checked by _validate_clause ('>==1.0' and
+# '== =1.0' are rejected there, matching packaging).
+_CLAUSE_SPLIT_RE = re.compile(
+    r"^\s*(===|==|!=|<=|>=|~=|<|>)\s*(.*?)\s*$", re.S
 )
+_PE440_VERSION_RE = re.compile(
+    r"""
+    v?
+    (?:
+        (?:(?P<epoch>[0-9]+)!)?
+        (?P<release>[0-9]+(?:\.[0-9]+)*)
+        (?P<pre>
+            [-_.]?
+            (?:alpha|a|beta|b|preview|pre|c|rc)
+            [-_.]?
+            (?:[0-9]+)?
+        )?
+        (?P<post>
+            (?:-(?:[0-9]+))
+            |
+            (?:
+                [-_.]?
+                (?:post|rev|r)
+                [-_.]?
+                (?:[0-9]+)?
+            )
+        )?
+        (?P<dev>
+            [-_.]?
+            dev
+            [-_.]?
+            (?:[0-9]+)?
+        )?
+    )
+    (?:\+(?P<local>[a-z0-9]+(?:[-_.][a-z0-9]+)*))?
+    """,
+    re.VERBOSE | re.IGNORECASE,
+)
+_PREFIX_MATCH_RE = re.compile(
+    r"v?(?:[0-9]+!)?[0-9]+(?:\.[0-9]+)*", re.IGNORECASE
+)
+_EXTRAS_SUFFIX_RE = re.compile(r"\[[^\]]*\]\s*$")
 # Editable option prefix on a line (dispatch only).
 _EDITABLE_PREFIX_RE = re.compile(r"^(?:-e|--editable)(?:\s+|=|$)")
 # A --hash option token (may carry comma-separated values).
 _HASH_TOKEN_RE = re.compile(r"^--hash=(.*)$", re.S)
+_HASH_TOKEN_STRIP_RE = re.compile(r"(?:^|\s)--hash=\S+")
 # Loose hash value: algorithm ':' digest.
 _HASH_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_+-]*:[0-9A-Fa-f]+$")
 # Marker safety: letters, digits, comparisons, quotes, parens, space.
-_MARKER_CHARS_RE = re.compile(r"^[A-Za-z0-9_.!<>~=\"'()\s-]+$")
+_MARKER_CHARS_RE = re.compile(r"^[A-Za-z0-9_.!<>~=\"'()\s,-]+$")
 # A marker must contain at least one comparison (or an `in` test).
 _MARKER_OP_RE = re.compile(r"===|==|!=|<=|>=|<|>|~=")
+_MARKER_TRAILING_OP_RE = re.compile(r"(?:===|==|!=|<=|>=|<|>|~=)\s*$")
+_MARKER_TRAILING_JOINER_RE = re.compile(
+    r"\b(?:and|or|in|not)\s*$", re.IGNORECASE
+)
+_OP_THEN_SPACE_RE = re.compile(r"^(?:===|==|!=|<=|>=|~=|<|>)\s")
 # VCS schemes recognized in URLs (the '+https' / 'ssh' family).
 _VCS_SCHEMES = ("git", "hg", "svn", "bzr")
 # Leading release components of a version token (for the ~= rule).
@@ -273,13 +333,13 @@ def _extract_hash_options(text: str) -> Tuple[str, List[str], Optional[str]]:
 
     Returns ``(remaining_text, hashes, error)`` — hash values may be
     comma-separated inside one option; any other ``--``-prefixed
-    token (or a ``--hash`` without a value) is an error.
+    token (or a ``--hash`` without a value) is an error. The
+    remaining text keeps its original spacing verbatim (only the
+    stripped tokens are removed), so markers survive untouched.
     """
     hashes: List[str] = []
-    kept: List[str] = []
     for token in text.split():
         if not token.startswith("--"):
-            kept.append(token)
             continue
         if token == "--hash":
             return text, [], "a --hash option carries no value"
@@ -300,7 +360,10 @@ def _extract_hash_options(text: str) -> Tuple[str, List[str], Optional[str]]:
                     f"'<algorithm>:<hex digest>'"
                 )
         hashes.extend(values)
-    return " ".join(kept), hashes, None
+    if not hashes:
+        return text, [], None
+    remaining = _HASH_TOKEN_STRIP_RE.sub(" ", text).strip()
+    return remaining, hashes, None
 
 
 def _vcs_of(url: str) -> Optional[str]:
@@ -346,41 +409,111 @@ def _is_pathish(text: str) -> bool:
     )
 
 
-def _validate_clauses(specifier: str) -> Optional[str]:
-    """Loosely validate a comma-separated PEP 440 clause list.
+def _validate_clause(clause: str) -> Optional[str]:
+    """Validate one specifier clause against the packaging grammar.
 
-    Each clause must be ``operator + version-token``; a trailing
-    comma is tolerated; ``~=`` needs at least two release
-    components (matching ``packaging``). Returns an error message
-    or None. Exact satisfiability is NOT judged here (see
+    ``===`` accepts any value at all (including an empty one),
+    matching ``packaging`` 23.x literally; every other operator
+    needs a PEP 440 version, with two operator/operand rules on
+    top: a ``.*`` prefix-match suffix is only valid with ``==`` /
+    ``!=`` and may follow only epoch + release components, and a
+    local version label (``+…``) is only valid with ``==`` /
+    ``!=`` / ``===``. Satisfiability is NOT judged (see
     VersionConstraintTool).
+    """
+    text = clause.strip()
+    match = _CLAUSE_SPLIT_RE.match(clause)
+    if match is None:
+        return (
+            f"malformed specifier clause {text!r} — expected "
+            f"'<op><version>' with op one of == != <= >= ~= < > === "
+            f"and a PEP 440 version"
+        )
+    operator, version = match.group(1), match.group(2)
+    if operator == "===":
+        return None
+    if not version:
+        return (
+            f"malformed specifier clause {text!r} — expected "
+            f"'<op><version>' with op one of == != <= >= ~= < > === "
+            f"and a PEP 440 version"
+        )
+    if version.endswith(".*"):
+        if operator not in ("==", "!="):
+            return (
+                f"the clause {text!r} combines '{operator}' with a "
+                f"'.*' prefix-match wildcard — wildcards are only "
+                f"valid with == and !="
+            )
+        if _PREFIX_MATCH_RE.fullmatch(version[:-2]) is None:
+            return (
+                f"the version {version!r} in clause {text!r} is not a "
+                f"valid prefix match — only epoch and release "
+                f"components may precede '.*' (e.g. '==1.2.*')"
+            )
+        return None
+    if "+" in version and operator not in ("==", "!="):
+        return (
+            f"the clause {text!r} carries a local version label "
+            f"(+…) — local versions are only valid with == and !="
+        )
+    full = _PE440_VERSION_RE.fullmatch(version)
+    if full is None:
+        return (
+            f"the version {version!r} in clause {text!r} is not a "
+            f"valid PEP 440 version"
+        )
+    if operator == "~=":
+        release = full.group("release") or ""
+        if len(release.split(".")) < 2:
+            return (
+                f"the compatible-release clause {text!r} needs at "
+                f"least two release components (e.g. '~=1.2')"
+            )
+    return None
+
+
+def _validate_clauses(specifier: str) -> Optional[str]:
+    """Validate a comma-separated PEP 440 clause list.
+
+    One trailing comma is tolerated (any number of them after an
+    ``===`` clause, matching ``packaging``); each clause is checked
+    by :func:`_validate_clause`. Exact satisfiability is NOT judged
+    here (see VersionConstraintTool).
     """
     text = specifier.strip()
     if text.endswith(","):
         text = text[:-1].rstrip()
+        fully = text.rstrip(", ")
+        parts = fully.split(",")
+        if parts and parts[-1].strip().startswith("==="):
+            text = fully
     if not text:
         return "an empty specifier is not a specifier (drop the commas)"
-    for clause in text.split(","):
-        match = _CLAUSE_RE.match(clause)
-        if match is None:
-            return (
-                f"malformed specifier clause {clause.strip()!r} — "
-                f"expected '<op><version>' with op one of "
-                f"== != <= >= ~= < > === and a version without "
-                f"spaces, commas, ';' or '#'"
-            )
-        operator, version = match.group(1), match.group(2)
-        if operator == "~=":
-            leading = _LEADING_RELEASE_RE.match(version)
-            components = (
-                leading.group(0).split(".") if leading is not None else []
-            )
-            if len(components) < 2:
+    clauses = text.split(",")
+    glued = False
+    for index, clause in enumerate(clauses):
+        clause_error = _validate_clause(clause)
+        if clause_error is not None:
+            return clause_error
+        stripped_clause = clause.strip()
+        if index and glued:
+            if clause[:1].isspace():
                 return (
-                    f"the compatible-release clause {clause.strip()!r} "
-                    f"needs at least two release components (e.g. "
-                    f"'~=1.2')"
+                    f"the clause {stripped_clause!r} is separated from "
+                    f"its comma by whitespace after an === clause — "
+                    f"packaging requires it glued there"
                 )
+            if _OP_THEN_SPACE_RE.match(stripped_clause):
+                return (
+                    f"the clause {stripped_clause!r} has whitespace "
+                    f"between its operator and version after an === "
+                    f"clause — packaging requires it glued there"
+                )
+        if clause != clause.rstrip():
+            glued = False
+        elif stripped_clause.startswith("==="):
+            glued = True
     return None
 
 
@@ -397,8 +530,8 @@ def _validate_markers(markers: str) -> Optional[str]:
         return (
             f"the marker {text[:64]!r} uses characters outside the "
             f"marker grammar (allowed: letters, digits, comparison "
-            f"operators, quotes, parentheses, spaces, '.', '_', '-', "
-            f"'~', '=')"
+            f"operators, quotes, parentheses, commas, spaces, '.', "
+            f"'_', '-', '~', '=')"
         )
     if text.count("'") % 2 or text.count('"') % 2:
         return (
@@ -409,6 +542,16 @@ def _validate_markers(markers: str) -> Optional[str]:
             f"the marker {text[:64]!r} contains no comparison — a "
             f"marker is built from 'variable <op> value' comparisons "
             f"joined by and / or"
+        )
+    if _MARKER_TRAILING_OP_RE.search(text):
+        return (
+            f"the marker {text[:64]!r} ends with a comparison "
+            f"operator — a value must follow it"
+        )
+    if _MARKER_TRAILING_JOINER_RE.search(text):
+        return (
+            f"the marker {text[:64]!r} ends with 'and' / 'or' / 'in' "
+            f"/ 'not' — an operand must follow it"
         )
     depth = 0
     for char in text:
@@ -429,17 +572,32 @@ def _validate_markers(markers: str) -> Optional[str]:
     return None
 
 
-def _extras_list(bracketed: Optional[str]) -> Optional[List[str]]:
-    """Parse a '[a, b]' extras bracket into a list (None if absent).
+def _extras_list(
+    bracketed: Optional[str],
+) -> Tuple[Optional[List[str]], Optional[str]]:
+    """Parse a '[a, b]' extras bracket into (list, error).
 
-    An empty bracket yields an empty list (matching ``packaging``).
+    An absent bracket is (None, None); an empty bracket is an empty
+    list; every item must be a PEP 508 identifier (letters, digits,
+    ``.`` ``_`` ``-``, not starting or ending with a separator) —
+    ``packaging`` rejects anything else, and so does this parser.
     """
     if bracketed is None:
-        return None
+        return None, None
     inner = bracketed.strip()[1:-1].strip()
     if not inner:
-        return []
-    return [part.strip() for part in inner.split(",")]
+        return [], None
+    extras: List[str] = []
+    for part in inner.split(","):
+        item = part.strip()
+        if _NAME_RE.fullmatch(item) is None:
+            return None, (
+                f"invalid extra name {item!r} — extras follow the PEP "
+                f"508 name grammar (letters, digits, '.', '_', '-', "
+                f"no empty items)"
+            )
+        extras.append(item)
+    return extras, None
 
 
 def _absolute_path(path: str) -> bool:
@@ -475,8 +633,12 @@ def _parse_requirements(text: str) -> Dict[str, Any]:
 
     Returns ``{counts, entries, errors, comments, options}`` —
     errors carry 1-based ``line`` numbers and a ``reason``; comment
-    and blank lines are reported distinctly, never as entries.
+    and blank lines are reported distinctly, never as entries. A
+    leading UTF-8 BOM (common in Windows-edited files, and stripped
+    by pip's auto-detection) is dropped before parsing.
     """
+    if text.startswith("\ufeff"):
+        text = text[1:]
     entries: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     comments: List[Dict[str, Any]] = []
@@ -592,14 +754,43 @@ def _parse_option(stripped: str, raw: str, line: int) -> Tuple[
     )
 
 
+def _split_trailing_marker(text: str) -> Tuple[str, Optional[str]]:
+    """Split a trailing ``;`` environment marker off a URL or path
+    target. A ``;`` that is part of the target (a URL matrix
+    parameter) stays in it unless what follows shape-validates as a
+    marker."""
+    body, semicolon, marker_part = text.partition(";")
+    if semicolon and _validate_markers(marker_part) is None:
+        return body.strip(), marker_part.strip()
+    return text, None
+
+
+def _is_path_line(stripped: str) -> Optional[str]:
+    """Guard the local-path fallback: a token that merely CONTAINS a
+    URL scheme (``name-@git+https://…``) is a mangled requirement,
+    not a path — pip and packaging reject those lines."""
+    if "://" in stripped:
+        return (
+            f"the line {stripped[:64]!r} embeds a URL but does not "
+            f"start with a scheme or a valid 'name @ url' direct "
+            f"reference — it is neither a path nor a requirement"
+        )
+    return None
+
+
 def _parse_editable(stripped: str, raw: str, line: int) -> Tuple[
     Optional[Dict[str, Any]], Optional[str]
 ]:
-    """Parse an editable install line (``-e`` / ``--editable``)."""
+    """Parse an editable install line (``-e`` / ``--editable``).
+
+    Targets may carry a trailing ``;`` environment marker and — for
+    path and bare-name targets — a trailing ``[extras]`` bracket
+    (``-e .[test] ; python_version >= "3"``, pip's documented
+    spelling). A bare ``-e`` is still recorded as an editable entry
+    without a target — the lint rule editable_without_path reports
+    it (the line shape IS recognizable, just unusable).
+    """
     match = _EDITABLE_RE.match(stripped)
-    # A bare '-e' / '--editable' is still recorded as an editable
-    # entry without a target — the lint rule editable_without_path
-    # reports it (the line shape IS recognizable, just unusable).
     target = match.group(1).strip() if match is not None else ""
     entry: Dict[str, Any] = {
         "kind": "editable",
@@ -610,8 +801,6 @@ def _parse_editable(stripped: str, raw: str, line: int) -> Tuple[
         "editable": True,
     }
     if not target:
-        # Recorded as-is; the lint rule editable_without_path flags
-        # it as an error (the line IS recognizable, just unusable).
         return entry, None
     target, hashes, hash_error = _extract_hash_options(target)
     if hash_error is not None:
@@ -625,13 +814,15 @@ def _parse_editable(stripped: str, raw: str, line: int) -> Tuple[
     direct = _DIRECT_REF_RE.match(target)
     if direct is not None:
         name_raw, extras_raw, url, markers = direct.groups()
+        extras, extras_error = _extras_list(extras_raw)
+        if extras_error is not None:
+            return None, extras_error
         entry["name"] = _normalize_name(name_raw)
         entry["name_raw"] = name_raw
         entry["url"] = url
         vcs = _vcs_of(url)
         if vcs:
             entry["vcs"] = vcs
-        extras = _extras_list(extras_raw)
         if extras is not None:
             entry["extras"] = extras
         if markers is not None:
@@ -642,19 +833,34 @@ def _parse_editable(stripped: str, raw: str, line: int) -> Tuple[
         return entry, None
 
     if _SCHEME_RE.match(target):
-        entry["url"] = target
-        vcs = _vcs_of(target)
+        url, markers = _split_trailing_marker(target)
+        entry["url"] = url
+        vcs = _vcs_of(url)
         if vcs:
             entry["vcs"] = vcs
-        entry["name"] = _name_from_url(target)
+        entry["name"] = _name_from_url(url)
+        if markers is not None:
+            entry["markers"] = markers
         return entry, None
 
+    target, markers = _split_trailing_marker(target)
+    extras: Optional[List[str]] = None
+    bracket = _EXTRAS_SUFFIX_RE.search(target)
+    if bracket is not None:
+        extras, extras_error = _extras_list(bracket.group(0))
+        if extras_error is not None:
+            return None, extras_error
+        target = target[: bracket.start()].strip()
+    if markers is not None:
+        entry["markers"] = markers
+    if extras is not None:
+        entry["extras"] = extras
     if _is_pathish(target):
+        guard_error = _is_path_line(target)
+        if guard_error is not None:
+            return None, guard_error
         entry["path"] = target
         return entry, None
-
-    # A bare token: editable needs a project path or URL — the lint
-    # rule editable_without_path reports it (error severity).
     entry["path"] = None
     if _NAME_RE.fullmatch(target):
         entry["name"] = _normalize_name(target)
@@ -669,10 +875,19 @@ def _parse_requirement(stripped: str, raw: str, line: int) -> Tuple[
 
     Dispatch: PEP 508 direct reference (``name @ url``) → bare URL
     (scheme) → local path → standard ``name[extras] spec ; markers``.
+    ``--hash`` options are stripped from the whole line before the
+    dispatch, so they may follow the marker as well (pip's layout).
     """
+    stripped, hashes, hash_error = _extract_hash_options(stripped)
+    if hash_error is not None:
+        return None, hash_error
+
     direct = _DIRECT_REF_RE.match(stripped)
     if direct is not None:
         name_raw, extras_raw, url, markers = direct.groups()
+        extras, extras_error = _extras_list(extras_raw)
+        if extras_error is not None:
+            return None, extras_error
         entry: Dict[str, Any] = {
             "kind": "direct_url",
             "line": line,
@@ -685,7 +900,6 @@ def _parse_requirement(stripped: str, raw: str, line: int) -> Tuple[
         vcs = _vcs_of(url)
         if vcs:
             entry["vcs"] = vcs
-        extras = _extras_list(extras_raw)
         if extras is not None:
             entry["extras"] = extras
         if markers is not None:
@@ -693,12 +907,12 @@ def _parse_requirement(stripped: str, raw: str, line: int) -> Tuple[
             if marker_error is not None:
                 return None, marker_error
             entry["markers"] = markers.strip()
+        if hashes:
+            entry["hash"] = hashes
         return entry, None
 
     if _SCHEME_RE.match(stripped):
-        url, hashes, hash_error = _extract_hash_options(stripped)
-        if hash_error is not None:
-            return None, hash_error
+        url, markers = _split_trailing_marker(stripped)
         if " " in url:
             return None, (
                 f"a URL requirement must be a single token — found "
@@ -715,25 +929,39 @@ def _parse_requirement(stripped: str, raw: str, line: int) -> Tuple[
         vcs = _vcs_of(url)
         if vcs:
             entry["vcs"] = vcs
+        if markers is not None:
+            entry["markers"] = markers
         if hashes:
             entry["hash"] = hashes
         return entry, None
 
     if _is_pathish(stripped):
-        path, hashes, hash_error = _extract_hash_options(stripped)
-        if hash_error is not None:
-            return None, hash_error
-        return (
-            {
-                "kind": "path",
-                "line": line,
-                "raw": raw,
-                "name": None,
-                "specifier": None,
-                "path": path,
-            },
-            None,
-        )
+        guard_error = _is_path_line(stripped)
+        if guard_error is not None:
+            return None, guard_error
+        path, markers = _split_trailing_marker(stripped)
+        extras: Optional[List[str]] = None
+        bracket = _EXTRAS_SUFFIX_RE.search(path)
+        if bracket is not None:
+            extras, extras_error = _extras_list(bracket.group(0))
+            if extras_error is not None:
+                return None, extras_error
+            path = path[: bracket.start()].strip()
+        entry = {
+            "kind": "path",
+            "line": line,
+            "raw": raw,
+            "name": None,
+            "specifier": None,
+            "path": path,
+        }
+        if markers is not None:
+            entry["markers"] = markers
+        if extras is not None:
+            entry["extras"] = extras
+        if hashes:
+            entry["hash"] = hashes
+        return entry, None
 
     # Standard PEP 508: name[extras] specifier ; markers
     name_match = _NAME_RE.match(stripped)
@@ -769,9 +997,6 @@ def _parse_requirement(stripped: str, raw: str, line: int) -> Tuple[
         if marker_error is not None:
             return None, marker_error
 
-    specifier, hashes, hash_error = _extract_hash_options(specifier)
-    if hash_error is not None:
-        return None, hash_error
     if specifier:
         clause_error = _validate_clauses(specifier)
         if clause_error is not None:
@@ -785,7 +1010,9 @@ def _parse_requirement(stripped: str, raw: str, line: int) -> Tuple[
         "name_raw": name_raw,
         "specifier": specifier if specifier else None,
     }
-    extras = _extras_list(extras_raw)
+    extras, extras_error = _extras_list(extras_raw)
+    if extras_error is not None:
+        return None, extras_error
     if extras is not None:
         entry["extras"] = extras
     if semicolon:

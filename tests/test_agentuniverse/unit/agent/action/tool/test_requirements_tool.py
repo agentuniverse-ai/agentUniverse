@@ -314,6 +314,96 @@ class ParseGroundTruths(unittest.TestCase):
         result = run_parse("\n\n")
         self.assertEqual(result["counts"]["blank_lines"], 2)
 
+    def test_packaging_grammar_alignment(self):
+        """Operator/operand rules and === quirks match packaging 23.x."""
+        text = "\n".join(
+            [
+                "foo~=1!2.0",
+                "foo~=2.2.post3",
+                "foo==1.0-1",
+                "foo==1.0post",
+                "foo==v1.0",
+                "foo==1!2.0",
+                "foo===whatever!!",
+                "foo===",
+                "foo=== ",
+                "foo====1.0",
+                "foo===..",
+                "foo===-",
+                "foo=== x",
+                "foo===1.0,,",
+                "foo===1.0,==2",
+                "foo===1.0,==2.0 , >=3",
+            ]
+        )
+        result = run_parse(text)
+        self.assertEqual(
+            result["errors"], [], str(result["errors"])
+        )
+        by_line = {e["line"]: e for e in result["entries"]}
+        self.assertEqual(by_line[1]["specifier"], "~=1!2.0")
+        self.assertEqual(by_line[2]["specifier"], "~=2.2.post3")
+        self.assertEqual(by_line[3]["specifier"], "==1.0-1")
+        self.assertEqual(by_line[5]["specifier"], "==v1.0")
+        self.assertEqual(by_line[7]["specifier"], "===whatever!!")
+        self.assertEqual(by_line[8]["specifier"], "===")
+        self.assertEqual(by_line[9]["specifier"], "===")
+        self.assertEqual(by_line[10]["specifier"], "====1.0")
+        self.assertEqual(by_line[11]["specifier"], "===..")
+        self.assertEqual(by_line[12]["specifier"], "===-")
+        self.assertEqual(by_line[13]["specifier"], "=== x")
+        self.assertEqual(by_line[14]["specifier"], "===1.0,,")
+
+    def test_bom_stripped_from_first_line(self):
+        """A UTF-8 BOM (Windows editors, pip's auto-decode) is dropped."""
+        result = run_parse("\ufeffrequests==2.0\nnumpy>=1\n")
+        self.assertEqual(result["errors"], [], str(result["errors"]))
+        self.assertEqual(
+            [e["name"] for e in result["entries"]], ["requests", "numpy"]
+        )
+        result = run_parse("\ufeff# comment only")
+        self.assertEqual(result["counts"]["comments"], 1)
+
+    def test_marker_and_extras_extensions(self):
+        """Comma membership markers, hash placement, path extras."""
+        text = "\n".join(
+            [
+                'foo>=1.0 ; python_version in "3.8, 3.9"',
+                'foo==1.0 ; python_version >= "3" --hash=sha256:0123abcd',
+                "foo @ https://files.example/r.tar.gz --hash=sha256:0123abcd",
+                "./pkg ; python_version >= '3.9'",
+                "./pkg[extra] ; os_name == 'nt'",
+                "-e .[test]",
+                '-e . ; python_version >= "3.8"',
+                "-e pkg[dev]",
+                "https://x/y.whl ; sys_platform == 'darwin'",
+            ]
+        )
+        result = run_parse(text)
+        self.assertEqual(result["errors"], [], str(result["errors"]))
+        by_line = {e["line"]: e for e in result["entries"]}
+        self.assertEqual(
+            by_line[1]["markers"], 'python_version in "3.8, 3.9"'
+        )
+        self.assertEqual(by_line[2]["markers"], 'python_version >= "3"')
+        self.assertEqual(by_line[2]["hash"], ["sha256:0123abcd"])
+        self.assertEqual(by_line[3]["url"], "https://files.example/r.tar.gz")
+        self.assertEqual(by_line[3]["hash"], ["sha256:0123abcd"])
+        self.assertEqual(by_line[4]["path"], "./pkg")
+        self.assertEqual(by_line[4]["markers"], "python_version >= '3.9'")
+        self.assertEqual(by_line[5]["path"], "./pkg")
+        self.assertEqual(by_line[5]["extras"], ["extra"])
+        self.assertEqual(by_line[6]["path"], ".")
+        self.assertEqual(by_line[6]["extras"], ["test"])
+        self.assertTrue(by_line[6]["editable"])
+        self.assertEqual(by_line[7]["path"], ".")
+        self.assertEqual(by_line[7]["markers"], 'python_version >= "3.8"')
+        self.assertEqual(by_line[8]["name"], "pkg")
+        self.assertEqual(by_line[8]["extras"], ["dev"])
+        self.assertIsNone(by_line[8]["path"])
+        self.assertEqual(by_line[9]["url"], "https://x/y.whl")
+        self.assertEqual(by_line[9]["markers"], "sys_platform == 'darwin'")
+
 
 # ------------------------------------------------------------------ #
 # parse mode — content error matrix
@@ -334,16 +424,38 @@ class ErrorMatrix(unittest.TestCase):
 
     def test_error_matrix(self):
         self.assert_error(">=1.0", "package name")
-        self.assert_error("foo >= 1.0 < 2.0", "malformed specifier clause")
+        self.assert_error("foo >= 1.0 < 2.0", "not a valid PEP 440 version")
+        self.assert_error("foo>=2.0<3.0", "not a valid PEP 440 version")
         self.assert_error("foo~=1", "compatible-release")
+        self.assert_error("foo~=2!1", "compatible-release")
         self.assert_error("foo==", "malformed specifier clause")
         self.assert_error("foo bar", "malformed specifier clause")
+        self.assert_error("foo==1..0", "not a valid PEP 440 version")
+        self.assert_error("foo==a", "not a valid PEP 440 version")
+        self.assert_error("foo!=x!y", "not a valid PEP 440 version")
+        self.assert_error("foo==..1.0", "not a valid PEP 440 version")
+        self.assert_error("foo==1.0_1", "not a valid PEP 440 version")
+        self.assert_error("foo==1.*.*", "not a valid prefix match")
+        self.assert_error("foo==1.0a1.*", "not a valid prefix match")
+        self.assert_error("foo>1.2.*", "wildcard")
+        self.assert_error("foo<=1.2.*", "wildcard")
+        self.assert_error("foo~=1.2.*", "wildcard")
+        self.assert_error("foo>1.0+local.1", "local version label")
+        self.assert_error("foo~=1.0+local.1", "local version label")
         self.assert_error("foo[a>=1.0", "extras bracket")
+        self.assert_error("foo[a,]", "invalid extra name")
+        self.assert_error("foo[a b]", "invalid extra name")
+        self.assert_error("foo[a!]", "invalid extra name")
         self.assert_error("foo;", "must not be empty")
         self.assert_error("foo ; python_version", "no comparison")
+        self.assert_error("foo ; python_version <", "ends with a comparison")
+        self.assert_error("foo ; x == '1' and", "operand must follow")
         self.assert_error('foo ; x == "unterminated', "unterminated")
         self.assert_error("foo ; ((x == '1')", "unclosed")
         self.assert_error("foo ; )x == '1')", "never opened")
+        self.assert_error("foo===1.0, ==2", "glued there")
+        self.assert_error("foo===1.0,== 2", "glued there")
+        self.assert_error("trailing-@git+https://x/y.git", "neither a path nor")
         self.assert_error("foo @ 1.0 2.0", "malformed")
         self.assert_error("foo==1.0 --random", "unexpected option")
         self.assert_error("foo --hash", "carries no value")
@@ -733,6 +845,30 @@ _VALID_SEED_POOL = [
     "foo[socks] @ git+https://x/y.git#egg=z",
     'foo @ https://example.com/x.tar.gz ; python_version >= "3.7"',
     "foo@1.0",
+    "foo~=1!2.0",
+    "foo~=2!2.0.1",
+    "foo~=2.2.post3",
+    "foo==1.0-1",
+    "foo==1.0post",
+    "foo==1.0_r1",
+    "foo==v1.0",
+    "foo==V1.0",
+    "foo==1!2.0",
+    "foo===whatever!!",
+    "foo===",
+    "foo=== ",
+    "foo====1.0",
+    "foo===..",
+    "foo===-",
+    "foo=== x",
+    "foo===1.0,,",
+    "foo===1.0,==2",
+    "foo===1.0,==2.0 , >=3",
+    'foo>=1.0 ; python_version in "3.8, 3.9"',
+    'foo ; python_version in "3.8" and sys_platform not in "win32, cygwin"',
+    "foo[a-b]",
+    "foo[a_b]",
+    "foo[1a]",
     "pytest>=7.0 ; python_full_version >= '3.8.1'",
     "urllib3==2.0.7 ; sys_platform == 'win32' and python_version < '3.10'",
 ]
@@ -740,10 +876,26 @@ _VALID_SEED_POOL = [
 _INVALID_SEED_POOL = [
     ">=1.0",
     "foo >= 2.0 < 3.0",
+    "foo>=2.0<3.0",
     "foo~=1",
+    "foo~=2!1",
+    "foo==1..0",
+    "foo==a",
+    "foo!=x!y",
+    "foo==..1.0",
+    "foo==1.0_1",
+    "foo==1.*.*",
+    "foo==1.0a1.*",
+    "foo>1.2.*",
+    "foo<=1.2.*",
+    "foo~=1.2.*",
+    "foo>1.0+local.1",
+    "foo~=1.0+local.1",
     "foo;",
     "foo ; ",
     "foo ; python_version",
+    "foo ; python_version <",
+    "foo ; x == '1' and",
     'foo ; x == "unterminated',
     "foo ; ((x == '1')",
     "foo ; )x == '1')",
@@ -753,9 +905,15 @@ _INVALID_SEED_POOL = [
     "foo!!",
     "!!foo==1.0",
     "foo[a>=1.0",
+    "foo[a,]",
+    "foo[a b]",
+    "foo[a!]",
     "foo @ 1.0 2.0",
     "foo==1.0 --random",
     "foo @ ",
+    "foo===1.0, ==2",
+    "foo===1.0,== 2",
+    "trailing-@git+https://x/y.git",
 ]
 
 # Exactly 300 seeds, deterministically tiled from the pools.
@@ -782,12 +940,10 @@ def _our_clauses(entry):
     if not entry.get("specifier"):
         return []
     clauses = []
-    text = entry["specifier"].strip()
-    if text.endswith(","):
-        text = text[:-1].rstrip()
+    text = entry["specifier"].strip().rstrip(",")
     for clause in text.split(","):
         match = re.match(
-            r"^\s*(===|==|!=|<=|>=|~=|<|>)\s*([^\s,;#]+)\s*$", clause
+            r"^\s*(===|==|!=|<=|>=|~=|<|>)\s*([^\s,;#]*)\s*$", clause
         )
         clauses.append(match.group(1) + match.group(2))
     return sorted(clauses)
