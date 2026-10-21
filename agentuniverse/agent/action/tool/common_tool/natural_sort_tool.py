@@ -5,14 +5,25 @@
 # ruff: noqa: TRY003
 
 import re
+import sys
 import unicodedata
-from decimal import Decimal
 from typing import Any, ClassVar
 
 from agentuniverse.agent.action.tool.tool import Tool
 
 _ASCII_NUM_RUN = re.compile(r"[0-9]+")
 _ASCII_DIGITS = frozenset("0123456789")
+
+
+def _int_str_limit() -> float:
+    """Python's int<->str conversion digit limit (inf before Python 3.11).
+
+    Digit runs longer than this must never be routed through ``int()`` /
+    ``str()``: on Python 3.11+ both directions raise ValueError past the
+    limit, so numeric keys are built from the digit strings directly.
+    """
+    getter = getattr(sys, "get_int_max_str_digits", None)
+    return float(getter()) if getter is not None else float("inf")
 
 # Chunk kinds produced by the tokenizer.
 _TEXT = "text"
@@ -26,11 +37,15 @@ class NaturalSortTool(Tool):
     Chunking rules
     --------------
     * A maximal run of ASCII digits (0-9) is one number chunk compared by its
-      integer value, so ``file2`` sorts before ``file10``. Values of runs of
-      1,000+ digits are compared as Python ints (arbitrary precision, never
-      floats).
+      integer value, so ``file2`` sorts before ``file10``. Values of long runs
+      (1,000+ digits, including runs beyond Python's 4,300-digit int<->str
+      conversion limit) are compared as exact arbitrary-precision digit
+      strings, never floats and never through ``int()``.
     * Every maximal run of non-digit characters is one text chunk compared
-      code point by code point (no locale is consulted, ever).
+      code point by code point after Unicode NFD normalization (no locale is
+      consulted, ever), so precomposed and decomposed accents are equal keys
+      (``café`` == ``cafe\\u0301``) and an accented letter sorts beside its
+      base letter instead of after every ASCII letter.
     * A number chunk sorts before a text chunk at the same position, matching
       the common human expectation that ``1a`` comes before ``a1``.
     * Embedded signs are NOT part of numbers: in ``a-1`` the ``-`` is
@@ -39,14 +54,15 @@ class NaturalSortTool(Tool):
     * Whitespace is ordinary text: it compares by code point after the
       optional case folding, so ``a\\tb`` < ``a\\nb`` < ``a b`` < ``ab``.
     * When two chunk lists are equal up to the length of the shorter one, the
-      shorter list sorts first (``file2`` < ``file2b``).
+      shorter list sorts first (``file2`` < ``file2b``), and the empty string
+      (zero chunks) sorts before every non-empty string.
 
     Case folding
     ------------
     With ``case_sensitive=False`` (the default) text chunks are compared via
-    ``str.casefold()`` (full Unicode case folding, e.g. ``ss`` and ``ß``
-    compare equal). Strings whose folded chunk keys are equal keep their
-    input order because Python's sort is stable.
+    ``str.casefold()`` applied after NFD normalization (full Unicode case
+    folding, e.g. ``ss`` and ``ß`` compare equal). Strings whose folded chunk
+    keys are equal keep their input order because Python's sort is stable.
 
     Leading zeros
     -------------
@@ -60,12 +76,15 @@ class NaturalSortTool(Tool):
     Decimal groups
     --------------
     With ``decimal=True`` a digit run, a single ``.``, and a following digit
-    run merge into one decimal chunk compared as an exact ``Decimal`` value,
+    run merge into one decimal chunk compared as an exact decimal value,
     so ``['1.5', '1.10']`` sorts as ``['1.10', '1.5']`` because 1.10 == 1.1
     numerically (without ``decimal`` the chunk-wise result ``1.5 < 1.10`` is
     the classic lexicographic gotcha). Merging is greedy left-to-right:
     ``1.2.3`` becomes ``1.2`` / ``.`` / ``3``. A decimal chunk requires
     digits on both sides of the dot; ``.5`` and ``5.`` stay text plus number.
+    The comparison is exact string arithmetic (integer part by length then
+    digits, fraction part digit-wise), so decimal groups of any length work
+    without float or Decimal conversion.
 
     Unicode digits
     --------------
@@ -84,6 +103,15 @@ class NaturalSortTool(Tool):
     ``decimal=True``); strings with embedded digits then compare as plain
     text, which keeps identifiers such as ``A-002`` lexicographically
     together while pure numbers still compare numerically.
+
+    compare mode
+    ------------
+    ``first_difference`` is the index of the first differing chunk computed
+    over the WHOLE chunk lists, never over the capped ``chunks`` explanation
+    list (when the difference lies beyond ``max_compare_chunks`` the index is
+    still reported and ``chunks_truncated`` is set). ``prefix_relation`` is
+    reported whenever one side's chunk list is a strict prefix of the other's,
+    including the empty string against anything.
 
     Determinism
     -----------
@@ -194,13 +222,15 @@ class NaturalSortTool(Tool):
     # Chunking
     # ------------------------------------------------------------------
 
-    def _chunks(self, text: str, options: dict[str, Any]) -> list[tuple[str, Any, Any, int]]:
-        """Split one string into (kind, raw, value, tiebreak) chunk tuples."""
+    def _chunks(self, text: str, options: dict[str, Any]) -> list[tuple[str, Any, Any, Any, int]]:
+        """Split one string into (kind, raw, key_value, display, tiebreak) tuples."""
         fold = not options["case_sensitive"]
         unicode_mode = options["unicode_digits"]
-        if unicode_mode == "reject":
+        if unicode_mode == "reject" and not text.isascii():
+            # ASCII text cannot contain non-ASCII decimal digits: scan only
+            # when non-ASCII characters are present.
             for position, char in enumerate(text):
-                if char not in _ASCII_DIGITS and unicodedata.category(char) == "Nd":
+                if char not in _ASCII_DIGITS and char.isdecimal():
                     raise ValueError(
                         f"non-ASCII decimal digit {char!r} at index {position}; "
                         "use unicode_digits='text' or 'normalize'"
@@ -209,24 +239,52 @@ class NaturalSortTool(Tool):
         if options["decimal"]:
             tokens = self._merge_decimals(tokens)
         if options["number_mode"] == "whole" and not self._is_whole_number(tokens):
-            return [(_TEXT, text, text.casefold() if fold else text, 0)]
-        chunks: list[tuple[str, Any, Any, int]] = []
+            return [(_TEXT, text, self._text_key(text, fold), None, 0)]
+        chunks: list[tuple[str, Any, Any, Any, int]] = []
         fewer_first = options["leading_zeros"] == "fewer_first"
         for kind, raw, ascii_digits in tokens:
             if kind == _TEXT:
-                chunks.append((_TEXT, raw, raw.casefold() if fold else raw, 0))
+                chunks.append((_TEXT, raw, self._text_key(raw, fold), None, 0))
             elif kind == _NUM:
-                chunks.append((_NUM, raw, int(ascii_digits), len(raw) if fewer_first else 0))
+                # Numeric key without int(): (digit count, digit string) of the
+                # zero-stripped digits orders exactly like the integer value
+                # with arbitrary precision and no int<->str length limit.
+                stripped = ascii_digits.lstrip("0")
+                key_value = ((len(stripped), stripped), "")
+                chunks.append((_NUM, raw, key_value, self._num_display(ascii_digits, stripped), len(raw) if fewer_first else 0))
             else:
-                # Decimal group "int.frac": exact Decimal value, tie-break on
-                # the total raw digit count (the dot itself is not a digit).
+                # Decimal group "int.frac": exact string arithmetic. The
+                # integer part keys like a number chunk; the fraction strips
+                # trailing zeros so 1.10 == 1.1, and digit-wise comparison of
+                # the remainder is exactly numeric fraction comparison.
+                int_part, _, frac_part = ascii_digits.partition(".")
+                int_stripped = int_part.lstrip("0")
+                key_value = ((len(int_stripped), int_stripped), frac_part.rstrip("0"))
+                # tie-break on the total raw digit count (the dot is not a digit)
                 tiebreak = (len(raw) - 1) if fewer_first else 0
-                chunks.append((_DEC, raw, Decimal(ascii_digits), tiebreak))
+                chunks.append((_DEC, raw, key_value, f"{int_stripped or '0'}.{frac_part}", tiebreak))
         return chunks
+
+    @staticmethod
+    def _text_key(raw: str, fold: bool) -> str:
+        """NFD-normalized text key, optionally casefolded (NFD first)."""
+        text = raw if raw.isascii() else unicodedata.normalize("NFD", raw)
+        return text.casefold() if fold else text
+
+    @staticmethod
+    def _num_display(digits: str, stripped: str) -> Any:
+        """Display an int for safe sizes, else the canonical digit string."""
+        if len(digits) <= _int_str_limit():
+            return int(digits)
+        # Beyond Python's int<->str conversion limit an int could not even be
+        # serialized back; report the exact zero-stripped digit string.
+        return stripped or "0"
 
     def _tokens(self, text: str, unicode_mode: str) -> list[tuple[str, str, str]]:
         """Tokenize into (kind, raw, ascii_digits) where kind is text/num."""
-        if unicode_mode != "normalize":
+        if unicode_mode != "normalize" or text.isascii():
+            # ASCII text (and any text in non-normalize modes) has no
+            # non-ASCII decimal digits: the regex path is exact and fast.
             tokens: list[tuple[str, str, str]] = []
             position = 0
             for match in _ASCII_NUM_RUN.finditer(text):
@@ -240,10 +298,11 @@ class NaturalSortTool(Tool):
 
         # Unicode-aware scan: Nd characters (including ASCII digits) join the
         # current number run, everything else joins the current text run.
+        # str.isdecimal() is exactly Unicode category Nd.
         runs: list[list[str]] = []
         kinds: list[str] = []
         for char in text:
-            is_digit = char in _ASCII_DIGITS or unicodedata.category(char) == "Nd"
+            is_digit = char in _ASCII_DIGITS or char.isdecimal()
             wanted = _NUM if is_digit else _TEXT
             if kinds and kinds[-1] == wanted:
                 runs[-1].append(char)
@@ -289,10 +348,10 @@ class NaturalSortTool(Tool):
         return len(tokens) == 1 and tokens[0][0] in (_NUM, _DEC)
 
     @staticmethod
-    def _key(chunks: list[tuple[str, Any, Any, int]]) -> tuple:
+    def _key(chunks: list[tuple[str, Any, Any, Any, int]]) -> tuple:
         """Comparable key: number chunks (0, value, tiebreak), text chunks (1, folded)."""
         return tuple(
-            (1, chunk[2]) if chunk[0] == _TEXT else (0, chunk[2], chunk[3])
+            (1, chunk[2]) if chunk[0] == _TEXT else (0, chunk[2], chunk[4])
             for chunk in chunks
         )
 
@@ -328,8 +387,8 @@ class NaturalSortTool(Tool):
             ]
         return preview, len(items) > limit
 
-    def _chunk_repr(self, chunk: tuple[str, Any, Any, int], truncate: bool = True) -> Any:
-        kind, raw, value, _ = chunk
+    def _chunk_repr(self, chunk: tuple[str, Any, Any, Any, int], truncate: bool = True) -> Any:
+        kind, raw, _, value, _ = chunk
         shown = raw
         if truncate and len(shown) > self.preview_chunk_length:
             shown = shown[: self.preview_chunk_length] + "..."
@@ -337,7 +396,7 @@ class NaturalSortTool(Tool):
             return shown
         if kind == _NUM:
             return {"number": shown, "value": value}
-        return {"decimal": shown, "value": str(value)}
+        return {"decimal": shown, "value": value}
 
     def _is_sorted(self, items: list[str], options: dict[str, Any]) -> dict[str, Any]:
         keys = [self._sort_key(item, options) for item in items]
@@ -405,16 +464,22 @@ class NaturalSortTool(Tool):
                 }
             )
         prefix_relation = None
+        # first_difference is computed over the WHOLE shared chunk range, not
+        # over the (possibly capped) explanation list, so a difference beyond
+        # max_compare_chunks is still reported honestly.
+        first_difference = next(
+            (index for index in range(shared) if key_a[index] != key_b[index]),
+            None,
+        )
         if key_a == key_b:
             result = 0
         else:
             result = -1 if key_a < key_b else 1
-            if shared and all(pair["relation"] == "=" for pair in pairs) and not truncated:
+            if first_difference is None and len(chunks_a) != len(chunks_b):
+                # Every shared chunk is equal (including the vacuous case of
+                # zero shared chunks: the empty string is a prefix of any
+                # non-empty string).
                 prefix_relation = "a_is_prefix" if len(chunks_a) < len(chunks_b) else "b_is_prefix"
-        first_difference = next(
-            (index for index, pair in enumerate(pairs) if pair["relation"] != "="),
-            None,
-        )
         return {
             "status": "success",
             "mode": "compare",

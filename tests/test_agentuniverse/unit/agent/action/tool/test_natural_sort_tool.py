@@ -5,6 +5,7 @@
 import json
 import os
 import random
+import sys
 import unittest
 
 from agentuniverse.agent.action.tool.common_tool import natural_sort_tool as natural_module
@@ -117,6 +118,33 @@ class NaturalSortToolTest(unittest.TestCase):
         # Different digit-count runs never fall back to text comparison.
         self.assertEqual(self._sorted(["1" + "0" * 1000, "9" * 100, "8" * 99]),
                          ["8" * 99, "9" * 100, "1" + "0" * 1000])
+
+    def test_digit_runs_beyond_int_str_limit(self):
+        """Verify runs longer than Python's 4,300-digit int<->str limit still work.
+
+        Python 3.11+ raises ValueError when int() parses (or str() renders)
+        more than 4,300 digits, so the tool must never route long digit runs
+        through int(): comparisons use exact digit-string keys.
+        """
+        limit = getattr(sys, "get_int_max_str_digits", lambda: None)()
+        if limit is None:  # Python < 3.11: no limit, exercise the path anyway
+            limit = 4301
+        n = limit + 700
+        nines, googol = "9" * n, "1" + "0" * n
+        self.assertEqual(self._sorted([googol, nines, "5"]), ["5", nines, googol])
+        # All four modes succeed and stay json-serializable.
+        self.assertEqual(self.tool.execute(mode="is_sorted", items=[nines, "5"])["sorted"], False)
+        ranked = self.tool.execute(mode="rank", value=nines, reference=["5", "3"])
+        self.assertEqual((ranked["position"], ranked["previous"]), (2, "5"))
+        compared = self.tool.execute(mode="compare", a=nines, b=googol)
+        self.assertEqual((compared["result"], compared["first_difference"]), (-1, 0))
+        result = self.tool.execute(mode="sort", items=[nines + ".1", "5"], decimal=True)
+        self.assertEqual(result["sorted"], ["5", nines + ".1"])
+        # The huge value is reported as its canonical digit string (an int
+        # this large could not be serialized back with str()).
+        preview = self.tool.execute(mode="sort", items=[nines])["key_preview"][nines]
+        self.assertEqual(preview[0]["value"], nines)
+        json.dumps(self.tool.execute(mode="sort", items=[nines]))
 
     # -- case folding ---------------------------------------------------
 
@@ -280,6 +308,31 @@ class NaturalSortToolTest(unittest.TestCase):
         greater = self.tool.execute(mode="compare", a="a10", b="a2")
         self.assertEqual(greater["result"], 1)
         self.assertEqual(greater["first_difference"], 1)
+
+    def test_compare_empty_string_is_a_prefix(self):
+        """Verify the empty string reports a prefix relation, not a bare -1/1."""
+        empty_first = self.tool.execute(mode="compare", a="", b="0.5")
+        self.assertEqual(empty_first["result"], -1)
+        self.assertEqual(empty_first["prefix_relation"], "a_is_prefix")
+        self.assertIsNone(empty_first["first_difference"])
+        empty_second = self.tool.execute(mode="compare", a="a", b="")
+        self.assertEqual(empty_second["result"], 1)
+        self.assertEqual(empty_second["prefix_relation"], "b_is_prefix")
+        self.assertEqual(self.tool.execute(mode="compare", a="", b="")["result"], 0)
+
+    def test_compare_first_difference_beyond_chunk_cap(self):
+        """Verify first_difference is computed over the full chunk lists.
+
+        The explanation list is capped by max_compare_chunks, but the verdict
+        fields must never be derived from the truncated slice.
+        """
+        tool = NaturalSortTool(max_compare_chunks=2)
+        result = tool.execute(mode="compare", a="a1b1", b="a1b2")
+        self.assertEqual(result["result"], -1)
+        self.assertTrue(result["chunks_truncated"])
+        self.assertEqual(len(result["chunks"]), 2)
+        self.assertEqual(result["first_difference"], 3)
+        self.assertIsNone(result["prefix_relation"])
 
     # -- is_sorted mode --------------------------------------------------------
 
@@ -476,6 +529,40 @@ class NaturalSortNatsortParityTest(unittest.TestCase):
         self.assertEqual(
             self.tool.execute(mode="sort", items=items)["sorted"],
             natsort.natsorted(items, alg=ns.IGNORECASE),
+        )
+
+    def test_diacritics_match_natsort_nfd(self):
+        """Verify text keys are NFD-normalized like the natsort oracle.
+
+        natsort normalizes every string with Unicode NFD before comparing, so
+        'café' sorts beside 'cafe' (the accent becomes a combining mark AFTER
+        the base letter) and precomposed/decomposed forms are equal keys.
+        Raw code-point comparison would put 'é' (U+00E9) after every ASCII
+        letter, sorting 'CAFF' before 'café' — a visible oracle divergence.
+        """
+        for items in (
+            ["café", "CAFF", "cafe", "CAFÉ"],
+            ["réservé", "reserve", "zulu", "Réserve"],
+            ["hôtel", "höz", "höz", "Hôtel", "haut"],
+        ):
+            self.assertEqual(
+                self.tool.execute(mode="sort", items=items)["sorted"],
+                natsort.natsorted(items, alg=ns.IGNORECASE),
+                items,
+            )
+            self.assertEqual(
+                self.tool.execute(mode="sort", items=items, case_sensitive=True)["sorted"],
+                natsort.natsorted(items),
+                items,
+            )
+        # Precomposed and decomposed accents are equal keys: input order kept.
+        self.assertEqual(
+            self.tool.execute(mode="sort", items=["cafe\u0301", "café"])["sorted"],
+            ["cafe\u0301", "café"],
+        )
+        # Case-sensitive mode still NFD-normalizes (natsort does too).
+        self.assertEqual(
+            self.tool.execute(mode="compare", a="café", b="cafe\u0301")["result"], 0,
         )
 
 

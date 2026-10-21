@@ -660,20 +660,29 @@ neighboring entries of one value against a reference list), `compare`
 `first_difference`), and `is_sorted` (bool plus adjacent violation pairs).
 
 Documented chunking rules: maximal ASCII digit runs are number chunks
-compared by integer value with arbitrary precision (1,000+ digit runs never
-use floats); number chunks sort before text chunks at the same position;
-text chunks compare by Unicode code point; whitespace and embedded signs
+compared by integer value with arbitrary precision via exact digit-string
+keys, so even runs longer than Python's 4,300-digit int-string conversion
+limit work (1,000+ digit runs never use floats or `int()`); number chunks
+sort before text chunks at the same position; text chunks are compared by
+Unicode code point after NFD normalization, so precomposed and decomposed
+accents are equal keys (`café` == `cafe` + U+0301) and `café` sorts beside
+`cafe` instead of after every ASCII letter; whitespace and embedded signs
 are plain text (`a-1` chunks as `a` / `-` / `1`); equal chunk prefixes order
-the shorter string first. `case_sensitive=False` (default) compares text via
-`str.casefold()`, so `Weiss` and `Weiß` are equal keys. `leading_zeros`
-defaults to `stable`: `002` and `2` are equal keys and keep input order;
-`fewer_first` breaks such ties toward fewer leading zeros. `decimal=True`
-merges `digits.digits` groups into exact `Decimal` values, so
-`["1.5", "1.10"]` sorts as `["1.10", "1.5"]` because 1.10 == 1.1
-numerically. `number_mode="whole"` recognizes only whole-string numbers.
-Non-ASCII decimal digits (Unicode Nd) are text by default; pass
-`unicode_digits="normalize"` to fold them to their values via
-`unicodedata.digit`, or `"reject"` to refuse them.
+the shorter string first, and the empty string sorts before everything.
+`case_sensitive=False` (default) compares text via `str.casefold()` applied
+after the NFD normalization, so `Weiss` and `Weiß` are equal keys.
+`leading_zeros` defaults to `stable`: `002` and `2` are equal keys and keep
+input order; `fewer_first` breaks such ties toward fewer leading zeros.
+`decimal=True` merges `digits.digits` groups into exact decimal values
+compared with string arithmetic (integer part by length then digits,
+fraction digit-wise), so `["1.5", "1.10"]` sorts as `["1.10", "1.5"]`
+because 1.10 == 1.1 numerically. `number_mode="whole"` recognizes only
+whole-string numbers. Non-ASCII decimal digits (Unicode Nd) are text by
+default; pass `unicode_digits="normalize"` to fold them to their values via
+`unicodedata.digit`, or `"reject"` to refuse them. In `compare`,
+`first_difference` is computed over the whole chunk lists — never from the
+capped explanation slice — and `prefix_relation` covers the empty string
+against any non-empty string.
 
 The tool never mutates its input, Python's stable sort preserves input order
 for equal keys, and no locale, time, or randomness is consulted: the same
