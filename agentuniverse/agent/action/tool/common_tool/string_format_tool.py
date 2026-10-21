@@ -225,17 +225,130 @@ class _Scan:
         self.field_count = 0
 
 
-def _scan_field_name(text: str, start: int) -> tuple[int, str]:
-    """Scan a field name from ``start``; stop at ':', '!' or '}' at
-    bracket depth zero. Returns (end_index, name)."""
-    i, n, depth = start, len(text), 0
+def _scan_fstring_field(
+    text: str, start: int
+) -> tuple[dict[str, Any] | None, int]:
+    """One f-string replacement field beginning at ``start`` (``{``).
+
+    The expression inside an f-string field is Python code, not a
+    str.format field name: ``(``, ``[`` and ``{`` nest, an index part
+    opened by ``[`` closes at the first ``]``, string literals may
+    contain any of ``:{}!`` verbatim, and ``:`` or ``!`` (outside
+    ``!=``) only start the conversion / format spec at nesting depth
+    zero — so ``f"{ {1, 2} }"`` spans the whole field, not up to the
+    display's ``}``. Returns ``(field_descriptor_or_None, end)``.
+    """
+    n = len(text)
+    i = start + 1
+    depth = 0
+    in_index = False
+    quote: str | None = None
     while i < n:
         ch = text[i]
+        if quote is not None:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            i += 1
+            continue
+        if in_index:
+            if ch == "]":
+                in_index = False
+            i += 1
+            continue
         if ch == "[":
+            in_index = True
+            i += 1
+            continue
+        if ch in "({":
             depth += 1
-        elif ch == "]":
-            depth = max(0, depth - 1)
-        elif depth == 0 and ch in ":!}":
+        elif ch in ")}":
+            if depth == 0:
+                break
+            depth -= 1
+        elif ch == "!" and depth == 0 and not text.startswith("!=", i):
+            break
+        elif ch == ":" and depth == 0:
+            break
+        i += 1
+    if i >= n:
+        return None, n
+    if text[i] == "!":
+        i += 2  # '!' + conversion letter
+    nested: list[dict[str, Any]] = []
+    if i < n and text[i] == ":":
+        i += 1
+        while i < n:
+            ch = text[i]
+            if ch == "{":
+                sub, end = _scan_fstring_field(text, i)
+                if sub is None:
+                    return None, n
+                nested.append(sub)
+                i = end
+                continue
+            if ch == "}":
+                break
+            i += 1
+    if i >= n or text[i] != "}":
+        return None, n
+    return {"span": (start, i + 1), "nested": nested}, i + 1
+
+
+def _scan_fstring_fields(text: str) -> list[dict[str, Any]]:
+    """Top-level replacement fields of f-string source text.
+
+    Every field is ``{'span': (start, end), 'nested': [...]}`` with
+    the spec-nested replacement fields listed recursively; ``{{`` and
+    ``}}`` escapes are honored. Fields the scanner cannot close are
+    skipped (syntax problems are the AST parser's finding to report).
+    """
+    fields: list[dict[str, Any]] = []
+    n = len(text)
+    i = 0
+    while i < n:
+        ch = text[i]
+        if ch == "{":
+            if text.startswith("{{", i):
+                i += 2
+                continue
+            field, end = _scan_fstring_field(text, i)
+            if field is not None:
+                fields.append(field)
+                i = end
+                continue
+            i += 1
+            continue
+        if text.startswith("}}", i):
+            i += 2
+            continue
+        i += 1
+    return fields
+
+def _scan_field_name(text: str, start: int) -> tuple[int, str]:
+    """Scan a field name from ``start``; stop at ':', '!' or '}' outside
+    an index part. Mirrors the real machinery exactly: ``[`` enters an
+    index part that only the first ``]`` closes (brackets do not nest —
+    a ``[`` after the closing ``]`` opens the next index part and any
+    terminator inside an index part is an ordinary key character —
+    ``'{a[b:c]}'`` formats with key ``'b:c'``). Returns
+    ``(end_index, name)``."""
+    i, n = start, len(text)
+    in_index = False
+    while i < n:
+        ch = text[i]
+        if in_index:
+            if ch == "]":
+                in_index = False
+        elif ch == "[":
+            in_index = True
+        elif ch in ":!}":
             break
         i += 1
     return i, text[start:i]
@@ -444,12 +557,19 @@ def _iter_fields(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _field_first_segment(name: str) -> str:
-    """First identifier segment of a field name ('a' for 'a[0].b')."""
+    """First identifier segment of a field name ('a' for 'a[0].b').
+
+    Stops at whichever of '.' or '[' appears first: '[' opens an index
+    part whose key may itself contain '.', and the real machinery
+    looks the first segment up as one mapping key or positional index
+    ('{x[k.y]}' formats ``mapping['x'][k_y]``-style — key ``'x'``).
+    """
+    best = -1
     for cut in (".", "["):
         idx = name.find(cut)
-        if idx >= 0:
-            return name[:idx]
-    return name
+        if idx >= 0 and (best < 0 or idx < best):
+            best = idx
+    return name if best < 0 else name[:best]
 
 
 def _numbering(parts: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1754,9 +1874,10 @@ class StringFormatTool(Tool):
 
         # Spans: CPython 3.11 reports every FormattedValue with the
         # whole f-string's position, so exact spans come from the
-        # template scanner (same replacement-field grammar), aligned
-        # to the AST nodes by order of appearance.
-        scan = _scan_template(inner)
+        # dedicated f-string field scanner (Python expression nesting:
+        # (), [], {} depth plus [...] index state and string literals),
+        # aligned to the AST nodes by order of appearance.
+        field_scan = _scan_fstring_fields(inner)
         offset = prefix_len if kind == "literal" else 0
 
         def visit(joined: ast.JoinedStr, depth: int, outer_span: tuple,
@@ -1823,7 +1944,7 @@ class StringFormatTool(Tool):
             for child in ast.iter_child_nodes(node):
                 visit_expr(child, depth, outer_span)
 
-        top_fields = [part for part in scan.parts if part["kind"] == "field"]
+        top_fields = field_scan
         try:
             visit(tree.body, 1, (0, len(template)), top_fields, True)
         except RecursionError:

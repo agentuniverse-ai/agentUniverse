@@ -992,3 +992,98 @@ class StringFormatToolSurfaceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --------------------------------------------------------------------- #
+
+class StringFormatBracketStateTest(unittest.TestCase):
+    """The field-name scanner must mirror the real machinery's bracket
+    rule: ``[`` opens an index part that only the first ``]`` closes
+    (no nesting), and ':', '!' and '}' inside the index part are
+    ordinary key characters."""
+
+    def test_names_agree_with_formatter_bracket_state(self):
+        cases = {
+            "{a[b[c]]}": "a[b[c]]",   # first ']' closes; second is literal
+            "{a[[]}": "a[[]",
+            "{a[b]c]d}": "a[b]c]d",
+            "{a[}b]}": "a[}b]",
+            "{a[b:c]}": "a[b:c]",
+            "{a[b][c]}": "a[b][c]",
+        }
+        for template, expected in cases.items():
+            with self.subTest(template=template):
+                fmt_name = Formatter().parse(template).__next__()[1]
+                self.assertEqual(fmt_name, expected)
+                result = StringFormatTool().execute(
+                    "fields", template=template)
+                self.assertEqual(
+                    [f["field_name"] for f in result["fields"]],
+                    [expected])
+                self.assertEqual(result["scan_errors"], [])
+
+    def test_unbalanced_bracket_still_lints_like_the_real_format(self):
+        # one '[' whose ']' arrives much later: the real machinery
+        # takes everything between as the index key and renders, so
+        # the veto contract demands verdict ok with zero errors.
+        template = "!{x[!r:{w}{p}}{{{x.0!r:>{}{}}{b[0]!s:>{}{}}"
+        fmt_name = Formatter().parse(template).__next__()[1]
+        self.assertEqual(
+            fmt_name, "x[!r:{w}{p}}{{{x.0!r:>{}{}}{b[0]")
+        verdict = StringFormatTool().execute("lint", template=template)
+        self.assertEqual(verdict["verdict"], "ok")
+        self.assertEqual(error_codes_of(verdict), [])
+
+    def test_render_missing_key_reports_the_real_first_segment(self):
+        # the index key contains '.', but the machinery looks up the
+        # first segment 'a' — not 'a[b.c' — before indexing.
+        template = "{a[b.c]}"
+        result = StringFormatTool().execute(
+            "render", template=template, mapping={})
+        self.assertEqual(result["missing_keys"], ["a"])
+
+
+class StringFormatFStringSpanTest(unittest.TestCase):
+    """f-string expression spans must honor Python expression nesting:
+    brace displays (dict/set literals), slices, lambdas, walrus and
+    string literals containing braces do not terminate the field."""
+
+    def test_spans_cover_brace_displays_exactly(self):
+        cases = [
+            'f"{ {1, 2} }"',
+            "f\"{ {'a':1}['a'] }\"",
+            "f\"{ {k: v for k, v in []} }\"",
+            "f'{d[\"}\"]}'",
+            "f'{a[1:2]}'",
+            "f'{x if y else z}'",
+            "f'{a != b}'",
+            'f"{(lambda: 5)()}"',
+            "f'{(n := 5)}'",
+        ]
+        for template in cases:
+            with self.subTest(template=template):
+                result = StringFormatTool().execute(
+                    "check_fstring", template=template)
+                self.assertTrue(result["ok"], result["findings"])
+                top = [e for e in result["expressions"]
+                       if e["depth"] == 1]
+                self.assertEqual(len(top), 1)
+                s0, s1 = top[0]["position_span"]
+                raw = template[s0:s1]
+                self.assertTrue(
+                    raw.startswith("{") and raw.endswith("}"),
+                    raw)
+                # the span covers the expression verbatim (ast.unparse
+                # normalizes quote style, so compare modulo quotes and
+                # spaces)
+                inner = raw[1:-1].replace("'", '"').replace(" ", "")
+                expr = (top[0]["expression"].replace("'", '"')
+                        .replace(" ", ""))
+                self.assertIn(expr, inner)
+
+    def test_nested_spec_field_span(self):
+        result = StringFormatTool().execute(
+            "check_fstring", template="f'{x!s:{a}}'")
+        spans = [(e["expression"], tuple(e["position_span"]))
+                 for e in result["expressions"]]
+        self.assertEqual(spans, [("x", (2, 11)), ("a", (7, 10))])
