@@ -634,3 +634,90 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## User-Agent Tool
+
+`UserAgentTool` parses User-Agent strings offline — pure Python
+standard library, no network, no Client Hints — into structured
+components an agent can reason about: browser, rendering engine,
+operating system and device type, plus an `is_bot` flag and a short
+one-liner. It complements `LogParserTool`: that tool parses *log
+lines* in which the User-Agent is one opaque quoted field, while this
+tool parses the User-Agent *string itself*.
+
+Two modes:
+
+- `parse` — User-Agent string → `{browser: {name, version}, engine:
+  {name, version}, os: {name, version}, device: {type, vendor?,
+  model?}, raw, is_bot, short}`.
+- `short` — User-Agent string → the one-liner only, e.g.
+  `"Chrome 120 / Windows 10 / desktop"` (major versions, unknown
+  parts read `unknown`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.user_agent_tool import UserAgentTool
+
+tool = UserAgentTool()
+tool.execute(mode="parse", user_agent=(
+    "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"))
+# browser Chrome 120.0.0.0, engine Blink, os Android 13,
+# device {type: mobile, vendor: Samsung, model: SM-G991B}, is_bot False
+tool.execute(mode="short", user_agent="curl/8.4.0")
+# {'short': 'curl 8 / unknown / bot', 'is_bot': True, ...}
+```
+
+Detection order (the order IS the disambiguation): bots first — a
+hint scan for `bot|crawl|spider|slurp|bingpreview|headlesschrome`
+plus non-browser clients (curl, Wget, python-requests, …) sets
+`is_bot` and `device.type=bot` before any browser matching, so the
+`Chrome/` and `Safari/` compatibility tokens inside Googlebot or
+bingbot strings are never misread; the bot's own token
+(`Googlebot/2.1`) becomes the reported browser. Then browsers by
+priority — `SamsungBrowser/` → Samsung Internet, `Edg`/`EdgA`/`EdgiOS`
+→ the Chromium-based Edge, `Edge/` → legacy EdgeHTML Edge, `OPR/` /
+`OPiOS/` / `Opera/` → Opera (legacy Opera froze at 9.80 with the real
+version in `Version/`, which is unfrozen), `MSIE`/`IEMobile` →
+Internet Explorer, `Firefox/`/`FxiOS/` → Firefox, a `Chromium` token
+→ Chromium, and only then `Chrome/` — reached solely when no
+Chromium-family sibling claimed the string, which is exactly the
+documented rule "`Chrome/` without `Edg/`|`OPR/`|`Chromium` means
+Chrome"; `Safari/` without any Chrome-family token → Safari with the
+version from `Version/`. Engines follow: `Trident/` (before `rv:` —
+in IE 11 `rv:` is the browser version, not the engine's), EdgeHTML
+for legacy Edge, `Presto/`, `rv:` → Gecko, and the documented Blink
+heuristic — `AppleWebKit/x … Chrome/y Safari/z` means Blink with
+version None (Chromium browsers render with Blink, a WebKit fork that
+has no version token; the `537.36` build number is frozen
+compatibility noise), while on iOS the same browsers report WebKit
+because Apple requires it. Operating systems: Windows Phone is
+checked before Android (Lumia strings carry both) and before Windows
+NT; `Windows NT` maps through a fixed table (`6.1`→7, `6.2`→8,
+`6.3`→8.1, `10.0`→10 — Windows 11 is honestly reported as Windows 10
+because its User-Agent is byte-identical); `Android 13; SM-G991B`
+yields the model from the token that follows (glued ` Build/…`
+suffixes and placeholders like `K`, `Mobile`, `wv`, `rv:…` are
+skipped, vendor via a documented prefix table); `CPU iPhone OS 17_1`
+→ iOS 17.1; `iPad; CPU OS 16_6` → iPadOS 16.6; `Mac OS X 10_15_7` →
+10.15.7; `CrOS` → ChromeOS; Ubuntu/Fedora are named; bare
+Linux/X11 → Linux. Devices: iPad, a `Tablet` token, or Android
+without the `Mobile` token → tablet (Android tablet User-Agents
+simply omit `Mobile`); iPhone, any `Mobile` token, Windows Phone or
+Opera Mini → mobile; a desktop OS token → desktop; vendors: Apple,
+the Android prefix table, and Nokia/Microsoft for Lumias.
+
+Honest limitations, documented rather than hidden: User-Agent
+strings are freely spoofable client-supplied text — the tool reports
+what the string claims, never a verified identity; no Client Hints
+(`Sec-CH-UA`) are consulted because there is no header access
+offline; the version maps are best-effort snapshots of how real
+User-Agents freeze today; vendor/model extraction only knows the
+documented prefix table; anything unrecognised is reported as
+`unknown` instead of guessed.
+
+Inputs are validated strictly before any computation: an unknown
+mode, a non-string, empty or whitespace-only `user_agent`, input
+over the 8,192-character cap, or control characters (a User-Agent is
+a single header line — NUL, CR, LF, TAB and other C0 controls are
+rejected) raise a `ValueError`. Everything is deterministic: no
+randomness, no clock, no network.
