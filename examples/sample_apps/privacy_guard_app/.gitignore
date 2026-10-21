@@ -1,0 +1,6 @@
+logs/
+db/
+config/custom_key.toml
+__pycache__/
+*.pyc
+.test_log_dir/

@@ -1,0 +1,12 @@
+# Custom API Keys / 自定义 API 密钥
+# Copy to custom_key.toml and fill in your key. Add custom_key.toml to .gitignore.
+# 复制为 custom_key.toml 并填入你的密钥。请将 custom_key.toml 加入 .gitignore。
+
+[KEY_LIST]
+# Required only for the LLM answer step (retrieval runs offline without it).
+# 仅 LLM 回答步骤需要；检索流程无需任何密钥。
+DEEPSEEK_API_KEY = 'your-deepseek-api-key-here'
+
+# Optional: only needed if you switch the store to an embedding-based one.
+# 可选：仅当切换到向量存储时需要。
+# DASHSCOPE_API_KEY = 'your-dashscope-api-key-here'

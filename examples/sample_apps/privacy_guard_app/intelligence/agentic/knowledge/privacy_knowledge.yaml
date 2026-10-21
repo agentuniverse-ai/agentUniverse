@@ -1,0 +1,15 @@
+# !/usr/bin/env python3
+# -*- coding:utf-8 -*-
+
+name: 'privacy_knowledge'
+description: '客服工单知识库：入库前对工单文本做敏感信息脱敏，召回时二次脱敏。'
+stores:
+    - 'privacy_sqlite_store'
+insert_processors:
+    - 'recursive_character_text_splitter'
+    - 'ticket_redactor'
+post_processors:
+    - 'recall_redactor'
+readers:
+    txt: 'default_txt_reader'
+meta_class: privacy_guard_app.intelligence.agentic.knowledge.privacy_knowledge.PrivacyKnowledge
