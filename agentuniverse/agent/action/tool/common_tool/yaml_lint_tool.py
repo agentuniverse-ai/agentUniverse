@@ -45,11 +45,14 @@ Supported modes
   ``ok`` plus ``findings``. Each finding is ``{code, severity, line,
   col, message, hint}``. ``ok`` is True only when no finding of
   severity error or warning was raised (info-only stays ok). When
-  PyYAML rejects the text, YML001 carries the parser's own problem
-  mark (context mark as fallback) and the parse-dependent rules are
-  skipped; the raw-line rules (BOM, tabs, trailing spaces) still run —
-  with block-scalar regions unprotected, since those regions cannot
-  be located in an unparseable stream. Findings are sorted by (line,
+  PyYAML rejects the text, YML001 carries the mark of the first error
+  a full ``yaml.safe_load`` read hits — the parser's own mark for
+  pure syntax mistakes (the raw scanner only breaks later on whatever
+  follows some of them), or an earlier document's construction error
+  when one interleaves ahead of a later parse error — and the
+  parse-dependent rules are skipped; the raw-line rules (BOM, tabs,
+  trailing spaces) still run, protected by whatever scalar regions
+  the scanner located before it failed. Findings are sorted by (line,
   col, code), capped at 200 entries (``finding_count`` keeps the true
   total and ``findings_truncated`` flags the cut).
 * ``profile`` — topology statistics over the whole stream: collection
@@ -72,9 +75,10 @@ Supported modes
   keys, deep nesting, non-string keys — restructuring is never
   attempted). When the text does not parse, BOM and trailing-space
   edits are still offered (``parse_failed`` is set and quoting is
-  skipped: quoting positions need a successful parse); block scalar
-  regions cannot be protected in that case. Trailing spaces and tabs
-  *inside* block scalars (``|`` / ``>``) are literal content: the
+  skipped: quoting positions need a successful parse); trailing-space
+  strips stay off block-scalar regions the scanner located before it
+  failed. Trailing spaces and tabs *inside* block scalars (``|`` /
+  ``>``) are literal content: the
   scanner's block-scalar token spans protect them from the
   trailing-space and tab rules, and leading tabs on quoted-scalar
   continuation lines are legal, so those lines are protected from the
@@ -101,12 +105,14 @@ YML003   tab_indentation     error    a line's leading whitespace contains a tab
 YML004   trailing_spaces     info     a line ends with spaces or tabs outside block      strip them (fix_hints) — inside quoted multi-line
                                       scalar content (where they are literal)           scalars they fold away silently
 YML005   duplicate_keys      error    a mapping repeats a key: keys compare by          rename the keys — plain yaml.safe_load silently
-                                      resolved value (case-insensitive booleans,        keeps the last value
-                                      underscore / base-normalized ints, quoted =
-                                      plain strings); one finding per repeat, both
-                                      lines in the message; merge keys (``<<``) are
-                                      exempt; int 1 vs float 1.0 and NaN-vs-NaN follow
-                                      text buckets (documented edges)
+                                      constructed value across int / float / bool        keeps the last value
+                                      (``on`` / ``true`` / ``1`` / ``1.0`` collide,
+                                      exactly like the dict PyYAML builds), plain
+                                      and quoted strings are equal; one finding per
+                                      repeat, both lines in the message; merge keys
+                                      (``<<``) are exempt; NaN keys never collide
+                                      and quoted vs numeric never collide
+                                      (documented edges)
 YML006   implicit_octal      info     a plain scalar matches ``[-+]?0[0-7_]+`` —         quote it ('010') or write 0o10 / 10 — YAML 1.1
                                       PyYAML resolves it as base-8 (``010`` → 8);       (PyYAML) reads 010 as octal, YAML 1.2 readers
                                       ``0o10`` does NOT resolve (stays a string)        leave 010 as a string
@@ -229,6 +235,11 @@ _OCTAL_LOOK = re.compile(r"\A[-+]?0[0-7_]+\Z")
 # Plain boolean words whose YAML 1.2 status differs from PyYAML's 1.1
 # reading; true/false are unambiguous and never flagged.
 _BOOL_WORD_VALUES = frozenset({"yes", "no", "on", "off"})
+# Bool-key spellings -> the python object PyYAML builds for them.
+_BOOL_KEY_VALUES: dict = {
+    "true": True, "yes": True, "on": True,
+    "false": False, "no": False, "off": False,
+}
 
 # Key naming styles (profile): snake, kebab and lowerCamel are the
 # competing styles; flat words and anything else stay neutral.
@@ -336,29 +347,34 @@ def _canonical_key(node: Any) -> tuple:
     """Hashable canonical form of a mapping key node.
 
     Mirrors how the python dict PyYAML builds would compare keys:
-    plain and quoted strings are equal, booleans compare
-    case-insensitively, ints compare across 0x / 0b / 0-prefix /
-    underscore spellings, floats across .inf spellings. Merge keys are
-    excluded by the caller. Collection keys collapse to structure.
-    Documented edges: int 1 vs float 1.0 and NaN-vs-NaN compare by
-    text bucket (the built dict would equate the former).
+    plain and quoted strings are equal, and every numeric spelling
+    shares one constructed-value bucket — booleans, ints and floats
+    compare by the python object they construct, so ``on``, ``true``,
+    ``1`` and ``1.0`` all collide exactly as they would in the built
+    dict. Merge keys are excluded by the caller. Collection keys
+    collapse to structure. Documented edges: NaN keys never collide
+    (each constructs a distinct python float, and NaN != NaN), and
+    timestamp-spelled keys compare by exact text.
     """
     if isinstance(node, ScalarNode):
         suffix = _tag_suffix(node)
         if suffix == "str":
             return ("s", node.value)
         if suffix == "bool":
-            return ("b", node.value.lower())
+            word = node.value.lower()
+            if word in _BOOL_KEY_VALUES:
+                return ("n", _BOOL_KEY_VALUES[word])
+            return ("r", node.tag, node.value)
         if suffix == "null":
-            return ("n",)
+            return ("n0",)
         if suffix == "int":
             try:
-                return ("i", _yaml_int_value(node.value))
+                return ("n", _yaml_int_value(node.value))
             except (ValueError, IndexError):
                 return ("r", node.tag, node.value)
         if suffix == "float":
             try:
-                return ("f", _yaml_float_value(node.value))
+                return ("n", _yaml_float_value(node.value))
             except (ValueError, IndexError):
                 return ("r", node.tag, node.value)
         return ("r", node.tag, node.value)
@@ -457,41 +473,49 @@ def _scan_raw_lines(text: str) -> dict:
 # Token scan (anchors, aliases, protected scalar regions)
 # ---------------------------------------------------------------------------
 
-def _scan_tokens(text: str) -> dict:
+def _scan_tokens(text: str) -> tuple:
     """Anchor / alias usage and block / quoted scalar line ranges.
 
-    Returns ``{"anchors": [(name, line)], "aliases": [(name, line)],
-    "block_ranges": [(lo, hi)], "quoted_ranges": [(lo, hi)]}`` with
-    1-based inclusive line ranges. Block scalar ranges cover the
-    literal content lines only; quoted ranges cover the continuation
-    lines (line 2 onward of a multi-line quoted scalar), where leading
-    tabs and folded trailing spaces are token content rather than
-    indentation noise.
+    Returns ``(result, error)``. ``result`` holds ``{"anchors":
+    [(name, line)], "aliases": [(name, line)], "block_ranges":
+    [(lo, hi)], "quoted_ranges": [(lo, hi)]}`` with 1-based inclusive
+    line ranges. Block scalar ranges cover the literal content lines
+    only; quoted ranges cover the continuation lines (line 2 onward of
+    a multi-line quoted scalar), where leading tabs and folded trailing
+    spaces are token content rather than indentation noise. When the
+    scanner fails partway through the stream, the ranges it located
+    before the failure are kept and the exception is returned — those
+    regions are still genuine scalar content even though the stream as
+    a whole is unparseable.
     """
     result: dict = {"anchors": [], "aliases": [], "block_ranges": [],
                     "quoted_ranges": []}
-    for token in yaml.scan(text, Loader=yaml.SafeLoader):
-        if isinstance(token, AnchorToken):
-            result["anchors"].append(
-                (token.value, token.start_mark.line + 1)
-            )
-        elif isinstance(token, AliasToken):
-            result["aliases"].append(
-                (token.value, token.start_mark.line + 1)
-            )
-        elif isinstance(token, ScalarToken):
-            if token.start_mark.line == token.end_mark.line:
-                continue
-            lo = token.start_mark.line + 2
-            if token.style in ("|", ">"):
-                hi = token.end_mark.line
-                if hi >= lo:
-                    result["block_ranges"].append((lo, hi))
-            elif token.style in ("'", '"'):
-                hi = token.end_mark.line + 1
-                if hi >= lo:
-                    result["quoted_ranges"].append((lo, hi))
-    return result
+    error: BaseException = None
+    try:
+        for token in yaml.scan(text, Loader=yaml.SafeLoader):
+            if isinstance(token, AnchorToken):
+                result["anchors"].append(
+                    (token.value, token.start_mark.line + 1)
+                )
+            elif isinstance(token, AliasToken):
+                result["aliases"].append(
+                    (token.value, token.start_mark.line + 1)
+                )
+            elif isinstance(token, ScalarToken):
+                if token.start_mark.line == token.end_mark.line:
+                    continue
+                lo = token.start_mark.line + 2
+                if token.style in ("|", ">"):
+                    hi = token.end_mark.line
+                    if hi >= lo:
+                        result["block_ranges"].append((lo, hi))
+                elif token.style in ("'", '"'):
+                    hi = token.end_mark.line + 1
+                    if hi >= lo:
+                        result["quoted_ranges"].append((lo, hi))
+    except (yaml.YAMLError, RecursionError) as failure:
+        error = failure
+    return result, error
 
 
 def _protected(lines: list, ranges: list) -> frozenset:
@@ -811,30 +835,35 @@ def _run_lint(tool: Any, text: str, allow_multiple: bool,
     A single leading UTF-8 BOM is stripped before any parsing (rule
     YML002 reports it); every reported line and column refers to the
     stream after the BOM, matching the marks PyYAML itself reports.
+    The compose pass runs even when the token scan fails: the parser
+    surfaces the *first* error a full read hits — for a stray bracket
+    the scanner only breaks later, on whatever follows — so its mark
+    is the one reported, with the scan error kept as a fallback.
+    Scalar regions the scanner located before a failure still protect
+    the raw-line rules.
     """
     had_bom = text.startswith("\ufeff")
     work = text[1:] if had_bom else text
     findings: list = []
-    parsed = True
     report_syntax = "YML001" not in disabled
 
-    # Token pass: anchors, aliases, protected regions.
-    try:
-        tokens = _scan_tokens(work)
-    except (yaml.YAMLError, RecursionError) as error:
-        tokens = None
-        if report_syntax:
-            findings.append(_syntax_finding(error))
-        parsed = False
+    # Token pass: anchors, aliases, protected regions (partial on error).
+    tokens, scan_error = _scan_tokens(work)
 
-    # Compose pass: the node tree.
-    documents = None
-    if parsed:
-        documents, parse_finding = _parse_stream(work)
-        if parse_finding is not None and report_syntax:
-            findings.append(parse_finding)
-        if documents is None:
-            parsed = False
+    # Compose pass: the node tree, and the authoritative syntax mark.
+    documents, parse_finding = _parse_stream(work)
+    if parse_finding is not None:
+        if report_syntax:
+            # yaml.safe_load interleaves construction with parsing, so
+            # a construction error in an earlier document surfaces
+            # before a later parse error; probe the construct pass for
+            # the earlier mark when composing failed.
+            _, construct_error = _collect_duplicates(work)
+            findings.append(construct_error or parse_finding)
+    elif scan_error is not None and report_syntax:
+        findings.append(_syntax_finding(scan_error))
+    parsed = (documents is not None and parse_finding is None
+              and scan_error is None)
 
     # Construct pass: duplicate keys via the loader subclass.
     duplicates: list = []
@@ -847,17 +876,14 @@ def _run_lint(tool: Any, text: str, allow_multiple: bool,
 
     # Raw-line rules, protected by the scalar regions.
     raw = _scan_raw_lines(work)
-    tab_protected: frozenset = frozenset()
-    trailing_protected: frozenset = frozenset()
-    if tokens is not None:
-        tab_protected = _protected(
-            [line for line, _col in raw["tabs"]],
-            tokens["block_ranges"] + tokens["quoted_ranges"],
-        )
-        trailing_protected = _protected(
-            [line for line, _col in raw["trailing"]],
-            tokens["block_ranges"],
-        )
+    tab_protected: frozenset = _protected(
+        [line for line, _col in raw["tabs"]],
+        tokens["block_ranges"] + tokens["quoted_ranges"],
+    )
+    trailing_protected: frozenset = _protected(
+        [line for line, _col in raw["trailing"]],
+        tokens["block_ranges"],
+    )
     if had_bom and "YML002" not in disabled:
         findings.append(_finding(
             "YML002", 1, 1,
@@ -890,13 +916,11 @@ def _run_lint(tool: Any, text: str, allow_multiple: bool,
 
     # Value-level rules over the composed tree.
     bool_words: list = []
-    if documents:
+    if documents and parsed:
         stats = _Stats()
-        deep_reported: list = []
         for document in documents:
             bool_words.extend(
-                _walk_tree(document, findings, stats, max_depth,
-                           deep_reported)
+                _walk_tree(document, findings, stats, max_depth, [])
             )
         doc_lines = [
             document.start_mark.line + 1 for document in documents
@@ -954,7 +978,12 @@ def _run_lint(tool: Any, text: str, allow_multiple: bool,
 def _run_profile(text: str) -> dict:
     """Topology statistics over the whole stream."""
     work = text[1:] if text.startswith("\ufeff") else text
-    tokens = _scan_tokens(work)
+    tokens, scan_error = _scan_tokens(work)
+    if scan_error is not None:
+        raise _err(
+            "profile mode requires a parseable YAML stream "
+            f"({_syntax_finding(scan_error)['message']})"
+        )
     documents, parse_finding = _parse_stream(work)
     if documents is None:
         raise _err(
@@ -1034,14 +1063,11 @@ def _run_fix_hints(tool: Any, text: str, remove_bom: bool,
             "original": "\ufeff", "replacement": "",
         })
     if strip_trailing and raw["trailing"]:
-        try:
-            tokens = _scan_tokens(work)
-            trailing_protected = _protected(
-                [line for line, _col in raw["trailing"]],
-                tokens["block_ranges"],
-            )
-        except (yaml.YAMLError, RecursionError):
-            trailing_protected = frozenset()
+        tokens, _scan_error = _scan_tokens(work)
+        trailing_protected = _protected(
+            [line for line, _col in raw["trailing"]],
+            tokens["block_ranges"],
+        )
         for line, col in raw["trailing"]:
             if line in trailing_protected:
                 continue

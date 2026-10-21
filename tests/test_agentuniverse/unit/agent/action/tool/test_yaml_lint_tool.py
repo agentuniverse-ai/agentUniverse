@@ -233,6 +233,36 @@ class YamlLintToolSyntaxMatrixTest(unittest.TestCase):
         self.assertIn("quoted scalar", message)
         self.assertIn("ScannerError", message)
 
+    def test_parser_mark_preferred_over_late_scanner_mark(self) -> None:
+        # A stray closing bracket survives the scanner and only breaks
+        # it later, on whatever follows; the compose pass reports the
+        # real mistake — the bracket itself — like safe_load does.
+        text = "root:\n  s:\n    - [[1, 2]]]\n    - {a: 1}\n"
+        with self.assertRaises(yaml.YAMLError) as raised:
+            yaml.safe_load(text)
+        mark = (raised.exception.problem_mark
+                or raised.exception.context_mark)
+        result = self.tool.execute(mode="lint", yaml_text=text)
+        finding = _finding(result, "YML001")
+        self.assertEqual(finding["line"], mark.line + 1)
+        self.assertEqual(finding["col"], mark.column + 1)
+        self.assertEqual(finding["line"], 3)
+
+    def test_earlier_construct_error_beats_later_parse_error(self) -> None:
+        # safe_load constructs document by document, so the unknown
+        # tag in document 1 surfaces before the mapping-value error in
+        # document 2; the reported mark must match safe_load's.
+        text = "!--\na: 1\n---\n\n: 2\n"
+        with self.assertRaises(yaml.YAMLError) as raised:
+            list(yaml.safe_load_all(text))
+        mark = (raised.exception.problem_mark
+                or raised.exception.context_mark)
+        result = self.tool.execute(mode="lint", yaml_text=text)
+        finding = _finding(result, "YML001")
+        self.assertEqual((finding["line"], finding["col"]),
+                         (mark.line + 1, mark.column + 1))
+        self.assertEqual(finding["line"], 1)
+
 
 class YamlLintToolRawRulesTest(unittest.TestCase):
     """YML002 / YML003 / YML004 with block-scalar protection."""
@@ -314,6 +344,20 @@ class YamlLintToolRawRulesTest(unittest.TestCase):
         result = self.tool.execute(mode="lint", yaml_text="a: 1\r\nb: 2\r\n")
         self.assertEqual(result["finding_count"], 0)
 
+    def test_scanned_regions_still_protected_after_later_error(self) -> None:
+        # The scanner reads the block scalar (recording its range)
+        # before it dies on the unterminated quote; the legal tab and
+        # trailing spaces inside the block content must not become
+        # findings just because the stream is broken further down.
+        result = self.tool.execute(
+            mode="lint",
+            yaml_text='b: |\n  \tx   \nlater: "unterminated\n',
+        )
+        self.assertFalse(result["parsed"])
+        self.assertIn("YML001", _codes(result))
+        self.assertNotIn("YML003", _codes(result))
+        self.assertNotIn("YML004", _codes(result))
+
 
 class YamlLintToolDuplicateKeysTest(unittest.TestCase):
     """YML005 via the duplicate-key-safe loader subclass."""
@@ -362,12 +406,57 @@ class YamlLintToolDuplicateKeysTest(unittest.TestCase):
         self.assertIn("YML005", _codes(result))
 
     def test_int_vs_float_equality_is_a_documented_edge(self) -> None:
-        # python dicts equate 1 and 1.0; the tool's text-bucket
-        # canonicalisation does not (documented edge).
+        # python dicts equate 1 and 1.0 and keep the last value, so
+        # the numeric bucket compares them by constructed value and
+        # the duplicate fires.
         result = self.tool.execute(
             mode="lint", yaml_text="1: a\n1.0: b\n"
         )
+        self.assertIn("YML005", _codes(result))
+
+    def test_bool_word_keys_collide_with_true_false(self) -> None:
+        # on / yes and true all construct to True, so the dict PyYAML
+        # builds keeps one key — the rule must see the collision.
+        for text in ("on: 1\ntrue: 2\n", "yes: 1\nTrue: 2\n",
+                     "off: 1\nFalse: 2\n"):
+            with self.subTest(text=text):
+                self.assertEqual(
+                    yaml.safe_load(text),
+                    {True: 2} if "true" in text.lower() else {False: 2},
+                )
+                result = self.tool.execute(mode="lint", yaml_text=text)
+                self.assertIn("YML005", _codes(result))
+
+    def test_bool_keys_collide_with_equal_ints(self) -> None:
+        # hash(True) == hash(1): the built dict collapses them.
+        for text in ("1: a\ntrue: b\n", "0: a\nfalse: b\n",
+                     "1: a\non: b\n"):
+            with self.subTest(text=text):
+                result = self.tool.execute(mode="lint", yaml_text=text)
+                self.assertIn("YML005", _codes(result))
+
+    def test_quoted_number_never_collides_with_numeric(self) -> None:
+        # '1' constructs to the string "1" — a different dict key.
+        result = self.tool.execute(
+            mode="lint", yaml_text="1: a\n'1': b\n"
+        )
         self.assertNotIn("YML005", _codes(result))
+
+    def test_nan_keys_never_collide(self) -> None:
+        # Each .nan constructs a distinct float; NaN != NaN, so even
+        # the built dict holds two keys.
+        result = self.tool.execute(
+            mode="lint", yaml_text="a: {.nan: x, .NaN: y}\n"
+        )
+        self.assertNotIn("YML005", _codes(result))
+
+    def test_single_letter_y_n_are_string_keys(self) -> None:
+        # PyYAML 6 does not resolve y / n to booleans.
+        result = self.tool.execute(mode="lint", yaml_text="y: 1\nn: 2\n")
+        self.assertNotIn("YML005", _codes(result))
+        self.assertEqual(
+            yaml.safe_load("y: 1\nn: 2\n"), {"y": 1, "n": 2}
+        )
 
     def test_merge_keys_are_exempt(self) -> None:
         result = self.tool.execute(
@@ -578,6 +667,21 @@ class YamlLintToolStructureRulesTest(unittest.TestCase):
         )
         result = self.tool.execute(mode="lint", yaml_text=text)
         self.assertIn("YML009", _codes(result))
+
+    def test_deep_nesting_reported_once_per_document(self) -> None:
+        # Two documents that each exceed the limit get one finding
+        # each, at their own first offending collection.
+        doc = "a:\n" + "".join(
+            f"{'  ' * (i + 1)}n{i}:\n" for i in range(13)
+        )
+        result = self.tool.execute(
+            mode="lint", yaml_text=doc + "---\n" + doc,
+            allow_multiple_documents=True,
+        )
+        findings = _findings(result, "YML009")
+        self.assertEqual(len(findings), 2)
+        self.assertEqual(findings[0]["line"], 13)
+        self.assertEqual(findings[1]["line"], 28)
 
     def test_max_depth_option_tightens_and_validates(self) -> None:
         text = self._nested(5)
@@ -820,6 +924,14 @@ class YamlLintToolProfileTest(unittest.TestCase):
     def test_profile_unparseable_raises(self) -> None:
         with self.assertRaises(ValueError):
             self.tool.execute(mode="profile", yaml_text="a: [\n")
+
+    def test_profile_scanner_error_also_raises_value_error(self) -> None:
+        # Scanner failures surface as ValueError, never as a leaked
+        # yaml.YAMLError.
+        for text in ('a: "unclosed\n', "a: 'x\ny: 1", "\tkey: v\n"):
+            with self.subTest(text=text):
+                with self.assertRaises(ValueError):
+                    self.tool.execute(mode="profile", yaml_text=text)
 
     def test_profile_longest_list_paths_and_cjk_key_paths(self) -> None:
         result = self.tool.execute(
