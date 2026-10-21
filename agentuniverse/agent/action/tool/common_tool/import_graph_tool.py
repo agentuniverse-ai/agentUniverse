@@ -457,6 +457,12 @@ class ImportGraphTool(Tool):
                         context.pop()
                     walk_body(stmt.orelse)
                     walk_body(stmt.finalbody)
+                elif isinstance(stmt, ast.Match):
+                    # ast.Match.cases holds ast.match_case nodes, not plain
+                    # statements, so the generic field walk below never
+                    # reaches the case bodies.
+                    for case in stmt.cases:
+                        walk_body(case.body)
                 else:
                     # Recurse into any nested statement lists (if/for/
                     # with/def/class/...) preserving the context.

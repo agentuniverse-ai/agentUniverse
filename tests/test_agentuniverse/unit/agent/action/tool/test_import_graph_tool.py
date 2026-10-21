@@ -333,6 +333,48 @@ class ImportGraphToolTest(unittest.TestCase):
             },
         )
 
+    def test_scan_match_case_bodies_walked(self) -> None:
+        # ast.Match.cases holds ast.match_case nodes, not plain statements;
+        # imports inside case bodies must still be reported (the compiler
+        # emits IMPORT_NAME for them, so the bytecode oracle sees them).
+        source = (
+            "import json\n"
+            "match json.load({}):\n"
+            "    case {'kind': 'csv'}:\n"
+            "        import csv\n"
+            "        from io import StringIO\n"
+            "    case _:\n"
+            "        from pathlib import Path\n"
+        )
+        result = self.tool.execute(mode="scan", source=source)
+        self.assertEqual(
+            [(r["line"], r["module"]) for r in result["imports"]],
+            [(1, "json"), (4, "csv"), (5, "io"), (7, "pathlib")],
+        )
+
+    def test_analyze_match_case_dependency_graph(self) -> None:
+        files = {
+            "a.py": (
+                "def pick(x):\n"
+                "    match x:\n"
+                "        case 1:\n"
+                "            import b\n"
+                "        case _:\n"
+                "            import c\n"
+                "    return None\n"
+            ),
+            "b.py": "import c\n",
+            "c.py": "VALUE = 1\n",
+        }
+        result = self.tool.execute(mode="analyze", files=files)
+        self.assertEqual(
+            [(e["from"], e["to"]) for e in result["edges"]],
+            [("a", "b"), ("a", "c"), ("b", "c")],
+        )
+        self.assertEqual(result["orphans"], [])
+        self.assertEqual(result["cycles"], [])
+
+
     # ------------------------------------------------------------------ #
     # deps mode — stdlib / external / internal classification
     # ------------------------------------------------------------------ #
