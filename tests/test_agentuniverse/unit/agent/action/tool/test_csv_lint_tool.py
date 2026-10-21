@@ -813,6 +813,13 @@ class CsvLintToolErrorMatrixTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.tool.execute(mode="lint", csv_text="\n\n\n")
 
+    def test_bom_only_raises_value_error_in_every_mode(self) -> None:
+        for mode in ("lint", "profile", "fix"):
+            with self.assertRaises(ValueError):
+                self.tool.execute(mode=mode, csv_text="\ufeff")
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="lint", csv_text="\ufeff", delimiter=";")
+
     def test_non_boolean_has_header_raises(self) -> None:
         with self.assertRaises(ValueError):
             self.tool.execute(mode="lint", csv_text="a,b\n", has_header="yes")
@@ -866,6 +873,18 @@ class CsvLintToolErrorMatrixTest(unittest.TestCase):
         self.assertEqual(result["finding_count"], 210)
         self.assertTrue(result["findings_truncated"])
         self.assertEqual(len(result["findings"]), 200)
+
+    def test_ok_false_when_warning_sits_beyond_findings_cap(self) -> None:
+        text = "a,b\n" + "\n".join([" x,y"] * 210) + "\nz\n"
+        result = self.tool.execute(mode="lint", csv_text=text)
+        self.assertEqual(result["finding_count"], 212)
+        self.assertTrue(result["findings_truncated"])
+        self.assertEqual(len(result["findings"]), 200)
+        self.assertFalse(any(
+            finding["severity"] in ("error", "warning")
+            for finding in result["findings"]
+        ))
+        self.assertFalse(result["ok"])
 
 
 def SqlModes() -> tuple:

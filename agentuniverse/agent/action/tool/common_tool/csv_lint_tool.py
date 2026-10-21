@@ -89,7 +89,7 @@ True, otherwise the modal (most common) width over the data rows with
 ties resolved to the *smaller* width. Data rows narrower than the
 expected width fire ``ragged_short``; wider rows fire ``ragged_long``
 (which most often means an unquoted delimiter inside a field).
-``inconsistent_column_count`` is the once-per-file summary of the
+``inconsistent_count`` is the once-per-file summary of the
 same problem: it fires when the header plus data rows do not all
 share one width, reporting the width breakdown.
 
@@ -226,13 +226,13 @@ _SECRET_NAME = re.compile(
 _RULES: dict = {
     "CSV001": ("bom", "info",
                "decode with utf-8-sig or strip the BOM before parsing"),
-    "CSV002": ("mixed_line_terminators", "warning",
+    "CSV002": ("mixed_terminators", "warning",
                "normalize to one terminator (fix mode, terminator option)"),
     "CSV003": ("ragged_short", "warning",
                "add the missing trailing fields or pad them (fix mode)"),
     "CSV004": ("ragged_long", "error",
                "quote fields that contain the delimiter"),
-    "CSV005": ("inconsistent_column_count", "warning",
+    "CSV005": ("inconsistent_count", "warning",
                "align all rows (and the header) to one field count"),
     "CSV006": ("empty_header_cell", "warning",
                "give every column a name"),
@@ -246,7 +246,7 @@ _RULES: dict = {
                "the file has structure but zero data rows"),
     "CSV011": ("unclosed_quote", "error",
                "repair the quoting around the reported record"),
-    "CSV012": ("numeric_column_mixed_locale", "warning",
+    "CSV012": ("mixed_number_locale", "warning",
                "export numbers in one locale-consistent format"),
     "CSV013": ("field_over_max_len", "warning",
                "raise max_field_len or fix the runaway field"),
@@ -491,6 +491,10 @@ def _run_lint(tool: Any, text: str, delimiter: str, delimiter_sniffed: bool,
             f"(got {len(records):,} records)"
         )
     if not records:
+        if parse_error is None:
+            raise _err(
+                "csv_text contains no non-empty record to analyze"
+            )
         # The strict reader failed before yielding anything: report
         # the quoting failure itself, there is no table to analyze.
         row, message = parse_error
@@ -695,7 +699,7 @@ def _run_lint(tool: Any, text: str, delimiter: str, delimiter_sniffed: bool,
     truncated = total > tool.MAX_FINDINGS
     ok = not any(
         finding["severity"] in ("error", "warning")
-        for finding in findings[: tool.MAX_FINDINGS]
+        for finding in findings
     )
     return {
         "mode": "lint",
