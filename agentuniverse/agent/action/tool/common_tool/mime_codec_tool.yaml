@@ -1,0 +1,32 @@
+name: mime_codec_tool
+description: Validate MIME transfer encodings (quoted-printable, base64) and decode RFC 2047 encoded words / RFC 2231 continuations offline.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.mime_codec_tool
+  class: MimeCodecTool
+input_keys:
+  - mode
+max_text_chars: 200000
+max_header_chars: 65536
+max_preview_chars: 512
+max_findings: 200
+max_words: 1000
+max_output_chars: 512
+output_hard_cap: 65536
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [validate_qp, validate_base64, decode_words, encode_preview]
+    text: {type: string}
+    header: {type: string}
+    target:
+      type: string
+      enum: [base64, qp, word-b, word-q, word]
+    charset: {type: string}
+    strict: {type: boolean, default: false}
+    max_output_chars: {type: integer}
+  required: [mode]
+  additionalProperties: false
