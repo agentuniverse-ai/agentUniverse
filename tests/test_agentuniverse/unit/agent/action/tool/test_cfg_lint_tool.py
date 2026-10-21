@@ -757,6 +757,205 @@ def _corpus() -> list[str]:
     return unique
 
 
+class CfgInterpolationChainTest(CfgLintToolTestCase):
+    """Reference chains: cycles, depth and transitive failures.
+
+    The interpolation_risk contract is "the value trips the default
+    BasicInterpolation at get() time" — a chain condition, not just an
+    immediate-token condition: BasicInterpolation._interpolate_some
+    recurses through %(name)s references with a depth cap of
+    configparser.MAX_INTERPOLATION_DEPTH (10) and propagates whatever
+    the referenced values raise.
+    """
+
+    @staticmethod
+    def _flagged_keys(text: str) -> set:
+        """The (section, key) pairs carrying an interpolation_risk."""
+        result = DirectCfgLintTool().execute(mode="lint", text=text)
+        out = set()
+        for finding in result["findings"]:
+            if finding["code"] != "interpolation_risk":
+                continue
+            message = finding["message"]
+            key = message.split("value of '", 1)[1].split("'", 1)[0]
+            section = message.split("in section '", 1)[1].split("'", 1)[0]
+            out.add((section, key))
+        return out
+
+    @staticmethod
+    def _oracle_get_raises(text: str) -> set:
+        """The (section, key) pairs whose interpolated get() raises.
+
+        The corpus of this class never collides DEFAULT and section
+        option names, so subtracting the defaults from options() yields
+        each section's own keys.
+        """
+        parser = oracle_parser(text)
+        bad = set()
+        for option in parser.defaults():
+            try:
+                parser.get(configparser.DEFAULTSECT, option)
+            except Exception:
+                bad.add((configparser.DEFAULTSECT, option))
+        inherited = set(parser.defaults())
+        for name in parser.sections():
+            for option in parser.options(name):
+                if option in inherited:
+                    continue
+                try:
+                    parser.get(name, option)
+                except Exception:
+                    bad.add((name, option))
+        return bad
+
+    def test_self_reference_is_a_depth_cycle(self) -> None:
+        text = "[s]\na = %(a)s\n"
+        self.assertEqual(self.lint(text), [("interpolation_risk", 2)])
+        result = self.tool.execute(mode="lint", text=text)
+        self.assertIn("cyclic", result["findings"][0]["message"])
+        self.assertIn("InterpolationDepthError", result["findings"][0]["message"])
+        self.assertEqual(result["findings"][0]["severity"], "warning")
+        self.assertFalse(result["configparser_would_reject"])
+        parser = oracle_parser(text)
+        with self.assertRaises(configparser.InterpolationDepthError):
+            parser.get("s", "a")
+
+    def test_self_reference_embedded_in_text(self) -> None:
+        self.assertEqual(self.lint("[s]\na = x%(a)sy\n"), [("interpolation_risk", 2)])
+
+    def test_mutual_cycle_flags_both_ends(self) -> None:
+        text = "[s]\na = %(b)s\nb = %(a)s\n"
+        self.assertEqual(
+            self.lint(text),
+            [("interpolation_risk", 2), ("interpolation_risk", 3)],
+        )
+        self.assertEqual(self._flagged_keys(text), {("s", "a"), ("s", "b")})
+
+    def test_three_option_cycle_flags_all_participants(self) -> None:
+        text = "[s]\na = %(b)s\nb = %(c)s\nc = %(a)s\n"
+        self.assertEqual(
+            self._flagged_keys(text), {("s", "a"), ("s", "b"), ("s", "c")}
+        )
+
+    def test_cycle_through_default(self) -> None:
+        text = "[DEFAULT]\nd = %(x)s\n[s]\nx = %(d)s\n"
+        # DEFAULT.d has an unresolvable immediate ref (x is not a default);
+        # section x cycles back through it — both are flagged
+        self.assertEqual(
+            self.lint(text),
+            [("interpolation_risk", 2), ("interpolation_risk", 4)],
+        )
+
+    def test_chain_of_exactly_ten_references_is_fine(self) -> None:
+        body = "\n".join(f"a{i} = %(a{i + 1})s" for i in range(1, 11))
+        text = f"[s]\n{body}\na11 = end\n"
+        self.assertEqual(self.lint(text), [])
+        self.assertEqual(self._oracle_get_raises(text), set())
+
+    def test_chain_deeper_than_max_depth_is_flagged(self) -> None:
+        body = "\n".join(f"a{i} = %(a{i + 1})s" for i in range(1, 12))
+        text = f"[s]\n{body}\na12 = end\n"
+        # only a1 exceeds the depth on its way down
+        self.assertEqual(self.lint(text), [("interpolation_risk", 2)])
+        parser = oracle_parser(text)
+        with self.assertRaises(configparser.InterpolationDepthError):
+            parser.get("s", "a1")
+        parser.get("s", "a2")  # a2 sits below the cap
+
+    def test_transitive_unknown_reference_reaches_the_origin(self) -> None:
+        text = "[s]\na = %(b)s\nb = %(nope)s\n"
+        self.assertEqual(
+            self.lint(text),
+            [("interpolation_risk", 2), ("interpolation_risk", 3)],
+        )
+        parser = oracle_parser(text)
+        for option in ("a", "b"):
+            with self.assertRaises(configparser.InterpolationMissingOptionError):
+                parser.get("s", option)
+
+    def test_transitive_syntax_error_reaches_the_origin(self) -> None:
+        text = "[s]\na = %(b)s\nb = 100%\n"
+        self.assertEqual(
+            self.lint(text),
+            [("interpolation_risk", 2), ("interpolation_risk", 3)],
+        )
+        parser = oracle_parser(text)
+        with self.assertRaises(configparser.InterpolationSyntaxError):
+            parser.get("s", "a")
+
+    def test_transitive_unterminated_token_reaches_the_origin(self) -> None:
+        self.assertEqual(
+            self.lint("[s]\na = %(b)s\nb = %(unclosed\n"),
+            [("interpolation_risk", 2), ("interpolation_risk", 3)],
+        )
+
+    def test_malformed_token_that_the_legacy_scan_tolerates(self) -> None:
+        # 'x)y' is a real key here, so the first-pass scanner resolves the
+        # token '%(x)y)s' — but BasicInterpolation's _KEYCRE (%\(([^)]+)\)s)
+        # cannot match it, so get() raises InterpolationSyntaxError
+        text = "[s]\nx)y = 1\nk = %(x)y)s\n"
+        self.assertEqual(self.lint(text), [("interpolation_risk", 3)])
+        parser = oracle_parser(text)
+        with self.assertRaises(configparser.InterpolationSyntaxError):
+            parser.get("s", "k")
+
+    def test_secret_chain_origin_does_not_name_references(self) -> None:
+        result = self.tool.execute(
+            mode="lint", text="[s]\napi_key = %(b)s\nb = %(nope)s\n"
+        )
+        origin = [f for f in result["findings"] if f["line"] == 2]
+        self.assertEqual(len(origin), 1)
+        self.assertNotIn("'b'", origin[0]["message"])
+        self.assertNotIn("'nope'", origin[0]["message"])
+        self.assertIn("another option", origin[0]["message"])
+
+    def test_get_agreement_over_interpolation_corpus(self) -> None:
+        texts = []
+        chains = [
+            "".join(f"a{i} = %(a{i + 1})s\n" for i in range(1, n)) + f"a{n} = end\n"
+            for n in range(1, 14)
+        ]
+        skeletons = [
+            "[s]\n{body}",
+            "[s]\na = %(body-ref)s\nbody-ref = plain\nb = %(a)s\n{body}",
+            "[DEFAULT]\ndb = /data\n[s]\npath = %(db)s/x\n{body}",
+            "[DEFAULT]\ndb = %(missing)s\n[s]\npath = %(db)s/x\n{body}",
+            "[DEFAULT]\nd = %(x)s\n[s]\nx = %(d)s\n{body}",
+            "[t]\nz = 100%%\n[s]\ny = %(t-ref)s\n{body}",
+        ]
+        bodies = [
+            "a = %(b)s\nb = plain",
+            "a = %(b)s\nb = %(a)s",
+            "a = %(b)s\nb = %(missing)s",
+            "a = %(b)s\nb = 100%",
+            "a = %(b)s\nb = %(unclosed",
+            "a = x%(a)sy",
+            "k = %(a)b)s",
+            "k = %(a)s)s",
+            "k = 100%% %(b)s\nb = ok",
+            "k = %%%(missing)s",
+            "k = %(HOME_DIR)s",
+            "k = %(b)s %(c)s\nb = 1\nc = 2",
+        ]
+        for body in bodies:
+            for skeleton in skeletons:
+                texts.append(skeleton.format(body=body))
+        texts.extend(f"[s]\n{chain}" for chain in chains)
+        checked = 0
+        for text in texts:
+            if oracle_rejects(text):
+                continue  # curated members are accepted; keep the guard anyway
+            flagged = self._flagged_keys(text)
+            raises = self._oracle_get_raises(text)
+            self.assertEqual(
+                flagged,
+                raises,
+                f"flags {sorted(flagged)} vs oracle {sorted(raises)} for {text!r}",
+            )
+            checked += 1
+        self.assertGreater(checked, 60)
+
+
 class CfgDifferentialOracleTest(CfgLintToolTestCase):
     """The tool's verdict must equal the real configparser's behavior."""
 

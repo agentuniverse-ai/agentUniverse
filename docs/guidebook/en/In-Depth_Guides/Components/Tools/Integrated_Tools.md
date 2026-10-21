@@ -685,7 +685,9 @@ citations; the tool reports them, it never crashes on them. Risk codes cover
 lowercased case collisions, repeated `[DEFAULT]` blocks, a UTF-8 BOM (which
 makes `configparser` raise `MissingSectionHeaderError` at line 1), `;` / `#`
 inside values (the default `inline_comment_prefixes=None` keeps them as data)
-and `%`-interpolation patterns that fail at `get()` time. Values of secret-ish
+and `%`-interpolation patterns that fail at `get()` time — including reference
+chains that are cyclic, nested deeper than `MAX_INTERPOLATION_DEPTH` (10), or
+that reach another option whose own value fails. Values of secret-ish
 keys (names containing KEY/SECRET/PASSWORD/TOKEN) are never echoed in full.
 This tool can be used directly without any keys, fully offline and
 deterministic.

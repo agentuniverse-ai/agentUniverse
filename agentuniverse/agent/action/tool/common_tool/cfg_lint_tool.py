@@ -63,10 +63,13 @@ Three modes, all offline and deterministic:
     ``BasicInterpolation`` would trip over at ``get()`` time:
     ``%(name)s`` referencing a name resolvable neither in the
     section nor in ``[DEFAULT]``, a bare ``%`` not followed by
-    ``%`` or ``(``, or a ``%( ... `` token without a ``)s``
-    terminator — ``read_string`` itself accepts these, access
-    raises ``InterpolationMissingOptionError`` /
-    ``InterpolationSyntaxError``).
+    ``%`` or ``(``, a ``%( ... `` token without a ``)s``
+    terminator, or — mirroring ``_interpolate_some``'s recursion —
+    a reference chain that is cyclic or nested deeper than
+    ``MAX_INTERPOLATION_DEPTH`` (10) or that reaches another option
+    whose own value fails; ``read_string`` itself accepts all of
+    these, access raises ``InterpolationMissingOptionError`` /
+    ``InterpolationSyntaxError`` / ``InterpolationDepthError``).
   - Style (severity ``info``): ``missing_final_newline``,
     ``trailing_whitespace`` (whitespace before the line terminator;
     a lone ``\\r`` left by a CRLF terminator is not counted as
@@ -153,6 +156,14 @@ _SECRET_MARKERS = ("KEY", "SECRET", "PASSWORD", "TOKEN")
 
 _MASK = "***"
 _MAX_TEXT_CHARS = 100_000
+
+# BasicInterpolation's interpolation-token regex (verbatim stdlib
+# _KEYCRE semantics: %\( then one or more non-')' chars then \)s).
+_INTERPVAR_CRE = re.compile(r"%\(([^)]+)\)s")
+
+# configparser.MAX_INTERPOLATION_DEPTH — BasicInterpolation raises
+# InterpolationDepthError above this reference nesting depth.
+_MAX_INTERPOLATION_DEPTH = 10
 
 # Valid policy options for check mode, in fixed (declaration) order,
 # with their defaults and the lint codes they police.
@@ -604,18 +615,31 @@ class CfgLintTool(Tool):
         """Flag values the default BasicInterpolation would trip on.
 
         ``read_string`` accepts any value; interpolation happens at
-        ``get()`` time. Flags a value when it contains a ``%`` that is
-        not an escape (``%%``) and not the start of a ``%(name)s``
+        ``get()`` time. Two passes:
+
+        *Per-value scan* — flags a value when it contains a ``%`` that
+        is not an escape (``%%``) and not the start of a ``%(name)s``
         token, a ``%( ... `` token without the ``)s`` terminator, or a
         complete ``%(name)s`` token whose name resolves neither in the
         section nor in ``[DEFAULT]`` (case-insensitively, matching
         ``optionxform``).
+
+        *Reference-chain walk* — mirrors ``BasicInterpolation.
+        _interpolate_some`` exactly (same token regex, same
+        section-over-[DEFAULT] lookup map, same depth counter): a value
+        also trips at ``get()`` time when its reference chain is
+        cyclic or nested deeper than ``MAX_INTERPOLATION_DEPTH`` (10)
+        — ``InterpolationDepthError`` — or when it references another
+        option whose own value fails (the error propagates to every
+        reader up the chain). Values already flagged by the per-value
+        scan are not re-flagged.
         """
         default_keys = (
             {k.lower() for k in sections.get(_DEFAULT_SECTION, {}).get("keys", [])}
             if _DEFAULT_SECTION in sections
             else set()
         )
+        flagged: set[tuple[str, str]] = set()
         for name, record in sections.items():
             resolvable = {k.lower() for k in record["keys"]} | default_keys
             for lowerkey, joined in record["values"].items():
@@ -638,6 +662,7 @@ class CfgLintTool(Tool):
                                 "default BasicInterpolation raises "
                                 "InterpolationSyntaxError when the value is read",
                             )
+                            flagged.add((name, lowerkey))
                             break
                         ref = joined[index + 2 : close].lower()
                         if ref not in resolvable:
@@ -658,6 +683,7 @@ class CfgLintTool(Tool):
                                 "InterpolationMissingOptionError when the value "
                                 "is read",
                             )
+                            flagged.add((name, lowerkey))
                         index = joined.find("%", close + 2)
                         continue
                     flag(
@@ -668,7 +694,124 @@ class CfgLintTool(Tool):
                         "default BasicInterpolation raises "
                         "InterpolationSyntaxError when the value is read",
                     )
+                    flagged.add((name, lowerkey))
                     break
+
+        # --- reference-chain walk (second pass) ------------------------- #
+        default_values = (
+            dict(sections[_DEFAULT_SECTION]["values"])
+            if _DEFAULT_SECTION in sections
+            else {}
+        )
+        for name, record in sections.items():
+            # the lookup map _interpolate_some uses: [DEFAULT] values
+            # overlaid with the section's own (for the [DEFAULT] record
+            # itself this is its own values, exactly like _unify_values)
+            merged = dict(default_values)
+            merged.update(record["values"])
+            for lowerkey, joined in record["values"].items():
+                if (name, lowerkey) in flagged or "%" not in joined:
+                    continue
+                error = cls._interp_reachability(merged, joined, 1, {})
+                if error is None:
+                    continue
+                kind, detail, depth = error
+                line = record["key_lines"].get(lowerkey, 1)
+                if kind == "depth":
+                    message = (
+                        f"value of '{lowerkey}' in section '{name}' starts an "
+                        "interpolation chain that is cyclic or nested deeper "
+                        f"than configparser's MAX_INTERPOLATION_DEPTH "
+                        f"({_MAX_INTERPOLATION_DEPTH}) — the default "
+                        "BasicInterpolation raises InterpolationDepthError "
+                        "when the value is read"
+                    )
+                elif kind == "missing":
+                    # unflagged by the first pass ⇒ the referenced name
+                    # resolves, but its own value fails further down
+                    shown = (
+                        "another option"
+                        if cls._is_secret(lowerkey)
+                        else f"'{detail}'"
+                    )
+                    message = (
+                        f"value of '{lowerkey}' in section '{name}' references "
+                        f"{shown} whose own value fails interpolation — reading "
+                        "this value raises the same "
+                        "InterpolationMissingOptionError"
+                    )
+                elif depth > 1:
+                    message = (
+                        f"value of '{lowerkey}' in section '{name}' references "
+                        "another option whose own value has invalid '%' "
+                        "syntax — reading this value raises the same "
+                        "InterpolationSyntaxError"
+                    )
+                else:
+                    message = (
+                        f"value of '{lowerkey}' in section '{name}' has a "
+                        "'%(' token without a well-formed ')s' terminator — "
+                        "the default BasicInterpolation raises "
+                        "InterpolationSyntaxError when the value is read"
+                    )
+                flag("interpolation_risk", line, message)
+
+    @classmethod
+    def _interp_reachability(
+        cls,
+        merged: dict[str, str],
+        value: str,
+        depth: int,
+        memo: dict[tuple[str, int], Any],
+    ) -> Any:
+        """Mirror ``BasicInterpolation._interpolate_some`` error behavior.
+
+        Walks ``value`` against the fixed lookup map ``merged`` exactly
+        as the stdlib does when ``get()`` resolves a value: ``%%`` is
+        an escape, ``%(name)s`` (stdlib ``_KEYCRE`` shape) looks up the
+        lowercased name in the map and recurses into the referenced
+        value when it contains any ``%``, anything else is a syntax
+        error. Returns ``None`` when the read succeeds, else a tuple
+        ``(kind, detail, depth)`` with kind ``depth`` / ``missing`` /
+        ``syntax``. Results are memoized per (value, depth); depth is
+        strictly increasing along reference edges, so the recursion is
+        bounded by ``_MAX_INTERPOLATION_DEPTH + 1``.
+        """
+        if depth > _MAX_INTERPOLATION_DEPTH:
+            return ("depth", None, depth)
+        memo_key = (value, depth)
+        if memo_key in memo:
+            return memo[memo_key]
+        result = None
+        pos = 0
+        while True:
+            index = value.find("%", pos)
+            if index == -1:
+                break
+            nxt = value[index + 1 : index + 2]
+            if nxt == "%":
+                pos = index + 2
+                continue
+            if nxt == "(":
+                match = _INTERPVAR_CRE.match(value, index)
+                if match is None:
+                    result = ("syntax", None, depth)
+                    break
+                var = match.group(1).lower()
+                sub = merged.get(var)
+                if sub is None:
+                    result = ("missing", var, depth)
+                    break
+                if "%" in sub:
+                    result = cls._interp_reachability(merged, sub, depth + 1, memo)
+                    if result is not None:
+                        break
+                pos = match.end()
+                continue
+            result = ("syntax", None, depth)
+            break
+        memo[memo_key] = result
+        return result
 
     # ------------------------------------------------------------------ #
     # Secret masking (family rule shared with the dotenv tool family)
