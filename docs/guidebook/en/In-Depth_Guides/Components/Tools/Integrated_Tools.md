@@ -676,7 +676,12 @@ Four modes:
   (consecutive textual overlap, offending pairs) and `min_coverage`
   (located-span coverage of the source, requires `source_text`);
   every rule reports an independent pass/fail and the result carries
-  an `all_pass` flag.
+  an `all_pass` flag. Every bound is inclusive: a chunk of exactly
+  `min_chars` / `max_chars` characters passes, a consecutive overlap
+  of exactly `max_overlap` characters passes and coverage exactly
+  equal to `min_coverage` passes (only strictly worse values fail),
+  with `min_coverage` compared at full precision before any display
+  rounding.
 
 ```python
 from agentuniverse.agent.action.tool.common_tool import ChunkOverlapTool

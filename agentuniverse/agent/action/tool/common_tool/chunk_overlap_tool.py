@@ -45,11 +45,16 @@ Four modes:
   pairs with a non-zero overlap (capped at 2,000 entries) with the
   shared text preview.
 * ``validate`` — chunks plus a ``policy`` against chunking invariants:
-  ``min_chars`` / ``max_chars`` (per-chunk size bounds, offending
-  chunk indices), ``max_overlap`` (consecutive suffix/prefix overlap,
+  ``min_chars`` / ``max_chars`` (per-chunk size bounds, offending chunk
+  indices), ``max_overlap`` (consecutive suffix/prefix overlap,
   offending pairs) and ``min_coverage`` (located-span coverage of the
   source, requires ``source_text``); every rule reports an independent
-  pass/fail and the result carries an ``all_pass`` flag.
+  pass/fail and the result carries an ``all_pass`` flag. Every bound is
+  inclusive: a chunk of exactly ``min_chars`` / ``max_chars``
+  characters passes, a consecutive overlap of exactly ``max_overlap``
+  characters passes and coverage exactly equal to ``min_coverage``
+  passes (only strictly worse values fail), with ``min_coverage``
+  compared at full precision before any display rounding.
 
 Conventions, pinned for determinism:
 
@@ -202,7 +207,9 @@ class ChunkOverlapTool(Tool):
                 (int >= 1, >= ``min_chars`` when both present),
                 ``max_overlap`` (int >= 0, consecutive textual overlap)
                 and ``min_coverage`` (number 0..1, needs
-                ``source_text``).
+                ``source_text``). All bounds are inclusive: a value
+                exactly at a bound passes, only strictly worse values
+                fail.
 
         Returns:
             Dict[str, Any]: The mode result as described in the module

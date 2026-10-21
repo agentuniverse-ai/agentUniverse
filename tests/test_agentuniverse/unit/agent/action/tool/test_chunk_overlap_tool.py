@@ -33,6 +33,7 @@ The worked sliding-window example used throughout:
              -> covered 10/10 = 1.0; duplicated depth-2 region [2, 8)
 """
 
+import random
 import unittest
 
 from agentuniverse.agent.action.tool.common_tool import ChunkOverlapTool
@@ -869,6 +870,379 @@ class ToolSurfaceTest(unittest.TestCase):
             mode="analyze", chunks=["abc"], source_text="abc"
         )
         self.assertEqual(result["mode"], "analyze")
+
+
+class MiddleOverlapTest(unittest.TestCase):
+    """shared text in the MIDDLE of two chunks is not suffix/prefix
+    overlap and must not count; a true sliding window counts exactly."""
+
+    def setUp(self) -> None:
+        self.tool = ChunkOverlapTool()
+
+    def test_middle_shared_text_not_counted(self):
+        result = self.tool.execute(
+            mode="analyze", chunks=["xxHELLOyy", "zzHELLOww"]
+        )
+        self.assertEqual(result["overlap_stats"]["pairs_with_overlap"], 0)
+        self.assertEqual(result["overlap_stats"]["max_overlap_chars"], 0)
+        self.assertEqual(result["overlap_stats"]["mean_overlap_chars"], 0.0)
+
+    def test_middle_shared_text_empty_matrix(self):
+        result = self.tool.execute(
+            mode="overlap_matrix", chunks=["qCOMMONq", "pCOMMONp"]
+        )
+        self.assertEqual(result["pairs_checked"], 1)
+        self.assertEqual(result["pairs_with_overlap"], 0)
+        self.assertEqual(result["overlaps"], [])
+
+    def test_sliding_window_overlap_counted_exactly(self):
+        source = "abcdefghijklmnopqrstuvwxyz012345"
+        chunks = [source[0:12], source[8:20], source[16:28]]
+        result = self.tool.execute(
+            mode="analyze", chunks=chunks, source_text=source
+        )
+        self.assertEqual(result["overlap_stats"]["pairs_with_overlap"], 2)
+        self.assertEqual(result["overlap_stats"]["max_overlap_chars"], 4)
+        self.assertEqual(result["overlap_stats"]["mean_overlap_chars"], 4.0)
+        matrix = self.tool.execute(
+            mode="overlap_matrix", chunks=chunks, window=2
+        )
+        self.assertEqual(
+            [(e["i"], e["j"], e["chars"]) for e in matrix["overlaps"]],
+            [(0, 1, 4), (1, 2, 4)],
+        )
+        self.assertEqual(matrix["overlaps"][0]["overlap_text"], "ijkl")
+
+
+class AstralOffsetTest(unittest.TestCase):
+    """astral-plane characters (emoji) count as one code point each."""
+
+    def setUp(self) -> None:
+        self.tool = ChunkOverlapTool()
+
+    def test_emoji_position_and_span(self):
+        source = "a\U0001f600\u6c49b\U0001f600c"
+        result = self.tool.execute(
+            mode="coverage", chunks=["\U0001f600"], source_text=source
+        )
+        self.assertEqual(result["per_chunk"][0]["chars"], 1)
+        self.assertEqual(result["per_chunk"][0]["positions"], [1, 4])
+        self.assertEqual(result["per_chunk"][0]["span"], [1, 2])
+
+    def test_emoji_adjacency_contiguous(self):
+        source = "a\U0001f600\u6c49b"
+        result = self.tool.execute(
+            mode="analyze",
+            chunks=["a\U0001f600", "\u6c49b"],
+            source_text=source,
+        )
+        self.assertEqual(
+            result["adjacency"]["pairs_detail"][0],
+            {
+                "pair": [0, 1],
+                "first": [0, 2],
+                "second": [2, 4],
+                "type": "contiguous",
+            },
+        )
+
+    def test_emoji_textual_overlap(self):
+        result = self.tool.execute(
+            mode="overlap_matrix",
+            chunks=["x\U0001f600y", "\U0001f600y"],
+        )
+        self.assertEqual(
+            result["overlaps"],
+            [
+                {
+                    "i": 0,
+                    "j": 1,
+                    "chars": 2,
+                    "overlap_text": "\U0001f600y",
+                }
+            ],
+        )
+
+
+class OverlappingPositionsTest(unittest.TestCase):
+    """occurrence starts step by one, so self-overlapping patterns count
+    every distinct start (the documented `positions` semantics)."""
+
+    def setUp(self) -> None:
+        self.tool = ChunkOverlapTool()
+
+    def test_overlapping_starts_all_counted(self):
+        result = self.tool.execute(
+            mode="coverage", chunks=["aa"], source_text="aaaa"
+        )
+        self.assertEqual(result["per_chunk"][0]["positions"], [0, 1, 2])
+        self.assertEqual(result["per_chunk"][0]["position_count"], 3)
+        self.assertFalse(result["per_chunk"][0]["positions_truncated"])
+
+    def test_distinct_occurrences(self):
+        result = self.tool.execute(
+            mode="coverage", chunks=["ab"], source_text="abab"
+        )
+        self.assertEqual(result["per_chunk"][0]["positions"], [0, 2])
+        self.assertEqual(result["per_chunk"][0]["position_count"], 2)
+
+
+class PolicyBoundaryTest(unittest.TestCase):
+    """every policy bound is inclusive — a value exactly at the bound
+    passes, only strictly worse values fail."""
+
+    def setUp(self) -> None:
+        self.tool = ChunkOverlapTool()
+        self.chunks = ["abcd", "cdef", "efgh"]
+
+    def test_min_chars_exact_passes_above_fails(self):
+        exact = self.tool.execute(
+            mode="validate", chunks=self.chunks, policy={"min_chars": 4}
+        )["rules"][0]
+        self.assertTrue(exact["pass"])
+        above = self.tool.execute(
+            mode="validate", chunks=self.chunks, policy={"min_chars": 5}
+        )["rules"][0]
+        self.assertFalse(above["pass"])
+
+    def test_max_chars_exact_passes_below_fails(self):
+        exact = self.tool.execute(
+            mode="validate", chunks=self.chunks, policy={"max_chars": 4}
+        )["rules"][0]
+        self.assertTrue(exact["pass"])
+        below = self.tool.execute(
+            mode="validate", chunks=self.chunks, policy={"max_chars": 3}
+        )["rules"][0]
+        self.assertFalse(below["pass"])
+
+    def test_max_overlap_exact_passes_below_fails(self):
+        exact = self.tool.execute(
+            mode="validate", chunks=self.chunks, policy={"max_overlap": 2}
+        )["rules"][0]
+        self.assertTrue(exact["pass"])
+        self.assertEqual(exact["violations"], 0)
+        below = self.tool.execute(
+            mode="validate", chunks=self.chunks, policy={"max_overlap": 1}
+        )["rules"][0]
+        self.assertFalse(below["pass"])
+        self.assertEqual(below["offending_pairs"], [[0, 1], [1, 2]])
+
+    def test_min_coverage_exact_passes_above_fails(self):
+        base = {
+            "mode": "validate",
+            "chunks": ["abcd", "hij"],
+            "source_text": "abcdefghij",
+        }
+        exact = self.tool.execute(
+            **base, policy={"min_coverage": 0.7}
+        )["rules"][0]
+        self.assertTrue(exact["pass"])
+        above = self.tool.execute(
+            **base, policy={"min_coverage": 0.70001}
+        )["rules"][0]
+        self.assertFalse(above["pass"])
+
+    def test_min_coverage_full_precision_before_rounding(self):
+        rule = self.tool.execute(
+            mode="validate",
+            chunks=["a"],
+            source_text="abc",
+            policy={"min_coverage": 1 / 3},
+        )["rules"][0]
+        self.assertTrue(rule["pass"])
+        self.assertEqual(rule["covered_ratio"], 0.3333)
+
+
+class DifferentialReferenceTest(unittest.TestCase):
+    """seeded cases checked against a per-character depth-array
+    reference — covered_ratio, missing spans, duplicated regions,
+    adjacency classification and consecutive textual overlaps all
+    computed independently of the tool's span algebra."""
+
+    def setUp(self) -> None:
+        self.tool = ChunkOverlapTool()
+
+    def _reference(self, chunks, source):
+        spans = []
+        cursor = 0
+        for chunk in chunks:
+            if not chunk:
+                spans.append(None)
+                continue
+            pos = source.find(chunk, cursor)
+            if pos == -1:
+                spans.append(None)
+            else:
+                spans.append((pos, pos + len(chunk)))
+                cursor = pos + 1
+        depth = [0] * len(source)
+        for span in spans:
+            if span is not None:
+                for i in range(span[0], span[1]):
+                    depth[i] += 1
+        covered = sum(1 for d in depth if d > 0)
+        ratio = round(covered / len(source), 4) if source else 0.0
+        missing, duplicated = [], []
+        i = 0
+        while i < len(source):
+            if depth[i] == 0:
+                j = i
+                while j < len(source) and depth[j] == 0:
+                    j += 1
+                missing.append((i, j))
+                i = j
+            else:
+                i += 1
+        i = 0
+        while i < len(source):
+            if depth[i] >= 2:
+                j = i
+                while j < len(source) and depth[j] >= 2:
+                    j += 1
+                duplicated.append((i, j))
+                i = j
+            else:
+                i += 1
+        kinds = []
+        for first, second in zip(spans, spans[1:]):
+            if first is None or second is None:
+                kinds.append("unlocated")
+            elif second[0] == first[1]:
+                kinds.append("contiguous")
+            elif second[0] < first[1]:
+                kinds.append("overlapping")
+            else:
+                kinds.append("gapped")
+        overlaps = []
+        for first, second in zip(chunks, chunks[1:]):
+            limit = min(len(first), len(second), 10_000)
+            match = 0
+            for k in range(limit, 0, -1):
+                if first[len(first) - k:] == second[:k]:
+                    match = k
+                    break
+            overlaps.append(match)
+        return spans, ratio, covered, missing, duplicated, kinds, overlaps
+
+    def _generate(self, rng, index):
+        pool = "abcdefghij" if index % 3 else "abc"
+        length = rng.randint(5, 120)
+        source = "".join(rng.choice(pool) for _ in range(length))
+        chunks = []
+        style = index % 5
+        if style == 0:
+            size = rng.randint(2, max(2, length // 2))
+            step = size - rng.randint(0, size - 1)
+            start = 0
+            while start < length:
+                chunks.append(source[start:start + size])
+                if start + size >= length:
+                    break
+                start += step
+        elif style == 1:
+            size = rng.randint(2, max(2, length // 3))
+            start = 0
+            while start < length:
+                chunks.append(source[start:start + size])
+                start += size + rng.randint(1, 4)
+        elif style == 2:
+            for _ in range(rng.randint(1, 6)):
+                start = rng.randrange(length)
+                end = min(length, start + rng.randint(1, max(1, length // 2)))
+                chunks.append(source[start:end])
+            if chunks:
+                chunks.append(rng.choice(chunks))
+        elif style == 3:
+            for _ in range(rng.randint(1, 8)):
+                start = rng.randrange(length)
+                end = min(length, start + rng.randint(0, max(1, length // 2)))
+                chunks.append(source[start:end])
+            chunks.append("Z" * rng.randint(1, 5))
+        else:
+            size = rng.randint(1, max(1, length // 2))
+            start = 0
+            while start < length:
+                chunks.append(source[start:start + size])
+                start += size
+            if len(chunks) > 1 and rng.random() < 0.5:
+                chunks.insert(rng.randrange(len(chunks)), "")
+        return source, chunks
+
+    def test_seeded_cases_match_reference(self):
+        rng = random.Random(3997)
+        for index in range(25):
+            with self.subTest(case=index):
+                source, chunks = self._generate(rng, index)
+                result = self.tool.execute(
+                    mode="analyze", chunks=chunks, source_text=source
+                )
+                (
+                    spans,
+                    ratio,
+                    covered,
+                    missing,
+                    duplicated,
+                    kinds,
+                    overlaps,
+                ) = self._reference(chunks, source)
+                coverage = result["coverage"]
+                self.assertEqual(coverage["covered_ratio"], ratio)
+                self.assertEqual(coverage["covered_chars"], covered)
+                self.assertEqual(
+                    coverage["missing_span_count"], len(missing)
+                )
+                self.assertEqual(
+                    [
+                        (m["start"], m["end"])
+                        for m in coverage["missing_spans"]
+                    ],
+                    missing[:20],
+                )
+                self.assertEqual(
+                    coverage["missing_spans_truncated"], len(missing) > 20
+                )
+                self.assertEqual(
+                    [
+                        (d["start"], d["end"])
+                        for d in coverage["duplicated_regions"]["regions"]
+                    ],
+                    duplicated[:20],
+                )
+                self.assertEqual(
+                    coverage["duplicated_regions"]["region_count"],
+                    len(duplicated),
+                )
+                self.assertEqual(
+                    coverage["duplicated_regions"]["truncated"],
+                    len(duplicated) > 20,
+                )
+                adjacency = result["adjacency"]
+                for kind in (
+                    "contiguous",
+                    "overlapping",
+                    "gapped",
+                    "unlocated",
+                ):
+                    self.assertEqual(
+                        adjacency[f"{kind}_pairs"], kinds.count(kind)
+                    )
+                for entry, kind in zip(adjacency["pairs_detail"], kinds):
+                    self.assertEqual(entry["type"], kind)
+                stats = result["overlap_stats"]
+                self.assertEqual(
+                    stats["pairs_with_overlap"],
+                    sum(1 for o in overlaps if o > 0),
+                )
+                self.assertEqual(
+                    stats["max_overlap_chars"],
+                    max(overlaps) if overlaps else 0,
+                )
+                self.assertEqual(
+                    stats["mean_overlap_chars"],
+                    round(sum(overlaps) / len(overlaps), 4)
+                    if overlaps
+                    else 0.0,
+                )
 
 
 if __name__ == "__main__":
