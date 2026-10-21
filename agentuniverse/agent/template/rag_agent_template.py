@@ -39,7 +39,9 @@ class RagAgentTemplate(AgentTemplate):
     async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
                                        prompt: Prompt, **kwargs) -> dict:
         tool_res: str = await self.async_invoke_tools(input_object)
-        knowledge_res: str = self.invoke_knowledge(agent_input.get('input'), input_object)
+        # The synchronous helper would block the event loop for the whole
+        # retrieval round-trip; await the thread-backed variant instead.
+        knowledge_res: str = await self.async_invoke_knowledge(agent_input.get('input'), input_object)
         agent_input['background'] = (agent_input['background']
                                      + f"tool_res: {tool_res} \n\n knowledge_res: {knowledge_res}")
         return await super().customized_async_execute(input_object, agent_input, memory, llm, prompt, **kwargs)

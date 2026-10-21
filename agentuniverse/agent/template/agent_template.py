@@ -105,6 +105,11 @@ class AgentTemplate(Agent, ABC):
         return super().invoke_knowledge(query_str=query_str, input_object=input_object,
                                         knowledge_names=self.knowledge_names)
 
+    async def async_invoke_knowledge(self, query_str: str, input_object: InputObject, **kwargs) -> str:
+        """Query configured knowledge bases from the async template path."""
+        return await super().async_invoke_knowledge(query_str=query_str, input_object=input_object,
+                                                    knowledge_names=self.knowledge_names)
+
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
         return super().process_prompt(agent_input=agent_input, prompt_version=self.prompt_version)
 
