@@ -668,8 +668,10 @@ neutralization) and `headers` ranks column names by data sensitivity
 The trigger set follows OWASP exactly: `=`, `+`, `-`, `@`, TAB (U+0009), and
 CR (U+000D). Cells starting with `%` are deliberately not flagged because
 spreadsheets treat `%` as a number-format hint, never a formula start;
-pure numeric literals such as `-2` are also not flagged (they parse as
-numbers), though `neutralize` still prefixes them defensively. Fullwidth
+pure numeric literals such as `-2` and `-1e-5` are also not flagged (they
+parse as numbers), though `neutralize` still prefixes them defensively.
+Header sensitivity matching is token-based, so a `secretary` column does not
+match the `secret` keyword. Fullwidth
 homoglyphs (U+FF1D etc.) are not executable and surface at info level only.
 
 The tool uses only the Python standard library, validates all inputs

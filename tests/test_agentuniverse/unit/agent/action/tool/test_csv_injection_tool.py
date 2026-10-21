@@ -4,6 +4,7 @@ import csv
 import io
 import os
 import random
+import re
 import time
 import unittest
 from collections import Counter
@@ -17,7 +18,6 @@ from agentuniverse.base.config.application_configer.application_config_manager i
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.config.configer import Configer
-import re
 
 YAML_PATH = os.path.join(os.path.dirname(csv_injection_module.__file__), "csv_injection_tool.yaml")
 
@@ -94,7 +94,7 @@ def oracle_needs_prefix(value):
 
 
 CELL_POOL = [
-    "", "hello", "world example", "42", "-2", "+3.14", "-.5e8", "3,000 built-in",
+    "", "hello", "world example", "42", "-2", "+3.14", "-.5e8", "-1e-5", "+2e+10", "3,000 built-in",
     "plain, comma", 'quote " inside', "line\nbreak", "tab\tinside", "\rCR inside",
     "café über 中文", "emoji 🚀 payload", "%50", "% growth", "'=escaped", "'text'",
     "=cmd|' /C calc'!A0", "=HYPERLINK(\"https://evil.invalid\",\"x\")",
@@ -278,7 +278,7 @@ class DeterminismOracleTest(unittest.TestCase):
         tool = CsvInjectionTool()
         base = tool.execute(mode="scan", csv_text=serialize(rows))
         mixed = tool.execute(mode="scan", csv_text=serialize(shuffled))
-        signature = lambda scan: Counter(  # noqa: E731 - local comparator helper
+        signature = lambda scan: Counter(
             (finding["col"], finding["code"], finding["risk"], finding["formula_snippet"]) for finding in scan["findings"]
         )
         self.assertEqual(signature(base), signature(mixed))
@@ -360,6 +360,72 @@ class ClassificationDetailTest(unittest.TestCase):
         notes = " ".join(result["summary"]["notes"])
         self.assertIn("%", notes)
         self.assertIn("OWASP", notes)
+
+    def test_numeric_scientific_notation_exclusion(self):
+        """Pure numerics with a signed exponent are not flagged as formulas.
+
+        Regression: "-1e5" was unflagged while "-1e-5"/"+2e+10"/"-.5e+8" were
+        flagged medium FORMULA_LIKE because the exponent's sign matched the
+        arithmetic-operator rule, contradicting the documented numeric
+        exclusion and float() parseability.
+        """
+        row = ",".join(["-1e-5", "+2e+10", "-.5e+8", "-3E-2", "-1e5", "-2", "+3.14", "-.5e8"])
+        result = self.scan(f"a\n{row}\n")
+        self.assertEqual(result["findings"], [])
+        explained = self.tool.execute(mode="explain", cell_value="-1e-5")
+        self.assertEqual(explained["risk"], "none")
+        self.assertFalse(explained["is_payload"])
+        # Real formulas still flagged, and neutralize stays defensively strict.
+        still_flagged = self.scan("a,b\n-2+5,=2\n")
+        self.assertEqual([f["risk"] for f in still_flagged["findings"]], ["medium", "medium"])
+        neutralized = self.tool.execute(mode="neutralize", csv_text="a\n-1e-5\n")
+        self.assertEqual(neutralized["changed_count"], 1)
+        self.assertEqual(neutralized["changed_cells"][0]["after"], "'-1e-5")
+
+    def test_evidence_echo_bounded_everywhere(self):
+        """Findings/explain evidence never echoes unbounded cell content.
+
+        Regression: a 50k-char bidi prefix made scan's payload_prefix and
+        explain's trigger/control_escaped grow to 300k+ chars, and a 1 MB
+        formula echoed fully in decoded_variants and
+        recommended_neutralization.
+        """
+        cell = "\u202e" * 50_000 + "=cmd|'x'!A0"
+        buffer = io.StringIO()
+        csv.writer(buffer).writerows([["h"], [cell]])
+        result = self.scan(buffer.getvalue())
+        finding = result["findings"][0]
+        self.assertEqual(finding["risk"], "high")
+        self.assertLessEqual(len(finding["payload_prefix"]), 100)
+        self.assertIn("...", finding["payload_prefix"])
+        self.assertLessEqual(len(finding["formula_snippet"]), self.tool.max_snippet + 3)
+        explained = self.tool.execute(mode="explain", cell_value=cell)
+        self.assertLessEqual(len(explained["trigger"]), 100)
+        for variant in explained["decoded_variants"].values():
+            self.assertLessEqual(len(variant), self.tool.max_snippet + 3, variant[:40])
+        big = "=" + "A" * 100_000
+        explained = self.tool.execute(mode="explain", cell_value=big)
+        self.assertLessEqual(len(explained["recommended_neutralization"]), self.tool.max_snippet + 3)
+        self.assertLessEqual(len(explained["decoded_variants"]["leading_whitespace_stripped"]), self.tool.max_snippet + 3)
+        self.assertLessEqual(len(explained["decoded_variants"]["control_escaped"]), self.tool.max_snippet + 3)
+
+    def test_header_keyword_token_boundaries(self):
+        """Header keywords match whole tokens, not substrings.
+
+        Regression: "secretary"/"author"/"tokenizer" were rated high via the
+        substrings secret/auth/token, and "email" double-matched email+mail.
+        """
+        text = "secretary,author,tokenizer,email,password_reset,credit_card_number\n1,2,3,4,5,6\n"
+        result = self.tool.execute(mode="headers", csv_text=text)
+        self.assertEqual(result["status"], "success")
+        by_name = {header["name"]: header for header in result["headers"]}
+        for name in ("secretary", "author", "tokenizer"):
+            self.assertEqual(by_name[name]["sensitivity"], "low", name)
+            self.assertEqual(by_name[name]["matched_keywords"], [], name)
+        self.assertEqual(by_name["email"]["sensitivity"], "medium")
+        self.assertEqual(by_name["email"]["matched_keywords"], ["email"])
+        self.assertEqual(by_name["password_reset"]["sensitivity"], "high")
+        self.assertEqual(by_name["credit_card_number"]["sensitivity"], "medium")
 
     def test_info_tier_homoglyph_and_rtl(self):
         """Fullwidth homoglyphs and RTL overrides surface at info level."""

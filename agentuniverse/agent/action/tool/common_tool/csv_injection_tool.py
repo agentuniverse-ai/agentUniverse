@@ -49,7 +49,7 @@ _REMOTE_FUNC_RE = re.compile(
 # Function-call shape after a trigger character, e.g. "SUM(" in "=SUM(1,2)".
 _FUNC_SHAPE_RE = re.compile(r"^[A-Za-z_]\w*\s*\(")
 
-# Pure numeric literal (including a leading sign): "-2", "+3.14", "-.5e8".
+# Pure numeric literal (including a leading sign): "-2", "+3.14", "-1e-5".
 # These parse as harmless numbers, not formulas, so they are not flagged.
 _NUMERIC_RE = re.compile(r"[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?")
 
@@ -118,9 +118,9 @@ _EXCLUSION_NOTES = (
     "Trigger set per OWASP CSV Injection: =, +, -, @, TAB (U+0009), CR (U+000D).",
     "Cells starting with % are NOT flagged: spreadsheets treat a leading % as a "
     "number-format hint (percentage style), never as a formula start.",
-    "Pure numeric literals after a leading + or - (e.g. -2, +3.14) are parsed as "
-    "numbers, not formulas, and are not flagged in scan results; the neutralize "
-    "mode still prefixes them per the strict OWASP remediation.",
+    "Pure numeric literals after a leading + or - (e.g. -2, +3.14, -1e-5, +2e+10) "
+    "are parsed as numbers, not formulas, and are not flagged in scan results; "
+    "the neutralize mode still prefixes them per the strict OWASP remediation.",
     "Fullwidth homoglyphs (U+FF1D/U+FF0B/U+FF0D/U+FF20) are not executable "
     "formula prefixes and are reported at info level only.",
 )
@@ -140,6 +140,19 @@ def _a1_column(col: int) -> str:
 def _escape_ascii(value: str) -> str:
     """Render control/bidi characters as visible ASCII escapes."""
     return value.encode("unicode_escape").decode("ascii")
+
+
+# Maximum number of hidden prefix characters echoed as evidence in findings
+# and explain output; longer prefixes are summarized with a "..." marker so
+# cell content is never echoed unbounded (cells can carry secrets/tokens).
+_MAX_PREFIX_EVIDENCE = 12
+
+
+def _evidence_prefix(prefix_hidden: str, lead: str) -> str:
+    """Render a bounded, control-escaped evidence prefix (hidden chars + trigger)."""
+    capped = prefix_hidden[:_MAX_PREFIX_EVIDENCE]
+    marker = "..." if len(prefix_hidden) > _MAX_PREFIX_EVIDENCE else ""
+    return _escape_ascii(capped) + marker + _escape_ascii(lead)
 
 
 def _hidden_kind(prefix: str) -> str:
@@ -169,10 +182,12 @@ def _classify_cell(value: str) -> dict[str, Any] | None:
 
     if lead in "=+-@":
         body = stripped[1:]
+        if lead in "+-" and _NUMERIC_RE.fullmatch(stripped):
+            return None
         obfuscation = (
             f"Obfuscated by leading {_hidden_kind(prefix_hidden)} prefix. " if prefix_hidden else ""
         )
-        shown_prefix = _escape_ascii(prefix_hidden + lead)
+        shown_prefix = _evidence_prefix(prefix_hidden, lead)
         if _DDE_RE.search(stripped):
             return {
                 "code": "DDE",
@@ -274,16 +289,27 @@ def _needs_neutralization(value: str) -> bool:
     return bool(value) and value[0] in _TRIGGER_CHARS
 
 
+def _keyword_in_tokens(keyword: str, tokens: list[str]) -> bool:
+    """Match a keyword against normalized header tokens at token boundaries.
+
+    Single-token keywords must equal a whole token (so "secretary" does not
+    match "secret"); compound keywords such as "credit_card" must equal
+    consecutive tokens.
+    """
+    parts = keyword.split("_")
+    if len(parts) == 1:
+        return keyword in tokens
+    return any(tokens[i : i + len(parts)] == parts for i in range(len(tokens) - len(parts) + 1))
+
+
 def _header_sensitivity(name: str) -> tuple[str, list[str]]:
     """Weigh one header name against the sensitive keyword lists."""
     normalized = re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
-    tokens = set(normalized.split("_")) if normalized else set()
-    matched_high = [kw for kw in _SENSITIVE_HIGH if kw in tokens or kw in normalized]
-    if matched_high:
-        return "high", matched_high
-    matched_medium = [kw for kw in _SENSITIVE_MEDIUM if kw in tokens or kw in normalized]
-    if matched_medium:
-        return "medium", matched_medium
+    tokens = normalized.split("_") if normalized else []
+    for risk_level, keywords in (("high", _SENSITIVE_HIGH), ("medium", _SENSITIVE_MEDIUM)):
+        matched = [kw for kw in keywords if _keyword_in_tokens(kw, tokens)]
+        if matched:
+            return risk_level, matched
     return "low", []
 
 
@@ -626,7 +652,7 @@ class CsvInjectionTool(Tool):
         if first in _TRIGGER_CHARS and first not in _OBFUSCATION_PREFIX:
             trigger = _escape_ascii(first)
         elif lead in "=+-@":
-            trigger = _escape_ascii(prefix_hidden + lead)
+            trigger = _evidence_prefix(prefix_hidden, lead)
         elif lead == "'":
             trigger = "'"
         else:
@@ -634,9 +660,10 @@ class CsvInjectionTool(Tool):
         code = finding["code"] if finding else None
         risk = finding["risk"] if finding else "none"
         if stripped:
-            control_escaped = _escape_ascii(prefix_hidden + lead) + stripped[1:]
+            control_escaped = _evidence_prefix(prefix_hidden, lead) + stripped[1:]
         else:
-            control_escaped = _escape_ascii(value)
+            marker = "..." if len(value) > _MAX_PREFIX_EVIDENCE else ""
+            control_escaped = _escape_ascii(value[:_MAX_PREFIX_EVIDENCE]) + marker
         return {
             "status": "success",
             "mode": "explain",
@@ -646,13 +673,15 @@ class CsvInjectionTool(Tool):
             "code": code,
             "trigger": trigger,
             "decoded_variants": {
-                "python_repr": repr(value),
-                "leading_whitespace_stripped": stripped,
-                "control_escaped": control_escaped,
+                "python_repr": self._snippet(repr(value)),
+                "leading_whitespace_stripped": self._snippet(stripped),
+                "control_escaped": self._snippet(control_escaped),
             },
             "what_spreadsheet_would_do": _SPREADSHEET_BEHAVIOR.get(
                 code, "Stored as literal text; no formula interpretation."
             ),
-            "recommended_neutralization": ("'" + value) if _needs_neutralization(value) else None,
+            "recommended_neutralization": (
+                self._snippet("'" + value) if _needs_neutralization(value) else None
+            ),
             "notes": list(_EXCLUSION_NOTES),
         }
