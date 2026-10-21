@@ -53,6 +53,10 @@ VALID_TRANSITIONS = {
 }
 
 
+class InvalidStateTransitionError(Exception):
+    """Raised when a request task state transition is not allowed."""
+
+
 class RequestTask:
     """The class that manages the agent service request, including state
     transitions and different types of execution flows."""
@@ -316,7 +320,9 @@ class RequestTask:
                 in VALID_TRANSITIONS):
             self.__request_do__.state = next_state.value
         else:
-            raise Exception("Invalid state transition")
+            raise InvalidStateTransitionError(
+                f"Invalid state transition from "
+                f"{self.__request_do__.state} to {next_state.value}")
 
     def check_state(self):
         """Keep check request task thread state every minute, if the thread
@@ -378,10 +384,22 @@ class RequestTask:
 
     def cancel(self):
         """Cancel the request task. If a response SSE stream is working, put
-        the EOF into the queue."""
-        self.next_state(TaskStateEnum.CANCELED)
+        the EOF into the queue so the stream consumer stops reading.
+
+        Canceling a task that already reached a terminal state (finished,
+        failed, or canceled) is a no-op instead of an error."""
+        try:
+            self.next_state(TaskStateEnum.CANCELED)
+        except InvalidStateTransitionError:
+            LOGGER.info(
+                "request:" + str(self.request_id) +
+                " cancel ignored, task already in state " +
+                self.__request_do__.state)
+            return
         if self.queue is not None:
             self.queue.put_nowait(EOF_SIGNAL)
+        if self.async_queue is not None:
+            self.async_queue.put_nowait(EOF_SIGNAL)
 
     def request_state(self):
         """Return the request task state."""
