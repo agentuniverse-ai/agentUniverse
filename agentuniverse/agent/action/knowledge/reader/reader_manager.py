@@ -45,6 +45,9 @@ class ReaderManager(ComponentManagerBase[Reader]):
                                 file_type: str,
                                 new_instance: bool = False) -> Reader | None:
         if file_type in self.DEFAULT_READER:
-            return self.get_instance_obj(self.DEFAULT_READER[file_type])
+            return self.get_instance_obj(
+                self.DEFAULT_READER[file_type],
+                new_instance=new_instance,
+            )
         else:
             return None
