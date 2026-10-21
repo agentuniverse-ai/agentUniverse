@@ -671,11 +671,19 @@ with or without values, unescapes quoted-pairs, and handles malformed `q`
 weights per RFC 7231. `security_audit` parses a `Name: value` text block and
 reports missing HSTS/CSP/X-Content-Type-Options/Referrer-Policy/
 Permissions-Policy with severities and mitigations, HSTS max-age checks
-(0, below the OWASP 180-day bar, overflow, quoting), CSP directive inventory
-with `unsafe-inline`/`unsafe-eval`/plaintext-http source flags and
-default-src fallback notes, deprecated headers (X-Frame-Options ALLOW-FROM,
-X-XSS-Protection, X-WebKit-CSP), `no-store` checks on sensitive responses,
-cookie attribute checks, and Server/X-Powered-By version leak notes.
+(0, below the OWASP 180-day bar, overflow, quoting; per RFC 6797 a duplicated
+directive or invalid delta-seconds voids the entire header, and the audit
+reports that instead of treating the header as active), CSP directive
+inventory with `unsafe-inline`/`unsafe-eval`/plaintext-http source flags
+(honoring the CSP3 ignore rules: `unsafe-inline` is inert beside a nonce or
+hash or under `strict-dynamic`, and host sources are inert under
+`strict-dynamic`), unquoted
+`nonce-`/`sha256-` tokens flagged as host-sources that never apply, the valid
+empty `sandbox` form, report-uri deprecation and report-to without a
+Reporting-Endpoints declaration, plus default-src fallback notes, deprecated
+headers (X-Frame-Options ALLOW-FROM, X-XSS-Protection, X-WebKit-CSP),
+`no-store` checks on sensitive responses, cookie attribute checks, and
+Server/X-Powered-By version leak notes.
 
 `parse_cookie` parses one Set-Cookie line into name, value, typed attributes
 (Expires via the real lenient RFC 6265 section 5.1.1 cookie-date algorithm,

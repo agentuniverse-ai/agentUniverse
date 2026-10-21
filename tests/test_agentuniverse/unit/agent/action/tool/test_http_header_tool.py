@@ -13,8 +13,16 @@ Oracle strategy:
   ``http.cookies.SimpleCookie`` with the lenient/strict divergences pinned
   ($Path/$Domain attachment, unquoting, whole-cookie drops).
 - security_audit: OWASP secure-headers ground-truth battery (HSTS max-age
-  parse, CSP3 directive examples, XFO/XSS-Protection/cache/cookie checks).
-- cookie-date: 60 hand-derived RFC 6265 section 5.1.1 cases.
+  parse, CSP3 directive examples, XFO/XSS-Protection/cache/cookie checks) plus
+  a self-review battery pinning RFC 6797 whole-header-ignore semantics for
+  non-conforming STS headers and CSP3 ignore rules (nonce/hash suppressing
+  'unsafe-inline', 'strict-dynamic' suppressing host allowlists, unquoted
+  nonce/hash tokens, sandbox's valid empty form, report-uri/report-to).
+- cookie-date: 60 hand-derived RFC 6265 section 5.1.1 cases plus a second,
+  disjoint 55-case battery re-derived during the hostile self-review.
+- A second-generation putheader battery (300 fresh seeds) and parse_list
+  battery (200 fresh values with unterminated quotes, ';=' chunks, and
+  duplicated q parameters) guard against regressions in the seeded oracles.
 """
 
 import email.header
@@ -275,6 +283,73 @@ def seeded_cookies(count, seed):
     return cookies
 
 
+def fresh_seeded_pairs(count, seed):
+    """Second-generation hostile (name, value) pairs (self-review battery)."""
+    rng = random.Random(seed)
+    names = [
+        "X-Good-1", "!#$%&'*+-.^_`|~", "a", "Z", "X_with_space", "X\tTabbed",
+        "é-Name", "X-Foo:", ":Leading", " Leading", "X\rFoo", "X\nFoo",
+        "Content-Length", "Set-Cookie", "Max-Forwards", "X-" + "y" * 30,
+    ]
+    values = [
+        "ok", "", " ", "\t", "a\r\nb", "a\r\n b", "a\r b", "a\n b", "a\nb",
+        "a\rb", "\r", "\n", "\r\n", "\r\n ", "\x00", "\x7f", "\x1f", "\x0b",
+        "ÿ", "é", "€", "\U0001f600", 'q"q', "a\\b", "a: b", ";x", "(x)", "@y",
+        "0" * 33, "ünïcodeÿ",
+    ]
+    mutations = ["\r", "\n", "\r\n", "\r\n ", "\r ", "\n\t", " ", "\t",
+                 "\x00", "\x1f", "\x7f", "ÿ", "€", "\U0001f600", ":", ";", '"', "\\"]
+    pairs = []
+    for i in range(count):
+        name = rng.choice(names)
+        value = rng.choice(values)
+        for _ in range(rng.randint(0, 2)):
+            if rng.random() < 0.5 and name:
+                pos = rng.randrange(len(name) + 1)
+                name = name[:pos] + rng.choice(mutations) + name[pos:]
+            elif value:
+                pos = rng.randrange(len(value) + 1)
+                value = value[:pos] + rng.choice(mutations) + value[pos:]
+        if rng.random() < 0.04:
+            name = ""
+        if rng.random() < 0.04:
+            value = ""
+        pairs.append((name, value))
+    return pairs
+
+
+def fresh_seeded_lists(count, seed):
+    """Second-generation list-header values (unterminated quotes, ;=, dup q)."""
+    rng = random.Random(seed)
+    tokens = [
+        "text/html", "application/vnd.api+json", "image/avif", "*/*",
+        "no-cache", "immutable", "stale-while-revalidate=60", "gzip", "zstd",
+        "br;q=0.7", "en-GB", "*;q=0.2", "bytes=100-", "\"who, knows\"", "a\"b",
+        "x\\y", "w/organ", "nosniff", "level=2", "mono", "UTF-16",
+    ]
+    params = [
+        "", ";q=1", ";q=0", ";q=0.9", ";q=0.123", ";q=1.000", ";q=00", ";q=0.",
+        ";q=1.", ";q=-0.5", ";q=2.0", ";q=0.1234", ";q=abc", ";q=", ";q",
+        ";Q=0.3", ";charset=\"utf, 8\"", ";foo=bar;baz", ";x=\"unclosed",
+        ";x=\"a\\\"b;c\"", ";q=0.5;q=0.6", "; ;", ";=", ";a=", ";=b",
+    ]
+    values = []
+    for i in range(count):
+        if i % 8 == 0:
+            values.append(rng.choice(tokens))
+            continue
+        pieces = [rng.choice(tokens) + rng.choice(params)
+                  for _ in range(rng.randint(1, 5))]
+        joiner = rng.choice([",", ", ", " ,", " , ", ",,", ",\t"])
+        candidate = joiner.join(pieces)
+        if rng.random() < 0.18:
+            candidate += rng.choice([",", ", ", " ,", ";"])
+        if rng.random() < 0.15:
+            candidate = rng.choice([", ", ","]) + candidate
+        values.append(candidate)
+    return values
+
+
 class HttpHeaderValidateTest(unittest.TestCase):
     """Mode validate: RFC 7230 grammar + http.client.putheader oracle."""
 
@@ -322,6 +397,37 @@ class HttpHeaderValidateTest(unittest.TestCase):
                 )
         self.assertGreater(rejects, 50, "oracle battery lost its hostile subpopulation")
         self.assertGreater(divergences, 20, "divergence adjudication never exercised")
+
+    def test_putheader_oracle_300_fresh_seeds(self):
+        """300 second-generation seeded pairs re-adjudicated against putheader.
+
+        Hostile re-probe battery from the self-review: fresh generator mix
+        (colon/whitespace-leading names, obs-fold continuations, non-latin-1
+        values) under seed 20261021.
+        """
+        pairs = fresh_seeded_pairs(300, 20261021)
+        rejects = 0
+        divergences = 0
+        for name, value in pairs:
+            result = self.tool.execute("validate", name=name, value=value)
+            error_codes = {
+                f["code"] for f in result["findings"] if f["severity"] == "error"
+            }
+            if putheader_rejects(name, value):
+                rejects += 1
+                self.assertTrue(
+                    error_codes,
+                    f"putheader rejects {name!r}/{value!r} but tool accepts it",
+                )
+            elif error_codes:
+                divergences += 1
+                self.assertTrue(
+                    error_codes <= PUTHEADER_DIVERGENCE_CODES,
+                    f"unexpected rejection of putheader-accepted "
+                    f"{name!r}/{value!r}: {error_codes}",
+                )
+        self.assertGreater(rejects, 100)
+        self.assertGreater(divergences, 30)
 
     def test_rfc7230_hand_examples(self):
         """Hand-embedded RFC 7230 grammar examples."""
@@ -430,6 +536,26 @@ class HttpHeaderParseListTest(unittest.TestCase):
                 len(result["elements"]), len(reference),
                 f"element count mismatch for {value!r}",
             )
+            for element, (token, params, q, q_malformed) in zip(result["elements"], reference):
+                self.assertEqual(element["token"], token, value)
+                self.assertEqual(
+                    [(p["name"], p["value"]) for p in element["params_list"]],
+                    list(params), value,
+                )
+                self.assertEqual(element["q"], q, value)
+                self.assertEqual(element["q_malformed"], q_malformed, value)
+
+    def test_reference_parser_parity_200_fresh_values(self):
+        """200 second-generation list values vs the independent reference.
+
+        Fresh shapes from the self-review: unterminated quoted params, ';='
+        chunks, duplicated q parameters, ',,' and ',\\t' joiners.
+        """
+        for value in fresh_seeded_lists(200, 20261022):
+            result = self.tool.execute("parse_list", value=value)
+            self.assertEqual(result["status"], "success", value)
+            reference = reference_list_parse(value)
+            self.assertEqual(len(result["elements"]), len(reference), value)
             for element, (token, params, q, q_malformed) in zip(result["elements"], reference):
                 self.assertEqual(element["token"], token, value)
                 self.assertEqual(
@@ -569,6 +695,111 @@ class HttpHeaderSecurityAuditTest(unittest.TestCase):
         self.assertIn("hsts_max_age_missing", hsts("includeSubDomains"))
         self.assertIn("hsts_duplicate_directive", hsts("max-age=1; max-age=2"))
         self.assertIn("hsts_unknown_directive", hsts("max-age=1; tomorrow"))
+
+    def test_hsts_nonconforming_header_battery(self):
+        """Self-review battery: RFC 6797 whole-header-ignore semantics.
+
+        Section 6.1: "All directives MUST appear only once in an STS header
+        field" and UAs MUST ignore any header that does not conform - so a
+        duplicated directive (max-age, includeSubDomains, preload, or any
+        other name) or an invalid delta-seconds voids the header; scope advice
+        must be suppressed because no protection is applied at all.
+        """
+        def hsts(value):
+            codes_ = self.codes_with(
+                "strict-transport-security",
+                f"Strict-Transport-Security: {value}",
+            )
+            return {c for c, _ in codes_ if c.startswith("hsts")}, {
+                (c, s) for c, s in codes_ if c.startswith("hsts")
+            }
+
+        codes_, pairs = hsts("max-age=31536000; max-age=0")
+        self.assertIn("hsts_duplicate_directive", codes_)
+        self.assertIn(("hsts_duplicate_directive", "high"), pairs)
+        self.assertNotIn("hsts_scope_limited", codes_)
+        # invalid first max-age: the second must NOT resurrect the header
+        codes_, pairs = hsts("max-age=abc; max-age=31536000")
+        self.assertIn("hsts_max_age_invalid", codes_)
+        self.assertIn("hsts_duplicate_directive", codes_)
+        self.assertIn("hsts_max_age_missing", codes_)
+        self.assertNotIn("hsts_scope_limited", codes_)
+        for value in (
+            "max-age=31536000; includeSubDomains; includeSubDomains",
+            "max-age=31536000; preload; preload",
+            "max-age=1; tomorrow; tomorrow",
+            'max-age="abc"', "max-age=+100", "max-age=1e6",
+        ):
+            codes_, _ = hsts(value)
+            self.assertNotIn("hsts_scope_limited", codes_, value)
+        codes_, _ = hsts("max-age=31536000; includeSubDomains; preload")
+        self.assertEqual(codes_, set())
+
+    def test_csp_edge_grammar_battery(self):
+        """Self-review battery: CSP3 ignore rules and source grammar.
+
+        Pins: 'unsafe-inline' ignored when a nonce/hash shares the source
+        list; host allowlists inert under 'strict-dynamic'; unquoted nonce-/
+        hash- tokens are host-sources; empty sandbox is valid (maximum
+        restrictions) while an empty require-trusted-types-for is not (it
+        requires "'script'"); report-uri deprecation and report-to without a
+        Reporting-Endpoints declaration.
+        """
+        def csp(value, extra=""):
+            codes_ = self.codes_with("content-security-policy",
+                                     f"Content-Security-Policy: {value}")
+            if extra:
+                codes_ = self.codes(
+                    self.baseline + f"\nContent-Security-Policy: {value}\n{extra}")
+            return codes_
+
+        # quoted nonce + hash stay clean
+        codes_ = csp("script-src 'self' 'nonce-R2lrL3Bvc3Q=' 'sha256-abc123'")
+        self.assertNotIn(("csp_unsafe_inline", "high"), codes_)
+        self.assertNotIn(("csp_unquoted_nonce_or_hash", "low"), codes_)
+        # nonce suppresses 'unsafe-inline' (info, not high)
+        codes_ = csp("script-src 'self' 'nonce-AbC123' 'unsafe-inline'")
+        self.assertNotIn(("csp_unsafe_inline", "high"), codes_)
+        self.assertIn(("csp_unsafe_inline_ignored_by_nonce", "info"), codes_)
+        # hash suppresses 'unsafe-inline' too; without either it stays high
+        codes_ = csp("style-src 'sha256-abc' 'unsafe-inline'")
+        self.assertNotIn(("csp_unsafe_inline", "high"), codes_)
+        self.assertIn(("csp_unsafe_inline_ignored_by_nonce", "info"), codes_)
+        self.assertIn(("csp_unsafe_inline", "high"),
+                      csp("script-src 'self' 'unsafe-inline'"))
+        # 'strict-dynamic' ignores 'unsafe-inline' as well (any allowlist/
+        # source expression is ignored per CSP3)
+        codes_ = csp("script-src 'strict-dynamic' 'nonce-AbC123' 'unsafe-inline'")
+        self.assertNotIn(("csp_unsafe_inline", "high"), codes_)
+        self.assertIn(("csp_unsafe_inline_ignored_by_nonce", "info"), codes_)
+        # 'strict-dynamic' makes plaintext host sources inert
+        codes_ = csp("script-src 'strict-dynamic' 'nonce-AbC123' http://cdn.example.com")
+        self.assertNotIn(("csp_insecure_source", "medium"), codes_)
+        self.assertIn(("csp_insecure_source_ignored_by_strict_dynamic", "info"), codes_)
+        self.assertIn(("csp_insecure_source", "medium"),
+                      csp("script-src http: 'self'"))
+        # unquoted nonce-/hash- tokens are host-sources, never applied
+        for token in ("nonce-AbC123", "sha256-AbC123"):
+            codes_ = csp(f"script-src 'self' {token}")
+            self.assertIn(("csp_unquoted_nonce_or_hash", "low"), codes_, token)
+        # empty sandbox is valid (maximum restrictions)
+        codes_ = csp("default-src 'self'; sandbox")
+        self.assertNotIn(("csp_empty_directive", "info"), codes_)
+        self.assertNotIn(("csp_empty_directive", "info"),
+                         csp("default-src 'self'; sandbox allow-scripts"))
+        # empty require-trusted-types-for is grammar-invalid ('script' required)
+        codes_ = csp("default-src 'self'; require-trusted-types-for")
+        self.assertIn(("csp_empty_directive", "info"), codes_)
+        self.assertNotIn(("csp_empty_directive", "info"),
+                         csp("default-src 'self'; require-trusted-types-for 'script'"))
+        # report-uri deprecated; report-to needs an endpoint declaration
+        codes_ = csp("default-src 'self'; report-uri /csp-report")
+        self.assertIn(("csp_report_uri_deprecated", "info"), codes_)
+        codes_ = csp("default-src 'self'; report-to csp-endpoint")
+        self.assertIn(("csp_report_to_no_endpoints", "info"), codes_)
+        codes_ = csp("default-src 'self'; report-to csp-endpoint",
+                     extra='Reporting-Endpoints: csp-endpoint="https://r.example/r"')
+        self.assertNotIn(("csp_report_to_no_endpoints", "info"), codes_)
 
     def test_csp_directive_battery(self):
         """CSP3-spec-derived directive battery: flags, fallbacks, deprecated."""
@@ -931,6 +1162,74 @@ class HttpHeaderCookieDateTest(unittest.TestCase):
             ("2021-06-09T10:18:14Z", None),                   # ISO is not a cookie-date
         ]
         self.assertGreaterEqual(len(cases), 60)
+        for raw, expected in cases:
+            self.assertEqual(self.date_of(raw), expected, f"cookie-date {raw!r}")
+
+    def test_cookie_date_battery_55_fresh_cases(self):
+        """55 disjoint hand-derived cookie-date cases (self-review battery).
+
+        Re-derived during the hostile re-probe against an independent
+        transliteration of RFC 6265 section 5.1.1; '.' being a delimiter is
+        pinned by the 11:22:33.5 case ('15' then takes the year slot).
+        """
+        cases = [
+            ("Fri, 31 Dec 2021 23:59:59 GMT", (2021, 12, 31, 23, 59, 59, True)),
+            ("Sat, 01 Jan 2000 00:00:00 GMT", (2000, 1, 1, 0, 0, 0, True)),
+            ("Tue, 29 Feb 2000 12:00:00 GMT", (2000, 2, 29, 12, 0, 0, True)),
+            ("Mon, 28 Feb 2022 12:00:00 GMT", (2022, 2, 28, 12, 0, 0, True)),
+            ("Wed, 29 Feb 2023 12:00:00 GMT", (2023, 2, 29, 12, 0, 0, False)),
+            ("Thu, 04 Jul 2002 12:34:56 GMT", (2002, 7, 4, 12, 34, 56, True)),
+            ("04 Jul 2002 12:34:56", (2002, 7, 4, 12, 34, 56, True)),
+            ("Jul 4 2002 12:34:56", (2002, 7, 4, 12, 34, 56, True)),
+            ("4 Jul 2002 12:34:56", (2002, 7, 4, 12, 34, 56, True)),
+            ("2002 Jul 4 12:34:56", (2002, 7, 4, 12, 34, 56, True)),
+            ("12:34:56 4 Jul 2002", (2002, 7, 4, 12, 34, 56, True)),
+            ("Feb 30 2021 00:00:00", (2021, 2, 30, 0, 0, 0, False)),
+            ("Feb 29 2024 00:00:00", (2024, 2, 29, 0, 0, 0, True)),
+            ("Feb 29 2100 00:00:00", (2100, 2, 29, 0, 0, 0, False)),
+            ("Feb 29 1600 00:00:00", None),          # year < 1601
+            ("Dec 31 1969 23:59:59", (1969, 12, 31, 23, 59, 59, True)),
+            ("31 Dec 99 23:59:59", (1999, 12, 31, 23, 59, 59, True)),
+            ("31 Dec 68 23:59:59", (2068, 12, 31, 23, 59, 59, True)),
+            ("31 Dec 69 23:59:59", (2069, 12, 31, 23, 59, 59, True)),
+            ("31 Dec 70 23:59:59", (1970, 12, 31, 23, 59, 59, True)),
+            ("Jan 1 100 00:00:00", None),            # 3-digit year stays 100
+            ("Jan 1 1601 00:00:00", (1601, 1, 1, 0, 0, 0, True)),
+            ("Sat, 02 Jan 9999 00:00:00 GMT", (9999, 1, 2, 0, 0, 0, True)),
+            ("Sat, 02 Jan 10000 00:00:00 GMT", None),  # 5-digit year
+            ("Jan 1 00 00:00:00", (2000, 1, 1, 0, 0, 0, True)),
+            ("Jan 1 0 00:00:00", None),              # 1-digit year unmatchable
+            ("Dec 25 (Christmas) 2021 00:00:00", (2021, 12, 25, 0, 0, 0, True)),
+            ("Fri Dec 31 2021 24:00:00", None),      # hour 24
+            ("Fri Dec 31 2021 12:60:00", None),      # minute 60
+            ("Fri Dec 31 2021 12:30:61", None),      # second 61
+            ("00:00:00 Dec 31 2021", (2021, 12, 31, 0, 0, 0, True)),
+            ("23:59:59 31 Dec 2021", (2021, 12, 31, 23, 59, 59, True)),
+            ("1:1:1 1 Jan 2001", (2001, 1, 1, 1, 1, 1, True)),
+            ("01:01:01 Jan 2001", None),             # no day
+            ("Nov 15 2021", None),                   # no time
+            ("Mon, 15-Nov-2021 11:22:33 GMT", (2021, 11, 15, 11, 22, 33, True)),
+            ("Mon,15 Nov 2021 11:22:33 GMT", (2021, 11, 15, 11, 22, 33, True)),
+            ("MONDAY, 15 NOVEMBER 2021 11:22:33 GMT", (2021, 11, 15, 11, 22, 33, True)),
+            ("Mon, 15 Nov 2021 11:22:33 +0100", (2021, 11, 15, 11, 22, 33, True)),
+            ("Mon, 15 Nov 2021 11:22:33 GMT extra 99", (2021, 11, 15, 11, 22, 33, True)),
+            ("Nov 2021 15 11:22:33", (2021, 11, 15, 11, 22, 33, True)),
+            ("Sep 31 2021 00:00:00", (2021, 9, 31, 0, 0, 0, False)),
+            ("Apr 31 2021 00:00:00", (2021, 4, 31, 0, 0, 0, False)),
+            ("Jun 31 2021 00:00:00", (2021, 6, 31, 0, 0, 0, False)),
+            ("Aug 32 2021 00:00:00", None),          # day > 31
+            ("Aug 0 2021 00:00:00", None),           # day < 1
+            ("Déc 15 2021 00:00:00", None),          # non-ASCII month
+            ("Mon, 15 Nov 2021 11:22:33.999 GMT", (2021, 11, 15, 11, 22, 33, True)),
+            ("Mon, 15 Nov 2021 11:22 GMT", None),    # no seconds
+            ("11:22:33.5 15 Nov 2021", (2015, 11, 5, 11, 22, 33, True)),
+            ("Nov\t15\t2021\t11:22:33", (2021, 11, 15, 11, 22, 33, True)),
+            ("Mon; 15; Nov; 2021; 11:22:33", (2021, 11, 15, 11, 22, 33, True)),
+            ("15 Nov 2021 11:22:33 16 Nov 2021", (2021, 11, 15, 11, 22, 33, True)),
+            ("Sat, 05 May 2001 05:05:05 GMT", (2001, 5, 5, 5, 5, 5, True)),
+            ("10:18:14:15 9 Jun 2021", (2021, 6, 9, 10, 18, 14, True)),
+        ]
+        self.assertGreaterEqual(len(cases), 55)
         for raw, expected in cases:
             self.assertEqual(self.date_of(raw), expected, f"cookie-date {raw!r}")
 

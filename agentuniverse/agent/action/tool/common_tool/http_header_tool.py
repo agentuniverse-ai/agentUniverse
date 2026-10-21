@@ -83,6 +83,11 @@ _CSP_DIRECTIVES = _FETCH_DIRECTIVES | frozenset({
     "plugin-types", "navigate-to",
 })
 _DEPRECATED_CSP_HEADERS = frozenset({"x-webkit-csp", "x-content-security-policy"})
+# CSP3 section 2.3.1 grammar: nonce-source/hash-source are single-quoted
+# ("'nonce-<base64>'", "'sha256-...'"); without the quotes the token parses as
+# a host-source and the intended nonce/hash is never applied.
+_CSP_QUOTED_NONCE_HASH = ("'nonce-", "'sha256-", "'sha384-", "'sha512-")
+_CSP_UNQUOTED_NONCE_HASH = ("nonce-", "sha256-", "sha384-", "sha512-")
 _HSTS_LOW_BAR_SECONDS = 15552000  # OWASP recommendation: at least 180 days.
 _MAX_HSTS_MAX_AGE = 2 ** 31 - 1
 _SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
@@ -649,6 +654,8 @@ class HttpHeaderTool(Tool):
         max_age = None
         include_subdomains = False
         preload = False
+        nonconforming = False
+        seen_names: set[str] = set()
         for directive in value.split(";"):
             directive = directive.strip()
             if not directive:
@@ -657,23 +664,37 @@ class HttpHeaderTool(Tool):
             name = name.strip()
             dvalue = dvalue.strip()
             lname = name.lower()
+            if lname in seen_names:
+                # RFC 6797 section 6.1: "All directives MUST appear only once
+                # in an STS header field" and a UA MUST ignore any header that
+                # does not conform - so a repeat voids the whole header.
+                nonconforming = True
+                findings.append(self._finding(
+                    label, "hsts_duplicate_directive", "high",
+                    f"Directive {name!r} appears more than once: RFC 6797 section 6.1 "
+                    "requires every directive to appear exactly once, and conforming "
+                    "UAs MUST ignore the entire STS header field - no HSTS protection "
+                    "is applied",
+                ))
+                continue
+            seen_names.add(lname)
             if lname == "max-age":
-                if max_age is not None:
-                    findings.append(self._finding(
-                        label, "hsts_duplicate_directive", "low",
-                        "Duplicate max-age directive: RFC 6797 section 6.1 defines no repeat semantics",
-                    ))
-                    continue
                 if not eq or not dvalue:
+                    nonconforming = True
                     findings.append(self._finding(
                         label, "hsts_max_age_invalid", "high",
-                        f"Directive {directive!r} has no value; RFC 6797 section 6.1.1 requires max-age=delta-seconds",
+                        f"Directive {directive!r} has no value; RFC 6797 section 6.1.1 "
+                        "requires max-age=delta-seconds; a conforming UA MUST ignore "
+                        "the entire STS header field (RFC 6797 section 6.1)",
                     ))
                     continue
                 if dvalue.startswith('"') or not _DIGITS_RE.fullmatch(dvalue):
+                    nonconforming = True
                     findings.append(self._finding(
                         label, "hsts_max_age_invalid", "high",
-                        f"max-age value {dvalue!r} is not an unquoted delta-seconds integer (RFC 6797 section 6.1.1)",
+                        f"max-age value {dvalue!r} is not an unquoted delta-seconds "
+                        "integer (RFC 6797 section 6.1.1); a conforming UA MUST ignore "
+                        "the entire STS header field (RFC 6797 section 6.1)",
                     ))
                     continue
                 max_age = int(dvalue)
@@ -716,6 +737,10 @@ class HttpHeaderTool(Tool):
                 "the UA MUST ignore the entire header (no protection is applied)",
             ))
             return
+        if nonconforming:
+            # The parsed max-age is moot: RFC 6797 section 6.1 makes the whole
+            # header ignorable, so scope advice would be misleading.
+            return
         missing_scope = [n for n, present in (
             ("includeSubDomains", include_subdomains), ("preload", preload)) if not present]
         if missing_scope:
@@ -753,15 +778,36 @@ class HttpHeaderTool(Tool):
             directives.append({"name": name, "values": tokens})
             inventory.setdefault(name, []).extend(tokens)
 
-        unsafe_inline = sorted(
-            d for d, toks in inventory.items()
-            if d in _FETCH_DIRECTIVES and "'unsafe-inline'" in toks
-        )
+        unsafe_inline: set[str] = set()
+        unsafe_inline_ignored: set[str] = set()
+        for directive in directives:
+            values = directive["values"]
+            if directive["name"] not in _FETCH_DIRECTIVES or "'unsafe-inline'" not in values:
+                continue
+            # CSP source matching: 'unsafe-inline' is ignored by conforming
+            # UAs when the same source list carries a nonce or hash, and
+            # 'strict-dynamic' ignores every allowlist/source expression.
+            has_nonce_hash = any(v.startswith(p) for v in values for p in _CSP_QUOTED_NONCE_HASH)
+            has_strict_dynamic = (
+                directive["name"] == "script-src" and "'strict-dynamic'" in values
+            )
+            if has_nonce_hash or has_strict_dynamic:
+                unsafe_inline_ignored.add(directive["name"])
+            else:
+                unsafe_inline.add(directive["name"])
         if unsafe_inline:
             findings.append(self._finding(
                 label, "csp_unsafe_inline", "high",
-                f"'unsafe-inline' in {', '.join(unsafe_inline)}: allows inline "
+                f"'unsafe-inline' in {', '.join(sorted(unsafe_inline))}: allows inline "
                 "script/style injection, defeating the CSP XSS mitigation; use nonces or hashes",
+            ))
+        if unsafe_inline_ignored:
+            findings.append(self._finding(
+                label, "csp_unsafe_inline_ignored_by_nonce", "info",
+                f"'unsafe-inline' in {', '.join(sorted(unsafe_inline_ignored))} is ignored "
+                "by conforming UAs: a nonce-source or hash-source in the same source "
+                "list takes precedence, and 'strict-dynamic' ignores every allowlist "
+                "expression; inline behavior stays nonce/hash-governed",
             ))
         unsafe_eval = sorted(
             d for d, toks in inventory.items()
@@ -772,16 +818,45 @@ class HttpHeaderTool(Tool):
                 label, "csp_unsafe_eval", "medium",
                 f"'unsafe-eval' in {', '.join(unsafe_eval)}: permits eval()/Function() code-injection sinks",
             ))
-        insecure_sources = sorted(
-            d for d, toks in inventory.items()
-            if d in ("script-src", "script-src-elem", "script-src-attr", "worker-src", "default-src")
-            and any(t == "http:" or t.startswith("http://") for t in toks)
-        )
+        insecure_sources: set[str] = set()
+        ignored_by_strict_dynamic: set[str] = set()
+        for directive in directives:
+            name = directive["name"]
+            if name not in ("script-src", "script-src-elem", "script-src-attr",
+                            "worker-src", "default-src"):
+                continue
+            if not any(t == "http:" or t.startswith("http://") for t in directive["values"]):
+                continue
+            # CSP3: 'strict-dynamic' in script-src makes UAs ignore host
+            # allowlists entirely, so plaintext sources there are inert.
+            if name == "script-src" and "'strict-dynamic'" in directive["values"]:
+                ignored_by_strict_dynamic.add(name)
+            else:
+                insecure_sources.add(name)
         if insecure_sources:
             findings.append(self._finding(
                 label, "csp_insecure_source", "medium",
-                f"Plaintext-http script source in {', '.join(insecure_sources)}: "
+                f"Plaintext-http script source in {', '.join(sorted(insecure_sources))}: "
                 "an on-path attacker can inject scripts",
+            ))
+        if ignored_by_strict_dynamic:
+            findings.append(self._finding(
+                label, "csp_insecure_source_ignored_by_strict_dynamic", "info",
+                "Plaintext-http source in script-src carries no effect: with "
+                "'strict-dynamic' present, conforming UAs ignore host allowlists "
+                "(only nonces/hashes and propagated loader grants apply)",
+            ))
+        unquoted_nonce_hash = sorted({
+            d["name"] for d in directives
+            if d["name"] in _FETCH_DIRECTIVES
+            and any(v.startswith(p) for v in d["values"] for p in _CSP_UNQUOTED_NONCE_HASH)
+        })
+        if unquoted_nonce_hash:
+            findings.append(self._finding(
+                label, "csp_unquoted_nonce_or_hash", "low",
+                f"Unquoted nonce-/hash- token in {', '.join(unquoted_nonce_hash)}: CSP "
+                "grammar requires single quotes ('nonce-...', 'sha256-...'); unquoted, "
+                "the token is a host-source and the intended nonce/hash never applies",
             ))
         unknown = sorted(d for d in inventory if d not in _CSP_DIRECTIVES)
         if unknown:
@@ -789,11 +864,13 @@ class HttpHeaderTool(Tool):
                 label, "csp_unknown_directive", "info",
                 f"Unrecognized directive(s): {', '.join(unknown)}",
             ))
+        # sandbox with no value is valid (it applies the maximum restriction
+        # set); upgrade-insecure-requests/block-all-mixed-content are flags.
+        # require-trusted-types-for however REQUIRES the "'script'" argument.
         empty = sorted({
             d["name"] for d in directives
             if not d["values"] and d["name"] not in (
-                "upgrade-insecure-requests", "block-all-mixed-content",
-                "require-trusted-types-for")
+                "upgrade-insecure-requests", "block-all-mixed-content", "sandbox")
         })
         if empty:
             findings.append(self._finding(
@@ -811,6 +888,19 @@ class HttpHeaderTool(Tool):
                 label, "csp_no_default_src", "low",
                 "No default-src fallback: any fetch directive omitted from the "
                 "policy leaves that resource type unrestricted",
+            ))
+        if "report-uri" in inventory:
+            findings.append(self._finding(
+                label, "csp_report_uri_deprecated", "info",
+                "report-uri is deprecated in favor of report-to (CSP3): wire a "
+                "Reporting-Endpoints endpoint group and switch the directive",
+            ))
+        if "report-to" in inventory and "reporting-endpoints" not in seen and "report-to" not in seen:
+            findings.append(self._finding(
+                label, "csp_report_to_no_endpoints", "info",
+                "report-to references an endpoint group, but no Reporting-Endpoints "
+                "(or legacy Report-To) response header declares it: violations "
+                "cannot be delivered anywhere",
             ))
         return directives
 
