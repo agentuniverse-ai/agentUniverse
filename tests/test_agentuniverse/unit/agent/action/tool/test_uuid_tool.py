@@ -133,6 +133,8 @@ class UuidToolParseTest(unittest.TestCase):
             ("{" + RFC_EXAMPLE + "}", "braced"),
             ("urn:uuid:{" + RFC_EXAMPLE.upper() + "}", "urn+braced"),
             ("  {" + RFC_EXAMPLE + "}  ", "braced"),
+            (RFC_EXAMPLE + "\n", "hyphenated"),
+            ("\t" + RFC_EXAMPLE + "\t", "hyphenated"),
         ]:
             with self.subTest(raw=raw):
                 result = self.tool.execute(mode="parse", uuid=raw)
@@ -380,6 +382,18 @@ class UuidToolCompareTest(unittest.TestCase):
         self.assertFalse(result["string_order_divergence"])
         self.assertNotIn("string_order_note", result)
 
+    def test_compare_whitespace_divergence_is_flagged(self) -> None:
+        canonical = "00000001-0000-4000-8000-000000000000"
+        self.assertTrue(canonical + " " > canonical)
+        result = self.tool.execute(
+            mode="compare", uuid_a=canonical + " ", uuid_b=canonical
+        )
+        self.assertEqual(result["order"], "=")
+        self.assertEqual(result["canonical_string_order"], "=")
+        self.assertEqual(result["input_string_order"], ">")
+        self.assertTrue(result["string_order_divergence"])
+        self.assertIn("surrounding whitespace", result["string_order_note"])
+
     def test_compare_later_fields_decide_when_time_low_equal(self) -> None:
         result = self.tool.execute(
             mode="compare",
@@ -500,6 +514,23 @@ class UuidToolNamespaceCheckTest(unittest.TestCase):
             name="python.org",
         )
         self.assertEqual(result["error"]["type"], "invalid_namespace")
+
+    def test_namespace_check_unencodable_name_is_structured_error(self) -> None:
+        bad_name = "lone-surrogate-\ud800-name"
+        for value, version in (
+            (UUID3_DNS_PYTHON_ORG, 3),
+            (UUID5_DNS_PYTHON_ORG, 5),
+        ):
+            with self.subTest(version=version):
+                result = self.tool.execute(
+                    mode="namespace_check",
+                    uuid=value,
+                    namespace="dns",
+                    name=bad_name,
+                )
+                self.assertEqual(result["error"]["type"], "unencodable_name")
+                self.assertIn("lone surrogate", result["error"]["message"])
+                self.assertNotIn("match", result)
 
     def test_namespace_check_invalid_uuid_is_structured_error(self) -> None:
         result = self.tool.execute(

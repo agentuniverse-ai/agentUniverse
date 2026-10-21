@@ -46,9 +46,9 @@ Five modes:
   equivalent to unsigned 128-bit integer comparison and **not** to
   sorting arbitrary strings. For canonical lowercase forms string
   order always agrees with field order; the raw input strings, when
-  non-canonical (mixed case, ``urn:uuid:``, braces), may sort
-  differently, so the result also reports both string orders and
-  flags any divergence.
+  non-canonical (mixed case, ``urn:uuid:``, braces, surrounding
+  whitespace), may sort differently, so the result also reports both
+  string orders and flags any divergence.
 * ``namespace_check`` — brute-force verification of a version 3 or
   version 5 UUID against its supposed ``(namespace, name)`` origin:
   recomputes ``uuid3`` / ``uuid5`` with the stdlib for one of the
@@ -66,7 +66,8 @@ at 100,000 and a batch at 10,000 entries) raise a ``ValueError``,
 mirroring the other common tools. Errors that depend on the *content
 being analyzed* — a string that is not a parseable UUID where one is
 required, a non-v1 UUID in ``v1_decode``, a non-v3/v5 UUID in
-``namespace_check``, an unresolvable namespace — are returned as a
+``namespace_check``, an unresolvable namespace, a name that cannot
+be UTF-8 encoded — are returned as a
 structured ``error`` payload (or as ``valid: false`` in ``parse`` /
 ``batch_stats``, where validity *is* the analysis) so an agent can
 react without catching exceptions.
@@ -203,8 +204,9 @@ class UuidTool(Tool):
                 decoded fields, for the other modes the mode-specific
                 payload — or a structured ``error`` payload for
                 content-level failures (unparseable UUID where one is
-                required, non-v1 UUID in ``v1_decode``, non-v3/v5 UUID
-                or unresolvable namespace in ``namespace_check``).
+                required, non-v1 UUID in ``v1_decode``, non-v3/v5 UUID,
+                unresolvable namespace or unencodable name in
+                ``namespace_check``).
 
         Raises:
             ValueError: If any parameter is malformed (before any
@@ -595,9 +597,9 @@ class UuidTool(Tool):
             result["string_order_note"] = (
                 "the raw input strings sort differently from the UUID "
                 "field order because they are not in canonical lowercase "
-                "form (mixed case, 'urn:uuid:' prefix and/or braces change "
-                "lexicographic order); canonical-form string order always "
-                "equals field order"
+                "form (mixed case, an 'urn:uuid:' prefix, braces and/or "
+                "surrounding whitespace change lexicographic order); "
+                "canonical-form string order always equals field order"
             )
         else:
             result["string_order_divergence"] = False
@@ -651,6 +653,19 @@ class UuidTool(Tool):
                     ),
                 )
             namespace_echo = str(namespace_value)
+        try:
+            name.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            return self._error_result(
+                context,
+                error_type="unencodable_name",
+                message=(
+                    "name contains a lone surrogate that cannot be "
+                    "UTF-8 encoded, so the version "
+                    f"{decoded['version']} digest cannot be computed "
+                    f"over it ({exc})"
+                ),
+            )
         if decoded["version"] == 3:
             expected = uuid_module.uuid3(namespace_value, name)
         else:
