@@ -20,6 +20,7 @@ validation / syntax-error matrix.
 """
 
 import pathlib
+import sys
 import unittest
 
 from agentuniverse.agent.action.tool.common_tool import DocstringCoverageTool
@@ -791,6 +792,173 @@ class RegistrationTest(unittest.TestCase):
         )
         self.assertEqual(config["metadata"]["class"], "DocstringCoverageTool")
         self.assertEqual(sorted(config["args_model_schema"]["required"]), ["mode", "text"])
+
+
+class HostileReviewRegressionTest(unittest.TestCase):
+    """Regressions for defects found in the hostile self-review:
+
+    1. ``try ... except*`` suites (ast.TryStar, Python 3.11+) were not
+       flattened, so definitions inside an except-group block silently
+       vanished from the audit (scan, summary and check all missed them).
+    2. The documented size caps (max_text_chars / max_items /
+       max_undocumented) were ClassVars, not model fields:
+       ``tool.max_items = 5`` raised AttributeError and the constructor
+       kwarg was silently ignored — dead config.
+    3. Validation errors echoed the rejected value with unbounded repr
+       (a megabyte ``mode`` string produced a megabyte error message).
+    4. The 1-decimal rounding convention (half-to-even on exact halves)
+       was pinned only in this file's comments, not in the tool's
+       documentation.
+    """
+
+    def setUp(self):
+        self.tool = DocstringCoverageTool()
+
+    def test_except_star_definitions_are_audited(self):
+        # A public def inside an except* block belongs to the module
+        # scope exactly like one inside a plain except handler.
+        if sys.version_info < (3, 11):
+            self.skipTest("except* requires Python 3.11+")
+        source = "\n".join(
+            [
+                '"""Doc."""',
+                "try:",
+                "    pass",
+                "except* ValueError:",
+                "    def fallback():",
+                '        """Handled."""',
+                "try:",
+                "    pass",
+                "except TypeError:",
+                "    def except_def():",
+                "        pass",
+            ]
+        )
+        scan = self.tool.execute(mode="scan", text=source)
+        self.assertEqual(
+            [(row["qualname"], row["has_docstring"]) for row in scan["items"]],
+            [("fallback", True), ("except_def", False)],
+        )
+        summary = self.tool.execute(mode="summary", text=source)
+        self.assertEqual(summary["total_public"], 2)
+        self.assertEqual(summary["documented_public"], 1)
+        self.assertEqual(summary["coverage_pct"], 50.0)
+        check = self.tool.execute(mode="check", text=source, min_public=51)
+        self.assertFalse(check["passed"])
+        self.assertEqual(
+            [row["qualname"] for row in check["checks"][1]["offenders"]],
+            ["except_def"],
+        )
+        # Inside a class body too: except* defs are methods of the class.
+        class_src = "\n".join(
+            [
+                "class Handler:",
+                "    try:",
+                "        pass",
+                "    except* ValueError:",
+                "        def handle(self):",
+                "            pass",
+            ]
+        )
+        scan = self.tool.execute(mode="scan", text=class_src)
+        self.assertEqual(
+            [(row["qualname"], row["kind"]) for row in scan["items"]],
+            [("Handler", "class"), ("Handler.handle", "method")],
+        )
+
+    def test_caps_are_live_model_fields(self):
+        # Documented Attributes must be real fields: assignment must not
+        # raise and must take effect; constructor kwargs must not be
+        # silently swallowed.
+        self.assertIn("max_undocumented", DocstringCoverageTool.model_fields)
+        self.assertIn("max_items", DocstringCoverageTool.model_fields)
+        self.assertIn("max_text_chars", DocstringCoverageTool.model_fields)
+        source = "\n".join(f"def f{i:02d}():\n    pass" for i in range(10))
+        tool = DocstringCoverageTool()
+        tool.max_undocumented = 3
+        result = tool.execute(mode="summary", text=source)
+        self.assertEqual(len(result["undocumented"]), 3)
+        self.assertEqual(result["undocumented_total"], 10)
+        self.assertTrue(result["truncated"])
+        tool.max_items = 5
+        scan = tool.execute(mode="scan", text=source)
+        self.assertEqual(scan["items_total"], 10)
+        self.assertEqual(len(scan["items"]), 5)
+        self.assertTrue(scan["items_truncated"])
+        ctor = DocstringCoverageTool(max_undocumented=2)
+        self.assertEqual(len(ctor.execute(mode="summary", text=source)["undocumented"]), 2)
+
+    def test_caps_validation(self):
+        from pydantic import ValidationError
+
+        for bad in (0, -1):
+            with self.assertRaises(ValidationError):
+                DocstringCoverageTool(max_items=bad, max_text_chars=bad)
+        with self.assertRaises(ValidationError):
+            DocstringCoverageTool(max_undocumented=-1)
+        # max_undocumented=0 (list nothing, keep the totals) is legal.
+        tool = DocstringCoverageTool(max_undocumented=0)
+        result = tool.execute(mode="summary", text="def f():\n    pass\n")
+        self.assertEqual(result["undocumented"], [])
+        self.assertEqual(result["undocumented_total"], 1)
+
+    def test_error_echo_is_bounded(self):
+        # A megabyte of bad input must not produce a megabyte of message.
+        with self.assertRaises(ValueError) as caught:
+            self.tool.execute(mode="x" * 1_000_000, text="pass")
+        self.assertLess(len(str(caught.exception)), 200)
+
+        class HugeRepr:
+            def __repr__(self):
+                return "R" * 2_000_000
+
+        with self.assertRaises(ValueError) as caught:
+            self.tool.execute(mode="scan", text=HugeRepr())
+        self.assertLess(len(str(caught.exception)), 200)
+        for option in ("min_module", "min_public", "min_class"):
+            with self.assertRaises(ValueError) as caught:
+                self.tool.execute(mode="check", text="pass", **{option: HugeRepr()})
+            self.assertLess(len(str(caught.exception)), 200)
+        # Small invalid values are still echoed readably.
+        with self.assertRaises(ValueError) as caught:
+            self.tool.execute(mode="check", text="pass", min_public="eighty")
+        self.assertIn("'eighty'", str(caught.exception))
+
+    def test_rounding_is_half_to_even_and_pinned(self):
+        # Exact binary halves at the second decimal: round() rounds
+        # half-to-even (56.25 -> 56.2, 74.25 -> 74.2, 0.75 -> 0.8),
+        # NOT decimal half-up (which would give 56.3 / 74.3 / 0.8).
+        def module(documented, total):
+            parts = [f"def d{i}():\n    'x'" for i in range(documented)]
+            parts += [f"def u{i}():\n    pass" for i in range(total - documented)]
+            return "\n".join(parts)
+
+        for documented, total, expected in (
+            (9, 16, 56.2),  # 56.25 exact: half-to-even down (2 is even)
+            (221, 400, 55.2),  # 55.25 exact: half-to-even down
+            (297, 400, 74.2),  # 74.25 exact
+            (3, 400, 0.8),  # 0.75 exact: half-to-even up (7 is odd)
+            (1, 16, 6.2),  # 6.25 exact
+        ):
+            with self.subTest(documented=documented, total=total):
+                result = self.tool.execute(mode="summary", text=module(documented, total))
+                self.assertEqual(result["coverage_pct"], expected)
+        # The gate sees the reported number: 55.2 passes at 55.2, fails at 55.3.
+        source = module(221, 400)
+        self.assertTrue(self.tool.execute(mode="check", text=source, min_public=55.2)["checks"][1]["passed"])
+        self.assertFalse(self.tool.execute(mode="check", text=source, min_public=55.3)["checks"][1]["passed"])
+
+    def test_guidebook_sections_present(self):
+        root = pathlib.Path(__file__).resolve()
+        while not (root / "agentuniverse" / "__init__.py").exists():
+            root = root.parent
+        for relative in (
+            "docs/guidebook/en/In-Depth_Guides/Components/Tools/Integrated_Tools.md",
+            "docs/guidebook/zh/In-Depth_Guides/组件列表/工具列表/集成的工具.md",
+        ):
+            with self.subTest(doc=relative):
+                text = (root / relative).read_text(encoding="utf-8")
+                self.assertIn("DocstringCoverageTool", text)
 
 
 if __name__ == "__main__":

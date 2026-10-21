@@ -634,3 +634,41 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## DocstringCoverageTool
+
+`DocstringCoverageTool` audits Python source text for docstring / API coverage
+with the pure-stdlib `ast` module — no network, and the source is parsed, never
+executed. It is the measurement layer that shows where documentation gaps still
+are while docstring-batch changes land module by module.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.docstring_coverage_tool import DocstringCoverageTool
+
+tool = DocstringCoverageTool()
+inventory = tool.execute(mode="scan", text=source_text)
+numbers = tool.execute(mode="summary", text=source_text)
+gate = tool.execute(
+    mode="check",
+    text=source_text,
+    min_module=1,
+    min_public=80.0,
+    min_class=50.0,
+)
+```
+
+One call audits exactly one module's source text (`scan`: the full inventory
+with `module_docstring` plus one row per `def` / `async def` / `class`;
+`summary`: the coverage numbers; `check`: threshold pass/fail with the
+offending names). Coverage percentages are reported at one decimal place with
+exact halves rounded half-to-even, and gates compare the reported number
+inclusively.
+
+Public means not underscore-prefixed; dunder names and definitions nested
+inside functions are reported but excluded from the requirement;
+`@override`, `@abstractmethod` and `@functools.wraps` items are exempt as
+documented-elsewhere; property getter/setter/deleter groups count once. A
+leading UTF-8 BOM is tolerated, and a syntax error returns a structured
+`error` payload instead of raising. The size caps (`max_text_chars`,
+`max_items`, `max_undocumented`) are model fields and can be tightened per
+instance.

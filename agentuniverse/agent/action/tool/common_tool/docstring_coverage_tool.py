@@ -40,11 +40,12 @@ The tool supports three modes (all walk the same AST inventory):
   for functions defined inside functions.
 * ``summary`` — the CI-gate numbers over the audit surface (public
   items only, see below): ``total_public``, ``documented_public``,
-  ``exempt_public``, ``coverage_pct`` (1 decimal place; 100.0 when
-  nothing requires a docstring), ``by_kind`` total/documented
-  counts, and ``undocumented`` — the offending rows
-  ``{qualname, line, kind}`` sorted by line, capped at 50 with
-  ``undocumented_total`` + ``truncated`` flags.
+  ``exempt_public``, ``coverage_pct`` (1 decimal place; exact halves
+  round **half-to-even**, Python's ``round`` — 56.25 reports 56.2,
+  0.75 reports 0.8; 100.0 when nothing requires a docstring),
+  ``by_kind`` total/documented counts, and ``undocumented`` — the
+  offending rows ``{qualname, line, kind}`` sorted by line, capped
+  at 50 with ``undocumented_total`` + ``truncated`` flags.
 * ``check`` — the lint mode: thresholds ``min_module`` (0/1 — the
   module docstring gate), ``min_public`` and ``min_class`` (0-100 —
   coverage percentage gates; defaults 0, i.e. off) produce one
@@ -78,23 +79,27 @@ report):
   without a visible same-named getter falls back to a normal
   method row (the AST alone cannot see inherited properties).
 * ``async def`` counts like ``def``; lambdas are skipped entirely;
-  definitions inside module- or class-level ``if`` / ``try`` /
-  ``for`` / ``with`` blocks belong to that scope like their
-  siblings (``if TYPE_CHECKING:`` blocks included).
+  definitions inside module- or class-level ``if`` / ``try``
+  (including ``except*`` groups on Python 3.11+) / ``for`` /
+  ``with`` blocks belong to that scope like their siblings
+  (``if TYPE_CHECKING:`` blocks included).
 
 Input validation is strict and happens before any computation:
 malformed parameters (wrong types, empty or whitespace-only text,
 unknown mode, out-of-place or out-of-range thresholds, text over
 10,000,000 characters) raise a ``ValueError``, mirroring the other
-common tools. The one content-level failure — a syntax error —
-returns a structured ``error`` payload so an agent can react
-without catching exceptions.
+common tools; error messages echo rejected values only in bounded
+form. The size caps (``max_text_chars`` / ``max_items`` /
+``max_undocumented``) are real model fields, configurable per
+instance. The one content-level failure — a syntax error — returns
+a structured ``error`` payload so an agent can react without
+catching exceptions.
 """
 
 import ast
 from typing import Any, ClassVar
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 from agentuniverse.agent.action.tool.tool import Tool
 
@@ -111,6 +116,8 @@ _BRANCH_NODES = (
     ast.With,
     ast.AsyncWith,
 )
+# ``try ... except*`` exists only on Python 3.11+ (absent on 3.10).
+_TRYSTAR: Any = getattr(ast, "TryStar", None)
 
 
 def _is_dunder(name: str) -> bool:
@@ -174,11 +181,12 @@ def _decorator_tags(decorators: list[ast.expr]) -> dict[str, Any]:
 def _definitions_in(body: list[ast.stmt]) -> list[ast.AST]:
     """Definitions introduced by one scope's statement list.
 
-    Flattens control-flow suites (``if`` / ``try`` / ``for`` /
-    ``while`` / ``with`` / ``match``) so that e.g. a ``def`` inside
-    ``if TYPE_CHECKING:`` belongs to the module scope. Definitions
-    inside functions / classes are NOT descended into here — the
-    caller recurses into scopes itself with the right qualname.
+    Flattens control-flow suites (``if`` / ``try`` (incl. ``except*``
+    on Python 3.11+) / ``for`` / ``while`` / ``with`` / ``match``) so
+    that e.g. a ``def`` inside ``if TYPE_CHECKING:`` belongs to the
+    module scope. Definitions inside functions / classes are NOT
+    descended into here — the caller recurses into scopes itself with
+    the right qualname.
     """
     found: list[ast.AST] = []
     for statement in body:
@@ -187,7 +195,9 @@ def _definitions_in(body: list[ast.stmt]) -> list[ast.AST]:
         elif isinstance(statement, ast.If):
             found.extend(_definitions_in(statement.body))
             found.extend(_definitions_in(statement.orelse))
-        elif isinstance(statement, ast.Try):
+        elif isinstance(statement, ast.Try) or (
+            _TRYSTAR is not None and isinstance(statement, _TRYSTAR)
+        ):
             found.extend(_definitions_in(statement.body))
             for handler in statement.handlers:
                 found.extend(_definitions_in(handler.body))
@@ -212,6 +222,10 @@ class DocstringCoverageTool(Tool):
             produce an unbounded response.
         max_undocumented (int): Cap on the ``undocumented`` /
             offending-name lists in ``summary`` and ``check``.
+        All three are real model fields: set them per instance via the
+        constructor (``DocstringCoverageTool(max_undocumented=3)``) or by
+        attribute assignment (``tool.max_items = 5``); values must be
+        positive (``max_undocumented`` allows 0).
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True, protected_namespaces=())
@@ -228,23 +242,25 @@ class DocstringCoverageTool(Tool):
         "pairs counted once, lambdas skipped, async counted, nested defs "
         "with <locals>. qualnames); mode='summary' returns the CI-gate "
         "numbers (total/documented/exempt public items, coverage_pct at 1 "
-        "decimal, by_kind counts, undocumented offenders capped at 50); "
-        "mode='check' applies min_module (0/1), min_public and min_class "
-        "(0-100 percentage gates, default 0) with pass/fail per threshold "
-        "and the offending names. Public = not _-prefixed; dunders and "
-        "non-importable nested defs are excluded from the requirement; a "
-        "syntax error returns a structured error payload, never an "
-        "exception. One module's source text per call."
+        "decimal, round-half-to-even on exact halves, by_kind counts, "
+        "undocumented offenders capped at 50); mode='check' applies "
+        "min_module (0/1), min_public and min_class (0-100 percentage "
+        "gates, default 0) with pass/fail per threshold and the offending "
+        "names. Public = not _-prefixed; dunders and non-importable "
+        "nested defs are excluded from the requirement; a syntax error "
+        "returns a structured error payload, never an exception. One "
+        "module's source text per call."
     )
 
     MODES: ClassVar[tuple] = ("scan", "summary", "check")
     KINDS: ClassVar[tuple] = ("function", "class", "method")
 
-    # Size caps are class constants so validating classmethods can read
-    # them off ``cls``.
-    max_text_chars: ClassVar[int] = 10_000_000
-    max_items: ClassVar[int] = 10_000
-    max_undocumented: ClassVar[int] = 50
+    # Size caps are real model fields so callers can tighten them per
+    # instance (constructor kwarg or attribute assignment); the internal
+    # helpers below read them off ``self``.
+    max_text_chars: int = Field(default=10_000_000, gt=0)
+    max_items: int = Field(default=10_000, gt=0)
+    max_undocumented: int = Field(default=50, ge=0)
     error_preview_chars: ClassVar[int] = 60
 
     # ------------------------------------------------------------------ #
@@ -287,7 +303,7 @@ class DocstringCoverageTool(Tool):
                 computation happens).
         """
         if mode not in self.MODES:
-            self._invalid(f"mode must be one of: {', '.join(self.MODES)} (got {mode!r})")
+            self._invalid(f"mode must be one of: {', '.join(self.MODES)} (got {self._echo(mode)})")
         clean_text = self._validate_text(text)
         if clean_text.startswith("\ufeff"):
             # A UTF-8 BOM survives utf-8 decoding as U+FEFF and
@@ -330,15 +346,28 @@ class DocstringCoverageTool(Tool):
         raise ValueError(f"docstring_coverage_tool: {message}")
 
     @classmethod
-    def _validate_text(cls, text: Any) -> str:
+    def _echo(cls, value: Any, limit: int = 60) -> str:
+        """Bounded ``repr`` for error messages.
+
+        Validation errors echo the rejected value so callers can see what
+        was wrong; the echo must never reproduce an unbounded input (a
+        multi-megabyte ``mode`` string or an object with a huge
+        ``__repr__``), so it is capped here.
+        """
+        text = repr(value)
+        if len(text) > limit:
+            text = text[: limit - 3] + "..."
+        return text
+
+    def _validate_text(self, text: Any) -> str:
         """Validate the module source text (single-text contract)."""
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"text must be a non-empty string (got {text!r})")
+            self._invalid(f"text must be a non-empty string (got {self._echo(text)})")
         if not text.strip():
             preview = text if len(text) <= 20 else text[:20] + "..."
-            cls._invalid(f"text must be a non-empty string (got {preview!r})")
-        if len(text) > cls.max_text_chars:
-            cls._invalid(f"text exceeds the {cls.max_text_chars:,}-character limit " f"(got {len(text):,} characters)")
+            self._invalid(f"text must be a non-empty string (got {preview!r})")
+        if len(text) > self.max_text_chars:
+            self._invalid(f"text exceeds the {self.max_text_chars:,}-character limit " f"(got {len(text):,} characters)")
         return text
 
     @classmethod
@@ -350,7 +379,7 @@ class DocstringCoverageTool(Tool):
             return int(min_module)
         if isinstance(min_module, int) and min_module in (0, 1):
             return min_module
-        cls._invalid(f"min_module must be 0 or 1 (got {min_module!r})")
+        cls._invalid(f"min_module must be 0 or 1 (got {cls._echo(min_module)})")
 
     @classmethod
     def _validate_min_percent(cls, name: str, value: Any) -> float:
@@ -358,7 +387,7 @@ class DocstringCoverageTool(Tool):
         if value is None:
             return 0.0
         if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0 or value > 100:
-            cls._invalid(f"{name} must be a number from 0 to 100 (got {value!r})")
+            cls._invalid(f"{name} must be a number from 0 to 100 (got {cls._echo(value)})")
         return float(value)
 
     @classmethod
@@ -391,8 +420,7 @@ class DocstringCoverageTool(Tool):
             }
         }
 
-    @classmethod
-    def _scan(cls, tree: ast.Module) -> tuple[bool, list[dict[str, Any]]]:
+    def _scan(self, tree: ast.Module) -> tuple[bool, list[dict[str, Any]]]:
         """Walk the AST; return (module_docstring, line-sorted rows)."""
         items: list[dict[str, Any]] = []
 
@@ -459,15 +487,14 @@ class DocstringCoverageTool(Tool):
     # scan mode
     # ------------------------------------------------------------------ #
 
-    @classmethod
-    def _run_scan(cls, module_docstring: bool, items: list[dict[str, Any]]) -> dict[str, Any]:
+    def _run_scan(self, module_docstring: bool, items: list[dict[str, Any]]) -> dict[str, Any]:
         """Return the full inventory (rows capped at max_items)."""
         result: dict[str, Any] = {
             "mode": "scan",
             "module_docstring": module_docstring,
         }
-        if len(items) > cls.max_items:
-            result["items"] = items[: cls.max_items]
+        if len(items) > self.max_items:
+            result["items"] = items[: self.max_items]
             result["items_truncated"] = True
             result["items_total"] = len(items)
         else:
@@ -485,15 +512,19 @@ class DocstringCoverageTool(Tool):
 
     @classmethod
     def _coverage(cls, total: int, documented: int) -> float:
-        """The reported 1-decimal percentage; 100.0 when total is 0."""
+        """The reported 1-decimal percentage; 100.0 when total is 0.
+
+        Exact halves round **half-to-even** (Python's built-in ``round``):
+        56.25 reports 56.2 and 0.75 reports 0.8 — deterministic and pinned
+        by the tests (a decimal half-up convention would give 56.3).
+        """
         if total == 0:
             return 100.0
         return round(100.0 * documented / total, 1)
 
-    @classmethod
-    def _summarize(cls, module_docstring: bool, items: list[dict[str, Any]]) -> dict[str, Any]:
+    def _summarize(self, module_docstring: bool, items: list[dict[str, Any]]) -> dict[str, Any]:
         """Compute the CI-gate numbers over the audit surface."""
-        requiring = [row for row in items if cls._requiring(row)]
+        requiring = [row for row in items if self._requiring(row)]
         documented = [row for row in requiring if row["has_docstring"]]
         undocumented = [
             {
@@ -509,7 +540,7 @@ class DocstringCoverageTool(Tool):
                 "total": sum(1 for row in requiring if row["kind"] == kind),
                 "documented": sum(1 for row in documented if row["kind"] == kind),
             }
-            for kind in cls.KINDS
+            for kind in self.KINDS
         }
         return {
             "mode": "summary",
@@ -517,27 +548,26 @@ class DocstringCoverageTool(Tool):
             "total_public": len(requiring),
             "documented_public": len(documented),
             "exempt_public": sum(1 for row in items if row["is_public"] and not row["is_nested"] and row["exempt"]),
-            "coverage_pct": cls._coverage(len(requiring), len(documented)),
+            "coverage_pct": self._coverage(len(requiring), len(documented)),
             "by_kind": by_kind,
-            "undocumented": undocumented[: cls.max_undocumented],
+            "undocumented": undocumented[: self.max_undocumented],
             "undocumented_total": len(undocumented),
-            "truncated": len(undocumented) > cls.max_undocumented,
+            "truncated": len(undocumented) > self.max_undocumented,
         }
 
     # ------------------------------------------------------------------ #
     # check mode
     # ------------------------------------------------------------------ #
 
-    @classmethod
     def _run_check(
-        cls,
+        self,
         summary: dict[str, Any],
         items: list[dict[str, Any]],
         thresholds: tuple[int, float, float],
     ) -> dict[str, Any]:
         """Apply the thresholds; one pass/fail row per gate."""
         min_module, min_public, min_class = thresholds
-        class_rows = [row for row in items if cls._requiring(row) and row["kind"] in ("class", "method")]
+        class_rows = [row for row in items if self._requiring(row) and row["kind"] in ("class", "method")]
         class_undocumented = [
             {
                 "qualname": row["qualname"],
@@ -547,7 +577,7 @@ class DocstringCoverageTool(Tool):
             for row in class_rows
             if not row["has_docstring"]
         ]
-        class_coverage = cls._coverage(
+        class_coverage = self._coverage(
             len(class_rows),
             len(class_rows) - len(class_undocumented),
         )
@@ -576,7 +606,7 @@ class DocstringCoverageTool(Tool):
                 "threshold": min_class,
                 "coverage_pct": class_coverage,
                 "undocumented_total": len(class_undocumented),
-                "offenders": class_undocumented[: cls.max_undocumented] if not class_passed else [],
+                "offenders": class_undocumented[: self.max_undocumented] if not class_passed else [],
             },
         ]
         return {
