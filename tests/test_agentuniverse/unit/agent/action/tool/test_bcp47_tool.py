@@ -103,7 +103,7 @@ RFC_WELL_FORMED_VALID = [
     "sr-Latn-RS", "az-Arab-IR", "zh-Hant-CN", "en-US", "x-fr-CH", "zh-gan",
     "gan", "yue", "zh-yue", "zh-cmn", "cmn", "sr-Latn", "de-AT", "es-419",
     "sl-nedis", "de-CH-1996", "zh-yue-Hant-HK", "yue-Hant-HK", "nan-Hant",
-    "nan-TW", "enochian-AQ", "enochian-Latn", "de-Latf-DE", "de-Latn-DE",
+    "nan-TW", "de-Latf-DE", "de-Latn-DE",
     "de-Deva", "de-DE-x-goethe", "i-klingon", "i-default", "i-enochian",
     "art-lojban", "no-bok", "no-nyn", "sgn-BE-FR", "en-GB-oed", "zh-min-nan",
     "zh-hakka", "x-foo-private",
@@ -116,7 +116,13 @@ RFC_MALFORMED = [
 ]
 
 # Well-formed but not valid: grammar passes, registry lookup fails.
-WELL_FORMED_UNKNOWN = ["abcd", "abcd-US", "qqa", "en-Qqqq-GB", "en-1234", "zzz-GB"]
+# 'enochian' was removed from the IANA registry (2015 revision dropped the
+# subtag and i-enochian's Preferred-Value); 'zho' is an ISO 639-2/T code and
+# RFC 5646 section 2.2.1 registers only the 639-1 code 'zh' for Chinese.
+WELL_FORMED_UNKNOWN = [
+    "abcd", "abcd-US", "qzx", "en-Qqqq-GB", "en-1234", "zzz-GB",
+    "enochian-AQ", "zho-CN", "eng-US",
+]
 
 # ---------------------------------------------------------------------------
 # Oracle (b): curated known-good canonicalization pairs (60).
@@ -133,9 +139,13 @@ CANONICAL_PAIRS = [
     ("i-lux", "lb"), ("i-navajo", "nv"), ("i-ami", "ami"), ("i-bnn", "bnn"),
     ("i-pwn", "pwn"), ("i-tao", "tao"), ("i-tay", "tay"), ("i-tsu", "tsu"),
     ("i-hak", "hak"), ("sgn-BE-FR", "sfb"), ("sgn-BE-NL", "vgt"),
-    ("sgn-CH-DE", "sgg"), ("cel-gaulish", "xtg-x-cel-gaulish"),
-    ("sh", "sr-Latn"), ("sh-IT", "sr-Latn-IT"), ("sh-Cyrl", "sr-Cyrl"),
-    ("tl", "fil"), ("scc", "sr"), ("scr", "hr"), ("en-UK", "en-GB"),
+    ("sgn-CH-DE", "sgg"), ("cel-gaulish", "cel-gaulish"),
+    ("i-enochian", "i-enochian"),
+    ("sh", "sh"), ("sh-IT", "sh-IT"), ("sh-Cyrl", "sh-Cyrl"),
+    ("tl", "tl"), ("scc", "scc"), ("scr", "scr"), ("en-UK", "en-UK"),
+    ("bh", "bih"), ("bh-IN", "bih-IN"),
+    ("sgn-csl", "csl"), ("zh-csl", "zh-csl"), ("sgn-jsl", "jsl"),
+    ("ru-SU", "ru-SU"), ("en-YD", "en-YE"), ("hy-arevela", "hy-arevela"),
     ("en-BU", "en-MM"), ("fr-ZR", "fr-CD"), ("de-TP", "de-TL"),
     ("es-FX", "es-FR"), ("MN-cYRL-mn", "mn-Cyrl-MN"),
     ("en-Latn-GB-boont-r-extended-sequence-x-private",
@@ -208,8 +218,8 @@ def _build_fuzz_cases() -> list[str]:
             base[0] = "abcd"
         elif kind == 3:  # 9-character subtag in variant position
             base.append("abcdefghi")
-        elif kind == 4:  # unknown language code
-            base[0] = "qqa"
+        elif kind == 4:  # unknown language code outside the qaa..qtz range
+            base[0] = "qzx"
         elif kind == 5:  # unknown region
             base.insert(1, "ZZ")
         elif kind == 6:  # misplaced script after region
@@ -498,9 +508,9 @@ class Bcp47InterfaceTest(unittest.TestCase):
         self.assertEqual(sync, async_result)
 
     def test_table_sizes(self):
-        self.assertGreaterEqual(len(bcp47_module.LANGUAGES), 390)
+        self.assertGreaterEqual(len(bcp47_module.LANGUAGES), 280)
         self.assertGreaterEqual(len(bcp47_module.REGIONS), 250)
-        self.assertGreaterEqual(len(bcp47_module.SCRIPTS), 150)
+        self.assertGreaterEqual(len(bcp47_module.SCRIPTS), 220)
         self.assertGreaterEqual(len(bcp47_module.VARIANTS), 40)
         self.assertEqual(len(bcp47_module.GRANDFATHERED), 26)
         self.assertGreaterEqual(len(bcp47_module.EXTLANGS), 15)
@@ -540,6 +550,193 @@ class Bcp47RegistrationTest(unittest.TestCase):
     def test_package_export(self):
         from agentuniverse.agent.action.tool.common_tool import Bcp47Tool as Exported
         self.assertIs(Exported, Bcp47Tool)
+
+
+class Bcp47SelfReviewRegressionTest(unittest.TestCase):
+    """Regressions found by the hostile self-review differential probes
+    against the live IANA language subtag registry (RFC 5646 section 2.2
+    incorporation rules) and RFC 4647's ASCII-only case-insensitive matching."""
+
+    def setUp(self):
+        self.tool = Bcp47Tool()
+
+    def _warnings(self, tag):
+        return [w["code"] for w in self.tool.execute(mode="validate", tag=tag)["warnings"]]
+
+    def _errors(self, tag):
+        return [e["code"] for e in self.tool.execute(mode="validate", tag=tag)["errors"]]
+
+    # -- registry-fidelity: languages ------------------------------------
+    def test_tl_is_not_deprecated(self):
+        # The registry record for 'tl' carries no Deprecated or
+        # Preferred-Value field; the old tl->fil mapping was fabricated.
+        self.assertNotIn("deprecated_subtag", self._warnings("tl"))
+        self.assertEqual(self.tool.execute(mode="canonicalize", tag="tl")["canonical"], "tl")
+
+    def test_sh_is_not_deprecated(self):
+        # 'sh' is an active registry macrolanguage (sr/hr/bs preferred by
+        # comment only); no redundant 'sh' record with Preferred-Value exists.
+        self.assertNotIn("deprecated_subtag", self._warnings("sh"))
+        result = self.tool.execute(mode="validate", tag="sh")
+        self.assertNotIn("redundant_tag", [w["code"] for w in result["warnings"]])
+        self.assertEqual(self.tool.execute(mode="canonicalize", tag="sh-CH")["canonical"], "sh-CH")
+
+    def test_bh_preferred_value_is_bih(self):
+        # Registry: bh Preferred-Value is the 'bih' macrolanguage, not 'bho'.
+        self.assertEqual(self.tool.execute(mode="canonicalize", tag="bh")["canonical"], "bih")
+
+    # -- registry-fidelity: grandfathered ----------------------------------
+    def test_cel_gaulish_has_no_preferred_value(self):
+        # Since the 2015-03-29 registry revision cel-gaulish is deprecated
+        # with no Preferred-Value (Comments: see xcg, xga, xtg).
+        result = self.tool.execute(mode="validate", tag="cel-gaulish")
+        self.assertTrue(result["valid"])
+        self.assertEqual(
+            self.tool.execute(mode="canonicalize", tag="cel-gaulish")["canonical"],
+            "cel-gaulish",
+        )
+
+    def test_i_enochian_has_no_preferred_value(self):
+        self.assertEqual(
+            self.tool.execute(mode="canonicalize", tag="i-enochian")["canonical"],
+            "i-enochian",
+        )
+        # 'enochian' itself is no longer a registered language subtag.
+        self.assertIn("unknown_language", self._errors("enochian-AQ"))
+
+    # -- registry-fidelity: redundant tags ----------------------------------
+    def test_fabricated_redundant_records_removed(self):
+        for tag in ("sh", "sl-rozaj-biske", "sl-rozaj-biske-1994", "hy-Latn-IT-arevela"):
+            result = self.tool.execute(mode="validate", tag=tag)
+            self.assertNotIn(
+                "redundant_tag", [w["code"] for w in result["warnings"]], tag
+            )
+        # Real redundant records still report.
+        result = self.tool.execute(mode="validate", tag="zh-cmn")
+        self.assertIn("redundant_tag", [w["code"] for w in result["warnings"]])
+
+    # -- registry-fidelity: regions -----------------------------------------
+    def test_uk_is_not_a_registry_region(self):
+        result = self.tool.execute(mode="validate", tag="en-UK")
+        self.assertIn("unknown_region", [e["code"] for e in result["errors"]])
+        self.assertFalse(result["valid"])
+        self.assertEqual(
+            self.tool.execute(mode="canonicalize", tag="en-UK")["canonical"], "en-UK"
+        )
+
+    def test_registry_deprecated_regions(self):
+        # AN/CS/NT/SU/YU/YD are real deprecated regions: valid, warned, and
+        # only rewritten when the registry records a preferred value (YD->YE).
+        for tag in ("ru-SU", "ru-AN", "ru-CS", "ru-NT", "ru-YU"):
+            result = self.tool.execute(mode="validate", tag=tag)
+            self.assertTrue(result["valid"], tag)
+            self.assertIn("deprecated_subtag", self._warnings(tag), tag)
+        self.assertEqual(
+            self.tool.execute(mode="canonicalize", tag="en-YD")["canonical"], "en-YE"
+        )
+        self.assertEqual(
+            self.tool.execute(mode="canonicalize", tag="en-BU")["canonical"], "en-MM"
+        )
+
+    # -- registry-fidelity: extlang prefixes --------------------------------
+    def test_sign_language_extlang_prefixes(self):
+        # csl/dsl/fsl/gsg/jsl are registered with Prefix 'sgn' (fold under
+        # sgn), not under zh/da/fr/de/ja.
+        self.assertEqual(self.tool.execute(mode="canonicalize", tag="sgn-csl")["canonical"], "csl")
+        self.assertEqual(self.tool.execute(mode="canonicalize", tag="sgn-jsl")["canonical"], "jsl")
+        self.assertIn("extlang_prefix", self._warnings("zh-csl"))
+        self.assertIn("extlang_prefix", self._warnings("da-dsl"))
+        self.assertNotIn("extlang_prefix", self._warnings("sgn-dsl"))
+
+    # -- registry-fidelity: suppress-script ---------------------------------
+    def test_suppress_script_values_match_registry(self):
+        for tag in ("ka-Geor", "ja-Jpan", "ko-Kore", "he-Hebr", "yi-Hebr", "iw-Hebr"):
+            self.assertIn("suppressed_script", self._warnings(tag), tag)
+        # Registry has NO Suppress-Script for these: never warn.
+        for tag in ("uz-Latn", "br-Latn", "ky-Cyrl", "chr-Cher", "sd-Arab", "tg-Cyrl"):
+            self.assertNotIn("suppressed_script", self._warnings(tag), tag)
+        # Script subtags that are merely unknown must stay errors.
+        self.assertNotIn("suppressed_script", self._warnings("ka-Kat"))
+
+    def test_hebr_and_kore_scripts_are_registered(self):
+        for tag in ("he-Hebr", "yi-Hebr", "ko-Kore"):
+            self.assertTrue(self.tool.execute(mode="validate", tag=tag)["valid"], tag)
+
+    # -- registry-fidelity: scripts and variants -----------------------------
+    def test_yi_script_code_is_yiii(self):
+        # ISO 15924/registry code is 'Yiii'; the old 'Yii' row was fabricated.
+        # ('Qaai' now lands in the Qaaa..Qabx private-use script range, so use
+        # an unregistered code outside that range for the unknown case.)
+        self.assertIn("unknown_script", self._errors("zh-Abcd"))
+        self.assertTrue(self.tool.execute(mode="validate", tag="zh-Yiii")["valid"])
+
+    def test_fabricated_variants_removed(self):
+        for tag in ("fr-1609nict", "xtg-cisauptr"):
+            self.assertIn("unknown_variant", self._errors(tag), tag)
+
+    def test_arevela_arevmda_deprecation_warnings(self):
+        for tag in ("hy-arevela", "hy-arevmda"):
+            self.assertIn("deprecated_subtag", self._warnings(tag), tag)
+        # No preferred value registered: canonical form keeps the variant.
+        self.assertEqual(
+            self.tool.execute(mode="canonicalize", tag="hy-arevela")["canonical"],
+            "hy-arevela",
+        )
+
+    # -- RFC 5646 2.2.1: only the 639-1 code is registered ------------------
+    def test_iso639_2_codes_are_not_valid_subtags(self):
+        for tag in ("zho-CN", "eng-US", "fra-FR", "chi-CN", "ger-DE"):
+            result = self.tool.execute(mode="validate", tag=tag)
+            self.assertTrue(result["well_formed"], tag)
+            self.assertFalse(result["valid"], tag)
+            self.assertIn("unknown_language", [e["code"] for e in result["errors"]], tag)
+
+    # -- RFC 5646 2.2 private-use ranges ------------------------------------
+    def test_private_use_ranges_are_valid(self):
+        for tag in ("qaa", "qaa-ZZ", "qtz", "zh-Hans-XQ", "qaa-Qaaa", "en-Qabx"):
+            result = self.tool.execute(mode="validate", tag=tag)
+            self.assertTrue(result["well_formed"], tag)
+            self.assertTrue(result["valid"], f"{tag}: {result['errors']}")
+            self.assertIn("private_use_range", self._warnings(tag), tag)
+
+    # -- ASCII-only case-insensitivity ---------------------------------------
+    def test_kelvin_sign_is_not_ascii_k(self):
+        kelvin = "K\u212a"
+        # Validate: a Kelvin sign is an invalid character everywhere, and must
+        # never be mistaken for the 'k' of a grandfathered tag.
+        result = self.tool.execute(mode="validate", tag=f"i-{kelvin}lingon")
+        self.assertFalse(result["well_formed"])
+        self.assertNotEqual(result["type"], "grandfathered")
+        self.assertIn("invalid_characters", [e["code"] for e in result["errors"]])
+        self.assertEqual(
+            self.tool.execute(mode="canonicalize", tag=f"i-{kelvin}lingon")["status"],
+            "error",
+        )
+        # Match: RFC 4647 comparisons are ASCII case-insensitive only.
+        self.assertIsNone(
+            self.tool.execute(mode="match", tag=f"en-{kelvin}", range="en-k",
+                              mechanism="filtering")["matched"]
+        )
+        self.assertIsNone(
+            self.tool.execute(mode="match", tag="en-k", range=f"en-{kelvin}",
+                              mechanism="filtering")["matched"]
+        )
+        self.assertIsNone(
+            self.tool.execute(mode="match", tag=f"en-{kelvin}", range="en-k",
+                              mechanism="lookup")["matched"]
+        )
+        # Plain ASCII case folding still works.
+        self.assertEqual(
+            self.tool.execute(mode="match", tag="EN-gb", range="en-GB",
+                              mechanism="filtering")["matched"],
+            "EN-gb",
+        )
+
+    def test_fullwidth_and_circled_letters_rejected(self):
+        for tag in ("ｅｎ", "en-ＧＢ", "en-Ⓐ"):
+            result = self.tool.execute(mode="validate", tag=tag)
+            self.assertFalse(result["well_formed"], tag)
+            self.assertIn("invalid_characters", [e["code"] for e in result["errors"]], tag)
 
 
 if __name__ == "__main__":

@@ -18,9 +18,10 @@ from agentuniverse.agent.action.tool.tool import Tool
 # ---------------------------------------------------------------------------
 # Embedded curated registry tables (frozen at import time).
 #
-# Sources: IANA Language Subtag Registry (curated subset), ISO 639-1/-2/-3,
-# ISO 15924, ISO 3166-1 alpha-2 plus common UN M.49 numeric regions, and the
-# RFC 5646 grandfathered tag list. Descriptions are informational.
+# Sources: IANA Language Subtag Registry (curated subset; the script table is
+# complete), ISO 639-1/-3 as incorporated into that registry, ISO 15924,
+# ISO 3166-1 alpha-2 plus common UN M.49 numeric regions, and the RFC 5646
+# grandfathered tag list. Descriptions are informational.
 # ---------------------------------------------------------------------------
 
 
@@ -77,8 +78,11 @@ def _tagged(text: str) -> MappingProxyType:
     return MappingProxyType(table)
 
 
-# Curated ISO 639-1/-2/-3 primary language subtags (~400 common entries,
-# including registered 5-8 letter subtags and deprecated ISO 639-1 codes).
+# Curated primary language subtags, restricted to codes registered in the
+# IANA language subtag registry. Per RFC 5646 section 2.2.1, when a language
+# has both an ISO 639-1 code and a three-letter code, only the ISO 639-1
+# code is registered (so 'zho'/'eng'/'fra' style codes are NOT valid BCP 47
+# subtags and are deliberately absent).
 _LANGUAGES_TEXT = """
 aa Afar
 ab Abkhazian
@@ -95,7 +99,8 @@ az Azerbaijani
 ba Bashkir
 be Belarusian
 bg Bulgarian
-bh Bihari languages (deprecated macrolanguage)
+bh Bihari languages (deprecated ISO 639-1; use bih)
+bih Bihari languages (macrolanguage)
 bi Bislama
 bm Bambara
 bn Bengali
@@ -227,7 +232,7 @@ sc Sardinian
 sd Sindhi
 se Northern Sami
 sg Sango
-sh Serbo-Croatian (deprecated; use sr-Latn or sr-Cyrl)
+sh Serbo-Croatian (active registry macrolanguage; sr, hr, or bs preferred for most modern uses)
 si Sinhala
 sk Slovak
 sl Slovenian
@@ -245,7 +250,7 @@ tg Tajik
 th Thai
 ti Tigrinya
 tk Turkmen
-tl Tagalog (deprecated; preferred value fil)
+tl Tagalog
 tn Tswana
 to Tongan
 tr Turkish
@@ -291,7 +296,6 @@ vgt Flemish Sign Language
 sgg Swiss German Sign Language
 jbo Lojban
 tlh Klingon
-enochian Enochian
 xtg Transalpine Gaulish
 ami Amis
 bnn Bunun
@@ -349,7 +353,6 @@ pms Piedmontese
 nap Neapolitan
 scn Sicilian
 szl Silesian
-srd Sardinian
 dsb Lower Sorbian
 hsb Upper Sorbian
 krl Karelian
@@ -381,102 +384,6 @@ swh Swahili (specific code)
 und Undetermined (special subtag)
 mul Multiple languages (special subtag)
 zxx No linguistic content (special subtag)
-afr Afrikaans T-code
-amh Amharic T-code
-ara Arabic T-code
-aze Azerbaijani T-code
-bak Bashkir T-code
-bel Belarusian T-code
-ben Bengali T-code
-bos Bosnian T-code
-bul Bulgarian T-code
-cat Catalan T-code
-ces Czech T-code
-cym Welsh T-code
-dan Danish T-code
-deu German T-code
-ell Greek T-code
-eng English T-code
-epo Esperanto T-code
-est Estonian T-code
-eus Basque T-code
-fas Persian T-code
-fin Finnish T-code
-fra French T-code
-fry Western Frisian T-code
-gle Irish T-code
-glg Galician T-code
-guj Gujarati T-code
-hat Haitian Creole T-code
-hau Hausa T-code
-heb Hebrew T-code
-hin Hindi T-code
-hrv Croatian T-code
-hun Hungarian T-code
-hye Armenian T-code
-ibo Igbo T-code
-ind Indonesian T-code
-isl Icelandic T-code
-ita Italian T-code
-jpn Japanese T-code
-kan Kannada T-code
-kat Georgian T-code
-kaz Kazakh T-code
-khm Central Khmer T-code
-kir Kirghiz T-code
-kor Korean T-code
-kur Kurdish T-code
-lao Lao T-code
-lat Latin T-code
-lav Latvian T-code
-lit Lithuanian T-code
-ltz Luxembourgish T-code
-mal Malayalam T-code
-mar Marathi T-code
-mkd Macedonian T-code
-mlt Maltese T-code
-mon Mongolian T-code
-mri Maori T-code
-mya Burmese T-code
-nep Nepali T-code
-nld Dutch T-code
-nor Norwegian T-code
-pan Panjabi T-code
-pol Polish T-code
-por Portuguese T-code
-pus Pashto T-code
-ron Romanian T-code
-rus Russian T-code
-sin Sinhala T-code
-slk Slovak T-code
-slv Slovenian T-code
-som Somali T-code
-spa Spanish T-code
-srp Serbian T-code
-tam Tamil T-code
-tat Tatar T-code
-tel Telugu T-code
-tgk Tajik T-code
-tha Thai T-code
-tuk Turkmen T-code
-tur Turkish T-code
-uig Uyghur T-code
-ukr Ukrainian T-code
-urd Urdu T-code
-uzb Uzbek T-code
-vie Vietnamese T-code
-yid Yiddish T-code
-zho Chinese T-code
-zul Zulu T-code
-ger German B-code
-gre Greek B-code
-fre French B-code
-ice Icelandic B-code
-rum Romanian B-code
-arm Armenian B-code
-geo Georgian B-code
-dut Dutch B-code
-chi Chinese B-code
 """
 
 # Registered extlang subtags (curated): code, description, prefix, fold_to.
@@ -493,16 +400,18 @@ arb Standard Arabic ar arb
 ase American Sign Language sgn ase
 bfi British Sign Language sgn bfi
 bzs Brazilian Sign Language sgn bzs
-csl Chinese Sign Language zh csl
-dsl Danish Sign Language da dsl
-fsl French Sign Language fr fsl
-gsg German Sign Language de gsg
-jsl Japanese Sign Language ja jsl
+csl Chinese Sign Language sgn csl
+dsl Danish Sign Language sgn dsl
+fsl French Sign Language sgn fsl
+gsg German Sign Language sgn gsg
+jsl Japanese Sign Language sgn jsl
 """
 
 # Curated ISO 15924 script codes (full common list).
 _SCRIPTS_TEXT = """
 Adlm Adlam script
+Afak Afaka
+Aghb Caucasian Albanian
 Ahom Ahom script
 Arab Arabic script
 Aran Arabic (Nastaliq variant) script
@@ -514,8 +423,10 @@ Bamu Bamum script
 Bass Bassa Vah script
 Batk Batak script
 Beng Bengali script
+Berf Beria Erfe
 Bhks Bhaiksuki script
 Blis Blissymbols
+Bopo Bopomofo
 Brah Brahmi script
 Brai Braille script
 Bugi Buginese script
@@ -525,10 +436,14 @@ Cans Unified Canadian Aboriginal Syllabics script
 Cari Carian script
 Cham Cham script
 Cher Cherokee script
+Chis Chisoi
 Chrs Chorasmian script
+Cirt Cirth
 Copt Coptic script
+Cpmn Cypro-Minoan
 Cprt Cypriot script
 Cyrl Cyrillic script
+Cyrs Cyrillic (Old Church Slavonic variant)
 Deva Devanagari (Nagari) script
 Diak Dives Akuru script
 Dogr Dogra script
@@ -540,36 +455,51 @@ Egyp Egyptian hieroglyphs
 Elba Elbasan script
 Elym Elymaic script
 Ethi Ethiopic (Ge'ez) script
+Gara Garay
+Geok Khutsuri (Asomtavruli and Nuskhuri)
 Geor Georgian (Mkhedruli) script
 Glag Glagolitic script
+Gong Gunjala Gondi
+Gonm Masaram Gondi
 Goth Gothic script
 Gran Grantha script
 Grek Greek script
 Gujr Gujarati script
+Gukh Gurung Khema
 Guru Gurmukhi script
+Hanb Han with Bopomofo (alias for Han + Bopomofo)
 Hang Hangul script
 Hani Han (Hanzi, Kanji, Hanja) script
 Hano Hanunoo script
 Hans Han (Simplified variant) script
 Hant Han (Traditional variant) script
 Hatr Hatran script
-Hegr Hegran script
+Hebr Hebrew
 Hira Hiragana script
 Hluw Anatolian Hieroglyphs (Luwian) script
 Hmng Pahawh Hmong script
 Hmnp Nyiakeng Puachue Hmong script
+Hntl Han (Traditional variant) with Latin (alias for Hant + Latn)
 Hrkt Japanese syllabaries (alias for Hiragana + Katakana)
 Hung Old Hungarian (Hungarian Runic) script
+Inds Indus
 Ital Old Italic (Etruscan, Oscan) script
+Jamo Jamo (alias for Jamo subset of Hangul)
+Java Javanese
 Jpan Japanese (Han + Hiragana + Katakana) script
 Jurc Jurchen script
 Kali Kayah Li script
 Kana Katakana script
+Kawi Kawi
 Khar Kharoshthi script
 Khmr Khmer script
 Khoj Khojki script
-Khit Khitan large script
+Kitl Khitan large script
+Kits Khitan small script
 Knda Kannada script
+Kore Korean (alias for Hangul + Han)
+Kpel Kpelle
+Krai Kirat Rai
 Kthi Kaithi script
 Lana Tai Tham (Lanna) script
 Laoo Lao script
@@ -578,6 +508,7 @@ Latg Latin (Gaelic variant) script
 Latn Latin script
 Leke Lek Domaing script
 Lepc Lepcha (Rong) script
+Limb Limbu
 Lina Linear A script
 Linb Linear B script
 Lisu Lisu (Fraser) script
@@ -585,10 +516,11 @@ Loma Loma script
 Lyci Lycian script
 Lydi Lydian script
 Mahj Mahajani script
-Makr Mandaic (Malkite variant) script
+Maka Makasar
 Mand Mandaic script
 Mani Manichaean script
 Marc Marchen script
+Maya Mayan hieroglyphs
 Medf Medefaidrin script
 Mend Mende Kikakui script
 Merc Meroitic Cursive script
@@ -596,10 +528,12 @@ Mero Meroitic Hieroglyphs script
 Mlym Malayalam script
 Modi Modi script
 Mong Mongolian (Hudum Mongolian) script
+Moon Moon
 Mroo Mro script
 Mtei Meetei Mayek script
 Mult Multani script
 Mymr Myanmar (Burmese) script
+Nagm Nag Mundari
 Nand Nandinagari script
 Narb Old North Arabian (Ancient North Arabian) script
 Nbat Nabataean script
@@ -610,20 +544,27 @@ Nkoo N'Ko script
 Nshu Nushu script
 Ogam Ogham script
 Olck Ol Chiki script
+Onao Ol Onal
 Orkh Old Turkic (Orkhon Runic) script
 Orya Oriya script
 Osge Osage script
 Osma Osmanya script
+Ougr Old Uyghur
 Palm Palmyrene script
 Pauc Pau Cin Hau script
+Pcun Proto-Cuneiform
+Pelm Proto-Elamite
 Perm Old Permic script
 Phag Phags-pa script
 Phli Inscriptional Pahlavi script
 Phlp Psalter Pahlavi script
 Phlv Book Pahlavi script
 Phnx Phoenician script
+Piqd Klingon (KLI pIqaD)
 Plrd Miao (Pollard) script
 Prti Inscriptional Parthian script
+Psin Proto-Sinaitic
+Ranj Ranjana
 Rjng Rejang script
 Rohg Hanifi Rohingya script
 Roro Rongorongo script
@@ -632,10 +573,13 @@ Samr Samaritan script
 Sara Sarati script
 Sarb Old South Arabian script
 Saur Saurashtra script
+Seal Seal
 Sgnw SignWriting script
 Shaw Shavian (Shaw) script
 Shrd Sharada script
+Shui Shuishu
 Sidd Siddham script
+Sidt Sidetic
 Sind Khudawadi script
 Sinh Sinhala script
 Sogd Sogdian script
@@ -643,8 +587,10 @@ Sogo Old Sogdian script
 Sora Sora Sompeng script
 Soyo Soyombo script
 Sund Sundanese script
+Sunu Sunuwar
 Sylo Syloti Nagri script
 Syrc Syriac script
+Syre Syriac (Estrangelo variant)
 Syrj Syriac (Western variant) script
 Syrn Syriac (Eastern variant) script
 Tagb Tagbanwa script
@@ -654,7 +600,9 @@ Talu New Tai Lue script
 Taml Tamil script
 Tang Tangut script
 Tavt Tai Viet script
+Tayo Tai Yo
 Telu Telugu script
+Teng Tengwar
 Tfng Tifinagh (Berber) script
 Tglg Tagalog script
 Thaa Thaana script
@@ -662,9 +610,13 @@ Thai Thai script
 Tibt Tibetan script
 Tirh Tirhuta script
 Tnsa Tangsa script
+Todr Todhri
+Tols Tolong Siki
 Toto Toto script
+Tutg Tulu-Tigalari
 Ugar Ugaritic script
 Vaii Vai script
+Visp Visible Speech
 Vith Vithkuqi script
 Wara Warang Citi script
 Wcho Wancho script
@@ -672,12 +624,15 @@ Wole Woleai script
 Xpeo Old Persian cuneiform script
 Xsux Sumero-Akkadian cuneiform script
 Yezi Yezidi script
-Yii Yi script
+Yiii Yi script
 Zanb Zanabazar Square script
 Zinh Inherited script
 Zmth Mathematical notation
 Zsym Symbols
 Zsye Emoji symbols
+Zxxx Code for unwritten documents
+Zyyy Code for undetermined script
+Zzzz Code for uncoded script
 """
 
 # Curated ISO 3166-1 alpha-2 regions plus common UN M.49 numeric regions and
@@ -931,14 +886,17 @@ YT Mayotte
 ZA South Africa
 ZM Zambia
 ZW Zimbabwe
-UK United Kingdom (deprecated; use GB)
 BU Burma (deprecated; use MM)
 TP East Timor (deprecated; use TL)
 ZR Zaire (deprecated; use CD)
 DD German Democratic Republic (deprecated; use DE)
 FX France, Metropolitan (deprecated; use FR)
-HV Upper Volta (deprecated; use BF)
-RH Rhodesia (deprecated; use ZW)
+AN Netherlands Antilles (deprecated, no preferred value)
+CS Serbia and Montenegro (deprecated, no preferred value)
+NT Neutral Zone (deprecated, no preferred value)
+SU Soviet Union (deprecated, no preferred value)
+YD Democratic Yemen (deprecated; use YE)
+YU Yugoslavia (deprecated, no preferred value)
 001 World
 002 Africa
 003 North America
@@ -973,7 +931,6 @@ RH Rhodesia (deprecated; use ZW)
 
 # Curated registered variant subtags (common subset of the IANA registry).
 _VARIANTS_TEXT = """
-1609nict French as used before the 17th century codification
 1694acad French as codified by the Academie in 1694
 1901 German orthography of 1901 (traditional)
 1994 Resian orthography of 1994
@@ -986,7 +943,6 @@ asante Akan, Asante (Ashanti) dialect
 biske Resian, Biske dialect
 bohoric Bohoric alphabet
 boont Boontling
-cisauptr Cisalpine Gaulish (orthography)
 dajnko Dajnko alphabet
 emodeng Early Modern English
 fonipa IPA phonetic notation
@@ -1019,33 +975,46 @@ vivaraup Vivaro-Alpine Occitan
 wadegile Wade-Giles romanization
 """
 
-# Preferred-value substitutions for deprecated language/region/script/variant
-# subtags (curated from the IANA registry). Language values may carry an
-# injected script part ('sh' -> 'sr' + 'Latn' when no script is present).
+# Preferred-value substitutions for deprecated language/region/variant
+# subtags (curated from the IANA registry). Every entry below is verified
+# against the live registry: the subtag is actually deprecated there and the
+# preferred value matches the record's Preferred-Value field ('' = the
+# registry deprecates the subtag without registering a replacement).
 _DEPRECATED_LANG = {
     "in": ("id", ""),
     "iw": ("he", ""),
     "ji": ("yi", ""),
     "jw": ("jv", ""),
     "mo": ("ro", ""),
-    "bh": ("bho", ""),
-    "tl": ("fil", ""),
-    "scc": ("sr", ""),
-    "scr": ("hr", ""),
-    "sh": ("sr", "Latn"),
+    "bh": ("bih", ""),
 }
 _DEPRECATED_REGION = {
-    "UK": "GB",
     "BU": "MM",
     "TP": "TL",
     "ZR": "CD",
     "DD": "DE",
     "FX": "FR",
-    "HV": "BF",
-    "RH": "ZW",
+    "YD": "YE",
 }
-_DEPRECATED_SCRIPT = {"Qaai": "Zinh"}
-_DEPRECATED_VARIANT = {"heploc": "alalc97"}
+# Deprecated region codes the registry keeps WITHOUT a preferred value.
+_DEPRECATED_REGION_NO_PREFERRED = frozenset({"AN", "CS", "NT", "SU", "YU"})
+_DEPRECATED_VARIANT = {
+    "heploc": "alalc97",
+    "arevela": "",
+    "arevmda": "",
+}
+
+# RFC 5646 section 2.2 reserves these subtag ranges for private use; subtags
+# in them are usable in valid tags without registration (section 2.2.1
+# rule 3 for languages, section 2.2.3 rule 3 for scripts, section 2.2.4
+# rule 3 for regions).
+_PRIVATE_USE_LANG_RANGE = ("qaa", "qtz")
+_PRIVATE_USE_SCRIPT_RANGE = ("Qaaa", "Qabx")
+_PRIVATE_USE_REGIONS = frozenset(
+    {"AA", "ZZ"}
+    | {f"Q{letter}" for letter in "MNOPQRSTUVWXYZ"}
+    | {f"X{letter}" for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
+)
 
 # RFC 5646 grandfathered (irregular + regular) tags with registry
 # Preferred-Values ('-' marks no preferred value registered).
@@ -1054,7 +1023,7 @@ en-GB-oed English, Oxford English Dictionary spelling (deprecated; use en-GB-oxe
 i-ami Amis (deprecated; use ami) ami
 i-bnn Bunun (deprecated; use bnn) bnn
 i-default Default Language (RFC 2277) -
-i-enochian Enochian (deprecated; use enochian) enochian
+i-enochian Enochian (deprecated, no preferred value registered) -
 i-hak Hakka (deprecated; use hak) hak
 i-klingon Klingon (deprecated; use tlh) tlh
 i-lux Luxembourgish (deprecated; use lb) lb
@@ -1068,7 +1037,7 @@ sgn-BE-FR Belgian French Sign Language (deprecated; use sfb) sfb
 sgn-BE-NL Belgian Flemish Sign Language (deprecated; use vgt) vgt
 sgn-CH-DE Swiss German Sign Language (deprecated; use sgg) sgg
 art-lojban Lojban (deprecated; use jbo) jbo
-cel-gaulish Gaulish (deprecated; use xtg-x-cel-gaulish) xtg-x-cel-gaulish
+cel-gaulish Gaulish (deprecated, no preferred value registered; see xcg, xga, xtg) -
 no-bok Norwegian Bokmal (deprecated; use nb) nb
 no-nyn Norwegian Nynorsk (deprecated; use nn) nn
 zh-guoyu Mandarin Chinese, national language (deprecated; use cmn) cmn
@@ -1078,10 +1047,10 @@ zh-min-nan Min Nan Chinese (deprecated; use nan) nan
 zh-xiang Xiang Chinese (deprecated; use hsn) hsn
 """
 
-# Registered redundant complete tags (curated metadata subset). These are
-# well-formed tags registered as a unit under older RFCs; metadata only.
+# Registered redundant complete tags (curated metadata subset, each verified
+# present in the IANA registry as Type: redundant). These are well-formed
+# tags registered as a unit under older RFCs; metadata only.
 _REDUNDANT_TEXT = """
-sh Serbo-Croatian (deprecated registered tag; preferred value sr-Latn) sr-Latn
 sr-Cyrl Serbian, Cyrillic script (registered tag) -
 sr-Latn Serbian, Latin script (registered tag) -
 zh-Hans Chinese, Simplified Han script (registered tag) -
@@ -1098,38 +1067,58 @@ de-CH-1996 German, Switzerland, 1996 orthography (registered tag) -
 de-DE-1996 German, Germany, 1996 orthography (registered tag) -
 de-AT-1996 German, Austria, 1996 orthography (registered tag) -
 sl-rozaj Slovenian, Resian dialect (registered tag) -
-sl-rozaj-biske Slovenian, Resian, Biske dialect (registered tag) -
-sl-rozaj-biske-1994 Slovenian, Resian, Biske dialect, 1994 orthography (registered tag) -
 sl-nedis Slovenian, Natisone dialect (registered tag) -
-hy-Latn-IT-arevela Armenian, Latin script, Italy, Eastern (registered tag) -
 en-scouse English, Scouse dialect (registered tag) -
 es-419 Spanish, Latin America and the Caribbean (registered tag) -
 """
 
-# Registry Suppress-Script values for common primary languages: the script is
-# redundant for these languages (RFC 5646 section 4.1).
+# Registry Suppress-Script values (RFC 5646 section 4.1) for the primary
+# languages in the table above, transcribed from the IANA registry records.
+# Languages without a Suppress-Script field in their registry record are
+# deliberately absent: the warning must never fire without registry backing.
 _SUPPRESS_SCRIPT = {
-    "en": "Latn", "fr": "Latn", "de": "Latn", "es": "Latn", "it": "Latn",
-    "nl": "Latn", "pt": "Latn", "sv": "Latn", "da": "Latn", "fi": "Latn",
-    "et": "Latn", "lv": "Latn", "lt": "Latn", "pl": "Latn", "cs": "Latn",
-    "sk": "Latn", "sl": "Latn", "hr": "Latn", "bs": "Latn", "sq": "Latn",
-    "ro": "Latn", "hu": "Latn", "tr": "Latn", "id": "Latn", "ms": "Latn",
-    "sw": "Latn", "zu": "Latn", "af": "Latn", "ca": "Latn", "eu": "Latn",
-    "gl": "Latn", "is": "Latn", "mt": "Latn", "cy": "Latn", "vi": "Latn",
-    "so": "Latn", "ha": "Latn", "yo": "Latn", "ig": "Latn", "wo": "Latn",
-    "mg": "Latn", "ln": "Latn", "rn": "Latn", "lg": "Latn", "rw": "Latn",
-    "no": "Latn", "nb": "Latn", "nn": "Latn", "ga": "Latn", "gd": "Latn",
-    "br": "Latn", "fy": "Latn", "oc": "Latn", "sc": "Latn", "az": "Latn",
-    "uz": "Latn",
-    "ru": "Cyrl", "uk": "Cyrl", "bg": "Cyrl", "be": "Cyrl", "mk": "Cyrl",
-    "kk": "Cyrl", "ky": "Cyrl", "tg": "Cyrl",
-    "hy": "Armn", "ka": "Kat", "el": "Grek", "he": "Hebr", "yi": "Hebr",
-    "ar": "Arab", "fa": "Arab", "ur": "Arab", "ps": "Arab", "sd": "Arab",
-    "ug": "Arab", "dv": "Thaa", "th": "Thai", "lo": "Laoo", "km": "Khmr",
-    "my": "Mymr", "si": "Sinh", "am": "Ethi", "ti": "Ethi", "bn": "Beng",
-    "as": "Beng", "hi": "Deva", "mr": "Deva", "ne": "Deva", "ta": "Taml",
-    "kn": "Knda", "ml": "Mlym", "gu": "Gujr", "pa": "Guru", "or": "Orya",
-    "bo": "Tibt", "ja": "Kana", "chr": "Cher",
+    "ar": "Arab", "fa": "Arab", "ps": "Arab", "ur": "Arab",
+    "hy": "Armn",
+    "as": "Beng", "bn": "Beng",
+    "ab": "Cyrl", "be": "Cyrl", "bg": "Cyrl", "kk": "Cyrl", "mk": "Cyrl",
+    "ru": "Cyrl", "uk": "Cyrl",
+    "hi": "Deva", "kok": "Deva", "mai": "Deva", "mr": "Deva", "ne": "Deva",
+    "am": "Ethi", "ti": "Ethi",
+    "ka": "Geor",
+    "el": "Grek",
+    "gu": "Gujr",
+    "pa": "Guru",
+    "he": "Hebr", "iw": "Hebr", "yi": "Hebr",
+    "ja": "Jpan",
+    "km": "Khmr",
+    "kn": "Knda",
+    "ko": "Kore",
+    "lo": "Laoo",
+    "af": "Latn", "ay": "Latn", "bs": "Latn", "ca": "Latn", "ch": "Latn",
+    "cs": "Latn", "cy": "Latn", "da": "Latn", "de": "Latn", "dsb": "Latn",
+    "en": "Latn", "eo": "Latn", "es": "Latn", "et": "Latn", "eu": "Latn",
+    "fi": "Latn", "fj": "Latn", "fo": "Latn", "fr": "Latn", "fy": "Latn",
+    "ga": "Latn", "gl": "Latn", "gn": "Latn", "gsw": "Latn", "gv": "Latn",
+    "hr": "Latn", "hsb": "Latn", "ht": "Latn", "hu": "Latn", "id": "Latn",
+    "in": "Latn", "is": "Latn", "it": "Latn", "kl": "Latn", "la": "Latn",
+    "lb": "Latn", "ln": "Latn", "lt": "Latn", "lv": "Latn", "mg": "Latn",
+    "mh": "Latn", "mo": "Latn", "ms": "Latn", "mt": "Latn", "na": "Latn",
+    "nb": "Latn", "nd": "Latn", "nds": "Latn", "nl": "Latn", "nn": "Latn",
+    "no": "Latn", "nr": "Latn", "nso": "Latn", "ny": "Latn", "om": "Latn",
+    "pl": "Latn", "pt": "Latn", "qu": "Latn", "rm": "Latn", "rn": "Latn",
+    "ro": "Latn", "rw": "Latn", "sg": "Latn", "sk": "Latn", "sl": "Latn",
+    "so": "Latn", "sq": "Latn", "ss": "Latn", "st": "Latn", "sv": "Latn",
+    "sw": "Latn", "tl": "Latn", "tn": "Latn", "to": "Latn", "tr": "Latn",
+    "ts": "Latn", "ve": "Latn", "vi": "Latn", "xh": "Latn", "zu": "Latn",
+    "ml": "Mlym",
+    "my": "Mymr",
+    "or": "Orya",
+    "si": "Sinh",
+    "ta": "Taml",
+    "te": "Telu",
+    "dv": "Thaa",
+    "th": "Thai",
+    "dz": "Tibt",
 }
 
 # Registered extension singletons (IANA extensions registry, curated).
@@ -1153,7 +1142,7 @@ _LIKELY_REGIONS = {
     "da": ["DK"], "fi": ["FI"], "nb": ["NO"], "nn": ["NO"], "no": ["NO"],
     "is": ["IS"], "el": ["GR", "CY"], "he": ["IL"], "cs": ["CZ"],
     "sk": ["SK"], "sl": ["SI"], "hr": ["HR"], "sr": ["RS", "BA"],
-    "uk": ["UA"], "ro": ["RO", "MD"], "hu": ["HU"], "bg": "BG",
+    "uk": ["UA"], "ro": ["RO", "MD"], "hu": ["HU"], "bg": ["BG"],
     "ca": ["ES", "AD"], "eu": ["ES"], "gl": ["ES"], "hy": ["AM"],
     "ka": ["GE"], "az": ["AZ"], "kk": ["KZ"], "uz": ["UZ"], "mn": ["MN"],
     "sw": ["KE", "TZ"], "am": ["ET"], "ha": ["NG", "NE"], "yo": ["NG"],
@@ -1177,6 +1166,20 @@ REDUNDANT: MappingProxyType = _tagged(_REDUNDANT_TEXT)
 _ALPHA = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 _DIGIT = frozenset("0123456789")
 _ALNUM = _ALPHA | _DIGIT
+
+# RFC 5646 section 2.1: tags consist of ASCII letters and digits, and
+# case-insensitive comparison applies to the ASCII alphabet ONLY. Python's
+# str.lower() performs full Unicode case folding (e.g. U+212A KELVIN SIGN
+# folds to ASCII 'k'), which would wrongly equate non-ASCII look-alikes with
+# ASCII subtags, so all tag comparisons use this ASCII-only folding instead.
+_ASCII_LOWER_TABLE = str.maketrans(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"
+)
+
+
+def _ascii_lower(text: str) -> str:
+    """Case-fold only the ASCII letters A-Z, leaving other code points intact."""
+    return text.translate(_ASCII_LOWER_TABLE)
 
 # Error codes that break the RFC 5646 grammar (well_formed becomes False).
 # Registry-lookup failures (unknown_*) leave the tag well-formed but invalid.
@@ -1290,7 +1293,7 @@ class Bcp47Validator:
         if not tag:
             parsed.errors.append(_Finding("empty_input", "language tag is empty", "", 0, 0))
             return parsed
-        entry = GRANDFATHERED.get(tag.lower())
+        entry = GRANDFATHERED.get(_ascii_lower(tag))
         if entry is not None:
             return self._grandfathered(tag, entry, parsed)
         tokens = _tokenize(tag)
@@ -1451,6 +1454,18 @@ class Bcp47Validator:
                     token["end"],
                 )
         else:
+            if len(subtag) == 3 and _PRIVATE_USE_LANG_RANGE[0] <= normalized <= _PRIVATE_USE_LANG_RANGE[1]:
+                parsed.lang = subtag
+                self._add_warning(
+                    parsed,
+                    "private_use_range",
+                    f"language subtag '{subtag}' is in the 'qaa'..'qtz' private use range "
+                    "reserved by RFC 5646 section 2.2.1; usable without registration",
+                    subtag,
+                    token["start"],
+                    token["end"],
+                )
+                return
             if len(subtag) == 4:
                 message = (
                     f"language subtag '{subtag}' has 4 letters, a range reserved for "
@@ -1521,26 +1536,28 @@ class Bcp47Validator:
                         token["start"],
                         token["end"],
                     )
-                if form in _DEPRECATED_SCRIPT:
+            else:
+                if _PRIVATE_USE_SCRIPT_RANGE[0] <= form <= _PRIVATE_USE_SCRIPT_RANGE[1]:
+                    parsed.script = subtag
                     self._add_warning(
                         parsed,
-                        "deprecated_subtag",
-                        f"script '{form}' is deprecated; preferred value is "
-                        f"'{_DEPRECATED_SCRIPT[form]}'",
+                        "private_use_range",
+                        f"script subtag '{form}' is in the 'Qaaa'..'Qabx' private use "
+                        "range reserved by RFC 5646 section 2.2.3; usable without registration",
                         subtag,
                         token["start"],
                         token["end"],
                     )
-            else:
-                self._add_error(
-                    parsed,
-                    "unknown_script",
-                    f"script subtag '{subtag}' is not a known ISO 15924 script code",
-                    subtag,
-                    token["start"],
-                    token["end"],
-                )
-                parsed.script = subtag
+                else:
+                    self._add_error(
+                        parsed,
+                        "unknown_script",
+                        f"script subtag '{subtag}' is not a known ISO 15924 script code",
+                        subtag,
+                        token["start"],
+                        token["end"],
+                    )
+                    parsed.script = subtag
             index += 1
             token = tokens[index] if index < len(tokens) else None
         if token is None:
@@ -1562,16 +1579,39 @@ class Bcp47Validator:
                         token["start"],
                         token["end"],
                     )
+                elif form in _DEPRECATED_REGION_NO_PREFERRED:
+                    self._add_warning(
+                        parsed,
+                        "deprecated_subtag",
+                        f"region subtag '{form}' is deprecated and has no preferred value "
+                        "registered",
+                        subtag,
+                        token["start"],
+                        token["end"],
+                    )
             else:
-                self._add_error(
-                    parsed,
-                    "unknown_region",
-                    f"region subtag '{subtag}' is not a known ISO 3166-1 or UN M.49 region code",
-                    subtag,
-                    token["start"],
-                    token["end"],
-                )
-                parsed.region = subtag
+                if form in _PRIVATE_USE_REGIONS:
+                    parsed.region = subtag
+                    self._add_warning(
+                        parsed,
+                        "private_use_range",
+                        f"region subtag '{form}' is in a private use range reserved by "
+                        "RFC 5646 section 2.2.4 ('AA', 'QM'-'QZ', 'XA'-'XZ', 'ZZ'); "
+                        "usable without registration",
+                        subtag,
+                        token["start"],
+                        token["end"],
+                    )
+                else:
+                    self._add_error(
+                        parsed,
+                        "unknown_region",
+                        f"region subtag '{subtag}' is not a known ISO 3166-1 or UN M.49 region code",
+                        subtag,
+                        token["start"],
+                        token["end"],
+                    )
+                    parsed.region = subtag
             index += 1
         return index
 
@@ -1625,11 +1665,16 @@ class Bcp47Validator:
                     token["end"],
                 )
             elif normalized in _DEPRECATED_VARIANT:
+                preferred = _DEPRECATED_VARIANT[normalized]
+                tail = (
+                    f"preferred value is '{preferred}'"
+                    if preferred
+                    else "no preferred value is registered"
+                )
                 self._add_warning(
                     parsed,
                     "deprecated_subtag",
-                    f"variant subtag '{subtag}' is deprecated; preferred value is "
-                    f"'{_DEPRECATED_VARIANT[normalized]}'",
+                    f"variant subtag '{subtag}' is deprecated; {tail}",
                     subtag,
                     token["start"],
                     token["end"],
@@ -1907,7 +1952,7 @@ class Bcp47Tool(Tool):
                     "span": [0, len(tag)],
                 }
             )
-        redundant = REDUNDANT.get(tag.lower())
+        redundant = REDUNDANT.get(_ascii_lower(tag))
         if redundant is not None and parsed.tag_type == "langtag":
             result["registered_tag"] = "redundant"
             note = f"tag is registered as a redundant complete tag: {redundant['description']}"
@@ -1955,7 +2000,7 @@ class Bcp47Tool(Tool):
     def _canonical_text(self, tag: str, parsed: _Parsed) -> tuple[str, list[str]]:
         notes: list[str] = []
         if parsed.tag_type == "grandfathered":
-            entry = GRANDFATHERED[tag.lower()]
+            entry = GRANDFATHERED[_ascii_lower(tag)]
             if entry["preferred"]:
                 notes.append(
                     f"replaced grandfathered tag '{tag}' with preferred value '{entry['preferred']}'"
@@ -1963,13 +2008,15 @@ class Bcp47Tool(Tool):
                 inner = self._validator().validate(entry["preferred"])
                 text, _ = self._canonical_text(entry["preferred"], inner)
                 return text, notes
-            text = "-".join(part.lower() for part in tag.split("-"))
+            text = "-".join(_ascii_lower(part) for part in tag.split("-"))
             if text != tag:
                 notes.append("case-normalized the grandfathered tag")
             return text, notes
 
         if parsed.tag_type == "privateuse":
-            text = "-".join(_case_form(part, "privateuse") for part in tag.split("-"))
+            text = "-".join(
+                part if part == "x" else _ascii_lower(part) for part in tag.split("-")
+            )
             if text != tag:
                 notes.append("case-normalized private use subtags")
             return text, notes
@@ -1979,17 +2026,17 @@ class Bcp47Tool(Tool):
         language_key = language.lower()
         if language_key in _DEPRECATED_LANG:
             preferred, injected_script = _DEPRECATED_LANG[language_key]
-            if parsed.script:
-                notes.append(
-                    f"replaced deprecated language '{language}' with preferred value '{preferred}'"
-                )
-            else:
+            if injected_script and not parsed.script:
                 notes.append(
                     f"replaced deprecated language '{language}' with preferred value "
                     f"'{preferred}' and injected script '{injected_script}'"
                 )
                 parsed.script = injected_script
                 parsed.script_injected = True
+            else:
+                notes.append(
+                    f"replaced deprecated language '{language}' with preferred value '{preferred}'"
+                )
             language = preferred
         parts.append((_case_form(language, "language"), "language"))
 
@@ -2007,13 +2054,7 @@ class Bcp47Tool(Tool):
             parts.append((_case_form(extlang, "extlang"), "extlang"))
 
         if parsed.script:
-            form = _case_form(parsed.script, "script")
-            preferred = _DEPRECATED_SCRIPT.get(form, form)
-            if preferred != form and form.lower() == parsed.script.lower():
-                notes.append(
-                    f"replaced deprecated script '{form}' with preferred value '{preferred}'"
-                )
-            parts.append((preferred, "script"))
+            parts.append((_case_form(parsed.script, "script"), "script"))
         if parsed.region:
             region = _case_form(parsed.region, "region")
             if region in _DEPRECATED_REGION:
@@ -2029,10 +2070,16 @@ class Bcp47Tool(Tool):
             normalized = variant.lower()
             if normalized in _DEPRECATED_VARIANT:
                 preferred = _DEPRECATED_VARIANT[normalized]
-                notes.append(
-                    f"replaced deprecated variant '{normalized}' with preferred value '{preferred}'"
-                )
-                normalized = preferred
+                if preferred:
+                    notes.append(
+                        f"replaced deprecated variant '{normalized}' with preferred value "
+                        f"'{preferred}'"
+                    )
+                    normalized = preferred
+                else:
+                    notes.append(
+                        f"variant '{normalized}' is deprecated with no preferred value; kept"
+                    )
             if normalized in seen_variants:
                 notes.append(f"dropped duplicate variant '{normalized}'")
                 continue
@@ -2114,7 +2161,7 @@ class Bcp47Tool(Tool):
     @staticmethod
     def _basic_filtering(tag: str, ranges: list[str]) -> tuple[str | None, int | None, str | None, list[str]]:
         """RFC 4647 section 3.3.1 Basic Filtering against a single tag."""
-        lowered = tag.lower()
+        lowered = _ascii_lower(tag)
         notes: list[str] = []
         for position, item in enumerate(ranges):
             if item == "*":
@@ -2122,7 +2169,7 @@ class Bcp47Tool(Tool):
                     f"range {position} '*' matched any non-empty tag (RFC 4647 section 3.3.1)"
                 )
                 return tag, position, "*", notes
-            candidate = item.lower()
+            candidate = _ascii_lower(item)
             if lowered == candidate or lowered.startswith(candidate + "-"):
                 notes.append(
                     f"range {position} '{item}' matched tag '{tag}' by subtag-boundary prefix "
@@ -2136,7 +2183,7 @@ class Bcp47Tool(Tool):
     @staticmethod
     def _lookup(tag: str, ranges: list[str]) -> tuple[str | None, int | None, str | None, list[str]]:
         """RFC 4647 section 3.4 Lookup with progressive truncation (single tag)."""
-        lowered = tag.lower()
+        lowered = _ascii_lower(tag)
         notes: list[str] = []
         tried: list[str] = []
         for position, item in enumerate(ranges):
@@ -2152,7 +2199,7 @@ class Bcp47Tool(Tool):
                     continue
                 candidate = "-".join(candidate_parts)
                 tried.append(candidate)
-                if candidate.lower() == lowered:
+                if _ascii_lower(candidate) == lowered:
                     notes.append(
                         f"range {position} '{item}' matched tag '{tag}' via truncation "
                         f"to '{candidate}' (RFC 4647 section 3.4)"
@@ -2176,7 +2223,7 @@ class Bcp47Tool(Tool):
         related: list[str] = []
 
         if parsed.tag_type == "grandfathered":
-            entry = GRANDFATHERED[tag.lower()]
+            entry = GRANDFATHERED[_ascii_lower(tag)]
             breakdown.append(
                 {
                     "subtag": tag,

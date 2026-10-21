@@ -639,14 +639,19 @@ evidence, metadata, and links are untrusted data rather than agent instructions.
 
 `Bcp47Tool` validates, canonicalizes, matches, and explains RFC 5646 (BCP 47)
 language tags entirely offline. It embeds curated tables from the IANA language
-subtag registry and ISO standards: about 400 language subtags (ISO 639-1/-2/-3
-plus registered 5-8 letter codes), the ISO 15924 script list, about 280 region
-codes (ISO 3166-1 alpha-2 plus common UN M.49 numeric regions and deprecated
-legacy codes), a curated variant subset, extlang records with macrolanguage
-prefixes, the complete RFC 5646 grandfathered tag list with preferred values,
-registered redundant tags, Suppress-Script pairs, and extension singletons
-(u, t). All tables are frozen at import time; the tool is standard-library
-only and deterministic.
+subtag registry and ISO standards: about 300 registered language subtags (ISO
+639-1 and ISO 639-3 codes plus registered 5-8 letter codes; per RFC 5646
+section 2.2.1 the registry defines only the ISO 639-1 code when a language has
+both, so codes such as `zho`/`eng` are not accepted), the full ISO 15924
+script list from the registry, about 290 region codes (ISO 3166-1 alpha-2 plus
+common UN M.49 numeric regions and registry-deprecated legacy codes), a
+curated variant subset, extlang records with their registry Prefix values, the
+complete RFC 5646 grandfathered tag list with preferred values, registered
+redundant tags, registry Suppress-Script pairs, and extension singletons
+(u, t). The RFC 5646 section 2.2 private-use ranges (`qaa`-`qtz` languages,
+`Qaaa`-`Qabx` scripts, `AA`/`QM`-`QZ`/`XA`-`XZ`/`ZZ` regions) are accepted as
+valid without registration. All tables are frozen at import time; the tool is
+standard-library only and deterministic.
 
 ```python
 from agentuniverse.agent.action.tool.common_tool.bcp47_tool import Bcp47Tool
@@ -665,13 +670,15 @@ wrong-length subtag, and warnings such as redundant Suppress-Script pairs
 (`en-Latn`), deprecated subtags (`in`, `iw`), grandfathered tags with preferred
 values (`i-klingon` -> `tlh`), and case-form guidance. The `canonicalize`
 mode applies RFC 5646 case forms, preferred-value substitutions (`in`->`id`,
-`iw`->`he`, `ji`->`yi`, `sh`->`sr-Latn`), extlang folding (`zh-cmn-Hant` ->
-`cmn-Hant`), deprecated region/script/variant replacements, duplicate-variant
-removal, and alphabetical extension ordering. The `match` mode implements RFC
+`iw`->`he`, `ji`->`yi`, `bh`->`bih`), extlang folding (`zh-cmn-Hant` ->
+`cmn-Hant`, `sgn-csl` -> `csl`), deprecated region/variant replacements,
+duplicate-variant removal, and alphabetical extension ordering. The `match`
+mode implements RFC
 4647 Basic Filtering (subtag-boundary prefix match, `*` matches any non-empty
-tag) and Lookup (progressive truncation, `*` ranges skipped), case-insensitive
-throughout. The `explain` mode maps every subtag to its registry meaning and
-suggests related tags.
+tag) and Lookup (progressive truncation, `*` ranges skipped), ASCII
+case-insensitive throughout (non-ASCII look-alikes such as the Kelvin sign
+never match an ASCII letter). The `explain` mode maps every subtag to its
+registry meaning and suggests related tags.
 
 Unknown-but-well-formed subtags make a tag invalid while leaving it
 well-formed; grammar violations (empty parts, singletons in the language
