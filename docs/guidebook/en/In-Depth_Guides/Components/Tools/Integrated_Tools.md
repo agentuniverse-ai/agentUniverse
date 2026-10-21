@@ -634,3 +634,67 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## URL Query Tool
+
+`UrlQueryTool` edits the query string of a URL purely on the Python
+standard library with zero network access, while scheme, authority,
+path and fragment stay byte-for-byte identical. `set` mode
+adds-or-updates parameters from a `{key: value}` dict — values are
+coerced with a documented rule (`True`/`False` → `"true"`/`"false"`
+(checked before `int`, since `bool` is an `int` subclass), `int` /
+`float` via `str()`, `str` verbatim and never re-decoded); updating a
+key rewrites its first occurrence in place (order preserved) and
+unknown keys are appended. `delete` mode removes every occurrence of
+the given keys and reports missing ones; `rename` mode renames keys
+in place against the original key set simultaneously (`a→b` plus
+`b→c` does not cascade), a rename onto an existing key coexisting as
+an additional occurrence; `clear` mode drops the whole query
+including a dangling `?` while keeping the fragment; `sort` mode
+stable-sorts parameters by key — the ordering convention used to
+prepare OAuth signature base strings (the tool neither signs nor
+verifies); `toggle_bool` mode flips `&k=true` ↔ `&k=false`
+(case-insensitive, only the first occurrence of a repeated key) and
+adds absent keys as `k=true`. Repeated keys are never silently
+collapsed, empty values (`?a=&a`) and bare keys are preserved, and
+any url-shaped string is accepted — scheme-relative references and
+non-http schemes such as `ftp` included (`strict=True` additionally
+requires a scheme).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.url_query_tool import UrlQueryTool
+
+tool = UrlQueryTool()
+paged = tool.execute(mode="set", url="https://e.com/s?b=2",
+                     params={"page": 2, "ok": True})["url"]
+# -> "https://e.com/s?b=2&page=2&ok=true"
+tracked = tool.execute(mode="delete", url="https://e.com/s?uid=1&ref=x",
+                       keys=["uid"])["url"]
+renamed = tool.execute(mode="rename", url="https://e.com/s?old=1",
+                       mapping={"old": "new"})["url"]
+signed_prep = tool.execute(mode="sort",
+                           url="https://e.com/s?b=2&a=1&a=0")["url"]
+# -> "https://e.com/s?a=1&a=0&b=2"
+flag = tool.execute(mode="toggle_bool", url="https://e.com/s?debug=true",
+                    key="debug")["url"]
+# -> "https://e.com/s?debug=false"
+```
+
+Encoding round-trips: existing parameters are decoded with
+`urllib.parse` semantics and, with the default `encode=True`,
+re-encoded through `quote_plus` with `safe=''` — spaces become `+`,
+`&` / `=` / CJK / emoji are percent-encoded, and a literal `%` in a
+value is preserved as data (`"a%20b"` → `a%2520b`) so the output
+always decodes back to the same pairs. With `encode=False`, untouched
+parameters keep their original bytes and new keys / values are
+inserted raw for pre-encoded input; raw segments may not contain `&`
+/ `#` / whitespace (raw keys additionally not `=` / `?`). Inputs are
+validated strictly before any computation: malformed parameters
+(wrong types, unknown mode, missing `url`, empty `params` / `keys` /
+`mapping`, a rename mapping a key to itself, non-boolean `encode` /
+`strict`) raise a `ValueError`, while errors that depend on the URL
+or value content — whitespace or control characters, URLs
+`urllib.parse` itself rejects, a missing scheme under `strict=True`,
+non-`true`/`false` toggle values, and forbidden raw characters —
+return a structured `error` payload instead of raising. The tool
+performs no network I/O.
