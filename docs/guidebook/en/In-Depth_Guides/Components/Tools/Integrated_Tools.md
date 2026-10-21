@@ -634,3 +634,60 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Env Schema Tool
+
+`EnvSchemaTool` validates dotenv (`.env`) text against a *declared
+schema* of required variables — the contract-checking layer ("does my
+.env define everything the app needs, with the right types?"). It is
+built purely on the Python standard library, with zero network access,
+and operates purely on text (never the filesystem). Where `EnvFileTool`
+parses and edits dotenv files, this tool answers whether a file
+*conforms to an expected set of variables*: `check` mode takes `.env`
+text plus a schema mapping `VAR -> rule` (`required`, default `true`;
+`type` of `string`/`int`/`float`/`bool`/`url`/`email`/`path`; a string
+`default` injected as the effective value when the variable is absent;
+numeric `min`/`max`; an `enum` of allowed raw values) and reports
+`missing` variables (each with a paste-ready `VAR=<default>` injection
+suggestion), `applied_defaults` (defaults are themselves fully
+type/enum/bounds-checked), `extra` variables the file defines but the
+schema does not declare (with the defining line numbers — values are
+never shown), `type_mismatches` (`{var, expected, got,
+raw_value_preview}`) and `violations` (enum/min/max), plus `passed` —
+false only when a required variable is missing without a default or a
+mismatch/violation occurred; missing optional variables and extras
+never fail the check. `suggest_schema` bootstraps the workflow by
+inferring a check-compatible schema from an existing `.env` (int,
+float, bool, url, email then string; `inferred_enum` when a variable
+holds 2–4 distinct values across duplicate occurrences).
+`diff` compares two `.env` texts (e.g. prod vs staging) reporting
+`only_in_a` / `only_in_b` / `value_diffs` and `count`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.env_schema_tool import EnvSchemaTool
+
+tool = EnvSchemaTool()
+report = tool.execute(mode="check", text=env_file_text, schema={
+    "API_HOST": {"type": "string"},
+    "API_PORT": {"type": "int", "default": "8080", "min": 1, "max": 65535},
+    "LOG_LEVEL": {"enum": ["debug", "info", "warn"]},
+})
+report["passed"], report["missing"], report["type_mismatches"]
+schema = tool.execute(mode="suggest_schema", text=env_file_text)["schema"]
+tool.execute(mode="diff", text=prod_text, text_b=staging_text)["count"]
+```
+
+Values of secret-ish variables (names containing `KEY`, `SECRET`,
+`PASSWORD` or `TOKEN`, case-insensitive) are never echoed: previews,
+diff entries and samples become `***`, and `suggest_schema` omits enum
+candidates for them entirely. Type coercion is a documented contract:
+`int` accepts plain decimal (optional sign); `float` accepts plain
+decimal/exponent forms (no `inf`/`nan`/hex); `bool` accepts
+`true`/`false`/`1`/`0`/`yes`/`no` case-insensitively; `url` requires a
+scheme and a host; `email` uses the `EmailValidatorTool` dot-atom
+profile; `path` requires a non-empty single-line value without control
+characters. Value parsing follows dotenv rules (quotes, `export`
+prefixes, inline comments, last-wins duplicates) consistent with
+`EnvFileTool`. Malformed parameters (including schema shape errors that
+always name the variable) raise `ValueError` before any computation;
+unterminated quotes are structured `error` payloads.
