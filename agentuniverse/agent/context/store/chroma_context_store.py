@@ -459,11 +459,8 @@ class ChromaContextStore(ContextStore):
             return 0
 
         try:
-            results = self._collection.get(
-                where={"session_id": session_id},
-                limit=1  # We only need count, not data
-            )
-            return self._collection.count()
+            results = self._collection.get(where={"session_id": session_id})
+            return len(results.get("ids") or [])
         except Exception:
             return 0
 
