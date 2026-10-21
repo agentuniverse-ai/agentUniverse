@@ -634,3 +634,60 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Indent Lint Tool
+
+`IndentLintTool` audits the indentation layer of Python source text: tab and
+space discipline, block consistency, PEP 8 conformance, statistics, semantics-
+preserving conversion, and per-line explanation. It runs in four modes:
+`lint`, `stats`, `convert`, and `explain`, all stdlib-only (`compile`, `ast`,
+`tokenize`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.indent_lint_tool import IndentLintTool
+
+tool = IndentLintTool()
+result = tool.execute(
+    mode="lint",
+    source="def f():\n    x = 1\n\ty = 2\n",
+)
+```
+
+`lint` returns findings `[{line, col, code, message, severity}]`. The
+authoritative oracle is `compile()` itself: every `IndentationError` /
+`TabError` is mirrored with the interpreter's own line, column, and message
+(`E_EXPECTED_INDENT`, `E_UNEXPECTED_INDENT`, `E_UNINDENT_MISMATCH`,
+`E_TAB_INCONSISTENT`). The interpreter reports `expected an indented block`
+on the line after the offending block opener and embeds the opener's line in
+the message; mirrored columns are the interpreter's own offsets. Consistency
+findings never claim breakage: mixed tab/space lines, tab lines in a
+space-majority file (and vice versa), space indents that are not multiples of
+the inferred step (the classic 3-space copy-paste), trailing whitespace,
+whitespace-only blank lines, dedents to visual levels that only the
+interpreter's hard-coded 8-column tab stops accept, form feeds (legal at line
+start), CRLF or mixed line endings, and a leading BOM. Continuation lines
+(bracket or backslash) and comment lines have free indentation — the
+interpreter accepts any leading whitespace there — so they are only ever
+reported as stylistic notes, and multi-line string content is never mistaken
+for indentation.
+
+`stats` returns total/blank/indented/tab/space/mixed line counts, the
+inferred style and step, continuation-line and string-content counts, maximum
+depth, a depth histogram over logical lines, and per-function maximum nesting
+derived from the AST.
+
+`convert` rewrites leading indentation to `spaces` or `tabs` using
+`tab_width` (default 4): each tab expands to the next multiple of
+`tab_width`, and pure-space indents become tabs only when they are exact
+multiples. String content is never touched. Because the interpreter compares
+columns at 8-column tab stops, the result is always verified — the tool
+compares `ast.dump` of the original and converted trees and returns the
+original text with an explanation whenever the rewrite would change
+semantics.
+
+`explain` focuses on one line and returns the indentation stack (interpreter
+columns), the visual column, the enclosing AST construct, and why the line
+fails when the interpreter rejected it.
+
+All inputs are bounded (`max_input_bytes`, `max_lines`, `max_line_bytes`,
+`max_findings`, `max_functions`) and every result is deterministic.
