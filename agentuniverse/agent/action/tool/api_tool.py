@@ -38,7 +38,12 @@ class APITool(Tool):
                                      max_recursive=10) -> Any:
         """Convert a property value based on its anyOf type."""
         if max_recursive <= 0:
-            raise Exception("Max recursion depth reached")
+            schema_preview = str(property)
+            if len(schema_preview) > 200:
+                schema_preview = schema_preview[:200] + "..."
+            raise Exception(
+                f"Max recursion depth reached while converting the anyOf schema "
+                f"for property: {schema_preview}")
         for option in any_of or []:
             try:
                 if 'type' in option:
@@ -203,14 +208,17 @@ class APITool(Tool):
                                                    follow_redirects=True)
             return response
         else:
-            raise ValueError('Invalid http method')
+            raise ValueError(f'Invalid http method: {method!r}. '
+                             f'Supported methods: get, head, post, put, delete, patch.')
 
     @staticmethod
     def get_parameter_value(parameter, parameters):
         if parameter['name'] in parameters:
             return parameters[parameter['name']]
         elif parameter.get('required', False):
-            raise Exception(f"Missing required parameter {parameter['name']}")
+            raise Exception(
+                f"Missing required parameter {parameter['name']} "
+                f"(in: {parameter.get('in', 'unknown')})")
         else:
             return (parameter.get('schema', {}) or {}).get('default', None)
 
@@ -219,8 +227,13 @@ class APITool(Tool):
         """Validate and parse the response from the tool response."""
         if isinstance(response, httpx.Response):
             if response.status_code >= 400:
+                body_text = response.text or ""
+                if len(body_text) > 500:
+                    body_text = body_text[:500] + "..."
                 raise Exception(
-                    f"Request failed with status code {response.status_code} and {response.text}")
+                    f"Request to {response.request.url} failed with status code "
+                    f"{response.status_code} ({response.reason_phrase}). "
+                    f"Response body (truncated): {body_text!r}")
             if not response.content:
                 return 'Empty response from the tool, please check your parameters and try again.'
             try:
