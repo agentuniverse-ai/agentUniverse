@@ -512,8 +512,14 @@ class Rfc2047OracleTest(unittest.TestCase):
             ("=?ISO-8859-1?Q?a?=", "a"),
             ("=?ISO-8859-1?Q?a?= b", "a b"),
             ("=?ISO-8859-1?Q?a?= =?ISO-8859-1?Q?b?=", "ab"),
-            ("=?ISO-8859-1?Q?a?=  =?ISO-8859-1?Q?b?=", "a b"),
+            # RFC 2047 section 8 example table: "Even multiple SPACEs
+            # between 'encoded-word's are ignored for the purpose of
+            # display" - the surplus space is dropped, not kept.
+            ("=?ISO-8859-1?Q?a?=  =?ISO-8859-1?Q?b?=", "ab"),
+            ("=?ISO-8859-1?Q?a?=   =?ISO-8859-1?Q?b?=", "ab"),
+            ("=?ISO-8859-1?Q?a?=\t=?ISO-8859-1?Q?b?=", "ab"),
             ("=?ISO-8859-1?Q?a?=\r\n =?ISO-8859-1?Q?b?=", "ab"),
+            ("=?ISO-8859-1?Q?a?=\r\n\t=?ISO-8859-1?Q?b?=", "ab"),
             ("=?ISO-8859-1?Q?a?= =?ISO-8859-2?Q?_b?=", "a b"),
             # Header examples from the same section.
             ("=?US-ASCII?Q?Keith_Moore?= <moore@cs.utk.edu>",
@@ -528,16 +534,25 @@ class Rfc2047OracleTest(unittest.TestCase):
             with self.subTest(header=header):
                 result = self.tool.execute("decode_words", header=header)
                 self.assertEqual(result["joined_text"], expected)
-        # Pinned: CPython make_header drops the kept space on the two-space
-        # example; RFC 2047 section 8 keeps one, and the tool follows the RFC.
+        # Oracle: CPython make_header and the policy.default parser both
+        # drop every separator between adjacent encoded words, matching
+        # RFC 2047 sections 6.2 and 8.
         import email.header
+        from email import message_from_string, policy
 
-        self.assertEqual(
-            str(email.header.make_header(
-                email.header.decode_header("=?ISO-8859-1?Q?a?=  =?ISO-8859-1?Q?b?=")
-            )),
-            "ab",
-        )
+        for gap in (" ", "  ", "\t", "\r\n "):
+            header = f"=?ISO-8859-1?Q?a?={gap}=?ISO-8859-1?Q?b?="
+            self.assertEqual(
+                str(email.header.make_header(
+                    email.header.decode_header(header)
+                )),
+                "ab",
+            )
+            folded = header.replace("\r\n", " ").replace("\t", " ")
+            msg = message_from_string(
+                "X: " + folded + "\n\n", policy=policy.default
+            )
+            self.assertEqual(str(msg["X"]), "ab")
 
     def test_q_and_b_word_details(self):
         result = self.tool.execute(
@@ -688,6 +703,70 @@ class Rfc2231Test(unittest.TestCase):
     def test_quoted_marker_is_not_a_parameter(self):
         params = self._param('X-A: "tricky*0*=not-a-param"')
         self.assertEqual(params, [])
+
+    def test_plain_section_keeps_its_position(self):
+        # Regression: a plain continuation section between two extended
+        # ones must be merged at its section position, not appended after
+        # all decoded byte chunks. Oracle: compat32 get_filename().
+        header = (
+            "Content-Disposition: attachment; "
+            "filename*0*=utf-8''a; filename*1=b; filename*2*=c%21"
+        )
+        param = next(
+            p for p in self._param(header) if p["name"] == "filename"
+        )
+        self.assertEqual(param["merged_value"], "abc!")
+        self.assertTrue(param["ok"])
+        from email import message_from_string
+
+        self.assertEqual(
+            message_from_string(header + "\n\n").get_filename(), "abc!"
+        )
+
+    def test_decl_parsed_from_first_extended_section(self):
+        # Regression: when a plain section sorts before the first extended
+        # one, the charset'language' declaration must still be stripped
+        # from that extended section instead of leaking into the value.
+        header = (
+            "Content-Disposition: attachment; "
+            "filename*0=plain%20one; filename*1*=utf-8''part%20two"
+        )
+        result = self.tool.execute("decode_words", header=header)
+        param = next(
+            p for p in result["rfc2231_params"] if p["name"] == "filename"
+        )
+        self.assertEqual(param["charset"], "utf-8")
+        self.assertNotIn("utf-8''", param["merged_value"])
+        self.assertIn("part two", param["merged_value"])
+        codes = {f["code"] for f in result["findings"]}
+        self.assertIn("charset_decl_not_initial", codes)
+
+    def test_mixed_sections_rfc_semantics(self):
+        # extended -> plain: plain chunk is verbatim (no percent-decoding),
+        # matching compat32 get_param behavior.
+        header = (
+            "Content-Disposition: attachment; "
+            "filename*0*=utf-8''part%20one; filename*1=plain%20two"
+        )
+        param = next(
+            p for p in self._param(header) if p["name"] == "filename"
+        )
+        self.assertEqual(param["merged_value"], "part oneplain%20two")
+        from email import message_from_string
+
+        msg = message_from_string(header + "\n\n")
+        self.assertEqual(msg.get_filename(), "part oneplain%20two")
+
+    def test_adjacent_word_all_whitespace_ignored(self):
+        # RFC 2047 sections 6.2 and 8: every separator between adjacent
+        # encoded words is ignored, however many spaces/tabs/folds it has.
+        for gap in (" ", "  ", "   ", "\t", "\t ", "\r\n ", "\r\n\t"):
+            with self.subTest(gap=gap):
+                result = self.tool.execute(
+                    "decode_words",
+                    header=f"=?utf-8?Q?a?={gap}=?utf-8?Q?b?=",
+                )
+                self.assertEqual(result["joined_text"], "ab")
 
 
 class EncodePreviewTest(unittest.TestCase):

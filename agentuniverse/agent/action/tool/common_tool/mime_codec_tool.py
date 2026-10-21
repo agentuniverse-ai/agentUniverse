@@ -671,12 +671,18 @@ class MimeCodecTool(Tool):
                              "Adjacent encoded words separated by a folded "
                              "(CRLF + WSP) gap; the fold is ignored per RFC "
                              "2047 section 6.2.")
+                    # All linear-white-space between adjacent encoded words
+                    # is ignored by decoders (RFC 2047 section 6.2; both
+                    # stdlib decoders - email.header.make_header and the
+                    # email policy parser - drop every separator character),
+                    # so nothing is emitted for the gap.
                     if len(folded_gap) > 1:
-                        pieces.append(" " * (len(folded_gap) - 1))
                         note("info", "extra_separator_whitespace", start,
                              "More than one whitespace character separates "
-                             "adjacent encoded words; RFC 2047 section 8 "
-                             "keeps the surplus as literal spaces.",
+                             "adjacent encoded words; RFC 2047 section 6.2 "
+                             "ignores all linear-white-space between a pair "
+                             "of adjacent encoded words, so the surplus "
+                             "carries no data and is dropped.",
                              gap=folded_gap[:16])
                 else:
                     pieces.append(gap)
@@ -872,30 +878,61 @@ class MimeCodecTool(Tool):
                 note("warning", "continuation_gap", 0,
                      f"Parameter {base!r} sections {indexes} are not "
                      "contiguous from 0.", indexes=indexes)
-            keys: list[int | None] = (
-                [None] + [k for k in indexes if k != 0] if None in bucket
-                else list(indexes)
+            # Section order: the un-numbered initial section sorts as 0 and
+            # numbered sections follow their index, so the merged value keeps
+            # every chunk at its declared position (RFC 2231 section 4.1:
+            # continuations are appended in sequence).
+            keys: list[int | None] = sorted(
+                bucket, key=lambda k: 0 if k is None else k
             )
             first_key = keys[0] if keys else None
+            first_ext_key = next(
+                (k for k in keys if bucket[k]["extended"]), None
+            )
+            if (
+                first_ext_key is not None
+                and first_ext_key != first_key
+            ):
+                note("warning", "charset_decl_not_initial", 0,
+                     f"Parameter {base!r} declares its charset on a "
+                     "non-initial section: RFC 2231 section 4 requires the "
+                     "charset'language'value declaration to ride on the "
+                     "first section when a parameter is extended.",
+                     section=bucket[first_ext_key]["index"])
             charset = language = ""
             ok = True
             error = None
-            byte_chunks = bytearray()
-            text_tail: list[tuple[int, str]] = []
-            any_extended = any(c["extended"] for c in bucket.values())
+            merged_parts: list[str] = []
+            run = bytearray()  # pending run of consecutive extended sections
+
+            def flush_run() -> None:
+                # Decode one maximal run of consecutive extended sections
+                # with the parameter charset (a multibyte character may span
+                # adjacent extended sections of the same run).
+                nonlocal run, charset, ok
+                if run:
+                    text, used = self._bytes_to_text(
+                        bytes(run), charset or "us-ascii", note, 0
+                    )
+                    merged_parts.append(text)
+                    charset = charset or used
+                    run = bytearray()
+
+            any_extended = first_ext_key is not None
             for key in keys:
                 chunk = bucket[key]
                 if not chunk["extended"]:
-                    text_tail.append((chunk["index"] or 0, chunk["raw"]))
+                    flush_run()
+                    merged_parts.append(chunk["raw"])
                     if any_extended:
                         note("info", "mixed_sections", 0,
                              f"Parameter {base!r} mixes extended and plain "
-                             "sections; plain sections are appended "
-                             "verbatim after charset decoding, matching the "
+                             "sections; plain sections are inserted verbatim "
+                             "at their section position, matching the "
                              "RFC 2231 section 4 example.")
                     continue
                 value = chunk["raw"]
-                if key == first_key:
+                if key == first_ext_key:
                     pieces = value.split("'", 2)
                     if len(pieces) != 3:
                         note("error", "missing_charset_decl", 0,
@@ -923,14 +960,9 @@ class MimeCodecTool(Tool):
                          "section 4).", raw=value[:48])
                     ok = False
                     error = error or "bad_percent_escape"
-                byte_chunks.extend(chunk_bytes)
-            merged = ""
-            if byte_chunks:
-                merged, used = self._bytes_to_text(
-                    bytes(byte_chunks), charset or "us-ascii", note, 0
-                )
-                charset = charset or used
-            merged += "".join(text for _, text in sorted(text_tail))
+                run.extend(chunk_bytes)
+            flush_run()
+            merged = "".join(merged_parts)
             results.append({
                 "name": base,
                 "charset": charset or None,
