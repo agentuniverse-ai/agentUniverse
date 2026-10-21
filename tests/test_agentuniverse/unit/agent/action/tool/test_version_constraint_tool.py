@@ -229,6 +229,22 @@ class ResolveGroundTruths(unittest.TestCase):
         self.assertIn("leading zeroes", reasons["01.2.3"]["reason"])
         self.assertEqual(result["candidates"], ["1.2.0", "1.4.0"])
 
+    def test_duplicate_versions_collapsed(self):
+        """The same version string listed twice is one candidate."""
+        result = run_resolve(
+            ["^1.0.0"],
+            ["1.5.0", "1.2.0", "1.5.0", "1.2.0", "0.9.0"],
+        )
+        self.assertEqual(result["available_requested"], 5)
+        self.assertEqual(result["available_count"], 3)
+        self.assertEqual(result["duplicate_count"], 2)
+        self.assertEqual(result["candidates"], ["1.2.0", "1.5.0"])
+        self.assertEqual(result["best"], "1.5.0")
+        self.assertEqual(result["per_constraint"][0]["matched_count"], 2)
+        self.assertEqual(
+            result["per_constraint"][0]["excluded_count"], 1
+        )
+
     def test_build_metadata_ignored(self):
         result = run_resolve(
             ["^1.0.0"], ["1.2.0+build.7", "1.2.0"]
@@ -291,6 +307,47 @@ class ResolvePrereleasePropagation(unittest.TestCase):
         """Two prerelease bounds on one triple do intersect."""
         result = run_conflicts(["^1.2.3-alpha", "^1.2.3-beta"])
         self.assertTrue(result["conflict_free"])
+
+    def test_min_prerelease_strict_upper_empty_branch(self):
+        """1.2.3-0 is the smallest pre-release of its tuple, so a
+        strict '<' against it admits nothing on the tuple: the range
+        >1.2.2 <1.2.3-0 matches no version at all (releases: the
+        window (1.2.3, 1.2.3) is empty; pre-releases: nothing on the
+        tuple sits below 1.2.3-0)."""
+        result = run_conflicts(
+            [">1.2.2 <1.2.3-0", "<1.2.3-0"]
+        )
+        self.assertFalse(result["conflict_free"])
+        self.assertEqual(result["conflicts"][0]["indexes"], [0, 1])
+
+    def test_min_prerelease_upper_resolves_empty(self):
+        """resolve() rejects every version of that empty range and
+        blames the pairwise conflict."""
+        result = run_resolve(
+            [">1.2.2 <1.2.3-0", ">=1.0.0"],
+            ["1.2.2", "1.2.3-0", "1.2.3-alpha", "1.2.3"],
+        )
+        self.assertFalse(result["satisfiable"])
+        self.assertEqual(result["candidates"], [])
+        self.assertEqual(
+            result["unsatisfiable_because"],
+            [{
+                "indexes": [0, 1],
+                "constraints": [">1.2.2 <1.2.3-0", ">=1.0.0"],
+            }],
+        )
+
+    def test_min_prerelease_explain_set_empty(self):
+        """The folded single-branch intersection is genuinely
+        empty for the minimum-prerelease strict upper bound — and
+        stays non-empty for any non-minimum bound (1.2.3-0 sits
+        below 1.2.3-alpha) or an inclusive bound (1.2.3-0 itself)."""
+        result = run_explain_set([">1.2.2 <1.2.3-0"])
+        self.assertTrue(result["intersection"]["empty"])
+        result = run_explain_set([">1.2.2 <1.2.3-alpha"])
+        self.assertFalse(result["intersection"]["empty"])
+        result = run_explain_set([">1.2.2 <=1.2.3-0"])
+        self.assertFalse(result["intersection"]["empty"])
 
 
 class ConflictsGroundTruths(unittest.TestCase):
@@ -361,6 +418,23 @@ class ConflictsGroundTruths(unittest.TestCase):
         result = run_conflicts(["^1.0.0 || ^2.0.0", ">=1.5.0"])
         self.assertTrue(result["conflict_free"])
         result = run_conflicts(["^1.0.0 || ^2.0.0", "^3.0.0"])
+        self.assertFalse(result["conflict_free"])
+
+    def test_wide_disjoint_unions_conflict(self):
+        """Two 40-branch unions with disjoint version spans conflict
+        (every branch pair is empty, exercising the span sweep)."""
+        left = " || ".join(f"^{i}.0.0" for i in range(1, 41))
+        right = " || ".join(f"^{i}.0.0" for i in range(41, 81))
+        result = run_conflicts([left, right])
+        self.assertFalse(result["conflict_free"])
+        self.assertEqual(result["conflicts"][0]["indexes"], [0, 1])
+
+    def test_wide_overlapping_unions_rescued(self):
+        """A wide tilde union meets a window deep inside its span."""
+        union = " || ".join(f"~1.{i}.0" for i in range(0, 40))
+        result = run_conflicts([union, ">=1.5.0 <2.0.0"])
+        self.assertTrue(result["conflict_free"])
+        result = run_conflicts([union, "^2.0.0"])
         self.assertFalse(result["conflict_free"])
 
     def test_exact_pins_conflict(self):

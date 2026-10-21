@@ -104,7 +104,10 @@ index, the ``fragment`` text and the ``constraint_index`` in the
 set) so an agent can react without catching exceptions. Junk
 entries inside the available-version list do not fail the run: they
 are counted and reported per entry with the parse reason, mirroring
-candidate-list handling elsewhere.
+candidate-list handling elsewhere. Exact duplicate entries inside
+the available-version list are collapsed to their first occurrence
+and reported via ``duplicate_count`` — the same version string
+listed twice is one available version, not two.
 """
 
 import itertools
@@ -500,6 +503,14 @@ def _exact_comparator(version: _SemVer) -> _Comparator:
 def _next_triple(triple: Tuple[int, int, int]) -> Tuple[int, int, int]:
     """The next discrete (major, minor, patch) triple."""
     return (triple[0], triple[1], triple[2] + 1)
+
+
+def _minimum_prerelease_key(triple: Tuple[int, int, int]) -> tuple:
+    """Precedence key of ``X.Y.Z-0``, the smallest pre-release of a
+    tuple (numeric identifiers sort below alphanumeric ones and ``0``
+    is the smallest numeric identifier, so nothing on the tuple sits
+    strictly below it)."""
+    return (triple[0], triple[1], triple[2], 0, ((0, 0),))
 
 
 class _Branch:
@@ -936,9 +947,10 @@ def _set_nonempty(bounds: _Bounds, gating: set) -> bool:
     branch admits (npm per-branch gating ANDed across the set).
     A release fits when a triple sits inside the half-open window;
     otherwise a gated pre-release triple must clear both bounds
-    (a pre-release can always be grown above a pre-release bound or
-    shrunk below an upper bound, so only equality conflicts rule a
-    triple out).
+    (a pre-release can always be grown above a pre-release bound and
+    shrunk below an upper bound — unless that upper bound is the
+    tuple's minimum pre-release ``X.Y.Z-0``, which nothing on the
+    tuple sits below, so a strict ``<`` there rules the triple out).
     """
     if bounds.never:
         return False
@@ -978,10 +990,22 @@ def _set_nonempty(bounds: _Bounds, gating: set) -> bool:
                 continue
         # Upper feasibility: strictly below the bound's triple, or on
         # the same triple (a pre-release of T is always below T's
-        # release and can be shrunk below a T pre-release bound).
+        # release and can be shrunk below a T pre-release bound —
+        # unless that bound is T's minimum pre-release T.0, below
+        # which nothing on the tuple exists).
         if upper is not None:
-            upper_triple = upper.version.core_tuple  # type: ignore
+            upper_bound = upper.version
+            assert upper_bound is not None
+            upper_triple = upper_bound.core_tuple
             if triple > upper_triple:
+                continue
+            if (
+                triple == upper_triple
+                and upper.op == "<"
+                and upper_bound.is_prerelease
+                and upper_bound.precedence_key
+                == _minimum_prerelease_key(triple)
+            ):
                 continue
         # Equality conflict: both bounds on the same pre-release
         # triple — feasible only when the open interval between the
@@ -1050,6 +1074,58 @@ def _simplify_branches(
     return simplified
 
 
+def _branch_span(
+    branch: _Branch,
+) -> Optional[Tuple[Tuple[int, int, int],
+                    Optional[Tuple[int, int, int]]]]:
+    """Closed triple span ``[lo, hi]`` every version of a branch is
+    confined to (``None`` when the branch matches nothing at all).
+
+    ``hi`` is ``None`` when unbounded above. Any version passing the
+    branch — release or gated pre-release — carries a triple between
+    its bound versions' own triples (comparator precedence cannot
+    move a version outside that interval), so two branches with
+    disjoint spans share no version and their merge can be skipped.
+    """
+    real = [c for c in branch.comparators if not c.is_any]
+    if not real:
+        return ((0, 0, 0), None)
+    bounds = _Bounds(real)
+    if bounds.never:
+        return None
+    if bounds.exacts:
+        exact = bounds.exacts[0].version
+        assert exact is not None
+        return (exact.core_tuple, exact.core_tuple)
+    lo = (0, 0, 0)
+    if bounds.lower is not None:
+        lower = bounds.lower.version
+        assert lower is not None
+        lo = lower.core_tuple
+    hi: Optional[Tuple[int, int, int]] = None
+    if bounds.upper is not None:
+        upper = bounds.upper.version
+        assert upper is not None
+        hi = upper.core_tuple
+    return (lo, hi)
+
+
+def _sorted_spans(
+    branches: List[_Branch],
+) -> List[Tuple[Tuple[int, int, int],
+                Optional[Tuple[int, int, int]], _Branch]]:
+    """Branch spans sorted by lower triple, dead branches dropped."""
+    return sorted(
+        (
+            span + (branch,)
+            for branch in branches
+            for span in [_branch_span(branch)]
+            if span is not None
+        ),
+        key=lambda row: row[0],
+    )
+
+
 def _ranges_intersect(branches_a: List[_Branch],
                       branches_b: List[_Branch]) -> bool:
     """Whether two parsed ranges share at least one version.
@@ -1057,10 +1133,28 @@ def _ranges_intersect(branches_a: List[_Branch],
     A version may pick its branch from either side of the ``||``
     unions, so the ranges intersect as soon as any branch pair is
     non-empty; the emptiness decision per pair is exact (release
-    windows plus per-triple prerelease gating).
+    windows plus per-triple prerelease gating). Branch pairs whose
+    closed triple spans are disjoint are skipped before the merge,
+    which keeps large ``||`` unions on both sides from degenerating
+    into a full pairwise product.
     """
-    for branch_a in branches_a:
-        for branch_b in branches_b:
+    spans_a = _sorted_spans(branches_a)
+    if not spans_a:
+        return False
+    spans_b = _sorted_spans(branches_b)
+    if not spans_b:
+        return False
+    advanced = 0
+    for lo_a, hi_a, branch_a in spans_a:
+        while advanced < len(spans_b):
+            hi_b = spans_b[advanced][1]
+            if hi_b is not None and hi_b < lo_a:
+                advanced += 1
+                continue
+            break
+        for lo_b, hi_b, branch_b in spans_b[advanced:]:
+            if hi_a is not None and lo_b > hi_a:
+                break
             if _simplify_branches([branch_a, branch_b]) is not None:
                 return True
     return False
@@ -1233,24 +1327,6 @@ class VersionConstraintTool(Tool):
         raise ValueError(f"version_constraint_tool: {message}")
 
     @classmethod
-    def _validate_string(cls, value: Any, name: str) -> str:
-        """Validate a string input parameter (type / emptiness)."""
-        if (
-            value is None
-            or isinstance(value, bool)
-            or not isinstance(value, str)
-        ):
-            cls._invalid(f"{name} must be a non-empty string (got {value!r})")
-        if not value:
-            cls._invalid(f"{name} must be a non-empty string (got '')")
-        if len(value) > _MAX_CHARS:
-            cls._invalid(
-                f"{name} exceeds the {_MAX_CHARS:,}-character limit "
-                f"(got {len(value):,} characters)"
-            )
-        return value
-
-    @classmethod
     def _validate_constraints(cls, value: Any) -> List[str]:
         """Validate the ``constraints`` list parameter."""
         if value is None or isinstance(value, (str, bytes)) or not (
@@ -1416,6 +1492,8 @@ class VersionConstraintTool(Tool):
             return parsed
         # Parse the available pool: junk entries are reported, not fatal.
         pool: List[Tuple[_SemVer, str]] = []
+        seen: set = set()
+        duplicate_count = 0
         invalid: List[Dict[str, Any]] = []
         invalid_count = 0
         for index, entry in enumerate(candidates_in):
@@ -1431,6 +1509,10 @@ class VersionConstraintTool(Tool):
                         }
                     )
                 continue
+            if entry in seen:
+                duplicate_count += 1
+                continue
+            seen.add(entry)
             pool.append((version, entry))
         # One pass per constraint over the pool (each check runs the
         # full npm semantics, prerelease gating included).
@@ -1472,6 +1554,7 @@ class VersionConstraintTool(Tool):
             "available_count": len(pool),
             "invalid_count": invalid_count,
             "invalid": invalid,
+            "duplicate_count": duplicate_count,
             "satisfiable": bool(candidates),
             "candidates": candidates,
             "best": candidates[-1] if candidates else None,
