@@ -307,12 +307,24 @@ class TestDanglingReferenceDetector(unittest.TestCase):
         self.assertEqual(meta['reference_integrity'], 'ok')
 
     def test_bare_equation_number_needs_preceding_punctuation(self):
-        """"(9)" right after a digit is part of the formula, not a number
-        tag; "(5)" after a word is an inline citation, not an anchor."""
-        _, meta = self._run("E = mc2  (9)\nwe substitute into (5) yields")
+        """"(9)" glued to the formula without a gap is an operand, not a
+        number tag; "(5)" after a word is an inline citation, not an
+        anchor."""
+        _, meta = self._run("f(n) = n(9) grows.\nwe substitute into (5) yields")
         self.assertEqual(meta['dangling_count'], 0)
         self.assertEqual(meta['unreferenced_anchor_count'], 0)
         self.assertEqual(meta['reference_integrity'], 'ok')
+
+    def test_bare_equation_number_after_variable_with_gap(self):
+        """A display equation ending in a variable still anchors when the
+        tag is set off by a wide gap (two-plus spaces or a tab)."""
+        for line in ("g = grad L    (4)", "E = mc2\t(9)", "E = mc2  (9)"):
+            text = line + "\nBy Eq. (4) it works." if "(4)" in line \
+                else line + "\nBy Eq. (9) it works."
+            _, meta = self._run(text)
+            self.assertEqual(meta['dangling_count'], 0, msg=line)
+            self.assertEqual(meta['unreferenced_anchor_count'], 0, msg=line)
+            self.assertEqual(meta['reference_integrity'], 'ok', msg=line)
 
     def test_bare_equation_number_inline_citation_stays_out(self):
         """Mid-sentence "(5)" followed by more text on the line is a
@@ -377,6 +389,193 @@ class TestDanglingReferenceDetector(unittest.TestCase):
         _, meta = self._run("Figures 1-80 are listed.", detector=detector)
         self.assertEqual(meta['dangling_count'], 10)
         self.assertEqual(meta['dangling_references'][-1]['id'], 10)
+
+    # ========== Enumeration and journal conventions ==========
+
+    def test_enumeration_and_joined(self):
+        """"Figs. 3 and 4" / "Eqs. (5) and (6)" reference both ids; the
+        and-join requires plural keywords, so "Eq. 5 and 6" stays a
+        single reference to 5."""
+        _, meta = self._run("Fig. 3: A.\nFigs. 3 and 4 compare.")
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(meta['dangling_references'][0]['id'], 4)
+
+        _, meta = self._run("Eq. (5): A.\nEqs. (5) and (6) hold.")
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(
+            (meta['dangling_references'][0]['kind'],
+             meta['dangling_references'][0]['id']), ('equation', 6))
+
+        _, meta = self._run("Eq. 5 and 6 hold.")
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(meta['dangling_references'][0]['id'], 5)
+
+    def test_enumeration_and_join_requires_plural(self):
+        """"Figure 2 and 4 others exist" must not manufacture a reference
+        to figure 4."""
+        _, meta = self._run("Figure 2 and 4 others exist.")
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(meta['dangling_references'][0]['id'], 2)
+
+    def test_equation_comma_list(self):
+        """"Eqs. (5,6)" and "Eqs. (5, 6, 7)" reference every listed id,
+        while a sentence comma after a closed "(5)" does not."""
+        _, meta = self._run("Eqs. (5,6) are solved.")
+        self.assertEqual(
+            sorted(e['id'] for e in meta['dangling_references']), [5, 6])
+
+        _, meta = self._run("Eqs. (5, 6, 7) hold.")
+        self.assertEqual(
+            sorted(e['id'] for e in meta['dangling_references']), [5, 6, 7])
+
+        _, meta = self._run("Eq. (5): A.\nusing Eq. (5), 6 runs failed")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['reference_integrity'], 'ok')
+
+    def test_lowercase_tokens(self):
+        """Lowercase journal forms "eq. (5)", "fig. 3", "tab. 2" and
+        uppercase "FIG. 3" are recognized."""
+        _, meta = self._run("Eq. (5): A.\nby eq. (5) and eq. (9) it works.")
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(meta['dangling_references'][0]['id'], 9)
+
+        _, meta = self._run("Figure 5: A.\nsee fig. 9 and FIG. 10.")
+        self.assertEqual(
+            sorted(e['id'] for e in meta['dangling_references']), [9, 10])
+
+        _, meta = self._run("Table 2: A.\nsee tab. 7 for details.")
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(meta['dangling_references'][0]['id'], 7)
+
+    def test_latex_tilde_binding(self):
+        """A LaTeX tilde binds keyword and number: "Table~2", "Fig.~1"
+        and "Eq.~(5)" work as anchors and as references."""
+        text = "\n".join([
+            "Table~2: Hyperparameters.",
+            "Fig.~1: Setup.",
+            "Eq.~(5): Update.",
+            "Table~2 lists them; see Fig.~1 and Eq.~(5).",
+            "Cf. Fig.~8 though.",
+        ])
+        _, meta = self._run(text)
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(meta['dangling_references'][0]['id'], 8)
+
+    def test_subfigure_suffix_resolves_to_base_id(self):
+        """"see Figure 3a" and "Fig. 4(b)" reference figures 3 and 4; the
+        letter never creates a distinct id, and subfigure-styled captions
+        ("Figure 3a:") anchor the base id."""
+        _, meta = self._run("Figure 3: Main.\n(see Figure 3a) and "
+                            "Fig. 3(b) help.")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['reference_integrity'], 'ok')
+
+        _, meta = self._run("Figure 3a: Sub one.\nFigure 3b: Sub two.\n"
+                            "see Figure 3a.")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['unreferenced_anchor_count'], 0)
+
+        _, meta = self._run("Fig. 4(b): The robust variant.\nas Fig. 4 shows")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['unreferenced_anchor_count'], 0)
+
+    def test_ranged_caption_anchors_every_id(self):
+        """"Figures 3-5: ..." is a caption defining figures 3, 4 and 5,
+        not three references; "Tables 1-2: ..." likewise."""
+        _, meta = self._run("Figures 3-5: Ablations.\nSee Figures 3-5.")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['unreferenced_anchor_count'], 0)
+        self.assertEqual(meta['reference_integrity'], 'ok')
+
+        _, meta = self._run("Tables 1-2: Data.\nSee Tables 1-2.")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['reference_integrity'], 'ok')
+
+    def test_mixed_range_and_enumeration(self):
+        """"Figures 3-5 and 7" spans the range and then joins the single
+        id."""
+        _, meta = self._run("Figures 3-5 and 7 appear.")
+        self.assertEqual(
+            sorted(e['id'] for e in meta['dangling_references']),
+            [3, 4, 5, 7])
+
+    def test_year_guard(self):
+        """Four-digit years never parse as ids: plain year ranges, years
+        after a comma and "(2020)" citations all stay inert."""
+        _, meta = self._run("Our survey covers 2020-2025.")
+        self.assertEqual(meta['dangling_count'], 0)
+
+        _, meta = self._run("See Fig. 3, 2020 was the start.")
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(meta['dangling_references'][0]['id'], 3)
+
+        _, meta = self._run("Figure 2020 shows it.")
+        self.assertEqual(meta['dangling_count'], 0)
+
+        _, meta = self._run("Results improved (2020) as shown below.")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['unreferenced_anchor_count'], 0)
+
+    def test_cn_non_table_words_ignored(self):
+        """"列表3" (list 3) and "图表2" (chart 2) are not table
+        references, like the existing "报表2" guard."""
+        _, meta = self._run("见列表3了解细节。")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['reference_integrity'], 'ok')
+
+        _, meta = self._run("如图表2所示。")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['reference_integrity'], 'ok')
+
+    def test_cn_enumeration_forms(self):
+        """"图1、图2" and "式(1)和(2)" reference every joined id."""
+        _, meta = self._run("图1：总览。\n图1、图2并列。")
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(meta['dangling_references'][0]['id'], 2)
+
+        _, meta = self._run("式（1）：目标。\n式(1)和(2)联立求解。")
+        self.assertEqual(meta['dangling_count'], 1)
+        self.assertEqual(
+            (meta['dangling_references'][0]['kind'],
+             meta['dangling_references'][0]['id']), ('equation', 2))
+
+        _, meta = self._run("图1：总览。\n由图1，6 个样本失效。")
+        self.assertEqual(meta['dangling_count'], 0)
+        self.assertEqual(meta['reference_integrity'], 'ok')
+
+    def test_anchor_position_rule_at_scale(self):
+        """A generated 120-line document keeps the position rule exact:
+        every caption flavour anchors, every mid-line or punct-less
+        mention references, mid-line colons stay references."""
+        lines = []
+        for n in range(1, 11):
+            m = n + 50
+            lines += [
+                f"Figure {n}: Caption number {n}.",
+                f"Fig. {n}. Period caption {n}.",
+                f"- Figure {n}: bullet caption",
+                f"## Figure {n}: heading caption",
+                f"{n}. Figure {n}: ordered caption",
+                f"**Figure {n}.** bold caption",
+                f"Table {n}: table caption",
+                f"图{n}：中文图注。",
+                f"The Figure {n} shows the pipeline.",
+                f"Depicted in Fig. {n} above.",
+                f"See Figure {m} in the appendix.",
+                f"We turn to Figure {m}: the encoder stack.",
+            ]
+        _, meta = self._run("\n".join(lines))
+        self.assertEqual(meta['dangling_count'], 20)
+        self.assertEqual(meta['unreferenced_anchor_count'], 10)
+        self.assertEqual(meta['reference_integrity'], 'dangling')
+        got = sorted((e['kind'], e['id'])
+                     for e in meta['dangling_references'])
+        self.assertEqual(got, sorted([('figure', n + 50)
+                                      for n in range(1, 11)] * 2))
+        self.assertEqual(
+            sorted((e['kind'], e['id'])
+                   for e in meta['unreferenced_anchors']),
+            [('table', n) for n in range(1, 11)])
 
     # ========== Dangling / unreferenced arithmetic ==========
 

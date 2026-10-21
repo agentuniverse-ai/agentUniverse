@@ -313,9 +313,9 @@ metadata:
 
 ### [DanglingReferenceDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/dangling_reference_detector.yaml)
 
-该组件标记文档中指向缺失锚点的图/表/公式引用，对应 issue #258 的**知识质量校验（坏文档检测）**方向。入库文档常常悄无声息地损坏：某个分块写着"参见图3"，但文档从未定义图3——锚点在导出时丢失、落在另一个分块里，或者编号本身就是错的——于是检索会自信地返回一段指向读者永远找不到的证据的文本。该组件在三个相互独立的编号命名空间（figure / table / equation）下扫描每篇文档的两种出现：**锚点**，即定义编号项的模式（"Figure 3: ..."、"Fig. 3. ..."、"Table 2: ..."、"图3：..."、"表2：..."、"Equation (5):"、"Eq. (5)."，以及行尾裸公式编号"y = f(x)   (5)"），和**引用**，即行文中的提及（"see Figure 3"、"as shown in Fig. 3"、"Table 2 lists"、"by Eq. (5)"、"如图3所示"、"见表2"）。范围会展开："Figures 3-5"与"图3至图5"都引用图 3、4、5。每个被引用却没有同类锚点的编号记为悬空引用；每个定义了却从未被引用的锚点记为未引用（仅作提示）。
+该组件标记文档中指向缺失锚点的图/表/公式引用，对应 issue #258 的**知识质量校验（坏文档检测）**方向。入库文档常常悄无声息地损坏：某个分块写着"参见图3"，但文档从未定义图3——锚点在导出时丢失、落在另一个分块里，或者编号本身就是错的——于是检索会自信地返回一段指向读者永远找不到的证据的文本。该组件在三个相互独立的编号命名空间（figure / table / equation）下扫描每篇文档的两种出现：**锚点**，即定义编号项的模式（"Figure 3: ..."、"Fig. 3. ..."、"Table 2: ..."、"图3：..."、"表2：..."、"Equation (5):"、"Eq. (5)."，以及行尾裸公式编号"y = f(x)   (5)"），和**引用**，即行文中的提及（"see Figure 3"、"as shown in Fig. 3"、"Table 2 lists"、"by Eq. (5)"、"如图3所示"、"见表2"）。范围会展开："Figures 3-5"与"图3至图5"都引用图 3、4、5；枚举则逐项引用："Figs. 3 and 4"、"Eqs. (5,6)"、"图3、图4"、"式(1)和(2)"恰好引用其列出的编号。每个被引用却没有同类锚点的编号记为悬空引用；每个定义了却从未被引用的锚点记为未引用（仅作提示）。
 
-锚点必须位于行首——中间允许 markdown 块标记（`#`、`>`、`*`、`-`、有序列表标记）或前置的 `**` 加粗标记，因此"**Figure 3.** caption"也算锚点——并且编号后必须紧跟标题标点（`:`、`.` 或全角冒号）；缺少任一条件的提及都算引用。该位置规则化解了标题自指的经典歧义：在"Figure 3: the architecture. As Figure 3 shows, ..."中，行首的"Figure 3:"是锚点，句中的"Figure 3"是引用，文档判定为完好；反过来"This is depicted in Figure 3."仍是引用——句尾句点是句子标点而非标题标点。匹配器刻意保守：裸括号编号只在行尾且前面是标点时才锚定公式（从而排除行内数字引文）；"Figure 3.5"解析为对图 3 的引用而非带小数标题的锚点；"报表2"中的"表2"被忽略。英文词元按规范大写形式做大小写敏感匹配。结果写入文档 metadata——`metadata['dangling_references']`（`{kind, id, span, context}` 条目，上下文各留 30 字符，最多 30 条）、`metadata['dangling_count']`、`metadata['unreferenced_anchors']` / `metadata['unreferenced_anchor_count']`，以及置为 `ok` 或 `dangling` 的 `metadata['reference_integrity']`——text、id 和已有 metadata 值绝不被修改，写入前会复制 metadata 映射。整个流程纯 Python（仅正则）、完全离线且确定性——适合在入库阶段、切分与向量化开销发生之前做坏文档质检，并与 CitationExtractor 等引文编目组件互补：那些组件记录文档引用了什么，本组件检查内部的图/表/证据指针能否解析。
+锚点必须位于行首——中间允许 markdown 块标记（`#`、`>`、`*`、`-`、有序列表标记）或前置的 `**` 加粗标记，因此"**Figure 3.** caption"也算锚点——并且编号后必须紧跟标题标点（`:`、`.` 或全角冒号）；缺少任一条件的提及都算引用。范围式标题（"Figures 3-5: ..."）锚定其覆盖的每一个编号。该位置规则化解了标题自指的经典歧义：在"Figure 3: the architecture. As Figure 3 shows, ..."中，行首的"Figure 3:"是锚点，句中的"Figure 3"是引用，文档判定为完好；反过来"This is depicted in Figure 3."仍是引用——句尾句点是句子标点而非标题标点。匹配器刻意保守：裸括号编号只在行尾且前面是标点、或与公式之间有宽空隙（制表符或两个及以上空格）时才锚定公式（从而排除行内数字引文以及"n(9)"这类粘连的操作数）；"Figure 3.5"解析为对图 3 的引用而非带小数标题的锚点；"报表2"、"列表3"、"图表2"中的"表2"被忽略（列表/图表并非表格）。子图后缀归并到基础编号——"see Figure 3a"与"Fig. 4(b)"引用图 3 和图 4，"Figure 3a:"标题锚定图 3——字母绝不产生独立编号。英文关键字大小写不敏感匹配（"eq. (5)"、"FIG. 3"），LaTeX 波浪线连接关键字与编号（"Table~2"）；"and"连接的枚举要求复数关键字（"Figs. 3 and 4"），因此"Figure 2 and 4 others"仍是单一引用。编号最多三位数字，四位年份（"2020-2025"）绝不会解析为引用。结果写入文档 metadata——`metadata['dangling_references']`（`{kind, id, span, context}` 条目，上下文各留 30 字符，最多 30 条）、`metadata['dangling_count']`、`metadata['unreferenced_anchors']` / `metadata['unreferenced_anchor_count']`，以及置为 `ok` 或 `dangling` 的 `metadata['reference_integrity']`——text、id 和已有 metadata 值绝不被修改，写入前会复制 metadata 映射。整个流程纯 Python（仅正则）、完全离线且确定性——适合在入库阶段、切分与向量化开销发生之前做坏文档质检，并与 CitationExtractor 等引文编目组件互补：那些组件记录文档引用了什么，本组件检查内部的图/表/证据指针能否解析。
 
 组件定义文件如下：
 ```yaml
@@ -333,10 +333,10 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.doc_processor.dangling_reference_detector'
   class: 'DanglingReferenceDetector'
 ```
-+- max_report：'dangling_references' 与 'unreferenced_anchors' 两个列表保留的最大条数；两个计数字段始终携带完整总数。0 表示关闭两个列表。必须 >= 0。
-+- context_chars：每个悬空引用区间两侧保留的上下文字符数。必须 >= 0。
-+- max_range_span：范围提及（"Figures 3-5"）最多展开的编号数；更长的范围从下界起截断到该数量。必须 >= 1。
-+- include_unreferenced：为真（默认）时收集从未被引用的锚点到 'unreferenced_anchors'；仅作提示，绝不影响 reference_integrity。
-+- dangling_key：悬空引用列表写入的 metadata 键；为空则不写入该列表（'dangling_count' 始终写入）。
-+- unreferenced_key：未引用锚点列表写入的 metadata 键；为空则不写入该列表（'unreferenced_anchor_count' 始终写入）。
-+- integrity_key：'ok' | 'dangling' 结论写入的 metadata 键；为空则不写入。
+- max_report：'dangling_references' 与 'unreferenced_anchors' 两个列表保留的最大条数；两个计数字段始终携带完整总数。0 表示关闭两个列表。必须 >= 0。
+- context_chars：每个悬空引用区间两侧保留的上下文字符数。必须 >= 0。
+- max_range_span：范围提及（"Figures 3-5"）最多展开的编号数；更长的范围从下界起截断到该数量。必须 >= 1。
+- include_unreferenced：为真（默认）时收集从未被引用的锚点到 'unreferenced_anchors'；仅作提示，绝不影响 reference_integrity。
+- dangling_key：悬空引用列表写入的 metadata 键；为空则不写入该列表（'dangling_count' 始终写入）。
+- unreferenced_key：未引用锚点列表写入的 metadata 键；为空则不写入该列表（'unreferenced_anchor_count' 始终写入）。
+- integrity_key：'ok' | 'dangling' 结论写入的 metadata 键；为空则不写入。
