@@ -120,10 +120,34 @@ class DotGraphToolTest(unittest.TestCase):
             result["result"],
             "digraph G {\n"
             '    db [label="Postgres", shape=cylinder, style=filled, '
-            "fillcolor=#2196f3, fontsize=14];\n"
+            'fillcolor="#2196f3", fontsize=14];\n'
             '    api [label="API", shape=box, fontsize=10.5];\n'
             "}",
         )
+
+    def test_digraph_fillcolor_always_quoted_exact(self) -> None:
+        """A '#'-hex value is not a valid bare DOT token; always quote."""
+        result = self.tool.execute(
+            mode="digraph",
+            nodes=[
+                {"id": "a", "style": "filled", "fillcolor": "#f00"},
+                {"id": "b", "style": "filled", "fillcolor": "#2196f380"},
+                {"id": "c", "style": "filled", "fillcolor": "red"},
+            ],
+        )
+        self.assertEqual(
+            result["result"],
+            "digraph G {\n"
+            '    a [shape=box, style=filled, fillcolor="#f00"];\n'
+            '    b [shape=box, style=filled, fillcolor="#2196f380"];\n'
+            '    c [shape=box, style=filled, fillcolor="red"];\n'
+            "}",
+        )
+        validated = self.tool.execute(
+            mode="validate", source=result["result"]
+        )
+        self.assertEqual(validated["issues"], [])
+        self.assertTrue(validated["ok"])
 
     def test_digraph_edge_styles_exact(self) -> None:
         result = self.tool.execute(
@@ -220,7 +244,7 @@ class DotGraphToolTest(unittest.TestCase):
             result["result"],
             "digraph G {\n"
             '    a [label="A", shape=ellipse, style=filled, '
-            "fillcolor=lightblue, fontsize=12];\n"
+            'fillcolor="lightblue", fontsize=12];\n'
             "}",
         )
 
@@ -583,6 +607,75 @@ class DotGraphToolTest(unittest.TestCase):
         )
         self.assertEqual(result["issues"], [])
         self.assertEqual(result["lines_checked"], 4)
+
+    def test_validate_edge_operator_mismatch_in_digraph(self) -> None:
+        result = self.tool.execute(
+            mode="validate",
+            source="digraph G {\n    a;\n    b;\n    a -- b;\n}",
+        )
+        self.assertEqual(
+            result["issues"],
+            [
+                {
+                    "line": 4,
+                    "check": "edge_operator",
+                    "severity": "error",
+                    "message": "undirected edge operator '--' in a "
+                               "digraph (digraph statements must use '->')",
+                }
+            ],
+        )
+        self.assertFalse(result["ok"])
+
+    def test_validate_edge_operator_mismatch_in_graph(self) -> None:
+        result = self.tool.execute(
+            mode="validate",
+            source="strict graph G {\n    a;\n    b;\n    a -> b;\n}",
+        )
+        self.assertEqual(
+            result["issues"],
+            [
+                {
+                    "line": 4,
+                    "check": "edge_operator",
+                    "severity": "error",
+                    "message": "directed edge operator '->' in an "
+                               "undirected graph (undirected statements "
+                               "must use '--')",
+                }
+            ],
+        )
+        self.assertFalse(result["ok"])
+
+    def test_validate_matching_edge_operators_silent(self) -> None:
+        self.assertEqual(
+            self.tool.execute(
+                mode="validate",
+                source="digraph G {\n    a;\n    a -> a;\n}",
+            )["issues"],
+            [],
+        )
+        self.assertEqual(
+            self.tool.execute(
+                mode="validate",
+                source="graph G {\n    a;\n    a -- a;\n}",
+            )["issues"],
+            [],
+        )
+
+    def test_validate_edge_operator_html_label_not_flagged(self) -> None:
+        result = self.tool.execute(
+            mode="validate",
+            source=(
+                "digraph G {\n"
+                "    a;\n"
+                "    b;\n"
+                "    a -> b [label=<<b>-- dash --</b>>];\n"
+                "}"
+            ),
+        )
+        self.assertEqual(result["issues"], [])
+        self.assertTrue(result["ok"])
 
     def test_validate_subgraph_cluster_source(self) -> None:
         source = (

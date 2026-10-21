@@ -27,7 +27,9 @@ Supported modes:
 * ``validate`` — run a *basic sanity check* over a DOT source string:
   graph declaration keyword, balanced ``{}`` / ``[]``, unterminated
   double quotes, statement lines missing the (optional but checked)
-  trailing semicolon, and edge endpoints referencing nodes that are
+  trailing semicolon, edge operators that contradict the declared
+  graph kind (``--`` inside a digraph, ``->`` inside an undirected
+  graph), and edge endpoints referencing nodes that are
   never declared. This is deliberately NOT a full DOT parser — it is
   a cheap line-oriented heuristic pass that catches the most common
   breakages; a clean validate result does not guarantee ``dot``
@@ -61,7 +63,9 @@ Determinism and escaping conventions (documented contract):
 * Attributes are emitted in a stable documented order — nodes:
   ``label, shape, style, fillcolor, fontsize``; edges: ``label,
   style, dir, weight`` — so the same spec always yields
-  byte-identical DOT source. ``shape`` is always emitted (the tool
+  byte-identical DOT source. ``label`` and ``fillcolor`` values are
+  always emitted double-quoted (a ``#``-hex color is not a valid
+  bare DOT token). ``shape`` is always emitted (the tool
   default ``box`` deliberately differs from Graphviz's own default);
   the other attributes are emitted only when provided. Every node /
   edge / cluster-label statement is terminated with ``;`` so the
@@ -149,7 +153,8 @@ class DotGraphTool(Tool):
         "(mode='digraph'), the undirected variant (mode='graph'), "
         "runs a basic sanity lint (declaration keyword, balanced "
         "braces/brackets, unterminated quotes, missing optional "
-        "semicolons, unknown edge endpoints) over DOT source "
+        "semicolons, edge operators that contradict the declared "
+        "graph kind, unknown edge endpoints) over DOT source "
         "(mode='validate'), and parses node/edge/cluster counts "
         "back out of DOT source (mode='stats')."
     )
@@ -638,7 +643,7 @@ class DotGraphTool(Tool):
             if "style" in spec:
                 attrs.append(f"style={spec['style']}")
             if "fillcolor" in spec:
-                attrs.append(f"fillcolor={spec['fillcolor']}")
+                attrs.append(f'fillcolor="{spec["fillcolor"]}"')
             if "fontsize" in spec:
                 attrs.append(
                     f"fontsize={self._format_number(spec['fontsize'])}"
@@ -725,6 +730,7 @@ class DotGraphTool(Tool):
         depth = 0
         bracket_depth = 0
         saw_declaration = False
+        graph_directed = None
 
         for number, raw_line in enumerate(raw_lines, start=1):
             masked = self._mask_quotes(raw_line)
@@ -743,9 +749,11 @@ class DotGraphTool(Tool):
             if not stripped:
                 continue
 
-            if not saw_declaration:
+            is_declaration_line = not saw_declaration
+            if is_declaration_line:
                 saw_declaration = True
-                if not _GRAPH_DECL.match(stripped):
+                declaration = _GRAPH_DECL.match(stripped)
+                if not declaration:
                     issues.append({
                         "line": number,
                         "check": "declaration",
@@ -754,6 +762,8 @@ class DotGraphTool(Tool):
                                    "'digraph' or 'graph' (optionally "
                                    "'strict') declaration",
                     })
+                else:
+                    graph_directed = declaration.group(2).lower() == "digraph"
 
             depth += stripped.count("{") - stripped.count("}")
             if depth < 0:
@@ -778,6 +788,29 @@ class DotGraphTool(Tool):
                 continue
 
             is_edge = ("->" in stripped) or ("--" in stripped)
+            if (
+                not is_declaration_line
+                and graph_directed is not None
+                and "<" not in stripped
+            ):
+                if graph_directed and "--" in stripped:
+                    issues.append({
+                        "line": number,
+                        "check": "edge_operator",
+                        "severity": "error",
+                        "message": "undirected edge operator '--' in a "
+                                   "digraph (digraph statements must use "
+                                   "'->')",
+                    })
+                elif not graph_directed and "->" in stripped:
+                    issues.append({
+                        "line": number,
+                        "check": "edge_operator",
+                        "severity": "error",
+                        "message": "directed edge operator '->' in an "
+                                   "undirected graph (undirected statements "
+                                   "must use '--')",
+                    })
             bare = None if is_edge else _BARE_STATEMENT.match(stripped)
             if is_edge:
                 statement = _EDGE_ATTRS.sub("", stripped).rstrip(";").strip()

@@ -1,5 +1,5 @@
 name: dot_graph_tool
-description: Graphviz DOT source generation tool — pure Python stdlib, no rendering and no Graphviz binary dependency. Builds directed-graph DOT source from nodes/edges/clusters specs (mode='digraph'), the undirected variant (mode='graph'), runs a basic sanity lint (declaration keyword, balanced braces/brackets, unterminated quotes, missing optional semicolons, unknown edge endpoints) over DOT source (mode='validate'), and parses node/edge/cluster counts back out of DOT source (mode='stats').
+description: Graphviz DOT source generation tool — pure Python stdlib, no rendering and no Graphviz binary dependency. Builds directed-graph DOT source from nodes/edges/clusters specs (mode='digraph'), the undirected variant (mode='graph'), runs a basic sanity lint (declaration keyword, balanced braces/brackets, unterminated quotes, missing optional semicolons, edge operators that contradict the declared graph kind, unknown edge endpoints) over DOT source (mode='validate'), and parses node/edge/cluster counts back out of DOT source (mode='stats').
 tool_type: api
 metadata:
   type: TOOL
@@ -18,7 +18,7 @@ args_model:
     required: false
   nodes:
     type: array
-    description: Node specs, each {id, label?, shape?, style?, fillcolor?, fontsize?} with shape one of box (default), ellipse, diamond, circle, hexagon, cylinder, record; style one of filled/dotted/dashed/bold/rounded; attributes are emitted in the stable order label, shape, style, fillcolor, fontsize. Ids are sanitized to [A-Za-z0-9_] deterministically and the mapping is reported. Required for the generation modes.
+    description: Node specs, each {id, label?, shape?, style?, fillcolor?, fontsize?} with shape one of box (default), ellipse, diamond, circle, hexagon, cylinder, record; style one of filled/dotted/dashed/bold/rounded; attributes are emitted in the stable order label, shape, style, fillcolor, fontsize (label and fillcolor values are emitted double-quoted). Ids are sanitized to [A-Za-z0-9_] deterministically and the mapping is reported. Required for the generation modes.
     required: false
   edges:
     type: array
