@@ -45,10 +45,12 @@ The tool supports four modes:
   capping at 100) or ``curve='scale_to_max'`` (linear rescale
   ``curved = score * 100 / max(scores)`` so the maximum becomes 100).
 
-All reported numbers are floats rounded to 2 decimal places; the
-arithmetic itself is plain float (no ``Decimal``), and percents are
-rounded before they enter the aggregate so every reported table is
-exactly reproducible by hand.
+All computed statistics are floats rounded to 2 decimal places
+(``scale_factor`` to 4), while echoed inputs (``score``, ``weight``,
+``max``, ``amount``) are preserved verbatim; the arithmetic itself is
+plain float (no ``Decimal``), and percents are rounded before they
+enter the aggregate so every reported table is exactly reproducible by
+hand.
 
 Input validation is strict and happens before any computation:
 malformed parameters (unknown mode, missing ``assignments``/``score``/
@@ -58,9 +60,10 @@ raise a ``ValueError``, mirroring the other common tools. Errors that
 depend on the *content being processed* — a malformed JSON array, an
 assignment element that is not an object, a missing or non-numeric
 ``score``/``weight``, a ``max`` of zero or less, an unknown assignment
-key, a non-monotonic custom threshold table — are returned as a
-structured ``error`` payload so an agent can react without catching
-exceptions.
+key, a non-monotonic custom threshold table, weights whose products or
+sum overflow the floating-point range, a ``drop_lowest`` call whose
+survivors carry no positive weight — are returned as a structured
+``error`` payload so an agent can react without catching exceptions.
 """
 
 import json
@@ -205,21 +208,21 @@ class GradeCalculatorTool(Tool):
         if mode in ("weighted", "drop_lowest"):
             try:
                 parsed = self._parse_assignments(assignments)
+                count = len(parsed)
+                if not self.MIN_ASSIGNMENTS <= count <= self.MAX_ASSIGNMENTS:
+                    self._invalid(
+                        f"assignments must contain between "
+                        f"{self.MIN_ASSIGNMENTS} and {self.MAX_ASSIGNMENTS} "
+                        f"entries (got {count})"
+                    )
+                if mode == "weighted":
+                    return self._run_weighted(parsed)
+                clean_drop_n = self._validate_drop_n(drop_n, count)
+                return self._run_drop_lowest(parsed, clean_drop_n)
             except _ContentError as exc:
                 return self._error_result(
                     {"mode": mode}, exc.error_type, exc.message
                 )
-            count = len(parsed)
-            if not self.MIN_ASSIGNMENTS <= count <= self.MAX_ASSIGNMENTS:
-                self._invalid(
-                    f"assignments must contain between "
-                    f"{self.MIN_ASSIGNMENTS} and {self.MAX_ASSIGNMENTS} "
-                    f"entries (got {count})"
-                )
-            if mode == "weighted":
-                return self._run_weighted(parsed)
-            clean_drop_n = self._validate_drop_n(drop_n, count)
-            return self._run_drop_lowest(parsed, clean_drop_n)
         if mode == "letter":
             try:
                 return self._run_letter(score, thresholds)
@@ -503,10 +506,15 @@ class GradeCalculatorTool(Tool):
 
     @staticmethod
     def _validate_drop_n(drop_n: Any, count: int) -> int:
-        """Validate the ``drop_lowest`` drop count against the count."""
+        """Validate the ``drop_lowest`` drop count against the count.
+
+        The default of 1 goes through the same bounds as an explicit
+        value, so a single-assignment collection (where no valid drop
+        count exists) is rejected up front.
+        """
         if drop_n is None:
-            return 1
-        if isinstance(drop_n, bool) or not isinstance(drop_n, int):
+            drop_n = 1
+        elif isinstance(drop_n, bool) or not isinstance(drop_n, int):
             GradeCalculatorTool._invalid(
                 f"drop_n must be an integer or None (got {drop_n!r})"
             )
@@ -538,8 +546,22 @@ class GradeCalculatorTool(Tool):
         2-dp percent, the weighted points ``percent * weight`` and
         the contribution ``percent * weight / total_weight`` those
         points make to the final mean.
+
+        Weights are individually finite but may still be
+        astronomically large, so any non-finite intermediate (a
+        ``percent * weight`` product, the weight total or the
+        weighted sum) is reported as a structured
+        ``invalid_assignments`` error instead of leaking ``inf`` or
+        ``nan`` into the result.
         """
-        total_weight = math.fsum(record["weight"] for record in records)
+        try:
+            total_weight = math.fsum(record["weight"] for record in records)
+        except OverflowError:
+            raise _ContentError(
+                "invalid_assignments",
+                "assignments weights are too large: their total "
+                "overflows the floating-point range",
+            ) from None
         if total_weight <= 0.0:
             cls._invalid(
                 "assignments weights must sum to a positive total "
@@ -550,6 +572,13 @@ class GradeCalculatorTool(Tool):
         percent_sum = 0.0
         for record in records:
             weighted_points = record["percent"] * record["weight"]
+            if not math.isfinite(weighted_points):
+                raise _ContentError(
+                    "invalid_assignments",
+                    f"assignment {record['name']!r} overflows: percent "
+                    f"{record['percent']} times weight {record['weight']} "
+                    "exceeds the floating-point range",
+                )
             weighted_sum += weighted_points
             percent_sum += record["percent"]
             entry = {
@@ -563,6 +592,12 @@ class GradeCalculatorTool(Tool):
             if record["max"] is not None:
                 entry["max"] = record["max"]
             table.append(entry)
+        if not math.isfinite(weighted_sum):
+            raise _ContentError(
+                "invalid_assignments",
+                "assignments are too large: the weighted sum overflows "
+                "the floating-point range",
+            )
         result: dict[str, Any] = {
             "count": len(records),
             "assignments": table,
@@ -596,7 +631,10 @@ class GradeCalculatorTool(Tool):
         score: ``{score: 85, weight: 9}`` (impact 765) is dropped
         before ``{score: 60, weight: 90}`` (impact 5400) even though
         60 is the lower score. Ties break deterministically on the
-        original element index.
+        original element index. When the survivors carry no positive
+        weight in total (every remaining assignment has weight 0) no
+        weighted mean is defined, and the call returns a structured
+        ``degenerate_weights`` error instead of raising.
         """
         before = self._aggregate(records)
         ranked = sorted(
@@ -607,6 +645,14 @@ class GradeCalculatorTool(Tool):
             ),
         )
         dropped, kept = ranked[:drop_n], ranked[drop_n:]
+        if math.fsum(record["weight"] for record in kept) <= 0.0:
+            return self._error_result(
+                {"mode": "drop_lowest", "drop_n": drop_n},
+                "degenerate_weights",
+                "dropping the lowest-impact assignments leaves only "
+                "zero-weight survivors, so no weighted mean is defined "
+                "over the kept assignments",
+            )
         after = self._aggregate(tuple(kept))
         return {
             "mode": "drop_lowest",
@@ -766,13 +812,26 @@ class GradeCalculatorTool(Tool):
         rescale ``curved = score * 100 / max(scores)`` so the highest
         score becomes exactly 100 and the others keep their relative
         distances. Curved scores are rounded to 2 decimal places and
-        the new mean is the mean of those reported values.
+        the new mean is the mean of those reported values. The
+        ``amount`` parameter is validated before ``scores`` is
+        parsed, keeping parameter errors ahead of content errors.
         """
         if curve not in self.CURVE_KINDS:
             self._invalid(
                 f"curve must be one of: {', '.join(self.CURVE_KINDS)} "
                 f"(got {curve!r})"
             )
+        if curve == "flat_add":
+            clean_amount = self._number(
+                amount, "amount", minimum=0.0, strict_minimum=True
+            )
+        else:
+            clean_amount = None
+            if amount is not None:
+                self._invalid(
+                    f"amount applies to flat_add only and must be omitted "
+                    f"for scale_to_max (got {amount!r})"
+                )
         data, source = self._parse_source(scores, "scores")
         if not isinstance(data, list):
             raise _ContentError(
@@ -800,15 +859,12 @@ class GradeCalculatorTool(Tool):
             "source": source,
             "count": len(values),
             "original": {
-                "min": min(values),
-                "max": max(values),
+                "min": round(min(values), 2),
+                "max": round(max(values), 2),
                 "mean": original_mean,
             },
         }
         if curve == "flat_add":
-            clean_amount = self._number(
-                amount, "amount", minimum=0.0, strict_minimum=True
-            )
             curved = [
                 round(min(100.0, value + clean_amount), 2) for value in values
             ]
@@ -824,11 +880,6 @@ class GradeCalculatorTool(Tool):
                 "new_min": min(curved),
                 "new_max": max(curved),
             }
-        if amount is not None:
-            self._invalid(
-                f"amount applies to flat_add only and must be omitted for "
-                f"scale_to_max (got {amount!r})"
-            )
         maximum = max(values)
         if maximum <= 0.0:
             return self._error_result(

@@ -302,6 +302,33 @@ class GradeCalculatorToolTest(unittest.TestCase):
         self.assertEqual(result["drop_n"], 1)
         self.assertEqual(len(result["dropped"]), 1)
 
+    def test_drop_lowest_default_rejected_for_single_assignment(self) -> None:
+        # The default drop_n=1 must go through the same bounds as an
+        # explicit value: with one assignment no valid drop count exists,
+        # so the call must raise the documented count ValueError instead
+        # of failing later with a misleading aggregate error.
+        message = self.assert_invalid(
+            mode="drop_lowest", assignments=[{"name": "only", "score": 50, "weight": 1}]
+        )
+        self.assertIn("strictly less than the assignment count", message)
+
+    def test_drop_lowest_zero_weight_survivors_is_structured_error(self) -> None:
+        # Impacts tie at 0 (0 * 10 and 100 * 0), so index order drops the
+        # zero-score assignment and only a weight-0 survivor remains: no
+        # weighted mean is defined and the tool must return a structured
+        # error payload rather than raise mid-computation.
+        result = self.tool.execute(
+            mode="drop_lowest",
+            assignments=[
+                {"name": "zeroed", "score": 0, "weight": 10},
+                {"name": "bonus", "score": 100, "weight": 0},
+            ],
+            drop_n=1,
+        )
+        message = self.assert_content_error(result, "degenerate_weights")
+        self.assertIn("zero-weight survivors", message)
+        self.assertNotIn("after", result)
+
     def test_drop_lowest_json_string_input(self) -> None:
         result = self.tool.execute(
             mode="drop_lowest",
@@ -456,6 +483,31 @@ class GradeCalculatorToolTest(unittest.TestCase):
         self.assertEqual(result["source"], "json")
         self.assertEqual(result["curved_scores"], [83.0, 100.0, 67.0])
 
+    def test_curve_original_min_max_are_rounded(self) -> None:
+        # Computed statistics are reported at 2 decimal places even when
+        # the raw inputs carry more precision; curving still uses the
+        # raw values (79.123456 + 1 = 80.123456 -> 80.12).
+        result = self.tool.execute(
+            mode="curve",
+            scores=[78.123456, 91.987654],
+            curve="flat_add",
+            amount=1,
+        )
+        self.assertEqual(result["original"]["min"], 78.12)
+        self.assertEqual(result["original"]["max"], 91.99)
+        self.assertEqual(result["curved_scores"], [79.12, 92.99])
+
+    def test_curve_amount_validated_before_scores_content(self) -> None:
+        # Parameter errors take precedence over content errors: an
+        # invalid amount raises ValueError even when scores also carry
+        # an out-of-range element.
+        self.assert_invalid(
+            mode="curve", scores=[80, 101], curve="flat_add", amount=0
+        )
+        self.assert_invalid(
+            mode="curve", scores=[80, 101], curve="scale_to_max", amount=5
+        )
+
     def test_curve_scale_to_max_all_zero_is_structured_error(self) -> None:
         result = self.tool.execute(
             mode="curve", scores=[0, 0], curve="scale_to_max"
@@ -580,6 +632,35 @@ class GradeCalculatorToolTest(unittest.TestCase):
         )
         self.assertIn("positive total", message)
 
+    def test_overflowing_weight_product_is_structured_error(self) -> None:
+        # A finite but astronomically large weight must not leak inf or
+        # nan into the result: the overflowing percent * weight product
+        # is reported as a structured invalid_assignments error.
+        result = self.tool.execute(
+            mode="weighted",
+            assignments=[
+                {"name": "big", "score": 100, "weight": 1e308},
+                {"name": "small", "score": 50, "weight": 1},
+            ],
+        )
+        message = self.assert_content_error(result, "invalid_assignments")
+        self.assertIn("overflows", message)
+        self.assertNotIn("weighted_mean", result)
+
+    def test_overflowing_weight_total_is_structured_error(self) -> None:
+        # Weights whose sum overflows the float range (fsum raises
+        # OverflowError internally) must surface as the same structured
+        # error, never as an uncaught exception.
+        result = self.tool.execute(
+            mode="weighted",
+            assignments=[
+                {"name": "big1", "score": 100, "weight": 1.5e308},
+                {"name": "big2", "score": 50, "weight": 1.5e308},
+            ],
+        )
+        message = self.assert_content_error(result, "invalid_assignments")
+        self.assertIn("overflows the floating-point range", message)
+
     # ------------------------------------------------------------------ #
     # Content error matrix (structured payloads, no exception)
     # ------------------------------------------------------------------ #
@@ -676,6 +757,14 @@ class GradeCalculatorToolTest(unittest.TestCase):
         self.assert_content_error(result, "invalid_json")
         result = self.tool.execute(
             mode="curve", scores=[80, 101], curve="flat_add", amount=5
+        )
+        self.assert_content_error(result, "invalid_scores")
+        result = self.tool.execute(
+            mode="curve", scores=[80, True], curve="flat_add", amount=5
+        )
+        self.assert_content_error(result, "invalid_scores")
+        result = self.tool.execute(
+            mode="curve", scores='[10, NaN]', curve="scale_to_max"
         )
         self.assert_content_error(result, "invalid_scores")
 
