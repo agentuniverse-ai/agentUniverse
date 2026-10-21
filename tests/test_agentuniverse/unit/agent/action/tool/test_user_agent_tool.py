@@ -841,6 +841,468 @@ class UserAgentToolTest(unittest.TestCase):
         result = self.tool.execute(mode="short", user_agent=ua)
         self.assertEqual(result["short"], "unknown / unknown / unknown")
 
+    def test_vendor_chromium_browsers(self) -> None:
+        cases = [
+            (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 YaBrowser/24.1.0.0 "
+                "Safari/537.36",
+                "Yandex Browser", "24.1.0.0",
+            ),
+            (
+                "Mozilla/5.0 (Linux; Android 13; SM-A536B) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/108.0.0.0 UCBrowser/16.0.8.1420 "
+                "Mobile Safari/537.36",
+                "UC Browser", "16.0.8.1420",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/55.0.2883.87 UBrowser/6.2.4098.3 "
+                "Safari/537.36",
+                "UC Browser", "6.2.4098.3",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36 "
+                "QQBrowser/10.7.4313.400",
+                "QQ Browser", "10.7.4313.400",
+            ),
+            (
+                "Mozilla/5.0 (Linux; U; Android 13; en-us; 2210132C "
+                "Build/TP1A.220624.014) AppleWebKit/537.36 (KHTML, like "
+                "Gecko) Version/4.0 Chrome/103.0.5060.129 Mobile "
+                "Safari/537.36 XiaoMi/MiuiBrowser/17.4.11",
+                "MiuiBrowser", "17.4.11",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 "
+                "MicroMessenger/8.0.43.2580(0x83000E30) "
+                "WindowsWechat(0x63090c33) XWEB/11275",
+                "WeChat", "8.0.43.2580",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 "
+                "Vivaldi/6.5.3206.50",
+                "Vivaldi", "6.5.3206.50",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/108.0.0.0 Whale/3.21.232.18 "
+                "Safari/537.36",
+                "Whale", "3.21.232.18",
+            ),
+            (
+                "Mozilla/5.0 (Linux; Android 12; Quest 2) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) OculusBrowser/27.0.0.2.24.676195627 "
+                "Safari/537.36 VR",
+                "Oculus Browser", "27.0.0.2.24.676195627",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36 "
+                "Discord/1.0.9092 Electron/27.1.0",
+                "Electron", "27.1.0",
+            ),
+        ]
+        for ua, name, version in cases:
+            with self.subTest(ua=ua):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertEqual(result["browser"]["name"], name)
+                self.assertEqual(result["browser"]["version"], version)
+                self.assertFalse(result["is_bot"])
+
+    def test_silk_requires_android(self) -> None:
+        fire = (
+            "Mozilla/5.0 (Linux; Android 9; KFMAWI) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Silk/96.1.1 Chrome/96.0.4664.110 Mobile "
+            "Safari/537.36"
+        )
+        result = self.tool.execute(mode="parse", user_agent=fire)
+        self.assertEqual(result["browser"]["name"], "Amazon Silk")
+        self.assertEqual(result["device"]["vendor"], "Amazon")
+        vita = (
+            "Mozilla/5.0 (PlayStation Vita 3.61) AppleWebKit/537.73 "
+            "(KHTML, like Gecko) Silk/3.2"
+        )
+        result = self.tool.execute(mode="parse", user_agent=vita)
+        self.assertEqual(result["browser"]["name"], "unknown")
+
+    def test_opera_mini_and_touch(self) -> None:
+        j2me = (
+            "Opera/9.80 (J2ME/MIDP; Opera Mini/5.1.21214/19.916; U; en) "
+            "Presto/2.5.25"
+        )
+        result = self.tool.execute(mode="parse", user_agent=j2me)
+        self.assertEqual(
+            result["browser"], {"name": "Opera Mini", "version": "5.1.21214"}
+        )
+        self.assertEqual(result["engine"]["name"], "Presto")
+        self.assertEqual(result["device"]["type"], "mobile")
+        android = (
+            "Mozilla/5.0 (Linux; U; Android 10; en-us; K) "
+            "AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 "
+            "Opera Mini/28.0.2254/119540 Mobile Safari/534.30"
+        )
+        result = self.tool.execute(mode="parse", user_agent=android)
+        self.assertEqual(
+            result["browser"], {"name": "Opera Mini", "version": "28.0.2254"}
+        )
+        self.assertIsNone(result["device"]["model"])
+        touch = (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) OPT/2.6.1 "
+            "Mobile/15E148 Safari/604.1"
+        )
+        result = self.tool.execute(mode="parse", user_agent=touch)
+        self.assertEqual(result["browser"]["name"], "Opera")
+        self.assertEqual(result["engine"]["name"], "WebKit")
+
+    def test_aosp_android_browser(self) -> None:
+        for ua in (
+            "Mozilla/5.0 (Linux; U; Android 4.4.2; en-us; SCH-I535 "
+            "Build/KOT49H) AppleWebKit/534.30 (KHTML, like Gecko) "
+            "Version/4.0 Mobile Safari/534.30",
+            "Mozilla/5.0 (Linux; U; Android 2.3.5; en-us; HTC Vision "
+            "Build/GRI40) AppleWebKit/533.1 (KHTML, like Gecko) "
+            "Version/4.0 Mobile Safari/533.1",
+        ):
+            with self.subTest(ua=ua):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertEqual(
+                    result["browser"],
+                    {"name": "Android Browser", "version": "4.0"},
+                )
+                self.assertEqual(result["engine"]["name"], "WebKit")
+                self.assertEqual(result["device"]["type"], "mobile")
+
+    def test_in_app_browsers(self) -> None:
+        ios = (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/21B74 "
+            "[FBAN/FBIOS;FBDV/iPhone14,2;FBMD/iPhone;FBSN/iOS;FBSV/17.1]"
+        )
+        result = self.tool.execute(mode="parse", user_agent=ios)
+        self.assertEqual(result["browser"]["name"], "Facebook")
+        self.assertIsNone(result["browser"]["version"])
+        self.assertEqual(result["engine"]["name"], "WebKit")
+        self.assertEqual(result["device"]["type"], "mobile")
+        android = (
+            "Mozilla/5.0 (Linux; Android 13; SM-G991B Build/TP1A.220624.014) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 "
+            "Chrome/118.0.0.0 Mobile Safari/537.36 "
+            "[FB_IAB/FB4A;FBAV/444.0.0.32.118;]"
+        )
+        result = self.tool.execute(mode="parse", user_agent=android)
+        self.assertEqual(
+            result["browser"],
+            {"name": "Facebook", "version": "444.0.0.32.118"},
+        )
+        self.assertEqual(result["engine"]["name"], "Blink")
+        instagram = (
+            "Mozilla/5.0 (Linux; Android 14; SM-S918B Build/UP1A.231005.007) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 "
+            "Chrome/119.0.6045.163 Mobile Safari/537.36 "
+            "Instagram 309.0.0.29.110 Android"
+        )
+        result = self.tool.execute(mode="parse", user_agent=instagram)
+        self.assertEqual(
+            result["browser"],
+            {"name": "Instagram", "version": "309.0.0.29.110"},
+        )
+
+    def test_case_insensitive_tokens(self) -> None:
+        cases = [
+            (
+                "mozilla/5.0 (windows nt 10.0; win64; x64) applewebkit/537.36 "
+                "(khtml, like gecko) chrome/120.0.0.0 safari/537.36",
+                "Chrome", "Windows", "Blink",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0 EDG/120.0.0.0",
+                "Edge", "Windows", None,
+            ),
+            (
+                "mozilla/5.0 (linux; android 13) chrome/120 mobile "
+                "safari/537.36 edga/121.0.0.0",
+                "Edge", "Android", None,
+            ),
+            (
+                "mozilla/5.0 (macintosh; intel mac os x 10_15_7) "
+                "applewebkit/605.1.15 (khtml, like gecko) version/17.1 "
+                "safari/605.1.15",
+                "Safari", "Mac OS X", "WebKit",
+            ),
+            (
+                "mozilla/5.0 (windows nt 6.1; trident/7.0; rv:11.0) "
+                "like gecko",
+                "Internet Explorer", "Windows", "Trident",
+            ),
+            (
+                "mozilla/5.0 (iphone; cpu iphone os 17_1 like mac os x) "
+                "applewebkit/605.1.15 (khtml, like gecko) crios/119.0 "
+                "mobile/15e148 safari/604.1",
+                "Chrome", "iOS", "WebKit",
+            ),
+        ]
+        for ua, browser, os_name, engine in cases:
+            with self.subTest(ua=ua):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertEqual(result["browser"]["name"], browser)
+                self.assertEqual(result["os"]["name"], os_name)
+                if engine is not None:
+                    self.assertEqual(result["engine"]["name"], engine)
+        self.assertTrue(
+            self.tool.execute(mode="short", user_agent="CURL/8.4.0")["is_bot"]
+        )
+
+    def test_bsd_and_kaios_os(self) -> None:
+        cases = [
+            (
+                "Mozilla/5.0 (X11; FreeBSD amd64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+                "FreeBSD",
+                "desktop",
+            ),
+            (
+                "Mozilla/5.0 (X11; NetBSD amd64; rv:128.0) Gecko/20100101 "
+                "Firefox/128.0",
+                "NetBSD",
+                "desktop",
+            ),
+            (
+                "Mozilla/5.0 (X11; OpenBSD amd64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "OpenBSD",
+                "desktop",
+            ),
+            (
+                "Mozilla/5.0 (Mobile; Nokia_8110_Virgin; rv:48.0) "
+                "Gecko/48.0 Firefox/48.0 KAI/2.5",
+                "KaiOS",
+                "mobile",
+            ),
+        ]
+        for ua, os_name, device_type in cases:
+            with self.subTest(ua=ua):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertEqual(result["os"]["name"], os_name)
+                self.assertEqual(result["device"]["type"], device_type)
+
+    def test_windows_phone_without_version(self) -> None:
+        ua = (
+            "Mozilla/5.0 (compatible; MSIE 9.0; Windows Phone; "
+            "IEMobile/9.0)"
+        )
+        result = self.tool.execute(mode="parse", user_agent=ua)
+        self.assertEqual(
+            result["os"], {"name": "Windows Phone", "version": None}
+        )
+        self.assertEqual(result["device"]["type"], "mobile")
+
+    def test_extended_bot_clients(self) -> None:
+        cases = [
+            ("facebookexternalhit/1.1", "facebookexternalhit", "1.1"),
+            (
+                "meta-externalagent/1.1 (+https://developers.facebook.com"
+                "/docs/sharing/webmasters/crawler)",
+                "meta-externalagent",
+                "1.1",
+            ),
+            (
+                "Mozilla/5.0 (Unknown; Linux x86_64) AppleWebKit/538.1 "
+                "(KHTML, like Gecko) PhantomJS/2.1.1 Safari/538.1",
+                "PhantomJS",
+                "2.1.1",
+            ),
+            ("Scrapy/2.11.0 (+https://scrapy.org)", "Scrapy", "2.11.0"),
+            ("python-httpx/0.27.0", "python-httpx", "0.27.0"),
+            ("aiohttp/3.9.5", "aiohttp", "3.9.5"),
+            ("Java/17.0.9", "Java", "17.0.9"),
+            ("Java/1.8.0_311", "Java", "1.8.0_311"),
+            ("libwww-perl/6.76", "libwww-perl", "6.76"),
+            ("lwp-trivial/5.837 libwww-perl/6.76", "lwp-trivial", "5.837"),
+            ("http.rb/5.1.1", "http.rb", "5.1.1"),
+            ("undici/5.22.0", "undici", "5.22.0"),
+            ("node-fetch/3.3.2", "node-fetch", "3.3.2"),
+            ("HTTPie/3.2.2", "HTTPie", "3.2.2"),
+            ("GuzzleHttp/7 (curl/7.87.0 PHP/8.2.4)", "GuzzleHttp", "7"),
+            (
+                "Mozilla/5.0 zgrab/0.x",
+                "zgrab",
+                "0.x",
+            ),
+            ("masscan/1.3.2", "masscan", "1.3.2"),
+            (
+                "Mozilla/5.0 (compatible; Claude-Web/2.0; "
+                "claude-web@anthropic.com)",
+                "Claude-Web",
+                "2.0",
+            ),
+            (
+                "Mozilla/5.0 (compatible; ChatGPT-User/1.0; "
+                "+https://openai.com/bot)",
+                "ChatGPT-User",
+                "1.0",
+            ),
+            (
+                "Mozilla/5.0 (compatible; YandexImages/3.0; "
+                "+http://yandex.com/bots)",
+                "YandexImages",
+                "3.0",
+            ),
+        ]
+        for ua, name, version in cases:
+            with self.subTest(ua=ua):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertTrue(result["is_bot"])
+                self.assertEqual(result["device"]["type"], "bot")
+                self.assertEqual(result["browser"]["name"], name)
+                self.assertEqual(result["browser"]["version"], version)
+
+    def test_bot_names_without_version_token(self) -> None:
+        cases = [
+            (
+                "Mozilla/5.0 (compatible; PetalBot; "
+                "+https://webmaster.petalsearch.com/site/petalbot)",
+                "PetalBot",
+            ),
+            (
+                "Mozilla/5.0 (compatible; Bytespider; "
+                "https://zhanzhang.toutiao.com/)",
+                "Bytespider",
+            ),
+            ("TelegramBot (like TwitterBot)", "TelegramBot"),
+            (
+                "Sogou web spider/4.0"
+                "(+http://www.sogou.com/docs/help/webmasters.htm#07)",
+                "Sogou web spider",
+            ),
+            (
+                "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)",
+                "Slackbot-LinkExpanding",
+            ),
+            (
+                "Mozilla/5.0 (compatible; MJ12bot/v1.4.8; "
+                "http://mj12bot.com/)",
+                "MJ12bot",
+            ),
+        ]
+        for ua, name in cases:
+            with self.subTest(ua=ua):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertTrue(result["is_bot"])
+                self.assertEqual(result["browser"]["name"], name)
+
+    def test_android_dual_sim_models(self) -> None:
+        cases = [
+            ("Android 13; SM-A536B/DS)", "SM-A536B", "Samsung"),
+            ("Android 13; SM-A536B/DS Build/TP1A.220624.014)", "SM-A536B", "Samsung"),
+            ("Android 12; SM-G975F/DS)", "SM-G975F", "Samsung"),
+            ("Android 11; SM-A217F/DSN)", "SM-A217F", "Samsung"),
+            ("Android 14; SM-A146P/DSN)", "SM-A146P", "Samsung"),
+        ]
+        for segment, model, vendor in cases:
+            ua = (
+                "Mozilla/5.0 (Linux; " + segment + ") AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            )
+            with self.subTest(segment=segment):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertEqual(result["device"]["model"], model)
+                self.assertEqual(result["device"]["vendor"], vendor)
+
+    def test_android_vendor_prefix_expansion(self) -> None:
+        cases = [
+            ("Android 12; SCG08)", "SCG08", "Samsung"),
+            ("Android 11; SCV41)", "SCV41", "Samsung"),
+            ("Android 13; RMX3261)", "RMX3261", "Realme"),
+            ("Android 13; XQ-CT72)", "XQ-CT72", "Sony"),
+            ("Android 11; SO-52D)", "SO-52D", "Sony"),
+            ("Android 12; SOV41)", "SOV41", "Sony"),
+            ("Android 12; HONOR 70)", "HONOR 70", "Huawei"),
+            ("Android 9; KFMAWI)", "KFMAWI", "Amazon"),
+        ]
+        for segment, model, vendor in cases:
+            ua = (
+                "Mozilla/5.0 (Linux; " + segment + ") AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            )
+            with self.subTest(segment=segment):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertEqual(result["device"]["model"], model)
+                self.assertEqual(result["device"]["vendor"], vendor)
+
+    def test_android_locale_tokens_are_not_models(self) -> None:
+        cases = [
+            "Android 10; en-us; K)",
+            "Android 13; zh-CN; SM-A536B)",
+        ]
+        for segment in cases:
+            ua = (
+                "Mozilla/5.0 (Linux; U; " + segment + ") "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 "
+                "Mobile Safari/537.36"
+            )
+            with self.subTest(segment=segment):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertNotEqual(result["device"]["model"], "en-us")
+                self.assertNotEqual(result["device"]["model"], "zh-CN")
+        keep = (
+            "Mozilla/5.0 (Linux; U; Android 4.4.2; en-us; SCH-I535 "
+            "Build/KOT49H) AppleWebKit/534.30 (KHTML, like Gecko) "
+            "Version/4.0 Mobile Safari/534.30"
+        )
+        result = self.tool.execute(mode="parse", user_agent=keep)
+        self.assertEqual(result["device"]["model"], "SCH-I535")
+        self.assertEqual(result["device"]["vendor"], "Samsung")
+
+    def test_mixed_token_precedence_chain(self) -> None:
+        cases = [
+            (
+                "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, "
+                "like Gecko) Safari/537.36 Chrome/120.0.0.0 Edg/120.0.0.0",
+                "Edge",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0) Safari/605 Chrome/120 "
+                "SamsungBrowser/23",
+                "Samsung Internet",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0) Chrome/120 Chromium/78",
+                "Chromium",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0) Firefox/120 Chrome/120 "
+                "Safari/537.36",
+                "Firefox",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0) MSIE 9.0 Chrome/120",
+                "Internet Explorer",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0) Version/17.0 Safari/605 "
+                "CriOS/119",
+                "Chrome",
+            ),
+            (
+                "Mozilla/5.0 (Windows NT 10.0) Chrome/120 Edg/120 Edge/12",
+                "Edge",
+            ),
+            (
+                "Mozilla/5.0 (Linux; Android 13) Chrome/120 Mobile "
+                "Safari/537.36 EdgA/121 YaBrowser/24.1",
+                "Edge",
+            ),
+        ]
+        for ua, expected in cases:
+            with self.subTest(ua=ua):
+                result = self.tool.execute(mode="parse", user_agent=ua)
+                self.assertEqual(result["browser"]["name"], expected)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -33,33 +33,56 @@ Two modes, all built purely on the standard library:
 Detection order (each step only runs on what the previous steps have
 not already claimed — the order IS the disambiguation):
 
-1. **Bots first.** A case-insensitive hint scan for
+1. **Bots first.** A case-insensitive substring hint scan for
    ``bot|crawl|spider|slurp|bingpreview|headlesschrome`` plus the
-   common non-browser HTTP clients (``curl``, ``wget``,
-   ``python-requests``, ``python-urllib``, ``go-http-client``,
-   ``postmanruntime``, ``axios``, ``okhttp``, ``dalvik``,
-   ``httpclient``) marks ``is_bot=true`` and ``device.type=bot``
-   *before* any browser matching, so compatibility tokens embedded in
-   bot strings (Googlebot carries ``Chrome/`` and ``Safari/``) are
-   never misread as the browser. The bot's own token
-   (``Googlebot/2.1``, ``curl/8.4.0``) is reported as the browser
-   name/version when present.
+   common non-browser HTTP clients and headless/scraping tools
+   (``curl``, ``wget``, ``python-requests``, ``python-urllib``,
+   ``python-httpx``, ``aiohttp``, ``go-http-client``, ``java/``,
+   ``libwww-perl``, ``lwp-trivial``, ``node-fetch``, ``undici``,
+   ``http.rb``, ``HTTPie``, ``Scrapy``, ``GuzzleHttp``, ``PhantomJS``,
+   ``zgrab``, ``masscan``, ``postmanruntime``, ``axios``, ``okhttp``,
+   ``dalvik``, ``httpclient``) and social fetchers
+   (``facebookexternalhit``, ``externalagent``/``meta-externalagent``,
+   ``claude-web``, ``chatgpt-user``) marks ``is_bot=true`` and
+   ``device.type=bot`` *before* any browser matching, so
+   compatibility tokens embedded in bot strings (Googlebot carries
+   ``Chrome/`` and ``Safari/``) are never misread as the browser. The
+   bot's own token (``Googlebot/2.1``, ``curl/8.4.0``, versions with
+   a leading ``v`` such as ``MJ12bot/v1.4.8``) is reported as the
+   browser name/version when present; without a version the keyword
+   word is used (``PetalBot``, ``Bytespider``, ``Sogou web
+   spider``), and when even that is only a bare keyword the hint
+   substring itself becomes the name.
 
-2. **Browsers.** Priority order: ``SamsungBrowser/`` → Samsung
-   Internet; ``Edg/``, ``EdgA/`` (Android) or ``EdgiOS/`` → the
-   Chromium-based Edge; ``Edge/`` → legacy EdgeHTML Edge;
-   ``OPR/``, ``OPiOS/`` or ``Opera/`` → Opera; ``IEMobile/`` /
-   ``MSIE`` → Internet Explorer; ``Firefox/`` / ``FxiOS/`` →
+2. **Browsers.** All token scans are case-insensitive; reported
+   names keep the string's own case. Priority order:
+   ``SamsungBrowser/`` → Samsung Internet; ``Edg/``, ``EdgA/``
+   (Android) or ``EdgiOS/`` → the Chromium-based Edge; ``Edge/`` →
+   legacy EdgeHTML Edge; ``OPR/``, ``OPiOS/`` or ``OPT/`` → Opera;
+   ``Opera Mini/`` → Opera Mini (claimed before the legacy
+   ``Opera/9.80`` prefix Mini strings also carry); ``Opera/`` →
+   Opera; then the vendor Chromium browsers whose own token beats
+   the ``Chrome/`` compatibility token they embed —
+   ``YaBrowser/`` → Yandex Browser, ``UCBrowser/``/``UBrowser/`` →
+   UC Browser, ``QQBrowser/`` → QQ Browser, ``MiuiBrowser/`` →
+   MiuiBrowser, ``MicroMessenger/`` → WeChat, ``OculusBrowser/`` →
+   Oculus Browser, ``Whale/`` → Whale, ``Vivaldi/`` → Vivaldi,
+   ``Electron/`` → Electron, ``FBAN``/``FBAV``/``FB_IAB`` → Facebook
+   (version from ``FBAV/``), ``Instagram`` → Instagram — and
+   ``Silk/`` → Amazon Silk only on Android (PlayStation Vita strings
+   carry a ``Silk/`` token too); ``IEMobile/`` / ``MSIE`` →
+   Internet Explorer; ``Firefox/`` / ``FxiOS/`` →
    Firefox; a ``Chromium`` token → Chromium; ``CriOS/`` or
    ``Chrome/`` → Chrome — reached only when no Chromium-family
    sibling has already claimed the string, which is exactly the
    documented rule *``Chrome/`` without ``Edg/``, ``OPR/`` or
    ``Chromium`` means Chrome*; finally ``Safari/`` without any
    Chrome-family token → Safari, whose version comes from the
-   ``Version/`` token. A ``Trident/`` + ``rv:`` string without
-   ``MSIE`` is the IE 11 shape. Legacy Opera froze ``Opera/`` at
-   9.80 and carried the real version in ``Version/``; that unfreezing
-   is applied.
+   ``Version/`` token — except on Android, where a Safari token is
+   the pre-Chromium AOSP **Android Browser**, never Safari. A
+   ``Trident/`` + ``rv:`` string without ``MSIE`` is the IE 11
+   shape. Legacy Opera froze ``Opera/`` at 9.80 and carried the real
+   version in ``Version/``; that unfreezing is applied.
 
 3. **Engines.** ``Trident/`` → Trident (checked first because in
    IE 11 the ``rv:`` token is the *browser* version, not the
@@ -79,34 +102,43 @@ not already claimed — the order IS the disambiguation):
    implies the Gecko engine.
 
 4. **Operating systems.** ``Windows Phone`` is checked *before*
-   ``Android`` (Lumia strings carry both) and before ``Windows NT``.
-   ``Windows NT`` versions map through a fixed table
+   ``Android`` (Lumia strings carry both) and before ``Windows NT``;
+   a bare ``Windows Phone`` without a version is still named Windows
+   Phone. ``Windows NT`` versions map through a fixed table
    (``6.1``→7, ``6.2``→8, ``6.3``→8.1, ``6.0``→Vista, ``5.1``/``5.2``
    →XP, ``5.0``→2000, ``10.0``→10 — Windows 11 is deliberately
    reported as 10 because its User-Agent is byte-identical on NT
    ``10.0``; the distinction is not honestly derivable from the
    string). ``Android 13`` → Android 13 with the device model taken
    from the token that follows (``Android 13; SM-G991B`` → vendor
-   Samsung, model ``SM-G991B``; a glued `` Build/…`` suffix and
-   placeholder tokens like ``K``, ``Mobile``, ``wv`` are skipped).
+   Samsung, model ``SM-G991B``; a glued `` Build/…`` suffix, glued
+   dual-SIM/regional suffixes (``SM-A536B/DS`` → ``SM-A536B``),
+   placeholder tokens like ``K``, ``Mobile``, ``wv`` and locale
+   tokens like ``en-us`` are skipped).
    ``CPU iPhone OS 17_1`` → iOS 17.1 (underscores become dots);
-   ``iPad; CPU OS 16_6`` → iPadOS 16.6; ``Mac OS X 10_15_7`` →
-   10.15.7; ``CrOS <arch> N`` → ChromeOS N; ``Ubuntu``/``Fedora``
-   tokens are named; a bare ``Linux``/``X11`` → Linux (Android is
-   matched earlier).
+   ``iPad; CPU OS 16_6`` → iPadOS 16.6 — a deliberate refinement:
+   iPad strings name iPadOS even though the family is iOS;
+   ``Mac OS X 10_15_7`` → 10.15.7; ``CrOS <arch> N`` → ChromeOS N;
+   ``KAI/x`` → KaiOS; ``Ubuntu``/``Fedora``/``FreeBSD``/``NetBSD``/
+   ``OpenBSD`` tokens are named; a bare ``Linux``/``X11`` → Linux
+   (Android and the BSDs are matched earlier).
 
 5. **Device.** bot → ``bot``; ``iPad`` or a ``Tablet`` token or
    Android *without* the ``Mobile`` token → ``tablet`` (Android
-   tablet User-Agents simply omit ``Mobile``); ``iPhone``, any
-   ``Mobile`` token, Windows Phone or Opera Mini → ``mobile``; a
-   desktop OS token (Windows / Mac OS X / Linux / ChromeOS) →
+   tablet User-Agents simply omit ``Mobile``; Amazon Fire tablets
+   are an honest exception — their strings do carry ``Mobile``, so
+   they read ``mobile``); ``iPhone``, any ``Mobile`` token, Windows
+   Phone or Opera Mini → ``mobile``; a desktop OS token (Windows /
+   Mac OS X / Linux / Ubuntu / Fedora / BSDs / ChromeOS / KaiOS) →
    ``desktop``; otherwise ``unknown``. Vendors: Apple for
-   iPhone/iPad/Mac, a documented prefix table for Android models
-   (``SM-``/``GT-``/``SC-``→Samsung, ``Pixel``→Google, ``LG-``/
-   ``LM-``→LG, ``Redmi``/``POCO``/``MIX``/``Mi ``→Xiaomi, ``moto``→
-   Motorola, ``CPH``/``OPPO``→OPPO, ``vivo``/``iQOO``→vivo,
-   ``ONEPLUS``→OnePlus, ``HUAWEI``/``Honor``→Huawei, ``Nokia``→
-   Nokia), and Nokia/Microsoft for Windows Phone Lumias.
+   iPhone/iPad/Mac, a documented prefix table for Android models,
+   matched case-insensitively (``SM-``/``GT-``/``SC-``/``SCH-``/
+   ``SCG``/``SCV``→Samsung, ``Pixel``→Google, ``LG-``/``LM-``→LG,
+   ``Redmi``/``POCO``/``MIX``/``Mi ``→Xiaomi, ``moto``→Motorola,
+   ``CPH``/``OPPO``→OPPO, ``vivo``/``iQOO``→vivo,
+   ``ONEPLUS``→OnePlus, ``HUAWEI``/``HONOR``→Huawei, ``Nokia``→
+   Nokia, ``RMX``→Realme, ``SO-``/``SOV``/``XQ-``→Sony,
+   ``KF``→Amazon), and Nokia/Microsoft for Windows Phone Lumias.
 
 Honest limitations (documented, not hidden): User-Agent strings are
 freely spoofable client-supplied text — this tool reports what the
@@ -115,8 +147,19 @@ string *claims*, never a verified identity; no Client Hints
 offline; version maps (Windows NT, frozen macOS/iOS versions, legacy
 Opera) are best-effort snapshots of how real User-Agents are frozen
 today; vendor/model extraction only knows the documented prefix
-table; and anything unrecognised is reported as ``unknown`` rather
-than guessed.
+table (numeric Xiaomi/OPPO/vivo codes, Huawei ``PGT-``-style codes
+and Japanese carrier codes beyond the table report the model with
+no vendor); legacy or niche forks that carry a standard token next
+to their own (SeaMonkey, Pale Moon, Maxthon, Sogou Explorer, 360,
+Brave and Vivaldi without their token, the QQ and Line in-app
+webviews) are reported under the standard token because that is all
+the string honestly says; console browsers (Nintendo Switch,
+PlayStation) and similar exotic platforms mostly report ``unknown``;
+the bot hint scan is substring-based, so any token merely containing
+``bot``/``spider``/… is conservatively treated as a bot, and bot
+names are the literal tokens (``facebookexternalhit``, not
+``FacebookBot``; ``Slurp``, not ``Yahoo! Slurp``); and anything
+unrecognised is reported as ``unknown`` rather than guessed.
 
 Input validation is strict and happens before any computation: a
 missing or unknown ``mode``, a ``user_agent`` that is not a string
@@ -144,64 +187,132 @@ _MAX_USER_AGENT_CHARS = 8_192
 # yet is a command-line client, so it needs its own token).
 _BOT_HINT_RE = re.compile(
     r"bot|crawl|spider|slurp|bingpreview|headlesschrome"
+    r"|facebookexternalhit|externalagent|phantomjs|scrapy"
+    r"|guzzlehttp|aiohttp|python-httpx|libwww-perl|lwp-trivial"
+    r"|node-fetch|undici|http\.rb|zgrab|masscan|java/|httpie"
+    r"|claude-web|chatgpt-user"
     r"|curl|wget|python-requests|python-urllib|go-http-client"
     r"|postmanruntime|axios|okhttp|dalvik|httpclient|httpcomponent",
     re.IGNORECASE,
 )
 # A bot's own name/version token, e.g. "Googlebot/2.1".
 _BOT_TOKEN_RE = re.compile(
-    r"([A-Za-z0-9_.+-]*(?:bot|crawl(?:er)?|spider|slurp"
-    r"|bingpreview|headlesschrome)[A-Za-z0-9_.+-]*)"
-    r"/([0-9][\w.+-]*)",
+    r"([A-Za-z0-9_.+ -]*(?:bot|crawl(?:er)?|spider|slurp"
+    r"|bingpreview|headlesschrome)[A-Za-z0-9_.+ -]*)"
+    r"\s*/[vV]?([0-9][\w.+-]*)",
     re.IGNORECASE,
+)
+_BOT_WORD_RE = re.compile(
+    r"[A-Za-z0-9_.+ -]*(?:bot|crawl(?:er)?|spider|slurp"
+    r"|bingpreview|headlesschrome)[A-Za-z0-9_.+ -]*",
+    re.IGNORECASE,
+)
+_BOT_WORD_VERSION_RE = re.compile(r"\s+[0-9][0-9A-Za-z.+-]*$")
+_BOT_WORD_NUMERIC_RE = re.compile(r"[0-9][0-9.]*")
+_BOT_WORD_GENERIC = frozenset(
+    {"bot", "bots", "robot", "robots", "crawler", "crawlers",
+     "crawl", "spider", "spiders", "slurp"}
 )
 # Library clients with a version token but no bot-ish suffix.
 _LIB_TOKEN_RE = re.compile(
-    r"\b(curl|wget|python-requests|python-urllib|go-http-client"
-    r"|postmanruntime|axios|okhttp|dalvik|java|apache-httpclient)"
-    r"/([0-9][\w.+-]*)",
+    r"\b(curl|wget|python-requests|python-urllib|python-httpx"
+    r"|aiohttp|go-http-client|postmanruntime|axios|okhttp|dalvik"
+    r"|java|apache-httpclient|facebookexternalhit|meta-externalagent"
+    r"|externalagent|phantomjs|scrapy|guzzlehttp|libwww-perl"
+    r"|lwp-trivial|node-fetch|undici|http\.rb|zgrab|masscan|httpie"
+    r"|claude-web|chatgpt-user|slack-imgproxy|yandeximages)"
+    r"/[vV]?([0-9][\w.+-]*)",
     re.IGNORECASE,
 )
 
 # Browser token extractors (version in group 1 of each).
-_RE_SAMSUNG = re.compile(r"SamsungBrowser/([0-9][0-9.]*)")
-_RE_EDGE_NEW = re.compile(r"\bEdg(?:A|iOS)?/([0-9][0-9.]*)")
-_RE_EDGE_OLD = re.compile(r"\bEdge/([0-9][0-9.]*)")
-_RE_OPR = re.compile(r"OPR/([0-9][0-9.]*)")
-_RE_OPIOS = re.compile(r"OPiOS/([0-9][0-9.]*)")
-_RE_OPERA_OLD = re.compile(r"Opera[/ ]([0-9][0-9.]*)")
-_RE_IEMOBILE = re.compile(r"IEMobile/([0-9][0-9.]*)")
-_RE_MSIE = re.compile(r"MSIE\s+([0-9][0-9.]*)")
-_RE_FIREFOX = re.compile(r"Firefox/([0-9][0-9.]*)")
-_RE_FXIOS = re.compile(r"FxiOS/([0-9][0-9.]*)")
-_RE_CHROMIUM = re.compile(r"Chromium/([0-9][0-9.]*)")
+_RE_SAMSUNG = re.compile(r"SamsungBrowser/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_EDGE_NEW = re.compile(r"\bEdg(?:A|iOS)?/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_EDGE_OLD = re.compile(r"\bEdge/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_OPR = re.compile(r"OPR/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_OPIOS = re.compile(r"OPiOS/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_OPT = re.compile(r"\bOPT/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_OPERA_MINI = re.compile(r"\bOpera Mini/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_OPERA_OLD = re.compile(r"Opera[/ ]([0-9][0-9.]*)", re.IGNORECASE)
+_RE_YABROWSER = re.compile(r"\bYaBrowser/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_UCBROWSER = re.compile(
+    r"\bU(?:CBrowser|Browser)/([0-9][0-9.]*)", re.IGNORECASE
+)
+_RE_QQBROWSER = re.compile(r"\bQQBrowser/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_MIUIBROWSER = re.compile(r"\bMiuiBrowser/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_MICROMESSENGER = re.compile(
+    r"\bMicroMessenger/([0-9][0-9.]*)", re.IGNORECASE
+)
+_RE_SILK = re.compile(r"\bSilk/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_OCULUS = re.compile(r"\bOculusBrowser/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_WHALE = re.compile(r"\bWhale/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_VIVALDI = re.compile(r"\bVivaldi/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_ELECTRON = re.compile(r"\bElectron/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_FB_PRESENCE = re.compile(r"(FBAN/|FBAV/|FB_IAB)", re.IGNORECASE)
+_RE_FBAV = re.compile(r"\bFBAV/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_INSTAGRAM = re.compile(r"\bInstagram[/ ]([0-9][0-9.]*)", re.IGNORECASE)
+_RE_IEMOBILE = re.compile(r"IEMobile/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_MSIE = re.compile(r"MSIE\s+([0-9][0-9.]*)", re.IGNORECASE)
+_RE_FIREFOX = re.compile(r"Firefox/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_FXIOS = re.compile(r"FxiOS/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_CHROMIUM = re.compile(r"Chromium/([0-9][0-9.]*)", re.IGNORECASE)
 _RE_CHROMIUM_WORD = re.compile(r"Chromium", re.IGNORECASE)
-_RE_CRIOS = re.compile(r"CriOS/([0-9][0-9.]*)")
-_RE_CHROME = re.compile(r"Chrome/([0-9][0-9.]*)")
-_RE_SAFARI = re.compile(r"Safari/[0-9.]+")
-_RE_VERSION = re.compile(r"Version/([0-9][0-9.]*)")
-_RE_RV = re.compile(r"rv:([0-9][0-9.]*)")
+_RE_CRIOS = re.compile(r"CriOS/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_CHROME = re.compile(r"Chrome/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_SAFARI = re.compile(r"Safari/[0-9.]+", re.IGNORECASE)
+_RE_VERSION = re.compile(r"Version/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_RV = re.compile(r"rv:([0-9][0-9.]*)", re.IGNORECASE)
+
+_VENDOR_CHROMIUM_RES: Tuple[Tuple["re.Pattern[str]", str], ...] = (
+    (_RE_YABROWSER, "Yandex Browser"),
+    (_RE_UCBROWSER, "UC Browser"),
+    (_RE_QQBROWSER, "QQ Browser"),
+    (_RE_MIUIBROWSER, "MiuiBrowser"),
+    (_RE_MICROMESSENGER, "WeChat"),
+    (_RE_OCULUS, "Oculus Browser"),
+    (_RE_WHALE, "Whale"),
+    (_RE_VIVALDI, "Vivaldi"),
+    (_RE_ELECTRON, "Electron"),
+    (_RE_FB_PRESENCE, "Facebook"),
+    (_RE_INSTAGRAM, "Instagram"),
+)
 
 # Engine token extractors.
-_RE_TRIDENT = re.compile(r"Trident/([0-9][0-9.]*)")
-_RE_PRESTO = re.compile(r"Presto/([0-9][0-9.]*)")
-_RE_APPLEWEBKIT = re.compile(r"AppleWebKit/([0-9][0-9.]*)")
+_RE_TRIDENT = re.compile(r"Trident/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_PRESTO = re.compile(r"Presto/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_APPLEWEBKIT = re.compile(r"AppleWebKit/([0-9][0-9.]*)", re.IGNORECASE)
 # A real Gecko date token ("Gecko/20100101"), never the frozen
 # compatibility marker "like Gecko".
-_RE_GECKO_DATE = re.compile(r"(?<![Ll]ike )Gecko/([0-9][0-9.]*)")
+_RE_GECKO_DATE = re.compile(
+    r"(?<![Ll]ike )Gecko/([0-9][0-9.]*)", re.IGNORECASE
+)
 
 # OS token extractors.
-_RE_WINDOWS_PHONE = re.compile(r"Windows Phone(?: OS)?\s+([0-9][0-9.]*)")
-_RE_ANDROID = re.compile(r"Android\s+([0-9][0-9.]*)")
+_RE_WINDOWS_PHONE = re.compile(
+    r"Windows Phone(?: OS)?\s+([0-9][0-9.]*)", re.IGNORECASE
+)
+_RE_WINDOWS_PHONE_BARE = re.compile(r"Windows\s+Phone", re.IGNORECASE)
+_RE_ANDROID = re.compile(r"Android\s+([0-9][0-9.]*)", re.IGNORECASE)
+_RE_ANDROID_ANY = re.compile(r"Android", re.IGNORECASE)
 # The parenthesized platform segment after the Android version; one
 # level of nested parentheses is tolerated because real model names
 # such as "moto g(8) power" contain them.
-_RE_ANDROID_SEG = re.compile(r"Android\s+[0-9.]+;((?:[^()]|\([^)]*\))*)\)")
-_RE_IPHONE_OS = re.compile(r"(?:CPU\s+)?iPhone\s+OS\s+([0-9_]+)")
-_RE_IPAD_OS = re.compile(r"CPU\s+OS\s+([0-9_]+)")
-_RE_MAC_OS = re.compile(r"Mac\s+OS\s+X\s*([0-9_.]+)")
-_RE_WINDOWS_NT = re.compile(r"Windows\s+NT\s+([0-9.]+)")
-_RE_CROS = re.compile(r"CrOS\s+\S+\s+([0-9][0-9.]*)")
+_RE_ANDROID_SEG = re.compile(
+    r"Android\s+[0-9.]+;((?:[^()]|\([^)]*\))*)\)", re.IGNORECASE
+)
+_RE_IPHONE_OS = re.compile(
+    r"(?:CPU\s+)?iPhone\s+OS\s+([0-9_]+)", re.IGNORECASE
+)
+_RE_IPAD_OS = re.compile(r"CPU\s+OS\s+([0-9_]+)", re.IGNORECASE)
+_RE_MAC_OS = re.compile(r"Mac\s+OS\s+X\s*([0-9_.]+)", re.IGNORECASE)
+_RE_WINDOWS_NT = re.compile(r"Windows\s+NT\s+([0-9.]+)", re.IGNORECASE)
+_RE_CROS = re.compile(r"CrOS\s+\S+\s+([0-9][0-9.]*)", re.IGNORECASE)
+_RE_KAI = re.compile(r"\bKAI/([0-9][0-9.]*)", re.IGNORECASE)
+_RE_UBUNTU = re.compile(r"Ubuntu", re.IGNORECASE)
+_RE_FEDORA = re.compile(r"Fedora", re.IGNORECASE)
+_RE_FREEBSD = re.compile(r"FreeBSD", re.IGNORECASE)
+_RE_NETBSD = re.compile(r"NetBSD", re.IGNORECASE)
+_RE_OPENBSD = re.compile(r"OpenBSD", re.IGNORECASE)
 _RE_LUMIA = re.compile(r"(Lumia\s+[0-9][0-9A-Za-z]*)", re.IGNORECASE)
 
 # Windows NT → marketing-name map. Windows 11 is NOT in the map on
@@ -218,43 +329,49 @@ _WINDOWS_NT_MAP: Dict[str, str] = {
     "10.0": "10",
 }
 
-# Chromium-family browsers whose AppleWebKit token implies Blink.
-_BLINK_BROWSERS = frozenset(
-    {"Chrome", "Chromium", "Edge", "Opera", "Samsung Internet"}
-)
 # iOS-only browser tokens: Apple mandates WebKit, never Blink.
-_IOS_BROWSER_TOKEN_RE = re.compile(r"CriOS/|FxiOS/|EdgiOS/|OPiOS/")
+_IOS_BROWSER_TOKEN_RE = re.compile(
+    r"CriOS/|FxiOS/|EdgiOS/|OPiOS/", re.IGNORECASE
+)
 
 # Android model tokens that are placeholders, never device models.
 _NON_MODEL_TOKENS = frozenset(
     {"mobile", "tablet", "tv", "build", "wv", "webview", "k", "u"}
 )
+_ANDROID_LOCALE_RE = re.compile(
+    r"[a-z]{2}(?:-(?:[a-z]{1,3}|[0-9]{1,3}))*", re.IGNORECASE
+)
 
 # Documented Android model prefix → vendor table (longest first so
 # "POCO" beats a hypothetical "P..." rule; evaluated in order).
 _ANDROID_VENDOR_PREFIXES: Tuple[Tuple[str, str], ...] = (
-    ("SM-", "Samsung"),
-    ("GT-", "Samsung"),
-    ("SC-", "Samsung"),
-    ("SCH-", "Samsung"),
-    ("Pixel", "Google"),
-    ("LG-", "LG"),
-    ("LM-", "LG"),
-    ("Redmi", "Xiaomi"),
-    ("POCO", "Xiaomi"),
-    ("MIX", "Xiaomi"),
-    ("Mi ", "Xiaomi"),
-    ("MI ", "Xiaomi"),
+    ("sm-", "Samsung"),
+    ("gt-", "Samsung"),
+    ("sc-", "Samsung"),
+    ("sch-", "Samsung"),
+    ("scg", "Samsung"),
+    ("scv", "Samsung"),
+    ("pixel", "Google"),
+    ("lg-", "LG"),
+    ("lm-", "LG"),
+    ("redmi", "Xiaomi"),
+    ("poco", "Xiaomi"),
+    ("mix", "Xiaomi"),
+    ("mi ", "Xiaomi"),
     ("moto", "Motorola"),
-    ("CPH", "OPPO"),
-    ("OPPO", "OPPO"),
-    ("iQOO", "vivo"),
+    ("cph", "OPPO"),
+    ("oppo", "OPPO"),
+    ("iqoo", "vivo"),
     ("vivo", "vivo"),
-    ("ONEPLUS", "OnePlus"),
-    ("OnePlus", "OnePlus"),
-    ("HUAWEI", "Huawei"),
-    ("Honor", "Huawei"),
-    ("Nokia", "Nokia"),
+    ("oneplus", "OnePlus"),
+    ("huawei", "Huawei"),
+    ("honor", "Huawei"),
+    ("nokia", "Nokia"),
+    ("rmx", "Realme"),
+    ("xq-", "Sony"),
+    ("so-", "Sony"),
+    ("sov", "Sony"),
+    ("kf", "Amazon"),
 )
 
 
@@ -396,11 +513,31 @@ class UserAgentTool(Tool):
         """Return the bot's browser dict, or None if not a bot."""
         if _BOT_HINT_RE.search(ua) is None:
             return None
-        token = _BOT_TOKEN_RE.search(ua) or _LIB_TOKEN_RE.search(ua)
+        token = _BOT_TOKEN_RE.search(ua)
+        if token is None:
+            token = _LIB_TOKEN_RE.search(ua)
         if token is not None:
-            return {"name": token.group(1), "version": token.group(2)}
+            return {
+                "name": cls._clean_bot_name(token.group(1)),
+                "version": token.group(2),
+            }
+        word = _BOT_WORD_RE.search(ua)
+        if word is not None:
+            name = cls._clean_bot_name(
+                _BOT_WORD_VERSION_RE.sub("", word.group(0).strip())
+            )
+            if name.lower() not in _BOT_WORD_GENERIC:
+                return {"name": name, "version": None}
         hint = _BOT_HINT_RE.search(ua)
         return {"name": hint.group(0), "version": None}
+
+    @staticmethod
+    def _clean_bot_name(raw: str) -> str:
+        """Trim whitespace and numeric-only lead words from a bot name."""
+        parts = raw.strip().split(" ")
+        while parts and _BOT_WORD_NUMERIC_RE.fullmatch(parts[0]):
+            parts.pop(0)
+        return " ".join(parts).strip()
 
     @classmethod
     def _detect_browser(
@@ -436,14 +573,30 @@ class UserAgentTool(Tool):
         version = _search_group(_RE_OPR, ua)
         if version is None:
             version = _search_group(_RE_OPIOS, ua)
+        if version is None:
+            version = _search_group(_RE_OPT, ua)
         if version is not None:
             return browser("Opera", version), "chromium"
+        version = _search_group(_RE_OPERA_MINI, ua)
+        if version is not None:
+            return browser("Opera Mini", version), None
         opera_legacy = _search_group(_RE_OPERA_OLD, ua)
         if opera_legacy is not None:
             real = _search_group(_RE_VERSION, ua)
             if opera_legacy == "9.80" and real is not None:
                 opera_legacy = real
             return browser("Opera", opera_legacy), None
+        is_android = _RE_ANDROID_ANY.search(ua) is not None
+        for vendor_re, vendor_name in _VENDOR_CHROMIUM_RES:
+            vendor_version = _search_group(vendor_re, ua)
+            if vendor_version is not None:
+                if vendor_re is _RE_FB_PRESENCE:
+                    vendor_version = _search_group(_RE_FBAV, ua)
+                return browser(vendor_name, vendor_version), "chromium"
+        if is_android:
+            silk_version = _search_group(_RE_SILK, ua)
+            if silk_version is not None:
+                return browser("Amazon Silk", silk_version), "chromium"
         version = _search_group(_RE_IEMOBILE, ua)
         if version is not None:
             return browser("Internet Explorer Mobile", version), None
@@ -469,6 +622,10 @@ class UserAgentTool(Tool):
         if version is not None:
             return browser("Chrome", version), "chromium"
         if _RE_SAFARI.search(ua) is not None:
+            if _RE_ANDROID_ANY.search(ua) is not None:
+                return browser(
+                    "Android Browser", _search_group(_RE_VERSION, ua)
+                ), None
             return browser("Safari", _search_group(_RE_VERSION, ua)), None
         # IE 11 shape: Trident/ + rv: without an MSIE token.
         if _RE_TRIDENT.search(ua) is not None:
@@ -486,11 +643,13 @@ class UserAgentTool(Tool):
         version = _search_group(_RE_WINDOWS_PHONE, ua)
         if version is not None:
             return "Windows Phone", version
+        if _RE_WINDOWS_PHONE_BARE.search(ua) is not None:
+            return "Windows Phone", None
         # Android (before generic Linux — Android strings say Linux).
         version = _search_group(_RE_ANDROID, ua)
         if version is not None:
             return "Android", version
-        if "iPad" in ua:
+        if re.search(r"iPad", ua, re.IGNORECASE) is not None:
             return "iPadOS", _undots(_search_group(_RE_IPAD_OS, ua))
         version = _undots(_search_group(_RE_IPHONE_OS, ua))
         if version is not None:
@@ -504,11 +663,20 @@ class UserAgentTool(Tool):
         version = _search_group(_RE_CROS, ua)
         if version is not None:
             return "ChromeOS", version
-        if re.search(r"Ubuntu", ua) is not None:
+        version = _search_group(_RE_KAI, ua)
+        if version is not None:
+            return "KaiOS", version
+        if _RE_UBUNTU.search(ua) is not None:
             return "Ubuntu", None
-        if re.search(r"Fedora", ua) is not None:
+        if _RE_FEDORA.search(ua) is not None:
             return "Fedora", None
-        if "Macintosh" in ua:
+        if _RE_FREEBSD.search(ua) is not None:
+            return "FreeBSD", None
+        if _RE_NETBSD.search(ua) is not None:
+            return "NetBSD", None
+        if _RE_OPENBSD.search(ua) is not None:
+            return "OpenBSD", None
+        if re.search(r"Macintosh", ua, re.IGNORECASE) is not None:
             return "Mac OS X", None
         # Case-insensitive: library clients report "linux-gnu" in
         # lowercase build triples.
@@ -594,18 +762,19 @@ class UserAgentTool(Tool):
             device_type = (
                 "mobile" if re.search(r"(?i)\bmobile\b", ua) else "tablet"
             )
-        elif "iPad" in ua or re.search(r"(?i)\btablet\b", ua) is not None:
+        elif "ipad" in ua.lower() or re.search(r"(?i)\btablet\b", ua) is not None:
             device_type = "tablet"
-            vendor = "Apple" if "iPad" in ua else None
+            vendor = "Apple" if "ipad" in ua.lower() else None
         elif (
-            "iPhone" in ua
+            "iphone" in ua.lower()
             or re.search(r"(?i)\bmobile\b", ua) is not None
-            or "Opera Mini" in ua
+            or re.search(r"(?i)opera mini", ua) is not None
         ):
             device_type = "mobile"
-            vendor = "Apple" if "iPhone" in ua else None
+            vendor = "Apple" if "iphone" in ua.lower() else None
         elif os_name in ("Windows", "Mac OS X", "Linux", "Ubuntu",
-                         "Fedora", "ChromeOS"):
+                         "Fedora", "FreeBSD", "NetBSD", "OpenBSD",
+                         "ChromeOS", "KaiOS"):
             device_type = "desktop"
             vendor = "Apple" if os_name == "Mac OS X" else None
         else:
@@ -620,9 +789,15 @@ class UserAgentTool(Tool):
 
         The token that follows ``Android <version>;`` inside the same
         parentheses is the device model on real strings. Placeholder
-        tokens (``K``, ``Mobile``, ``wv``, ``Build``, ``rv:…``) and a
-        glued `` Build/<build-id>`` suffix are skipped, and the vendor
-        is looked up through the documented prefix table.
+        tokens (``K``, ``Mobile``, ``wv``, ``Build``, ``rv:…``),
+        locale tokens from legacy ``Linux; U; Android x; en-us; …``
+        strings (``en``, ``en-us``, ``zh-CN`` — pure-alpha or
+        pure-numeric subtags only, so dashed model codes such as
+        ``SC-01F`` survive), a glued `` Build/<build-id>`` suffix and
+        glued dual-SIM / regional suffixes (``SM-A536B/DS`` → model
+        ``SM-A536B``) are skipped or split off, and the vendor is
+        looked up through the documented prefix table,
+        case-insensitively.
         """
         segment = _RE_ANDROID_SEG.search(ua)
         if segment is None:
@@ -632,17 +807,19 @@ class UserAgentTool(Tool):
             if not token:
                 continue
             token = token.split(" Build/")[0].strip()
+            if "/" in token:
+                token = token.split("/")[0].strip()
             lowered = token.lower()
             if (
                 not token
-                or "/" in token
                 or lowered in _NON_MODEL_TOKENS
                 or lowered.startswith("rv:")
+                or _ANDROID_LOCALE_RE.fullmatch(lowered) is not None
                 or (" " in token and lowered.split(" ")[0] in _NON_MODEL_TOKENS)
             ):
                 continue
             for prefix, table_vendor in _ANDROID_VENDOR_PREFIXES:
-                if token.startswith(prefix):
+                if lowered.startswith(prefix):
                     return token, table_vendor
             return token, None
         return None, None
