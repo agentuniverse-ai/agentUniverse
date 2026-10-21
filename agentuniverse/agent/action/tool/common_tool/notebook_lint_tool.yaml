@@ -1,0 +1,29 @@
+name: notebook_lint_tool
+description: Jupyter notebook (.ipynb JSON) structural linting tool — pure Python stdlib, no network required, no third-party dependencies. Lint a notebook text (mode='lint') against the nbformat v4 (4.0-4.5) schema layer with exact line positions via a JSON path-to-line mapper — cell structure and per-type fields, execution_count null-or-int rules, output shapes (stream/display_data/execute_result/error), mime bundle validity, cell id pattern (the real ^[a-zA-Z0-9-_]+$ 1..64 rule of the v4.5 schema) with duplicate detection, kernelspec/language_info metadata, and the 4.0-4.5 version matrix (ids introduced in 4.5, rejected before it). Summarize a notebook (mode='summary' — cell counts by type, executed/unexecuted code cells, output totals and error outputs, max execution count with monotonicity regression detection, mime types used, id health). Audit cell ids read-only (mode='check_ids' — per-cell presence/validity/duplicates with cell indexes; never regenerates ids, unlike nbformat.normalize).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.notebook_lint_tool
+  class: NotebookLintTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lint, summary or check_ids.
+    required: true
+  notebook:
+    type: string
+    description: The notebook (.ipynb) JSON TEXT to inspect (required in every mode). Structural linting lives in the text — findings carry the line of the offending value via a JSON path-to-line mapper. Capped at 1,000,000 characters.
+    required: true
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "summary", "check_ids"]
+      description: Operation mode.
+    notebook:
+      type: string
+      description: The notebook JSON text to inspect.
+  required: ["mode", "notebook"]

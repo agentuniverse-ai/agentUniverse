@@ -634,3 +634,20 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## NotebookLintTool
+
+`NotebookLintTool` lints the *structure* of Jupyter notebook (.ipynb) files against the nbformat v4 (4.0-4.5) schema — pure Python stdlib, no network, no third-party dependencies. A .ipynb is JSON, so `JsonLintTool` covers its generic JSON quality and `MarkdownLintTool` the prose of markdown cells; this tool implements the notebook schema layer neither covers: cell composition, execution counts, output shapes, mime bundles, cell ids and kernel metadata. Every schema rule was hand-embedded from the official v4.5 schema and cross-verified against `nbformat.validate` in the test suite.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import NotebookLintTool
+
+tool = NotebookLintTool()
+tool.execute(mode="lint", notebook=notebook_text)     # findings {line, code, message, severity}
+tool.execute(mode="summary", notebook=notebook_text)  # cell/output/id statistics
+tool.execute(mode="check_ids", notebook=notebook_text) # read-only id audit
+```
+
+`lint` reports findings at the exact line of the offending value via a JSON path-to-line mapper (a missing required field is reported at its containing cell). Schema-mirror checks: JSON syntax, the four required top-level keys (unknown top-level keys are rejected — `additionalProperties: false`), `nbformat` must be integer 4 and `nbformat_minor` a non-negative integer (minors above 4.5 are info-only: validate falls back to the latest schema), cells must be an array of objects with a valid `cell_type` and the per-type required fields (`code` → `outputs` + `execution_count`; `outputs`/`execution_count` on markdown/raw and `attachments` on code are errors), `execution_count` must be null or a non-negative integer (floats, booleans and negatives rejected), output shapes (`stream` → `name`+`text`, `display_data` → `data`+`metadata`, `execute_result` → +`execution_count`, `error` → `ename`+`evalue`+`traceback` array), mime bundle values must be strings or arrays of strings, kernelspec needs `name`+`display_name` and `language_info` needs `name`, and cell ids must match the real v4.5 pattern `^[a-zA-Z0-9-_]+$` (1-64 chars) — with the version matrix quirk that ids are *required* since 4.5 and *rejected* before it. Stricter-than-schema extras use distinct codes and never affect the schema verdict: `cell_id_missing` and `cell_id_duplicate` (nbformat 5.x silently repairs both with random ids — its own warning says missing ids will become a hard error), execution-count monotonicity regressions, mixed string/array source forms, the trailing-newline convention, unparseable `application/json` payloads and non-base64 `image/*` payloads (validate accepts both), unusual stream names, and free-form `metadata.widgets` (info-only by design). `check_ids` audits ids read-only with cell indexes and never regenerates them — unlike `nbformat.normalize()`, whose random repair breaks external cell references.
+
+`summary` returns cell counts by type, executed/unexecuted code cells, total and error outputs, the maximum execution count with per-regression records, mime types used, and id health `{present, unique, valid}`. Deterministic: findings sorted by (line, code, message); notebook input is capped at 1,000,000 characters and never modified.
