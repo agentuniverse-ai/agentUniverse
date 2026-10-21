@@ -32,7 +32,9 @@ Three modes:
   distribution, editable (``-e …``) and direct-reference
   (``name @ url``) lines are reported as non-pin lines, comments
   and blanks are counted, and anything unparsable lands in
-  ``errors`` with a 1-based line number. The payload carries a
+  ``errors`` with a 1-based line number — including ``==X.*``
+  wildcards, requirements-file syntax pip freeze never emits. The
+  payload carries a
   ``source`` tag — ``live`` or ``text``.
 * ``compare`` — the environment-drift verdict. A requirements.txt
   text is checked against an installed environment (a ``freeze``
@@ -125,9 +127,20 @@ in ``duplicates``, nameless metadata records are skipped and
 counted in ``skipped_nameless``.
 
 Input validation is strict and happens before any work: wrong
-parameter types raise ``ValueError``; the text inputs are capped
-at 10,000 lines, 10,000 characters per line and 4,000,000
-characters total; the exempt list is capped at 1,000 entries.
+parameter types raise ``ValueError`` (the echoed value is
+truncated to a bounded preview — a wrong-typed argument can be
+arbitrarily large and is never echoed whole); the text inputs are
+capped at 10,000 lines, 10,000 characters per line and 4,000,000
+characters total — the three caps are real overridable fields on
+the tool instance (``max_lines``, ``max_line_chars``,
+``max_text_chars``); the exempt list is capped at 1,000 entries.
+Requirement clause lists follow packaging's PEP 508 grammar:
+exactly one trailing comma is tolerated, leading or doubled
+commas are errors, and the clause list may be wrapped in one
+layer of parentheses (``pkg (>=1.0,<2.0)``, even ``pkg()``).
+Version parsing is ASCII-only — PEP 440 requires ASCII digits,
+so non-ASCII digit spellings are rejected exactly as
+``packaging.version`` rejects them.
 """
 
 import itertools
@@ -135,7 +148,7 @@ import re
 from importlib import metadata as _importlib_metadata
 from typing import Any, ClassVar, Dict, List, NamedTuple, Optional, Set, Tuple
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 from agentuniverse.agent.action.tool.tool import Tool
 
@@ -208,16 +221,33 @@ _FLAG_OPTIONS: Dict[str, str] = {
 # no requirements.txt declares; overridable via the exempt argument.
 _DEFAULT_EXEMPT: Tuple[str, ...] = ("pip", "setuptools", "wheel")
 
+
+def _preview(value: Any, limit: int = 120) -> str:
+    """A bounded ``repr`` for error messages — a wrong-typed
+    parameter can be arbitrarily large, and echoing it whole would
+    turn a one-line ``ValueError`` into megabytes."""
+    text = repr(value)
+    if len(text) > limit:
+        text = f"{text[:limit]}... (truncated {type(value).__name__})"
+    return text
+
 # Minimal PEP 440 version grammar (epoch, release, pre, post,
 # implicit post -N, dev, local). Deliberately the same surface
 # packaging.version accepts, minus spellings that normalize away.
+# Every numeric class is spelled [0-9] on purpose: PEP 440 requires
+# ASCII digits, and a bare \d (or str.isdigit()) also accepts
+# Arabic-Indic / Devanagari / fullwidth digits that
+# packaging.version.Version rejects. The local segment keeps
+# packaging's own [a-z0-9]+ IGNORECASE idiom (case-insensitive,
+# so it folds a few Unicode single-char cases exactly like
+# packaging does).
 _VERSION_RE = re.compile(
     r"""^\s*[vV]?
-    (?:(?P<epoch>\d+)!)?
-    (?P<release>\d+(?:\.\d+)*)
-    (?:[-_.]?(?P<pre_l>alpha|a|beta|b|preview|pre|rc|c)[-_.]?(?P<pre_n>\d*))?
-    (?:(?:[-_.]?(?:post|rev|r)[-_.]?(?P<post_n>\d*))|(?:-(?P<post_n2>\d+)))?
-    (?:[-_.]?dev[-_.]?(?P<dev_n>\d*))?
+    (?:(?P<epoch>[0-9]+)!)?
+    (?P<release>[0-9]+(?:\.[0-9]+)*)
+    (?:[-_.]?(?P<pre_l>alpha|a|beta|b|preview|pre|rc|c)[-_.]?(?P<pre_n>[0-9]*))?
+    (?:(?:[-_.]?(?:post|rev|r)[-_.]?(?P<post_n>[0-9]*))|(?:-(?P<post_n2>[0-9]+)))?
+    (?:[-_.]?dev[-_.]?(?P<dev_n>[0-9]*))?
     (?:\+(?P<local>[a-z0-9]+(?:[-_.][a-z0-9]+)*))?
     \s*$""",
     re.VERBOSE | re.IGNORECASE,
@@ -531,6 +561,21 @@ def _parse_freeze(text: str) -> Dict[str, Any]:
             continue
         pin = _FREEZE_PIN_RE.match(line)
         if pin is not None:
+            version = pin.group("version")
+            if pin.group("op") == "==" and version.endswith(".*"):
+                # pip freeze emits exact pins only; a trailing .*
+                # wildcard is requirements-file syntax, never freeze
+                # output (same family as >= / ~= lines, which error
+                # above by not matching the pin grammar).
+                errors.append(
+                    {
+                        "line": number,
+                        "raw": raw,
+                        "reason": "wildcard specifier (==X.*): not a "
+                        "freeze pin (pip freeze emits exact pins only)",
+                    }
+                )
+                continue
             name_raw = pin.group("name")
             name = _normalize_name(name_raw)
             if name in pins:
@@ -546,7 +591,7 @@ def _parse_freeze(text: str) -> Dict[str, Any]:
             pins[name] = {
                 "name": name,
                 "name_raw": name_raw,
-                "version": pin.group("version"),
+                "version": version,
             }
             continue
         if _EDITABLE_PREFIX_RE.match(line):
@@ -607,7 +652,9 @@ def _parse_clauses(
 ) -> Tuple[Optional[List[Tuple[str, str]]], Optional[str]]:
     """Parse a comma-separated clause list (``None`` = no specifier).
 
-    Returns ``(clauses, error)`` — a trailing comma is tolerated,
+    Returns ``(clauses, error)`` — exactly one trailing comma is
+    tolerated (packaging's PEP 508 grammar accepts
+    ``pkg==1.0,`` but rejects ``pkg,==1.0`` and ``pkg==1.0,,``),
     each clause is ``(op, version_text)`` with light validation:
     the version token must parse as PEP 440 (wildcard and ``===``
     exempt where packaging exempts them), ``.*`` only on ``==`` /
@@ -618,9 +665,14 @@ def _parse_clauses(
         return None, None
     clauses: List[Tuple[str, str]] = []
     pieces = [piece.strip() for piece in spec_text.split(",")]
+    if len(pieces) >= 2 and pieces[-1] == "":
+        pieces = pieces[:-1]  # tolerate a single trailing comma
+    if any(not piece for piece in pieces):
+        return None, (
+            "empty clause between commas (only a single trailing "
+            "comma is allowed)"
+        )
     for piece in pieces:
-        if not piece:
-            continue  # tolerate a trailing comma
         match = _CLAUSE_OP_RE.match(piece)
         if match is not None:
             op, version = match.group(1), match.group(2).strip()
@@ -783,6 +835,13 @@ def _parse_requirements_declarations(text: str) -> Dict[str, Any]:
                 {"line": number, "raw": raw, "kind": "direct_url"}
             )
             continue
+        if rest.startswith("(") and rest.endswith(")"):
+            # PEP 508 / packaging also accept the specifier list in
+            # parentheses — 'pkg (>=1.0)', 'pkg(>=1.0,<2.0)' and the
+            # empty 'pkg()' — unwrap exactly one layer (a doubled
+            # '((...))' is a packaging error, and stays one here
+            # because the inner text then re-fails the clause parse).
+            rest = rest[1:-1].strip()
         clauses, clause_error = _parse_clauses(rest)
         if clause_error is not None:
             errors.append(
@@ -792,7 +851,7 @@ def _parse_requirements_declarations(text: str) -> Dict[str, Any]:
         spec_text = (
             None
             if clauses is None
-            else re.sub(r"\s*,\s*", ",", rest.rstrip(",").strip())
+            else ",".join(f"{op}{version}" for op, version in clauses)
         )
         entry: Dict[str, Any] = {
             "line": number,
@@ -1028,9 +1087,12 @@ class FreezeDiffTool(Tool):
     """Pip-freeze / installed-distribution snapshot comparison tool.
 
     Attributes:
-        max_lines (int): Upper bound on the line count of any text.
-        max_line_chars (int): Upper bound on any single line.
-        max_text_chars (int): Upper bound on a whole text input.
+        max_lines (int): Upper bound on the line count of any text
+            (default 10,000; overridable per instance).
+        max_line_chars (int): Upper bound on any single line
+            (default 10,000; overridable per instance).
+        max_text_chars (int): Upper bound on a whole text input
+            (default 4,000,000; overridable per instance).
     """
 
     model_config = ConfigDict(
@@ -1061,6 +1123,12 @@ class FreezeDiffTool(Tool):
     )
 
     MODES: ClassVar[tuple] = ("installed", "compare", "snapshot_diff")
+
+    # The documented caps, as real overridable fields (validated
+    # positive at construction).
+    max_lines: int = Field(default=_MAX_LINES, gt=0)
+    max_line_chars: int = Field(default=_MAX_LINE_CHARS, gt=0)
+    max_text_chars: int = Field(default=_MAX_TEXT_CHARS, gt=0)
 
     # ------------------------------------------------------------------ #
     # Public entry point
@@ -1106,7 +1174,7 @@ class FreezeDiffTool(Tool):
         if mode not in self.MODES:
             self._invalid(
                 f"mode must be one of: {', '.join(self.MODES)} "
-                f"(got {mode!r})"
+                f"(got {_preview(mode)})"
             )
         if mode == "installed":
             return self._run_installed(freeze)
@@ -1123,31 +1191,30 @@ class FreezeDiffTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"freeze_diff_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, value: Any, name: str) -> str:
+    def _validate_text(self, value: Any, name: str) -> str:
         """Validate a text parameter (type and caps)."""
         if (
             value is None
             or isinstance(value, bool)
             or not isinstance(value, str)
         ):
-            cls._invalid(f"{name} must be a string (got {value!r})")
-        if len(value) > _MAX_TEXT_CHARS:
-            cls._invalid(
-                f"{name} exceeds the {_MAX_TEXT_CHARS:,}-character "
+            self._invalid(f"{name} must be a string (got {_preview(value)})")
+        if len(value) > self.max_text_chars:
+            self._invalid(
+                f"{name} exceeds the {self.max_text_chars:,}-character "
                 f"limit (got {len(value):,} characters)"
             )
         lines = value.splitlines()
-        if len(lines) > _MAX_LINES:
-            cls._invalid(
-                f"{name} exceeds the {_MAX_LINES:,}-line limit (got "
+        if len(lines) > self.max_lines:
+            self._invalid(
+                f"{name} exceeds the {self.max_lines:,}-line limit (got "
                 f"{len(lines):,} lines)"
             )
         for number, line in enumerate(lines, start=1):
-            if len(line) > _MAX_LINE_CHARS:
-                cls._invalid(
+            if len(line) > self.max_line_chars:
+                self._invalid(
                     f"line {number} of {name} exceeds the "
-                    f"{_MAX_LINE_CHARS:,}-character limit (got "
+                    f"{self.max_line_chars:,}-character limit (got "
                     f"{len(line):,} characters)"
                 )
         return value
@@ -1160,12 +1227,12 @@ class FreezeDiffTool(Tool):
         if isinstance(value, (str, bytes)) or isinstance(value, bool):
             cls._invalid(
                 f"exempt must be a list of package names (got "
-                f"{value!r})"
+                f"{_preview(value)})"
             )
         if not isinstance(value, (list, tuple, set)):
             cls._invalid(
                 f"exempt must be a list of package names (got "
-                f"{value!r})"
+                f"{_preview(value)})"
             )
         entries: List[str] = []
         for entry in value:
@@ -1176,7 +1243,7 @@ class FreezeDiffTool(Tool):
             ):
                 cls._invalid(
                     f"exempt entries must be non-empty strings (got "
-                    f"{entry!r})"
+                    f"{_preview(entry)})"
                 )
             entries.append(_normalize_name(entry))
         if len(entries) > _MAX_EXEMPT:

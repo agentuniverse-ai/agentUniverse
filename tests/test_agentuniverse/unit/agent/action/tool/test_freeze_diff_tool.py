@@ -691,7 +691,13 @@ class PackagingDifferential(unittest.TestCase):
             clauses.append((match.group(1), match.group(2).strip()))
         return clauses
 
-    def test_500_seeded_specifier_pairs(self):
+    def test_seeded_specifier_pairs_full_cross_product(self):
+        """The whole spec x version cross product (plus seeded
+        two-clause sets) is checked — a previous revision sliced
+        ``pairs[:500]``, and since the == / != specs alone fill the
+        first 500 slots, the > / < / ~= / === families and every
+        multi-clause combination were never differentially tested.
+        """
         import random
 
         rng = random.Random(20261021)
@@ -712,14 +718,17 @@ class PackagingDifferential(unittest.TestCase):
                 if wildcardish(spec) and "!" in version:
                     continue
                 pairs.append((spec, version))
-        while len(pairs) < 500 or len(pairs) % 3:
+        # seeded two-clause sets (pre-release gate interactions)
+        combos = set()
+        while len(combos) < 500:
             spec = f"{rng.choice(_SPEC_POOL)},{rng.choice(_SPEC_POOL)}"
             version = rng.choice(_VER_POOL)
             if wildcardish(spec) and "!" in version:
                 continue
-            pairs.append((spec, version))
+            combos.add((spec, version))
+        pairs.extend(sorted(combos))
         checked = 0
-        for spec, version in pairs[:500]:
+        for spec, version in pairs:
             ours, _ = _evaluate_minimal(self._clauses_of(spec), version)
             theirs = SpecifierSet(spec).contains(version)
             self.assertEqual(
@@ -729,7 +738,7 @@ class PackagingDifferential(unittest.TestCase):
                 f"says {ours}, packaging says {theirs}",
             )
             checked += 1
-        self.assertEqual(checked, 500)
+        self.assertGreaterEqual(checked, 2000)
 
     def test_ordering_key_agrees_with_packaging(self):
         import itertools
@@ -776,6 +785,155 @@ class PackagingDifferential(unittest.TestCase):
                 expected,
                 f"{spec} vs installed {row['installed_version']}",
             )
+
+
+# ------------------------------------------------------------------ #
+# self-review regressions (differential findings, #4026 review)
+# ------------------------------------------------------------------ #
+
+class SelfReviewRegressions(unittest.TestCase):
+    """Defects found by differential testing against packaging
+    (Version / SpecifierSet / Requirement) and fixed — one test
+    per provable disagreement."""
+
+    def test_ascii_only_version_grammar(self):
+        """PEP 440 requires ASCII digits; ``\\d`` also matched
+        Arabic-Indic / fullwidth digits that packaging rejects."""
+        from agentuniverse.agent.action.tool.common_tool import (
+            freeze_diff_tool as fdt,
+        )
+
+        for bad in ["\u0661.\u0662", "\uff11.\uff10", "1!\u0662",
+                    "v\u0661.0", "1.0.post\u0661"]:
+            self.assertIsNone(fdt._parse_version(bad), repr(bad))
+        # the requirement side rejects such clauses outright
+        result = run_compare("pkg==\uff11.\uff10\n", "pkg==1.0\n")
+        self.assertEqual(len(result["errors"]), 1)
+        self.assertIn("not a PEP 440", result["errors"][0]["reason"])
+        # the snapshot side routes such pins to unparsed
+        snap = run_snapshot("p==1.0\n", "p==\uff10\n")
+        self.assertEqual(
+            snap["unparsed"], [{"name": "p", "from": "1.0", "to": "\uff10"}]
+        )
+
+    def test_parenthesized_specifiers(self):
+        """PEP 508 / packaging accept the clause list in one layer of
+        parentheses — 'pkg (>=1.0)', 'pkg(>=1.0,<2.0)' and 'pkg()'
+        were previously errors."""
+        result = run_compare(
+            "pkg (>=1.0,<2.0)\nother(>=1.0)\nempty()\n", "pkg==1.5\n"
+        )
+        rows = {row["name"]: row for row in result["declared"]}
+        self.assertEqual(len(result["errors"]), 0)
+        self.assertEqual(rows["pkg"]["spec"], ">=1.0,<2.0")
+        self.assertTrue(rows["pkg"]["satisfied"])
+        self.assertEqual(rows["empty"]["clauses"], [])
+        for bad in ["pkg ((>=1.0))", "pkg (>=1.0) extra", "pkg (>=1.0"]:
+            errors = run_compare(f"{bad}\n", "pkg==1.0\n")["errors"]
+            self.assertEqual(len(errors), 1, bad)
+
+    def test_comma_rule_matches_packaging(self):
+        """Exactly one trailing comma is allowed; leading and doubled
+        commas are errors, like packaging.requirements.Requirement."""
+        for ok in ["pkg==1.0,", "pkg>=1.0,<2.0,", "pkg==1.0 ,"]:
+            result = run_compare(f"{ok}\n", "pkg==1.5\n")
+            self.assertEqual(len(result["errors"]), 0, ok)
+        for bad in ["pkg,==1.0", "pkg==1.0,,", "pkg>=1.0,,<2.0"]:
+            result = run_compare(f"{bad}\n", "pkg==1.5\n")
+            self.assertEqual(len(result["errors"]), 1, bad)
+            self.assertIn(
+                "trailing comma", result["errors"][0]["reason"], bad
+            )
+
+    def test_freeze_wildcard_is_an_error(self):
+        """``==X.*`` is requirements-file syntax pip freeze never
+        emits; it previously parsed as a pin carrying the junk
+        version 'X.*'."""
+        result = run_installed("pkg==1.0.*\n")
+        self.assertEqual(result["count"], 0)
+        self.assertEqual(len(result["errors"]), 1)
+        self.assertIn("wildcard", result["errors"][0]["reason"])
+        # surfaced as environment errors in compare mode too
+        compared = run_compare("pkg==1.0\n", "pkg==1.0.*\n")
+        self.assertEqual(len(compared["errors_environment"]), 1)
+        # === keeps arbitrary operands (legacy pins) — stays a pin
+        legacy = run_installed("pkg===1.0.*\n")
+        self.assertEqual(legacy["count"], 1)
+
+    def test_caps_are_real_overridable_fields(self):
+        """The documented caps were dead attributes (assignment used
+        to raise 'object has no field'); they are real fields now."""
+        tool = FreezeDiffTool()
+        self.assertIn("max_lines", type(tool).model_fields)
+        self.assertIn("max_line_chars", type(tool).model_fields)
+        self.assertIn("max_text_chars", type(tool).model_fields)
+        tool.max_lines = 3  # attribute override works
+        with self.assertRaises(ValueError):
+            tool.execute(mode="installed", freeze="a==1\nb==2\nc==3\nd==4\n")
+        self.assertEqual(
+            tool.execute(mode="installed", freeze="a==1\nb==2\nc==3\n")[
+                "count"
+            ],
+            3,
+        )
+        strict = FreezeDiffTool(max_line_chars=12)  # constructor override
+        with self.assertRaises(ValueError):
+            strict.execute(mode="installed", freeze="a==1.0.0.0.0.0\n")
+        with self.assertRaises(Exception):
+            FreezeDiffTool(max_lines=0)  # caps must be positive
+
+    def test_error_messages_bounded(self):
+        """Wrong-typed parameters used to be echoed whole in the
+        ValueError message — a 50k-element list became megabytes."""
+        with self.assertRaises(ValueError) as ctx:
+            FreezeDiffTool().execute(mode="compare", requirements=[0] * 50000)
+        self.assertLess(len(str(ctx.exception)), 300)
+        with self.assertRaises(ValueError) as ctx:
+            run_compare("a==1\n", "a==1\n", exempt=["ok", ("x" * 5000,)])
+        self.assertLess(len(str(ctx.exception)), 300)
+
+    def test_snapshot_identical_junk_is_unchanged(self):
+        """Identical raw version strings count as unchanged without
+        a parse (no ordering decision is involved)."""
+        result = run_snapshot("p==1.0$\n", "p==1.0$\n")
+        self.assertEqual(result["unchanged_count"], 1)
+        self.assertEqual(result["unparsed"], [])
+
+    @unittest.skipUnless(
+        PACKAGING_AVAILABLE, "the packaging distribution is not installed"
+    )
+    def test_requirement_verdicts_vs_packaging_oracle(self):
+        """Tool parse verdicts must agree with
+        packaging.requirements.Requirement accept/reject on PEP 508
+        shapes (path-shaped lines are the documented
+        requirements-file extension and stay out of this corpus)."""
+        accepted = [
+            "pkg", "pkg==1.0", "pkg[a]", "pkg[ a , b ]==1.0",
+            "pkg[a-b]==1.0", "pkg>=1.0,<2.0", "pkg~=1.2.3",
+            "pkg!=1.2.*", "pkg===lol", "pkg@ file:///x",
+            "pkg @ https://e/x.whl", "pkg==1.0+local", "pkg==1!1.0",
+            "pkg (>=1.0)", "pkg(>=1.0,<2.0)", "pkg()", "pkg[]",
+            "pkg==1.0, ",
+            'pkg==1.0 ; python_version >= "3.8"',
+        ]
+        rejected = [
+            "pkg==1.0 ==2.0", "pkg >=1.0<2.0", "pkg==", "pkg[a",
+            "pkg[,]", "pkg[a][]", "pkg..==1.0", "pkg==1.0 --hash=sha256:x",
+            "pkg 1.0", "==1.0", "pkg==\uff11.\uff10", "pkg,==1.0",
+            "pkg==1.0,,", "pkg ((>=1.0))", "pkg (>=1.0) extra",
+        ]
+        from packaging.requirements import Requirement as PkgRequirement
+
+        def tool_errors(line):
+            return bool(run_compare(f"{line}\n", "pkg==1.0\n")["errors"])
+
+        for line in accepted:
+            PkgRequirement(line)  # must not raise
+            self.assertFalse(tool_errors(line), line)
+        for line in rejected:
+            with self.assertRaises(Exception, msg=line):
+                PkgRequirement(line)
+            self.assertTrue(tool_errors(line), line)
 
 
 # ------------------------------------------------------------------ #
