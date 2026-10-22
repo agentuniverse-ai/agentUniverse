@@ -96,3 +96,5 @@ results = store.query(Query(embeddings=[[0.1, 0.2]], similarity_top_k=5), metada
 ## PGVectorStore
 
 `PGVectorStore` 提供基于 PostgreSQL/pgvector 的同步与异步 CRUD、余弦/L2/内积检索、JSONB 包含过滤、可选的自动向量化、维度校验、自动建表和可选 HNSW 索引。安装 `store_ext` extra，并将 `agentuniverse/agent/action/knowledge/store/pgvector_store.yaml.example` 复制到应用配置目录。连接地址可以写在本地配置的 `connection_url` 中，或通过 `PGVECTOR_CONNECTION_URL` 提供；请勿提交数据库凭据。
+
+对于已经预先配置的数据库，设置 `create_table: false` 可在同步与异步操作中禁用扩展、表和 HNSW 索引的自动创建。管理员需要先安装 `vector` 扩展，并创建具有所需字段和向量维度的表。应用角色只需 schema 使用权限及相应操作所需的表权限；查询可以使用只读连接。`create_hnsw_index` 仅在 `create_table` 启用时生效。配置与向量校验仍然执行，缺少数据库资源或数据访问权限仍会报错。
