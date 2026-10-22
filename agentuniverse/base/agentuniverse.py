@@ -67,7 +67,7 @@ class AgentUniverse(object):
         """
         character_util.show_au_start_banner()
         # get default config path
-        project_root_path = get_project_root_path()
+        project_root_path = get_project_root_path(config_path)
         sys.path.append(str(project_root_path.parent))
         self._add_to_sys_path(project_root_path, ['intelligence', 'app'])
 
