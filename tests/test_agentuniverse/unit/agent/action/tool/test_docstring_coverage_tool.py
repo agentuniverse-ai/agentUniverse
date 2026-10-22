@@ -785,7 +785,7 @@ class RegistrationTest(unittest.TestCase):
         path = root / "agentuniverse" / "agent" / "action" / "tool" / "common_tool" / "docstring_coverage_tool.yaml"
         config = yaml.safe_load(path.read_text(encoding="utf-8"))
         self.assertEqual(config["name"], "docstring_coverage_tool")
-        self.assertEqual(config["input_keys"], ["mode"])
+        self.assertEqual(config["input_keys"], ["mode", "text"])
         self.assertEqual(
             config["metadata"]["module"],
             "agentuniverse.agent.action.tool.common_tool.docstring_coverage_tool",

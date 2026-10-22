@@ -7,6 +7,10 @@ metadata:
   class: DocstringCoverageTool
 input_keys:
   - mode
+  - text
+max_text_chars: 10000000
+max_items: 10000
+max_undocumented: 50
 args_model:
   mode:
     type: string
@@ -49,3 +53,4 @@ args_model_schema:
       type: number
       description: Minimum class API coverage percentage in check mode (default 0).
   required: ["mode", "text"]
+  additionalProperties: false
