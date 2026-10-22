@@ -246,7 +246,7 @@ def openai_protocol_chat(model: str, messages: list):
     params = {
         "service_id": model,
         "messages": messages,
-        "stream": stream
+        "streaming": stream
     }
     if stream:
         task = RequestTask(service_run_queue, False, **params)
