@@ -36,7 +36,10 @@ position-based scoring that preserves the input order — making the component
 safe to drop into an existing single-store pipeline.
 """
 
+import math
 from typing import Dict, List, Optional, Tuple
+
+from pydantic import Field, StrictBool, StrictFloat, StrictInt, StrictStr
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -73,6 +76,32 @@ class ReciprocalRankFusionProcessor(DocProcessor):
     k: int = 60
     top_n: Optional[int] = None
     score_field: str = "relevance_score"
+    channel_weights: Dict[StrictStr, StrictFloat] = Field(default_factory=dict)
+    explain: StrictBool = False
+    explanation_field: StrictStr = "fusion_details"
+    max_explanation_channels: StrictInt = 32
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        self._validate_extensions()
+
+    def _validate_extensions(self):
+        """Validate optional controls also after runtime assignment."""
+        if not isinstance(self.channel_weights, dict):
+            raise ValueError("channel_weights must be a mapping")
+        for channel, weight in self.channel_weights.items():
+            if not isinstance(channel, str) or type(weight) not in (int, float):
+                raise ValueError("channel weights require string keys and numeric values")
+            if not math.isfinite(weight) or weight < 0:
+                raise ValueError("channel weights must be finite and nonnegative")
+        if type(self.explain) is not bool:
+            raise ValueError("explain must be a boolean")
+        if (not isinstance(self.explanation_field, str) or
+                not self.explanation_field.strip() or
+                self.explanation_field == self.score_field):
+            raise ValueError("explanation_field must be nonblank and distinct from score_field")
+        if type(self.max_explanation_channels) is not int or self.max_explanation_channels < 0:
+            raise ValueError("max_explanation_channels must be nonnegative")
 
     def _process_docs(self, origin_docs: List[Document],
                       query: Query = None) -> List[Document]:
@@ -88,6 +117,7 @@ class ReciprocalRankFusionProcessor(DocProcessor):
             (descending), each carrying ``metadata[score_field]``. An empty
             input yields an empty list.
         """
+        self._validate_extensions()
         if self.k < 0:
             raise ValueError("k must be non-negative")
         if not origin_docs:
@@ -100,15 +130,33 @@ class ReciprocalRankFusionProcessor(DocProcessor):
         # the document as it first appeared.
         scores: Dict[Tuple, float] = {}
         representatives: Dict[Tuple, Document] = {}
+        details: Dict[Tuple, List[Dict]] = {}
+        omitted: Dict[Tuple, float] = {}
+        omitted_count: Dict[Tuple, int] = {}
         for channel in channels:
+            channel_id = (channel[0].metadata or {}).get(self.channel_key) if self.channel_key else None
+            weight = self.channel_weights.get(channel_id, 1.0) if isinstance(channel_id, str) else 1.0
+            if weight == 0:
+                continue
             seen_in_channel = set()
             for rank, doc in enumerate(channel):
                 identity = self._identity(doc)
                 if identity in seen_in_channel:
                     continue
                 seen_in_channel.add(identity)
-                scores[identity] = scores.get(identity, 0.0) + \
-                    1.0 / (self.k + rank + 1)
+                contribution = weight / (self.k + rank + 1)
+                scores[identity] = scores.get(identity, 0.0) + contribution
+                if not math.isfinite(scores[identity]):
+                    raise ValueError("weighted fusion score overflow")
+                if self.explain:
+                    entries = details.setdefault(identity, [])
+                    if len(entries) < self.max_explanation_channels:
+                        entries.append({"channel": channel_id if isinstance(channel_id, str) else None,
+                                        "rank": rank + 1, "weight": weight,
+                                        "contribution": contribution})
+                    else:
+                        omitted[identity] = omitted.get(identity, 0.0) + contribution
+                        omitted_count[identity] = omitted_count.get(identity, 0) + 1
                 if identity not in representatives:
                     representatives[identity] = doc
 
@@ -126,6 +174,12 @@ class ReciprocalRankFusionProcessor(DocProcessor):
             doc = representatives[identity]
             metadata = dict(doc.metadata or {})
             metadata[self.score_field] = scores[identity]
+            if self.explain:
+                metadata[self.explanation_field] = {
+                    "channels": details[identity],
+                    "omitted_channels": omitted_count.get(identity, 0),
+                    "omitted_contribution": omitted.get(identity, 0.0),
+                }
             doc.metadata = metadata
             fused.append(doc)
         return fused
@@ -204,6 +258,11 @@ class ReciprocalRankFusionProcessor(DocProcessor):
         Returns:
             The initialized processor instance.
         """
+        extension_names = ("channel_weights", "explain", "explanation_field", "max_explanation_channels")
+        values = {name: getattr(doc_processor_configer, name, getattr(self, name))
+                  for name in extension_names}
+        validated = ReciprocalRankFusionProcessor(
+            score_field=getattr(doc_processor_configer, "score_field", self.score_field), **values)
         super()._initialize_by_component_configer(doc_processor_configer)
         if hasattr(doc_processor_configer, "channel_key"):
             self.channel_key = doc_processor_configer.channel_key
@@ -215,4 +274,6 @@ class ReciprocalRankFusionProcessor(DocProcessor):
             self.top_n = doc_processor_configer.top_n
         if hasattr(doc_processor_configer, "score_field"):
             self.score_field = doc_processor_configer.score_field
+        for name in extension_names:
+            setattr(self, name, getattr(validated, name))
         return self
