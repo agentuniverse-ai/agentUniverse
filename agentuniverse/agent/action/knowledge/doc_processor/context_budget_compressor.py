@@ -127,7 +127,8 @@ class ContextBudgetCompressor(DocProcessor):
         if self.counter == "tiktoken":
             encoder = _tiktoken_encoder(self.tiktoken_encoding)
             if encoder is not None:
-                return len(encoder.encode(text))
+                # Recalled documents contain literal text, not control tokens.
+                return len(encoder.encode(text, disallowed_special=()))
             logger.warning(
                 "tiktoken is not available; counting with the chars/4 estimate "
                 "instead. Install tiktoken or set counter to 'estimate'/'char'/"
@@ -152,9 +153,11 @@ class ContextBudgetCompressor(DocProcessor):
                 # A token boundary can split a UTF-8 character. Decode only
                 # complete characters, then recheck the re-encoded size: BPE
                 # token counts are not necessarily stable at a shorter prefix.
-                prefix = encoder.decode(encoder.encode(text)[:remaining],
+                tokens = encoder.encode(text, disallowed_special=())
+                prefix = encoder.decode(tokens[:remaining],
                                         errors="ignore")
-                while prefix and len(encoder.encode(prefix)) > remaining:
+                while prefix and len(encoder.encode(
+                        prefix, disallowed_special=())) > remaining:
                     prefix = prefix[:-1]
                 return prefix
         # "estimate" (and the tiktoken-unavailable fallback): ~4 chars per unit.
