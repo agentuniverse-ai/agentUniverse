@@ -198,6 +198,11 @@ metadata:
 - summary_agent: `hierarchical_index`中设置`need_summary`为True的时候生成总结文本的Agent， 默认为`simple_summary_agent`
 - llm: 如指定的话，则会用指定的llm取代原本`summary_agent`中的llm。
 
+标题层级由 `hierarchical_index` 的顺序决定。新标题会结束之前同级或更深层级的分支。
+中间层级缺失时，标题挂到当前最近的较浅层标题下；不存在较浅层标题时，父节点为 `root`。
+例如“第一章 → 第一节 → 第二章 → 子条款”中的子条款属于第二章，不会关联到第一章的第一节。
+正文只累加到当前祖先节点及其摘要输入中，不会为缺失层级创建虚拟节点。
+
 ### [SummarizationProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/summarization_processor.yaml)
 
 该组件将召回的文档汇总压缩为一份摘要文档，减少多路召回后的冗余与噪声，对应 issue #248 中"摘要、总结"方向。

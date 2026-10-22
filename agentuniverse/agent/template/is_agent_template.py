@@ -217,7 +217,14 @@ class ISAgentTemplate(AgentTemplate):
         final_result = dict()
 
         # Extract result and execution context
-        is_results = planner_result.get('result', [])
+        raw_results = planner_result.get('result', [])
+        is_results = [
+            {
+                **checkpoint_result,
+                'effective_result': self._get_effective_result(checkpoint_result),
+            }
+            for checkpoint_result in raw_results
+        ]
         execution_context = planner_result.get('execution_context', {})
 
         # Build comprehensive output
@@ -260,13 +267,10 @@ class ISAgentTemplate(AgentTemplate):
         # Final result
         if is_results:
             last_checkpoint = is_results[-1]
-            final_impl = (
-                last_checkpoint.get('correction_result')
-                or last_checkpoint.get('implementation_result', {})
-            )
+            effective_result = last_checkpoint.get('effective_result', {})
             final_output = (
-                final_impl.get('checkpoint_output', '')
-                or final_impl.get('output', '')
+                effective_result.get('checkpoint_output')
+                or effective_result.get('output', '')
             )
             output_lines.append(f"\n\n=== Final Output ===\n{final_output}")
             final_result['output'] = final_output
@@ -279,6 +283,16 @@ class ISAgentTemplate(AgentTemplate):
         final_result['execution_context'] = execution_context
 
         return final_result
+
+    @staticmethod
+    def _get_effective_result(checkpoint_result: dict) -> dict:
+        """Return the result that should represent a completed checkpoint."""
+        return (
+            checkpoint_result.get('effective_result')
+            or checkpoint_result.get('correction_result')
+            or checkpoint_result.get('implementation_result')
+            or {}
+        )
 
     def customized_execute(self, work_pattern, input_object: InputObject,
                           agent_input: dict, **kwargs) -> dict:
