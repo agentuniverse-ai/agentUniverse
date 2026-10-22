@@ -97,7 +97,10 @@ class Configer(object):
         self.__value = value
 
     def load_by_path(self, path: str) -> 'Configer':
-        """Load the configuration file by the given path
+        """Load the configuration file by the given path.
+
+        The final .toml or .yaml extension selects the parser; directory names
+        and earlier suffixes do not affect the configuration format.
         Args:
             path(str): the path of the configuration file
         Returns:
@@ -160,17 +163,11 @@ class Configer(object):
         Returns:
             Optional[Callable]: the load method
         """
-        # Define the regular expression and the corresponding method map.
-        toml_re = re.compile(r'.*\.toml')
-        yaml_re = re.compile(r'.*\.yaml')
-
-        re_method_map = {
-            toml_re: self.__load_toml_file,
-            yaml_re: self.__load_yaml_file
+        load_method_map = {
+            '.toml': self.__load_toml_file,
+            '.yaml': self.__load_yaml_file,
         }
-        for re_compile, method in re_method_map.items():
-            if re_compile.search(path):
-                return method
+        return load_method_map.get(os.path.splitext(path)[1])
 
     @staticmethod
     def __load_toml_file(path: str) -> dict:
