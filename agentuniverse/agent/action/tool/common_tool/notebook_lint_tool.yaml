@@ -7,6 +7,8 @@ metadata:
   class: NotebookLintTool
 input_keys:
   - mode
+  - notebook
+max_text: 1000000
 args_model:
   mode:
     type: string
@@ -27,3 +29,4 @@ args_model_schema:
       type: string
       description: The notebook JSON text to inspect.
   required: ["mode", "notebook"]
+  additionalProperties: false
