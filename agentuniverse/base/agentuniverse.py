@@ -185,6 +185,14 @@ class AgentUniverse(object):
                                           + self.__system_default_log_sink_package)
 
         core_llm_channel_package_list = app_configer.core_llm_channel_package_list or app_configer.core_default_package_list
+        core_context_store_package_list = (
+            app_configer.core_context_store_package_list or app_configer.core_default_package_list)
+        core_context_compressor_package_list = (
+            app_configer.core_context_compressor_package_list or app_configer.core_default_package_list)
+        core_context_router_package_list = (
+            app_configer.core_context_router_package_list or app_configer.core_default_package_list)
+        core_context_manager_package_list = (
+            app_configer.core_context_manager_package_list or app_configer.core_default_package_list)
 
 
         component_package_map = {
@@ -209,7 +217,11 @@ class AgentUniverse(object):
             ComponentEnum.MEMORY_STORAGE: core_memory_storage_package_list,
             ComponentEnum.WORK_PATTERN: core_work_pattern_package_list,
             ComponentEnum.LOG_SINK: core_log_sink_package_list,
-            ComponentEnum.LLM_CHANNEL: core_llm_channel_package_list
+            ComponentEnum.LLM_CHANNEL: core_llm_channel_package_list,
+            ComponentEnum.CONTEXT_STORE: core_context_store_package_list,
+            ComponentEnum.CONTEXT_COMPRESSOR: core_context_compressor_package_list,
+            ComponentEnum.CONTEXT_ROUTER: core_context_router_package_list,
+            ComponentEnum.CONTEXT_MANAGER: core_context_manager_package_list,
         }
 
         component_configer_list_map = {}
