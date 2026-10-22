@@ -8,7 +8,7 @@
 
 import os
 import json
-import shutil
+import stat
 import tempfile
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
@@ -66,24 +66,45 @@ class WriteFileTool(Tool):
                 })
 
         try:
-            if append or not os.path.exists(file_path):
-                mode = 'a' if append else 'w'
-                with open(file_path, mode, encoding='utf-8') as file:
+            if append:
+                with open(file_path, 'a', encoding='utf-8') as file:
                     file.write(content)
             else:
-                temporary = None
+                # Write beside the destination and replace it only after the
+                # complete UTF-8 write succeeds.  Opening the destination in
+                # ``w`` mode first can destroy an existing file when encoding
+                # or I/O fails halfway through the operation.
+                try:
+                    destination_mode = stat.S_IMODE(os.stat(file_path).st_mode)
+                except FileNotFoundError:
+                    destination_mode = None
+                temporary_path = None
                 try:
                     with tempfile.NamedTemporaryFile(
-                        mode='w', encoding='utf-8', prefix='.write-', dir=directory, delete=False
-                    ) as file:
-                        temporary = file.name
-                        file.write(content)
-                    shutil.copymode(file_path, temporary)
-                    os.replace(temporary, file_path)
-                    temporary = None
+                        mode='w',
+                        encoding='utf-8',
+                        dir=directory or None,
+                        prefix=f'.{os.path.basename(file_path)}.',
+                        suffix='.tmp',
+                        delete=False,
+                    ) as temporary_file:
+                        temporary_path = temporary_file.name
+                        temporary_file.write(content)
+                        temporary_file.flush()
+                        os.fsync(temporary_file.fileno())
+                    if destination_mode is None:
+                        # NamedTemporaryFile uses 0600 regardless of the
+                        # process umask. Restore the normal 0666 creation
+                        # semantics for a newly created destination.
+                        current_umask = os.umask(0)
+                        os.umask(current_umask)
+                        destination_mode = 0o666 & ~current_umask
+                    os.chmod(temporary_path, destination_mode)
+                    os.replace(temporary_path, file_path)
+                    temporary_path = None
                 finally:
-                    if temporary and os.path.exists(temporary):
-                        os.unlink(temporary)
+                    if temporary_path and os.path.exists(temporary_path):
+                        os.unlink(temporary_path)
             file_size = os.path.getsize(file_path)
             return json.dumps({
                 "file_path": file_path,

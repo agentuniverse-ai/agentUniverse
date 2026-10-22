@@ -8,6 +8,7 @@
 
 import os
 import json
+import stat
 import shutil
 import tempfile
 import unittest
@@ -126,6 +127,58 @@ class WriteFileToolTest(unittest.TestCase):
         self.assertIn('append must be a boolean value', result['error'])
         with open(file_path, 'r', encoding='utf-8') as f:
             self.assertEqual(f.read(), 'old content')
+
+    def test_failed_overwrite_preserves_existing_file(self):
+        """A failed UTF-8 write must not truncate the existing destination."""
+        file_path = os.path.join(self.temp_dir, 'test_atomic_overwrite.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+
+        result = json.loads(self.tool.execute(
+            file_path=file_path,
+            content='invalid surrogate: \ud800',
+        ))
+
+        self.assertEqual(result['status'], 'error')
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'old content')
+        self.assertEqual(
+            [name for name in os.listdir(self.temp_dir)
+             if name.startswith('.test_atomic_overwrite.txt.')],
+            [],
+        )
+
+    @unittest.skipIf(os.name == 'nt', 'Windows does not expose POSIX permission bits')
+    def test_overwrite_preserves_existing_file_permissions(self):
+        """Atomic replacement must retain the destination mode."""
+        file_path = os.path.join(self.temp_dir, 'test_permissions.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('old content')
+        os.chmod(file_path, 0o640)
+
+        result = json.loads(self.tool.execute(
+            file_path=file_path,
+            content='new content',
+        ))
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(stat.S_IMODE(os.stat(file_path).st_mode), 0o640)
+
+    def test_new_overwrite_uses_normal_creation_permissions(self):
+        """A new atomic write must follow the platform's normal create mode."""
+        reference_path = os.path.join(self.temp_dir, 'normal_create_mode.txt')
+        with open(reference_path, 'w', encoding='utf-8') as f:
+            f.write('reference')
+        expected_mode = stat.S_IMODE(os.stat(reference_path).st_mode)
+
+        file_path = os.path.join(self.temp_dir, 'new_atomic_file.txt')
+        result = json.loads(self.tool.execute(
+            file_path=file_path,
+            content='new content',
+        ))
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(stat.S_IMODE(os.stat(file_path).st_mode), expected_mode)
 
     def test_non_binary_numeric_append_value_returns_error_without_writing(self):
         """Verify a non-binary numeric append value errors without writing."""
