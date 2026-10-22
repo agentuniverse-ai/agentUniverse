@@ -63,12 +63,14 @@ class AdaptiveCompressor(ContextCompressor):
         summarize_weight: Weight for summarize strategy (quality)
     """
 
+    name: Optional[str] = None
     time_critical_threshold_ms: float = 500.0
     quality_threshold: float = 0.9  # Target: >=90% preservation
     enable_hybrid: bool = True
     truncate_weight: float = 1.0
     selective_weight: float = 1.0
     summarize_weight: float = 1.0
+    llm_name: str = "default_llm"
 
     def __init__(self, **kwargs):
         """Initialize adaptive compressor."""
@@ -99,7 +101,7 @@ class AdaptiveCompressor(ContextCompressor):
         self._summarize_compressor = SummarizeCompressor(
             name=f"{self.name}_summarize",
             compression_ratio=self.compression_ratio,
-            llm_name=kwargs.get("llm_name", "default_llm")
+            llm_name=self.llm_name
         )
 
         return self
@@ -126,11 +128,11 @@ class AdaptiveCompressor(ContextCompressor):
         Raises:
             ValueError: If target_tokens <= 0 or segments is empty
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         # Handle empty input - return empty result
         if not segments:
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             metrics = CompressionMetrics(
                 original_tokens=0,
                 compressed_tokens=0,
@@ -172,7 +174,7 @@ class AdaptiveCompressor(ContextCompressor):
         )
 
         # Update metrics with selection info
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
         metrics.strategy_used = f"adaptive_{selected_strategy.value}"
         metrics.compression_time_ms = elapsed_ms
 
@@ -382,7 +384,7 @@ class AdaptiveCompressor(ContextCompressor):
         Returns:
             Tuple of (compressed_segments, compression_metrics)
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         # Separate by category
         high_priority = [
@@ -413,7 +415,10 @@ class AdaptiveCompressor(ContextCompressor):
 
         # Step 2: Summarize background/reference
         if summarizable and tokens_used < target_tokens:
-            sum_target = int(target_tokens * 0.4) - tokens_used  # 40% budget
+            sum_target = min(
+                int(target_tokens * 0.4),
+                target_tokens - tokens_used,
+            )  # Dedicated 40% budget, capped by remaining space
             if sum_target > 0:
                 sum_compressed, _ = self._summarize_compressor.compress(
                     summarizable, sum_target, **kwargs
@@ -430,7 +435,7 @@ class AdaptiveCompressor(ContextCompressor):
                 )
                 result.extend(rem_compressed)
 
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
         metrics = self.create_metrics(
             segments, result, elapsed_ms, "hybrid",
             segments_compressed=len(result)

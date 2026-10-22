@@ -99,7 +99,7 @@ class SummarizeCompressor(ContextCompressor):
             ValueError: If target_tokens <= 0 or segments is empty
             RuntimeError: If LLM is not available
         """
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         if not segments:
             raise ValueError("Cannot compress empty segment list")
@@ -127,7 +127,7 @@ class SummarizeCompressor(ContextCompressor):
 
         if critical_tokens >= target_tokens:
             # CRITICAL alone exceeds target, return as-is
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             metrics = self.create_metrics(
                 original_segments, critical_segments, elapsed_ms, "summarize"
             )
@@ -169,7 +169,7 @@ class SummarizeCompressor(ContextCompressor):
         # Step 4: Combine results
         result = critical_segments + summarized
 
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
         metrics = self.create_metrics(
             original_segments, result, elapsed_ms, "summarize",
             segments_compressed=len(summarized)

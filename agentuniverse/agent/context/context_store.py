@@ -33,6 +33,11 @@ class ContextStore(ComponentBase):
     enable_metrics: bool = False
     _metrics: Dict[str, Any] = {}
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.enable_metrics:
+            self.initialize_metrics()
+
     def initialize_metrics(self) -> None:
         """Initialize performance metrics tracking."""
         self._metrics = {
@@ -258,7 +263,7 @@ class ContextStore(ComponentBase):
                 return True
 
         # Check age
-        if max_age_hours:
+        if max_age_hours is not None:
             age_hours = (datetime.now() - segment.metadata.created_at).total_seconds() / 3600
             if age_hours > max_age_hours:
                 return True
