@@ -11,6 +11,7 @@ import queue
 import json
 
 from flask import request, make_response, jsonify
+from werkzeug.exceptions import BadRequest
 
 from ..service_instance import ServiceInstance
 from ...agent.agent import Agent
@@ -42,7 +43,10 @@ def request_param(func):
         else:
             if "application/json" in request.headers.get("Content-Type", ""):
                 raw_data = request.data.decode('utf-8')
-                req_data = json.loads(raw_data)
+                try:
+                    req_data = json.loads(raw_data)
+                except json.JSONDecodeError as exception:
+                    raise BadRequest("Malformed JSON request body") from exception
             else:
                 req_data = request.form.to_dict()
         # Get the func arguments name and type.
