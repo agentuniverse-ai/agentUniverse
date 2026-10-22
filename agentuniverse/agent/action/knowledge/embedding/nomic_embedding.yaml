@@ -1,0 +1,7 @@
+name: 'nomic_embedding'
+description: 'embedding use nomic api with support for the nomic-embed-text-v1.5 model (768 dimensions)'
+embedding_model_name: 'nomic-embed-text-v1.5'
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.nomic_embedding'
+  class: 'NomicEmbedding'
