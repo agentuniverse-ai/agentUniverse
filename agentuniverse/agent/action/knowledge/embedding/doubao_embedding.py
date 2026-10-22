@@ -7,6 +7,7 @@
 # @FileName: doubao_embedding.py
 
 from typing import Any, List, Optional
+import asyncio
 from pydantic import Field
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.agent.action.knowledge.embedding.embedding import Embedding
@@ -77,7 +78,12 @@ class DoubaoEmbedding(Embedding):
 
     async def async_get_embeddings(self, texts: List[str],
                                    **kwargs) -> List[List[float]]:
-        return self.get_embeddings(texts)
+        """Run the synchronous Ark request outside the caller's event loop.
+
+        Cancelling the await does not stop an SDK request already running in
+        the worker thread; SDK transport timeouts still bound that work.
+        """
+        return await asyncio.to_thread(self.get_embeddings, texts, **kwargs)
 
     def _initialize_by_component_configer(
             self, embedding_configer: ComponentConfiger) -> 'Embedding':
