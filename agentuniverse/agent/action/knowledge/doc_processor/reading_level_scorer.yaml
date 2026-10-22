@@ -1,0 +1,24 @@
+name: 'reading_level_scorer'
+description: 'stamp Flesch, Flesch-Kincaid and Gunning-Fog readability metrics into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.reading_level_scorer'
+  class: 'ReadingLevelScorer'
+
+# Optional filter mode: when set, documents whose Flesch-Kincaid grade
+# falls below min_grade (or above max_grade) are dropped. Documents
+# without a computable grade (blank or non-Latin text) are always kept.
+# Leave both unset (null) for the default stamp-only behaviour.
+min_grade: null
+max_grade: null
+
+# Metadata key the metrics dictionary is written to on every document;
+# '' disables stamping. The dictionary holds flesch_reading_ease,
+# flesch_kincaid_grade, gunning_fog (None when not computable) and
+# word_count / sentence_count / syllable_count.
+reading_level_key: 'reading_level'
+
+# Metadata key the note for predominantly non-Latin text is written to
+# ('syllable formulas apply to English text only'); '' disables the note.
+note_key: 'readability_note'
