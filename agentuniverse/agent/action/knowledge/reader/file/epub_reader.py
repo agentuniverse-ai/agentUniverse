@@ -34,6 +34,8 @@ class EpubReader(Reader):
     Block elements and explicit line breaks separate extracted text with spaces;
     inline formatting preserves adjacent text within a word.
     Read raw chapter content so direct body text is retained; omit HTML head metadata.
+    Chapters follow the spine reading order. Documents outside the spine are
+    retained afterwards in manifest order; an empty spine uses manifest order.
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
@@ -76,8 +78,20 @@ class EpubReader(Reader):
 
         chapter_count = 0
         
-        # Process each item in the book
-        for item in book.get_items():
+        # The manifest lists resources, not their reading order. Resolve the
+        # spine first, retaining unlisted resources afterwards for compatibility.
+        items = list(book.get_items())
+        items_by_id = {item.get_id(): item for item in items}
+        ordered_items = []
+        seen_ids = set()
+        for item_id, _linear in book.spine:
+            if item_id in items_by_id and item_id not in seen_ids:
+                ordered_items.append(items_by_id[item_id])
+                seen_ids.add(item_id)
+        ordered_items.extend(item for item in items if item.get_id() not in seen_ids)
+
+        # Process each item in reading order.
+        for item in ordered_items:
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapter_count += 1
                 

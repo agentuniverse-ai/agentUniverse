@@ -115,7 +115,7 @@ class NvdCveTool(Tool):
             "startIndex": 0 if is_cve_lookup else start_index,
         }
         if is_cve_lookup:
-            params["cveIds"] = normalized_query
+            params["cveId"] = normalized_query
         else:
             params["keywordSearch"] = normalized_query
             if exact_match:

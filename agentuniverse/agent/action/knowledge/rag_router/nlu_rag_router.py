@@ -37,7 +37,14 @@ class NluRagRouter(RagRouter):
             store_info=json.dumps(store_info),
             store_amount=self.store_amount
         )
-        target_store_list = agent_result.output.split(",")
+        # LLMs commonly include a space after commas. Normalize tokens before
+        # applying the amount limit and validating configured stores, otherwise
+        # valid selections such as ``"vector_store, keyword_store"`` are
+        # silently discarded.
+        target_store_list = [
+            store.strip() for store in agent_result.output.split(",")
+            if store.strip()
+        ]
         if len(target_store_list) > self.store_amount:
             target_store_list = target_store_list[:self.store_amount]
         filtered_store_list = [_store for _store in target_store_list if _store in store_list]

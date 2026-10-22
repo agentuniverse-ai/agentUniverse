@@ -55,13 +55,14 @@ class MCPTool(Tool):
 
 
     def get_mcp_server_connect_args(self) -> dict:
+        """Merge connection overrides for every supported transport."""
         if self.transport == "sse":
             connect_args = {
                 'transport': self.transport,
                 'url': self.url
             }
         elif self.transport == "stdio":
-            return {
+            connect_args = {
                 'transport': self.transport,
                 "command": self.command,
                 "args": self.args,
