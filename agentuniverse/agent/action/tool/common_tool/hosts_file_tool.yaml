@@ -1,0 +1,68 @@
+name: hosts_file_tool
+description: "Hosts file (/etc/hosts) analysis tool — pure Python stdlib, no DNS or network access. Structural lint of a hosts text (mode='parse': per-line entries with normalized IPs, aliases and attached comments, plus findings for malformed IPs (IPv6 zone IDs rejected), invalid hostnames, duplicate and conflicting mappings — first match wins per resolver order — and localhost conventions), first-match-wins hostname lookup with optional v4/v6 family filter (mode='lookup'), whole-file statistics with localhost coverage and sinkhole-entry reporting (mode='analyze'), hostname-keyed diff of two hosts texts (mode='diff'), and deterministic hosts-text generation from a hostname-to-IP mapping (mode='generate')."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.hosts_file_tool
+  class: HostsFileTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Analysis mode — parse, lookup, analyze, diff or generate.
+    required: true
+  hosts_text:
+    type: string
+    description: The hosts file content for the parse, lookup and analyze modes.
+    required: false
+  hostname:
+    type: string
+    description: The hostname to resolve against hosts_text (lookup mode); matched case-insensitively against canonical names and aliases with first-match-wins semantics.
+    required: false
+  family:
+    type: string
+    description: Optional address family filter for the lookup mode — 'v4' or 'v6'; omit to scan both families.
+    required: false
+  hosts_text_a:
+    type: string
+    description: The first (old) hosts file content (diff mode).
+    required: false
+  hosts_text_b:
+    type: string
+    description: The second (new) hosts file content (diff mode).
+    required: false
+  mapping:
+    type: object
+    description: "Mapping of {hostname: ip} for the generate mode; insertion order is preserved and IPs are emitted in normalized form."
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "lookup", "analyze", "diff", "generate"]
+      description: Analysis mode.
+    hosts_text:
+      type: string
+      description: Hosts file content (parse, lookup, analyze modes).
+    hostname:
+      type: string
+      description: Hostname to resolve (lookup mode).
+    family:
+      type: string
+      enum: ["v4", "v6"]
+      description: Address family filter (lookup mode).
+    hosts_text_a:
+      type: string
+      description: First hosts file content (diff mode).
+    hosts_text_b:
+      type: string
+      description: Second hosts file content (diff mode).
+    mapping:
+      type: object
+      additionalProperties:
+        type: string
+      description: Hostname-to-IP mapping (generate mode).
+  required: ["mode"]
+  additionalProperties: false
