@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Literal
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
 class MetadataFilter(DocProcessor):
@@ -27,23 +28,37 @@ class MetadataFilter(DocProcessor):
         "gt", "gte", "lt", "lte",
     }
 
+    def _initialize_by_component_configer(self,
+                                          doc_processor_configer: ComponentConfiger) \
+            -> 'MetadataFilter':
+        super()._initialize_by_component_configer(doc_processor_configer)
+        for attribute in ("conditions", "match_mode", "missing"):
+            if hasattr(doc_processor_configer, attribute):
+                setattr(self, attribute, getattr(doc_processor_configer, attribute))
+        self._validate_configuration()
+        return self
+
     def _process_docs(self, origin_docs: List[Document],
                       query: Query = None) -> List[Document]:
+        self._validate_configuration()
         if not origin_docs or not self.conditions:
             return origin_docs
-        if self.match_mode not in {"all", "any"}:
-            raise ValueError("match_mode must be either 'all' or 'any'")
-        if self.missing not in {"exclude", "include"}:
-            raise ValueError("missing must be either 'exclude' or 'include'")
-
-        for condition in self.conditions:
-            self._validate_condition(condition)
 
         matched = [
             document for document in origin_docs
             if self._matches_document(document)
         ]
         return matched
+
+    def _validate_configuration(self) -> None:
+        if self.match_mode not in {"all", "any"}:
+            raise ValueError("match_mode must be either 'all' or 'any'")
+        if self.missing not in {"exclude", "include"}:
+            raise ValueError("missing must be either 'exclude' or 'include'")
+        if not isinstance(self.conditions, list):
+            raise TypeError("metadata filter conditions must be a list")
+        for condition in self.conditions:
+            self._validate_condition(condition)
 
     def _matches_document(self, document: Document) -> bool:
         results = [self._matches_condition(document, condition)

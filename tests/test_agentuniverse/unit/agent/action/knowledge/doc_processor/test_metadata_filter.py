@@ -1,11 +1,16 @@
 # -*- coding:utf-8 -*-
 
+import os
+
 import pytest
 
 from agentuniverse.agent.action.knowledge.doc_processor.metadata_filter import (
     MetadataFilter,
 )
 from agentuniverse.agent.action.knowledge.store.document import Document
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+from agentuniverse.base.config.configer import Configer
+import agentuniverse.agent.action.knowledge.doc_processor.metadata_filter as metadata_filter_module
 
 
 def _documents():
@@ -81,3 +86,30 @@ def test_metadata_filter_rejects_invalid_conditions():
         MetadataFilter(conditions=[
             {"field": "tenant", "operator": "in", "value": "a"},
         ]).process_docs(_documents())
+
+
+def test_metadata_filter_applies_shipped_yaml_configuration():
+    config_path = str(
+        os.path.join(
+            os.path.dirname(metadata_filter_module.__file__),
+            "metadata_filter.yaml",
+        )
+    )
+    configer = Configer(path=config_path).load()
+    component_configer = ComponentConfiger().load_by_configer(configer)
+    processor = MetadataFilter().initialize_by_component_configer(component_configer)
+    documents = [
+        Document(text="allowed", metadata={"tenant_id": "tenant-a", "language": "en"}),
+        Document(text="other tenant", metadata={"tenant_id": "tenant-b", "language": "en"}),
+        Document(text="other language", metadata={"tenant_id": "tenant-a", "language": "fr"}),
+    ]
+
+    result = processor.process_docs(documents)
+
+    assert processor.conditions == [
+        {"field": "tenant_id", "operator": "eq", "value": "tenant-a"},
+        {"field": "language", "operator": "in", "value": ["en", "zh"]},
+    ]
+    assert processor.match_mode == "all"
+    assert processor.missing == "exclude"
+    assert [document.text for document in result] == ["allowed"]
