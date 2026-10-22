@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 
 import unittest
+from unittest.mock import patch
 
 from agentuniverse.agent.action.tool.api_tool import APITool
 
@@ -61,6 +62,38 @@ class TestAPIToolTypeConversion(unittest.TestCase):
         )
 
         self.assertIs(result, False)
+
+    def test_missing_required_body_parameter_reports_operation(self):
+        self.tool.openapi_spec = {
+            "operation": {
+                "operationId": "createUser",
+                "parameters": [],
+            },
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "required": ["name"],
+                            "properties": {"name": {"type": "string"}},
+                        },
+                    },
+                },
+            },
+        }
+
+        with patch("agentuniverse.agent.action.tool.api_tool.ssrf_proxy.post") as post:
+            with self.assertRaisesRegex(
+                ValueError,
+                "Missing required parameter name in operation createUser",
+            ):
+                self.tool.do_http_request(
+                    "https://example.com/users",
+                    "post",
+                    {},
+                    {},
+                )
+
+        post.assert_not_called()
 
 
 if __name__ == "__main__":
