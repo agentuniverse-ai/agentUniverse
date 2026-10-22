@@ -1,0 +1,43 @@
+name: timezone_abbrev_tool
+description: >-
+  Timezone abbreviation utilities with zero dependencies and no network
+  access: lookup abbreviations (EST, PST, CST, IST, ...) with UTC
+  offsets, names and honest ambiguity flags, convert HH:MM times
+  between abbreviations, read an abbreviation's current offset, and
+  search abbreviations by UTC offset.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.timezone_abbrev_tool
+  class: TimezoneAbbrevTool
+input_keys: [mode]
+args_model:
+  mode: {type: string, required: true, description: lookup, convert, now_offset, or search_by_offset}
+  abbr: {type: string, required: false, description: Timezone abbreviation for lookup and now_offset (case-insensitive, 1-5 letters)}
+  time: {type: string, required: false, description: Wall-clock time for convert in strict HH:MM form (00-23 hours)}
+  from_abbr: {type: string, required: false, description: Source abbreviation for convert}
+  to_abbr: {type: string, required: false, description: Destination abbreviation for convert}
+  offset: {type: string, required: false, description: UTC offset for search_by_offset, as +HH:MM/-HH:MM or integer minutes}
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [lookup, convert, now_offset, search_by_offset]
+      description: Timezone abbreviation operation to run.
+    abbr:
+      type: string
+      description: Abbreviation to resolve (case-insensitive); ambiguous codes such as CST, IST, BST, AST and SST return every entry with ambiguity flags.
+    time:
+      type: string
+      description: Wall-clock time in strict HH:MM form (e.g. 09:30); required by convert.
+    from_abbr:
+      type: string
+      description: Source abbreviation for convert; ambiguous codes resolve to the first table entry and add a warning.
+    to_abbr:
+      type: string
+      description: Destination abbreviation for convert.
+    offset:
+      description: UTC offset for search_by_offset — a '+08:00'/'-05:30' string or an integer minute count (480, -330).
+  required: [mode]
+  additionalProperties: false
