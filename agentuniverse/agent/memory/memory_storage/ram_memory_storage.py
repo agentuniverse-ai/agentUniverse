@@ -7,6 +7,8 @@
 # @FileName: ram_memory_storage.py
 from typing import Optional, List, Dict
 
+from pydantic import Field
+
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
 from agentuniverse.agent.memory.message import Message
 
@@ -18,7 +20,11 @@ class RamMemoryStorage(MemoryStorage):
         messages (dict[str, dict[str, list[Message]]]): The messages in the ram memory.
     """
 
-    messages: Optional[Dict[str, Dict[str, List[Message]]]] = dict()
+    # Instance-scoped via default_factory so two RamMemoryStorage instances
+    # (e.g. two agents with different storage names) do not share the same
+    # dict and leak each other's messages. A bare ``= dict()`` default is
+    # evaluated once at class definition time and shared across all instances.
+    messages: Optional[Dict[str, Dict[str, List[Message]]]] = Field(default_factory=dict)
 
     def add(self, message_list: List[Message], session_id: str = '', agent_id: str = '', **kwargs) -> None:
         """Add messages to the memory db.
