@@ -57,6 +57,12 @@ class ZipReader(Reader):
         return self._readers.get(suffix)
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
+        """Read one archive with call-local counters and delegate readers.
+
+        Concurrent calls may reuse this component, but must not reset or spend
+        one another's resource budgets. Nested archives still share the state
+        of their root call.
+        """
         if isinstance(file, str):
             file = Path(file)
         if not isinstance(file, Path):
@@ -64,10 +70,11 @@ class ZipReader(Reader):
         if not file.exists():
             raise FileNotFoundError(f"Zip file not found: {file}")
 
-        self._total_size = 0
-        self._file_count = 0
-        self._readers = {}
-        self._reader_classes = {
+        reader = self.model_copy()
+        reader._total_size = 0
+        reader._file_count = 0
+        reader._readers = {}
+        reader._reader_classes = {
             ".csv": CSVReader,
             ".txt": TxtReader,
             ".md": MarkdownReader,
@@ -81,7 +88,7 @@ class ZipReader(Reader):
         ext_meta = dict(ext_info or {})
         with zipfile.ZipFile(file) as archive:
             with tempfile.TemporaryDirectory() as temp_dir:
-                return self._iterate_archive(
+                return reader._iterate_archive(
                     archive,
                     file,
                     Path(temp_dir),
