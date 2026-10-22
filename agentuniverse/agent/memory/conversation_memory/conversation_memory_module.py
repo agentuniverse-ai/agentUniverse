@@ -226,6 +226,14 @@ class ConversationMemoryModule:
                   "pair_id": pair_id}
         self._add_trace_info(**kwargs)
 
+    def _enqueue_trace(self, add_trace) -> None:
+        try:
+            self.queue.put_nowait(add_trace)
+        except queue.Full:
+            LOGGER.warn(
+                "Conversation memory trace queue is full; dropping trace."
+            )
+
     def add_trace_info(self, start_info: dict, target_info: dict, type: str, params: dict, pair_id: str):
         """Add trace info to the memory."""
         trace_id = FrameworkContextManager().get_context('trace_id')
@@ -241,7 +249,7 @@ class ConversationMemoryModule:
             self._add_trace(start_info, target_info, type, params, session_id,
                             trace_id, pair_id)
 
-        self.queue.put_nowait(add_trace)
+        self._enqueue_trace(add_trace)
 
     def add_tool_input_info(self, start_info: dict, target: str, params: dict, pair_id: str, auto: bool = True):
         """Add trace info to the memory."""
@@ -327,7 +335,7 @@ class ConversationMemoryModule:
                 "type": "agent"
             }
             self._add_trace(target_info, start_info, 'output', params, session_id, trace_id, pair_id)
-        self.queue.put_nowait(add_trace)
+        self._enqueue_trace(add_trace)
 
     def add_llm_input_info(self, start_info: dict, target: str, prompt: str, pair_id: str, auto=True):
         if not self.collection_current_agent_memory(start_info, 'llm', auto):
