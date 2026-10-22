@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 class LlmDTO(BaseModel):
+    """DTO model describing a llm.
+    """
     id: str = Field(description="ID")
     nickname: Optional[str] = Field(description="llm nickname", default="")
     temperature: Optional[float] = Field(description="llm temperature", default=None)
