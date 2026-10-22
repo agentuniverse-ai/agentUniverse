@@ -1,0 +1,65 @@
+name: semver_tool
+description: Semantic versioning (semver 2.0.0) tool — pure Python stdlib, no network required. Parse a version into major/minor/patch/prerelease/build with a strict validity verdict citing the violated spec rule (mode='parse'), compare two versions by semver precedence rules and get -1/0/1 (mode='compare'), bump major/minor/patch/prerelease levels or strip a prerelease for release (mode='bump'), and check simple ranges — exact versions, comparison operators, tilde and caret ranges (mode='range').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.semver_tool
+  class: SemverTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — parse, compare, bump or range.
+    required: true
+  version:
+    type: string
+    description: The version string. Required for the parse, bump and range modes.
+    required: false
+  version_a:
+    type: string
+    description: First comparand. Required for the compare mode.
+    required: false
+  version_b:
+    type: string
+    description: Second comparand. Required for the compare mode.
+    required: false
+  level:
+    type: string
+    description: Bump level — major, minor, patch, prerelease or release. Required for the bump mode.
+    required: false
+  label:
+    type: string
+    description: Prerelease channel label for the prerelease bump level (default 'rc'); only valid with level='prerelease'.
+    required: false
+  version_range:
+    type: string
+    description: Range expression for the range mode — exact versions ('1.2.3'), comparison operators (> >= < <= =), tilde ('~1.2.3', '~1.2', '~1'), caret ('^1.2.3', '^0.2.3', '^0.0.3', '^1.2', '^0.0', '^1', '^0') and whitespace-separated conjunctions. Unions, hyphen ranges, x-ranges and dist-tags are not supported.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "compare", "bump", "range"]
+      description: Operation mode.
+    version:
+      type: string
+      description: Version to parse / bump / range-check (parse, bump, range modes).
+    version_a:
+      type: string
+      description: First comparand (compare mode).
+    version_b:
+      type: string
+      description: Second comparand (compare mode).
+    level:
+      type: string
+      enum: ["major", "minor", "patch", "prerelease", "release"]
+      description: Bump level (bump mode).
+    label:
+      type: string
+      description: Prerelease channel label, default 'rc' (bump mode, level='prerelease').
+    version_range:
+      type: string
+      description: Range expression (range mode).
+  required: ["mode"]
