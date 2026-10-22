@@ -32,8 +32,10 @@ def test_sparse_workbook_streams_and_keeps_columns(tmp_path):
 def test_workbook_closed_when_row_iteration_fails():
     from unittest.mock import MagicMock
     workbook = MagicMock()
-    workbook.sheetnames = ['one']
-    workbook['one'].iter_rows.side_effect = RuntimeError('read failed')
+    worksheet = MagicMock()
+    worksheet.title = 'one'
+    workbook.worksheets = [worksheet]
+    worksheet.iter_rows.side_effect = RuntimeError('read failed')
     with patch.object(openpyxl, 'load_workbook', return_value=workbook):
         with pytest.raises(RuntimeError, match='read failed'):
             XlsxReader().load_data('broken.xlsx')

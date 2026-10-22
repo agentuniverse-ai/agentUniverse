@@ -340,7 +340,7 @@ class AcademicPaperFragmenter(DocProcessor):
             argument_type = self._classify_argument(paragraph, section.name)
 
             # Extract citations in this paragraph
-            paragraph_citations = self._extract_paragraph_citations(paragraph)
+            paragraph_citations = self._extract_paragraph_citations(paragraph) if self.extract_citations else []
 
             argument = Argument(
                 text=paragraph,

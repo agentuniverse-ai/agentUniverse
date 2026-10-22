@@ -175,7 +175,7 @@ class SemanticDeduplicator(DocProcessor):
 
                         # Handle duplicate based on merge strategy
                         if self.merge_strategy == 'keep_best':
-                            if self._is_better_doc(docs[j], doc):
+                            if self._is_better_doc(docs[j], unique_docs[-1]):
                                 # Replace with better document
                                 unique_docs[-1] = docs[j]
                         elif self.merge_strategy == 'merge':

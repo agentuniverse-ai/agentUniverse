@@ -189,7 +189,10 @@ class MMRProcessor(DocProcessor):
                 # Only a freshly computed embedding shares the configured model's
                 # space; a precomputed Query.embeddings value has no verifiable
                 # provenance (equal dimension does NOT imply same model).
-                query_embedding = model.get_embeddings([query.query_str])[0]
+                # Asymmetric embedding models distinguish search queries from
+                # documents; the default role is usually document.
+                query_embedding = model.get_embeddings(
+                    [query.query_str], text_type="query")[0]
             elif query is not None and not query.query_str and query.embeddings:
                 logger.warning(
                     "MMR: embedding_name is configured but the query carries no "

@@ -46,8 +46,8 @@ class XlsxReader(Reader):
         document_list = []
 
         try:
-            for sheet_name in workbook.sheetnames:
-                worksheet = workbook[sheet_name]
+            for worksheet in workbook.worksheets:
+                sheet_name = worksheet.title
                 max_row = worksheet.max_row
                 max_col = worksheet.max_column
                 sheet_data = []

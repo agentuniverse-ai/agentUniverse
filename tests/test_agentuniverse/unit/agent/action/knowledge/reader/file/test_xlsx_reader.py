@@ -32,7 +32,7 @@ class TestXlsxReader:
         # Mock workbook and worksheet
         mock_workbook = MagicMock()
         mock_worksheet = MagicMock()
-        mock_worksheet.sheetnames = ['Sheet1']
+        mock_worksheet.title = 'Sheet1'
         mock_worksheet.max_row = 3
         mock_worksheet.max_column = 2
         
@@ -48,10 +48,9 @@ class TestXlsxReader:
         
         mock_worksheet.cell = mock_cell
         mock_workbook.__getitem__.return_value = mock_worksheet
-        mock_workbook.sheetnames = ['Sheet1']
+        mock_workbook.worksheets = [mock_worksheet]
         mock_load_workbook.return_value = mock_workbook
-        for sheet_name in mock_workbook.sheetnames:
-            sheet = mock_workbook[sheet_name]
+        for sheet in mock_workbook.worksheets:
             sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
                 [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
                 for row in range(1, sheet.max_row + 1)
@@ -94,10 +93,12 @@ class TestXlsxReader:
                 return mock_sheet2
             return None
         
+        mock_sheet1.title = 'Sheet1'
+        mock_sheet2.title = 'Sheet2'
+        mock_workbook.worksheets = [mock_sheet1, mock_sheet2]
         mock_workbook.__getitem__.side_effect = mock_getitem
         mock_load_workbook.return_value = mock_workbook
-        for sheet_name in mock_workbook.sheetnames:
-            sheet = mock_workbook[sheet_name]
+        for sheet in mock_workbook.worksheets:
             sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
                 [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
                 for row in range(1, sheet.max_row + 1)
@@ -122,16 +123,15 @@ class TestXlsxReader:
         # Mock workbook
         mock_workbook = MagicMock()
         mock_worksheet = MagicMock()
-        mock_worksheet.sheetnames = ['Sheet1']
+        mock_worksheet.title = 'Sheet1'
         mock_worksheet.max_row = 1
         mock_worksheet.max_column = 1
         mock_worksheet.cell.return_value = MagicMock(value='Test')
         
         mock_workbook.__getitem__.return_value = mock_worksheet
-        mock_workbook.sheetnames = ['Sheet1']
+        mock_workbook.worksheets = [mock_worksheet]
         mock_load_workbook.return_value = mock_workbook
-        for sheet_name in mock_workbook.sheetnames:
-            sheet = mock_workbook[sheet_name]
+        for sheet in mock_workbook.worksheets:
             sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
                 [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
                 for row in range(1, sheet.max_row + 1)
@@ -150,16 +150,15 @@ class TestXlsxReader:
         # Mock empty workbook
         mock_workbook = MagicMock()
         mock_worksheet = MagicMock()
-        mock_worksheet.sheetnames = ['Sheet1']
+        mock_worksheet.title = 'Sheet1'
         mock_worksheet.max_row = 0
         mock_worksheet.max_column = 0
         mock_worksheet.cell.return_value = MagicMock(value=None)
         
         mock_workbook.__getitem__.return_value = mock_worksheet
-        mock_workbook.sheetnames = ['Sheet1']
+        mock_workbook.worksheets = [mock_worksheet]
         mock_load_workbook.return_value = mock_workbook
-        for sheet_name in mock_workbook.sheetnames:
-            sheet = mock_workbook[sheet_name]
+        for sheet in mock_workbook.worksheets:
             sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
                 [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
                 for row in range(1, sheet.max_row + 1)
@@ -176,16 +175,15 @@ class TestXlsxReader:
             # Mock workbook
             mock_workbook = MagicMock()
             mock_worksheet = MagicMock()
-            mock_worksheet.sheetnames = ['Sheet1']
+            mock_worksheet.title = 'Sheet1'
             mock_worksheet.max_row = 1
             mock_worksheet.max_column = 1
             mock_worksheet.cell.return_value = MagicMock(value='Test')
             
             mock_workbook.__getitem__.return_value = mock_worksheet
-            mock_workbook.sheetnames = ['Sheet1']
+            mock_workbook.worksheets = [mock_worksheet]
             mock_load_workbook.return_value = mock_workbook
-            for sheet_name in mock_workbook.sheetnames:
-                sheet = mock_workbook[sheet_name]
+            for sheet in mock_workbook.worksheets:
                 sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
                     [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
                     for row in range(1, sheet.max_row + 1)

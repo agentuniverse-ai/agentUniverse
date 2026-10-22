@@ -54,10 +54,10 @@ class PythonREPLTool(Tool):
                     "`allow_code_execution: True` to opt in, and only do so in a "
                     "trusted, isolated environment.")
 
-        pattern = re.compile(r"```python(.*?)``", re.DOTALL)
+        pattern = re.compile(r"```python(.*?)```", re.DOTALL)
         matches = pattern.findall(input)
         if len(matches) == 0:
-            pattern = re.compile(r"```py(.*?)``", re.DOTALL)
+            pattern = re.compile(r"```py(.*?)```", re.DOTALL)
             matches = pattern.findall(input)
         if len(matches) == 0:
             return self.client.run(input)
