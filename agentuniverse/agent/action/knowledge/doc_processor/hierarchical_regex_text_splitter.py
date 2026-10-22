@@ -7,6 +7,7 @@
 # @FileName: hierarchical_regex_text_splitter.py
 import re
 import uuid
+from copy import deepcopy
 from typing import List, Optional
 
 from agentuniverse.agent.agent_manager import AgentManager
@@ -24,6 +25,10 @@ class HierarchicalRegexTextSplitter(DocProcessor):
     A new heading closes deeper levels from the previous branch. Missing
     intermediate levels do not create synthetic nodes; without a shallower
     heading, the node's parent is ``root``.
+
+    Each heading chunk receives an independent deep copy of its source
+    document's metadata. Generated hierarchy fields override source fields
+    with the same names.
     """
     merge_first: bool = False
     hierarchical_index: List[dict] = [
@@ -85,6 +90,7 @@ class HierarchicalRegexTextSplitter(DocProcessor):
                         id=str(uuid.uuid4()),
                         text=line,
                         metadata={
+                            **deepcopy(doc.metadata or {}),
                             'hierarchical_parent': parent_id,
                             'hierarchical_info': match.group(0) if match else '',
                             'hierarchical_level': _ptr
