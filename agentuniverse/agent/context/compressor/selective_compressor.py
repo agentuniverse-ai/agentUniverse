@@ -80,7 +80,7 @@ class SelectiveCompressor(ContextCompressor):
             target_tokens: Target token count after compression
             **kwargs: Additional parameters:
                 - preserve_types: List[ContextType] to always preserve
-                - min_segments: Minimum number of segments to keep
+                - min_segments: Desired minimum count, subject to the token budget
 
         Returns:
             Tuple of (selected_segments, compression_metrics)
@@ -195,11 +195,14 @@ class SelectiveCompressor(ContextCompressor):
             selected_ids = {seg.id for seg in selected}
             remaining = [seg for seg in segments if seg.id not in selected_ids]
             remaining_sorted = self._score_and_sort(remaining)
+            tokens_used = self.calculate_total_tokens(selected)
 
             for seg in remaining_sorted:
                 if len(selected) >= min_segments:
                     break
-                selected.append(seg)
+                if tokens_used + seg.tokens <= target_tokens:
+                    selected.append(seg)
+                    tokens_used += seg.tokens
 
         elapsed_ms = (time.time() - start_time) * 1000
         metrics = self.create_metrics(
@@ -304,11 +307,6 @@ class SelectiveCompressor(ContextCompressor):
             if tokens_used + seg.tokens <= available_tokens:
                 selected.append(seg)
                 tokens_used += seg.tokens
-            else:
-                # Try to fit at least one HIGH priority segment
-                if len(selected) == 0 and seg.tokens <= available_tokens:
-                    selected.append(seg)
-                break
 
         return selected
 
@@ -352,12 +350,12 @@ class SelectiveCompressor(ContextCompressor):
         selected = []
         tokens_used = 0
 
-        for seg in scored[:target_count]:
+        for seg in scored:
+            if len(selected) >= target_count:
+                break
             if tokens_used + seg.tokens <= available_tokens:
                 selected.append(seg)
                 tokens_used += seg.tokens
-            else:
-                break
 
         return selected
 
@@ -411,8 +409,6 @@ class SelectiveCompressor(ContextCompressor):
             if tokens_used + seg.tokens <= available_tokens:
                 selected.append(seg)
                 tokens_used += seg.tokens
-            else:
-                break
 
         return selected
 

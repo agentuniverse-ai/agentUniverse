@@ -87,6 +87,8 @@ class ChromaMemoryStorage(MemoryStorage):
             filters['session_id'] = session_id
         if agent_id is not None:
             filters['agent_id'] = agent_id
+        if len(filters) > 1:
+            filters = {"$and": [{key: value} for key, value in filters.items()]}
         self._collection.delete(where=filters)
 
     def add(self, message_list: List[Message], session_id: str = None, agent_id: str = None, **kwargs) -> None:
@@ -136,6 +138,8 @@ class ChromaMemoryStorage(MemoryStorage):
         Returns:
             List[Message]: A list of messages retrieved from the memory db.
         """
+        if top_k <= 0:
+            return []
         if self._collection is None:
             self._init_collection()
         filters = {"$and": []}

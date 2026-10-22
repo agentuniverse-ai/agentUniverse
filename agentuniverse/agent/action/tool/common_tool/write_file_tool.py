@@ -8,6 +8,8 @@
 
 import os
 import json
+import shutil
+import tempfile
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_safe_path
@@ -64,10 +66,24 @@ class WriteFileTool(Tool):
                 })
 
         try:
-            mode = 'a' if append else 'w'
-
-            with open(file_path, mode, encoding='utf-8') as file:
-                file.write(content)
+            if append or not os.path.exists(file_path):
+                mode = 'a' if append else 'w'
+                with open(file_path, mode, encoding='utf-8') as file:
+                    file.write(content)
+            else:
+                temporary = None
+                try:
+                    with tempfile.NamedTemporaryFile(
+                        mode='w', encoding='utf-8', prefix='.write-', dir=directory, delete=False
+                    ) as file:
+                        temporary = file.name
+                        file.write(content)
+                    shutil.copymode(file_path, temporary)
+                    os.replace(temporary, file_path)
+                    temporary = None
+                finally:
+                    if temporary and os.path.exists(temporary):
+                        os.unlink(temporary)
             file_size = os.path.getsize(file_path)
             return json.dumps({
                 "file_path": file_path,

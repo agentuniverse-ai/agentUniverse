@@ -28,6 +28,11 @@ class Mode(Enum):
     CHANNEL_INFO = "channel_info"
 
 class YouTubeTool(Tool):
+    """Search videos, inspect channels, or fetch trending videos.
+
+    Search and trending return one API page, at most 50 videos. Channel
+    uploads paginate up to max_results, using pages of at most 50 items.
+    """
 
     service: Optional[Any] = None
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("YOUTUBE_API_KEY"))
@@ -75,7 +80,7 @@ class YouTubeTool(Tool):
                 q=query,
                 part='id',
                 type='video',
-                maxResults=self.max_results
+                maxResults=min(self.max_results, 50)
             ).execute()
 
             video_ids = [item['id']['videoId'] for item in search_response.get('items', [])]
@@ -87,8 +92,14 @@ class YouTubeTool(Tool):
                 part='snippet,statistics,contentDetails'
             ).execute()
 
+            # videos.list does not supply the relevance ranking from search.list.
+            # Rebuild that order using the IDs returned by the search call.
+            details_by_id = {item['id']: item for item in video_response.get('items', [])}
             results = []
-            for item in video_response.get('items', []):
+            for video_id in video_ids:
+                item = details_by_id.get(video_id)
+                if item is None:
+                    continue
                 results.append({
                     'id': item['id'],
                     'title': item['snippet']['title'],
@@ -129,7 +140,7 @@ class YouTubeTool(Tool):
                 playlist_items = self.service.playlistItems().list(
                     playlistId=playlist_id,
                     part='snippet,contentDetails',
-                    maxResults=remaining,
+                    maxResults=min(remaining, 50),
                     pageToken=next_page_token
                 ).execute()
 
@@ -139,7 +150,8 @@ class YouTubeTool(Tool):
                     video_list.append({
                         'id': item['contentDetails']['videoId'],
                         'title': item['snippet']['title'],
-                        'published_at': item['snippet']['publishedAt']
+                        'published_at': (item['contentDetails'].get('videoPublishedAt')
+                                         or item['snippet']['publishedAt'])
                     })
 
                 next_page_token = playlist_items.get('nextPageToken')
@@ -167,7 +179,7 @@ class YouTubeTool(Tool):
             request_param = {
                 'part': 'snippet,statistics,contentDetails',
                 'chart': 'mostPopular',
-                'maxResults': self.max_results
+                'maxResults': min(self.max_results, 50)
             }
             if region_code:
                 request_param['regionCode'] = region_code

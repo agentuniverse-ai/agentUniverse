@@ -79,6 +79,8 @@ class ViewFileTool(Tool):
             })
 
         try:
+            content_lines = []
+            total_lines = 0
             with open(file_path, 'r', encoding='utf-8') as file:
                 start_line = max(0, start_line)
                 requested_end_line = end_line

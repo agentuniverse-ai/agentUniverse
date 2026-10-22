@@ -5,7 +5,7 @@
 # @Author  : Assistant
 # @FileName: xlsx_reader.py
 from pathlib import Path
-from typing import Union, List, Optional, Dict
+from typing import Union, List, Optional, Dict, BinaryIO
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -17,11 +17,12 @@ class XlsxReader(Reader):
     Used to read and parse Excel format files, supports multiple sheets and various data types.
     """
 
-    def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
+    def _load_data(self, file: Union[str, Path, BinaryIO], ext_info: Optional[Dict] = None) -> List[Document]:
         """Parse Excel file.
 
         Args:
-            file: Excel file path or file object
+            file: Excel file path or binary file object. Metadata uses the
+                basename of its name, or "unknown" for an unnamed stream.
             ext_info: Additional metadata information
 
         Returns:
@@ -43,11 +44,14 @@ class XlsxReader(Reader):
 
         # Load the workbook
         workbook = openpyxl.load_workbook(file, data_only=True)
+        name_attr = getattr(file, "name", None)
+        file_name = Path(name_attr).name if isinstance(name_attr, (str, Path)) else "unknown"
+        file_name = file_name or "unknown"
         document_list = []
 
         # Process each worksheet
-        for sheet_name in workbook.sheetnames:
-            worksheet = workbook[sheet_name]
+        for worksheet in workbook.worksheets:
+            sheet_name = worksheet.title
             
             # Extract data from the worksheet
             sheet_data = []
@@ -76,7 +80,7 @@ class XlsxReader(Reader):
             if sheet_data:
                 sheet_content = "\n".join(sheet_data)
                 metadata = {
-                    "file_name": file.name,
+                    "file_name": file_name,
                     "sheet_name": sheet_name,
                     "max_row": max_row,
                     "max_col": max_col
