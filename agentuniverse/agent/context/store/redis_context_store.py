@@ -39,7 +39,9 @@ class RedisContextStore(ContextStore):
         redis_port: Redis server port
         redis_db: Redis database number
         redis_password: Optional Redis password
-        key_prefix: Prefix for all Redis keys
+        key_prefix: Literal prefix for all Redis keys. Glob characters are
+            escaped when listing sessions or clearing the store, so prefixes
+            such as ``tenant[1]:`` address only their own keys.
         default_ttl_seconds: Default TTL for segments
     """
 
@@ -377,7 +379,7 @@ class RedisContextStore(ContextStore):
             return []
 
         # Scan for all session keys
-        pattern = f"{self.key_prefix}session:*"
+        pattern = f"{self._escaped_key_prefix()}session:*"
         session_keys = []
 
         cursor = 0
@@ -407,7 +409,7 @@ class RedisContextStore(ContextStore):
             return
 
         # Delete all keys with our prefix
-        pattern = f"{self.key_prefix}*"
+        pattern = f"{self._escaped_key_prefix()}*"
         cursor = 0
 
         while True:
@@ -418,6 +420,11 @@ class RedisContextStore(ContextStore):
                 self._redis.delete(*keys)
             if cursor == 0:
                 break
+
+    def _escaped_key_prefix(self) -> str:
+        """Escape the literal key prefix for Redis SCAN's glob syntax."""
+        return "".join("\\" + char if char in "\\*?[]" else char
+                       for char in self.key_prefix)
 
     def _make_session_key(self, session_id: str) -> str:
         """Generate Redis key for session data."""
