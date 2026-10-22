@@ -50,13 +50,9 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
         if self.streaming:
             completion = ""
             token_usage = {}
-            chat_generation_info: Dict = {}
             for chunk in self._stream(messages, stop, run_manager, **kwargs):
-                chat_generation_info = (
-                    chunk.generation_info
-                    if chunk.generation_info is not None
-                    else chat_generation_info
-                )
+                if chunk.generation_info and chunk.generation_info.get("usage"):
+                    token_usage = chunk.generation_info["usage"]
                 completion += chunk.text
             lc_msg = AIMessage(content=completion, additional_kwargs={})
             gen = ChatGeneration(
@@ -66,7 +62,7 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
             return ChatResult(
                 generations=[gen],
                 llm_output={
-                    "token_usage": chat_generation_info.get("usage", {}),
+                    "token_usage": token_usage,
                     "model_name": self.model,
                 },
             )
@@ -95,13 +91,9 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
         if self.streaming:
             completion = ""
             token_usage = {}
-            chat_generation_info: Dict = {}
             async for chunk in self._astream(messages, stop, run_manager, **kwargs):
-                chat_generation_info = (
-                    chunk.generation_info
-                    if chunk.generation_info is not None
-                    else chat_generation_info
-                )
+                if chunk.generation_info and chunk.generation_info.get("usage"):
+                    token_usage = chunk.generation_info["usage"]
                 completion += chunk.text
 
             lc_msg = AIMessage(content=completion, additional_kwargs={})
@@ -112,7 +104,7 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
             return ChatResult(
                 generations=[gen],
                 llm_output={
-                    "token_usage": chat_generation_info.get("usage", {}),
+                    "token_usage": token_usage,
                     "model_name": self.model,
                 },
             )
@@ -160,6 +152,9 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
                 res = res.raw
                 msg = _convert_dict_to_message(res)
                 additional_kwargs = msg.additional_kwargs.get("function_call", {})
+                generation_info = dict(msg.additional_kwargs)
+                if res.get("usage"):
+                    generation_info["usage"] = res["usage"]
                 chunk = ChatGenerationChunk(
                     text=res["result"],
                     message=AIMessageChunk(
@@ -167,7 +162,7 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
                         role="assistant",
                         additional_kwargs=additional_kwargs,
                     ),
-                    generation_info=msg.additional_kwargs,
+                    generation_info=generation_info,
                 )
                 if run_manager:
                     run_manager.on_llm_new_token(chunk.text, chunk=chunk)
@@ -188,6 +183,9 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
             if res:
                 msg = _convert_dict_to_message(res)
                 additional_kwargs = msg.additional_kwargs.get("function_call", {})
+                generation_info = dict(msg.additional_kwargs)
+                if res.get("usage"):
+                    generation_info["usage"] = res["usage"]
                 chunk = ChatGenerationChunk(
                     text=res["result"],
                     message=AIMessageChunk(
@@ -195,7 +193,7 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
                         role="assistant",
                         additional_kwargs=additional_kwargs,
                     ),
-                    generation_info=msg.additional_kwargs,
+                    generation_info=generation_info,
                 )
                 if run_manager:
                     await run_manager.on_llm_new_token(chunk.text, chunk=chunk)
