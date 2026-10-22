@@ -459,11 +459,13 @@ class ChromaContextStore(ContextStore):
             return 0
 
         try:
+            # Chroma has no filtered count(), so fetch only the ids of this
+            # session and count them instead of using the collection-wide total.
             results = self._collection.get(
                 where={"session_id": session_id},
-                limit=1  # We only need count, not data
+                include=[]
             )
-            return self._collection.count()
+            return len(results["ids"])
         except Exception:
             return 0
 
