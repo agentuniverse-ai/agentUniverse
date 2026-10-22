@@ -1,0 +1,28 @@
+name: 'causal_phrase_detector'
+description: 'extract explicit causal relation spans (cause -> effect) from document text into metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.causal_phrase_detector'
+  class: 'CausalPhraseDetector'
+
+# Maximum number of relations stamped per document in
+# metadata['causal_relations']; extra detections are dropped. [1, 10000].
+max_relations: 50
+
+# Maximum length of a cause or effect span in characters; longer spans
+# are cut and the hit is flagged cause_truncated / effect_truncated.
+# [1, 10000].
+span_char_limit: 200
+
+# Metadata key for the relation list
+# ({cause, effect, marker, span, direction, cause_truncated,
+# effect_truncated} dicts); '' disables the stamp.
+relations_key: 'causal_relations'
+
+# Metadata key for the number of stamped relations; '' disables.
+count_key: 'causal_count'
+
+# Metadata key for relations per 100 sentences (2-decimal rounding);
+# '' disables.
+density_key: 'causal_density'
