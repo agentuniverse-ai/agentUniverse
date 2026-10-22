@@ -128,8 +128,16 @@ characters (default 65,536) and ``max_rule_lines`` lines (default
 ``path`` must be relative, slash-separated, 1-``max_path_chars``
 characters with at most ``max_path_segments`` components, without
 empty / ``.`` / ``..`` components or backslashes (one trailing
-``/`` is allowed and asserts a directory, mirroring the
-check-ignore CLI; an explicit ``is_dir`` argument overrides).
+``/`` is allowed and asserts the directory dtype — the same
+decision ``git check-ignore`` reaches for an on-disk directory
+queried by its bare name; an explicit ``is_dir`` argument
+overrides). Note that literally passing a trailing-slash argument
+to the ``check-ignore`` CLI additionally makes git match the
+slash-terminated form of the path (so e.g. rule ``x/*`` matches a
+directory ``x`` only when queried as ``x/``); that CLI query quirk
+is intentionally not modeled — the dtype semantics of ``git
+status``/``git add`` walking, and of the 400+-case differential
+test corpus, are.
 
 Division of labor inside the family (see the Distinction section
 of the PR): **PathLintTool** (#4036) lints the *path string* for
@@ -566,6 +574,16 @@ def _wildmatch(pattern: str, text: str, pathname: bool) -> bool:
     )
 
 
+def _wildmatch_bytes(pattern: bytes, text: str, pathname: bool) -> bool:
+    """wildmatch with a pre-encoded pattern (parse-once, match-many).
+
+    The directory walk tests one rule against many leading directories;
+    encoding the pattern on every call made large rule sets x deep paths
+    quadratic in encoding work alone.
+    """
+    return _dowild(pattern, 0, text.encode("utf-8"), 0, pathname) == _WM_MATCH
+
+
 # ------------------------------------------------------------------ #
 # Rule parsing — dir.c add_patterns_from_buffer() +
 # trim_trailing_spaces() + parse_path_pattern(), mirrored.
@@ -614,6 +632,9 @@ class _Rule:
         "match_pat",
         "nodir",
         "space_trimmed",
+        "core_bytes",
+        "match_pat_bytes",
+        "first_literal",
     )
 
     def __init__(self, index: int, line: int, raw_line: str, source: str) -> None:
@@ -636,6 +657,36 @@ class _Rule:
         self.match_pat = core[1:] if core.startswith("/") else core
         self.nodir = "/" not in core
         self.space_trimmed = source != raw_line
+        # Encoded once at parse time: the directory walk tests one rule
+        # against many leading directories, and re-encoding the pattern
+        # per call made large rule sets x deep paths pay O(rules x depth)
+        # encoding work on top of the matching itself.
+        self.core_bytes = core.encode("utf-8")
+        self.match_pat_bytes = self.match_pat.encode("utf-8")
+        self.first_literal = self._first_segment_literal()
+
+    def _first_segment_literal(self) -> Optional[str]:
+        """First path segment if it is a plain literal, else None.
+
+        For slash-bearing rules whose first segment contains no wildcard
+        and no escape, any matching path must start with exactly that
+        segment — a sound per-path prefilter for the directory walk.
+        ``None`` means "not prefilterable" (wildcard, escape, ``**``
+        prefix, or a basename rule that matches at any depth).
+        """
+        if self.nodir:
+            return None
+        pat = self.match_pat
+        if pat.startswith("**/"):
+            return None
+        seg = []
+        for ch in pat:
+            if ch == "/":
+                break
+            if ch in "*?[\\":
+                return None
+            seg.append(ch)
+        return "".join(seg) if seg else None
 
 
 def _parse_rules(text: str) -> List[_Rule]:
@@ -689,8 +740,8 @@ def _rule_matches(rule: _Rule, path: str, is_dir: bool) -> bool:
         return False
     if rule.nodir:
         basename = path.rsplit("/", 1)[-1]
-        return _wildmatch(rule.core, basename, pathname=False)
-    return _wildmatch(rule.match_pat, path, pathname=True)
+        return _wildmatch_bytes(rule.core_bytes, basename, pathname=False)
+    return _wildmatch_bytes(rule.match_pat_bytes, path, pathname=True)
 
 
 class _Verdict:
@@ -717,14 +768,23 @@ def _check_ignore(rules: List[_Rule], path: str, is_dir: bool) -> Optional[_Verd
       negation makes the path not-ignored.
     """
     components = path.split("/")
+    # Sound prefilter: a slash-bearing rule whose first segment is a
+    # plain literal can only match paths whose FIRST component is that
+    # literal, so the per-level scan (and the final scan) can skip it
+    # once and for all instead of re-testing it at every depth.
+    first = components[0]
+    candidates = [
+        r for r in rules
+        if r.first_literal is None or r.first_literal == first
+    ]
     for k in range(1, len(components)):
         directory = "/".join(components[:k])
-        for rule in reversed(rules):
+        for rule in reversed(candidates):
             if _rule_matches(rule, directory, True):
                 if not rule.negated:
                     return _Verdict(rule, "directory", directory)
                 break  # un-ignored at this level: keep walking
-    for rule in reversed(rules):
+    for rule in reversed(candidates):
         if _rule_matches(rule, path, is_dir):
             return _Verdict(rule, "path", None)
     return None
@@ -1308,8 +1368,9 @@ class GitignoreTool(Tool):
             rules (str): The rules text (gitignore syntax) for
                 ``match`` / ``analyze`` / ``lint``.
             path (str): The relative path for ``match`` (one
-                trailing ``/`` asserts a directory, like the
-                check-ignore CLI).
+                trailing ``/`` asserts the directory dtype, like
+                the check-ignore CLI's on-disk resolution for a
+                directory queried by its bare name).
             is_dir (bool): Optional explicit directory assertion
                 for ``match`` (overrides the trailing-slash rule).
             rule (str): The single rule line for ``explain``.
@@ -1563,7 +1624,9 @@ class GitignoreTool(Tool):
             "notes": (
                 "pure in-memory semantics (git wildmatch/dir.c translation); "
                 "core.ignoreCase=false (case-sensitive); is_dir mirrors the "
-                "dtype resolution of git check-ignore"
+                "dtype resolution of git check-ignore (the directory-walk "
+                "semantics of git status, not the CLI's trailing-slash "
+                "query form)"
             ),
         }
 
@@ -2343,7 +2406,15 @@ class GitignoreTool(Tool):
         if rule.mustbedir:
             miss_candidates.append(base_body)  # the same name as a FILE
         elif rule.nodir:
-            miss_candidates.append("dir/" + base_body + "/inner")
+            # Depth miss for a basename rule: the ANCESTOR component must
+            # itself be a non-match. Using the matching base as the parent
+            # (dir/<base>/inner) would make the leading-directory walk
+            # ignore the subtree — the 'miss' would contradict this
+            # tool's own match mode and real git.
+            miss_body = next(
+                (m for m in miss_candidates if not m.endswith("/")), base_body
+            )
+            miss_candidates.append("dir/" + miss_body + "/inner")
         else:
             miss_candidates.append("prefix/" + base_body)
         misses: List[str] = []
@@ -2352,6 +2423,9 @@ class GitignoreTool(Tool):
                 is_dir, norm = True, m[:-1]
             else:
                 is_dir, norm = False, m
-            if norm and not _rule_matches(rule, norm, is_dir):
+            # Verified through the full single-rule pipeline: neither the
+            # path nor any leading directory may match, mirroring what
+            # git check-ignore reports for a one-rule gitignore.
+            if norm and _check_ignore([rule], norm, is_dir) is None:
                 misses.append(m)
         return matches[:3], misses[:2], not matches

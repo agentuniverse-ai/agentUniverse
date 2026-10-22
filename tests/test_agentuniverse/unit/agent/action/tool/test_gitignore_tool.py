@@ -1172,5 +1172,121 @@ class FreshSeedOracleTest(unittest.TestCase):
         return table.get(rules_text, [])
 
 
+
+# ------------------------------------------------------------------ #
+# Second-pass hostile review regressions: explain misses vs the
+# directory walk, walk-prefilter soundness, deep-path walk timing.
+# ------------------------------------------------------------------ #
+
+class SecondPassRegressionTest(unittest.TestCase):
+    """Regressions found by the second hostile differential pass."""
+
+    def test_explain_misses_survive_directory_walk(self):
+        # For basename (slash-free) rules the old miss construction used
+        # the MATCHING example as a parent component (dir/<base>/inner).
+        # A basename rule that matches that parent directory makes the
+        # whole subtree ignored, so the "miss" contradicted this tool's
+        # own match mode and real git (e.g. rule '[\\]]' produced the
+        # miss 'dir/]/inner' while match mode reported it ignored via
+        # the directory 'dir/]'). Misses must now be verified through
+        # the full single-rule pipeline.
+        for rule in ("[\\]]", "??", "[a-]", "?", "[[:digit:]]*",
+                     "[a\\-z]", "x?y", "foo", "foo/"):
+            res = explain(rule)
+            self.assertTrue(res["example_misses"], rule)
+            for miss in res["example_misses"]:
+                norm = miss.rstrip("/")
+                is_dir = miss.endswith("/")
+                verdict = TOOL.execute(mode="match", rules=rule + "\n",
+                                       path=norm, is_dir=is_dir)
+                self.assertFalse(
+                    verdict["matched"],
+                    f"rule {rule!r} miss {miss!r} is matched by the "
+                    f"tool's own pipeline ({verdict['matched_on']})")
+        # '*' matches every path: no miss can exist, and none is claimed.
+        self.assertEqual(explain("*")["example_misses"], [])
+
+    def test_explain_miss_avoids_matching_ancestor(self):
+        # The exact reported defect: no miss example may contain a
+        # rule-matching component in an ancestor position.
+        res = explain("[\\]]")
+        for miss in res["example_misses"]:
+            for comp in miss.rstrip("/").split("/")[:-1]:
+                self.assertFalse(
+                    _rule_matches(_parse_rules("[\\]]\n")[0], comp, True),
+                    f"miss {miss!r} has matching ancestor {comp!r}")
+
+    def test_walk_prefilter_sound(self):
+        # The first-segment prefilter must never drop a rule that can
+        # match: literal-prefix rules still decide, wildcard/escaped/
+        # '**'-prefixed and basename rules bypass the filter entirely.
+        rules = ("a/**\n!a/keep\nb/*\nzzz\nx?/y\n[wx]/z\n"
+                 "**/deep\n\\!/lit\nq/r/\n")
+        cases = [
+            ("a/x/y", False, True, 1),      # a/** via walk+full
+            ("a/keep", False, True, 2),     # matched by the !a/keep
+                                           # negation (effective=False)
+            ("b/z", False, True, 3),
+            ("c/b/zzz", False, True, 4),    # basename rule at depth
+            ("xx/y", False, True, 5),       # '?' rule through filter
+            ("w/z", False, True, 6),        # class rule through filter
+            ("p/deep", False, True, 7),     # '**/deep' through filter
+            ("!/lit", False, True, 8),      # escaped-literal rule
+            ("q/r", True, True, 9),         # dir-only rule
+            ("q/r/f", False, True, 9),      # dir-only rule via walk
+            ("zz/other", False, False, None),
+        ]
+        for path, is_dir, want_matched, want_line in cases:
+            with self.subTest(path=path):
+                res = match(rules, path, is_dir=is_dir)
+                self.assertEqual(bool(res["matched"]), want_matched)
+                if want_line is not None:
+                    self.assertEqual(res["rule_line"], want_line)
+
+    def test_prefilter_first_literal_classification(self):
+        # Pin the prefilter key itself: literal first segments only.
+        from agentuniverse.agent.action.tool.common_tool.gitignore_tool import _Rule
+        def first(rule_text):
+            return _Rule(0, 1, rule_text, rule_text).first_literal
+        self.assertEqual(first("a/b"), "a")
+        self.assertEqual(first("/a/b"), "a")
+        self.assertEqual(first("a"), None)      # basename rule
+        self.assertEqual(first("**/a"), None)   # '**/' prefix
+        self.assertEqual(first("*/b"), None)    # wildcard segment
+        self.assertEqual(first("x?/b"), None)
+        self.assertEqual(first("[ab]/b"), None)
+        self.assertEqual(first("a\\/b"), None)  # escaped slash: not plain
+
+    def test_deep_path_walk_stays_fast(self):
+        # 5k slash rules x a 200-segment path used to cost O(rules x
+        # depth) matcher calls (2.6s at 20k x 300); the first-segment
+        # prefilter keeps the same verdict in well under the budget.
+        import time
+        tool = DirectGitignoreTool()
+        tool.max_rule_lines = 8192
+        tool.max_rules_chars = 1_000_000
+        tool.max_path_chars = 8192
+        tool.max_path_segments = 256
+        rules = "\n".join("pattern%d/*.tmp" % i for i in range(5000))
+        rules += "\nkeep/\n"
+        deep = "/".join("s%d" % i for i in range(200))
+        t0 = time.time()
+        res = tool.execute(mode="match", rules=rules, path=deep, is_dir=False)
+        elapsed = time.time() - t0
+        self.assertFalse(res["matched"])
+        self.assertLess(elapsed, 2.0)
+        # the prefilter keeps rules that DO match reachable
+        res = tool.execute(mode="match", rules=rules,
+                           path="keep/inner", is_dir=False)
+        self.assertTrue(res["matched"])
+        self.assertEqual(res["rule_line"], 5001)
+        res = tool.execute(
+            mode="match", rules=rules,
+            path="pattern4999/x.tmp", is_dir=False)
+        self.assertTrue(res["matched"])
+        self.assertEqual(res["rule_line"], 5000)
+
+
+
 if __name__ == "__main__":
     unittest.main()
