@@ -1,0 +1,51 @@
+name: text_distance_tool
+description: Text distance tool — pure Python stdlib, no network required. Levenshtein edit distance (mode='levenshtein'), restricted Damerau-Levenshtein / optimal-string-alignment distance that also counts adjacent transpositions (mode='damerau_levenshtein'), and a normalized 0-1 similarity score (mode='similarity') based on either metric via the 'metric' option, with optional case-insensitive comparison.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_distance_tool
+  class: TextDistanceTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Distance mode — levenshtein, damerau_levenshtein or similarity.
+    required: true
+  text_a:
+    type: string
+    description: The first text to compare. Empty strings are valid (the distance to a non-empty text is its length).
+    required: false
+  text_b:
+    type: string
+    description: The second text to compare. Empty strings are valid.
+    required: false
+  case_sensitive:
+    type: boolean
+    description: True (default) compares the texts exactly; False applies str.casefold() to both texts before measuring.
+    required: false
+  metric:
+    type: string
+    description: similarity mode only — levenshtein (default) or damerau_levenshtein, the distance the normalized score is based on. Ignored by the two distance modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["levenshtein", "damerau_levenshtein", "similarity"]
+      description: Distance mode.
+    text_a:
+      type: string
+      description: First text to compare.
+    text_b:
+      type: string
+      description: Second text to compare.
+    case_sensitive:
+      type: boolean
+      description: Exact comparison (default) vs casefolded case-insensitive comparison.
+    metric:
+      type: string
+      enum: ["levenshtein", "damerau_levenshtein"]
+      description: Distance used for the normalized similarity (similarity mode).
+  required: ["mode"]
