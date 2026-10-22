@@ -2,6 +2,7 @@
 
 import base64
 import io
+import json
 import os
 import random
 import stat
@@ -654,10 +655,19 @@ class PathologicalInputTest(TarInspectToolTest):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["error_type"], "validation_error")
 
-    def test_zero_block_file_is_structured_error(self):
-        """A zeros-only file is rejected as having no tar header."""
-        path = self.write_raw("zeros.tar", b"\0" * 1024)
-        result = self.inspect(path)
+    def test_zero_block_archives_are_valid_empty(self):
+        """Streams of zero blocks are valid empty archives for tarfile and tar."""
+        import gzip as gzip_module
+
+        for index, blob in enumerate([(b"\0" * 512, "plain512"), (b"\0" * 1024, "plain1024"), (gzip_module.compress(b"\0" * 1024), "gz1024")]):
+            with self.subTest(case=blob[1]):
+                path = self.write_raw(f"zeros-{blob[1]}.tar", blob[0])
+                result = self.inspect(path)
+                self.assertEqual(result["status"], "success", result)
+                self.assertEqual(result["entry_count"], 0)
+                self.assertEqual(result["entries"], [])
+        # Truncated zero streams shorter than one block still fail structured.
+        result = self.inspect(self.write_raw("short-zeros.tar", b"\0" * 300))
         self.assertEqual(result["status"], "error")
         self.assertIn("tar header", result["error"])
 
@@ -791,6 +801,192 @@ class PathologicalInputTest(TarInspectToolTest):
         self.audit(path)
         self.tool.execute(mode="plan_extraction", file_path="ro.tar", dest_dir="out")
         self.assertEqual(sorted(os.listdir(self.directory.name)), before)
+
+
+class SelfReviewRegressionTest(TarInspectToolTest):
+    """Regressions for defects found by the hostile self-review differential battery."""
+
+    def test_fractional_and_negative_pax_mtimes_match_tarfile(self):
+        """PAX fractional mtimes must be reported exactly as tarfile reports them."""
+
+        def builder(archive):
+            for name, mtime in [("frac.txt", 1690000000.25), ("negfrac.txt", -12345.5), ("plain.txt", 1690000000)]:
+                info = tarfile.TarInfo(name)
+                info.size = 1
+                info.mode = 0o644
+                info.mtime = mtime
+                archive.addfile(info, io.BytesIO(b"x"))
+
+        path = self.build("frac-mtime.tar", builder, tar_format=tarfile.PAX_FORMAT)
+        with tarfile.open(path) as archive:
+            members = archive.getmembers()
+        result = self.inspect(path)
+        for got, member in zip(result["entries"], members, strict=True):
+            self.assertEqual(got["mtime"], member.mtime)
+        self.assertEqual(result["entries"][0]["mtime"], 1690000000.25)
+        self.assertEqual(result["entries"][1]["mtime"], -12345.5)
+        self.assertIsInstance(result["entries"][2]["mtime"], int)
+
+    def test_inspect_output_json_safe_with_surrogates(self):
+        """Names AND link targets with undecodable bytes must serialize to UTF-8 JSON."""
+
+        def builder(archive):
+            info = tarfile.TarInfo("bad\udcfe.txt")
+            info.size = 1
+            info.mode = 0o644
+            info.mtime = SANE_MTIME
+            archive.addfile(info, io.BytesIO(b"x"))
+            add_symlink(archive, "lnk", "t\udcfeget")
+
+        path = self.build("surr-out.tar", builder, tar_format=tarfile.GNU_FORMAT)
+        result = self.inspect(path)
+        json.dumps(result, ensure_ascii=False).encode("utf-8")  # must not raise
+        self.assertNotIn("\udcfe", result["entries"][1]["link_target"])
+        plan = self.tool.execute(mode="plan_extraction", file_path="surr-out.tar", dest_dir="out")
+        json.dumps(plan, ensure_ascii=False).encode("utf-8")
+
+    def test_deep_redirect_resolved_path_matches_normpath(self):
+        """A >512-component name written through a symlink keeps its full landing path."""
+
+        def builder(archive):
+            add_symlink(archive, "r", "..")
+            add_file(archive, "r/" + "n/" * 700 + "f.txt", b"x")
+
+        path = self.build("deep-redir.tar", builder, tar_format=tarfile.PAX_FORMAT)
+        result = self.tool.execute(mode="plan_extraction", file_path="deep-redir.tar", dest_dir="out")
+        expected = os.path.normpath(os.path.join("out", "../" + "n/" * 700 + "f.txt"))
+        self.assertEqual(result["plans"][-1]["resolved_path"], expected)
+        self.assertTrue(result["plans"][-1]["escapes_dest"])
+        self.assertEqual(self.rules(self.audit(path)).get("symlink_redirect"), "high")
+
+    def test_symlink_loop_resolved_path(self):
+        """A symlink loop resolves literally after the first revisited link, not to the dest root."""
+
+        def builder(archive):
+            add_symlink(archive, "loop1", "loop2")
+            add_symlink(archive, "loop2", "loop1")
+            add_file(archive, "loop1/x", b"x")
+
+        path = self.build("loop.tar", builder, tar_format=tarfile.PAX_FORMAT)
+        result = self.tool.execute(mode="plan_extraction", file_path="loop.tar", dest_dir="out")
+        self.assertEqual(result["plans"][-1]["resolved_path"], "out/loop1/x")
+        self.assertFalse(result["plans"][-1]["escapes_dest"])
+        self.assertEqual(self.rules(self.audit(path)).get("symlink_redirect"), None)
+
+    def test_absolute_name_redirect_landing(self):
+        """Absolute entry names keep their absoluteness across symlink redirects."""
+
+        def builder(archive):
+            add_symlink(archive, "/tmp/s", "..")
+            add_file(archive, "/tmp/s/evil.txt", b"x")  # noqa: S108 - archive member names
+
+        path = self.build("abs-redir.tar", builder, tar_format=tarfile.PAX_FORMAT)
+        result = self.tool.execute(mode="plan_extraction", file_path="abs-redir.tar", dest_dir="out")
+        self.assertEqual(result["plans"][-1]["resolved_path"], "/evil.txt")
+        self.assertTrue(result["plans"][-1]["escapes_dest"])
+
+    def test_verydeep_symlink_redirect_flagged(self):
+        """Redirects through symlinks named deeper than 512 components are still caught."""
+
+        def builder(archive):
+            deep = "b/" * 520
+            add_symlink(archive, deep + "out", "/tmp")  # noqa: S108 - archive member target
+            add_file(archive, deep + "out/pwn", b"x")
+
+        path = self.build("verydeep.tar", builder, tar_format=tarfile.PAX_FORMAT)
+        result = self.audit(path)
+        self.assertEqual(self.rules(result).get("symlink_redirect"), "high")
+        self.assertFalse(result["extract_safe"])
+
+    def test_walk_budget_fails_closed(self):
+        """Paths whose redirect walk exceeds the step budget are flagged, never truncated."""
+
+        def builder(archive):
+            add_symlink(archive, "s", "real")
+            add_file(archive, "s/" + "a/" * 70_000 + "f.txt", b"x")
+
+        path = self.build("budget.tar", builder, tar_format=tarfile.PAX_FORMAT)
+        result = self.audit(path)
+        self.assertEqual(self.rules(result).get("resolution_budget_exceeded"), "high")
+        self.assertFalse(result["extract_safe"])
+        plan = self.tool.execute(mode="plan_extraction", file_path="budget.tar", dest_dir="out")
+        last = plan["plans"][-1]
+        self.assertTrue(last.get("resolution_incomplete"))
+        self.assertTrue(last["escapes_dest"])
+        self.assertIn(last["name"], plan["escaping_entries"])
+
+    def test_duplicate_scan_is_not_quadratic(self):
+        """50k entries with 25k distinct duplicate names audit in bounded time."""
+        path = self.path("many-dups.tar")
+        started = time.monotonic()
+        with tarfile.open(path, "w") as archive:
+            for repeat in range(2):
+                for index in range(25_000):
+                    info = tarfile.TarInfo(f"item-{index:06d}.txt")
+                    info.size = 0
+                    info.mtime = SANE_MTIME
+                    archive.addfile(info)
+        self.assertLess(time.monotonic() - started, 120)
+        started = time.monotonic()
+        result = self.audit(path)
+        self.assertLess(time.monotonic() - started, 30, "duplicate tracking must stay near-linear")
+        finding = next(item for item in result["findings"] if item["rule"] == "duplicate_entries")
+        self.assertEqual(finding["count"], 25_000)
+
+    def test_deep_name_audit_stays_fast(self):
+        """Deep-named entries with a symlink present audit without a per-step rebuild blowup."""
+        path = self.path("deepnames.tar")
+        started = time.monotonic()
+        with tarfile.open(path, "w", format=tarfile.PAX_FORMAT) as archive:
+            add_symlink(archive, "r", "sub")
+            for index in range(5_000):
+                info = tarfile.TarInfo(f"r/n/{'d/' * 700}f{index}.txt")
+                info.size = 0
+                info.mtime = SANE_MTIME
+                archive.addfile(info)
+        self.assertLess(time.monotonic() - started, 120)
+        started = time.monotonic()
+        result = self.audit(path)
+        self.assertLess(time.monotonic() - started, 60)
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["entry_count"], 5_001)
+
+    def test_base64_mime_wrapped_payload(self):
+        """base64 wrapped in newlines (MIME style) decodes like the unwrapped form."""
+        path = self.build("mime-src.tar", lambda archive: add_file(archive, "file.txt", b"data"))
+        with open(path, "rb") as stream:
+            encoded = base64.b64encode(stream.read()).decode("ascii")
+        wrapped = "\n".join(encoded[index : index + 76] for index in range(0, len(encoded), 76))
+        result = self.tool.execute(mode="inspect", base64_archive=wrapped)
+        self.assertEqual(result["status"], "success", result)
+        self.assertEqual(result["entries"][0]["name"], "file.txt")
+
+    def test_deep_gnu_longname_chain_is_structured_error(self):
+        """A 2000-deep GNU longname chain (stdlib raises RecursionError) stays structured."""
+        long_name = "chain-target.txt"
+        info = tarfile.TarInfo("real.txt")
+        info.size = 0
+        info.mtime = SANE_MTIME
+        blob = tarfile.TarInfo("././@LongLink")
+        blob.type = tarfile.GNUTYPE_LONGNAME
+        blob.size = len(long_name) + 1
+        blob.mtime = SANE_MTIME
+        header = blob.tobuf(format=tarfile.GNU_FORMAT)
+        data = long_name.encode() + b"\0"
+        pad = b"\0" * ((-len(data)) % 512)
+        link = header + data + pad
+        path = self.path("chain.tar")
+        with open(path, "wb") as stream:
+            for _ in range(2000):
+                stream.write(link)
+            stream.write(info.tobuf(format=tarfile.GNU_FORMAT))
+            stream.write(b"\0" * 1024)
+        with self.assertRaises((tarfile.TarError, RecursionError)):  # stdlib oracle itself fails here
+            with tarfile.open(path) as archive:
+                len(archive.getmembers())
+        result = self.inspect(path)
+        self.assertEqual(result["status"], "error")
+        self.assertIn(result["error_type"], {"validation_error", "operation_error"})
 
 
 class TarInspectRegistrationTest(unittest.TestCase):

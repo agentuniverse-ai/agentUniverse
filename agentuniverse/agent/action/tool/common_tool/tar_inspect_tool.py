@@ -14,6 +14,7 @@ import os
 import posixpath
 import re
 import tarfile
+from collections import deque
 from typing import Any, ClassVar
 
 from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_safe_path
@@ -22,10 +23,15 @@ from agentuniverse.agent.action.tool.tool import Tool
 _WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
 _SURROGATE_RANGE = re.compile(r"[\udc80-\udcff]")
 _MAX_NAMES_PER_FINDING = 20
+_MAX_WALK_STEPS = 65_536
 
 
 class _ScanBudgetExceeded(Exception):
     """Raised when a decompressed stream grows past the configured budget."""
+
+
+class _WalkBudgetExceeded(Exception):
+    """Raised when a symlink-redirect walk grows past the per-entry step budget."""
 
 
 class TarInspectTool(Tool):
@@ -158,7 +164,8 @@ class TarInspectTool(Tool):
         if not isinstance(payload, str) or not payload:
             raise ValueError("base64_archive must be a non-empty string")
         try:
-            raw = base64.b64decode(payload.strip().encode("ascii"), validate=True)
+            compact = "".join(payload.split())
+            raw = base64.b64decode(compact.encode("ascii"), validate=True)
         except (binascii.Error, UnicodeEncodeError) as exc:
             raise ValueError(f"base64_archive is not valid base64: {exc}") from exc
         if len(raw) > self.max_base64_bytes:
@@ -179,8 +186,11 @@ class TarInspectTool(Tool):
         else:
             compression = None
         header = TarInspectTool._header_block(TarInspectTool._open_stream(raw, compression))
-        if len(header) < 512 or header == b"\x00" * 512:
+        if len(header) < 512:
             raise ValueError("data is not a tar archive (no tar header block found)")
+        # A first block of zeros is NOT rejected here: a stream of zero blocks
+        # is a valid empty archive (stdlib tarfile and tar both accept it), and
+        # zeros followed by garbage fails member parsing in _read_members.
         magic = header[257:265]
         if magic == b"ustar\x0000":
             variant = "ustar"
@@ -329,7 +339,7 @@ class TarInspectTool(Tool):
                 "mode_int": int(member.mode),
                 "uid": member.uid,
                 "gid": member.gid,
-                "mtime": int(member.mtime),
+                "mtime": int(member.mtime) if float(member.mtime).is_integer() else member.mtime,
                 "link_target": member.linkname if member.linkname else None,
                 "pax": bool(getattr(member, "pax_headers", None)),
             }
@@ -366,7 +376,7 @@ class TarInspectTool(Tool):
             "uid": entry["uid"],
             "gid": entry["gid"],
             "mtime": entry["mtime"],
-            "link_target": entry["link_target"],
+            "link_target": TarInspectTool._display(entry["link_target"]) if entry["link_target"] else None,
         }
 
     # ------------------------------------------------------------- inspection
@@ -455,7 +465,7 @@ class TarInspectTool(Tool):
                 bucket["entries"].append(self._display(name))
 
         seen_names: set[str] = set()
-        duplicate_firsts: list[str] = []
+        duplicate_names: set[str] = set()
         symlinks: dict[str, str] = {}
         total = 0
         for entry in entries:
@@ -463,8 +473,8 @@ class TarInspectTool(Tool):
             self._audit_entry_paths(entry, add)
             self._audit_link_targets(entry, add)
             self._audit_entry_attributes(entry, add)
-            if name in seen_names and name not in duplicate_firsts:
-                duplicate_firsts.append(name)
+            if name in seen_names and name not in duplicate_names:
+                duplicate_names.add(name)
                 add(
                     "duplicate_entries",
                     "high",
@@ -475,17 +485,27 @@ class TarInspectTool(Tool):
             if entry["kind"] == "file":
                 total += entry["size"]
             # Simulate extraction order: only symlinks created EARLIER can redirect.
-            landing = self._resolve_through_symlinks(name.replace("\\", "/"), symlinks)
-            if landing is not None:
-                resolved, chain = landing
-                if self._escapes_root(resolved, "."):
-                    via = " -> ".join(f"{self._display(step[0])}=>{self._display(step[1])}" for step in chain)
+            if symlinks:
+                try:
+                    landing = self._resolve_through_symlinks(name.replace("\\", "/"), symlinks)
+                except _WalkBudgetExceeded:
                     add(
-                        "symlink_redirect",
+                        "resolution_budget_exceeded",
                         "high",
                         name,
-                        f"entry writes through earlier symlink(s) {via} and lands at {self._display(resolved)}",
+                        "symlink redirect walk exceeded its step budget; the landing path is unknown (fail closed)",
                     )
+                    landing = None
+                if landing is not None:
+                    resolved, chain = landing
+                    if self._escapes_root(resolved, "."):
+                        via = " -> ".join(f"{self._display(step[0])}=>{self._display(step[1])}" for step in chain)
+                        add(
+                            "symlink_redirect",
+                            "high",
+                            name,
+                            f"entry writes through earlier symlink(s) {via} and lands at {self._display(resolved)}",
+                        )
             if entry["kind"] == "symlink":
                 symlinks[posixpath.normpath(name.replace("\\", "/"))] = entry["link_target"] or ""
 
@@ -498,6 +518,7 @@ class TarInspectTool(Tool):
             "symlink_target_absolute",
             "symlink_target_escapes",
             "symlink_redirect",
+            "resolution_budget_exceeded",
             "hardlink_outside",
             "device_special",
             "fifo_special",
@@ -621,37 +642,55 @@ class TarInspectTool(Tool):
         (s1 -> s2 -> /var) resolve fully. Returns (final path, redirect chain)
         when at least one component passed through a symlink created earlier,
         otherwise None. The final path may be absolute or start with '..' when
-        the walk escapes the extraction root.
+        the walk escapes the extraction root. Symlink loops stop expanding at
+        the first revisited link (the link name then counts as a literal path
+        component, mirroring how extraction fails with ELOOP); a total step
+        budget guards against pathological symlink farms by raising
+        _WalkBudgetExceeded instead of silently truncating the landing path.
         """
-        queue = [part for part in name.split("/") if part not in ("", ".")]
+        queue = deque(part for part in name.split("/") if part not in ("", "."))
         current: list[str] = []
+        prefix = ""
         chain: list[tuple[str, str]] = []
         redirected = False
-        absolute = False
+        absolute = name.startswith("/")
+        visited: set[str] = set()
+        # Fast path: a prefix can only match a symlink key when its length is
+        # the length of a real key, so hashing long prefixes is skipped while
+        # walking deep trees.
+        key_lengths = {len(key) for key in symlinks}
         steps = 0
         while queue:
             steps += 1
-            if steps > 512:  # symlink farms and loops must not wedge the walk
-                break
-            part = queue.pop(0)
+            if steps > _MAX_WALK_STEPS:
+                raise _WalkBudgetExceeded(name)
+            part = queue.popleft()
             if part == ".":
                 continue
             if part == "..":
                 TarInspectTool._apply_up_segment(current, absolute)
+                prefix = "/".join(current)
                 continue
-            key = posixpath.normpath("/".join([*current, part]))
-            if key in symlinks:
-                target = symlinks[key]
-                if not target:
+            candidate_len = len(prefix) + len(part) + (1 if prefix else 0) + (1 if absolute else 0)
+            if candidate_len in key_lengths:
+                key = ("/" if absolute else "") + (f"{prefix}/{part}" if prefix else part)
+                if key in symlinks and key not in visited:
+                    target = symlinks[key]
+                    visited.add(key)
+                    if not target:
+                        continue
+                    chain.append((key, target))
+                    redirected = True
+                    queue.extendleft(
+                        piece for piece in reversed(target.replace("\\", "/").split("/")) if piece and piece != "."
+                    )
+                    if target.startswith("/"):
+                        absolute = True
+                        current = []
+                        prefix = ""
                     continue
-                chain.append((key, target))
-                redirected = True
-                if target.startswith("/"):
-                    absolute = True
-                    current = []
-                queue = [piece for piece in target.replace("\\", "/").split("/") if piece and piece != "."] + queue
-                continue
             current.append(part)
+            prefix = f"{prefix}/{part}" if prefix else part
         if not redirected:
             return None
         final = ("/" + "/".join(current)) if absolute else "/".join(current)
@@ -686,7 +725,13 @@ class TarInspectTool(Tool):
         escaping: list[str] = []
         for entry in entries:
             posix_name = entry["raw_name"].replace("\\", "/")
-            landing = self._resolve_through_symlinks(posix_name, symlinks)
+            landing = None
+            incomplete = False
+            if symlinks:
+                try:
+                    landing = self._resolve_through_symlinks(posix_name, symlinks)
+                except _WalkBudgetExceeded:
+                    incomplete = True
             if landing is not None:
                 relative, chain = landing
                 resolved = (
@@ -702,7 +747,7 @@ class TarInspectTool(Tool):
                     else posixpath.normpath(posixpath.join(root, posix_name))
                 )
                 via = None
-            escapes = self._escapes_root(resolved, root)
+            escapes = self._escapes_root(resolved, root) or incomplete
             plan = {
                 "name": entry["name"],
                 "kind": entry["kind"],
@@ -710,6 +755,8 @@ class TarInspectTool(Tool):
                 "escapes_dest": escapes,
                 "redirect_via": via,
             }
+            if incomplete:
+                plan["resolution_incomplete"] = True
             if entry["kind"] in ("symlink", "hardlink") and entry["link_target"]:
                 target = entry["link_target"]
                 if target.startswith("/") or _WINDOWS_DRIVE.match(target) or target.startswith("\\\\"):
