@@ -1,0 +1,32 @@
+name: 'question_detector'
+description: 'find interrogative sentences and stamp them into document metadata for FAQ mining and QA-pair workflows'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.question_detector'
+  class: 'QuestionDetector'
+
+# Maximum number of question hits kept in metadata['questions']. The
+# question_count metadata always reports the uncapped total, so capping
+# the list never hides the true magnitude. Must be >= 0.
+max_questions: 50
+
+# Minimum number of words (whitespace tokens containing at least one
+# alphanumeric character) for a segment to count as a sentence; segments
+# below the threshold are ignored entirely. The default 1 keeps
+# single-word questions such as 'Why?' (one word) and only drops
+# punctuation husks like a bare '?'. Must be >= 1.
+min_words: 1
+
+# Metadata key the (capped) list of question hits is written to; each hit
+# is {'text', 'span': (start, end), 'kind': wh|polar|tagged, 'opener'}.
+# An empty value disables this stamp.
+questions_key: 'questions'
+
+# Metadata key the uncapped question sentence count is written to; ''
+# disables this stamp.
+count_key: 'question_count'
+
+# Metadata key the question ratio (question sentences / total sentences,
+# 0.0 for empty text) is written to; '' disables this stamp.
+ratio_key: 'question_ratio'
