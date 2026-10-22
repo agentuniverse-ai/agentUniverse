@@ -11,13 +11,13 @@ max_evidence_chars: 120
 max_text_chars: 200000
 args_model:
   html: {type: string, required: true}
-  mode: {type: string, required: false, default: audit}
+  mode: {type: string, required: true}
   allowed_tags: {type: array, required: false}
 args_model_schema:
   type: object
   properties:
     html: {type: string}
-    mode: {type: string, enum: [audit, allowlist_diff, text, stats], default: audit}
+    mode: {type: string, enum: [audit, allowlist_diff, text, stats]}
     allowed_tags: {type: array, items: {type: string}}
   required: [html, mode]
   additionalProperties: false

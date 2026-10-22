@@ -447,7 +447,7 @@ class HtmlAuditTool(Tool):
     def execute(
         self,
         html: str,
-        mode: str = "audit",
+        mode: str,
         allowed_tags: list[str] | set[str] | tuple[str, ...] | None = None,
     ) -> dict[str, Any]:
         try:
