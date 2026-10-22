@@ -1,0 +1,17 @@
+name: 'list_structure_extractor'
+description: 'detect bullet/numbered/checkbox lists and record their structure into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.list_structure_extractor'
+  class: 'ListStructureExtractor'
+
+# Maximum number of list blocks recorded in metadata['lists']; must be
+# >= 1. Blocks beyond the cap are omitted from the payload, but
+# metadata['list_count'] still reports the true total.
+max_lists: 20
+
+# Maximum number of items recorded per list block; must be >= 1. Each
+# block's item_count keeps the true total even when the items payload
+# is trimmed.
+max_items_per_list: 100
