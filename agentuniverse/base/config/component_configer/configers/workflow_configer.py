@@ -38,6 +38,8 @@ class WorkflowConfiger(ComponentConfiger):
 
     @property
     def graph(self) -> Optional[dict]:
+        """Return the graph configuration of the workflow.
+        """
         return self.__graph
 
     def load(self) -> 'WorkflowConfiger':
