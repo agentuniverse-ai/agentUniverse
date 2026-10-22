@@ -1,0 +1,23 @@
+name: 'contradiction_signal_detector'
+description: 'Flag potential contradiction signals (contrast flips, negation repeats, mutual negations) in document text into metadata for review pipelines'
+
+# Maximum sentence distance for a compared (earlier, later) pair.
+# The default 2 compares each sentence with the next two sentences.
+window_size: 2
+
+# Maximum number of signals recorded per document; further signals are
+# dropped and signal_count reflects the recorded list.
+max_signals: 30
+
+# Maximum shared content terms kept per signal (sorted, deterministic).
+max_shared_terms: 5
+
+# Metadata keys stamped per document; empty string disables a key.
+signals_key: 'contradiction_signals'
+count_key: 'signal_count'
+risk_key: 'contradiction_risk'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.contradiction_signal_detector'
+  class: 'ContradictionSignalDetector'
