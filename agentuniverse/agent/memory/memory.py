@@ -5,6 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: memory.py
+import logging
 from typing import Optional, List
 from langchain_core.memory import BaseMemory
 from pydantic import Extra
@@ -22,6 +23,9 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.memory_configer import MemoryConfiger
 from agentuniverse.base.util.memory_util import get_memory_tokens, get_memory_string
+
+
+logger = logging.getLogger(__name__)
 
 
 class Memory(ComponentBase):
@@ -55,6 +59,38 @@ class Memory(ComponentBase):
     def __init__(self, **kwargs):
         super().__init__(component_type=ComponentEnum.MEMORY, **kwargs)
 
+    def _resolve_memory_storage(self, storage_name: Optional[str]) -> Optional[MemoryStorage]:
+        """Resolve one configured memory storage, tolerating a missing setup.
+
+        ``MemoryStorageManager`` builds its lookup key from the application
+        name held by ``ApplicationConfigManager``.  A ``Memory`` can be
+        constructed and read before the application bootstrap runs (the
+        integration tests do exactly that), and in that state every storage
+        lookup raises ``ValueError`` before the manager can report an unknown
+        component.  An unknown storage already means the Memory has nothing to
+        read or write, so the same graceful result is returned here while the
+        bootstrap problem is reported for diagnosis.
+
+        A falsy storage name is skipped without touching the manager.  This is
+        important for the default configuration: ``memory_retrieval_storage``
+        is ``None`` and a read must simply return an empty history instead of
+        asking the manager to look up the literal name ``None``.
+        """
+        if not storage_name:
+            return None
+        try:
+            return MemoryStorageManager().get_instance_obj(storage_name)
+        except ValueError as exc:
+            # ``get_instance_obj`` only raises for an uninitialised application
+            # config when ``strict`` is left at its default, so this does not
+            # hide a genuinely missing storage.
+            logger.warning(
+                'Memory storage %s cannot be resolved because the application '
+                'configuration is not initialised: %s',
+                storage_name, exc,
+            )
+            return None
+
     def as_langchain(self) -> BaseMemory:
         """Convert the agentUniverse(aU) memory class to the langchain memory class."""
         pass
@@ -65,20 +101,20 @@ class Memory(ComponentBase):
         if not message_list:
             return
         for storage in self.memory_storages:
-            memory_storage: MemoryStorage = MemoryStorageManager().get_instance_obj(storage)
+            memory_storage = self._resolve_memory_storage(storage)
             if memory_storage:
                 memory_storage.add(message_list, session_id, agent_id, **kwargs)
 
     def delete(self, session_id: str = None, **kwargs) -> None:
         """Delete messages from the memory."""
         for storage in self.memory_storages:
-            memory_storage: MemoryStorage = MemoryStorageManager().get_instance_obj(storage)
+            memory_storage = self._resolve_memory_storage(storage)
             if memory_storage:
                 memory_storage.delete(session_id, **kwargs)
 
     def get(self, session_id: str = None, agent_id: str = None, prune: bool = False, **kwargs) -> List[Message]:
         """Get messages from the memory."""
-        memory_storage: MemoryStorage = MemoryStorageManager().get_instance_obj(self.memory_retrieval_storage)
+        memory_storage = self._resolve_memory_storage(self.memory_retrieval_storage)
         if memory_storage:
             memories = memory_storage.get(session_id, agent_id, **kwargs)
             if prune:
@@ -88,7 +124,7 @@ class Memory(ComponentBase):
 
     def get_with_no_prune(self, session_id: str = None, agent_id: str = None, **kwargs) -> List[Message]:
         """Get messages from the memory."""
-        memory_storage: MemoryStorage = MemoryStorageManager().get_instance_obj(self.memory_retrieval_storage)
+        memory_storage = self._resolve_memory_storage(self.memory_retrieval_storage)
         if memory_storage:
             memories = memory_storage.get(session_id, agent_id, **kwargs)
             return memories
@@ -140,6 +176,13 @@ class Memory(ComponentBase):
         Returns:
             List[Message]: Messages within allocated budget (most recent first)
 
+        Notes:
+            The linked context manager is optional.  When it is not registered,
+            or when the application has not been bootstrapped yet, retrieval
+            degrades to the configured memory storage.  If no retrieval storage
+            is configured either, an empty history is returned instead of
+            raising a bootstrap error.
+
         Example:
             >>> # In Agent.run() with ContextManager
             >>> window = context_manager.get_context_window(session_id)
@@ -152,7 +195,7 @@ class Memory(ComponentBase):
         if self.context_manager_name:
             try:
                 from agentuniverse.agent.context.context_manager_manager import ContextManagerManager
-                from agentuniverse.agent.context.context_model import ContextType, ContextPriority
+                from agentuniverse.agent.context.context_model import ContextType
 
                 ctx_mgr = ContextManagerManager().get_instance_obj(self.context_manager_name)
                 if ctx_mgr:
@@ -189,8 +232,16 @@ class Memory(ComponentBase):
 
                     return selected_messages
 
-            except Exception:
-                pass  # Fall back to traditional retrieval
+            except Exception as exc:
+                # The linked manager may be absent, or the application may not
+                # be bootstrapped yet.  Memory retrieval must keep working in
+                # both cases, but the reason for the fallback is worth keeping
+                # in the debug log instead of disappearing.
+                logger.debug(
+                    'Context manager %s is unavailable; using traditional '
+                    'memory retrieval: %s',
+                    self.context_manager_name, exc,
+                )
 
         # Fallback: Original pruning logic (backward compatible)
         memories = self.get(session_id, agent_id, prune=False, **kwargs)

@@ -22,7 +22,6 @@ from agentuniverse.agent.context.context_model import (
     ContextPriority,
 )
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
-from agentuniverse.base.config.application_configer.app_configer import AppConfiger
 
 
 class TestPhase2Integration:
@@ -471,60 +470,165 @@ class TestPhase2Integration:
 class TestMemoryIntegration:
     """Integration tests for Memory class with ContextManager."""
 
-    @classmethod
-    def setup_class(cls):
-        # The memory fallback resolves storages through the component
-        # manager, which reads the application name from the global
-        # ApplicationConfigManager. Install a minimal configer so these
-        # tests do not depend on a full application bootstrap.
+    @pytest.fixture
+    def app_config(self):
+        """Install the application name required by component managers.
+
+        Component managers build their instance codes from the global
+        application name.  The manager integration tests need a deterministic
+        name; the fallback tests deliberately run without it so that they
+        cover the pre-bootstrap behaviour of Memory.
+        """
+        from types import SimpleNamespace
+
+        config_manager = ApplicationConfigManager()
         try:
-            cls._previous_app_configer = ApplicationConfigManager().app_configer
+            previous_configer = config_manager.app_configer
         except ValueError:
-            cls._previous_app_configer = None
-        ApplicationConfigManager().app_configer = AppConfiger()
+            previous_configer = None
 
-    @classmethod
-    def teardown_class(cls):
-        if cls._previous_app_configer is not None:
-            ApplicationConfigManager().app_configer = cls._previous_app_configer
+        config_manager.app_configer = SimpleNamespace(
+            base_info_appname='test_app',
+            llm_configer_map={},
+        )
+        try:
+            yield 'test_app'
+        finally:
+            config_manager.app_configer = previous_configer
 
-    def test_memory_budget_aware_retrieval(self):
-        """Test that Memory uses budget-aware retrieval when linked to ContextManager."""
+    @pytest.fixture
+    def no_app_config(self):
+        """Clear the global config to model a call before bootstrap."""
+        config_manager = ApplicationConfigManager()
+        try:
+            previous_configer = config_manager.app_configer
+        except ValueError:
+            previous_configer = None
+
+        config_manager.app_configer = None
+        try:
+            yield
+        finally:
+            config_manager.app_configer = previous_configer
+
+    def test_memory_budget_aware_retrieval(self, app_config):
+        """Memory reads the linked manager and stops at the allocated budget."""
+        from agentuniverse.agent.context.context_manager_manager import ContextManagerManager
+        from agentuniverse.agent.memory.memory import Memory
+
+        store = RamContextStore(
+            name='test_memory_hot_store',
+            max_segments=100,
+            ttl_hours=24,
+        )
+        manager = ContextManager(
+            name='test_manager',
+            hot_store_name='test_memory_hot_store',
+            default_max_tokens=2000,
+            default_reserved_tokens=200,
+        )
+        manager._hot_store = store
+        manager.create_context_window(
+            'test',
+            max_tokens=2000,
+            reserved_tokens=200,
+        )
+
+        for index in range(3):
+            segment = manager.add_context(
+                'test',
+                f'message-{index}',
+                ContextType.CONVERSATION,
+                ContextPriority.MEDIUM,
+            )
+            # Context segments created in the same microsecond do not have a
+            # stable access order.  Pin the timestamps so the retrieval order
+            # is deterministic instead of depending on the test machine.
+            segment.metadata.last_accessed = datetime.now() + timedelta(seconds=index)
+
+        registry = ContextManagerManager()
+        instance_code = manager.get_instance_code()
+        registry.register(instance_code, manager)
+        try:
+            memory = Memory(
+                name='test_memory',
+                context_manager_name='test_manager',
+                max_tokens=1000,
+            )
+            # No LLM is registered, so token counting falls back to the
+            # formatted string length.  Each short message costs 12 pseudo
+            # tokens, which means a 25 token budget admits the two newest
+            # messages and rejects the oldest one.
+            messages = memory.get_with_context_budget(
+                session_id='test',
+                agent_id='agent1',
+                allocated_tokens=25,
+            )
+            # A zero budget is the lower boundary: even the newest message
+            # cannot fit, so the result must be empty rather than negative or
+            # partially selected.
+            assert memory.get_with_context_budget(
+                session_id='test',
+                agent_id='agent1',
+                allocated_tokens=0,
+            ) == []
+        finally:
+            registry.unregister(instance_code)
+
+        assert [message.content for message in messages] == ['message-2', 'message-1']
+
+    def test_memory_fallback_without_context_manager(self, no_app_config):
+        """A Memory without a manager or storage returns an empty history."""
+        from agentuniverse.agent.memory.memory import Memory
+
+        memory = Memory(
+            name='test_memory',
+            max_tokens=1000,
+        )
+
+        messages = memory.get_with_context_budget(
+            session_id='test',
+            agent_id='agent1',
+            allocated_tokens=500,
+        )
+
+        assert messages == []
+
+    def test_memory_with_unregistered_context_manager_falls_back(self, app_config):
+        """An unresolved manager name must not break budget-aware retrieval."""
+        from agentuniverse.agent.memory.memory import Memory
+
+        memory = Memory(
+            name='test_memory',
+            context_manager_name='missing_manager',
+            max_tokens=1000,
+        )
+
+        messages = memory.get_with_context_budget(
+            session_id='test',
+            agent_id='agent1',
+            allocated_tokens=500,
+        )
+
+        assert messages == []
+
+    def test_unconfigured_storage_lookup_is_graceful(self, no_app_config, caplog):
+        """Add, delete and read work before the application is bootstrapped."""
         from agentuniverse.agent.memory.memory import Memory
         from agentuniverse.agent.memory.message import Message
 
-        # Create memory with context manager link
         memory = Memory(
             name='test_memory',
-            context_manager_name='test_manager',
-            max_tokens=1000
+            max_tokens=1000,
         )
 
-        # Test get_with_context_budget method
-        messages = memory.get_with_context_budget(
-            session_id='test',
-            agent_id='agent1',
-            allocated_tokens=500
+        with caplog.at_level(logging.WARNING):
+            memory.add([Message(content='hello')], session_id='test')
+            memory.delete('test')
+
+        assert memory.get('test') == []
+        assert memory.get_with_no_prune('test') == []
+        assert any(
+            'application configuration is not initialised' in record.getMessage()
+            for record in caplog.records
         )
-
-        # Should return list (even if empty without actual storage)
-        assert isinstance(messages, list)
-
-    def test_memory_fallback_without_context_manager(self):
-        """Test that Memory falls back gracefully without ContextManager."""
-        from agentuniverse.agent.memory.memory import Memory
-
-        # Create memory without context manager
-        memory = Memory(
-            name='test_memory',
-            max_tokens=1000
-        )
-
-        # Should still work with fallback
-        messages = memory.get_with_context_budget(
-            session_id='test',
-            agent_id='agent1',
-            allocated_tokens=500
-        )
-
-        assert isinstance(messages, list)
