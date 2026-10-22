@@ -8,6 +8,7 @@
 
 import os
 import json
+import stat
 import tempfile
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
@@ -73,6 +74,10 @@ class WriteFileTool(Tool):
                 # complete UTF-8 write succeeds.  Opening the destination in
                 # ``w`` mode first can destroy an existing file when encoding
                 # or I/O fails halfway through the operation.
+                try:
+                    destination_mode = stat.S_IMODE(os.stat(file_path).st_mode)
+                except FileNotFoundError:
+                    destination_mode = None
                 temporary_path = None
                 try:
                     with tempfile.NamedTemporaryFile(
@@ -87,6 +92,14 @@ class WriteFileTool(Tool):
                         temporary_file.write(content)
                         temporary_file.flush()
                         os.fsync(temporary_file.fileno())
+                    if destination_mode is None:
+                        # NamedTemporaryFile uses 0600 regardless of the
+                        # process umask. Restore the normal 0666 creation
+                        # semantics for a newly created destination.
+                        current_umask = os.umask(0)
+                        os.umask(current_umask)
+                        destination_mode = 0o666 & ~current_umask
+                    os.chmod(temporary_path, destination_mode)
                     os.replace(temporary_path, file_path)
                     temporary_path = None
                 finally:
