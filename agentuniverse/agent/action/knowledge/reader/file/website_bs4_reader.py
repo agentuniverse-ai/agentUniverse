@@ -91,7 +91,7 @@ class WebsiteBs4Reader(Reader):
             raise RuntimeError(f"Content parsing failed: {str(e)}")
 
     def _get_primary_domain(self, url: str) -> str:
-        """Extract primary domain from URL
+        """Extract the existing two-label domain scope from the URL hostname.
         
         Args:
             url: Full URL
@@ -99,8 +99,21 @@ class WebsiteBs4Reader(Reader):
         Returns:
             str: Primary domain
         """
-        domain_parts = urlparse(url).netloc.split(".")
+        hostname = (urlparse(url).hostname or "").rstrip(".")
+        domain_parts = hostname.split(".")
         return ".".join(domain_parts[-2:])
+
+    def _is_in_domain(self, url: str, primary_domain: str) -> bool:
+        """Match HTTP(S) hostnames at a domain-label boundary."""
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").rstrip(".")
+        return (
+            parsed.scheme in {"http", "https"}
+            and bool(hostname)
+            and bool(primary_domain)
+            and (hostname == primary_domain
+                 or hostname.endswith("." + primary_domain))
+        )
 
     def _extract_main_content(self, soup: BeautifulSoup) -> str:
         """Extract main content from webpage
@@ -164,7 +177,7 @@ class WebsiteBs4Reader(Reader):
 
             # Skip if URL meets any exclusion criteria
             if (current_url in self._visited
-                or not urlparse(current_url).netloc.endswith(primary_domain)
+                or not self._is_in_domain(current_url, primary_domain)
                 or current_depth > self.max_depth
                 or num_links >= self.max_links):
                 continue
@@ -187,7 +200,7 @@ class WebsiteBs4Reader(Reader):
                     for link in soup.find_all("a", href=True):
                         full_url = urldefrag(urljoin(current_url, link["href"])).url
                         parsed_url = urlparse(full_url)
-                        if (parsed_url.netloc.endswith(primary_domain) 
+                        if (self._is_in_domain(full_url, primary_domain)
                             and not any(parsed_url.path.endswith(ext) 
                                       for ext in [".pdf", ".jpg", ".png"])
                             and full_url not in self._visited 
