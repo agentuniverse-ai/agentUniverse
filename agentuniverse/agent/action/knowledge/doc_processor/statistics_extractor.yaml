@@ -1,0 +1,18 @@
+name: 'statistics_extractor'
+description: 'pull numeric claims (percentages, counts with units, ratios, large numbers) from documents into metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.statistics_extractor'
+  class: 'StatisticsExtractor'
+
+# Maximum number of hits stored in metadata['statistics']; the summary is
+# still computed over every hit found. Must be an integer >= 1.
+max_statistics: 100
+
+# Metadata key the hit list is written to; '' disables list stamping.
+statistics_key: 'statistics'
+
+# Metadata key the per-kind digest (counts + min/max) is written to;
+# '' disables digest stamping.
+summary_key: 'statistics_summary'
