@@ -59,9 +59,9 @@ class LLMNode(Node):
 
         input_variables = re.findall(r'\{\{(.*?)\}\}', prompt)
         if model_name:
-            llm.set_by_agent_model(model_name=model_name, temperature=temperature)
+            llm = llm.set_by_agent_model(model_name=model_name, temperature=temperature)
         else:
-            llm.set_by_agent_model(temperature=temperature)
+            llm = llm.set_by_agent_model(temperature=temperature)
 
         llm_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
         for variable in input_variables:
