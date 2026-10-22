@@ -5,6 +5,7 @@
 # @Author  : kaichuan
 # @FileName: supervision_agent_template.py
 from queue import Queue
+import re
 
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
@@ -115,8 +116,26 @@ class SupervisionAgentTemplate(AgentTemplate):
         Returns:
             bool: Whether correction is needed.
         """
-        # Look for explicit correction markers in the output
-        output_lower = output.lower()
+        output = output or ''
+
+        # Prefer the structured verdict field emitted by the supervision
+        # prompt.  Searching the whole response is unsafe because the rubric
+        # often quotes both positive and negative phrases as examples.
+        verdict_pattern = re.compile(
+            r'^\s*(?:needs[ _]+correction|需要修正)\s*[:：]\s*'
+            r'(true|false|yes|no|是|否|需要|不需要)\s*$',
+            flags=re.IGNORECASE,
+        )
+        for line in output.splitlines():
+            match = verdict_pattern.match(line)
+            if match:
+                return match.group(1).lower() in {'true', 'yes', '是', '需要'}
+
+        # Keep a conservative fallback for older prompts without a dedicated
+        # verdict line.  Check negated phrases before their positive
+        # substrings (for example, "no correction needed" before
+        # "correction needed").
+        output_lower = output.casefold()
 
         # Positive indicators (needs correction)
         correction_needed_markers = [
@@ -132,12 +151,20 @@ class SupervisionAgentTemplate(AgentTemplate):
         # Negative indicators (no correction needed)
         no_correction_markers = [
             'no correction needed',
+            'no correction required',
             '无需修正',
+            '不需要修正',
+            '无需改进',
+            '不需要改进',
             '符合要求',
             'meets requirements',
             'satisfactory',
             'acceptable'
         ]
+
+        for marker in ('not acceptable', 'not satisfactory', 'does not meet', '不符合要求'):
+            if marker in output_lower:
+                return True
 
         # Check for explicit markers
         for marker in no_correction_markers:
