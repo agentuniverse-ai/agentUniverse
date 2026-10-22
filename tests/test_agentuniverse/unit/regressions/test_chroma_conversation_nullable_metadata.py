@@ -15,13 +15,15 @@ from agentuniverse.agent.memory.message import Message  # noqa: E402
 
 
 @pytest.fixture
-def storage(monkeypatch):
+def storage(monkeypatch, tmp_path):
     def no_network(*args, **kwargs):
         raise AssertionError("offline")
 
     monkeypatch.setattr(socket.socket, "connect", no_network)
     monkeypatch.setattr(socket, "getaddrinfo", no_network)
-    client = chromadb.EphemeralClient(Settings(anonymized_telemetry=False))
+    # Ephemeral clients share process-wide settings, even after collection deletion.
+    # A per-test path keeps these telemetry settings isolated from other stores.
+    client = chromadb.PersistentClient(path=str(tmp_path), settings=Settings(anonymized_telemetry=False))
     collection = client.create_collection("nullable_" + uuid.uuid4().hex, embedding_function=None)
     manager = Mock()
     manager.get_instance_obj.return_value.get_embeddings.return_value = [[1.0, 0.0]]
