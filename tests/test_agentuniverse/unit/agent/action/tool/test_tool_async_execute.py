@@ -22,7 +22,7 @@ class LegacyAsyncExecuteTool(Tool):
 def test_async_run_awaits_async_execute_implementation():
     tool = AsyncExecuteTool(input_keys=["value"])
 
-    result = asyncio.run(tool.async_run(value="payload"))
+    result = asyncio.run(Tool.async_run.__wrapped__(tool, value="payload"))
 
     assert result == "async:payload"
 
@@ -30,7 +30,7 @@ def test_async_run_awaits_async_execute_implementation():
 def test_async_run_awaits_legacy_async_execute_implementation():
     tool = LegacyAsyncExecuteTool(input_keys=["value"])
 
-    result = asyncio.run(tool.async_run(value="payload"))
+    result = asyncio.run(Tool.async_run.__wrapped__(tool, value="payload"))
 
     assert result == "legacy-async:payload"
 
@@ -38,6 +38,8 @@ def test_async_run_awaits_legacy_async_execute_implementation():
 def test_async_langchain_run_awaits_async_execute_implementation():
     tool = AsyncExecuteTool(input_keys=["value"])
 
-    result = asyncio.run(tool.async_langchain_run('{"value": "payload"}'))
+    result = asyncio.run(
+        Tool.async_langchain_run.__wrapped__(tool, '{"value": "payload"}')
+    )
 
     assert result == "async:payload"
