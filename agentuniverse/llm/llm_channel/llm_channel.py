@@ -86,7 +86,18 @@ class LLMChannel(ComponentBase):
         return self
 
     def create_copy(self):
-        return self
+        """Return an independent copy — sharing a channel must not share mutable config.
+
+        LLM.init_channel writes vars(self) of each LLM into the channel it
+        resolves; returning self made every LLM sharing a channel name mutate
+        the same instance (last initializer wins for channel_model_config,
+        ext_params/ext_headers merge cumulatively). Mirror LLM.create_copy.
+        """
+        copied = self.model_copy()
+        copied.ext_params = dict(self.ext_params)
+        copied.ext_headers = dict(self.ext_headers)
+        copied._channel_model_config = dict(self._channel_model_config or {})
+        return copied
 
     @property
     def channel_model_config(self):
