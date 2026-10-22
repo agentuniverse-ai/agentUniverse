@@ -534,7 +534,9 @@ class HttpHeaderTool(Tool):
             else:
                 pvalue = None
             params.append({"name": pname, "value": pvalue})
-            params_map[pname] = pvalue
+            # First occurrence wins, consistent with the q handling
+            # below (whose note already documents "first kept").
+            params_map.setdefault(pname, pvalue)
 
         q = None
         q_raw = None
@@ -601,11 +603,19 @@ class HttpHeaderTool(Tool):
             seen.setdefault(name.strip().lower(), []).append(value.strip())
         for key in sorted(seen):
             if len(seen[key]) > 1 and key != "set-cookie":
+                if key == "content-security-policy":
+                    consequence = (
+                        "browsers enforce EVERY policy line (the intersection), "
+                        "so a lax-looking later line cannot weaken an earlier "
+                        "one, but each line is a separate policy to audit"
+                    )
+                else:
+                    consequence = "recipients may join or drop later values"
                 findings.append({
                     "header": key,
                     "code": "audit_duplicate_header",
                     "severity": "info",
-                    "message": f"Header {key} appears {len(seen[key])} times; recipients may join or drop later values",
+                    "message": f"Header {key} appears {len(seen[key])} times; {consequence}",
                 })
 
         self._audit_hsts(seen, findings)
@@ -780,8 +790,25 @@ class HttpHeaderTool(Tool):
 
         unsafe_inline: set[str] = set()
         unsafe_inline_ignored: set[str] = set()
+        # CSP3 section "frame-ancestors": the frame-ancestors source
+        # grammar is only 'none'/'self'/scheme-source/host-source —
+        # 'unsafe-inline', 'unsafe-eval', 'strict-dynamic', nonce- and
+        # hash-sources are NOT valid there, and a conforming UA that
+        # meets one ignores the whole directive, silently dropping the
+        # clickjacking protection.
+        frame_ancestors_invalid: set[str] = set()
         for directive in directives:
             values = directive["values"]
+            if directive["name"] == "frame-ancestors":
+                invalid = sorted(
+                    v for v in values
+                    if v in ("'unsafe-inline'", "'unsafe-eval'",
+                             "'strict-dynamic'")
+                    or v.startswith(_CSP_QUOTED_NONCE_HASH)
+                )
+                if invalid:
+                    frame_ancestors_invalid.update(invalid)
+                continue
             if directive["name"] not in _FETCH_DIRECTIVES or "'unsafe-inline'" not in values:
                 continue
             # CSP source matching: 'unsafe-inline' is ignored by conforming
@@ -808,6 +835,16 @@ class HttpHeaderTool(Tool):
                 "by conforming UAs: a nonce-source or hash-source in the same source "
                 "list takes precedence, and 'strict-dynamic' ignores every allowlist "
                 "expression; inline behavior stays nonce/hash-governed",
+            ))
+        if frame_ancestors_invalid:
+            findings.append(self._finding(
+                label, "csp_frame_ancestors_invalid_source", "medium",
+                f"frame-ancestors carries {', '.join(sorted(frame_ancestors_invalid))}: "
+                "CSP3's frame-ancestors grammar allows only 'none', 'self', "
+                "scheme- and host-sources — nonce-/hash-sources, 'unsafe-inline', "
+                "'unsafe-eval' and 'strict-dynamic' are invalid there, and a "
+                "conforming UA ignores the entire directive, silently dropping "
+                "the clickjacking protection",
             ))
         unsafe_eval = sorted(
             d for d, toks in inventory.items()
@@ -866,16 +903,39 @@ class HttpHeaderTool(Tool):
             ))
         # sandbox with no value is valid (it applies the maximum restriction
         # set); upgrade-insecure-requests/block-all-mixed-content are flags.
-        # require-trusted-types-for however REQUIRES the "'script'" argument.
+        # sandbox with no value is valid (it applies the maximum
+        # restriction set); upgrade-insecure-requests and
+        # block-all-mixed-content are flags; a BARE trusted-types is also
+        # valid and restrictive (no policy names may be created).
         empty = sorted({
             d["name"] for d in directives
             if not d["values"] and d["name"] not in (
-                "upgrade-insecure-requests", "block-all-mixed-content", "sandbox")
+                "upgrade-insecure-requests", "block-all-mixed-content",
+                "sandbox", "trusted-types", "require-trusted-types-for")
         })
         if empty:
             findings.append(self._finding(
                 label, "csp_empty_directive", "info",
                 f"Directive(s) without values: {', '.join(empty)}",
+            ))
+        # require-trusted-types-for REQUIRES exactly the "'script'"
+        # argument (CSP3): with the argument missing or anything else,
+        # the directive is non-conforming and conforming UAs ignore it —
+        # the Trusted Types enforcement the author intended is absent.
+        for directive in directives:
+            if directive["name"] != "require-trusted-types-for":
+                continue
+            if directive["values"] == ["'script'"]:
+                continue
+            problem = ("its 'script' argument is missing"
+                       if not directive["values"]
+                       else f"the argument(s) {directive['values']} are not "
+                            "exactly \"'script'\"")
+            findings.append(self._finding(
+                label, "csp_trusted_types_for_invalid", "medium",
+                f"require-trusted-types-for: {problem} — the directive is "
+                "non-conforming per CSP3 and conforming UAs ignore it, so "
+                "no Trusted Types enforcement is applied",
             ))
         for directive in directives:
             if "'none'" in directive["values"] and len(directive["values"]) > 1:

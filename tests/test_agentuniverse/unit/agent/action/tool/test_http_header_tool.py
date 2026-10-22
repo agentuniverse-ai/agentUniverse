@@ -787,10 +787,16 @@ class HttpHeaderSecurityAuditTest(unittest.TestCase):
         self.assertNotIn(("csp_empty_directive", "info"), codes_)
         self.assertNotIn(("csp_empty_directive", "info"),
                          csp("default-src 'self'; sandbox allow-scripts"))
-        # empty require-trusted-types-for is grammar-invalid ('script' required)
+        # require-trusted-types-for without/wrong argument is
+        # non-conforming (CSP3): UAs ignore it, so Trusted Types
+        # enforcement is silently absent — a dedicated medium finding,
+        # not the generic empty-directive info.
         codes_ = csp("default-src 'self'; require-trusted-types-for")
-        self.assertIn(("csp_empty_directive", "info"), codes_)
-        self.assertNotIn(("csp_empty_directive", "info"),
+        self.assertIn(("csp_trusted_types_for_invalid", "medium"), codes_)
+        self.assertNotIn(("csp_empty_directive", "info"), codes_)
+        self.assertIn(("csp_trusted_types_for_invalid", "medium"),
+                      csp("default-src 'self'; require-trusted-types-for 'foo'"))
+        self.assertNotIn(("csp_trusted_types_for_invalid", "medium"),
                          csp("default-src 'self'; require-trusted-types-for 'script'"))
         # report-uri deprecated; report-to needs an endpoint declaration
         codes_ = csp("default-src 'self'; report-uri /csp-report")
@@ -1300,6 +1306,170 @@ class HttpHeaderDeterminismTest(unittest.TestCase):
         result = self.tool.execute("validate")
         self.assertEqual(result["status"], "error")
         self.assertIn("name must be a string", result["error"])
+
+
+
+
+class HttpHeaderSecondPassRegressionTest(unittest.TestCase):
+    """Second-pass hostile self-review regressions: putheader grammar
+    edges, list-parameter first-wins, CSP3 frame-ancestors /
+    trusted-types grammar, HSTS hostile values, and fresh RFC 6265
+    5.1.1 cookie-date cases (browser semantics: each date token is
+    consumed by at most one production)."""
+
+    def setUp(self):
+        self.tool = HttpHeaderTool()
+
+    # ------------------------------------------------------- validate
+
+    def test_putheader_grammar_edges(self):
+        ok = self.tool.execute("validate", name="x" * 800, value="v")
+        self.assertTrue(ok["name_valid"])
+        ok = self.tool.execute("validate", name="x" * 1024, value="v")
+        self.assertTrue(ok["name_valid"])  # at cap, not over
+        err = self.tool.execute("validate", name="x" * 1025, value="v")
+        self.assertEqual(err["status"], "error")
+        self.assertIn("max_name_len", err["error"])
+        for bad_name in ("\u540d\u524d", "caf\u00e9", "X Api", "X\tApi", ":"):
+            r = self.tool.execute("validate", name=bad_name, value="v")
+            self.assertFalse(r["name_valid"], bad_name)
+        # 16k value at/over cap
+        r = self.tool.execute("validate", name="X", value="a" * 16384)
+        self.assertEqual(r["status"], "success")
+        r = self.tool.execute("validate", name="X", value="a" * 16385)
+        self.assertEqual(r["status"], "error")
+
+    def test_obs_fold_then_bare_cr_both_reported(self):
+        r = self.tool.execute("validate", name="X", value="a\r\n b\r\nc")
+        got = [f["code"] for f in r["findings"]]
+        self.assertIn("value_obs_fold", got)
+        self.assertIn("value_cr_lf_injection", got)
+        self.assertFalse(r["value_valid"])
+
+    # ------------------------------------------------------ parse_list
+
+    def test_duplicate_params_first_wins(self):
+        """params_map keeps the FIRST occurrence of a duplicated
+        parameter, consistent with the q handling whose note documents
+        'first kept' (previously the map silently kept the last)."""
+        r = self.tool.execute("parse_list", value="a;q=0.35;q=0.4")
+        elem = r["elements"][0]
+        self.assertEqual(elem["params"]["q"], "0.35")
+        self.assertEqual(elem["q"], 0.35)
+        self.assertTrue(any("Duplicate q parameter" in n for n in elem["notes"]))
+        self.assertEqual(len(elem["params_list"]), 2)  # list keeps both
+
+    # --------------------------------------------------------- CSP
+
+    def test_frame_ancestors_grammar(self):
+        def csp(value):
+            r = self.tool.execute("security_audit",
+                                  headers="Content-Security-Policy: " + value)
+            return [(f["code"], f["severity"]) for f in r["findings"]
+                    if f["header"] == "Content-Security-Policy"]
+        # valid forms stay clean
+        for good in ("frame-ancestors 'none'", "frame-ancestors 'self'",
+                     "frame-ancestors *", "frame-ancestors *.example.com",
+                     "frame-ancestors https://x.example"):
+            self.assertNotIn(("csp_frame_ancestors_invalid_source", "medium"),
+                             csp(good), good)
+        # 'unsafe-inline' is invalid there: dedicated finding, and NOT
+        # the generic inline-injection high (wrong consequence — the
+        # directive is ignored, which drops framing protection).
+        got = csp("frame-ancestors 'unsafe-inline'")
+        self.assertIn(("csp_frame_ancestors_invalid_source", "medium"), got)
+        self.assertNotIn(("csp_unsafe_inline", "high"), got)
+        for bad in ("frame-ancestors 'nonce-abc'", "frame-ancestors 'sha256-XhY='",
+                    "frame-ancestors 'strict-dynamic'"):
+            self.assertIn(("csp_frame_ancestors_invalid_source", "medium"),
+                          csp(bad), bad)
+
+    def test_trusted_types_directives(self):
+        def csp(value):
+            r = self.tool.execute("security_audit",
+                                  headers="Content-Security-Policy: " + value)
+            return [(f["code"], f["severity"]) for f in r["findings"]
+                    if f["header"] == "Content-Security-Policy"]
+        # bare trusted-types is valid and restrictive (no policies may
+        # be created) — not an "empty directive"
+        self.assertNotIn(("csp_empty_directive", "info"),
+                         csp("default-src 'self'; trusted-types"))
+        # require-trusted-types-for takes exactly 'script'
+        self.assertNotIn(("csp_trusted_types_for_invalid", "medium"),
+                         csp("default-src 'self'; require-trusted-types-for 'script'"))
+        for bad in ("require-trusted-types-for",
+                    "require-trusted-types-for 'foo'",
+                    "require-trusted-types-for 'script' 'script'"):
+            self.assertIn(("csp_trusted_types_for_invalid", "medium"),
+                          csp("default-src 'self'; " + bad), bad)
+
+    # --------------------------------------------------------- HSTS
+
+    def test_hsts_hostile_values(self):
+        def hsts(value):
+            r = self.tool.execute("security_audit",
+                                  headers="Strict-Transport-Security: " + value)
+            return [(f["code"], f["severity"]) for f in r["findings"]
+                    if f["header"] == "Strict-Transport-Security"]
+        # plus sign and quoted values are not delta-seconds
+        for bad in ("max-age=+31536000", 'max-age="31536000"',
+                    "max-age=2 147483647", "max-age=", "max-age"):
+            self.assertIn(("hsts_max_age_invalid", "high"), hsts(bad), bad)
+        # leading zeros are fine (delta-seconds = 1*DIGIT)
+        self.assertNotIn(("hsts_max_age_invalid", "high"), hsts("max-age=007"))
+        # preload before max-age is fine (RFC order does not matter)
+        self.assertNotIn(("hsts_max_age_invalid", "high"),
+                         hsts("preload; max-age=31536000"))
+        # duplicates in DIFFERENT casings still void the header
+        for dup in ("MAX-AGE=31536000; max-age=100",
+                    "max-age=31536000; INCLUDESUBDOMAINS; includeSubDomains"):
+            self.assertIn(("hsts_duplicate_directive", "high"), hsts(dup), dup)
+        # a comma is not a separator here: value is invalid, not split
+        self.assertIn(("hsts_max_age_invalid", "high"),
+                      hsts("max-age=31536000 , includeSubDomains"))
+
+    # --------------------------------------------------- cookie-date
+
+    def test_cookie_date_fresh_battery(self):
+        from agentuniverse.agent.action.tool.common_tool.http_header_tool import (
+            _cookie_date,
+        )
+        cases = {
+            # a time token never doubles as day-of-month (browser
+            # semantics; the RFC's sequential steps consume each token
+            # once): day comes from "06", not from "08:49:37".
+            "08:49:37 Nov 06 1994": (1994, 11, 6, 8, 49, 37),
+            # no day-of-month token at all -> attribute ignored
+            "10:18:14 Jun 2021": None,
+            "\u00b109 Jun 2021 10:18:14": None,  # leading non-digit: no day token
+            # 2*4DIGIT year edge: 100 -> below 1601 -> invalid
+            "06 Nov 100 08:49:37": None,
+            "06 Nov 1600 08:49:37": None,
+            "06 Nov 1601 08:49:37": (1601, 11, 6, 8, 49, 37),
+            # two-digit year windows
+            "06 Nov 69 08:49:37": (2069, 11, 6, 8, 49, 37),
+            "06 Nov 70 08:49:37": (1970, 11, 6, 8, 49, 37),
+            "06 Nov 99 08:49:37": (1999, 11, 6, 8, 49, 37),
+            # delimiters: repeated commas fine; tabs fine
+            "Wed,, 09 Jun 2021 10:18:14 GMT": (2021, 6, 9, 10, 18, 14),
+            "Wed,\t09\tJun\t2021\t10:18:14\tGMT": (2021, 6, 9, 10, 18, 14),
+            # trailing garbage after each production is allowed
+            "Jan 01 2020 00:00:00.500": (2020, 1, 1, 0, 0, 0),
+            "Jan 01 2020 00:00:00x": (2020, 1, 1, 0, 0, 0),
+            # out-of-range clock fields abort
+            "06 Nov 2021 24:00:00": None,
+            "06 Nov 2021 12:60:00": None,
+            "06 Nov 2021 12:30:60": None,
+        }
+        for raw, want in cases.items():
+            got = _cookie_date(raw)
+            if want is None:
+                self.assertIsNone(got, raw)
+            else:
+                self.assertIsNotNone(got, raw)
+                self.assertEqual(
+                    (got["year"], got["month"], got["day"], got["hour"],
+                     got["minute"], got["second"]), want, raw)
 
 
 if __name__ == "__main__":
