@@ -19,6 +19,7 @@ class RagAgentTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Initialize the AgentUniverse environment before each test case."""
         AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
     def test_rag_agent(self):
