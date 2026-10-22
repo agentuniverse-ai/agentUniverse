@@ -1,0 +1,77 @@
+name: currency_format_tool
+description: Currency format tool — ISO-4217 amount formatting, pure Python stdlib, no network required. Format an amount with per-currency minor units and locale-style grouping (mode 'format', en 1,234.56 | de 1.234,56 | fr 1 234,56 | zh 1,234.56, optional currency symbol with code fallback), look up a currency's name / symbol / minor units in an embedded indicative ISO-4217 table of 39 currencies (mode 'info'), or re-present an amount under another currency's minor units with NO exchange-rate lookup — the amount is unchanged (mode 'convert_presentation').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.currency_format_tool
+  class: CurrencyFormatTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Currency mode — format, info or convert_presentation.
+    required: true
+  amount:
+    type: number
+    description: The monetary amount — int, finite float or plain numeric string (no thousands separators). Required for the format and convert_presentation modes.
+    required: false
+  currency:
+    type: string
+    description: 3-letter ISO-4217 currency code (case-insensitive), e.g. USD or jpy. Required for the format and info modes.
+    required: false
+  from_currency:
+    type: string
+    description: convert_presentation only — the 3-letter ISO-4217 code of the source currency.
+    required: false
+  to_currency:
+    type: string
+    description: convert_presentation only — the 3-letter ISO-4217 code of the target currency (presentation only, no exchange rate is applied).
+    required: false
+  locale:
+    type: string
+    description: format only — digit-grouping style en (1,234.56), de (1.234,56), fr (1 234,56) or zh (1,234.56, symbol prefixed). Defaults to en.
+    required: false
+  decimals:
+    type: integer
+    description: format only — explicit minor-unit override (0-6); defaults to the currency's table value (JPY/KRW/VND 0, BHD/KWD/OMR 3, most 2).
+    required: false
+  symbol:
+    type: boolean
+    description: format only — attach the currency symbol where the table knows one ($ € ¥ £ and others), else the code itself; prefix without a space for en/zh, space-separated suffix for de/fr.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["format", "info", "convert_presentation"]
+      description: Currency mode.
+    amount:
+      type: string
+      description: Monetary amount (int, finite float or plain numeric string) — format and convert_presentation modes.
+    currency:
+      type: string
+      pattern: "^[A-Za-z]{3}$"
+      description: 3-letter ISO-4217 currency code (format and info modes).
+    from_currency:
+      type: string
+      pattern: "^[A-Za-z]{3}$"
+      description: Source currency code (convert_presentation mode).
+    to_currency:
+      type: string
+      pattern: "^[A-Za-z]{3}$"
+      description: Target currency code (convert_presentation mode; presentation only).
+    locale:
+      type: string
+      enum: ["en", "de", "fr", "zh"]
+      description: Digit-grouping style (format mode).
+    decimals:
+      type: integer
+      minimum: 0
+      maximum: 6
+      description: Explicit minor-unit override (format mode).
+    symbol:
+      type: boolean
+      description: Attach the currency symbol or code fallback (format mode).
+  required: ["mode"]
