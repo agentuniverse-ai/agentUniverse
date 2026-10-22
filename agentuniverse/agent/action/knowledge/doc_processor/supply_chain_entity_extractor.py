@@ -16,6 +16,7 @@ from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import Doc
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.llm.llm_manager import LLMManager
+from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 logger = logging.getLogger(__name__)
@@ -193,6 +194,8 @@ class SupplyChainEntityExtractor(DocProcessor):
             # Call LLM
             messages = [{"role": "user", "content": prompt}]
             response = llm.call(messages=messages)
+            if isinstance(response, LLMOutput):
+                response = response.text
 
             # Parse response
             entities = self._parse_llm_entity_response(response)
@@ -495,6 +498,8 @@ Return results in JSON format:
             # Call LLM
             messages = [{"role": "user", "content": prompt}]
             response = llm.call(messages=messages)
+            if isinstance(response, LLMOutput):
+                response = response.text
 
             # Parse response
             relationships = self._parse_llm_relationship_response(response)
@@ -620,7 +625,9 @@ Return results in JSON format:
                 r'{entity1}\s+delivers?\s+.{{0,30}}\s+(?:to\s+)?{entity2}',
                 r'{entity2}\s+receives?\s+(?:delivery|shipment)\s+from\s+{entity1}',
                 r'{entity1}\s+transports?\s+.{{0,30}}\s+(?:to\s+)?{entity2}',
-                r'shipped\s+to\s+(?:the\s+)?{entity2}',  # "shipped to the Los Angeles distribution center"
+                # Match both endpoints: a destination-only phrase must not
+                # assign the shipment to every other entity in the document.
+                r'{entity1}\s+(?:(?:was|were)\s+)?shipped\s+to\s+(?:the\s+)?{entity2}',
             ],
             'sells_to': [
                 r'{entity1}\s+sells?\s+.{{0,30}}\s+(?:to\s+)?{entity2}',

@@ -18,7 +18,8 @@ entities:
   - api_key
 
 # --- Replacement ---
-# Text substituted for every detected match.
+# Literal text substituted for every detected match. Backslashes and regex
+# backreference syntax are not expanded and cannot reinsert the original match.
 replacement: '[REDACTED]'
 
 # --- Custom patterns ---
