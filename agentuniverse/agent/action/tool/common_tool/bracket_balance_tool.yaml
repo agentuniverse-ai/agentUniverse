@@ -1,0 +1,53 @@
+name: bracket_balance_tool
+description: Bracket balance tool — pure Python stdlib, no network required. Check whether text has balanced brackets and quotes with the precise first-error position (mode='check'), list every unbalanced position capped at 100 (mode='locate'), repair simple imbalances by dropping orphan closers and appending missing closers (mode='fix'), or profile per-type counts and nesting depth (mode='stats'). Tracks (), [], {}, the CJK full-width （）【】《》 pairs, and <> behind an inside-word generics heuristic (angle_brackets option, off by default). Quotes make brackets inside them inert (string_aware option, on by default).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.bracket_balance_tool
+  class: BracketBalanceTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — check (balanced verdict with the precise first error), locate (all unbalanced positions, capped at 100), fix (drop orphan closers / append missing closers) or stats (per-type counts and nesting depth).
+    required: true
+  text:
+    type: string
+    description: The text to scan (1 to 100,000 characters). Required for every mode.
+    required: false
+  string_aware:
+    type: boolean
+    description: When true (default), the quote characters ' " and backtick open quoted spans that make brackets inside them inert; a backslash inside a span escapes the next character, and a span left open at end of text is an unterminated_string error. When false, quote characters are ordinary text.
+    required: false
+  angle_brackets:
+    type: boolean
+    description: When true, ASCII angle brackets are tracked with the documented inside-word generics heuristic — '<' opens only right after a word character and '>' closes only after a word character (or '>' for nested '>>') while a '<' is the innermost open bracket. Off by default.
+    required: false
+  fix_modes:
+    type: array
+    description: Fix mode only — subset of append_missing_closers (append the closers still missing at end of text, innermost first) and drop_orphans (remove unmatched or mismatched closers). Defaults to both; drops are applied before appends.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["check", "locate", "fix", "stats"]
+      description: Operation mode.
+    text:
+      type: string
+      description: Text to scan.
+    string_aware:
+      type: boolean
+      description: Quote-aware scanning (default true).
+    angle_brackets:
+      type: boolean
+      description: Track ASCII angle brackets via the generics heuristic (default false).
+    fix_modes:
+      type: array
+      items:
+        type: string
+        enum: ["append_missing_closers", "drop_orphans"]
+      description: Repairs to apply in fix mode.
+  required: ["mode"]
