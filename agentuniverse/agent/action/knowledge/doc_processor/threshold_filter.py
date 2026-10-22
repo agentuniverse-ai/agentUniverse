@@ -6,6 +6,7 @@
 # @FileName: threshold_filter.py
 
 import math
+from collections import Counter
 from typing import List, Dict, Any, Optional, Literal
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -276,8 +277,9 @@ class ThresholdFilter(DocProcessor):
     def _restore_order(self, filtered_docs: List[Document], original_docs: List[Document]) -> List[Document]:
         """Restore original document order.
 
-        Iterates through original documents in order and includes those
-        present in the filtered set.
+        Iterates through original documents in order, retaining only the
+        occurrence counts selected by filtering. Repeated references must
+        not reintroduce occurrences that top-k or percentile filtering removed.
 
         Args:
             filtered_docs: Documents after filtering.
@@ -286,8 +288,14 @@ class ThresholdFilter(DocProcessor):
         Returns:
             List[Document]: Filtered documents in original order.
         """
-        filtered_ids = set(id(doc) for doc in filtered_docs)
-        return [doc for doc in original_docs if id(doc) in filtered_ids]
+        remaining = Counter(id(doc) for doc in filtered_docs)
+        ordered = []
+        for doc in original_docs:
+            identity = id(doc)
+            if remaining[identity] > 0:
+                ordered.append(doc)
+                remaining[identity] -= 1
+        return ordered
 
     def _initialize_by_component_configer(self, doc_processor_configer: ComponentConfiger) -> 'ThresholdFilter':
         """Initialize filter parameters from component configuration.
