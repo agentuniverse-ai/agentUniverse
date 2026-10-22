@@ -39,6 +39,7 @@ class RequestTool(Tool):
         return self.method.strip().upper()
 
     def execute(self, input: str):
+        """Execute the configured HTTP method from a URL or JSON payload."""
         input_params: str = input
         if self.json_parser:
             try:
@@ -63,6 +64,7 @@ class RequestTool(Tool):
         return await self.async_execute_by_method(input_params)
 
     async def async_execute_by_method(self, url: str, data: dict = None, **kwargs):
+        """Dispatch an asynchronous request through the configured wrapper."""
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
@@ -77,6 +79,7 @@ class RequestTool(Tool):
             raise ValueError(f"Unsupported method: {method or self.method}")
 
     def execute_by_method(self, url: str, data: dict = None, **kwargs):
+        """Dispatch a synchronous request through the configured wrapper."""
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
