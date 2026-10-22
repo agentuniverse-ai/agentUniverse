@@ -636,3 +636,49 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## DateTimeTool
+
+`DateTimeTool` provides datetime operations for agent workflows: `now` (current datetime in a timezone), `format` (parse a datetime string with a given or auto-detected format and reformat it), `convert` (convert between timezones, DST-aware), `diff` (difference between two datetimes in a chosen unit, including calendar `months`/`years`), and `add` (date arithmetic over years/months/weeks/days/hours/minutes/seconds). Built exclusively on the Python standard library (`datetime` + `zoneinfo`): zero third-party dependencies, zero network access.
+
+Register a component pointing at `agentuniverse.agent.action.tool.common_tool.datetime_tool.DateTimeTool`, then call `execute(mode=..., datetime_str=..., ...)`:
+
+```python
+from agentuniverse.agent.action.tool.common_tool.datetime_tool import DateTimeTool
+
+tool = DateTimeTool()
+tool.execute(mode="now", timezone_str="Asia/Shanghai")                               # 2026-10-19 15:30:00 style output + ISO/timestamp/weekday
+tool.execute(mode="format", datetime_str="2026-01-15 10:30:00", fmt="%d/%m/%Y %H:%M")# 15/01/2026 10:30
+tool.execute(mode="format", datetime_str="31/12/2026", input_fmt="%d/%m/%Y")         # explicit pattern for day-first dates
+tool.execute(mode="convert", datetime_str="2026-01-15 10:00:00", timezone_str="UTC",
+             target_timezone="America/New_York")                                     # 2026-01-15 05:00:00 (EST)
+tool.execute(mode="diff", datetime_str="2026-01-31", end_datetime="2026-02-28",
+             unit="months")                                                          # 1 (calendar months)
+tool.execute(mode="diff", datetime_str="2026-06-01", end_datetime="2026-06-02",
+             unit="hours")                                                           # 24
+tool.execute(mode="add", datetime_str="2026-01-31", months=1)                        # 2026-02-28 (month-end clamping)
+tool.execute(mode="add", datetime_str="2026-10-19 12:00:00", days=-7, hours=3)       # 2026-10-12 15:00:00
+```
+
+```yaml
+name: datetime_tool
+description: Datetime operations (now, format, convert, diff, add) with zero dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.datetime_tool
+  class: DateTimeTool
+input_keys: [mode]
+default_timezone: UTC
+default_format: "%Y-%m-%d %H:%M:%S"
+max_unit_value: 100000
+```
+- default_timezone: Timezone attached to naive inputs and used by `now` when none is given — an IANA name (`Asia/Shanghai`), `UTC`, `local` or a fixed offset (`+08:00`). Default `UTC`.
+- default_format: strftime pattern used to render output when no `fmt` is supplied (default `%Y-%m-%d %H:%M:%S`).
+- max_unit_value: Largest absolute offset accepted by each `add` unit (default 100000).
+- Timezone parsing accepts IANA names through the standard library `zoneinfo` database (Python 3.9+; on Windows install the `tzdata` package). Conversions are DST-aware.
+- Without `input_fmt`, parsing auto-detects year-first forms (`2026-01-15`, `2026-01-15T10:30:00`, `2026/01/15`), month-first slash forms (`01/15/2026`), English textual dates (`January 15, 2026`, `15 Jan 2026`) and ISO 8601 (including a trailing `Z`). Day-first dates such as `31/12/2026` are ambiguous and require an explicit `input_fmt`.
+- `diff` measures `end - start`: seconds/minutes/hours/days/weeks are exact durations; `months`/`years` use dateutil `relativedelta`-style calendar arithmetic implemented manually — a month has elapsed once the same day-of-month is reached (month-end clamped), so `2026-01-31` to `2026-02-28` is exactly 1 month. Omitting `end_datetime` compares against the current time.
+- `add` shifts by calendar months/years first (day clamped to the target month's end: `2026-01-31` + 1 month = `2026-02-28`), then applies exact weeks/days/hours/minutes/seconds. Negative offsets subtract.
+- Every result is a structured dict with a `status` field; errors are returned, never raised. Unknown timezones come back with closest-match suggestions; unparseable datetimes come back with the list of formats tried.
+- Deterministic testing is supported via the `frozen_now` attribute: when set, `now` and `diff` without `end_datetime` read it instead of the wall clock.
