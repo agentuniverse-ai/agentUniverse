@@ -134,6 +134,24 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(search_call.kwargs["params"]["tool"], "agentuniverse_pubmed_tool")
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_search_uses_article_elocation_doi_when_article_id_is_absent(self, mock_get: Mock) -> None:
+        xml = SAMPLE_XML.replace(
+            b"<ArticleTitle>",
+            b'<ELocationID EIdType="doi">10.1000/elocation</ELocationID><ArticleTitle>',
+        ).replace(
+            b'<ArticleId IdType="doi">10.1000/example</ArticleId>',
+            b'<ArticleId IdType="pubmed">12345678</ArticleId>',
+        )
+        mock_get.side_effect = [
+            response_mock(json_data={"esearchresult": {"count": "1", "idlist": ["12345678"]}}),
+            response_mock(content=xml),
+        ]
+
+        result = self.tool.execute(query="AI medicine")
+
+        self.assertEqual(result["papers"][0]["doi"], "10.1000/elocation")
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_search_supports_paging_and_sorting(self, mock_get: Mock) -> None:
         """Test that search supports paging and sorting.
         """
