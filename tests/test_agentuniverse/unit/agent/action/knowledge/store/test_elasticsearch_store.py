@@ -8,18 +8,28 @@
 import unittest
 from unittest.mock import MagicMock
 
+import os
+import sys
+import types
+
 try:
     import elasticsearch  # noqa: F401
 
     ELASTICSEARCH_AVAILABLE = True
 except ImportError:
     ELASTICSEARCH_AVAILABLE = False
+    # Inject a minimal fake of the client library so the component's lazy
+    # import resolves and the behavioral tests below still run everywhere;
+    # the fake is only the client class, all connection behavior is mocked
+    # by the tests themselves.
+    _fake_elasticsearch = types.ModuleType("elasticsearch")
+    _fake_elasticsearch.Elasticsearch = MagicMock()
+    sys.modules.setdefault("elasticsearch", _fake_elasticsearch)
 
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 
 
-@unittest.skipUnless(ELASTICSEARCH_AVAILABLE, "elasticsearch not available")
 class TestElasticsearchStore(unittest.TestCase):
     """Test cases for the Elasticsearch store, run against mocked clients."""
 
@@ -145,6 +155,58 @@ class TestElasticsearchStore(unittest.TestCase):
         self.assertEqual(kwargs["hosts"], "https://es.example.com:9200")
         self.assertEqual(kwargs["api_key"], "secret")
         self.assertNotIn("basic_auth", kwargs)
+
+
+@unittest.skipUnless(
+    ELASTICSEARCH_AVAILABLE and os.environ.get("ELASTICSEARCH_HOST"),
+    "real integration test: install elasticsearch, start Elasticsearch "
+    "(docker run -d -p 9200:9200 -e discovery.type=single-node -e xpack.security.enabled=false "
+    "docker.elastic.co/elasticsearch/elasticsearch:8.15.0) and set ELASTICSEARCH_HOST to run",
+)
+class TestElasticsearchStoreIntegration(unittest.TestCase):
+    """Integration tests against a real Elasticsearch server.
+
+    Start a server and set the endpoint to run:
+        docker run -d --name elasticsearch -p 9200:9200 \
+            -e discovery.type=single-node -e xpack.security.enabled=false \
+            docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+        ELASTICSEARCH_HOST=http://localhost:9200 python -m pytest \
+            tests/test_agentuniverse/unit/agent/action/knowledge/store/test_elasticsearch_store.py
+    """
+
+    def test_roundtrip(self):
+        import uuid as uuid_module
+        from agentuniverse.agent.action.knowledge.store.elasticsearch_store import ElasticsearchStore
+
+        index_name = "test_" + uuid_module.uuid4().hex[:8]
+        store = ElasticsearchStore(
+            index_name=index_name,
+            connection_args={"hosts": os.environ["ELASTICSEARCH_HOST"]},
+        )
+        store.client = store._new_client()
+        try:
+            documents = [
+                Document(id="doc1", text="hello world", embedding=[1.0, 0.0], metadata={"k": "v"}),
+                Document(id="doc2", text="goodbye world", embedding=[0.0, 1.0]),
+            ]
+            store.insert_document(documents)
+            store.client.indices.refresh(index=index_name)
+            results = store.query(Query(query_str="hi", embeddings=[[1.0, 0.0]], similarity_top_k=1))
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].text, "hello world")
+            store.upsert_document([Document(id="doc1", text="updated", embedding=[1.0, 0.1])])
+            store.client.indices.refresh(index=index_name)
+            results = store.query(Query(query_str="hi", embeddings=[[1.0, 0.0]], similarity_top_k=10))
+            texts = {document.text for document in results}
+            self.assertIn("updated", texts)
+            self.assertNotIn("hello world", texts)
+            store.delete_document("doc1")
+            store.client.indices.refresh(index=index_name)
+            results = store.query(Query(query_str="hi", embeddings=[[1.0, 0.0]], similarity_top_k=10))
+            self.assertEqual([document.text for document in results], ["goodbye world"])
+        finally:
+            if store.client.indices.exists(index=index_name):
+                store.client.indices.delete(index=index_name)
 
 
 if __name__ == "__main__":
