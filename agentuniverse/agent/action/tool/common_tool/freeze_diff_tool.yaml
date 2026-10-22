@@ -1,0 +1,63 @@
+name: freeze_diff_tool
+description: "Pip-freeze / installed-distribution snapshot comparison — pure Python stdlib plus importlib.metadata (stdlib), no network, no subprocess. Inventory the environment (mode='installed': the live interpreter via importlib.metadata with PEP 503 normalized names, versions and requires_dist_count, or a pip-freeze text parsed into name==version pins — source tag live|text), judge environment drift (mode='compare': a requirements.txt text vs the freeze text or the live environment — per-requirement satisfied verdicts via a ==/!=/>=/<=/~=/</>/=== evaluator with wildcard, epoch, pre/post/dev/local and packaging-compatible pre-release handling (packaging when importable, else a documented minimal PEP 440 evaluator), missing_not_installed, undeclared_installed after a pip/setuptools/wheel exempt list) and diff two freeze snapshots (mode='snapshot_diff': upgraded / downgraded / added / removed / unchanged with PEP 440 ordering). outdated_guess (index queries) is out of scope — offline by design; RequirementsTool (#4021) parses/lints the requirements file itself and VersionConstraintTool (#3995) resolves abstract range sets — this tool is the installed-environment drift layer."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.freeze_diff_tool
+  class: FreezeDiffTool
+input_keys:
+  - mode
+max_lines: 10000
+max_line_chars: 10000
+max_text_chars: 4000000
+args_model:
+  mode:
+    type: string
+    description: Operation mode — installed, compare or snapshot_diff.
+    required: true
+  requirements:
+    type: string
+    description: The requirements.txt text for the compare mode (required there; capped at 10000 lines).
+    required: false
+  freeze:
+    type: string
+    description: A pip-freeze text — optional inventory source for the installed and compare modes (the live interpreter is read when absent; capped at 10000 lines).
+    required: false
+  freeze_old:
+    type: string
+    description: The before snapshot text for the snapshot_diff mode (capped at 10000 lines).
+    required: false
+  freeze_new:
+    type: string
+    description: The after snapshot text for the snapshot_diff mode (capped at 10000 lines).
+    required: false
+  exempt:
+    type: array
+    description: Package names filtered out of undeclared_installed in the compare mode (default pip, setuptools, wheel).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["installed", "compare", "snapshot_diff"]
+      description: Operation mode.
+    requirements:
+      type: string
+      description: The requirements.txt text (compare mode).
+    freeze:
+      type: string
+      description: A pip-freeze text (installed and compare modes).
+    freeze_old:
+      type: string
+      description: The before freeze snapshot (snapshot_diff mode).
+    freeze_new:
+      type: string
+      description: The after freeze snapshot (snapshot_diff mode).
+    exempt:
+      type: array
+      items:
+        type: string
+      description: Names filtered out of undeclared_installed (compare mode).
+  required: ["mode"]
+  additionalProperties: false
