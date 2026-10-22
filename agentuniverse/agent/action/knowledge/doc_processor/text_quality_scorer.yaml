@@ -1,0 +1,44 @@
+name: 'text_quality_scorer'
+description: 'score document content quality (0-100) from lexical statistics and optionally drop low-quality documents'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.text_quality_scorer'
+  class: 'TextQualityScorer'
+
+# Optional drop threshold in [0, 100]. When set, documents scoring below it
+# are marked metadata['quality_rejected'] = True on their original object
+# and removed from the output; documents scoring exactly min_score are kept.
+# Leave unset (null) to keep every document and only stamp scores.
+min_score: null
+
+# Relative contribution of each sub-score to the composite: alpha
+# (alphabetic share), structure (word units + Latin word length),
+# punctuation (share band of real prose), diversity (penalises repetition
+# and token-soup uniqueness), digit (tolerates moderate digit share),
+# whitespace (penalises irregular runs), length (rewards useful size).
+# A provided mapping replaces the defaults entirely; values must be
+# non-negative with at least one positive.
+weights:
+  alpha: 0.10
+  structure: 0.20
+  punctuation: 0.20
+  diversity: 0.30
+  digit: 0.05
+  whitespace: 0.05
+  length: 0.10
+
+# CJK-character share over non-whitespace characters at which the
+# CJK-aware path activates (CJK characters count as word units, Latin word
+# length stops contributing), in (0, 1].
+cjk_threshold: 0.30
+
+# Metadata key the numeric quality score is written to; '' disables.
+score_key: 'quality_score'
+
+# Metadata key the metrics dict is written to; '' disables.
+metrics_key: 'quality_metrics'
+
+# Metadata key set to True on dropped document objects when min_score
+# filtering is active; '' disables.
+rejected_key: 'quality_rejected'
