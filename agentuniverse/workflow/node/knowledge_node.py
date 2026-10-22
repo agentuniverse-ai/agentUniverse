@@ -68,7 +68,7 @@ class KnowledgeNode(Node):
             if document_texts:
                 knowledge_res_list.append('\n'.join(document_texts))
         knowledge_res = '\n'.join(knowledge_res_list)
-        output_params: List[NodeOutputParams] = self._data.outputs
+        output_params: List[NodeOutputParams] = self._output_params_for_run()
         output_params[0].value = knowledge_res
 
         workflow_output.workflow_parameters[self.id] = output_params

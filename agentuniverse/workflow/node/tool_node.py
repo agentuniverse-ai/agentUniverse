@@ -44,7 +44,7 @@ class ToolNode(Node):
 
         tool_input_params = self._resolve_input_params(inputs.input_param, workflow_output)
         tool_output = tool.run(**tool_input_params)
-        output_params: List[NodeOutputParams] = self._data.outputs
+        output_params: List[NodeOutputParams] = self._output_params_for_run()
 
         if isinstance(tool_output, str):
             output_params[0].value = tool_output
