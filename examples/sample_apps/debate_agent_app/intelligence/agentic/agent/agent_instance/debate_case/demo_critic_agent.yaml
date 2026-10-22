@@ -1,0 +1,22 @@
+info:
+  name: 'demo_critic_agent'
+  description: 'Demo critic agent for reviewing proposals and providing feedback'
+
+profile:
+  # Prompt configuration
+  prompt_version: 'demo_critic_agent.cn'
+
+  # LLM configuration
+  llm_model:
+    name: 'default_openai_llm'
+    model_name: 'gpt-4o-2024-11-20'
+    temperature: 0.7
+
+  # Memory configuration
+  memory:
+    name: 'demo_memory'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.critic_agent_template'
+  class: 'CriticAgentTemplate'
