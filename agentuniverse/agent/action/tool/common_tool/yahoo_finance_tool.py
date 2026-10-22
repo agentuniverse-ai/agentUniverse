@@ -183,13 +183,15 @@ class YahooFinanceTool(Tool):
         """Render historical bars as a compact, aligned table."""
         if not rows:
             return f"{symbol} — no historical data available."
-        columns = ["date", "open", "high", "low", "close", "volume"]
+        columns = ["date/time", "open", "high", "low", "close", "volume"]
         header = " | ".join(col.ljust(8) for col in columns)
         body = []
         for row in rows:
-            date = self._row_value(row, "date", "index")
+            timestamp = self._row_value(row, "datetime")
+            date = timestamp if timestamp is not None else self._row_value(row, "date", "index")
             cells = [
-                str(date)[:10].ljust(8) if date is not None else "-".ljust(8),
+                (str(date) if timestamp is not None else str(date)[:10]).ljust(9)
+                if date is not None else "-".ljust(9),
                 self._fmt_num(self._row_value(row, "open")),
                 self._fmt_num(self._row_value(row, "high")),
                 self._fmt_num(self._row_value(row, "low")),
