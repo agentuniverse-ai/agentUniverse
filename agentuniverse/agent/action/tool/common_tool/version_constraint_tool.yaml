@@ -1,0 +1,44 @@
+name: version_constraint_tool
+description: "Dependency constraint-set resolution tool — pure Python stdlib, no network required. Resolve a group of npm-style range constraints on one package against its available versions (mode='resolve': satisfiable verdict, the satisfying candidates sorted by semver precedence, the best (highest) pick, the binding constraint that eliminated the most candidates and a per-constraint matched/excluded breakdown), detect pairwise conflicts in a constraint set (mode='conflicts': pairs of ranges with an empty intersection plus the tightest constraint) and explain the whole set (mode='explain_set': each range's comparator expansion side-by-side plus the computed intersection bounds). Full npm grammar: tilde ~, caret ^ with the 0.x special cases, hyphen ranges with partial upper bounds, x-ranges (1.2.x, *), comparison primitives with partial right-hand sides, whitespace AND conjunctions, || unions, and the npm prerelease rule (a prerelease only matches when a comparator of the matching branch carries a prerelease on the same major.minor.patch tuple)."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.version_constraint_tool
+  class: VersionConstraintTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — resolve, conflicts or explain_set.
+    required: true
+  constraints:
+    type: array
+    items:
+      type: string
+    description: The constraint set — npm range expressions that all apply to one package (required for every mode, bounded to 100 entries) — e.g. ['^1.0.0', '>=1.2.0', '<1.5.0'].
+    required: false
+  available_versions:
+    type: array
+    items:
+      type: string
+    description: The versions of the package that exist (required for the resolve mode, bounded to 1000 entries); junk entries are reported per item instead of failing the run.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["resolve", "conflicts", "explain_set"]
+      description: Operation mode.
+    constraints:
+      type: array
+      items:
+        type: string
+      description: npm range constraint list applied to one package (all modes).
+    available_versions:
+      type: array
+      items:
+        type: string
+      description: Available versions of the package (resolve mode).
+  required: ["mode"]
