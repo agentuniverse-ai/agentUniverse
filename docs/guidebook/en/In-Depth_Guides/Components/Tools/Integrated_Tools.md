@@ -636,3 +636,52 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## URL Parser Tool
+
+`URLParserTool` inspects, edits, builds and canonicalizes URLs purely on
+the Python standard library (`urllib.parse`) with zero network access.
+`parse` mode splits a URL into scheme / netloc / hostname / path /
+query / fragment, decodes the query into an ordered list of `[key,
+value]` pairs (multi-value aware, blanks kept), resolves the port
+against the per-scheme defaults (http 80, https 443, ws 80, wss 443,
+ftp 21), flags embedded userinfo and handles bracketed IPv6 hosts —
+non-http(s) schemes such as `ftp` or `urn` are flagged via
+`is_http_scheme` but not rejected. `query` mode gets, sets or deletes
+query parameters: `get` returns every value of a key (or every pair
+when no key is given), `set` replaces the first occurrence with one or
+more new values and appends unknown keys, `delete` drops every
+occurrence — the order of untouched parameters is preserved and
+percent-encoding round-trips. `build` mode constructs a URL from
+validated parts (`scheme`, `host` or raw `netloc`, `port`, `path`,
+`query` as a string / pair list / dict, `fragment`, optional
+percent-encoded `username` / `password`). `normalize` mode lowercases
+the scheme and host, strips trailing-dot hosts, removes default ports,
+stably sorts the query by key and drops empty `?` / `#` markers —
+idempotently, and reporting every applied change.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.url_parser_tool import URLParserTool
+
+tool = URLParserTool()
+parts = tool.execute(mode="parse", url="https://u:p@Example.com:443/a?b=2&a=1#f")
+values = tool.execute(mode="query", operation="get", url="https://e.com/s?tag=a&tag=b", key="tag")["values"]
+edited = tool.execute(mode="query", operation="set", url="https://e.com/s?b=2", key="a", value="1")["url"]
+built = tool.execute(mode="build", scheme="https", host="e.com", path="/x", query=[["q", "1"]])["url"]
+canonical = tool.execute(mode="normalize", url="HTTP://Example.COM.:80/a?b=2&a=1#")["url"]
+# -> "http://example.com/a?a=1&b=2"
+```
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, unknown mode / operation, missing `url`,
+missing `key` for query set/delete, conflicting `host` and `netloc` in
+build mode) raise a `ValueError`. Errors that depend on the URL content
+— whitespace or control characters, unmatched IPv6 brackets, a missing
+scheme (unless `allow_scheme_relative=True`), ports that are not
+integers or outside 1-65535, and invalid build parts — are returned as
+a structured `error` payload (`{"type": ..., "message": ...}`)
+instead of raising. Normalization is idempotent and keeps userinfo
+byte-identical; query rebuilding re-encodes with conventional
+separators (`+` for spaces) but always decodes back to the same
+parameter pairs. The tool performs no DNS resolution or network I/O —
+it never checks that a host actually exists.
