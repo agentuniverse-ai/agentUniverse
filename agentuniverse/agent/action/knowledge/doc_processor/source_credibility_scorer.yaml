@@ -1,0 +1,36 @@
+name: 'source_credibility_scorer'
+description: 'score and filter recalled documents by source credibility (domain / source-label priors with custom overrides)'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.source_credibility_scorer'
+  class: 'SourceCredibilityScorer'
+
+# Metadata field holding each document's source. Accepted values: full URL,
+# bare domain (e.g. 'cdc.gov'), or a source label (e.g. 'official', 'news').
+source_key: 'source'
+
+# Custom {pattern: score} overrides, checked BEFORE the built-in tables.
+# Patterns may be exact domains/URLs, source labels, or wildcard domains.
+# Examples:
+#   '*.gov': 0.98            # every government site
+#   '*.edu.*': 0.9           # any TLD combination of .edu
+#   'mycompany.com': 0.95    # first-party content
+#   'competitor-rumors.com': 0.1
+#   'internal_wiki': 0.8     # non-domain source labels work too
+credibility_map: {}
+
+# Documents scoring below this threshold are dropped. 0 keeps everything and
+# only attaches scores.
+min_score: 0.0
+
+# Metadata key the credibility score is written to; '' disables stamping.
+# A '<score_key>_matched' key records which rule produced the score.
+score_key: 'credibility_score'
+
+# Score for sources not found in any table (the built-in prior for the
+# unknown middle of the web).
+default_score: 0.5
+
+# Documents with no source metadata: true keeps them unstamped, false drops.
+keep_no_source: true
