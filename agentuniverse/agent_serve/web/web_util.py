@@ -11,6 +11,7 @@ import queue
 import json
 
 from flask import request, make_response, jsonify
+from werkzeug.exceptions import BadRequest
 
 from ..service_instance import ServiceInstance
 from ...agent.agent import Agent
@@ -30,6 +31,18 @@ class FlaskServerManager:
     @sync_service_timeout.setter
     def sync_service_timeout(self, timeout):
         self._sync_service_timeout = timeout
+
+
+def _parse_boolean_parameter(value, parameter_name):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized_value = value.strip().casefold()
+        if normalized_value in {"true", "1", "yes", "on"}:
+            return True
+        if normalized_value in {"false", "0", "no", "off"}:
+            return False
+    raise BadRequest(f"{parameter_name} must be a boolean value")
 
 
 def request_param(func):
@@ -55,7 +68,10 @@ def request_param(func):
                 continue
             if name == "saved":
                 if "saved" in req_data:
-                    kwargs['saved'] = req_data['saved']
+                    kwargs['saved'] = _parse_boolean_parameter(
+                        req_data['saved'],
+                        "saved",
+                    )
                 else:
                     kwargs['saved'] = sig.parameters['saved'].default
                 continue
