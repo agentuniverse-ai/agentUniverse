@@ -1,28 +1,9 @@
-import sys
-import types
-
 import pytest
 
-# Chroma is an optional runtime dependency. These minimal modules let the
-# validation tests exercise filter construction without a database client.
-if "chromadb" not in sys.modules:
-    chromadb = types.ModuleType("chromadb")
-    chromadb_config = types.ModuleType("chromadb.config")
-    chromadb_config.Settings = object
-    chromadb_api = types.ModuleType("chromadb.api")
-    chromadb_models = types.ModuleType("chromadb.api.models")
-    chromadb_collection = types.ModuleType("chromadb.api.models.Collection")
-    chromadb_collection.Collection = object
-    chromadb.config = chromadb_config
-    sys.modules.update(
-        {
-            "chromadb": chromadb,
-            "chromadb.config": chromadb_config,
-            "chromadb.api": chromadb_api,
-            "chromadb.api.models": chromadb_models,
-            "chromadb.api.models.Collection": chromadb_collection,
-        }
-    )
+# Chroma is an optional runtime dependency. Use the installed package when
+# available and skip these integration-bound tests otherwise; do not inject
+# incomplete modules into global sys.modules during test collection.
+pytest.importorskip("chromadb")
 
 from agentuniverse.agent.memory.memory_storage.chroma_memory_storage import ChromaMemoryStorage
 
