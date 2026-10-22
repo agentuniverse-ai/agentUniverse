@@ -1,0 +1,36 @@
+name: json_path_tool
+description: JSON path query tool — pure Python stdlib, no network required. Query nested JSON documents with a practical JSONPath subset (mode='query') — dot and quoted bracket keys, integer indexes (negative allowed), start:end slices, wildcards ([*] or .*), and simple filters like [?(@.price < 10)] comparing a sub-path to a number, string, true, false or null with ==, !=, <, <=, >, >=; each match carries its concrete path and value. Validate a path without data (mode='validate'). Invalid JSON text and invalid paths return structured error payloads instead of raising.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.json_path_tool
+  class: JsonPathTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — query (evaluate a path against a JSON document) or validate (parse a path alone and report its segments).
+    required: true
+  path:
+    type: string
+    description: The JSON path, e.g. $.store.book[0].title or $.items[?(@.price < 10)]. A leading $ is optional; $ alone selects the whole document.
+    required: false
+  data:
+    type: string
+    description: The document to query — a JSON string or an already-decoded dict/list. Required for query mode; not used by validate mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["query", "validate"]
+      description: Operation mode.
+    path:
+      type: string
+      description: JSON path expression (dot/bracket keys, indexes, slices, wildcards, simple filters).
+    data:
+      type: string
+      description: JSON document text (or decoded dict/list when called programmatically) to query (query mode).
+  required: ["mode"]

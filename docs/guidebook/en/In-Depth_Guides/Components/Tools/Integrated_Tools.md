@@ -636,3 +636,62 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## JSON Path Tool
+
+`JsonPathTool` queries nested JSON documents with a practical JSONPath
+subset, built purely on the Python standard library (`json` plus a
+hand-written path parser) with zero network access. `query` mode takes a
+JSON document — as text or an already-decoded `dict` / `list` — and a
+path, and returns every value the path selects; each match carries its
+concrete rendered path (for example `$.store.book[0].title`) and its
+value, alongside `found` / `count` / `truncated` status. `validate`
+mode parses a path without any data and reports its segments, so agents
+can verify a path before using it.
+
+Supported path syntax: an optional leading `$` root, where `$` alone
+selects the whole document; dot keys (`$.store.bicycle.color`) and
+quoted bracket keys (`$['a b']`, with `\` and quote escapes) for
+objects; integer indexes including negative ones (`$.items[-1]`) for
+lists; `start:end` slices with either side optional and no step;
+wildcards (`[*]` or `.*`) iterating list elements and object values;
+and simple filters of the form `[?(@.price < 10)]` comparing the
+element (`@`) or a sub-path (`@.price`, `@['unit price']`,
+`@.tags[0]`) against a number, quoted string, `true`, `false` or
+`null` using `==`, `!=`, `<`, `<=`, `>` or `>=`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.json_path_tool import JsonPathTool
+
+tool = JsonPathTool()
+result = tool.execute(
+    mode="query",
+    data='{"store": {"book": [{"title": "Moby Dick", "price": 8.99},'
+         ' {"title": "Ulysses", "price": 18.99}]}}',
+    path="$.store.book[?(@.price < 10)].title",
+)  # matches: [{"path": "$.store.book[0].title", "value": "Moby Dick"}]
+check = tool.execute(mode="validate", path="$.store.book[0:1].title")
+```
+
+Filter semantics are strictly typed and deterministic: equality only
+holds between values of the same JSON kind (numbers compare numerically
+across int/float; booleans, strings and `null` only match their own
+kind), ordering comparisons apply to numbers only, and a missing or
+type-mismatched filter sub-path simply excludes the element instead of
+raising. A path that selects nothing is a normal empty result
+(`found: false`), not an error.
+
+Malformed parameters (unknown mode, missing / empty / over-long path,
+wrong `data` type, JSON text over `max_input_chars`) raise a
+`ValueError` before any work happens. Errors that depend on the content
+being processed — JSON text that fails to parse (including `NaN` /
+`Infinity` constants and nesting too deep for the interpreter stack)
+and path syntax errors — are returned as a structured `error` payload
+(`{"type": "invalid_json", ...}` / `{"type": "invalid_path", ...}`)
+instead of raising. Cost is bounded by caps rather than timeouts:
+`max_input_chars` (default 100,000) bounds the document — and with it
+every step of the iterative evaluator, whose states are concrete paths
+from the root and can never outnumber document nodes — while
+`max_matches` (default 1000) caps the returned match list and sets
+`truncated: true` beyond it. The tool never mutates and never
+re-serializes the queried document.
