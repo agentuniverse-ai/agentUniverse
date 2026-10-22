@@ -154,8 +154,9 @@ class QdrantMemoryStorage(MemoryStorage):
                 raise ValueError("No vectors available for message. Cannot store message without embeddings.")
 
             payload = {
-                "content": message.content,
                 **metadata,
+                # The reserved payload field must match the text we embedded.
+                "content": message.content,
             }
 
             try:
