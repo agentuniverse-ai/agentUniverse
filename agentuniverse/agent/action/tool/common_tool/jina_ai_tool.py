@@ -13,6 +13,7 @@ from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.util.env_util import get_from_env
 from loguru import logger
 import html
+import json
 
 
 jina_read_url = "https://r.jina.ai/"
@@ -188,7 +189,7 @@ class JinaAITool(Tool):
         if not content:
             return None
             
-        return str(content.get("data"))
+        return json.dumps(content.get("data"), ensure_ascii=False)
     
     def check_fact(self, query: str) -> str:
         """
@@ -223,7 +224,7 @@ class JinaAITool(Tool):
             return content
         if not content:
             return None
-        return str(content.get("data"))
+        return json.dumps(content.get("data"), ensure_ascii=False)
 
     def _remove_images(self, content: str) -> str:
         """
