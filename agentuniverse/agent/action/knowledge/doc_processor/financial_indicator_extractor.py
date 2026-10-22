@@ -20,6 +20,13 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 
 logger = logging.getLogger(__name__)
 
+# Percentages and ratios are dimensionless, so exchange rates do not apply.
+_NON_MONETARY_METRICS = frozenset({
+    'margin', 'gross_margin', 'operating_margin', 'net_margin',
+    'roi', 'roe', 'roa', 'growth_rate', 'market_share', 'churn_rate',
+    'debt_ratio',
+})
+
 
 @dataclass
 class FinancialMetric:
@@ -519,7 +526,8 @@ class FinancialIndicatorExtractor(DocProcessor):
             metrics: List of financial metrics.
 
         Note:
-            Modifies metrics in place. Currently uses fixed exchange rates.
+            Modifies monetary metrics in place using fixed exchange rates.
+            Percentages and dimensionless ratios keep their extracted values.
         """
         # Fixed exchange rates (simplified)
         exchange_rates = {
@@ -530,6 +538,8 @@ class FinancialIndicatorExtractor(DocProcessor):
         }
 
         for metric in metrics:
+            if metric.name in _NON_MONETARY_METRICS:
+                continue
             # Check context for currency indicators
             if '¥' in metric.context or '元' in metric.context or 'CNY' in metric.context:
                 metric.value *= exchange_rates.get('CNY', 1.0)
