@@ -1,0 +1,85 @@
+name: hackernews_tool
+description: Hacker News (Algolia HN Search API) tool — no API key required. Searches stories and comments (mode='search', relevance or recent-first order) and fetches the full detail of one item (mode='item') or the public profile of one user (mode='user').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.hackernews_tool
+  class: HackerNewsTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Query mode — search (full-text search over stories or comments), item (full detail of one submission including its top-level replies), or user (public profile of one account).
+    required: true
+  query:
+    type: string
+    description: Search keywords, required in search mode (e.g. 'vector database'). Ignored in item/user modes.
+    required: false
+  tags:
+    type: string
+    description: Search over stories (tags='story', default) or comments (tags='comment'). Search mode only.
+    required: false
+    default: story
+  order:
+    type: string
+    description: Result ordering — relevance (default) or recent (newest first). Search mode only.
+    required: false
+    default: relevance
+  max_results:
+    type: integer
+    description: Number of hits to return (search mode only), from 1 to 50.
+    required: false
+    default: 10
+  page:
+    type: integer
+    description: Zero-based result page (search mode only), from 0 to 49.
+    required: false
+    default: 0
+  item_id:
+    type: string
+    description: Numeric Hacker News item id, as an integer or digit-only string. Required in item mode; ignored elsewhere.
+    required: false
+  username:
+    type: string
+    description: Hacker News account name (2-30 characters of letters, digits, dashes, or underscores). Required in user mode; ignored elsewhere.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["search", "item", "user"]
+      description: Query mode.
+    query:
+      type: string
+      description: Search keywords (search mode only).
+    tags:
+      type: string
+      enum: ["story", "comment"]
+      default: story
+      description: Story or comment filter (search mode only).
+    order:
+      type: string
+      enum: ["relevance", "recent"]
+      default: relevance
+      description: Result ordering (search mode only).
+    max_results:
+      type: integer
+      default: 10
+      minimum: 1
+      maximum: 50
+      description: Hit count bound (search mode only).
+    page:
+      type: integer
+      default: 0
+      minimum: 0
+      maximum: 49
+      description: Zero-based result page (search mode only).
+    item_id:
+      type: string
+      description: Numeric item id (item mode only).
+    username:
+      type: string
+      description: Account name (user mode only).
+  required: ["mode"]

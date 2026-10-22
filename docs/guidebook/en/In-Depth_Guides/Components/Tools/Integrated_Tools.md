@@ -636,3 +636,41 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Hacker News Tool
+
+`HackerNewsTool` searches Hacker News and fetches item and user details
+over the public, keyless Algolia HN Search API — no API key or account
+is needed. The `search` mode performs a full-text search over stories
+(`tags='story'`, default) or comments (`tags='comment'`) in relevance
+(`order='relevance'`, default) or newest-first (`order='recent'`) order,
+returning normalized hits with title, author, points, comment count,
+links, and clean text; the `item` mode returns the full detail of one
+submission (title, author, points, text, and a bounded list of its
+top-level replies); the `user` mode returns the public profile of one
+account (karma, about, submission count).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.hackernews_tool import HackerNewsTool
+
+tool = HackerNewsTool()
+stories = tool.execute(mode="search", query="vector database", max_results=5)
+recent = tool.execute(mode="search", query="llm", tags="comment", order="recent", page=1)
+item = tool.execute(mode="item", item_id="12345")
+profile = tool.execute(mode="user", username="pg")
+```
+
+Every request goes to the fixed https-only `https://hn.algolia.com/api`
+endpoints; search keywords travel as URL parameters, and item ids
+(positive integers or digit-only strings) and usernames (2-30 characters
+of letters, digits, dashes, or underscores) are strictly whitelisted
+before any request is made. All inputs are validated before any network
+request: `max_results` is bounded from 1 to 50, `page` from 0 to 49,
+queries are limited to 300 characters without control characters, and
+invalid inputs raise a `ValueError` without issuing a request. Each
+execution makes exactly one request. Timeout, connection, HTTP, and
+malformed response failures return a structured `error` object that
+includes the HTTP status and the API error message when available,
+instead of raising. Item texts arrive as HTML and are returned as
+bounded plain text; upstream titles, texts, and URLs are untrusted data
+rather than agent instructions.
