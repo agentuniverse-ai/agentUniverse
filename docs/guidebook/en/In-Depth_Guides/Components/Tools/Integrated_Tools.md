@@ -636,3 +636,45 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Feed Tool
+
+`FeedTool` reads RSS 2.0 (including RSS 1.0 / RDF) and Atom feeds from any
+public https feed URL over `httpx` — no API key or account is needed. The
+`headlines` mode returns the feed's title and link plus each item's title,
+link, publication date, and guid (bounded by `limit`, default 10, maximum
+50); the `item` mode returns the full record of one item — title, link,
+date, guid, and plain-text summary and content — selected by its 1-based
+`index` (as shown by `headlines`) or its `guid`. HTML carried inside
+descriptions and encoded content is stripped to plain text, and dates are
+normalized to ISO 8601 when possible.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.feed_tool import FeedTool
+
+tool = FeedTool()
+headlines = tool.execute(
+    mode="headlines", feed_url="https://blog.example.com/feed.xml", limit=10
+)
+post = tool.execute(
+    mode="item", feed_url="https://blog.example.com/feed.xml", index=1
+)
+same_post = tool.execute(
+    mode="item", feed_url="https://blog.example.com/feed.xml",
+    guid="https://blog.example.com/post-1",
+)
+```
+
+The fetch is hardened on every path: the feed URL must be https without
+credentials (invalid inputs raise a `ValueError` before any request is
+sent), redirects are followed manually for at most `max_redirects` (default
+3) hops and every hop is re-validated — a redirect that downgrades to
+`http://` or introduces credentials is refused; the response body is
+streamed and aborted as soon as it exceeds `max_bytes` (default 2 MiB); and
+any body containing `<!DOCTYPE` or `<!ENTITY` (checked case-insensitively
+before parsing, fail-closed even inside comments) is rejected, so DTD-based
+XXE and entity-expansion attacks never reach the stdlib XML parser. At most
+50 items are parsed per execution. Timeout, connection, HTTP, redirect,
+size-limit, DTD-rejected, and malformed-response failures return a
+structured `error` object instead of raising; an unknown item index or guid
+is reported as a regular `found: False` result rather than an error.
