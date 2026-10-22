@@ -67,4 +67,10 @@ class KIMIOpenAIStyleLLM(OpenAIStyleLLM):
         body = {"model": self.model_name, "messages": messages}
         headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.api_key}'}
         res = requests.post(f"{self.api_base}/tokenizers/estimate-token-count", headers=headers, json=body)
-        return res.json().get('data').get('total_tokens')
+        # Moonshot 错误载荷是 {"error": ...}（无 data 键）——链式 .get 会
+        # AttributeError 而非走兄弟类（llm.py/qwen/ollama）的优雅回退。
+        data = (res.json() or {}).get('data') or {}
+        total_tokens = data.get('total_tokens')
+        if total_tokens is None:
+            return len(text.split())
+        return total_tokens
