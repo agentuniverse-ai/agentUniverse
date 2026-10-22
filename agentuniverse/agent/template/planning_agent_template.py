@@ -34,7 +34,7 @@ class PlanningAgentTemplate(AgentTemplate):
 
         output = agent_result.get('output')
         output = parse_json_markdown(output)
-        final_result['framework'] = output.get('framework')
+        final_result['framework'] = output.get('framework') or []
         final_result['thought'] = output.get('thought', '')
 
         # add planning agent log info.
