@@ -5,7 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: graph.py
-from typing import Optional, Any
+from typing import Optional, Any, Callable
 
 import networkx as nx
 
@@ -68,11 +68,14 @@ class Graph(nx.DiGraph):
         self.add_edge(edge_config.get('source_node_id'), edge_config.get('target_node_id'),
                       source_handler=edge_config.get('source_handler'))
 
-    def run(self, workflow_output: WorkflowOutput) -> None:
+    def run(self, workflow_output: WorkflowOutput,
+            checkpoint_callback: Optional[Callable[[WorkflowOutput], None]] = None) -> None:
         """Run the graph.
 
         Args:
             workflow_output: The workflow output.
+            checkpoint_callback: Called with an isolated state snapshot after
+                every successfully completed node.
         """
         sorted_nodes = list(nx.topological_sort(self))
         predecessor_node: Node | None = None
@@ -83,7 +86,12 @@ class Graph(nx.DiGraph):
             if self._has_node_been_executed(workflow_output, next_node.id):
                 predecessor_node = next_node
                 continue
-            self._run_node(cur_node=next_node, workflow_output=workflow_output)
+            node_output = self._run_node(
+                cur_node=next_node,
+                workflow_output=workflow_output,
+            )
+            if checkpoint_callback and node_output.status == NodeStatusEnum.SUCCEEDED:
+                checkpoint_callback(workflow_output.model_copy(deep=True))
             if next_node.type == NodeEnum.END:
                 break
             predecessor_node = next_node
@@ -134,7 +142,7 @@ class Graph(nx.DiGraph):
 
     @staticmethod
     def _run_node(cur_node: Node = None,
-                  workflow_output: WorkflowOutput = None) -> None:
+                  workflow_output: WorkflowOutput = None) -> NodeOutput:
         """Run the node in the graph.
 
         Args:
@@ -143,3 +151,4 @@ class Graph(nx.DiGraph):
         """
         node_output = cur_node.run(workflow_output)
         workflow_output.workflow_node_results[cur_node.id] = node_output
+        return node_output
