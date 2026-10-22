@@ -808,6 +808,49 @@ class SqliteInspectOracleTest(unittest.TestCase):
         self.assertGreater(surfaced, 0, "at least one flipped byte must surface an integrity problem")
 
 
+class SqliteInspectHostileReviewRegressionTest(unittest.TestCase):
+    """Regressions found by a fresh hostile probe battery (independent seeds and oracles)."""
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.tool = SqliteInspectTool(base_dir=self.directory.name)
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def make(self, name, script, **kwargs):
+        path = os.path.join(self.directory.name, name)
+        build_database(path, script, **kwargs)
+        return path
+
+    def test_column_level_integer_pk_desc_is_flagged_nullable(self):
+        """Column-level 'INTEGER PRIMARY KEY DESC' is not a rowid alias; the engine stores NULLs, so audit must flag it."""
+        path = self.make("desc.db", "CREATE TABLE t (a INTEGER PRIMARY KEY DESC, v TEXT);")
+        # Prove the footgun is real: two rows with NULL in the PRIMARY KEY column.
+        conn = sqlite3.connect(path)
+        conn.execute("INSERT INTO t (v) VALUES ('x'), ('y')")
+        stored = conn.execute("SELECT a FROM t").fetchall()
+        conn.commit()
+        conn.close()
+        self.assertEqual(stored, [(None,), (None,)])
+        result = self.tool.execute(mode="audit", db_path="desc.db")
+        finding = next(f for f in result["findings"] if f["code"] == "nullable_primary_key_column")
+        self.assertEqual(finding["table"], "t")
+        self.assertEqual(finding["columns"], ["a"])
+
+    def test_rowid_alias_variants_still_not_flagged(self):
+        """ASC / AUTOINCREMENT / table-level PRIMARY KEY(a DESC) all alias the rowid and stay clean."""
+        self.make(
+            "alias.db",
+            "CREATE TABLE a1 (a INTEGER PRIMARY KEY ASC, v TEXT);"
+            "CREATE TABLE a2 (a INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT);"
+            "CREATE TABLE a3 (a INTEGER, v TEXT, PRIMARY KEY (a DESC));"
+            "CREATE TABLE a4 (a INTEGER, v TEXT, PRIMARY KEY (a));",
+        )
+        result = self.tool.execute(mode="audit", db_path="alias.db")
+        self.assertNotIn("nullable_primary_key_column", [f["code"] for f in result["findings"]])
+
+
 class SqliteInspectRegistrationTest(unittest.TestCase):
     """Unit tests for registering the shipped sqlite_inspect_tool.yaml as a tool component."""
 

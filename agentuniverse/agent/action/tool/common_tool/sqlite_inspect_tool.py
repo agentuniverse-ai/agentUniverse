@@ -60,6 +60,12 @@ class SqliteInspectTool(Tool):
         re.compile(r"\bUPDATE\s+" + _IDENT + r"\s+SET", re.IGNORECASE),
         re.compile(r"\bDELETE\s+FROM\s+" + _IDENT, re.IGNORECASE),
     )
+    # Column-level "INTEGER PRIMARY KEY DESC" inside one declaration (no commas
+    # or parentheses in between, so a table-level PRIMARY KEY(a DESC) -- which
+    # IS a rowid alias -- never matches).
+    _INTEGER_PK_DESC: ClassVar[re.Pattern[str]] = re.compile(
+        r"\bINTEGER\b[^,()]*\bPRIMARY\s+KEY\s+DESC\b", re.IGNORECASE
+    )
 
     def execute(self, mode: str, db_path: str) -> dict[str, Any]:
         """Inspect ``db_path`` with one of the four modes and return a structured result."""
@@ -359,8 +365,9 @@ class SqliteInspectTool(Tool):
                         "table": name,
                         "columns": nullable,
                         "detail": (
-                            "PRIMARY KEY column(s) without NOT NULL: SQLite permits NULL in non-INTEGER "
-                            "PRIMARY KEY columns of rowid tables, so duplicates of NULL can be stored."
+                            "PRIMARY KEY column(s) without NOT NULL: SQLite permits NULL in non-alias "
+                            "PRIMARY KEY columns of rowid tables (any non-INTEGER type, or the column-level "
+                            "'INTEGER PRIMARY KEY DESC' quirk), so duplicates of NULL can be stored."
                         ),
                     }
                 )
@@ -403,8 +410,15 @@ class SqliteInspectTool(Tool):
             return []
         # An exactly-INTEGER single PRIMARY KEY on a rowid table aliases the
         # rowid, which the engine itself keeps non-null even though table_info
-        # reports notnull=0; that case is not a footgun.
-        if self._rowid_table(sql) and len(nullable) == 1 and nullable[0]["type"].strip().upper() == "INTEGER":
+        # reports notnull=0; that case is not a footgun. Documented exception:
+        # a column-level "INTEGER PRIMARY KEY DESC" declaration is NOT a rowid
+        # alias, so the engine stores NULLs (and duplicate NULLs) in it.
+        if (
+            self._rowid_table(sql)
+            and len(nullable) == 1
+            and nullable[0]["type"].strip().upper() == "INTEGER"
+            and not (sql and self._INTEGER_PK_DESC.search(sql))
+        ):
             return []
         return nullable
 
