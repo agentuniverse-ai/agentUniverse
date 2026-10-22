@@ -16,6 +16,11 @@ class ServerApplication:
 
     @classmethod
     def start(cls):
+        """Start the multimodal server application.
+
+        Bootstraps the AgentUniverse runtime and starts the embedded web
+        server to serve the agent application over HTTP.
+        """
         AgentUniverse().start()
         start_web_server()
 
