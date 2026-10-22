@@ -28,6 +28,8 @@ metrics:
   - assets
   - liabilities
   - equity
+# Currency normalization converts monetary amounts, including EPS.
+# Percentages (margins, returns, shares and rates) and debt ratios stay unchanged.
 metadata:
   type: 'DOC_PROCESSOR'
   module: 'agentuniverse.agent.action.knowledge.doc_processor.financial_indicator_extractor'
