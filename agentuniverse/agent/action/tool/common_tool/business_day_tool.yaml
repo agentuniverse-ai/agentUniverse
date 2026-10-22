@@ -1,0 +1,83 @@
+name: business_day_tool
+description: "Business day tool — pure Python stdlib workday arithmetic, no network required. Add or subtract N business days from a date (mode='add', N=0 returns the input unchanged), count business days between two dates with inclusive or exclusive ends (mode='count'), test whether a date is a business day with a weekend/holiday reason and echoed holiday name (mode='is_business'), and find the next business day strictly after a date or the same day when already business (mode='next'). Weekends are configurable (sat_sun default, fri_sat for MENP markets, sun_only rare) and holidays are supplied as a list of ISO dates or a {date: name} mapping."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.business_day_tool
+  class: BusinessDayTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — add, count, is_business or next.
+    required: true
+  date_str:
+    type: string
+    description: Reference date (YYYY-MM-DD). Required for the add, is_business and next modes; not used by count.
+    required: false
+  days:
+    type: integer
+    description: Business days to add — negative walks backwards, 0 returns the input date unchanged; bounded to ±3650. Required for the add mode; integer strings accepted.
+    required: false
+  start_date:
+    type: string
+    description: Count mode start date (YYYY-MM-DD); must not be after end_date.
+    required: false
+  end_date:
+    type: string
+    description: Count mode end date (YYYY-MM-DD).
+    required: false
+  holidays:
+    type: array
+    description: "Holiday calendar — a list of YYYY-MM-DD strings or a {date: name} mapping whose names the is_business verdict echoes; accepted by every mode, at most 1000 entries."
+    required: false
+  weekend:
+    type: string
+    description: Weekend preset — sat_sun (default), fri_sat (MENP markets) or sun_only (rare), case-insensitive.
+    required: false
+  include_ends:
+    type: boolean
+    description: Count mode — count both endpoints (default true) or only the strictly-between span (false excludes both endpoints).
+    required: false
+  same_day:
+    type: boolean
+    description: Next mode — when true a date already a business day is returned unchanged; default false always returns a day strictly after.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["add", "count", "is_business", "next"]
+      description: Business-day operation.
+    date_str:
+      type: string
+      format: date
+      description: Reference ISO date (add, is_business, next modes).
+    days:
+      type: integer
+      minimum: -3650
+      maximum: 3650
+      description: Business-day offset (add mode); 0 returns the input unchanged.
+    start_date:
+      type: string
+      format: date
+      description: Span start (count mode).
+    end_date:
+      type: string
+      format: date
+      description: Span end (count mode).
+    holidays:
+      description: "Holiday calendar — list of ISO dates or {date: name} mapping."
+    weekend:
+      type: string
+      enum: ["sat_sun", "fri_sat", "sun_only"]
+      description: Weekend preset.
+    include_ends:
+      type: boolean
+      description: Count both endpoints (true, default) or strictly-between only (false).
+    same_day:
+      type: boolean
+      description: Return the input itself when it is already a business day (next mode).
+  required: ["mode"]
