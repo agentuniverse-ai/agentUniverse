@@ -1,0 +1,7 @@
+name: 'prompt_injection_guard'
+description: 'filter or annotate common prompt injection markers in recalled documents'
+mode: 'filter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.prompt_injection_guard'
+  class: 'PromptInjectionGuard'

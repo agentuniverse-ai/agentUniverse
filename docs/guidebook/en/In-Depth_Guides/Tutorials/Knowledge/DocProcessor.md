@@ -82,6 +82,29 @@ doc_processor = ['sample_standard_app.intelligence.agentic.knowledge.doc_process
 
 
 ## The following DocProcessors are built into agentUniverse:
+
+### [PromptInjectionGuard](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/prompt_injection_guard.yaml)
+
+`PromptInjectionGuard` is a deterministic defense-in-depth check for recalled
+content. In its default `filter` mode it removes Documents matching common
+instruction-override or hidden-prompt-exfiltration patterns. In `annotate` mode
+it keeps the Document and adds `security_flags: [prompt_injection]` plus a
+`prompt_injection_detected` metadata flag for auditing.
+
+```yaml
+name: 'prompt_injection_guard'
+description: 'filter or annotate common prompt injection markers in recalled documents'
+mode: 'filter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.prompt_injection_guard'
+  class: 'PromptInjectionGuard'
+```
+
+The component is heuristic rather than a complete security boundary. Keep
+untrusted content separate from executable agent instructions, and provide
+application-specific `patterns` when a domain needs additional coverage.
+
 ### [CharacterTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/character_text_splitter.yaml)
 This component splits the original text based on the number of characters.
 The component definition file is as follows:
