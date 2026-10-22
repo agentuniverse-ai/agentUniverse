@@ -1,0 +1,62 @@
+name: identifier_split_tool
+description: Identifier split tool — extract the words inside code identifiers, pure Python stdlib, no network. mode='split' splits an identifier into words with acronyms preserved (HTTPServer -> [HTTP, Server], XMLHttpRequest -> [XML, Http, Request], utf8Decode -> [utf8, Decode], base64 -> [base64]) and detects the style (camel/pascal/snake/kebab/screaming_snake/mixed), mode='rejoin' joins a word list back into snake/kebab/camel/pascal/constant (screaming) style — CaseConverterTool covers full text case conversions, mode='is_identifier' checks the ASCII identifier grammar ^[A-Za-z_][A-Za-z0-9_]*$ with a Python keyword flag, and mode='batch_split' splits a symbol list and builds a lowercased word vocabulary with counts. Round-trip identity lower(split(rejoin(words, style))) equals lower(words) on canonical identifiers.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.identifier_split_tool
+  class: IdentifierSplitTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — split, rejoin, is_identifier or batch_split.
+    required: true
+  identifier:
+    type: string
+    description: The identifier to split. Required for the split mode; non-empty, ASCII letters/digits/underscore/dash only.
+    required: false
+  words:
+    type: array
+    description: The word list to re-join. Required for the rejoin mode; 1..N non-empty items, each ASCII letters/digits/underscore/dash only.
+    required: false
+  style:
+    type: string
+    description: Target style for the rejoin mode — snake, kebab, camel, pascal, constant or screaming (constant's synonym).
+    required: false
+  text:
+    type: string
+    description: The string to check. Required for the is_identifier mode; any string (emptiness and invalid characters are reported, not raised).
+    required: false
+  identifiers:
+    type: array
+    description: The symbol list to split. Required for the batch_split mode; items failing identifier validation yield structured per-item errors instead of aborting.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["split", "rejoin", "is_identifier", "batch_split"]
+      description: Operation mode.
+    identifier:
+      type: string
+      description: Identifier to split (split mode).
+    words:
+      type: array
+      items:
+        type: string
+      description: Word list to re-join (rejoin mode).
+    style:
+      type: string
+      enum: ["snake", "kebab", "camel", "pascal", "constant", "screaming"]
+      description: Target style (rejoin mode).
+    text:
+      type: string
+      description: String to check (is_identifier mode).
+    identifiers:
+      type: array
+      items:
+        type: string
+      description: Symbol list to split (batch_split mode).
+  required: ["mode"]
