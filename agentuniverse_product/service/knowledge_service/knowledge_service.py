@@ -239,7 +239,8 @@ class KnowledgeService:
         except Exception as e:
             raise e
         stores = knowledge.stores
-        stores.append(knowledge_store_name)
+        if knowledge_store_name not in stores:
+            stores.append(knowledge_store_name)
         knowledge.insert_knowledge(source_path=file_location, stores=[knowledge_store_name])
 
         return True
