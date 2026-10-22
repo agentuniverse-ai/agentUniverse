@@ -1,0 +1,11 @@
+name: pdf_annotation_reader
+description: Read-only PDF review comments with raw page-space anchors
+max_file_bytes: 32000000
+max_pages: 2000
+max_annotations: 20000
+max_document_chars: 200000
+max_total_chars: 10000000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.pdf_annotation_reader
+  class: PdfAnnotationReader
