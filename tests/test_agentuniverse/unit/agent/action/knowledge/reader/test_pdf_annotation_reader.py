@@ -263,4 +263,3 @@ def test_user_unit_and_multiple_quads(tmp_path):
     writer.write(path)
     info = PdfAnnotationReader().load_data(path)[0].metadata["pdf_annotation"]
     assert info["user_unit"] == 2 and info["quad_points"] == quads
-
