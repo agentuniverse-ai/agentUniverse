@@ -1,0 +1,32 @@
+name: fraction_tool
+description: Parse, compute with, and convert exact rational numbers with mixed-number, vulgar-fraction, and repeating-decimal support.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.fraction_tool
+  class: FractionTool
+input_keys:
+  - mode
+  - value
+max_input_length: 10000
+max_expression_length: 10000
+max_operations: 10000
+max_parse_depth: 200
+max_digits: 30
+max_digits_limit: 10000
+max_period: 10000
+max_denominator: 1000000
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [parse, compute, to_decimal, to_fraction, compare]
+    value: {type: string}
+    expression: {type: string}
+    other: {type: string}
+    max_digits: {type: integer, minimum: 1}
+    max_denominator: {type: integer, minimum: 1}
+    normalize: {type: boolean, default: false}
+  required: [mode]
+  additionalProperties: false

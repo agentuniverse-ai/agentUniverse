@@ -649,3 +649,23 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## FractionTool
+
+`FractionTool` provides exact rational arithmetic for agent workflows: `parse` ('3/4', mixed numbers '1 1/2' and '-2 3/8', Unicode vulgar fractions '½ ⅓ ⅔ ¾ ⅕..⅞', decimals, and scientific notation), `compute` for expressions over `+ - * /` with parentheses and unary minus, decimal/fraction conversion with repeating-decimal support, and `compare`. All arithmetic uses the standard library's `fractions.Fraction`, so results carry no floating-point error.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.fraction_tool import FractionTool
+
+tool = FractionTool()
+tool.execute("parse", value="1 1/2")                   # normalized '3/2', form 'mixed'
+tool.execute("compute", expression="(1/2 + 3/4) * 2")  # exact '5/2' plus per-operation steps
+tool.execute("to_decimal", value="22/7")               # '3.(142857)', period_length 6
+tool.execute("to_fraction", value="0.1(6)")            # exact '1/6'
+tool.execute("to_fraction", value=0.1)                 # best approximation '1/10' with error bound
+tool.execute("compare", value="1/3", other="0.3")
+```
+
+Rules worth knowing: a negative sign in a mixed number applies to the whole value wherever it sits ('2 -1/2' equals '-2 1/2', both -5/2, and the response notes the applied rule); zero denominators are rejected; leading zeros are accepted; non-ASCII digits require `normalize=True`; floats enter through `Fraction(float).limit_denominator(max_denominator)` (default 1000000) and the response reports the exact error bound of that approximation. In expressions an unspaced 'a/b' reads as one fraction literal, except inside a division chain, where '/' binds left-associatively ('3.75 / 80/45' equals '(3.75 / 80) / 45').
+
+`to_decimal` reports the repetend, the cycle start, and the number-theoretic period length — the multiplicative order of 10 modulo the denominator after removing the factors 2 and 5. Expansions longer than `max_digits` are truncated and flagged, and the period search is capped at `max_period` (1/97 reports period 96; a denominator whose period exceeds the cap reports `period_capped` instead of searching unboundedly). Input lengths, expression length, operation count, nesting depth, digit counts, and denominator limits are all bounded; the tool is deterministic, offline, and standard-library only.
