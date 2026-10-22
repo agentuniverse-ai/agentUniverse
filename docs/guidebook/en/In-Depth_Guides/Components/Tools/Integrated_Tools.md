@@ -636,3 +636,33 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## YouTube Tool
+
+`YouTubeTool` searches YouTube videos and fetches their details over the
+official YouTube Data API v3. The `search` mode performs a keyword video
+search; the `videos` mode returns the title, duration, view / like / comment
+counts, tags, and other metadata for one video ID or a comma-separated list
+of up to 10 IDs.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.youtube_tool import YouTubeTool
+
+tool = YouTubeTool()
+results = tool.execute(mode="search", query="machine learning tutorial", max_results=5)
+details = tool.execute(mode="videos", video_id="dQw4w9WgXcQ")
+```
+
+Set the `YOUTUBE_API_KEY` environment variable before use. The key is held as
+a `SecretStr` and is never echoed in results or error payloads; every
+user-visible error string is additionally redacted against the raw key value
+as a defense in depth.
+
+All inputs are validated strictly before any network request is made: video
+IDs must be exactly 11 characters, `max_results` is bounded from 1 to 25, and
+invalid inputs raise a `ValueError` without issuing a request. Each execution
+makes exactly one request to the fixed https-only `googleapis.com` endpoint.
+Descriptions, tags, and error messages are bounded so the agent context stays
+compact. Timeout, connection, HTTP, rate-limit, JSON, and response-shape
+failures return a structured `error` object that includes the HTTP status and
+the API `reason` when available, instead of raising.

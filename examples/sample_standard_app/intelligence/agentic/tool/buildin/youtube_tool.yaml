@@ -1,24 +1,23 @@
 name: 'youtube_tool'
 description: |
-  该工具用于在 youtube 上检索视频和分析频道信息。工具支持三种操作模式：
-  1. 搜索相关视频：通过关键词搜索相关视频
-  2. 获取热榜视频：获取 youtube 热榜视频，可指定地区
-  3. 获取频道信息：通过频道 ID 获取频道名、订阅数、总播放量和视频数等信息
+  该工具基于 YouTube Data API v3 检索视频信息。工具支持两种操作模式：
+  1. 搜索视频：通过关键词搜索 youtube 视频
+  2. 获取视频详情：通过视频 ID 获取标题、时长、播放量、点赞数和评论数等统计信息
+
+  使用前需配置环境变量 YOUTUBE_API_KEY。
 
   工具输入示例：
     模式1 - 搜索视频：
-      input: "machine learning"
+      query: "machine learning"
       mode: "search"
+      max_results: 5
 
-    模式3 - 获取热榜视频：
-      input: "US"
-      mode: "trending"
-    
-    模式3 - 获取频道信息：
-      input: "UC_x5XG1OV2P6uZZ5FSM9Ttw" 
-      mode: "channel_info"
+    模式2 - 获取视频详情：
+      video_id: "dQw4w9WgXcQ"
+      mode: "videos"
+      （video_id 也支持逗号分隔的多个视频 ID，最多 10 个）
 tool_type: 'api'
-input_keys: ['mode', 'input']
+input_keys: ['mode']
 metadata:
   type: 'TOOL'
   module: 'agentuniverse.agent.action.tool.common_tool.youtube_tool'
