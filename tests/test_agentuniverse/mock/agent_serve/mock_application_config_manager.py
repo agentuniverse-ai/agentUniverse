@@ -11,7 +11,11 @@ BASE_INFO_APPNAME = "test_app"
 
 class MockAppConfiger:
 
+    """Mockappconfiger.
+    """
     def __init__(self):
+        """Initialize the __init__ instance.
+        """
         self.base_info_appname = BASE_INFO_APPNAME
 
 
@@ -19,4 +23,6 @@ class MockApplicationConfigManager:
     """Mock class of ApplicationConfigManager."""
 
     def __init__(self):
+        """Initialize the __init__ instance.
+        """
         self.app_configer = MockAppConfiger()
