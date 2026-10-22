@@ -38,7 +38,7 @@ class PlanningAgentTemplate(AgentTemplate):
         final_result['thought'] = output.get('thought', '')
 
         # add planning agent log info.
-        logger_info = f"\nPlanning agent execution result is :\n"
+        logger_info = "\nPlanning agent execution result is :\n"
         for index, one_framework in enumerate(final_result.get('framework')):
             logger_info += f"[{index + 1}] {one_framework} \n"
         LOGGER.info(logger_info)
@@ -61,7 +61,7 @@ class PlanningAgentTemplate(AgentTemplate):
             return
         try:
             output = parse_json_markdown(agent_output).get('framework')
-        except:
+        except Exception:
             output = agent_output
         # add planning agent final result into the stream output.
         stream_output(output_stream,

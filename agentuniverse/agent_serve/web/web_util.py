@@ -40,7 +40,7 @@ def request_param(func):
             req_data = request.args.to_dict()
         # Get the post params from body according to different content type.
         else:
-            if "application/json" in request.headers.get("Content-Type"):
+            if "application/json" in request.headers.get("Content-Type", ""):
                 raw_data = request.data.decode('utf-8')
                 req_data = json.loads(raw_data)
             else:

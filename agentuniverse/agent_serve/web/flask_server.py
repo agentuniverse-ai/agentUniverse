@@ -49,6 +49,7 @@ def _run_with_timeout(func, timeout):
     try:
         return executor.submit(func).result(timeout=timeout)
     finally:
+        # A timed-out call keeps running; joining it would delay the 504 response.
         executor.shutdown(wait=False)
 
 
