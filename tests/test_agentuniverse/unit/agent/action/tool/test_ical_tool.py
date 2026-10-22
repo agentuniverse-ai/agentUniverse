@@ -979,6 +979,140 @@ class IcalToolValidationAndCapsTest(unittest.TestCase):
                              self.tool.execute(mode=mode, text=text))
 
 
+class IcalToolHostileReviewFixesTest(unittest.TestCase):
+    """Regression tests for defects found by a hostile self-review pass.
+
+    Covers: max_components enforcement (was counted but never enforced),
+    WKST grammar, the RFC 5545 3.3.10 UNTIL zone-form clauses, COUNT=0
+    (grammar plus builtin/dateutil agreement), and the PERCENT-COMPLETE /
+    GEO value ranges.
+    """
+
+    def setUp(self):
+        self.tool = IcalTool()
+
+    def _many_events(self, count):
+        lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Cap//EN"]
+        for index in range(count):
+            lines += ["BEGIN:VEVENT", f"UID:cap-{index}@example.com",
+                      "DTSTAMP:19970901T130000Z", "END:VEVENT"]
+        lines.append("END:VCALENDAR")
+        return CRLF.join(lines) + CRLF
+
+    def test_max_components_enforced(self):
+        text = self._many_events(30)
+        result = IcalTool(max_components=5).execute(mode="parse", text=text)
+        # 1 VCALENDAR + 4 VEVENT = 5 kept; the rest are dropped.
+        self.assertEqual(result["stats"]["components"], {"VCALENDAR": 1, "VEVENT": 4})
+        self.assertTrue(result["stats"]["components_truncated"])
+        lint = IcalTool(max_components=5).execute(mode="lint", text=text)
+        self.assertIn("component_cap_reached", finding_codes(lint))
+        events = IcalTool(max_components=5).execute(mode="events", text=text)
+        self.assertEqual(events["event_count"], 4)
+        self.assertTrue(events["components_truncated"])
+        # The default cap leaves normal calendars untouched.
+        self.assertFalse(self.tool.execute(mode="parse", text=text)
+                         ["stats"]["components_truncated"])
+
+    def test_capped_subtree_still_balances_end_lines(self):
+        # max_components=1 keeps only the VCALENDAR; every nested component
+        # is skipped, and their END lines must balance without corrupting
+        # the stack (no unexpected_end / component_not_closed errors).
+        text = calendar_with_event_lines("DTSTART:19970903T163000Z",
+                                         "BEGIN:VALARM", "ACTION:DISPLAY",
+                                         "TRIGGER:-PT15M", "END:VALARM")
+        result = IcalTool(max_components=1).execute(mode="lint", text=text)
+        codes = finding_codes(result)
+        self.assertIn("component_cap_reached", codes)
+        for unexpected in ("unexpected_end", "component_not_closed",
+                           "component_end_mismatch"):
+            self.assertNotIn(unexpected, codes)
+        parse = IcalTool(max_components=1).execute(mode="parse", text=text)
+        calendar = parse["components"][0]
+        self.assertEqual(calendar["type"], "VCALENDAR")
+        self.assertEqual(calendar["components"], [])
+        # properties inside the skipped VEVENT are dropped with it
+        self.assertEqual([p["name"] for p in calendar["properties"]],
+                         ["VERSION", "PRODID"])
+
+    def test_wkst_grammar(self):
+        result = self.tool.execute(mode="lint", text=calendar_with_event_lines(
+            "DTSTART:19970903T163000Z", "RRULE:FREQ=WEEKLY;WKST=XX;COUNT=3"))
+        flagged = [f for f in result["findings"]
+                   if f["code"] == "rrule_invalid_value" and "WKST" in f["detail"]]
+        self.assertEqual(len(flagged), 1)
+        clean = self.tool.execute(mode="lint", text=calendar_with_event_lines(
+            "DTSTART:19970903T163000Z", "RRULE:FREQ=WEEKLY;WKST=SU;COUNT=3"))
+        self.assertTrue(clean["ok"], clean["findings"])
+
+    def test_until_zone_form_grammar(self):
+        # RFC 5545 3.3.10: floating DTSTART needs a local UNTIL; UTC/TZID
+        # DTSTART needs a UTC UNTIL (warning: the RFC's own 3.8.5.3
+        # illustrations mix these, so real-world files do too).
+        cases = [
+            ("DTSTART:19970902T090000", "RRULE:FREQ=DAILY;UNTIL=19971224T000000Z", True),
+            ("DTSTART:19970902T090000Z", "RRULE:FREQ=DAILY;UNTIL=19971224T000000Z", False),
+            ("DTSTART:19970902T090000Z", "RRULE:FREQ=DAILY;UNTIL=19971224T000000", True),
+            ("DTSTART:19970902T090000", "RRULE:FREQ=DAILY;UNTIL=19971224T000000", False),
+        ]
+        for dtstart, rrule, expect in cases:
+            result = self.tool.execute(mode="lint", text=calendar_with_event_lines(
+                dtstart, rrule))
+            flagged = "rrule_until_zone_form_mismatch" in finding_codes(result)
+            self.assertEqual(flagged, expect, (dtstart, rrule))
+
+    def test_until_zone_form_with_tzid(self):
+        vtimezone = ["BEGIN:VTIMEZONE", "TZID:Zone/One", "BEGIN:STANDARD",
+                     "DTSTART:19700101T000000", "TZOFFSETFROM:+0000",
+                     "TZOFFSETTO:+0000", "END:STANDARD", "END:VTIMEZONE"]
+        event_lines = ["BEGIN:VEVENT", "UID:zf@example.com",
+                       "DTSTAMP:19970901T130000Z",
+                       "DTSTART;TZID=Zone/One:19970902T090000",
+                       "RRULE:FREQ=DAILY;UNTIL=19971224T000000", "END:VEVENT"]
+        text = wrap(*vtimezone, *event_lines)
+        self.assertIn("rrule_until_zone_form_mismatch",
+                      finding_codes(self.tool.execute(mode="lint", text=text)))
+        fixed = text.replace("UNTIL=19971224T000000", "UNTIL=19971224T000000Z")
+        self.assertNotIn("rrule_until_zone_form_mismatch",
+                         finding_codes(self.tool.execute(mode="lint", text=fixed)))
+
+    def test_count_zero_flagged_and_engines_agree(self):
+        result = self.tool.execute(mode="lint", text=calendar_with_event_lines(
+            "DTSTART:19970903T163000Z", "RRULE:FREQ=DAILY;COUNT=0"))
+        self.assertIn("rrule_invalid_value", finding_codes(result))
+        parsed = ical_tool_module._parse_rrule("FREQ=DAILY;COUNT=0")
+        builtin = ical_tool_module._builtin_occurrences(
+            parsed["normalized"], datetime(1997, 9, 2, 9, 0), 4, 5000)
+        if DATEUTIL_AVAILABLE:
+            dateutil_result = ical_tool_module._dateutil_occurrences(
+                parsed["normalized"], datetime(1997, 9, 2, 9, 0), 4)
+            self.assertEqual([o.isoformat() for o in builtin["occurrences"]],
+                             [o.isoformat() for o in dateutil_result["occurrences"]])
+
+    def test_percent_complete_range(self):
+        for raw, bad in (("PERCENT-COMPLETE:101", True),
+                         ("PERCENT-COMPLETE:100", False),
+                         ("PERCENT-COMPLETE:0", False),
+                         ("PERCENT-COMPLETE:abc", True)):
+            result = self.tool.execute(mode="lint", text=calendar_with_event_lines(
+                "DTSTART:19970903T163000Z", raw))
+            errors = [f["code"] for f in result["findings"]
+                      if f["severity"] == "error"]
+            self.assertEqual("value_out_of_range" in errors, bad, raw)
+
+    def test_geo_grammar(self):
+        for raw, bad in (("GEO:37.386013;-122.082932", False),
+                         ("GEO:+37.4;-122.0", False),
+                         ("GEO:abc", True),
+                         ("GEO:37.386013", True),
+                         ("GEO:37.386013,-122.082932", True)):
+            result = self.tool.execute(mode="lint", text=calendar_with_event_lines(
+                "DTSTART:19970903T163000Z", raw))
+            errors = [f["code"] for f in result["findings"]
+                      if f["severity"] == "error"]
+            self.assertEqual("invalid_geo" in errors, bad, raw)
+
+
 class IcalToolRegistrationTest(unittest.TestCase):
     """Registration tests for the shipped ical_tool.yaml."""
 

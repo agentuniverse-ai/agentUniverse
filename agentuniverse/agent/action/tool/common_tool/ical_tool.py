@@ -19,9 +19,12 @@ required:
                that read like new properties, missing required properties per
                component, DATE vs DATE-TIME form mismatches, TZID parameters
                without a matching VTIMEZONE, RRULE grammar (FREQ required,
-               COUNT+UNTIL mutually exclusive, UNTIL form must match DTSTART
-               form), value-type checks (PRIORITY 0-9, SEQUENCE non-negative
-               integer, CALSCALE), parameter quoting, and TEXT escapes.
+               COUNT+UNTIL mutually exclusive, COUNT/INTERVAL positive
+               integers, WKST a weekday, UNTIL form must match DTSTART form
+               and its UTC-ness must match DTSTART's zone form), value-type
+               checks (PRIORITY 0-9, PERCENT-COMPLETE 0-100, SEQUENCE
+               non-negative integer, CALSCALE, GEO two floats), parameter
+               quoting, and TEXT escapes.
 * ``events`` - normalized event list: ISO-normalized start/end, all-day
                detection, implied end resolution (DTEND, DURATION, next
                calendar date for DATE values, same instant per RFC 5545
@@ -38,6 +41,10 @@ Semantics notes:
 * Line breaks: RFC 5545 requires CRLF. Bare LF (and bare CR) input is
   accepted so real-world files parse, and lint reports it as an information
   finding (``non_crlf_line_break``) or a warning (``mixed_line_endings``).
+* The ``max_components`` cap is enforced on the returned tree: components
+  beyond the cap (and their content) are dropped with a single
+  ``component_cap_reached`` warning, and parse/events surface
+  ``components_truncated``.
 * Determinism: no wall-clock reads anywhere. Recurrence occurrences are
   generated forward from DTSTART, never from "now"; caps and scan bounds are
   fixed constants; findings are emitted in line order.
@@ -181,6 +188,9 @@ _DURATION_RE = re.compile(
     r"(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$"
 )
 _TZOFFSET_RE = re.compile(r"^[+-]\d{4}(\d{2})?$")
+_GEO_RE = re.compile(
+    r"^[+-]?(?:\d+(?:\.\d+)?|\.\d+);[+-]?(?:\d+(?:\.\d+)?|\.\d+)$"
+)
 _BYDAY_ITEM_RE = re.compile(r"^([+-]?\d{1,2})?(MO|TU|WE|TH|FR|SA|SU)$")
 _LOOKS_LIKE_PROPERTY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*:")
 _INT_RE = re.compile(r"^\d+$")
@@ -550,7 +560,7 @@ def _parse_rrule(raw: str) -> dict[str, Any]:
             "code": "rrule_count_until_exclusive", "severity": "error",
             "message": "RRULE specifies both COUNT and UNTIL (RFC 5545 3.3.10: they MUST NOT occur in the same rule).",
         })
-    if "COUNT" in parts and not _INT_RE.match(parts["COUNT"]):
+    if "COUNT" in parts and (not _INT_RE.match(parts["COUNT"]) or int(parts["COUNT"]) < 1):
         findings.append({
             "code": "rrule_invalid_value", "severity": "error",
             "detail": f"COUNT={parts['COUNT']}",
@@ -561,6 +571,12 @@ def _parse_rrule(raw: str) -> dict[str, Any]:
             "code": "rrule_invalid_value", "severity": "error",
             "detail": f"INTERVAL={parts['INTERVAL']}",
             "message": "RRULE INTERVAL must be a positive integer (RFC 5545 3.3.10).",
+        })
+    if "WKST" in parts and parts["WKST"] not in _WEEKDAY_NAMES:
+        findings.append({
+            "code": "rrule_invalid_value", "severity": "error",
+            "detail": f"WKST={parts['WKST']}",
+            "message": "RRULE WKST must be a weekday name MO..SU (RFC 5545 3.3.10).",
         })
     byday: list[str] = []
     if "BYDAY" in parts:
@@ -686,7 +702,9 @@ def _builtin_occurrences(
     if unsupported:
         return {"occurrences": [], "unsupported": unsupported, "hit_scan_cap": False}
 
-    limit_count = rule.get("COUNT")
+    # COUNT=0 is invalid grammar (lint flags it); both engines read it as
+    # unbounded so the answer stays deterministic instead of half-empty.
+    limit_count = rule.get("COUNT") or None
     until = rule.get("UNTIL") if isinstance(rule.get("UNTIL"), dict) else None
     until_date = until.get("date") if until else None
     until_datetime = until.get("datetime") if until else None
@@ -907,6 +925,7 @@ def _build_components(
     findings: list[dict[str, Any]] = list(anomalies)
     truncated = False
     component_count = 0
+    cap_reported = False
     for position, entry in enumerate(logical_lines, 1):
         raw = entry["text"]
         if raw == "":
@@ -935,13 +954,29 @@ def _build_components(
             findings.append(issue)
         value = parsed["value"]
         if name_upper == "BEGIN":
+            component_count += 1
+            if component_count > max_components:
+                # Enforce the cap: the component and everything inside it are
+                # dropped from the tree; a single finding discloses the cut.
+                truncated = True
+                if not cap_reported:
+                    findings.append({
+                        "code": "component_cap_reached", "severity": "warning",
+                        "line": position, "detail": value.upper(),
+                        "message": (
+                            f"Calendar has more than max_components={max_components} "
+                            f"components; BEGIN:{value.upper()} (logical line "
+                            f"{position}) and everything after it are dropped "
+                            "from the returned tree."
+                        ),
+                    })
+                    cap_reported = True
+                stack.append({"_skipped": True})
+                continue
             node = {
                 "type": value.upper(), "raw_type": value, "line": position,
                 "end_line": None, "properties": [], "components": [],
             }
-            component_count += 1
-            if component_count > max_components:
-                truncated = True
             if stack:
                 stack[-1]["components"].append(node)
             else:
@@ -967,6 +1002,9 @@ def _build_components(
                 })
                 continue
             top = stack[-1]
+            if top.get("_skipped"):
+                stack.pop()
+                continue
             if top["type"] != expected:
                 findings.append({
                     "code": "component_end_mismatch", "severity": "error",
@@ -986,8 +1024,10 @@ def _build_components(
             "name": name_upper, "raw_name": parsed["name"],
             "params": parsed["params"], "value": value, "line": position,
         }
-        if stack:
+        if stack and not stack[-1].get("_skipped"):
             stack[-1]["properties"].append(prop)
+        elif stack:
+            continue  # inside a capped-out component: dropped with the cap finding
         else:
             findings.append({
                 "code": "content_outside_vcalendar", "severity": "error",
@@ -995,6 +1035,8 @@ def _build_components(
                 "message": f"Property {name_upper} appears outside any component (RFC 5545 3.4).",
             })
     for node in stack:
+        if node.get("_skipped"):
+            continue
         findings.append({
             "code": "component_not_closed", "severity": "error",
             "line": node["line"], "detail": node["type"],
@@ -1120,6 +1162,7 @@ def _walk_semantic_lint(
                         ),
                     })
         dtstart_form = None
+        dtstart_zone = None
         dtstart_line = node["line"]
         dtend_form = None
         for prop in node["properties"]:
@@ -1133,6 +1176,11 @@ def _walk_semantic_lint(
                     if name == "DTSTART":
                         if _parse_ical_datetime(piece).get("ok"):
                             dtstart_form = "DATE-TIME"
+                            dtstart_zone = (
+                                "utc" if piece.endswith("Z")
+                                else "tzid" if prop["params"].get("TZID")
+                                else "floating"
+                            )
                         elif _parse_ical_date(piece).get("ok"):
                             dtstart_form = "DATE"
                         dtstart_line = prop["line"]
@@ -1167,6 +1215,19 @@ def _walk_semantic_lint(
                         "line": prop["line"], "property": name, "detail": raw[:20],
                         "message": f"PRIORITY must be an integer 0..9, got '{raw[:20]}' (RFC 5545 3.8.1.9).",
                     })
+            elif name == "PERCENT-COMPLETE":
+                if not _INT_RE.match(raw) or not 0 <= int(raw) <= 100:
+                    findings.append({
+                        "code": "value_out_of_range", "severity": "error",
+                        "line": prop["line"], "property": name, "detail": raw[:20],
+                        "message": f"PERCENT-COMPLETE must be an integer 0..100, got '{raw[:20]}' (RFC 5545 3.8.2.8).",
+                    })
+            elif name == "GEO" and not _GEO_RE.match(raw):
+                findings.append({
+                    "code": "invalid_geo", "severity": "error",
+                    "line": prop["line"], "property": name, "detail": raw[:40],
+                    "message": f"GEO value '{raw[:40]}' is not two semicolon-separated decimal floats (RFC 5545 3.8.1.6).",
+                })
             elif name == "SEQUENCE" and not _INT_RE.match(raw):
                 findings.append({
                     "code": "value_out_of_range", "severity": "error",
@@ -1224,6 +1285,37 @@ def _walk_semantic_lint(
                             "this is the classic interoperability bug (RFC 5545 3.3.10)."
                         ),
                     })
+                elif (isinstance(until, dict) and until.get("form") == "DATE-TIME"
+                        and dtstart_form == "DATE-TIME" and dtstart_zone is not None):
+                    # RFC 5545 3.3.10: a floating DTSTART needs a local UNTIL;
+                    # a UTC or TZID DTSTART needs a UTC UNTIL. Warning, not
+                    # error: real-world files (and the RFC's own 3.8.5.3
+                    # illustrations) mix these constantly.
+                    until_utc = bool(until.get("utc"))
+                    if dtstart_zone == "floating" and until_utc:
+                        findings.append({
+                            "code": "rrule_until_zone_form_mismatch",
+                            "severity": "warning", "line": prop["line"],
+                            "property": "RRULE", "component": ctype,
+                            "detail": "floating DTSTART with UTC UNTIL",
+                            "message": (
+                                "DTSTART is a date-time with local time (floating), so "
+                                "RRULE UNTIL must also be local time, but it ends with "
+                                "'Z' (RFC 5545 3.3.10)."
+                            ),
+                        })
+                    elif dtstart_zone in ("utc", "tzid") and not until_utc:
+                        findings.append({
+                            "code": "rrule_until_zone_form_mismatch",
+                            "severity": "warning", "line": prop["line"],
+                            "property": "RRULE", "component": ctype,
+                            "detail": f"{dtstart_zone} DTSTART with non-UTC UNTIL",
+                            "message": (
+                                "DTSTART is a date-time with UTC time or a time zone "
+                                "reference, so RRULE UNTIL must be UTC time (end with "
+                                "'Z'), but it does not (RFC 5545 3.3.10)."
+                            ),
+                        })
             if prop["raw_name"].upper().startswith("X-"):
                 findings.append({
                     "code": "x_property", "severity": "info",
@@ -1432,7 +1524,7 @@ class IcalTool(Tool):
 
     def _parse(self, text: str) -> dict[str, Any]:
         prepared = self._prepare(text)
-        roots, findings, _ = self._assemble(prepared)
+        roots, findings, components_truncated = self._assemble(prepared)
         all_folds = prepared["unfolded"]["fold_sites"]
         component_counts: dict[str, int] = {}
         property_count = 0
@@ -1457,6 +1549,7 @@ class IcalTool(Tool):
                 "components": component_counts,
                 "properties": property_count,
                 "max_logical_line_octets": max_octets,
+                "components_truncated": components_truncated,
             },
             "structure_findings": [f for f in findings if f["severity"] == "error"],
             "notes": [
@@ -1532,7 +1625,7 @@ class IcalTool(Tool):
 
     def _events(self, text: str, occurrence_cap: int) -> dict[str, Any]:
         prepared = self._prepare(text)
-        roots, _, _ = self._assemble(prepared)
+        roots, _, components_truncated = self._assemble(prepared)
         events: list[dict[str, Any]] = []
         truncated = False
         for node in _iter_components(roots):
@@ -1548,6 +1641,7 @@ class IcalTool(Tool):
             "events": events,
             "event_count": len(events),
             "truncated": truncated,
+            "components_truncated": components_truncated,
             "notes": [
                 "Deterministic: occurrences are generated forward from DTSTART, "
                 "never from the wall clock; identical input yields identical output.",
