@@ -1,0 +1,18 @@
+# !/usr/bin/env python3
+# -*- coding:utf-8 -*-
+
+name: 'recall_redactor'
+description: '召回侧兜底脱敏：二次清洗检索结果；log_key 为空，不覆盖入库时记录的 redaction_summary。'
+entities:
+    - email
+    - phone
+    - credit_card
+    - id_card
+    - ip_address
+replacement: '[REDACTED]'
+custom_patterns: []
+log_key: null
+metadata:
+    type: 'DOC_PROCESSOR'
+    module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_data_redactor'
+    class: 'SensitiveDataRedactor'
