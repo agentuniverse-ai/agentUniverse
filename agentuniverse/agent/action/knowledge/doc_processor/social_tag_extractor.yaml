@@ -1,0 +1,22 @@
+name: 'social_tag_extractor'
+description: 'extract social-media markers (#hashtags, @mentions, $cashtags) with spans into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.social_tag_extractor'
+  class: 'SocialTagExtractor'
+
+# Maximum number of hits kept in the metadata 'social_tags' entry; must be
+# >= 1. tag_counts and top_hashtags always cover every hit found, even past
+# the cap.
+max_tags: 200
+
+# Number of most frequent hashtags written to metadata 'top_hashtags'
+# (ties broken alphabetically); 0 disables the entry. Must be >= 0.
+top_n: 10
+
+# Metadata keys the three entries are written to; '' disables the
+# respective entry.
+tags_key: 'social_tags'
+counts_key: 'tag_counts'
+top_hashtags_key: 'top_hashtags'
