@@ -37,6 +37,8 @@ class RedisVectorStore(Store):
     hnsw_ef_construction: int = 200
     client: Any = None
     async_client: Any = None
+    _index_ready: tuple[Any, tuple[Any, ...]] | None = None
+    _async_index_ready: tuple[Any, tuple[Any, ...]] | None = None
 
     _IDENTIFIER: ClassVar[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
     _PREFIX: ClassVar[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9:_-]+$")
@@ -177,26 +179,43 @@ class RedisVectorStore(Store):
         return "index already exists" in str(exc).lower()
 
     def _ensure_index(self, dimensions: int) -> None:
+        """Reuse successful setup for this client and index configuration.
+
+        Concurrent first uses may both try setup; an existing index is accepted.
+        An externally deleted index remains a search error until setup is reset
+        by replacing the client or creating a new store.
+        """
         if not self.create_index:
             self._index_command(dimensions)
             return
         connection = self._ensure_client()
+        command = tuple(self._index_command(dimensions))
+        ready = self._index_ready
+        if ready is not None and ready[0] is connection and ready[1] == command:
+            return
         try:
-            connection.execute_command(*self._index_command(dimensions))
+            connection.execute_command(*command)
         except Exception as exc:
             if not self._already_exists(exc):
                 raise
+        self._index_ready = (connection, command)
 
     async def _async_ensure_index(self, dimensions: int) -> None:
+        """Keep asynchronous readiness separate from the synchronous client."""
         if not self.create_index:
             self._index_command(dimensions)
             return
         connection = await self._ensure_async_client()
+        command = tuple(self._index_command(dimensions))
+        ready = self._async_index_ready
+        if ready is not None and ready[0] is connection and ready[1] == command:
+            return
         try:
-            await connection.execute_command(*self._index_command(dimensions))
+            await connection.execute_command(*command)
         except Exception as exc:
             if not self._already_exists(exc):
                 raise
+        self._async_index_ready = (connection, command)
 
     def _embedding_for_query(self, query: Query) -> list[float]:
         if query.embeddings:
