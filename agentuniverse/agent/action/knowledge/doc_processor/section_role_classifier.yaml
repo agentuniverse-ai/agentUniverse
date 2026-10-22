@@ -1,0 +1,8 @@
+name: 'section_role_classifier'
+description: 'Classify document sections by scholarly role (intro/method/results/discussion/conclusion and non-core roles) into metadata; fence-immune ATX heading detection, keyword + positional fallback classification, pure stdlib and offline'
+max_sections: 30
+positional_fallback: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.section_role_classifier'
+  class: 'SectionRoleClassifier'
