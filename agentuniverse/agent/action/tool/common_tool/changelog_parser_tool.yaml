@@ -1,0 +1,43 @@
+name: changelog_parser_tool
+description: Changelog parser tool — pure Python stdlib, no network required. Parses Keep-a-Changelog style markdown documents into structured releases (mode='parse': version headings '## [1.2.3]' / '## 1.2.3' / '## v1.2.3' plus [Unreleased], ISO dates, Added/Changed/Deprecated/Removed/Fixed/Security and free-form ### sections, flattened bullet entries with indent levels, yanked markers and link-reference URLs, latest flag on the first release listed), returns the newest semver release with its entries (mode='latest'), or the releases strictly after from_version up to and including to_version (mode='between').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.changelog_parser_tool
+  class: ChangelogParserTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Parse mode — parse (full releases list), latest (newest semver release only) or between (releases in the (from_version, to_version] semver range).
+    required: true
+  text:
+    type: string
+    description: The markdown changelog document to parse. Required for every mode.
+    required: false
+  from_version:
+    type: string
+    description: between mode only — a SemVer string (optional leading 'v'); only releases comparing strictly greater than it are returned.
+    required: false
+  to_version:
+    type: string
+    description: between mode only — a SemVer string (optional leading 'v'); releases up to and including it are returned. Must be strictly greater than from_version.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "latest", "between"]
+      description: Parse mode.
+    text:
+      type: string
+      description: The markdown changelog document to parse.
+    from_version:
+      type: string
+      description: Exclusive lower semver boundary (between mode).
+    to_version:
+      type: string
+      description: Inclusive upper semver boundary (between mode).
+  required: ["mode"]
