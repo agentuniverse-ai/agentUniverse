@@ -69,13 +69,13 @@ class AuConversationSummaryBufferMemory(ConversationSummaryBufferMemory):
         """
         if self.messages is None:
             return
-        # save system messages
-        for message in self.messages:
-            if message.type.lower() == ChatMessageEnum.SYSTEM.value:
-                self.moving_summary_buffer += message.content
-                self.messages.remove(message)
+        # save system messages（快照后过滤：遍历中 remove 会跳过相邻的 system 消息）
+        system_contents = [m.content for m in self.messages if (m.type or "").lower() == ChatMessageEnum.SYSTEM.value]
+        self.moving_summary_buffer += "".join(system_contents)
+        self.messages = [m for m in self.messages if (m.type or "").lower() != ChatMessageEnum.SYSTEM.value]
         # generate pairs of Human and AI conversation messages and save to the memory buffer
-        for i in range(0, len(self.messages), 2):
+        # 奇数长度（如末尾悬挂的用户提问）不再 IndexError——循环条件保护 i+1。
+        for i in range(0, len(self.messages) - 1, 2):
             inputs, outputs = self.generate_chat_messages(self.messages[i], self.messages[i + 1])
             self.save_context(inputs, outputs)
 
@@ -160,12 +160,11 @@ class AuConversationTokenBufferMemory(ConversationTokenBufferMemory):
         """
         if self.messages is None:
             return
-        # discard system messages
-        for message in self.messages:
-            if message.type.lower() == ChatMessageEnum.SYSTEM.value:
-                self.messages.remove(message)
+        # discard system messages（快照后过滤；未类型化消息的 type 可能为 None）
+        self.messages = [m for m in self.messages if (m.type or "").lower() != ChatMessageEnum.SYSTEM.value]
         # generate pairs of Human and AI conversation messages and save to the memory buffer
-        for i in range(0, len(self.messages), 2):
+        # 奇数长度（如末尾悬挂的用户提问）不再 IndexError——循环条件保护 i+1。
+        for i in range(0, len(self.messages) - 1, 2):
             inputs, outputs = self.generate_chat_messages(self.messages[i], self.messages[i + 1])
             self.save_context(inputs, outputs)
 
