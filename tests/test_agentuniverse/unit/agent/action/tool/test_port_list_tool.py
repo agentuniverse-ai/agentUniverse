@@ -185,6 +185,28 @@ class PortListParseTest(unittest.TestCase):
         self.assertEqual(result["ports_total"], 16)
         self.assertIn("overlap by 6 port(s)", json.dumps(result["infos"]))
 
+    def test_overlap_infos_report_contained_ranges(self):
+        """A range contained in an earlier wide range is reported too.
+
+        Regression: only sorted-adjacent pairs were compared, so for
+        '0-100,10-20,30-40' the 0-100/30-40 containment was silent.
+        """
+        result = self.tool.execute(mode="parse", spec="0-100,10-20,30-40")
+        messages = [i["message"] for i in result["infos"] if i["code"] == "overlap"]
+        self.assertEqual(len(messages), 2, messages)
+        self.assertIn("ranges 0-100 and 10-20 overlap by 11 port(s)", messages)
+        self.assertIn("ranges 0-100 and 30-40 overlap by 11 port(s)", messages)
+        four = self.tool.execute(mode="parse", spec="0-100,10-20,30-40,50-60")
+        self.assertEqual(len([i for i in four["infos"] if i["code"] == "overlap"]), 3)
+        chain = self.tool.execute(mode="parse", spec="1-5,4-8,7-10")
+        self.assertEqual(
+            [i["message"] for i in chain["infos"] if i["code"] == "overlap"],
+            [
+                "ranges 1-5 and 4-8 overlap by 2 port(s)",
+                "ranges 4-8 and 7-10 overlap by 2 port(s)",
+            ],
+        )
+
     def test_all_keyword_requires_opt_in(self):
         self.assertEqual(self.tool.execute(mode="parse", spec="all")["status"], "error")
         result = self.tool.execute(mode="parse", spec="all", allow_all=True)
@@ -726,6 +748,27 @@ class PortListExpandCheckTest(unittest.TestCase):
         self.assertEqual(full["ports"][0], 1)
         self.assertEqual(full["ports"][-1], 5000)
         self.assertEqual(len(set(full["ports"])), 5000)
+
+    def test_expand_overlapping_ranges_not_double_counted(self):
+        """The expand cap counts the expanded set, not summed range sizes.
+
+        Regression: overlapping/duplicate segments double-counted toward the
+        cap, so 50 copies of 6000-6099 (100 distinct ports) were rejected and
+        even '0-65535,0-65535' with include_full=true tripped the cap.
+        """
+        result = self.tool.execute(mode="expand", spec="80-90,85-95")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["total"], 16)
+        self.assertEqual(len(result["ports"]), 16)
+        duplicated = ",".join(["6000-6099"] * 50)
+        result = self.tool.execute(mode="expand", spec=duplicated)
+        self.assertEqual(result["status"], "success", "overlapping duplicates must not trip the cap")
+        self.assertEqual(result["total"], 100)
+        self.assertEqual(result["ports"], list(range(6000, 6100)))
+        full = self.tool.execute(mode="expand", spec="0-65535,0-65535", include_full=True)
+        self.assertEqual(full["status"], "success")
+        self.assertEqual(full["total"], 65536)
+        self.assertEqual(full["ports"], list(range(65536)))
 
     def test_check_blocked_and_allowed(self):
         result = self.tool.execute(

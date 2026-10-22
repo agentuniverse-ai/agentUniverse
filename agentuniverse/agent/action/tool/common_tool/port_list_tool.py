@@ -476,28 +476,37 @@ class PortListTool(Tool):
         ranges.append({"start": start, "end": end})
 
     def _overlap_infos(self, ranges: list[dict[str, int]]) -> list[dict[str, Any]]:
-        """Report duplicate and overlapping ranges with overlap arithmetic."""
+        """Report duplicate and overlapping ranges with overlap arithmetic.
+
+        Each range is compared against the widest range seen so far (the
+        running maximum end), so a range contained in an earlier wide range is
+        reported even when it does not overlap its sorted neighbour: for
+        ``0-100,10-20,30-40`` both ``10-20`` and ``30-40`` are reported against
+        ``0-100``.
+        """
         infos: list[dict[str, Any]] = []
         order = sorted(range(len(ranges)), key=lambda i: (ranges[i]["start"], ranges[i]["end"]))
         reported = 0
-        for position in range(len(order) - 1):
-            left = ranges[order[position]]
-            right = ranges[order[position + 1]]
-            if right["start"] > left["end"]:
-                continue
-            overlap = min(left["end"], right["end"]) - right["start"] + 1
-            if reported >= self.max_overlap_reports:
+        widest = -1
+        for position in order:
+            entry = ranges[position]
+            if widest >= 0 and entry["start"] <= ranges[widest]["end"]:
+                left = ranges[widest]
+                if reported >= self.max_overlap_reports:
+                    infos.append({
+                        "code": "overlap_report_truncated",
+                        "message": f"more than {self.max_overlap_reports} overlapping pairs; further pairs are counted only in ports_total",
+                    })
+                    break
+                overlap = min(left["end"], entry["end"]) - entry["start"] + 1
+                code = "duplicate_range" if (left["start"] == entry["start"] and left["end"] == entry["end"]) else "overlap"
                 infos.append({
-                    "code": "overlap_report_truncated",
-                    "message": f"more than {self.max_overlap_reports} overlapping pairs; further pairs are counted only in ports_total",
+                    "code": code,
+                    "message": f"ranges {left['start']}-{left['end']} and {entry['start']}-{entry['end']} overlap by {overlap} port(s)",
                 })
-                break
-            code = "duplicate_range" if (left["start"] == right["start"] and left["end"] == right["end"]) else "overlap"
-            infos.append({
-                "code": code,
-                "message": f"ranges {left['start']}-{left['end']} and {right['start']}-{right['end']} overlap by {overlap} port(s)",
-            })
-            reported += 1
+                reported += 1
+            if widest < 0 or entry["end"] > ranges[widest]["end"]:
+                widest = position
         if any(entry["start"] == MIN_PORT for entry in ranges):
             infos.append({
                 "code": "reserved_port_zero",
@@ -533,7 +542,10 @@ class PortListTool(Tool):
         parsed = self._parse_spec(spec, allow_all)
         if parsed["errors"]:
             return {"status": "error", "spec": spec, "errors": parsed["errors"]}
-        total = sum(r["end"] - r["start"] + 1 for r in parsed["ranges"])
+        ports = sorted(self._ranges_to_set(parsed["ranges"]))
+        # The cap applies to the expanded set, not the sum of range sizes:
+        # overlapping or duplicate ranges must not double-count toward it.
+        total = len(ports)
         cap = MAX_PORT + 1 if include_full else self.max_expand_ports
         if total > cap:
             return {
