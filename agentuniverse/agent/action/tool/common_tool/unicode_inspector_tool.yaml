@@ -1,0 +1,37 @@
+name: unicode_inspector_tool
+description: Unicode inspector tool — pure Python stdlib unicodedata, no network required. 'What is this character' inspection (mode='inspect') with per-character codepoint, name, category, bidirectional class, East Asian width, NFD decomposition and is-emoji-ish flag, capped at 100 characters with the total count; script-mix summary (mode='string_stats') with Latin/CJK/Hangul/Kana/Cyrillic/Greek/Arabic/Hebrew/digits/punctuation/symbols/whitespace counts plus the NFKC form and lengths in code points, UTF-8 bytes and UTF-16 units; Unicode normalization (mode='normalize') to NFC/NFD/NFKC/NFKD with a changed flag and the changed positions.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.unicode_inspector_tool
+  class: UnicodeInspectorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Inspection mode — inspect, string_stats or normalize.
+    required: true
+  text:
+    type: string
+    description: The text to inspect. Must be a non-empty string of at most 100,000 characters.
+    required: false
+  form:
+    type: string
+    description: normalize mode only — the Unicode normalization form, one of NFC, NFD, NFKC or NFKD (exact uppercase spelling).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["inspect", "string_stats", "normalize"]
+      description: Inspection mode.
+    text:
+      type: string
+      description: Text to inspect (all modes).
+    form:
+      type: string
+      enum: ["NFC", "NFD", "NFKC", "NFKD"]
+      description: Unicode normalization form (normalize mode).
+  required: ["mode"]
