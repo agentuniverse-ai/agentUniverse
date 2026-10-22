@@ -1,0 +1,54 @@
+name: bullets_to_prose_tool
+description: "Bullets to prose tool — pure Python stdlib template stitching, no network and no LLM required. Convert every consecutive bullet/numbered block of a markdown text into a flowing prose paragraph with discourse-role connectors (first/middle/last, customizable), nested sub-lists flattened inline with '(namely: a; b; c)' parentheticals and checkboxes mapped to '(completed)'/'(pending)' (mode='convert'); preview which line-ranges would convert without rewriting (mode='paragraphs_only'); report blocks found, items converted and nesting levels seen (mode='stats'). Non-list text is preserved byte-exact and code fences are immune; the rewrite is idempotent."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.bullets_to_prose_tool
+  class: BulletsToProseTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — convert, paragraphs_only or stats.
+    required: true
+  text:
+    type: string
+    description: The markdown text to process; required for every mode.
+    required: false
+  lead_connector:
+    type: boolean
+    description: When true, prefix the first item of each multi-item block with 'First, ' in convert mode (unless connectors['first'] overrides it). Default false.
+    required: false
+  connectors:
+    type: object
+    description: Optional subset of {first, middle, last} custom connector strings, honored exactly as provided; convert mode only.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["convert", "paragraphs_only", "stats"]
+      description: Operation mode.
+    text:
+      type: string
+      description: The markdown text to process (all modes).
+    lead_connector:
+      type: boolean
+      description: Prefix the first item of multi-item blocks with 'First, ' (convert mode, default false).
+    connectors:
+      type: object
+      properties:
+        first:
+          type: string
+          description: Connector prefixed to the first item (defaults to none).
+        middle:
+          type: string
+          description: Connector inserted before every middle item (default ', and then ').
+        last:
+          type: string
+          description: Connector inserted before the last item (default ', and finally ').
+      additionalProperties: false
+      description: Custom discourse-role connectors, honored exactly as provided.
+  required: ["mode"]
