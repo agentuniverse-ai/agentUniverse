@@ -102,10 +102,11 @@ class ReciprocalRankFusionProcessor(DocProcessor):
         representatives: Dict[Tuple, Document] = {}
         for channel in channels:
             seen_in_channel = set()
-            for rank, doc in enumerate(channel):
+            for doc in channel:
                 identity = self._identity(doc)
                 if identity in seen_in_channel:
                     continue
+                rank = len(seen_in_channel)
                 seen_in_channel.add(identity)
                 scores[identity] = scores.get(identity, 0.0) + \
                     1.0 / (self.k + rank + 1)
