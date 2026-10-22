@@ -1,0 +1,24 @@
+name: git_log_tool
+description: Parse and summarize git log text output (default/short/oneline formats, --stat, --numstat, --name-status) without running git.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.git_log_tool
+  class: GitLogTool
+input_keys:
+  - mode
+max_text_chars: 2000000
+max_commits: 5000
+max_files_per_commit: 2000
+max_message_chars: 4000
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [parse, detect, summarize]
+    log_text:
+      type: string
+      description: Raw git log output text to analyze.
+  required: [mode]
+  additionalProperties: false
