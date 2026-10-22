@@ -1,0 +1,45 @@
+name: context_escape_tool
+description: Context escape tool — prepare text for safe embedding, pure Python stdlib, no network required. escape/unescape for seven contexts — markdown_table (pipes become \|, newlines become literal <br> markers, CR becomes <cr>, marker-safe round trip), csv (RFC 4180 field quoting with doubled quotes), shell_single (POSIX '...' wrapping with the '"'"' idiom for embedded quotes), html_attr (& < > " ' become entities), html_text (& < > become entities), json_string (json.dumps/json.loads with an ensure_ascii option), regex (re.escape and its documented inverse). Every context pair round-trips exactly, unescape(escape(x)) == x.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.context_escape_tool
+  class: ContextEscapeTool
+input_keys:
+  - mode
+  - context
+args_model:
+  mode:
+    type: string
+    description: Transformation direction — escape (prepare text for embedding) or unescape (reverse an escape).
+    required: true
+  context:
+    type: string
+    description: Target context — markdown_table, csv, shell_single, html_attr, html_text, json_string or regex.
+    required: true
+  text:
+    type: string
+    description: The text to transform (non-empty string, up to 100,000 characters).
+    required: false
+  ensure_ascii:
+    type: boolean
+    description: json_string context only — passed to json.dumps when escaping (True emits non-ASCII characters as \uXXXX escapes, the default; False keeps them verbatim). Must not be set for any other context.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["escape", "unescape"]
+      description: Transformation direction.
+    context:
+      type: string
+      enum: ["markdown_table", "csv", "shell_single", "html_attr", "html_text", "json_string", "regex"]
+      description: Target embedding context.
+    text:
+      type: string
+      description: Text to escape or unescape.
+    ensure_ascii:
+      type: boolean
+      description: Emit non-ASCII characters as \uXXXX escapes (json_string escape only).
+  required: ["mode", "context"]
