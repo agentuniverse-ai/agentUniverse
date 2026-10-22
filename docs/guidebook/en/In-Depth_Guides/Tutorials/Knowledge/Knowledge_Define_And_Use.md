@@ -81,6 +81,10 @@ knowledge = ['sample_standard_app.intelligence.agentic.knowledge']
 ## Configuring Knowledge in an Agent
 Based on the content in [Creating and Using Agents](../../../In-Depth_Guides/Tutorials/Agent/Agent_Create_And_Use.md), you can set any created knowledge under the knowledge action in the agent.
 
+## Ollama embedding batch lifecycle
+
+`OllamaEmbedding.async_get_embeddings` runs requests concurrently and returns vectors in input order. If one request fails or is cancelled, unfinished requests in that batch are cancelled and awaited before the operation exits. Caller cancellation is propagated as cancellation, not converted into a normal result. Shared HTTP clients and unrelated tasks are not closed or cancelled. Cleanup relies on requests cooperating with asyncio cancellation; it cannot undo computation already performed by the server and does not add automatic retries or a concurrency limit.
+
 ## Using the Knowledge Manager
 You can obtain the Knowledge instance corresponding to the name via the `.get_instance_obj(xx_knowledge_name)` method in the Knowledge Manager, and call it using the `query_knowledge` method.
 
