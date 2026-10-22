@@ -501,7 +501,9 @@ class CustomExcelTool(ExcelTool):
     max_read_size = 100 * 1024 * 1024  # 100MB
     max_write_size = 20 * 1024 * 1024   # 20MB
 
-    # 扩展名白名单不会添加格式转换能力；.xls/.xlsb 必须先转换为 .xlsx
+    # 扩展名白名单只控制路径检查，不会添加格式转换能力。
+    # 内置 openpyxl 后端仅支持 .xlsx；.xls/.xlsb 请先转换。
+    # 自定义后端可覆盖相应操作方法，并配置其支持的扩展名。
     allowed_extensions = ['.xlsx']
 ```
 

@@ -23,16 +23,12 @@ def test_unsupported_write_does_not_create_file(tmp_path, suffix, asynchronous):
 
 @pytest.mark.parametrize('mode', ['write', 'read', 'append', 'info'])
 @pytest.mark.parametrize('suffix', ['.xls', '.xlsb'])
-def test_unsupported_operations_preserve_existing_bytes(tmp_path, monkeypatch, mode, suffix):
+def test_unsupported_operations_preserve_existing_bytes(tmp_path, mode, suffix):
     path = tmp_path / ('existing' + suffix)
     original = b'existing legacy file placeholder'
     path.write_bytes(original)
     tool = ExcelTool(allowed_extensions=['.xlsx', '.xls', '.xlsb'])
 
-    def unexpected(*args, **kwargs):
-        pytest.fail('Unsupported format should be rejected before file inspection')
-
-    monkeypatch.setattr(tool, '_check_file_size', unexpected)
     result = json.loads(tool.execute(str(path), mode, data=[['changed']], overwrite=True))
     assert result['status'] == 'error'
     assert 'convert' in result['error'].lower()
@@ -62,7 +58,63 @@ def test_custom_allowlist_still_restricts_supported_formats(tmp_path):
 
 
 def test_default_and_custom_allowlist_contract(tmp_path):
-    assert ExcelTool().allowed_extensions == ['.xlsx']
+    assert ExcelTool().allowed_extensions == ['.xlsx', '.xls']
     tool = ExcelTool(allowed_extensions=['.xlsm', '.xltx', '.xltm'])
     for suffix in tool.allowed_extensions:
         assert tool._validate_path(str(tmp_path / ('custom' + suffix))) == {'valid': True}
+
+
+@pytest.mark.parametrize('suffix', ['.xls', '.xlsb'])
+@pytest.mark.parametrize('mode', ['read', 'write', 'append', 'info'])
+@pytest.mark.parametrize('asynchronous', [False, True])
+def test_custom_backend_can_handle_allowed_legacy_formats(tmp_path, suffix, mode, asynchronous):
+    class CustomBackend(ExcelTool):
+        def _read_excel(self, file_path, **kwargs):
+            return {'status': 'success', 'backend': 'custom', 'operation': 'read'}
+
+        def _write_excel(self, file_path, **kwargs):
+            return {'status': 'success', 'backend': 'custom', 'operation': 'write'}
+
+        def _append_excel(self, file_path, **kwargs):
+            return {'status': 'success', 'backend': 'custom', 'operation': 'append'}
+
+        def _get_excel_info(self, file_path):
+            return {'status': 'success', 'backend': 'custom', 'operation': 'info'}
+
+    # Preserve the inherited .xls allowlist as well as explicit .xlsb opt-in.
+    tool = CustomBackend() if suffix == '.xls' else CustomBackend(allowed_extensions=[suffix])
+    path = str(tmp_path / ('custom' + suffix))
+    kwargs = {'file_path': path, 'mode': mode, 'data': [[1]]}
+    result = json.loads(asyncio.run(tool.async_execute(**kwargs)) if asynchronous
+                        else tool.execute(**kwargs))
+    assert result == {'status': 'success', 'backend': 'custom', 'operation': mode}
+
+
+@pytest.mark.parametrize('suffix', ['.xls', '.xlsb'])
+def test_builtin_writer_rejects_legacy_path_before_creating_directory(tmp_path, suffix):
+    path = tmp_path / 'not_created' / ('new' + suffix)
+    # Direct backend calls are protected too; shared validation is not bypassed
+    # to permit a mislabeled write.
+    result = ExcelTool()._write_excel(str(path), [[1]])
+    assert result['status'] == 'error'
+    assert not path.parent.exists()
+
+
+@pytest.mark.parametrize('suffix', ['.xls', '.xlsb'])
+@pytest.mark.parametrize('mode', ['read', 'append', 'info'])
+def test_renamed_ooxml_copy_is_not_legacy_support(tmp_path, suffix, mode):
+    from shutil import copyfile
+    from openpyxl import Workbook
+
+    source = tmp_path / 'source.xlsx'
+    workbook = Workbook()
+    workbook.active.append(['original'])
+    workbook.save(source)
+    workbook.close()
+    path = tmp_path / ('renamed' + suffix)
+    copyfile(source, path)
+    original = path.read_bytes()
+    tool = ExcelTool(allowed_extensions=['.xlsx', '.xls', '.xlsb'])
+    result = json.loads(tool.execute(str(path), mode, data=[['changed']]))
+    assert result['status'] == 'error'
+    assert path.read_bytes() == original == source.read_bytes()

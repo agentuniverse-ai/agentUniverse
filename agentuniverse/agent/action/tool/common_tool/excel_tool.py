@@ -12,11 +12,19 @@ import asyncio
 from typing import Optional, List, Dict, Any, Union
 from enum import Enum
 from dataclasses import dataclass
+from datetime import date, datetime, time
 from pydantic import Field
 
 from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.base.annotation.retry import retry
 from agentuniverse.base.util.logging.logging_util import LOGGER
+
+
+def _serialize_excel_date(value: Any) -> str:
+    """Serialize Excel date/time values without masking unsupported types."""
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 class ExcelMode(Enum):
@@ -61,7 +69,7 @@ class ExcelTool(Tool):
 
     max_read_size: int = Field(50 * 1024 * 1024, description="Maximum file size for reading (50MB)")
     max_write_size: int = Field(10 * 1024 * 1024, description="Maximum file size for writing (10MB)")
-    allowed_extensions: List[str] = Field(default_factory=lambda: ['.xlsx'], description="Allowed file extensions")
+    allowed_extensions: List[str] = Field(default_factory=lambda: ['.xlsx', '.xls'], description="Allowed file extensions")
 
     def _validate_path(self, file_path: str) -> Dict[str, Any]:
         """
@@ -96,11 +104,6 @@ class ExcelTool(Tool):
 
         # 3. Check file extension
         _, ext = os.path.splitext(file_path)
-        if ext.lower() in {'.xls', '.xlsb'}:
-            return {
-                "valid": False,
-                "error": "Unsupported Excel format: Convert .xls or .xlsb files to .xlsx first"
-            }
         if ext.lower() not in self.allowed_extensions:
             return {
                 "valid": False,
@@ -216,6 +219,16 @@ class ExcelTool(Tool):
             import openpyxl
         except ImportError:
             raise ImportError("openpyxl is required. Install with: pip install openpyxl")
+
+        # This backend writes OOXML, irrespective of the filename. Keep format
+        # validation here so subclasses can supply a different writer without
+        # replacing the shared path/allowlist checks.
+        if os.path.splitext(file_path)[1].lower() in {'.xls', '.xlsb'}:
+            return {
+                "status": "error",
+                "error": "Unsupported Excel format: Convert .xls or .xlsb files to .xlsx first",
+                "file_path": file_path
+            }
 
         try:
             # Check if file exists
@@ -417,7 +430,8 @@ class ExcelTool(Tool):
                 - info: (no additional params)
 
         Returns:
-            JSON string with operation result
+            JSON string with operation result. Date and time cells are ISO 8601
+            strings; other cell values retain their JSON types.
         """
         # Validate mode
         if mode not in [m.value for m in ExcelMode]:
@@ -493,7 +507,7 @@ class ExcelTool(Tool):
             elif mode == ExcelMode.INFO.value:
                 result = self._get_excel_info(file_path)
 
-            return json.dumps(result, ensure_ascii=False, indent=2)
+            return json.dumps(result, ensure_ascii=False, indent=2, default=_serialize_excel_date)
 
         except Exception as e:
             LOGGER.error(f"Excel tool execution error: {str(e)}")
