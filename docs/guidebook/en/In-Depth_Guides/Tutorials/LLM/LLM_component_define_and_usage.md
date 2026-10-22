@@ -144,11 +144,6 @@ This method defines the maximum context length for an LLM model. For example, th
 #### The get_num_tokens method
 The get_num_tokens method defines the model's encoding method and the way tokens are counted. It takes the input data and outputs the corresponding number of tokens.
 
-The prompt utility `split_texts` retries a failed split once unless `retry=False`.
-The retry retains the requested `chunk_size` and `chunk_overlap`, so
-`truncate_content` keeps its requested length instead of falling back to the
-default chunk size. A second failure is reported as a `ValueError`.
-
 #### An Actual Example of LLM Domain Behavior Definition
 Taking the OpenAI LLM series as an example, let's consider OpenAILLM.py.
 

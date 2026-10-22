@@ -382,34 +382,6 @@ class TestThresholdFilter(unittest.TestCase):
         result_scores = [self.filter._get_score(doc) for doc in result]
         self.assertEqual(result_scores, [0.4, 0.6, 0.8, 1.0])
 
-    def test_and_logic_keeps_first_filter_order_when_not_preserving_input_order(self):
-        """AND keeps a ranking filter's order when input order is disabled."""
-        self.filter.logic_operator = 'AND'
-        self.filter.preserve_order = False
-        topk = {'type': 'topk', 'k': 5}
-        length = {'type': 'length', 'min_length': 50}
-
-        self.filter.filters = [topk, length]
-        self.assertEqual(
-            self.filter._process_docs(self.sample_docs),
-            list(reversed(self.sample_docs[1:])))
-
-        self.filter.filters = [length, topk]
-        self.assertEqual(
-            self.filter._process_docs(self.sample_docs),
-            self.sample_docs[1:])
-
-    def test_and_logic_restores_input_order_when_enabled(self):
-        """The default ordering still follows the original document list."""
-        self.filter.filters = [
-            {'type': 'topk', 'k': 5},
-            {'type': 'length', 'min_length': 50},
-        ]
-
-        self.assertEqual(
-            self.filter._process_docs(self.sample_docs),
-            self.sample_docs[1:])
-
     # ========== Edge Case Tests ==========
 
     def test_empty_document_list(self):

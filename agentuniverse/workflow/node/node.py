@@ -55,23 +55,12 @@ class Node(BaseModel):
         node_input_params = {}
         for input_param in input_params:
             val = input_param.value
-            if val is None:
-                raise ValueError(
-                    f"Input parameter '{input_param.name}' is missing a value."
-                )
             if val.type == 'reference':
-                if not isinstance(val.content, list) or len(val.content) < 2:
-                    raise ValueError(
-                        f"Input parameter '{input_param.name}' reference must "
-                        "contain a node id and output name."
-                    )
                 reference_node_id = val.content[0]
-                reference_output_name = val.content[1]
                 reference_output_params: List[NodeOutputParams] = workflow_output.workflow_parameters.get(
                     reference_node_id, [])
                 node_input_params[input_param.name] = next(
-                    (param.value for param in reference_output_params
-                     if param.name == reference_output_name), None)
+                    (param.value for param in reference_output_params if param.name == val.content[1]), None)
             else:
                 node_input_params[input_param.name] = val.content
         return node_input_params

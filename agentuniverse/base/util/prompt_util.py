@@ -82,8 +82,7 @@ def split_texts(texts: list[str], llm: LLM, chunk_size=800, chunk_overlap=100, r
         return split_texts_res
     except Exception as e:
         if retry:
-            return split_texts(texts=texts, llm=llm, chunk_size=chunk_size,
-                               chunk_overlap=chunk_overlap, retry=False)
+            return split_texts(texts=texts, llm=llm, retry=False)
         raise ValueError("split text failed, exception=" + str(e))
 
 

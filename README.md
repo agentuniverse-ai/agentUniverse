@@ -109,7 +109,7 @@ pip install magent-ui ruamel.yaml
 
 Run [product_application.py](examples/sample_apps/workflow_agent_app/bootstrap/platform/product_application.py) in sample_apps/workflow_agent_app/bootstrap/platform for quick startup.
 
-For more details, refer to [Quick Start for Product Platform](docs/guidebook/en/How-to/Guide%20to%20Visual%20Agentic%20Workflow%20Platform/Product_Platform_Quick_Start.md) and the [Advanced Guide](docs/guidebook/en/How-to/Guide%20to%20Visual%20Agentic%20Workflow%20Platform/Product_Platform_Advancement_Guide.md).
+For more details, refer to [Quick Start for Product Platform](docs/guidebook/en/How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Quick_Start.md) and the [Advanced Guide](docs/guidebook/en/How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Advancement_Guide.md).
 
 This feature is jointly developed by [difizen](https://github.com/difizen/magent) and agentUniverse.
 

@@ -13,8 +13,6 @@ metadata:
 # box. When no document carries the field the whole input is treated as one
 # channel (degrades to single-channel position scoring), so this is safe to use
 # in a single-store pipeline too.
-# Missing/null channel values share a fallback bucket. Explicit string names
-# (including '__default__') always identify their own channel, not that bucket.
 channel_key: 'recall_channel'
 
 # --- De-duplication ---

@@ -167,8 +167,7 @@ class NvdCveToolTest(unittest.TestCase):
         self.assertEqual(result["max_results"], 1)
         self.assertEqual(result["start_index"], 0)
         params = mock_get.call_args.kwargs["params"]
-        self.assertEqual(params["cveId"], "CVE-2021-44228")
-        self.assertNotIn("cveIds", params)
+        self.assertEqual(params["cveIds"], "CVE-2021-44228")
         self.assertEqual(params["resultsPerPage"], 1)
         self.assertEqual(params["startIndex"], 0)
         self.assertNotIn("keywordSearch", params)

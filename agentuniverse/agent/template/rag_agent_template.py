@@ -16,25 +16,20 @@ from agentuniverse.prompt.prompt import Prompt
 class RagAgentTemplate(AgentTemplate):
 
     def input_keys(self) -> list[str]:
-        """Return the retrieval request expected by the template."""
         return ['input']
 
     def output_keys(self) -> list[str]:
-        """Return the fields exposed by the template result."""
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
-        """Copy the retrieval request into the agent input."""
         agent_input['input'] = input_object.get_data('input')
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
-        """Expose the generated response under the output field."""
         return {**agent_result, 'output': agent_result['output']}
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM, prompt: Prompt,
                            **kwargs) -> dict:
-        """Enrich the prompt with tool and knowledge results before execution."""
         tool_res: str = self.invoke_tools(input_object)
         knowledge_res: str = self.invoke_knowledge(agent_input.get('input'), input_object)
         agent_input['background'] = (agent_input['background']
@@ -43,7 +38,6 @@ class RagAgentTemplate(AgentTemplate):
 
     async def customized_async_execute(self, input_object: InputObject, agent_input: dict, memory: Memory, llm: LLM,
                                        prompt: Prompt, **kwargs) -> dict:
-        """Asynchronously enrich the prompt before agent execution."""
         tool_res: str = await self.async_invoke_tools(input_object)
         knowledge_res: str = self.invoke_knowledge(agent_input.get('input'), input_object)
         agent_input['background'] = (agent_input['background']
@@ -51,7 +45,6 @@ class RagAgentTemplate(AgentTemplate):
         return await super().customized_async_execute(input_object, agent_input, memory, llm, prompt, **kwargs)
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'RagAgentTemplate':
-        """Initialize the template and select its configured prompt version."""
         super().initialize_by_component_configer(component_configer)
         self.prompt_version = self.agent_model.profile.get('prompt_version', 'default_rag_agent.cn')
         return self

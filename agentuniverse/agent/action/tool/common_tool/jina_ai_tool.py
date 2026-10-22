@@ -13,7 +13,6 @@ from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.util.env_util import get_from_env
 from loguru import logger
 import html
-import json
 
 
 jina_read_url = "https://r.jina.ai/"
@@ -51,34 +50,31 @@ class JinaAITool(Tool):
         if not input:
             return None
         
-        # Apply call-specific settings to a copy so later invocations keep the
-        # configured defaults, including credentials and custom headers.
-        overrides = {}
+        # Update optional configurations
         if mode:
-            overrides["mode"] = mode
+            self.mode = mode
         if timeout:
-            overrides["timeout"] = timeout
+            self.timeout = timeout
         if api_key:
-            overrides["api_key"] = api_key
+            self.api_key = api_key
         if max_read_content_length:
-            overrides["max_read_content_length"] = max_read_content_length
+            self.max_read_content_length = max_read_content_length
         if remove_image is not None:
-            overrides["remove_image"] = remove_image
+            self.remove_image = remove_image
         if headers:
-            overrides["headers"] = headers
-        tool = self.model_copy(update=overrides) if overrides else self
+            self.headers = headers
 
         # print(f"mode: {self.mode}, max_read_content_length: {self.max_read_content_length}, headers: {self.headers}")
 
-        if tool.mode == "read":
+        if self.mode == "read":
             if input.startswith("https://") or input.startswith("http://"):
-                return tool.read_url(url=html.unescape(input))
+                return self.read_url(url=html.unescape(input))
             else:
                 return None
-        elif tool.mode == "search":
-            return tool.search_query(query=input)
-        elif tool.mode == "check_fact":
-            return tool.check_fact(query=input)
+        elif self.mode == "search":
+            return self.search_query(query=input)
+        elif self.mode == "check_fact":
+            return self.check_fact(query=input)
         else:
             return None
 
@@ -192,7 +188,7 @@ class JinaAITool(Tool):
         if not content:
             return None
             
-        return json.dumps(content.get("data"), ensure_ascii=False)
+        return str(content.get("data"))
     
     def check_fact(self, query: str) -> str:
         """
@@ -227,7 +223,7 @@ class JinaAITool(Tool):
             return content
         if not content:
             return None
-        return json.dumps(content.get("data"), ensure_ascii=False)
+        return str(content.get("data"))
 
     def _remove_images(self, content: str) -> str:
         """

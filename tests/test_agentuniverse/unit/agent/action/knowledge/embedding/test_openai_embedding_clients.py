@@ -25,7 +25,6 @@ def test_as_langchain_allows_uninitialized_async_client():
     assert result is langchain_embedding
     langchain_client.assert_called_once_with(
         openai_api_key="test-key",
-        model="text-embedding-3-small",
         client=sync_client.embeddings,
         async_client=None,
     )

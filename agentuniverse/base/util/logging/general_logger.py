@@ -28,14 +28,13 @@ LOG_LEVEL = Literal[
 
 def get_context_prefix() -> str:
     """Get a dict contains log prefix info from current context and format it
-    to a log prefix string. Values unsupported by JSON use their string form.
-    """
+    to a log prefix string."""
     trace_dict = AuTraceManager().get_trace_dict()
     log_context = FrameworkContextManager().get_context("LOG_CONTEXT")
     if log_context and isinstance(log_context, dict):
         trace_dict.update(log_context)
     if trace_dict:
-        json_str = json.dumps(trace_dict, default=str)
+        json_str = json.dumps(trace_dict)
         format_context_prefix = '[' + json_str[1:-1] + ']'
         return format_context_prefix
     else:

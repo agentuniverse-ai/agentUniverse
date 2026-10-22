@@ -10,7 +10,6 @@ from typing import Dict, Type, List, Optional
 
 from agentuniverse.agent.action.knowledge.reader.file.docx_reader import DocxReader
 from agentuniverse.agent.action.knowledge.reader.file.epub_reader import EpubReader
-from agentuniverse.agent.action.knowledge.reader.file.json_reader import JsonReader
 from agentuniverse.agent.action.knowledge.reader.file.markdown_reader import MarkdownReader
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
@@ -33,7 +32,6 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".md": MarkdownReader,
     ".markdown": MarkdownReader,
     ".csv": CSVReader,
-    ".json": JsonReader,
     ".rar": RarReader,
     ".zip": ZipReader,
     ".7z": SevenZipReader,
@@ -44,8 +42,6 @@ class FileReader(Reader):
     """The agentUniverse(aU) file reader class.
 
     FileReader is used to load data from files based on the provided file paths.
-    JSON uses the existing JsonReader. Paths are forwarded positionally because
-    built-in readers use different parameter names, such as file and fpath.
 
     Attributes:
         file_readers (Dict[str, Type[Reader]], optional): The file reader dictionary,
@@ -60,5 +56,5 @@ class FileReader(Reader):
             file_suffix = file_path.suffix.lower()
             if file_suffix in self.file_readers.keys():
                 file_reader = self.file_readers[file_suffix]()
-                document_list.extend(file_reader.load_data(file_path, ext_info=ext_info))
+                document_list.extend(file_reader.load_data(file=file_path, ext_info=ext_info))
         return document_list

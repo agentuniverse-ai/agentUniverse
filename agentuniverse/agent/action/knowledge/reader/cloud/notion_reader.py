@@ -4,13 +4,9 @@
 # @Time    : 2025/9/29
 # @FileName: notion_reader.py
 from typing import List, Optional, Dict
-import logging
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
-
-
-logger = logging.getLogger(__name__)
 
 
 class NotionReader(Reader):
@@ -23,7 +19,7 @@ class NotionReader(Reader):
     """
 
     def _load_data(self, page_or_db_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        logger.debug("NotionReader starting page or database load")
+        print(f"debugging: NotionReader start load id={page_or_db_id}")
         if not page_or_db_id:
             raise ValueError("NotionReader requires a Notion page or database id")
 
@@ -51,7 +47,7 @@ class NotionReader(Reader):
             metadata["type"] = "page"
             text_blocks.extend(self._export_page(client, page_or_db_id))
         except Exception as e_page:
-            logger.debug("NotionReader page retrieval failed; trying database fallback", exc_info=True)
+            print(f"debugging: NotionReader page retrieve failed: {e_page}")
             # Try as database
             try:
                 metadata["type"] = "database"

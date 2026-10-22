@@ -14,7 +14,7 @@ from agentuniverse.agent.agent_model import AgentModel
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.plan.planner.planner import Planner
-from agentuniverse.base.util.agent_util import assemble_memory_input, assemble_memory_output, resolve_tool_names
+from agentuniverse.base.util.agent_util import assemble_memory_input, assemble_memory_output
 from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
 from agentuniverse.prompt.prompt import Prompt
@@ -55,7 +55,7 @@ class Nl2ApiPlanner(Planner):
 
     @staticmethod
     def acquire_tools(action) -> list[LangchainTool]:
-        tool_names: list = resolve_tool_names(action)
+        tool_names: list = action.get('tool') or list()
         lc_tools: list[LangchainTool] = list()
         for tool_name in tool_names:
             tool: Tool = ToolManager().get_instance_obj(tool_name)

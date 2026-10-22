@@ -45,8 +45,6 @@ class KnowledgeNode(Node):
                     param_map[knowledge_param.name] = knowledge_param.value.get('content', None)
 
         knowledge_id_list = param_map.get('id')
-        if isinstance(knowledge_id_list, str):
-            knowledge_id_list = [knowledge_id_list]
         query_top_k = param_map.get('top_k')
 
         knowledge_list = []

@@ -277,7 +277,7 @@ class GitHubTool(Tool):
             "html_url": result["html_url"],
             "stars": result["stargazers_count"],
             "forks": result["forks_count"],
-            "watchers": result["subscribers_count"],
+            "watchers": result["watchers_count"],
             "language": result.get("language", ""),
             "created_at": result["created_at"],
             "updated_at": result["updated_at"],

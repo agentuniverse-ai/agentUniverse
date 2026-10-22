@@ -7,7 +7,6 @@
 # @FileName: jina_reranker.py
 
 from typing import List, Optional
-import math
 import requests
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -84,34 +83,17 @@ class JinaReranker(DocProcessor):
         # single combined try block would misreport it as an API-call error;
         # isolating JSON decoding here surfaces it as a non-JSON response.
         try:
-            payload = response.json()
+            results = response.json().get("results", [])
         except ValueError as e:
             raise Exception(f"Jina AI rerank API returned a non-JSON response: {e}")
 
-        if not isinstance(payload, dict) or not isinstance(payload.get("results", []), list):
-            raise ValueError("Jina AI rerank API results must be a list in a JSON object.")
-        results = payload.get("results", [])
-
         rerank_docs = []
-        seen_indices = set()
         for result in results:
-            if not isinstance(result, dict):
-                continue
             index = result.get("index")
             relevance_score = result.get("relevance_score")
 
-            # bool is an int subclass, and negative indexes select unrelated
-            # documents in Python. Reject both before touching the input list.
-            if type(index) is not int or not 0 <= index < len(origin_docs):
+            if index is None or relevance_score is None:
                 continue
-            if index in seen_indices or type(relevance_score) not in (int, float):
-                continue
-            try:
-                if not math.isfinite(relevance_score):
-                    continue
-            except OverflowError:
-                continue
-            seen_indices.add(index)
 
             if origin_docs[index].metadata:
                 origin_docs[index].metadata["relevance_score"] = relevance_score

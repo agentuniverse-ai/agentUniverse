@@ -228,14 +228,11 @@ class RedisVectorStore(Store):
             not isinstance(vector, list)
             or not vector
             or any(
-                isinstance(value, bool) or not isinstance(value, (int, float))
+                isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value))
                 for value in vector
             )
         ):
             raise ValueError("embedding must be a non-empty list of finite numbers")
-        # Validate the actual wire representation before inferring dimensions
-        # or issuing Redis commands: finite Python floats can overflow FLOAT32.
-        self._vector_bytes(vector)
         if self.dimensions is None:
             self.dimensions = len(vector)
         if len(vector) != self.dimensions:
@@ -245,12 +242,7 @@ class RedisVectorStore(Store):
 
     @staticmethod
     def _vector_bytes(vector: list[float]) -> bytes:
-        try:
-            values = array("f", (float(value) for value in vector))
-        except (OverflowError, ValueError) as exc:
-            raise ValueError("embedding must contain finite FLOAT32 values") from exc
-        if any(not math.isfinite(value) for value in values):
-            raise ValueError("embedding must contain finite FLOAT32 values")
+        values = array("f", (float(value) for value in vector))
         if sys.byteorder != "little":
             values.byteswap()
         return values.tobytes()

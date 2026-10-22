@@ -39,7 +39,6 @@ class RequestTool(Tool):
         return self.method.strip().upper()
 
     def execute(self, input: str):
-        """Execute the configured HTTP method from a URL or JSON payload."""
         input_params: str = input
         if self.json_parser:
             try:
@@ -64,7 +63,6 @@ class RequestTool(Tool):
         return await self.async_execute_by_method(input_params)
 
     async def async_execute_by_method(self, url: str, data: dict = None, **kwargs):
-        """Dispatch an asynchronous request through the configured wrapper."""
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
@@ -79,7 +77,6 @@ class RequestTool(Tool):
             raise ValueError(f"Unsupported method: {method or self.method}")
 
     def execute_by_method(self, url: str, data: dict = None, **kwargs):
-        """Dispatch a synchronous request through the configured wrapper."""
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
@@ -98,9 +95,9 @@ class RequestTool(Tool):
         :param component_configer:
         :return:
         """
-        self.headers = component_configer.configer.value.get('headers', self.headers)
-        self.method = component_configer.configer.value.get('method', self.method)
-        self.response_content_type = component_configer.configer.value.get('response_content_type', self.response_content_type)
+        self.headers = component_configer.configer.value.get('headers')
+        self.method = component_configer.configer.value.get('method')
+        self.response_content_type = component_configer.configer.value.get('response_content_type')
         if 'json_parser' in component_configer.configer.value:
             self.json_parser = component_configer.configer.value.get('json_parser')
         self.requests_wrapper = GenericRequestsWrapper(

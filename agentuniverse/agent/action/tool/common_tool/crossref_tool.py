@@ -8,7 +8,7 @@ from calendar import monthrange
 from datetime import date
 from html.parser import HTMLParser
 from typing import Any, ClassVar, Dict, List, Optional
-from urllib.parse import quote, unquote
+from urllib.parse import quote
 
 import requests
 from pydantic import Field
@@ -24,8 +24,6 @@ class _CrossrefAPIError(Exception):
 class _MarkupTextExtractor(HTMLParser):
     """Extract text from HTML or JATS-style abstract markup."""
 
-    BLOCK_TAGS: ClassVar[set[str]] = {"p", "div", "sec", "title", "li", "br", "tr"}
-
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: List[str] = []
@@ -33,16 +31,8 @@ class _MarkupTextExtractor(HTMLParser):
     def handle_data(self, data: str) -> None:
         self.parts.append(data)
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.rpartition(":")[-1] in self.BLOCK_TAGS:
-            self.parts.append(" ")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag.rpartition(":")[-1] in self.BLOCK_TAGS:
-            self.parts.append(" ")
-
     def text(self) -> str:
-        return " ".join("".join(self.parts).split())
+        return " ".join(" ".join(self.parts).split())
 
 
 class CrossrefTool(Tool):
@@ -371,11 +361,7 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _normalize_doi(value: str) -> str:
-        resolver = re.match(r"^https?://(?:dx\.)?doi\.org/", value, flags=re.IGNORECASE)
-        if resolver:
-            doi = unquote(value[resolver.end():]).strip()
-        else:
-            doi = re.sub(r"^doi:\s*", "", value, flags=re.IGNORECASE).strip()
+        doi = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", value, flags=re.IGNORECASE).strip()
         if not doi.startswith("10.") or "/" not in doi or any(character.isspace() for character in doi):
             raise ValueError("query must contain a valid DOI in doi mode")
         return doi

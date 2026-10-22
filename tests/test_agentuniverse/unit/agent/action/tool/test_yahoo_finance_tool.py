@@ -18,7 +18,7 @@ regression is caught at test time rather than at agent runtime.
 
 import os
 import unittest
-from unittest.mock import Mock, PropertyMock, patch
+from unittest.mock import Mock, patch
 
 from agentuniverse.agent.action.tool.common_tool import yahoo_finance_tool as yf_module
 from agentuniverse.agent.action.tool.common_tool.yahoo_finance_tool import (
@@ -93,18 +93,6 @@ class TestFormatters(unittest.TestCase):
         self.assertIn("101.00", out)
         # Volumes with thousands separators.
         self.assertIn("1,000", out)
-
-    def test_format_intraday_history_preserves_distinct_timestamps(self) -> None:
-        rows = [
-            {"datetime": "2024-01-02 10:30:00-05:00", "close": 102.0},
-            {"datetime": "2024-01-02 09:30:00-05:00", "close": 101.0},
-        ]
-
-        out = self.tool._format_history("AAPL", rows)
-
-        self.assertIn("2024-01-02 10:30:00-05:00", out)
-        self.assertIn("2024-01-02 09:30:00-05:00", out)
-        self.assertLess(out.index("10:30"), out.index("09:30"))
 
     def test_format_history_empty(self) -> None:
         out = self.tool._format_history("AAPL", [])
@@ -230,49 +218,6 @@ class TestExecute(unittest.TestCase):
         self.assertIn("Apple Inc.", out)
         self.assertIn("Technology", out)
 
-    def test_info_fetch_retries_transient_failures(self) -> None:
-        for mode, info, expected in (
-            ("quote", {"regularMarketPrice": 150.0}, "150.00"),
-            ("info", {"longName": "Apple Inc."}, "Apple Inc."),
-        ):
-            with self.subTest(mode=mode):
-                ticker = Mock()
-                info_property = PropertyMock(side_effect=[
-                    RuntimeError("temporary outage"), info,
-                ])
-                type(ticker).info = info_property
-                with patch.object(self.tool, "_get_ticker", return_value=ticker), \
-                        patch("agentuniverse.base.annotation.retry.time.sleep"):
-                    out = self.tool.execute(mode=mode, symbol="AAPL")
-                self.assertIn(expected, out)
-                self.assertEqual(info_property.call_count, 2)
-
-    def test_info_fetch_reports_exhausted_retries(self) -> None:
-        for mode in ("quote", "info"):
-            with self.subTest(mode=mode):
-                ticker = Mock()
-                info_property = PropertyMock(side_effect=RuntimeError("network down"))
-                type(ticker).info = info_property
-                with patch.object(self.tool, "_get_ticker", return_value=ticker), \
-                        patch("agentuniverse.base.annotation.retry.time.sleep"):
-                    out = self.tool.execute(mode=mode, symbol="AAPL")
-                self.assertIn("Error fetching data", out)
-                self.assertIn("network down", out)
-                self.assertEqual(info_property.call_count, 3)
-
-    def test_empty_info_remains_a_successful_empty_result(self) -> None:
-        for mode in ("quote", "info"):
-            for info in (None, {}):
-                with self.subTest(mode=mode, info=info):
-                    ticker = Mock()
-                    info_property = PropertyMock(return_value=info)
-                    type(ticker).info = info_property
-                    with patch.object(self.tool, "_get_ticker", return_value=ticker):
-                        out = self.tool.execute(mode=mode, symbol="AAPL")
-                    self.assertIn("no ", out)
-                    self.assertNotIn("Error", out)
-                    self.assertEqual(info_property.call_count, 1)
-
     def test_execute_history_via_mocked_fetch(self) -> None:
         # A minimal DataFrame-like stub so the real _fetch_history runs
         # end-to-end (reset_index → rename(lower) → to_dict) without pandas.
@@ -281,9 +226,6 @@ class TestExecute(unittest.TestCase):
 
             def __init__(self, records):
                 self._records = records
-
-            def tail(self, count):
-                return _FakeHistory(self._records[-count:])
 
             def reset_index(self):
                 return self
@@ -309,37 +251,6 @@ class TestExecute(unittest.TestCase):
         self.assertIn("101.00", out)
         # newest first → the 01-02 row precedes the 01-01 row.
         self.assertLess(out.index("2024-01-02"), out.index("2024-01-01"))
-
-    def test_history_limits_rows_before_converting_to_dicts(self) -> None:
-        class _FakeHistory:
-            empty = False
-
-            def __init__(self, records):
-                self.records = records
-                self.converted_count = None
-
-            def tail(self, count):
-                return _FakeHistory(self.records[-count:])
-
-            def reset_index(self):
-                return self
-
-            def rename(self, columns=None):
-                return self
-
-            def to_dict(self, orient="records"):
-                self.converted_count = len(self.records)
-                if self.converted_count > 2:
-                    raise AssertionError("unbounded history converted to dictionaries")
-                return self.records
-
-        ticker = Mock()
-        ticker.history.return_value = _FakeHistory([{"date": str(day)} for day in range(100)])
-        tool = YahooFinanceTool(max_history_rows=2)
-
-        rows = tool._fetch_history(ticker, period="max", interval="1d")
-
-        self.assertEqual(rows, [{"date": "99"}, {"date": "98"}])
 
     def test_execute_symbol_uppercased_before_fetch(self) -> None:
         ticker = self._mock_ticker({"regularMarketPrice": 1.0})

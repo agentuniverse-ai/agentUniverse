@@ -12,19 +12,15 @@ from agentuniverse.agent.template.rag_agent_template import RagAgentTemplate
 class SummarizeRagAgentTemplate(RagAgentTemplate):
 
     def input_keys(self) -> list[str]:
-        """Return the inputs required to summarize supplied content."""
         return ['input', 'summarize_content']
 
     def output_keys(self) -> list[str]:
-        """Return the fields exposed by the template result."""
         return ['output']
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
-        """Copy the request and source content into the agent input."""
         agent_input['input'] = input_object.get_data('input')
         agent_input['summarize_content'] = input_object.get_data('summarize_content')
         return agent_input
 
     def parse_result(self, agent_result: dict) -> dict:
-        """Expose the generated summary under the output field."""
         return {**agent_result, 'output': agent_result['output']}
