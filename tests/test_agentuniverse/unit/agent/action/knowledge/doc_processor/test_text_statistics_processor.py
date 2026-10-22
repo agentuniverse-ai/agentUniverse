@@ -6,6 +6,8 @@ from agentuniverse.agent.action.knowledge.doc_processor.text_statistics_processo
     TextStatisticsProcessor,
 )
 from agentuniverse.agent.action.knowledge.store.document import Document
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+from agentuniverse.base.config.configer import Configer
 
 
 def test_text_statistics_processor_adds_deterministic_unicode_metrics():
@@ -35,3 +37,30 @@ def test_text_statistics_processor_handles_empty_text_and_custom_key():
 def test_text_statistics_processor_rejects_empty_metadata_key():
     with pytest.raises(ValueError, match="metadata_key"):
         TextStatisticsProcessor(metadata_key=" ").process_docs([])
+
+
+def test_text_statistics_processor_applies_yaml_configuration(tmp_path):
+    config_path = tmp_path / "configured_text_statistics.yaml"
+    config_path.write_text(
+        """name: configured_text_statistics
+description: configured processor
+metadata_key: custom_stats
+overwrite: false
+metadata:
+  type: DOC_PROCESSOR
+  module: agentuniverse.agent.action.knowledge.doc_processor.text_statistics_processor
+  class: TextStatisticsProcessor
+""",
+        encoding="utf-8",
+    )
+
+    configer = Configer(path=str(config_path)).load()
+    component_configer = ComponentConfiger().load_by_configer(configer)
+    processor = TextStatisticsProcessor().initialize_by_component_configer(component_configer)
+    document = Document(text="new value", metadata={"custom_stats": {"old": 1}})
+
+    processor.process_docs([document])
+
+    assert processor.metadata_key == "custom_stats"
+    assert processor.overwrite is False
+    assert document.metadata["custom_stats"] == {"old": 1}

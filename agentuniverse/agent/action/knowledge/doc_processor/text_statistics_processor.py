@@ -16,6 +16,18 @@ class TextStatisticsProcessor(DocProcessor):
     metadata_key: str = "text_statistics"
     overwrite: bool = True
 
+    def _initialize_by_component_configer(self, doc_processor_configer):
+        super()._initialize_by_component_configer(doc_processor_configer)
+        if hasattr(doc_processor_configer, "metadata_key"):
+            self.metadata_key = doc_processor_configer.metadata_key
+        if hasattr(doc_processor_configer, "overwrite"):
+            self.overwrite = doc_processor_configer.overwrite
+        if not isinstance(self.metadata_key, str) or not self.metadata_key.strip():
+            raise ValueError("metadata_key must be a non-empty string")
+        if not isinstance(self.overwrite, bool):
+            raise ValueError("overwrite must be a boolean")
+        return self
+
     def _process_docs(self, origin_docs: List[Document],
                       query: Query = None) -> List[Document]:
         if not isinstance(self.metadata_key, str) or not self.metadata_key.strip():
