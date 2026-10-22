@@ -3,9 +3,13 @@
 Oracle strategy (lxml is installed in the test venv only; the tool itself is
 stdlib-only):
 
-(a) Extraction parity: 300 seeded HTML tables with random spans, headers,
-    nesting, empty cells, entities, <br>, captions, colgroups and
-    thead/tbody/tfoot mixes. The tool's expanded grid must equal an
+(a) Extraction parity: 300 seeded HTML tables with random spans (including
+    rowspan=0 in sections and stray-row runs, colspan=0, spans colliding on
+    the same cell), duplicate attributes, invalid non-ASCII span digits,
+    headers, nesting, empty cells, entities (incl. &#x1F600; and invalid
+    numeric refs), <br>, block elements, captions (incl. nested markup),
+    colgroups (incl. col span pre-allocation), cell attributes and
+    thead/tbody/tfoot mixes in document order. The tool's expanded grid must equal an
     INDEPENDENT lxml.etree-based expansion implemented below. Both
     implementations walk the same DOM semantics through different code paths
     (tool: html.parser + occupied-set cursor; reference: lxml.etree + dense
@@ -25,6 +29,7 @@ stdlib-only):
 
 import csv
 import io
+import json
 import os
 import random
 import time
@@ -48,7 +53,10 @@ WORDS = ["alpha", "beta", "gamma", "delta", "omega", "zeta", "sigma", "kappa", "
 ENTITY_SAMPLES = [
     "A&amp;B", "x&lt;y", "y&gt;x", "&#233;cole", "caf&eacute;", "a&nbsp;b",
     "&quot;q&quot;", "&#39;edge&#39;", "tab&#9;char", "mix&amp;mix",
+    "&#x1F600;grin", "&#0;null", "&#x110000;over", "&#xD800;sur", "&#38;#60;esc",
 ]
+BLOCK_SAMPLES = ["<div>blk %d</div>", "<p>para %d</p>", "<span>sp %d</span>"]
+CELL_ATTR_SAMPLES = [' class="c%d"', ' title="t%d"', ' style="color:red"', ' data-x="v%d"']
 
 
 # --------------------------------------------------------------------------- #
@@ -92,7 +100,7 @@ def _ref_span(element, attribute):
         return 1
     digits = ""
     for character in raw.strip():
-        if character.isdigit():
+        if character in "0123456789":  # WHATWG non-negative integers: ASCII digits only
             digits += character
         else:
             break
@@ -198,24 +206,37 @@ def _ref_place(rows, colspan_zero_width):
     return grid, extents
 
 
-def _ref_extract_table(table_element, depth):
+def _ref_extract_table(table_element, depth):  # noqa: C901
     """Full independent extraction of one table element."""
     raw_rows = _ref_rows(table_element)
     total = len(raw_rows)
-    # Rewrite rowspan=0 to the end of its row group per the HTML Standard.
+    # Rewrite rowspan=0 to the end of its row group per the HTML Standard:
+    # thead/tbody/tfoot sections are groups, and a maximal run of consecutive
+    # stray tr children forms one implicit group (implicit tbody).
     section_last = {}
     index = 0
+    run_start = None
     for child in table_element:
         if not isinstance(child.tag, str):
             continue
+        if child.tag == "tr":
+            if run_start is None:
+                run_start = index
+            section_last[index] = None
+            index += 1
+            continue
+        if run_start is not None:
+            for i in range(run_start, index):
+                section_last[i] = index - 1
+            run_start = None
         if child.tag in ("thead", "tbody", "tfoot"):
             count = sum(1 for tr in child if isinstance(tr.tag, str) and tr.tag == "tr")
-            for _ in range(count):
-                section_last[index] = index + count - 1
-                index += 1
-        elif child.tag == "tr":
-            section_last[index] = index
-            index += 1
+            for i in range(index, index + count):
+                section_last[i] = index + count - 1
+            index += count
+    if run_start is not None:
+        for i in range(run_start, index):
+            section_last[i] = index - 1
     prepared = []
     for y, cells in enumerate(raw_rows):
         prepared_row = []
@@ -327,6 +348,10 @@ def _gen_cell_text(rng, allow_br):
     text = " ".join(rng.choice(WORDS) for _ in range(rng.randint(1, 3)))
     if rng.random() < 0.45:
         text = rng.choice(ENTITY_SAMPLES)
+    if rng.random() < 0.12:
+        text = rng.choice(BLOCK_SAMPLES) % rng.randint(0, 9) + text
+    if rng.random() < 0.08:
+        text = text + ' "q, %s";' % rng.choice(WORDS)
     if allow_br and rng.random() < 0.25:
         text = text + "<br>" + rng.choice(WORDS)
     return text
@@ -344,7 +369,7 @@ def _gen_inner(rng, allow_br):
     return inner + extras
 
 
-def _gen_table(rng, depth=0):
+def _gen_table(rng, depth=0):  # noqa: C901
     columns = rng.randint(1, 7)
     row_count = rng.randint(1, 10)
     style = rng.choice(["th", "none", "scattered", "first-row"])
@@ -356,21 +381,32 @@ def _gen_table(rng, depth=0):
     parts.append(">")
     if rng.random() < 0.4:
         parts.append("<caption>Cap&amp;tion %d</caption>" % rng.randint(1, 9))
+    if rng.random() < 0.15:
+        parts.append(f"<caption><b>Nested</b> <i>cap {rng.randint(1, 9)}</i></caption>")
     if rng.random() < 0.3:
         parts.append("<colgroup>" + "<col>" * columns + "</colgroup>")
-    use_sections = rng.random() < 0.5
+    if rng.random() < 0.15:  # col span pre-allocation: extractors ignore it
+        parts.append(f'<colgroup><col span="{rng.randint(1, 3)}">' + "<col>" * rng.randint(0, 2) + "</colgroup>")
+    layout = rng.choice(["none", "sections", "tfoot_first", "two_tbody", "stray_mixed", "thead_late"])
     body_rows = []
     for row_index in range(row_count):
         cells = []
         for _ in range(rng.randint(1, max(1, columns))):
             attributes = ""
-            if rng.random() < 0.28:
+            if rng.random() < 0.10:
+                pick = rng.choice(CELL_ATTR_SAMPLES)
+                attributes += pick % rng.randint(0, 9) if "%d" in pick else pick
+            if rng.random() < 0.04:  # duplicate attribute: the first occurrence wins
+                attributes += f' colspan="{rng.randint(1, 3)}" colspan="0"'
+            elif rng.random() < 0.30:
                 attributes += ' colspan="%d"' % rng.randint(1, 3)
             elif rng.random() < 0.05:
                 attributes += ' colspan="0"'
-            if rng.random() < 0.28:
+            if rng.random() < 0.04:  # non-ASCII digits: invalid, span defaults to 1
+                attributes += f' rowspan="{rng.choice(["²", "１２", "٣"])}"'  # noqa: RUF001
+            elif rng.random() < 0.30:
                 attributes += ' rowspan="%d"' % rng.randint(1, 4)
-            elif rng.random() < 0.04:
+            elif rng.random() < 0.05:
                 attributes += ' rowspan="0"'
             if style == "th" and row_index == 0:
                 tag = "th"
@@ -384,11 +420,22 @@ def _gen_table(rng, depth=0):
         body_rows[0] = "<tr><th>Name</th><th>Amount</th></tr>" if columns >= 2 else "<tr><th>Name</th></tr>"
         for replacement in range(1, len(body_rows)):
             body_rows[replacement] = "<tr><td>item %d</td><td>%d</td></tr>" % (replacement, replacement)
-    if use_sections:
+    if layout == "sections" and row_count >= 2:
         split = max(1, len(body_rows) - 1)
         parts.append("<thead>" + body_rows[0] + "</thead>")
         if len(body_rows) > 1:
             parts.append("<tbody>" + "".join(body_rows[1:split]) + "".join(body_rows[split:]) + "</tbody>")
+    elif layout == "tfoot_first" and row_count >= 2:
+        parts.append("<tfoot>" + body_rows[0] + "</tfoot><tbody>" + "".join(body_rows[1:]) + "</tbody>")
+    elif layout == "two_tbody" and row_count >= 3:
+        split = rng.randint(1, len(body_rows) - 2)
+        parts.append("<tbody>" + "".join(body_rows[:split]) + "</tbody><tbody>" + "".join(body_rows[split:]) + "</tbody>")
+    elif layout == "stray_mixed" and row_count >= 3:
+        split = rng.randint(1, len(body_rows) - 1)
+        parts.extend(body_rows[:split])
+        parts.append("<tbody>" + "".join(body_rows[split:]) + "</tbody>")
+    elif layout == "thead_late" and row_count >= 2:
+        parts.append("<tbody>" + "".join(body_rows[1:]) + "</tbody><thead>" + body_rows[0] + "</thead>")
     else:
         parts.extend(body_rows)
     if depth < 2 and rng.random() < 0.22:
@@ -865,6 +912,163 @@ class HtmlTableToolPathologicalTest(unittest.TestCase):
         result = HtmlTableTool().execute(mode="extract", html=html)
         self.assertEqual(result["status"], "error")
         self.assertIn("nesting", result["error"])
+
+
+class HtmlTableToolSelfReviewRegressionTest(unittest.TestCase):
+    """Regressions for defects found by the hostile self-review (PR #4079)."""
+
+    def setUp(self):
+        self.tool = HtmlTableTool()
+
+    def rows(self, html, index=None):
+        result = self.tool.execute(mode="extract", html=html, table_index=index)
+        self.assertEqual(result["status"], "success", result.get("error"))
+        return result["tables"][0]
+
+    def test_rowspan_zero_spans_implicit_row_group_run(self):
+        """rowspan=0 spans the whole run of consecutive stray trs (implicit tbody)."""
+        html = "<table><tr><td rowspan=0>A</td><td>B</td></tr><tr><td>C</td></tr><tr><td>D</td></tr></table>"
+        table = self.rows(html)
+        self.assertEqual(table["rows"], [["A", "B"], ["A", "C"], ["A", "D"]])
+
+    def test_rowspan_zero_run_bounded_by_section_and_split_runs(self):
+        """A stray run ends at a section; runs on either side are separate groups."""
+        html = "<table><tr><td rowspan=0>A</td></tr><tbody><tr><td>x</td></tr></tbody><tr><td>B</td></tr></table>"
+        table = self.rows(html)
+        self.assertEqual(table["rows"], [["A"], ["x"], ["B"]])
+
+    def test_rowspan_zero_non_first_section_row(self):
+        """rowspan=0 on a non-first row spans the section, never the next one."""
+        html = (
+            "<table><tbody><tr><td>x</td></tr><tr><td rowspan=0>A</td></tr></tbody>"
+            "<tbody><tr><td>y</td></tr></tbody></table>"
+        )
+        table = self.rows(html)
+        self.assertEqual(table["rows"], [["x"], ["A"], ["y"]])
+        analysis = self.tool.execute(mode="analyze", html=html)
+        finding = next(f for f in analysis["tables"][0]["findings"] if f["code"] == "rowspan_zero")
+        self.assertEqual(finding["cells"], [{"row": 1, "col": 0, "expanded_to": 1}])
+
+    def test_duplicate_attribute_first_occurrence_wins(self):
+        """WHATWG: on duplicate attributes the first occurrence wins."""
+        html = '<table><tr><th colspan="3" colspan="0">H</th></tr><tr><td>1</td><td>2</td><td>3</td></tr></table>'
+        table = self.rows(html)
+        self.assertEqual(table["headers"], ["H", "H", "H"])
+        self.assertEqual(table["rows"], [["1", "2", "3"]])
+        self.assertEqual(self.rows(
+            '<table><tr><td rowspan="2" rowspan="5">A</td><td>B</td></tr><tr><td>C</td></tr></table>'
+        )["rows"], [["A", "B"], ["A", "C"]])
+
+    def test_span_non_ascii_digits_are_invalid(self):
+        """Only ASCII digits parse; superscripts crash-free default to 1."""
+        table = self.rows('<table><tr><td rowspan="²">A</td><td>B</td></tr><tr><td>C</td></tr></table>')
+        self.assertEqual(table["rows"], [["A", "B"], ["C", ""]])
+        table = self.rows('<table><tr><td rowspan="１２">A</td><td>B</td></tr><tr><td>C</td></tr></table>')  # noqa: RUF001
+        self.assertEqual(table["rows"], [["A", "B"], ["C", ""]])
+        table = self.rows('<table><tr><td colspan="٣">A</td><td>B</td></tr></table>')
+        self.assertEqual(table["rows"], [["A", "B"]])
+
+    def test_unclosed_inline_element_does_not_swallow_next_cell(self):
+        """Implied end tags close open cells/rows through inline elements."""
+        table = self.rows("<table><tr><td><b>x<td>y</table>")
+        self.assertEqual(table["rows"], [["x", "y"]])
+        table = self.rows("<table><tr><td><b>x<tr><td>y</table>")
+        self.assertEqual(table["rows"], [["x"], ["y"]])
+        table = self.rows("<table><tr><td><b>x<tbody><tr><td>y</table>")
+        self.assertEqual(table["rows"], [["x"], ["y"]])
+        table = self.rows("<table><tr><p>para<td>c</table>")
+        self.assertEqual(table["rows"], [["c"]])
+        table = self.rows("<table><tr><td><b>x</td><td>y</td></tr></table>")
+        self.assertEqual(table["rows"], [["x", "y"]])
+
+    def test_extract_table_index_semantics(self):
+        """Omitted index -> all top-level tables; an explicit index (0 included)
+        selects exactly one table, consistent with to_csv and compare."""
+        html = "<table><tr><td>one</td></tr></table><table><tr><td>two</td></tr></table>"
+        all_tables = self.tool.execute(mode="extract", html=html)
+        self.assertEqual(all_tables["table_count"], 2)
+        first = self.tool.execute(mode="extract", html=html, table_index=0)
+        self.assertEqual(first["table_count"], 1)
+        self.assertEqual(first["tables"][0]["rows"], [["one"]])
+        second = self.tool.execute(mode="extract", html=html, table_index=1)
+        self.assertEqual(second["tables"][0]["rows"], [["two"]])
+        csv_first = self.tool.execute(mode="to_csv", html=html, table_index=0)
+        self.assertEqual(csv_first["csv"].splitlines(), ["one"])
+        compared = self.tool.execute(mode="compare", html=html, html2=html, table_index=0, table_index2=1)
+        self.assertEqual(compared["status"], "success")
+        self.assertEqual(compared["changed_cells"], [{"row": 0, "col": 0, "a": "one", "b": "two"}])
+        out_of_range = self.tool.execute(mode="extract", html=html, table_index=2)
+        self.assertEqual(out_of_range["status"], "error")
+        bad_type = self.tool.execute(mode="extract", html=html, table_index="0")
+        self.assertEqual(bad_type["status"], "error")
+
+    def test_invalid_numeric_references_become_replacement(self):
+        """&#0;, surrogates and out-of-range refs decode to U+FFFD (JSON-safe)."""
+        table = self.rows("<table><tr><td>&#0; &#xD800; &#x110000;</td></tr></table>")
+        self.assertEqual(table["rows"], [["\ufffd \ufffd \ufffd"]])
+        json.dumps(table)  # must not raise
+        grin = self.rows("<table><tr><td>&#x1F600; ok</td></tr></table>")
+        self.assertEqual(grin["rows"], [["\U0001f600 ok"]])
+
+    def test_c0_control_character_reference_pinned(self):
+        """Pinned divergence: the stdlib decoder drops C0 control char refs
+        (lxml keeps them); the tool follows the stdlib deterministically."""
+        table = self.rows("<table><tr><td>a&#3;b</td></tr></table>")
+        self.assertEqual(table["rows"], [["ab"]])
+
+    def test_colgroup_span_preallocation_ignored(self):
+        """Pinned: colgroup/col span pre-allocation is ignored; cells set the grid."""
+        table = self.rows('<table><colgroup><col span="3"><col></colgroup><tr><td>1</td><td>2</td></tr></table>')
+        self.assertEqual(table["rows"], [["1", "2"]])
+        self.assertEqual(table["col_count"], 2)
+
+    def test_compare_changed_cells_cap_flags_truncation(self):
+        left = [[f"k{i}" for i in range(5)] for _ in range(3000)]
+        right = [[f"v{i}" for i in range(5)] for _ in range(3000)]
+        result = self.tool.execute(
+            mode="compare",
+            table_a={"headers": None, "rows": left},
+            table_b={"headers": None, "rows": right},
+        )
+        self.assertEqual(len(result["changed_cells"]), 10_000)
+        self.assertTrue(result["changed_cells_truncated"])
+        self.assertFalse(result["same"])
+
+    def test_extract_thirty_k_rows_bounded(self):
+        """Quadratic regressions (descendant walk, nested anchors) stay linear."""
+        html = "<table><tbody>" + "".join(
+            f"<tr><td>{i}</td><td>a{i}</td><td>b{i}</td><td>c{i}</td><td>d{i}</td></tr>"
+            for i in range(30_000)
+        ) + "</tbody></table>"
+        started = time.monotonic()
+        result = self.tool.execute(mode="extract", html=html)
+        elapsed = time.monotonic() - started
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["tables"][0]["row_count"], 30_000)
+        self.assertLess(elapsed, 4.0, f"30k-row table took {elapsed:.2f}s")
+
+    def test_nested_table_anchors_stay_linear(self):
+        html = "<table>" + "".join(
+            f"<tr><td>cell {i}<table><tr><td>n{i}</td></tr></table></td></tr>" for i in range(6_000)
+        ) + "</table>"
+        started = time.monotonic()
+        result = self.tool.execute(mode="extract", html=html)
+        elapsed = time.monotonic() - started
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(len(result["tables"][0]["child_tables"]), 6_000)
+        self.assertLess(elapsed, 3.0, f"6k nested tables took {elapsed:.2f}s")
+
+    def test_one_hundred_k_cells_bounded(self):
+        html = "<table><tbody>" + "".join(
+            f"<tr><td>{i}</td><td>a{i}</td><td>b{i}</td><td>c{i}</td><td>d{i}</td></tr>"
+            for i in range(20_000)
+        ) + "</tbody></table>"
+        started = time.monotonic()
+        result = self.tool.execute(mode="extract", html=html)
+        elapsed = time.monotonic() - started
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(len(result["tables"][0]["rows"][0]), 5)
+        self.assertLess(elapsed, 4.0, f"100k cells took {elapsed:.2f}s")
 
 
 class HtmlTableToolRegistrationTest(unittest.TestCase):

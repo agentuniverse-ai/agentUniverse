@@ -26,7 +26,10 @@ args_model_schema:
       type: string
     table_index:
       type: integer
-      default: 0
+      description: >-
+        Omit (null) in extract mode to return every top-level table; an explicit
+        integer (0-based) selects one table, like to_csv and compare.
+      default: null
     table_index2:
       type: integer
       default: 0

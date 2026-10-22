@@ -16,10 +16,11 @@ from agentuniverse.agent.action.tool.tool import Tool
 _VOID_ELEMENTS = frozenset(
     "area base br col embed hr img input link meta param source track wbr".split()
 )
-# Starts that implicitly close an open cell or row in lenient parsing. A nested
-# <table> never closes its own cell: it belongs inside that cell per the HTML parser.
-_IMPLIED_END_FOR_CELL = frozenset({"td", "th", "tr", "thead", "tbody", "tfoot", "caption", "colgroup"})
-_IMPLIED_END_FOR_ROW = frozenset({"tr", "thead", "tbody", "tfoot", "caption", "colgroup"})
+# Tags that close an open row when they start. A nested <table> never closes its
+# own cell: it belongs inside that cell per the HTML parser.
+_ROW_CLOSERS = frozenset({"tr", "thead", "tbody", "tfoot", "caption", "colgroup"})
+# Scanning for an implied end never crosses these elements (table scope).
+_TABLE_SCOPE = frozenset({"table", "caption", "colgroup", "thead", "tbody", "tfoot", "#document"})
 _DROPPED_SUBTREES = frozenset({"script", "style"})
 _WHATWG_MAX_COLSPAN = 1000
 _WHATWG_MAX_ROWSPAN = 65534
@@ -45,24 +46,56 @@ class _TreeBuilder(HTMLParser):
         self.root = _Node("#document", {}, None)
         self.stack: list[_Node] = [self.root]
 
+    def _decode_attrs(self, attrs) -> dict[str, str]:
+        # WHATWG 13.2.5: on a duplicate attribute the first occurrence wins.
+        decoded: dict[str, str] = {}
+        for key, value in attrs:
+            if key not in decoded:
+                decoded[key] = unescape(value) if isinstance(value, str) else ""
+        return decoded
+
+    def _implied_end_for_cell(self) -> None:
+        """A td/th start closes an open cell of the current row (and anything
+        inside it), then attaches directly under the current row."""
+        for position in range(len(self.stack) - 1, 0, -1):
+            tag_name = self.stack[position].tag
+            if tag_name in ("td", "th"):
+                del self.stack[position:]
+                return
+            if tag_name in _TABLE_SCOPE:
+                break
+        for position in range(len(self.stack) - 1, 0, -1):
+            tag_name = self.stack[position].tag
+            if tag_name == "tr":
+                del self.stack[position + 1 :]
+                return
+            if tag_name in _TABLE_SCOPE:
+                return
+
+    def _implied_end_for_row(self) -> None:
+        """A tr/section start closes the open row (and everything inside it)."""
+        for position in range(len(self.stack) - 1, 0, -1):
+            tag_name = self.stack[position].tag
+            if tag_name == "tr":
+                del self.stack[position:]
+                return
+            if tag_name in _TABLE_SCOPE:
+                return
+
     def handle_starttag(self, tag, attrs):
+        if tag in ("td", "th"):
+            self._implied_end_for_cell()
+        elif tag in _ROW_CLOSERS:
+            self._implied_end_for_row()
         current = self.stack[-1]
-        if tag in _IMPLIED_END_FOR_CELL and current.tag in ("td", "th"):
-            self.stack.pop()
-            current = self.stack[-1]
-        if tag in _IMPLIED_END_FOR_ROW and current.tag == "tr":
-            self.stack.pop()
-            current = self.stack[-1]
-        decoded = {key: unescape(value) if isinstance(value, str) else "" for key, value in attrs}
-        node = _Node(tag, decoded, current)
+        node = _Node(tag, self._decode_attrs(attrs), current)
         current.children.append(node)
         if tag not in _VOID_ELEMENTS:
             self.stack.append(node)
 
     def handle_startendtag(self, tag, attrs):
         current = self.stack[-1]
-        decoded = {key: unescape(value) if isinstance(value, str) else "" for key, value in attrs}
-        current.children.append(_Node(tag, decoded, current))
+        current.children.append(_Node(tag, self._decode_attrs(attrs), current))
 
     def handle_endtag(self, tag):
         if tag in _VOID_ELEMENTS:
@@ -131,17 +164,30 @@ class HtmlTableTool(Tool):
     ``analyze`` (per-table findings), ``to_csv`` (one table as CSV text) and
     ``compare`` (cell-level diff of two tables). Runtime is stdlib-only.
 
+    ``extract`` returns every top-level table when ``table_index`` is omitted;
+    an explicit integer index (0 included) returns exactly that table, with
+    the same 0-based meaning as ``to_csv`` and ``compare``.
+
     Expansion follows the WHATWG fixed table-processing semantics: a rowspan
     fills downward copies and a colspan fills rightward copies of the cell
     text (copies, not merged markers). colspan=0 is expanded per the
     historical HTML4 "span to the end of the row" rule and flagged;
-    rowspan=0 spans to the end of its row group per the HTML Standard;
-    a rowspan past the last row is clamped to the remaining rows and flagged.
+    rowspan=0 spans to the end of its row group per the HTML Standard, where
+    a maximal run of consecutive ``tr`` elements not inside a
+    thead/tbody/tfoot forms one implicit row group; a rowspan past the last
+    row is clamped to the remaining rows and flagged. Span attributes parse
+    as WHATWG non-negative integers (ASCII digits only; invalid values are
+    ignored, so the span defaults to 1) and duplicate attributes keep the
+    first occurrence. ``colgroup``/``col`` span pre-allocation is ignored:
+    cells alone determine the grid.
 
-    Cell text rules: character references are decoded, script/style subtrees
-    are dropped, nested tables are reported as child references instead of
+    Cell text rules: character references are decoded (invalid numeric
+    references such as ``&#0;`` become U+FFFD), script/style subtrees are
+    dropped, nested tables are reported as child references instead of
     inlined text, and runs of Unicode whitespace (non-breaking spaces
     included) collapse to a single space. <br> contributes one space.
+    Lenient parsing generates implied end tags, so an unclosed inline
+    element before the next cell or row does not swallow it.
     """
 
     max_input_bytes: int = 4 * 1024 * 1024
@@ -158,7 +204,7 @@ class HtmlTableTool(Tool):
         mode: str,
         html: str | None = None,
         html2: str | None = None,
-        table_index: int = 0,
+        table_index: int | None = None,
         table_index2: int = 0,
         table_a: dict[str, Any] | None = None,
         table_b: dict[str, Any] | None = None,
@@ -272,39 +318,58 @@ class HtmlTableTool(Tool):
     def _descendant_tables(element: _Node) -> list[_Node]:
         """Return nested table elements (any depth) in document order."""
         found: list[_Node] = []
-        queue: list[Any] = list(element.children)
-        while queue:
-            node = queue.pop(0)
-            if not isinstance(node, _Node):
-                continue
+        stack: list[_Node] = [child for child in reversed(element.children) if isinstance(child, _Node)]
+        while stack:
+            node = stack.pop()
             if node.tag == "table":
                 found.append(node)
-                queue = list(node.children) + queue
-            else:
-                queue = list(node.children) + queue
+            stack.extend(reversed([child for child in node.children if isinstance(child, _Node)]))
         return found
+
+    def _row_scan(self, table: _ParsedTable) -> list[tuple[list[_Cell], int]]:
+        """Read the table's rows in document order, tagged with a row-group id.
+
+        Row groups for rowspan=0: rows of a thead/tbody/tfoot section form one
+        group; a maximal run of consecutive stray tr children forms one
+        implicit group (HTML parsing wraps them in an implicit tbody), and
+        any other element child ends the run.
+        """
+        raw_rows: list[tuple[list[_Cell], int]] = []
+        group_id = -1
+        continuing_run = False
+        for child in table.element.children:
+            if not isinstance(child, _Node):
+                continue
+            if child.tag == "tr":
+                if not continuing_run:
+                    group_id += 1
+                    continuing_run = True
+                raw_rows.append((self._row_cells(child), group_id))
+                continue
+            continuing_run = False
+            group_id += 1
+            if child.tag == "caption" and table.caption is None:
+                table.caption = self._subtree_text(child)
+            elif child.tag in ("thead", "tbody", "tfoot"):
+                for kid in child.children:
+                    if isinstance(kid, _Node) and kid.tag == "tr":
+                        raw_rows.append((self._row_cells(kid), group_id))
+        return raw_rows
 
     def _fill_table(self, table: _ParsedTable) -> None:
         element = table.element
         table.presentation = element.attrs.get("role", "").strip().lower() == "presentation"
         summary = element.attrs.get("summary")
         table.summary = self._normalize(summary) if summary else None
-        row_index = 0
-        for child in element.children:
-            if not isinstance(child, _Node):
-                continue
-            if child.tag == "caption" and table.caption is None:
-                table.caption = self._subtree_text(child)
-            elif child.tag in ("thead", "tbody", "tfoot"):
-                section_rows = [kid for kid in child.children if isinstance(kid, _Node) and kid.tag == "tr"]
-                for row_element in section_rows:
-                    table.rows.append((self._row_cells(row_element), row_index, row_index + len(section_rows) - 1))
-                    row_index += 1
-            elif child.tag == "tr":
-                table.rows.append((self._row_cells(child), row_index, row_index))
-                row_index += 1
-        if len(table.rows) > self.max_rows_per_table:
+        raw_rows = self._row_scan(table)
+        if len(raw_rows) > self.max_rows_per_table:
             raise ValueError(f"table {table.index} exceeds max_rows_per_table ({self.max_rows_per_table})")
+        group_last: dict[int, int] = {}
+        for position, (_cells, group) in enumerate(raw_rows):
+            group_last[group] = position
+        table.rows = [
+            (cells, position, group_last[group]) for position, (cells, group) in enumerate(raw_rows)
+        ]
 
     def _row_cells(self, row_element: _Node) -> list[_Cell]:
         cells: list[_Cell] = []
@@ -323,13 +388,18 @@ class HtmlTableTool(Tool):
 
     @staticmethod
     def _attr_span(cell: _Node, attribute: str) -> int:
-        """Parse a span attribute per the rules for non-negative integers."""
+        """Parse a span attribute per the WHATWG rules for non-negative integers.
+
+        Only ASCII digits count; anything else (including non-ASCII digit
+        forms such as superscripts or full-width digits) makes the value
+        invalid, and an invalid attribute is ignored (span defaults to 1).
+        """
         raw = cell.attrs.get(attribute)
         if raw is None:
             return 1
         digits = ""
         for character in raw.strip():
-            if character.isdigit():
+            if character in "0123456789":
                 digits += character
             else:
                 break
@@ -365,17 +435,6 @@ class HtmlTableTool(Tool):
     def _normalize(text: str) -> str:
         """Collapse runs of Unicode whitespace (non-breaking spaces included)."""
         return " ".join(text.split())
-
-    @staticmethod
-    def _contains(outer: _Node, target: _Node) -> bool:
-        stack: list[Any] = list(outer.children)
-        while stack:
-            item = stack.pop()
-            if isinstance(item, _Node):
-                if item is target:
-                    return True
-                stack.extend(item.children)
-        return False
 
     # ------------------------------------------------------------------ #
     # Grid expansion (WHATWG fixed processing semantics: span copies)     #
@@ -423,13 +482,45 @@ class HtmlTableTool(Tool):
             resolved.append(row_spans)
         return resolved
 
+    @staticmethod
+    def _nested_anchors(table: "_ParsedTable", origins: dict[int, tuple[int, int]]) -> list[dict[str, int]]:
+        """Anchor nested tables by walking each child's ancestor chain to its
+        enclosing cell (linear in the number of child tables, not cells)."""
+        anchors: list[dict[str, int]] = []
+        for child_index, child_element in table.direct_children:
+            ancestor: _Node | None = child_element.parent
+            cell_node: _Node | None = None
+            while ancestor is not None and ancestor is not table.element:
+                if ancestor.tag in ("td", "th"):
+                    cell_node = ancestor
+                    break
+                ancestor = ancestor.parent
+            origin = origins.get(id(cell_node)) if cell_node is not None else None
+            if origin is not None:
+                anchors.append({"index": child_index, "row": origin[0], "col": origin[1]})
+        return anchors
+
+    @staticmethod
+    def _note_span_flags(
+        flags: dict[str, list[dict[str, int]]], cell: _Cell, row_index: int, col: int, rowspan: int, colspan: int
+    ) -> None:
+        """Record colspan=0 / rowspan=0 expansions and clamped rowspans."""
+        if cell.colspan <= 0:
+            flags["colspan_zero"].append({"row": row_index, "col": col, "expanded_to": colspan})
+        if cell.rowspan <= 0:
+            flags["rowspan_zero"].append({"row": row_index, "col": col, "expanded_to": rowspan})
+        if rowspan < cell.rowspan:
+            flags["rowspan_clamped"].append(
+                {"row": row_index, "col": col, "declared": cell.rowspan, "effective": rowspan}
+            )
+
     def _expand(self, table: _ParsedTable) -> dict[str, Any]:
         rows = table.rows
         total = len(rows)
         spans = self._effective_spans(rows, total)
         occupied: list[set[int]] = [set() for _ in range(total)]
         grid_rows: list[dict[int, str]] = [dict() for _ in range(total)]
-        anchors: list[dict[str, int]] = []
+        origins: dict[int, tuple[int, int]] = {}
         flags = {
             "colspan_zero": [],
             "rowspan_zero": [],
@@ -442,24 +533,15 @@ class HtmlTableTool(Tool):
                 # The whole footprint must fit without overlapping placed cells.
                 while any(slot in occupied[row_index] for slot in range(cursor, cursor + colspan)):
                     cursor += 1
-                if cell.colspan <= 0:
-                    flags["colspan_zero"].append({"row": row_index, "col": cursor, "expanded_to": colspan})
-                if cell.rowspan <= 0:
-                    flags["rowspan_zero"].append({"row": row_index, "col": cursor, "expanded_to": rowspan})
-                if rowspan < cell.rowspan:
-                    flags["rowspan_clamped"].append(
-                        {"row": row_index, "col": cursor, "declared": cell.rowspan, "effective": rowspan}
-                    )
+                self._note_span_flags(flags, cell, row_index, cursor, rowspan, colspan)
                 for delta_y in range(rowspan):
                     occupied[row_index + delta_y].update(range(cursor, cursor + colspan))
                     # Rowspan fills downward copies, colspan rightward copies.
                     for delta_x in range(colspan):
                         grid_rows[row_index + delta_y][cursor + delta_x] = cell.text
-                if table.direct_children:
-                    for child_index, child_element in table.direct_children:
-                        if self._contains(cell.node, child_element):
-                            anchors.append({"index": child_index, "row": row_index, "col": cursor})
+                origins[id(cell.node)] = (row_index, cursor)
                 cursor += colspan
+        anchors = self._nested_anchors(table, origins)
         col_count = 0
         for placed in grid_rows:
             if placed:
@@ -530,8 +612,15 @@ class HtmlTableTool(Tool):
     # Modes                                                               #
     # ------------------------------------------------------------------ #
 
-    def _table_payload(self, table: _ParsedTable, tables: list[_ParsedTable], raw_spans: bool) -> dict[str, Any]:
-        expansion = self._expand(table)
+    def _table_payload(
+        self,
+        table: _ParsedTable,
+        tables: list[_ParsedTable],
+        raw_spans: bool,
+        expansion: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if expansion is None:
+            expansion = self._expand(table)
         grid = expansion["grid"]
         headers, detection = self._detect_headers(expansion)
         rows = grid[1:] if headers is not None else grid
@@ -601,7 +690,10 @@ class HtmlTableTool(Tool):
         return table_index
 
     def _extract(self, tables: list[_ParsedTable], table_index: Any, raw_spans: bool) -> dict[str, Any]:
-        if table_index:
+        # An omitted table_index extracts every top-level table; an explicit
+        # integer (0 included) extracts exactly that table, consistent with
+        # to_csv and compare.
+        if table_index is not None:
             index = self._checked_index(tables, table_index, "table_index")
             return {
                 "status": "success",
@@ -618,7 +710,7 @@ class HtmlTableTool(Tool):
             if table.depth != 0:
                 continue
             expansion = self._expand(table)
-            payload = self._table_payload(table, tables, False)
+            payload = self._table_payload(table, tables, False, expansion)
             findings: list[dict[str, Any]] = []
             if not any(isinstance(child, _Node) and child.tag == "tbody" for child in table.element.children):
                 findings.append(
@@ -730,7 +822,7 @@ class HtmlTableTool(Tool):
         return {"status": "success", "mode": "analyze", "table_count": len(reports), "tables": reports}
 
     def _to_csv(self, tables: list[_ParsedTable], table_index: Any) -> dict[str, Any]:
-        index = self._checked_index(tables, table_index, "table_index")
+        index = self._checked_index(tables, 0 if table_index is None else table_index, "table_index")
         payload = self._table_payload(tables[index], tables, False)
         buffer = io.StringIO()
         writer = csv.writer(buffer)
@@ -748,11 +840,11 @@ class HtmlTableTool(Tool):
             "col_count": payload["col_count"],
         }
 
-    def _grid_from_html(self, html: Any, table_index: int, label: str) -> dict[str, Any]:
+    def _grid_from_html(self, html: Any, table_index: int | None, label: str) -> dict[str, Any]:
         if not isinstance(html, str) or not html:
             raise ValueError(f"{label} must be a non-empty html string (or pass table_a/table_b structures)")
         tables = self._collect(html)
-        index = self._checked_index(tables, table_index, "table_index")
+        index = self._checked_index(tables, 0 if table_index is None else table_index, "table_index")
         payload = self._table_payload(tables[index], tables, False)
         return {"headers": payload["headers"], "rows": payload["rows"], "col_count": payload["col_count"]}
 

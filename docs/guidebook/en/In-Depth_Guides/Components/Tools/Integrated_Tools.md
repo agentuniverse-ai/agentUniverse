@@ -651,7 +651,9 @@ tool = HtmlTableTool()
 result = tool.execute(mode="extract", html=html_text)
 ```
 
-The `extract` mode returns every top-level table with detected `headers`
+The `extract` mode returns every top-level table (when `table_index` is
+omitted; an explicit 0-based index, `0` included, returns exactly that table,
+consistent with `to_csv` and `compare`) with detected `headers`
 (method noted: `th-elements`, `first-row-strong` or `none`), `rows` where
 spans are expanded per the WHATWG table-processing semantics (rowspan fills
 downward copies, colspan fills rightward copies; copies, not merged markers),
@@ -668,7 +670,19 @@ produces a cell-level diff (added/removed rows and columns, changed cells
 with coordinates, header drift) of two tables given as extracted structures
 or as two HTML documents with indexes.
 
-Cell text follows documented rules: character references are decoded,
+Span parsing follows the WHATWG rules for non-negative integers: only ASCII
+digits count, invalid values (superscripts, full-width digits, junk) fall
+back to a span of 1, and duplicate attributes keep the first occurrence.
+`rowspan=0` spans its row group per the HTML Standard: the `thead`/`tbody`/
+`tfoot` section, or the maximal run of consecutive section-less `tr` rows
+(the implicit tbody the HTML parser would create). `colgroup`/`col` span
+pre-allocation is ignored; cells alone determine the grid. Lenient parsing
+generates implied end tags, so an unclosed inline element cannot swallow the
+next cell or row.
+
+Cell text follows documented rules: character references are decoded (invalid
+numeric references such as `&#0;` become U+FFFD, and C0 control references
+like `&#3;` are dropped, following the Python stdlib decoder),
 script/style content is dropped, nested tables are reported as references,
 runs of Unicode whitespace (non-breaking spaces included) collapse to one
 space and `<br>` contributes one space. Input size, table count, rows per
