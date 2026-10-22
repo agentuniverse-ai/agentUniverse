@@ -34,6 +34,8 @@ class RamContextStore(ContextStore):
     storage_tier: str = "hot"
 
     def __init__(self, **kwargs):
+        """Initialize the ram context store.
+        """
         super().__init__(**kwargs)
         # Storage: session_id -> OrderedDict[segment_id -> ContextSegment]
         self._storage: Dict[str, OrderedDict] = {}
