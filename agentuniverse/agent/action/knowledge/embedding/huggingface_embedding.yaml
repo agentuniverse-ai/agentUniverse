@@ -1,0 +1,9 @@
+name: 'huggingface_embedding'
+description: 'embedding using the hugging face inference api feature-extraction pipeline'
+embedding_model_name: 'sentence-transformers/all-MiniLM-L6-v2'
+api_base: '${HF_API_BASE}'
+api_key: '${HF_TOKEN}'
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.huggingface_embedding'
+  class: 'HuggingFaceEmbedding'
