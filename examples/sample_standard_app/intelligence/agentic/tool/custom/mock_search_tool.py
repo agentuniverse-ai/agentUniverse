@@ -12,11 +12,25 @@ class MockSearchTool(Tool):
     """
 
     def execute(self, input: str):
+        """Execute the mock search for the given query.
+
+        Args:
+            input: The search query text (kept for interface compatibility).
+
+        Returns:
+            The pre-fetched mock search results as a single text block.
+        """
         # get top10 results from mock search.
         res = self.mock_api_res()
         return res
 
     def mock_api_res(self):
+        """Return the canned mock search result text.
+
+        Returns:
+            A static multi-paragraph Chinese text block describing the mock
+            search outcome for the demo tool.
+        """
         res = f"""采访中谈及第十次减持比亚迪，巴菲特称是为了便于伯克希尔进行更好的资金配置。而在今年2月，
         芒格在美国报纸和软件公司Daily Journal举行的虚拟年会上也曾谈及减持比亚迪的 ... 
         对比亚迪的减持可能反映出巴菲特对中国新能源汽车市场未来增长的预期调整，或是对比亚迪本身估值的重新评估。
