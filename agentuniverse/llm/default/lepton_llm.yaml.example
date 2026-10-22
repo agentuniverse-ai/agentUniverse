@@ -1,0 +1,13 @@
+name: 'default_lepton_llm'
+description: 'default lepton llm powered by the Lepton AI models'
+model_name: 'llama3.1-8b'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${LEPTON_API_KEY}'
+api_base: 'https://api.lepton.run/api/v1'
+proxy: '${LEPTON_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.lepton_llm'
+  class: 'LeptonLLM'
