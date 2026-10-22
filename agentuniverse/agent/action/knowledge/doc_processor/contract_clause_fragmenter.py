@@ -246,6 +246,10 @@ class ContractClauseFragmenter(DocProcessor):
             clause_id = match.group(1) if match else 'unknown'
             return ('article', f'article_{clause_id}')
 
+        match = re.match(r'^([一二三四五六七八九十百千]+)、', header)
+        if match:
+            return ('clause', f'enumeration_{match.group(1)}')
+
         # Fallback
         return ('clause', 'clause_unknown')
 
