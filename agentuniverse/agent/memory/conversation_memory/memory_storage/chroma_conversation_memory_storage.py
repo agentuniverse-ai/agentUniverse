@@ -8,12 +8,9 @@ import json
 
 import uuid
 from datetime import datetime
-from urllib.parse import urlparse
 from typing import Optional, List, Any
 
-import chromadb
 from pydantic import SkipValidation
-from chromadb.config import Settings
 from chromadb.api.models.Collection import Collection
 
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
@@ -21,6 +18,7 @@ from agentuniverse.agent.memory.conversation_memory.conversation_message import 
 from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageEnum, ConversationMessageSourceType
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+from agentuniverse.agent.action.knowledge.store.chroma_client_factory import create_chroma_client
 
 
 class ChromaConversationMemoryStorage(MemoryStorage):
@@ -57,19 +55,7 @@ class ChromaConversationMemoryStorage(MemoryStorage):
 
     def _init_collection(self) -> Any:
         """Initialize the ChromaDB collection."""
-        if self.persist_path.startswith('http') or self.persist_path.startswith('https'):
-            parsed_url = urlparse(self.persist_path)
-            settings = Settings(
-                chroma_api_impl="chromadb.api.fastapi.FastAPI",
-                chroma_server_host=parsed_url.hostname,
-                chroma_server_http_port=str(parsed_url.port)
-            )
-        else:
-            settings = Settings(
-                is_persistent=True,
-                persist_directory=self.persist_path
-            )
-        client = chromadb.Client(settings)
+        client = create_chroma_client(self.persist_path)
         self._collection = client.get_or_create_collection(name=self.collection_name)
         return client
 
