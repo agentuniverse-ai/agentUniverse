@@ -209,10 +209,9 @@ class PDFTool(Tool):
         indexes = set(self._page_indexes(pages, len(reader.pages)))
         _, Writer = self._classes()
         writer = Writer()
-        for index, page in enumerate(reader.pages):
-            if index in indexes:
-                page.rotate(rotation)
-            writer.add_page(page)
+        writer.clone_document_from_reader(reader)
+        for index in indexes:
+            writer.pages[index].rotate(rotation)
         self._save(writer, destination)
         return {
             "status": "success",

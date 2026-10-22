@@ -87,7 +87,10 @@ class TestEpubReader(unittest.TestCase):
         self.assertGreater(len(documents), 0)
 
         # Check document content
-        doc = documents[0]
+        # The navigation document is first in this fixture's spine. Locate the
+        # chapter explicitly instead of assuming manifest insertion order.
+        doc = next(doc for doc in documents
+                   if doc.metadata['chapter_file'] == 'test_chap.xhtml')
         self.assertIn("Test Chapter", doc.text)
         self.assertIn("test paragraph", doc.text)
 
