@@ -153,9 +153,10 @@ class YahooFinanceTool(Tool):
         df = ticker.history(period=period, interval=interval)
         if df is None or getattr(df, "empty", True):
             return []
-        # Reset the date index into a column, then take the most recent rows.
-        rows = df.reset_index().rename(columns=str.lower).to_dict(orient="records")
-        return rows[::-1][:self.max_history_rows]
+        # Select the newest rows while they are still a DataFrame; converting
+        # the full history to dictionaries can be expensive for period="max".
+        rows = df.tail(self.max_history_rows).reset_index().rename(columns=str.lower).to_dict(orient="records")
+        return rows[::-1]
 
     @retry(3, 1.0)
     def _fetch_info(self, ticker) -> Dict[str, Any]:
