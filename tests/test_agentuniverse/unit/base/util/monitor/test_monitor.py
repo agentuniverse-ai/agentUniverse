@@ -52,3 +52,18 @@ def test_get_llm_token_usage_reads_top_level_messages():
 
     assert usage["prompt_tokens"] > 0
     assert usage["completion_tokens"] > 0
+
+
+def test_serialize_obj_filters_nested_values_without_dropping_record():
+    payload = {
+        "messages": [{"role": "user", "content": "hello", "runtime": object()}],
+        "result": {"content": "kept", "runtime": object()},
+    }
+
+    serialized = Monitor().serialize_obj(payload)
+
+    assert serialized == {
+        "messages": [{"role": "user", "content": "hello"}],
+        "result": {"content": "kept"},
+    }
+    assert payload["messages"][0]["runtime"] is not None
