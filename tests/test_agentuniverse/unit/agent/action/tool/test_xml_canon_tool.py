@@ -330,6 +330,17 @@ class XmlCanonToolBasicTest(unittest.TestCase):
         self.assertEqual(difference["offset"], len("<r>t</r>"))
         self.assertIn("\n<?pi x?>", difference["context_b"])
 
+    def test_compare_gratuitous_undeclaration_is_equal(self):
+        # A redundant xmlns="" (nothing to undo) is semantically neutral, so
+        # documents differing only by one must compare canonically equal in
+        # both variants (regression: it used to force a false difference).
+        left = '<m:delta xmlns:m="http://example.org/a" beta="1">text</m:delta>'
+        right = '<m:delta xmlns:m="http://example.org/a" xmlns="" beta="1">text</m:delta>'
+        for kwargs in ({}, {"variant": "exclusive"}):
+            result = self.tool.execute(mode="compare", xml_text=left, xml_text_b=right, **kwargs)
+            self.assertEqual(result["status"], "success", kwargs)
+            self.assertTrue(result["canonically_equal"], kwargs)
+
     def test_explain_lists_applicable_transformations(self):
         document = "<r b='2' a='1'><!-- c --><c><![CDATA[x<y]]></c><e/></r>"
         result = self.tool.execute(mode="explain", xml_text=document)
@@ -544,6 +555,36 @@ INCLUSIVE_PREFIX_EXAMPLES = [
 ]
 
 
+# Undeclarations with nothing to undo are dropped (Exclusive C14N 4.3), while
+# undeclarations that cancel a rendered default namespace are materialized.
+UNDECLARATION_EXAMPLES = [
+    (
+        '<p:a xmlns:p="http://p"><b xmlns=""/></p:a>',
+        '<p:a xmlns:p="http://p"><b></b></p:a>',
+    ),
+    (
+        '<p:a xmlns:p="http://p"><b xmlns=""/><b2/></p:a>',
+        '<p:a xmlns:p="http://p"><b></b><b2></b2></p:a>',
+    ),
+    (
+        '<p:a xmlns:p="http://p"><b xmlns=""/><c xmlns="http://v"/></p:a>',
+        '<p:a xmlns:p="http://p"><b></b><c xmlns="http://v"></c></p:a>',
+    ),
+    (
+        '<p:a xmlns:p="http://p"><w xmlns="http://w"><b xmlns=""/></w></p:a>',
+        '<p:a xmlns:p="http://p"><w xmlns="http://w"><b xmlns=""></b></w></p:a>',
+    ),
+    (
+        '<m:beta xmlns:m="http://m" xmlns=""/>',
+        '<m:beta xmlns:m="http://m"></m:beta>',
+    ),
+    (
+        '<d xmlns="http://d"><p:a xmlns:p="http://p"><b xmlns=""/></p:a></d>',
+        '<d xmlns="http://d"><p:a xmlns:p="http://p"><b xmlns=""></b></p:a></d>',
+    ),
+]
+
+
 @unittest.skipUnless(LXML_AVAILABLE, "lxml is required as the canonicalization test oracle")
 class XmlCanonToolOracleTest(unittest.TestCase):
     """Byte-equality tests against lxml C14N on seeded corpora and spec examples."""
@@ -617,6 +658,35 @@ class XmlCanonToolOracleTest(unittest.TestCase):
         self.assertEqual(result["canonical"], '<k:r xmlns="http://u" xmlns:k="http://k"><k:c></k:c></k:r>')
         without = self.tool.execute(mode="canonicalize", xml_text=document, variant="exclusive")
         self.assertEqual(without["canonical"], '<k:r xmlns:k="http://k"><k:c></k:c></k:r>')
+
+    def test_undeclaration_without_rendered_default_dropped(self):
+        """xmlns="" renders only to undo a default ns an output ancestor rendered.
+
+        Exclusive C14N section 4.3: an empty default declaration is emitted
+        only when the nearest output ancestor utilizing the default namespace
+        actually rendered one; a gratuitous undeclaration is dropped in both
+        variants (lxml/libxml2 agree).
+        """
+        for document, expected in UNDECLARATION_EXAMPLES:
+            for variant in ("c14n10", "exclusive"):
+                with self.subTest(document=document[:40], variant=variant):
+                    ours = self.assert_matches_lxml(document, variant=variant)
+                    self.assertEqual(ours["canonical"], expected)
+
+    def test_seeded_corpus_undeclaration_churn(self):
+        """Seeded default-namespace churn (undeclare/rebind) matches lxml."""
+        for seed in range(40):
+            with self.subTest(seed=seed):
+                rng = random.Random(11_000 + seed)  # noqa: S311 (seeded deterministic test data)
+                inner = ['<b xmlns=""/>', "<b2/>", '<c xmlns="http://v"/>', "<b3/>"][seed % 4]
+                wrapper = (
+                    '<p:a xmlns:p="http://p">{inner}</p:a>'
+                    if rng.random() < 0.5
+                    else '<d xmlns="http://d"><p:a xmlns:p="http://p">{inner}</p:a></d>'
+                )
+                document = wrapper.format(inner=inner + inner)
+                self.assert_matches_lxml(document)
+                self.assert_matches_lxml(document, variant="exclusive")
 
     def test_compare_equal_pairs(self):
         """200 seeded cosmetic pairs must always compare canonically equal."""

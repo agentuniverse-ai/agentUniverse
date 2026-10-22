@@ -20,11 +20,14 @@ Implemented canonicalization subset (document order serialization):
 3.  The XML declaration is dropped; comments are removed and adjacent text
     nodes merge; whitespace outside the root element is dropped; document
     level processing instructions are kept, separated by single newlines.
-4.  Namespace declarations are rendered before attributes at every element,
+    4.  Namespace declarations are rendered before attributes at every element,
     sorted by prefix (default namespace first). A declaration is rendered only
     when its prefix-to-URI binding differs from the nearest binding rendered
     by an ancestor output, so redundant re-declarations are suppressed while
-    re-bindings and ``xmlns=""`` undeclarations are materialized.
+    re-bindings and ``xmlns=""`` undeclarations are materialized. An
+    ``xmlns=""`` undeclaration is rendered only when an output ancestor
+    actually rendered a default namespace binding (an undeclaration with
+    nothing to undo is dropped, per Exclusive C14N section 4.3).
 5.  Attributes are sorted by (namespace URI, local name); unprefixed
     attributes carry no namespace and sort first. Values are double quoted
     with ``& < "`` escaped plus character references for TAB/LF/CR.
@@ -645,6 +648,13 @@ class XmlCanonTool(Tool):
             level: dict[str, str] = {}
             for prefix, uri in self._candidates(element, variant, prefixes):
                 if _nearest_rendered(rendered, prefix) == uri:
+                    continue
+                # Per Exclusive C14N section 4.3 (and libxml2): xmlns="" is
+                # rendered only to undo a default namespace that an output
+                # ancestor actually rendered. When no output ancestor rendered
+                # any default binding there is nothing to undo, so the
+                # undeclaration must not be materialized.
+                if prefix == "" and uri == "" and _nearest_rendered(rendered, "") is None:
                     continue
                 rendered_name = "xmlns" if prefix == "" else f"xmlns:{prefix}"
                 out.append(f' {rendered_name}="{_escape_attribute(uri)}"')
