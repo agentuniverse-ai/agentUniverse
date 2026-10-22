@@ -8,7 +8,7 @@ In this section, we will show you how to:
 
 ## Environment and Application Engineering Preparation
 ### Application Engineering Preparation
-We have placed the sample of product module within the sample_standard_app project of agentUniverse. You can access and view them [here](../../../../../examples/sample_apps/difizen_app). These modules can be configured in the background using YAML file, and additionally, the functions can be automatically created and managed via the product page.
+We have placed the product module sample in agentUniverse's `difizen_app` project. You can access and view it [here](../../../../../examples/sample_apps/difizen_app). These modules can be configured in the background using YAML files, and the product page can also create and manage them automatically.
 
 
 ### Installing Dependencies
@@ -18,12 +18,12 @@ pip install magent-ui ruamel.yaml
 ```
 
 ### Configuration File
-If you have previously used agentUniverse’s sample project, please add the following information to the `config.toml`  file  to include the product module path as configured in sample_standard_app:
+If you have previously used an agentUniverse sample project, add the following information to `config.toml`. In the linked example, `ROOT_PACKAGE` is `difizen_app`:
 ```toml
 # Ignore the context content.
 [CORE_PACKAGE]
 # Scan and register product components for all paths under this list, with priority over the default.
-product = ['sample_standard_app.platform.difizen.product']
+product = ['${ROOT_PACKAGE}.platform.difizen.product']
 # Ignore the context content.
 ```
 If you are using agentUniverse for the first time, you can directly adopt the latest sample project’s `config.toml` file.
@@ -34,7 +34,7 @@ Of course, when utilizing the agent, you need to preconfigure the various LLM mo
 
 ## Using the agentUniverse Product Platform
 ### Starting the Product Service
-To start the product service with a single click, run the [product_application](../../../../../examples/sample_apps/difizen_app/bootstrap/platform/product_application.py) file located in `sample_standard_app/bootstrap/platform` .
+To start the product service with a single click, run the [product_application](../../../../../examples/sample_apps/difizen_app/bootstrap/platform/product_application.py) file located in `difizen_app/bootstrap/platform`.
 ![img.png](../../../_picture/product_start.png)
 
 Upon successful initiation, it will automatically redirect you to the product homepage, which features system presets as well as your customized Agent, Tool and Knowledge product modules.

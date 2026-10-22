@@ -19,9 +19,5 @@ else
 fi
 
 
-cd ./bootstrap/platform
-
-nohup python3 -u product_application.py &
-
-cd ../intelligence
+cd ./bootstrap/intelligence || exit 1
 python3 -u server_application.py
