@@ -1,0 +1,31 @@
+name: console_ansi_tool
+description: Parse, classify, strip, sanitize, and explain ANSI terminal escape sequences per ECMA-48 and xterm conventions.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.console_ansi_tool
+  class: ConsoleAnsiTool
+input_keys:
+  - mode
+  - text
+max_input_chars: 2000000
+max_codes: 200
+max_samples: 8
+max_sample_chars: 48
+max_pending_chars: 64
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [strip, classify, sanitize, explain]
+    text:
+      type: string
+    sequence:
+      type: string
+    keep:
+      type: string
+      enum: [none, sgr-only, safe]
+      default: none
+  required: [mode]
+  additionalProperties: false
