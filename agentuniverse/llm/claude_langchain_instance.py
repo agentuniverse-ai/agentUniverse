@@ -28,7 +28,7 @@ class ClaudeLangChainInstance(ChatAnthropic):
     def __init__(self, llm: LLM):
         init_params = {}
         init_params['model'] = llm.model_name if llm.model_name else 'Claude-Instant-V1.3'
-        init_params['temperature'] = llm.temperature if llm.temperature else 0.7
+        init_params['temperature'] = llm.temperature if llm.temperature is not None else 0.7
         init_params['default_request_timeout'] = llm.request_timeout
         init_params['streaming'] = llm.streaming if llm.streaming else False
         init_params['anthropic_api_key'] = llm.api_key if llm.api_key else 'blank'
