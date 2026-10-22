@@ -131,6 +131,23 @@ class TestKnowledgeRrfIntegration(unittest.TestCase):
         self.assertAlmostEqual(
             out[0].metadata["relevance_score"], 2.0 / 61)
 
+    def test_shared_document_instance_keeps_each_recall_channel(self) -> None:
+        """Channel stamping must not mutate a document reused by stores."""
+        shared = Document(text="shared", metadata={"source": "cached"})
+        stores = {
+            "vector_store": MagicMock(query=MagicMock(return_value=[shared])),
+            "keyword_store": MagicMock(query=MagicMock(return_value=[shared])),
+        }
+        rrf = ReciprocalRankFusionProcessor(channel_key=RECALL_CHANNEL_KEY)
+        knowledge = self._build_knowledge(stores)
+
+        out = self._run_query(knowledge, stores, rrf)
+
+        self.assertEqual(len(out), 1)
+        self.assertAlmostEqual(
+            out[0].metadata["relevance_score"], 2.0 / 61)
+        self.assertEqual(shared.metadata, {"source": "cached"})
+
     def test_no_rrf_collapses_cross_store_duplicates(self) -> None:
         """Without a channel-fusion post-processor, Knowledge keeps the default
         retrieval contract: a document recalled by several stores is returned

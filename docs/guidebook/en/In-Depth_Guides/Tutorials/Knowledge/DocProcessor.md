@@ -238,6 +238,10 @@ metadata:
 
 The processor always returns a single Document whose `text` is the summary. Its `metadata` records the operating mode (`summarization_mode`: `llm` or `extractive`), the number of source documents (`source_doc_count`), and the `llm_name` used.
 
+### [ReciprocalRankFusionProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/reciprocal_rank_fusion_processor.yaml)
+
+When using `ReciprocalRankFusionProcessor` with `channel_key: recall_channel`, knowledge retrieval gives each store's result its own channel metadata. This also applies when stores reuse the same cached `Document` instance: each channel contributes to the fused score without changing the cached document's metadata.
+
 ### [MMRProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/mmr_processor.yaml)
 
 This component re-ranks the recalled documents with Maximal Marginal Relevance (MMR), balancing query relevance against inter-document redundancy so a result set is both on-topic and non-repetitive. It addresses the *re-ranking / diversity* direction of issue #248.

@@ -236,6 +236,10 @@ metadata:
 
 该组件始终返回单个 Document，其 `text` 为摘要内容。其 `metadata` 记录工作模式（`summarization_mode`：`llm` 或 `extractive`）、参与摘要的源文档数（`source_doc_count`）以及使用的 `llm_name`。
 
+### [ReciprocalRankFusionProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/reciprocal_rank_fusion_processor.yaml)
+
+使用 `ReciprocalRankFusionProcessor` 并设置 `channel_key: recall_channel` 时，知识检索会为每个存储的结果分别标记召回渠道。即使多个存储复用同一个缓存的 `Document` 实例，各渠道也能分别参与融合计分，且不会改动缓存文档的元数据。
+
 ### [MMRProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/mmr_processor.yaml)
 
 该组件使用最大边际相关性（Maximal Marginal Relevance，MMR）对召回文档重排，在"与查询相关"和"彼此不重复"之间取得平衡，使结果既切题又无冗余。对应 issue #248 的*重排 / 多样性*方向。
