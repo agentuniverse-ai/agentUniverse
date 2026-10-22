@@ -636,3 +636,48 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Cron Expression Tool
+
+`CronExpressionTool` parses, validates, explains and projects cron schedules
+using only the Python standard library — no network access and no third-party
+cron dependency. It understands standard five-field expressions
+(minute hour day-of-month month day-of-week) with `*`, lists (`a,b,c`),
+ranges (`a-b`), steps (`*/n`, `a-b/n`, `a/n`), month and day names
+(`jan-dec`, `sun-sat`, case-insensitive, also inside ranges such as
+`mon-fri`), day-of-week `0` and `7` both meaning Sunday, and the
+`@daily` / `@hourly` / `@weekly` / `@monthly` / `@yearly` macros (plus the
+`@midnight` and `@annually` aliases). Standard cron day semantics apply:
+when both day-of-month and day-of-week are restricted (neither is the
+literal `*`), a day matches when either field matches.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.cron_expression_tool import CronExpressionTool
+
+tool = CronExpressionTool()
+
+# Check an expression and get precise per-field errors plus the
+# expanded value sets and a normalized form.
+tool.execute(mode="validate", expression="*/15 9-17/2 * * mon-fri")
+
+# Get a human-readable English summary.
+tool.execute(mode="describe", expression="30 * * * *")
+# -> "At 30 minutes past every hour"
+
+# Project the next runs after a reference time (omit `now` for the
+# system clock; tests inject a fixed value).
+tool.execute(mode="next", expression="@daily",
+             now="2026-01-15T10:20:00", count=3)
+```
+
+The `next` mode iterates candidate minutes with wholesale skips over
+non-matching months, days and hours, bounded by a hard iteration cap
+(`max_iterations`, default 1,000,000, at most 5,000,000) — worst-case
+runtime is O(cap) constant-time checks and memory stays O(count).
+Expressions that can never match (for example `0 0 31 2 *`, February 31st)
+exhaust the cap and return an `iteration_cap_exceeded` error instead of
+looping; matches are always strictly after `now`. Malformed parameters
+(unknown mode, non-string expression, out-of-range `count` /
+`max_iterations`, unparsable `now`) raise a `ValueError`, while
+content-level failures — an invalid expression in the `describe` / `next`
+modes, or an exhausted cap — are returned as structured `error` payloads.
