@@ -1,0 +1,45 @@
+name: 'cooccurrence_relation_extractor'
+description: 'extract entity co-occurrence relations (term pairs sharing a window) into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cooccurrence_relation_extractor'
+  class: 'CooccurrenceRelationExtractor'
+
+# Tracked entity names. Each entry is canonical under its own spelling
+# and matched case-insensitively with Latin word boundaries, so 'Apple'
+# matches neither 'Pineapple' nor 'Apples'. May be empty when
+# auto_capitalized carries the detection instead.
+terms:
+  - 'Apple'
+  - 'Samsung'
+  - 'Taiwan Semiconductor'
+
+# Optional surface-form -> canonical-name folding. Aliases are matched
+# like terms and counted under their canonical target; alias entries
+# take precedence over colliding terms entries.
+alias_map:
+  'AAPL': 'Apple'
+  'TSMC': 'Taiwan Semiconductor'
+
+# When true, Latin capitalized sequences ('Boeing', 'U.S. Army') are
+# auto-detected as additional terms, with sentence-start noise removed
+# via a stoplist and trailing possessives/periods stripped.
+auto_capitalized: false
+
+# Co-occurrence window: 'sentence' (default; abbreviation-guarded
+# segmentation on . ! ? and the CJK terminators) or 'paragraph'
+# (blank-line separated blocks).
+window: 'sentence'
+
+# Maximum number of relations kept in metadata['relations']; the
+# relation_graph adjacency is never capped by this. Must be >= 1.
+max_relations: 50
+
+# Minimum co-occurrence count for a pair to be kept anywhere. Must be
+# >= 1; raise it to keep only repeatedly co-occurring pairs.
+min_count: 1
+
+# Extra stop words appended to the built-in stoplist that trims
+# auto-detected candidates; compared case-insensitively.
+stopwords: []
