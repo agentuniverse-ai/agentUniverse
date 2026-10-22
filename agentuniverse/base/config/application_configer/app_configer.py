@@ -296,5 +296,7 @@ class AppConfiger(object):
         self.__core_log_sink_package_list = configer.value.get('CORE_PACKAGE', {}).get('log_sink')
         self.__core_llm_channel_package_list = configer.value.get('CORE_PACKAGE', {}).get('llm_channel')
         self.__conversation_memory_configer = configer.value.get('CONVERSATION_MEMORY', {})
-        self.__llm_plugins = self.load_llm_plugins(configer.value.get("PLUGINS", {}).get("llm_plugins", []))
+        # YAML 中 PLUGINS: 存在但为空（无子键）时解析为 None——.get 的默认值
+        # 只在键不存在时生效，链式 .get 在 None 上 AttributeError。
+        self.__llm_plugins = self.load_llm_plugins((configer.value.get("PLUGINS") or {}).get("llm_plugins") or [])
         return self
