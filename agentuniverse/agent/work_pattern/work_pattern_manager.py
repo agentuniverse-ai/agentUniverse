@@ -16,4 +16,6 @@ class WorkPatternManager(ComponentManagerBase[WorkPattern]):
     """A singleton manager class of the WorkPattern."""
 
     def __init__(self):
+        """Initialize the work pattern manager.
+        """
         super().__init__(ComponentEnum.WORK_PATTERN)
