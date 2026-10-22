@@ -7,6 +7,7 @@
 """Tests for the ContextBudgetCompressor doc processor."""
 
 import os
+import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -24,6 +25,32 @@ from agentuniverse.base.config.configer import Configer
 
 _YAML_PATH = os.path.join(os.path.dirname(cbc_module.__file__),
                           "context_budget_compressor.yaml")
+
+
+class _FakeEncoding:
+    """Small deterministic stand-in for a tiktoken encoding."""
+
+    def __init__(self, token_width: int) -> None:
+        self.token_width = token_width
+
+    def encode(self, text: str) -> list[str]:
+        return [text[index : index + self.token_width] for index in range(0, len(text), self.token_width)]
+
+    @staticmethod
+    def decode(tokens: list[str]) -> str:
+        return "".join(tokens)
+
+
+def _fake_tiktoken_module() -> tuple[SimpleNamespace, dict[str, _FakeEncoding]]:
+    encodings = {
+        "cl100k_base": _FakeEncoding(token_width=2),
+        "p50k_base": _FakeEncoding(token_width=3),
+    }
+
+    def get_encoding(name: str) -> _FakeEncoding:
+        return encodings[name]
+
+    return SimpleNamespace(get_encoding=get_encoding), encodings
 
 
 def _run(docs, **kwargs):
@@ -81,6 +108,12 @@ class TestContextBudgetSelection(unittest.TestCase):
 class TestContextBudgetCounters(unittest.TestCase):
     """The counter choice changes how size is measured."""
 
+    def setUp(self) -> None:
+        cbc_module._TIKTOKEN_ENCODERS.clear()
+
+    def tearDown(self) -> None:
+        cbc_module._TIKTOKEN_ENCODERS.clear()
+
     def test_char_counter_counts_characters(self) -> None:
         proc = ContextBudgetCompressor(budget=5, counter="char")
         self.assertEqual(proc._count("hello"), 5)
@@ -99,25 +132,23 @@ class TestContextBudgetCounters(unittest.TestCase):
         self.assertEqual(proc._count("x" * 12), 3)   # 12 // 4
         self.assertEqual(proc._count(""), 1)         # at least 1
 
-    def test_tiktoken_counter_counts_real_tokens(self) -> None:
-        try:
-            import tiktoken
-            enc = tiktoken.get_encoding("cl100k_base")
-        except Exception:  # noqa: BLE001 - optional dependency
-            self.skipTest("tiktoken not installed")
-        proc = ContextBudgetCompressor(counter="tiktoken")
-        text = "hello world"
-        self.assertEqual(proc._count(text), len(enc.encode(text)))
+    def test_tiktoken_counter_counts_tokens(self) -> None:
+        tiktoken, encodings = _fake_tiktoken_module()
+        with patch.dict(sys.modules, {"tiktoken": tiktoken}):
+            proc = ContextBudgetCompressor(counter="tiktoken")
+            text = "hello world"
+            self.assertEqual(
+                proc._count(text),
+                len(encodings["cl100k_base"].encode(text)))
 
     def test_tiktoken_counter_truncates_by_tokens(self) -> None:
-        try:
-            import tiktoken
-            enc = tiktoken.get_encoding("cl100k_base")
-        except Exception:  # noqa: BLE001 - optional dependency
-            self.skipTest("tiktoken not installed")
-        # "hello world" is two tokens ('hello', ' world'); keep one.
-        out = _run(["hello world"], budget=1, counter="tiktoken", truncate=True)
-        self.assertEqual(out[0].text, enc.decode(enc.encode("hello world")[:1]))
+        tiktoken, encodings = _fake_tiktoken_module()
+        with patch.dict(sys.modules, {"tiktoken": tiktoken}):
+            out = _run(["hello world"], budget=1, counter="tiktoken",
+                       truncate=True)
+        encoding = encodings["cl100k_base"]
+        expected = encoding.decode(encoding.encode("hello world")[:1])
+        self.assertEqual(out[0].text, expected)
 
     def test_tiktoken_truncation_preserves_unicode_and_budget(self) -> None:
         try:
@@ -158,8 +189,8 @@ class TestContextBudgetTiktokenCache(unittest.TestCase):
     estimate counter.
     """
 
-    # cl100k_base and p50k_base disagree on this string (6 vs 7 tokens), so a
-    # later instance reusing the first instance's encoder would miscount.
+    # The fake encodings disagree on this string, so a later instance reusing
+    # the first instance's encoder would miscount.
     _PROBE = "def __init__(self):"
 
     def setUp(self) -> None:
@@ -169,17 +200,18 @@ class TestContextBudgetTiktokenCache(unittest.TestCase):
         cbc_module._TIKTOKEN_ENCODERS.clear()
 
     def test_each_instance_uses_its_configured_encoding(self) -> None:
-        import tiktoken
-        cl100k = ContextBudgetCompressor(counter="tiktoken",
-                                         tiktoken_encoding="cl100k_base")
-        p50k = ContextBudgetCompressor(counter="tiktoken",
-                                       tiktoken_encoding="p50k_base")
-        self.assertEqual(
-            cl100k._count(self._PROBE),
-            len(tiktoken.get_encoding("cl100k_base").encode(self._PROBE)))
-        self.assertEqual(
-            p50k._count(self._PROBE),
-            len(tiktoken.get_encoding("p50k_base").encode(self._PROBE)))
+        tiktoken, encodings = _fake_tiktoken_module()
+        with patch.dict(sys.modules, {"tiktoken": tiktoken}):
+            cl100k = ContextBudgetCompressor(
+                counter="tiktoken", tiktoken_encoding="cl100k_base")
+            p50k = ContextBudgetCompressor(
+                counter="tiktoken", tiktoken_encoding="p50k_base")
+            self.assertEqual(
+                cl100k._count(self._PROBE),
+                len(encodings["cl100k_base"].encode(self._PROBE)))
+            self.assertEqual(
+                p50k._count(self._PROBE),
+                len(encodings["p50k_base"].encode(self._PROBE)))
         # The two encoders must be cached as distinct objects keyed by name.
         self.assertIn("cl100k_base", cbc_module._TIKTOKEN_ENCODERS)
         self.assertIn("p50k_base", cbc_module._TIKTOKEN_ENCODERS)
@@ -188,34 +220,36 @@ class TestContextBudgetTiktokenCache(unittest.TestCase):
             cbc_module._TIKTOKEN_ENCODERS["p50k_base"])
 
     def test_invalid_encoding_raises_configuration_error(self) -> None:
-        proc = ContextBudgetCompressor(
-            counter="tiktoken", tiktoken_encoding="not_a_real_encoding")
-        with self.assertRaises(ValueError) as ctx:
-            proc._count(self._PROBE)
+        tiktoken, _ = _fake_tiktoken_module()
+        with patch.dict(sys.modules, {"tiktoken": tiktoken}):
+            proc = ContextBudgetCompressor(
+                counter="tiktoken", tiktoken_encoding="not_a_real_encoding")
+            with self.assertRaises(ValueError) as ctx:
+                proc._count(self._PROBE)
         self.assertIn("not_a_real_encoding", str(ctx.exception))
 
     def test_invalid_encoding_before_valid_does_not_poison(self) -> None:
-        # The core regression: an invalid encoding on one instance must not
-        # silently push a later valid instance onto the estimate counter.
-        bad = ContextBudgetCompressor(
-            counter="tiktoken", tiktoken_encoding="not_a_real_encoding")
-        with self.assertRaises(ValueError):
-            bad._count(self._PROBE)
-        # Invalid lookups are not cached, so the cache stays clean.
-        self.assertNotIn("not_a_real_encoding", cbc_module._TIKTOKEN_ENCODERS)
+        tiktoken, encodings = _fake_tiktoken_module()
+        with patch.dict(sys.modules, {"tiktoken": tiktoken}):
+            # The core regression: an invalid encoding on one instance must not
+            # silently push a later valid instance onto the estimate counter.
+            bad = ContextBudgetCompressor(
+                counter="tiktoken", tiktoken_encoding="not_a_real_encoding")
+            with self.assertRaises(ValueError):
+                bad._count(self._PROBE)
+            # Invalid lookups are not cached, so the cache stays clean.
+            self.assertNotIn("not_a_real_encoding", cbc_module._TIKTOKEN_ENCODERS)
 
-        good = ContextBudgetCompressor(
-            counter="tiktoken", tiktoken_encoding="cl100k_base")
-        import tiktoken
-        self.assertEqual(
-            good._count(self._PROBE),
-            len(tiktoken.get_encoding("cl100k_base").encode(self._PROBE)))
+            good = ContextBudgetCompressor(
+                counter="tiktoken", tiktoken_encoding="cl100k_base")
+            self.assertEqual(
+                good._count(self._PROBE),
+                len(encodings["cl100k_base"].encode(self._PROBE)))
 
     def test_missing_dependency_degrades_instead_of_raising(self) -> None:
         # A missing optional dependency must degrade to the estimate counter,
         # in contrast with an invalid encoding (which raises). Setting a
         # sys.modules key to None makes `import tiktoken` raise ImportError.
-        import sys
         proc = ContextBudgetCompressor(
             counter="tiktoken", tiktoken_encoding="cl100k_base")
         with patch.dict(sys.modules, {"tiktoken": None}):
