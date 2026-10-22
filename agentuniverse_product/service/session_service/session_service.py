@@ -54,15 +54,11 @@ class SessionService:
         """Get a list of sessions for a given agent id."""
         if agent_id is None:
             raise ValueError("agent_id is required parameter.")
-        session_do_list: List[SessionDO] = SessionLibrary().get_session_list(agent_id)
+        session_do_list: List[SessionDO] = SessionLibrary().get_session_list(agent_id, limit=10)
         if len(session_do_list) == 0:
             return []
-        # newest 10 sessions
-        session_do_list = session_do_list[:10]
-        session_messages_map = {}
-        for session_do in session_do_list:
-            message_do_list: List[MessageDO] = MessageLibrary().get_messages(session_do.session_id)
-            session_messages_map[session_do.session_id] = message_do_list
+        session_messages_map = MessageLibrary().get_messages_for_sessions(
+            [session_do.session_id for session_do in session_do_list])
         return SessionService().convert_to_session_dto(session_do_list, session_messages_map)
 
     @staticmethod
