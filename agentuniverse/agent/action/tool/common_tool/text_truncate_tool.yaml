@@ -1,0 +1,90 @@
+name: text_truncate_tool
+description: Text truncation tool — pure Python stdlib, no network required. Budget-aware truncation with smart boundaries — mode='chars' caps characters with optional word-boundary snap-back, mode='words' keeps the first N words (whitespace-normalized or original-preserved rejoin; CJK ideographs count one word each), mode='sentences' keeps the first N sentences using conservative .!? plus CJK 。！？ segmentation with an English abbreviation guard, and mode='head_chars_keep_sentences' spends a character budget but snaps the cut to the nearest sentence boundary within a tolerance. Optional ellipsis ('...' or '…') appended when truncation happened, and a min_length guard that refuses over-aggressive cuts.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_truncate_tool
+  class: TextTruncateTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Truncation mode — chars, words, sentences or head_chars_keep_sentences.
+    required: true
+  text:
+    type: string
+    description: The non-empty text to truncate (at most 100,000 characters).
+    required: false
+  max:
+    type: integer
+    description: The budget — characters (chars / head_chars_keep_sentences), words (words) or sentences (sentences). Required, >= 1.
+    required: false
+  add_ellipsis:
+    type: boolean
+    description: Append '...' (language='en', default) or '…' (language='cjk') when truncation actually happened; inputs that already fit the budget are returned unchanged with no ellipsis.
+    required: false
+  language:
+    type: string
+    description: Ellipsis style — en ('...') or cjk ('…'). Default en.
+    required: false
+  count_ellipsis:
+    type: boolean
+    description: With add_ellipsis — when false (default) the ellipsis is NOT counted against the budget and the result may exceed max by the ellipsis length; when true the ellipsis IS counted, the text budget shrinks by the ellipsis length and the hard cut plus ellipsis never exceeds max (sentence-snap extension may still exceed it by design). Only meaningful in the character-based modes (chars / head_chars_keep_sentences); no effect in the words / sentences modes. Requires add_ellipsis.
+    required: false
+  min_length:
+    type: integer
+    description: Optional guard (characters, >= 1; must not exceed max in the character-based modes) — refuses cuts that would leave fewer characters, so the original is returned unchanged when it fits within 1.5x the budget, else a structured error.
+    required: false
+  word_boundary:
+    type: boolean
+    description: chars mode only — snap the cut back so it lands after a whole word (whitespace-separated; CJK runs and URLs have no boundary and keep the hard cut).
+    required: false
+  whitespace:
+    type: string
+    description: words mode only — normalize (default; rejoin kept words with single spaces, adjacent CJK unspaced) or preserve (keep the original inter-word spacing).
+    required: false
+  tolerance:
+    type: integer
+    description: head_chars_keep_sentences mode only — how far (characters) the cut may move to the nearest sentence boundary; default max(10, max // 10).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["chars", "words", "sentences", "head_chars_keep_sentences"]
+      description: Truncation mode.
+    text:
+      type: string
+      description: The text to truncate.
+    max:
+      type: integer
+      minimum: 1
+      description: The truncation budget (characters, words or sentences depending on the mode).
+    add_ellipsis:
+      type: boolean
+      description: Append an ellipsis when truncation happened.
+    language:
+      type: string
+      enum: ["en", "cjk"]
+      description: Ellipsis style — en uses '...', cjk uses '…'.
+    count_ellipsis:
+      type: boolean
+      description: Count the appended ellipsis against the budget (requires add_ellipsis; only meaningful in the character-based modes chars / head_chars_keep_sentences).
+    min_length:
+      type: integer
+      minimum: 1
+      description: Minimum characters a cut may leave before the tool refuses.
+    word_boundary:
+      type: boolean
+      description: chars mode — cut lands after a whole word.
+    whitespace:
+      type: string
+      enum: ["normalize", "preserve"]
+      description: words mode — rejoin style for the kept words.
+    tolerance:
+      type: integer
+      minimum: 0
+      description: head_chars_keep_sentences mode — sentence-snap tolerance in characters.
+  required: ["mode"]
