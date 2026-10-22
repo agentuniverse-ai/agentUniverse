@@ -7,6 +7,12 @@ metadata:
   class: StringFormatTool
 input_keys:
   - mode
+  - template
+max_template_chars: 4000
+max_fields: 200
+max_findings: 50
+max_mapping_keys: 200
+max_render_chars: 100000
 args_model:
   mode:
     type: string
@@ -42,3 +48,4 @@ args_model_schema:
       enum: ["to_format", "to_percent"]
       description: Translation direction for translate_percent mode.
   required: ["mode", "template"]
+  additionalProperties: false
