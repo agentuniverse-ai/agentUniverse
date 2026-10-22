@@ -65,7 +65,15 @@ class Graph(nx.DiGraph):
         Args:
             edge_config: The edge configuration.
         """
-        self.add_edge(edge_config.get('source_node_id'), edge_config.get('target_node_id'),
+        source_node_id = edge_config.get('source_node_id')
+        target_node_id = edge_config.get('target_node_id')
+        for endpoint, node_id in (
+                ('source', source_node_id), ('target', target_node_id)):
+            if not self.has_node(node_id):
+                raise ValueError(
+                    f"Workflow edge references undefined {endpoint} node {node_id!r}."
+                )
+        self.add_edge(source_node_id, target_node_id,
                       source_handler=edge_config.get('source_handler'))
 
     def run(self, workflow_output: WorkflowOutput) -> None:
