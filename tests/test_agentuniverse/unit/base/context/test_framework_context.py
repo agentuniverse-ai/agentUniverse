@@ -110,5 +110,22 @@ def test_log_context_isolated_across_copied_contexts():
     context_manager.clear_all_contexts()
 
 
+def test_context_key_registry_isolated_across_copied_contexts():
+    context_manager.clear_all_contexts()
+    context_manager.set_context("parent_only", "parent")
+    child_context = copy_context()
+
+    def update_child():
+        context_manager.set_context("child_only", "child")
+        context_manager.del_context("parent_only", force=True)
+        assert not context_manager.is_context_exist("parent_only")
+
+    child_context.run(update_child)
+
+    assert not context_manager.is_context_exist("child_only")
+    assert context_manager.get_context("parent_only") == "parent"
+    context_manager.clear_all_contexts()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-s"])
