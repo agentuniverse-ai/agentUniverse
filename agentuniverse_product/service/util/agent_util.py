@@ -111,7 +111,7 @@ def assemble_agent_config_data(agent_dto: AgentDTO) -> Dict:
         if llm is None:
             raise ValueError("The llm instance corresponding to the llm id cannot be found.")
         llm_model_dict = {'name': agent_dto.llm.id}
-        if agent_dto.llm.temperature:
+        if agent_dto.llm.temperature is not None:
             llm_model_dict['temperature'] = agent_dto.llm.temperature
         if agent_dto.llm.model_name:
             llm_model_dict['model_name'] = agent_dto.llm.model_name[0]
@@ -314,7 +314,7 @@ def get_llm_dto(agent_model: AgentModel) -> LlmDTO | None:
     if llm is None:
         return None
     llm_model_name = llm_model.get('model_name') if llm_model.get('model_name') else llm.model_name
-    llm_temperature = llm_model.get('temperature') if llm_model.get('temperature') else llm.temperature
+    llm_temperature = llm_model.get('temperature') if llm_model.get('temperature') is not None else llm.temperature
     return LlmDTO(id=llm_id, nickname=product.nickname if product else '', temperature=llm_temperature,
                   model_name=[llm_model_name])
 
@@ -386,7 +386,7 @@ def update_agent_config(agent: Agent, agent_dto: AgentDTO, agent_config_path: st
         if llm_dto.id:
             agent_updates['profile.llm_model.name'] = agent_dto.llm.id
             agent.agent_model.profile.get('llm_model')['name'] = agent_dto.llm.id
-        if llm_dto.temperature:
+        if llm_dto.temperature is not None:
             agent_updates['profile.llm_model.temperature'] = agent_dto.llm.temperature
             agent.agent_model.profile.get('llm_model')['temperature'] = agent_dto.llm.temperature
         if llm_dto.model_name:
