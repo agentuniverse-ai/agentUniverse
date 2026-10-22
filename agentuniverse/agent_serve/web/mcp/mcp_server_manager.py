@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 import functools
 import inspect
-from typing import Literal
+from typing import Literal, get_type_hints
 
 from agentuniverse.agent.action.tool.tool import Tool
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
@@ -37,6 +37,7 @@ def is_method_overridden(
 
 
 def create_exposed_tool_method_wrapper(tool_name):
+    """Expose a tool method with annotations resolved in its defining module."""
     method_name = 'async_execute'
     original_method = getattr(ToolManager().get_instance_obj(tool_name).__class__, method_name)
 
@@ -51,11 +52,17 @@ def create_exposed_tool_method_wrapper(tool_name):
     original_signature = inspect.signature(original_method)
     original_parameters = list(original_signature.parameters.values())
 
-    exposed_parameters = original_parameters[1:]
+    # FastMCP inspects the wrapper's module, where the tool's aliases and models
+    # may not exist. Resolve them before moving the signature across modules.
+    type_hints = get_type_hints(original_method, include_extras=True)
+    exposed_parameters = [
+        parameter.replace(annotation=type_hints.get(parameter.name, parameter.annotation))
+        for parameter in original_parameters[1:]
+    ]
 
     exposed_signature = inspect.Signature(
         parameters=exposed_parameters,
-        return_annotation=original_signature.return_annotation
+        return_annotation=type_hints.get('return', original_signature.return_annotation)
     )
 
     if inspect.iscoroutinefunction(original_method):
@@ -69,6 +76,11 @@ def create_exposed_tool_method_wrapper(tool_name):
             instance = ToolManager().get_instance_obj(tool_name)
             return getattr(instance, method_name)(*args, **kwargs)
     wrapper.__signature__ = exposed_signature
+    wrapper.__annotations__ = {
+        name: annotation
+        for name, annotation in type_hints.items()
+        if name in exposed_signature.parameters or name == 'return'
+    }
 
     return wrapper
 
