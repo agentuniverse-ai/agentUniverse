@@ -711,6 +711,45 @@ class FractionPathologicalTest(unittest.TestCase):
         self.assertEqual(self.tool.execute("parse", value="1/2", normalize="yes")["status"], "error")
 
 
+class HostileReviewRegressionTest(unittest.TestCase):
+    """Regressions found by a fresh hostile probe battery (independent seeds and oracles)."""
+
+    def setUp(self):
+        self.tool = FractionTool()
+
+    def test_repeating_notation_accepted_by_all_string_modes(self):
+        """The docstring promises repeating notation support; parse/to_decimal/compare must honor it."""
+        parsed = self.tool.execute("parse", value="0.1(6)")
+        self.assertEqual(parsed["status"], "success")
+        self.assertEqual(parsed["normalized"], "1/6")
+        self.assertEqual(parsed["form"], "repeating")
+        expanded = self.tool.execute("to_decimal", value="2.1(6)")
+        self.assertEqual(expanded["status"], "success")
+        self.assertEqual(expanded["decimal"], "2.1(6)")
+        self.assertEqual(expanded["fraction"], {"numerator": 13, "denominator": 6})
+        compared = self.tool.execute("compare", value="0.(3)", other="1/3")
+        self.assertEqual(compared["status"], "success")
+        self.assertEqual(compared["relation"], "equal")
+        # degenerate forms stay rejected
+        for bad in ("(3)", "0.()", "1.(2"):
+            self.assertEqual(self.tool.execute("parse", value=bad)["status"], "error", bad)
+
+    def test_truncated_expansion_does_not_claim_a_cycle_start(self):
+        """cycle_start must be None when truncation hides the cycle (true start unknowable)."""
+        truncated = self.tool.execute("to_decimal", value="1/97", max_digits=5)
+        self.assertTrue(truncated["truncated"])
+        self.assertIsNone(truncated["repetend"])
+        self.assertIsNone(truncated["cycle_start"], "1/97's cycle starts at digit 0, not at the truncation point")
+        self.assertEqual(truncated["period_length"], 96)
+        full = self.tool.execute("to_decimal", value="1/97", max_digits=200)
+        self.assertFalse(full["truncated"])
+        self.assertEqual(full["cycle_start"], 0)
+        terminating = self.tool.execute("to_decimal", value="1/2")
+        self.assertFalse(terminating["truncated"])
+        self.assertEqual(terminating["cycle_start"], 1)
+        self.assertEqual(terminating["period_length"], 0)
+
+
 class FractionToolRegistrationTest(unittest.TestCase):
     """Unit tests for registering the shipped fraction_tool.yaml component."""
 

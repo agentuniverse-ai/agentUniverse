@@ -280,6 +280,9 @@ class FractionTool(Tool):
             text = converted.strip()
         elif any(character.isdigit() and not character.isascii() for character in text):
             raise ValueError("value contains non-ASCII digits; retry with normalize=True")
+        repeating = _REPEATING_RE.match(text)
+        if repeating and repeating.group(4) is not None:
+            return {"fraction": self._repeating_value(repeating), "form": "repeating", "issues": issues}
         matched = self._match_form(text, issues)
         if matched is not None:
             return matched
@@ -387,7 +390,10 @@ class FractionTool(Tool):
         return {
             "decimal": decimal,
             "repetend": None,
-            "cycle_start": len(digits),
+            # Terminating expansions never cycle, so the position after the last
+            # digit is reported; a truncated expansion may hide a cycle that
+            # starts anywhere, so no cycle_start claim is made (None).
+            "cycle_start": None if truncated else len(digits),
             "truncated": truncated,
             "digits_emitted": len(digits),
         }
