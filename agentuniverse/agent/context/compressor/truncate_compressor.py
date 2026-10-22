@@ -17,7 +17,6 @@ Use cases:
 """
 
 import time
-from copy import deepcopy
 from typing import List, Optional
 
 from agentuniverse.agent.context.compressor.context_compressor import (
@@ -203,7 +202,7 @@ class TruncateCompressor(ContextCompressor):
             target_tokens: Target token count
 
         Returns:
-            New segment with truncated content
+            Independent revision retaining the source identity, scope and relationships
         """
         if target_tokens <= 0:
             target_tokens = self.min_segment_tokens
@@ -227,7 +226,7 @@ class TruncateCompressor(ContextCompressor):
         # nested metadata remain attached to the compressed context item.
         # ``update_content`` also refreshes the content hash used for change
         # detection instead of leaving the copy with a stale identity state.
-        truncated_seg = deepcopy(segment)
+        truncated_seg = segment.model_copy(deep=True)
         truncated_seg.update_content(truncated_content, target_tokens)
         truncated_seg.metadata.compressed = True
         truncated_seg.metadata.original_tokens = segment.tokens

@@ -17,6 +17,7 @@ class SpanJsonExporter(SpanExporter):
 
     def export(self,
                spans: typing.Sequence[ReadableSpan]) -> "SpanExportResult":
+        """Write each eligible span to an atomic JSON file."""
         try:
             for span in spans:
                 folder = self._folder_for(span)
@@ -35,9 +36,11 @@ class SpanJsonExporter(SpanExporter):
             return SpanExportResult.FAILURE
 
     def shutdown(self):
+        """Shut down the exporter; it holds no persistent resources."""
         ...
 
     def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        """Report completion because exports are performed synchronously."""
         return True
 
     def _folder_for(self, span: ReadableSpan) -> pathlib.Path | None:
