@@ -34,6 +34,11 @@ class PDFTool(Tool):
         overwrite: bool = False,
         metadata: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        """Run a bounded PDF merge, split, rotate, extract, or info operation.
+
+        Validation and dependency failures are returned as structured error
+        dictionaries rather than raised to the tool caller.
+        """
         try:
             self._validate_config()
             operation = self._mode(mode)
@@ -209,10 +214,9 @@ class PDFTool(Tool):
         indexes = set(self._page_indexes(pages, len(reader.pages)))
         _, Writer = self._classes()
         writer = Writer()
-        for index, page in enumerate(reader.pages):
-            if index in indexes:
-                page.rotate(rotation)
-            writer.add_page(page)
+        writer.clone_document_from_reader(reader)
+        for index in indexes:
+            writer.pages[index].rotate(rotation)
         self._save(writer, destination)
         return {
             "status": "success",

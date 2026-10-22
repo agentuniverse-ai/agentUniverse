@@ -140,17 +140,19 @@ class ReciprocalRankFusionProcessor(DocProcessor):
         Documents are grouped by ``metadata[channel_key]`` while preserving
         input order both across and within channels. When ``channel_key`` is
         unset, or when no document carries the field, the whole input forms a
-        single channel.
+        single channel. Missing and None values share a private fallback
+        bucket, distinct from every explicitly named string channel.
         """
         if not self.channel_key:
             return [list(origin_docs)]
 
         order: List = []
         buckets: Dict = {}
+        missing_channel = object()
         for doc in origin_docs:
             channel_id = (doc.metadata or {}).get(self.channel_key)
             if channel_id is None:
-                channel_id = "__default__"
+                channel_id = missing_channel
             if channel_id not in buckets:
                 buckets[channel_id] = []
                 order.append(channel_id)
@@ -158,7 +160,7 @@ class ReciprocalRankFusionProcessor(DocProcessor):
 
         # If every document landed in the default bucket (none carried the
         # field), behave exactly like single-channel mode.
-        if len(order) == 1 and order[0] == "__default__":
+        if len(order) == 1 and order[0] is missing_channel:
             return [list(origin_docs)]
 
         return [buckets[name] for name in order]
