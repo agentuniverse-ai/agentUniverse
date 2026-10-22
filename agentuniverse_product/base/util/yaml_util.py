@@ -6,10 +6,32 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: yaml_util.py
 import os
+import stat
+import tempfile
 
 from ruamel.yaml import YAML
 from typing import Any, Dict
-import os
+
+
+def _write_yaml_atomically(file_path: str, config_data: dict, yaml: YAML) -> None:
+    """Replace a config only after serialization has completed successfully."""
+    target = os.path.realpath(file_path)
+    directory = os.path.dirname(target)
+    os.makedirs(directory, exist_ok=True)
+    descriptor, temporary_path = tempfile.mkstemp(
+        prefix=f".{os.path.basename(target)}.", suffix=".tmp", dir=directory
+    )
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as temporary_file:
+            yaml.dump(config_data, temporary_file)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        if os.path.exists(target):
+            os.chmod(temporary_path, stat.S_IMODE(os.stat(target).st_mode))
+        os.replace(temporary_path, target)
+    finally:
+        if os.path.exists(temporary_path):
+            os.unlink(temporary_path)
 
 
 def update_nested_yaml_value(config_path: str, updates: dict) -> None:
@@ -51,9 +73,7 @@ def update_nested_yaml_value(config_path: str, updates: dict) -> None:
         except Exception as e:
             print(f"Skipping update for '{path}': {e}")
 
-    # write the modified content back to the YAML file
-    with open(config_path, 'w', encoding='utf-8') as file:
-        yaml.dump(config_data, file)
+    _write_yaml_atomically(config_path, config_data, yaml)
 
 
 def write_yaml_file(file_path, config_data) -> None:
@@ -64,11 +84,7 @@ def write_yaml_file(file_path, config_data) -> None:
         config_data (dict): The dictionary to write to the YAML file.
     """
     yaml = YAML()
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-    # Write the dictionary to the YAML file
-    with open(file_path, 'w', encoding='utf-8') as yaml_file:
-        yaml.dump(config_data, yaml_file)
+    _write_yaml_atomically(file_path, config_data, yaml)
 
 
 def delete_yaml_file(file_path: str) -> None:
