@@ -1,0 +1,43 @@
+name: sequence_analyzer_tool
+description: "Numeric sequence pattern analyzer — pure Python stdlib decimal arithmetic, no network required. Classify a list of 3-100 finite numbers (mode='classify': types detected — arithmetic (constant difference), geometric (constant ratio > 0, exact Decimal cross-multiplication), fibonacci-like (each = sum of previous two), quadratic (constant non-zero second difference), constant (all equal), primes (all prime by trial division, bound n < 10**12); multiple types can hold; params difference/ratio/second_difference; next_term predicted by the strongest type with priority quadratic > fibonacci-like > geometric > arithmetic > constant; no type -> types [\"none\"] and null next_term), extend a sequence by k=1-10 terms following the strongest type (mode='next_n'), and recover the single missing value of a sequence holding exactly one null via the best-fitting type, verified on the completed sequence (mode='missing')."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.sequence_analyzer_tool
+  class: SequenceAnalyzerTool
+input_keys:
+  - mode
+  - sequence
+args_model:
+  mode:
+    type: string
+    description: Operation mode — classify, next_n or missing.
+    required: true
+  sequence:
+    type: array
+    description: List of 3-100 finite numbers (missing mode needs 4-100 entries with exactly one null, or the literal string "null"). Booleans, NaN and infinities are rejected.
+    required: true
+  k:
+    type: integer
+    description: Continuation count 1-10. Required for (and only valid in) the next_n mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["classify", "next_n", "missing"]
+      description: Sequence analysis operation mode.
+    sequence:
+      type: array
+      items:
+        type: number
+      minItems: 3
+      maxItems: 100
+      description: The numeric sequence to analyze (classify / next_n), or the same with exactly one null entry (missing).
+    k:
+      type: integer
+      minimum: 1
+      maximum: 10
+      description: How many terms to append in the next_n mode.
+  required: ["mode", "sequence"]
