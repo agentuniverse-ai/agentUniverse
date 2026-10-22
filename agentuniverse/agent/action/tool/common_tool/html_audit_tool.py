@@ -40,6 +40,18 @@ _URL_IN_REFRESH_RE = re.compile(r"(?i)url\s*=\s*(.*)$")
 _CHARSET_RE = re.compile(r"(?i)charset\s*=\s*([\w.\-]+)")
 _SCRIPT_CLOSE_RE = re.compile(r"</script\s*>", re.I)
 _STYLE_CLOSE_RE = re.compile(r"</style\s*>", re.I)
+# Markup smuggled inside <style> raw text. html.parser treats style content
+# as CDATA, but inside foreign-content integration points (math/mtext/
+# annotation-xml) browsers parse it as markup, so handler- or scheme-bearing
+# tags that the tokenizer hid as CSS text become live (mutation XSS).
+_MXSS_HANDLER_MARKUP_RE = re.compile(
+    r"<[a-zA-Z][^>]*(?:\son[a-z]+\s*=|(?:javascript|vbscript|livescript|mocha|jscript)\s*:)",
+    re.I)
+# Close tags that terminate a raw-text or foreign context when they appear
+# inside style raw text (e.g. </noscript> inside <style> inside <noscript>).
+_MXSS_CONTEXT_CLOSE_RE = re.compile(
+    r"</\s*(?:noscript|noembed|textarea|title|xmp|math|mtext|mglyph|"
+    r"annotation-xml|svg|form|table|template|iframe|script|body|html)\b", re.I)
 
 # Elements html.parser treats as raw text (CDATA content elements).
 _RAW_TEXT_ELEMENTS = frozenset({"script", "style"})
@@ -666,6 +678,15 @@ class HtmlAuditTool(Tool):
                     findings.append(self._finding(
                         code, "high" if code == "DANGEROUS_URL_SCHEME" else "low",
                         tag, name, f'{name}="{value}"', detail, line, col))
+                if "`" in value:
+                    # IE-family browsers treat backticks as attribute quotes;
+                    # whitespace then splits the value so scheme probing only
+                    # sees a prefix of what the browser would navigate to.
+                    findings.append(self._finding(
+                        "MALFORMED_MARKUP", "info", tag, name,
+                        f'{name}={value}', f'{name} value contains a backtick; IE-family'
+                        ' browsers treat backticks as quotes and can rejoin the value',
+                        line, col))
             if _EMBEDDED_TAG_RE.search(value):
                 findings.append(self._finding(
                     "EMBEDDED_HTML_IN_ATTR", "medium", tag, name,
@@ -798,11 +819,51 @@ class HtmlAuditTool(Tool):
                     "STYLE_EXPRESSION", "medium", "style", None, evidence,
                     "style element content uses expression()",
                     line, col))
+            findings.extend(self._audit_style_mxss(text, probed, line, col))
         elif event["raw_parent"] is None and re.search(r"<[a-zA-Z]", text):
             findings.append(self._finding(
                 "MALFORMED_MARKUP", "info", "#text", None, text,
                 "text contains markup-like data that the tokenizer treated as text",
                 line, col))
+        return findings
+
+    def _audit_style_mxss(self, text: str, probed: str,
+                          line: int, col: int) -> list[dict[str, Any]]:
+        """Flag markup html.parser hid inside <style> raw text (mutation XSS).
+
+        html.parser treats style content as CDATA and the raw-span masker
+        blanks it, so handler-bearing tags inside style text are invisible to
+        both the event audit and the raw-source cross-check. Browsers parsing
+        foreign content (math/mtext/annotation-xml integration points) treat
+        that same text as live markup; a close tag of a raw-text element
+        (e.g. </noscript>) inside style text also resurfaces following markup
+        as live. Both surfaces (raw and entity-decoded) are probed.
+        """
+        findings: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for surface, decoded in ((text, False), (probed, True)):
+            match = _MXSS_HANDLER_MARKUP_RE.search(surface)
+            if match and "handler" not in seen:
+                seen.add("handler")
+                findings.append(self._finding(
+                    "MXSS_CONTEXT_CONFUSION", "high", "style", None,
+                    match.group(0),
+                    ("style element content hides markup with an event handler"
+                     " or script URL"
+                     + (" after entity decoding" if decoded else "")
+                     + "; foreign-content contexts (math/mtext/annotation-xml)"
+                       " parse style text as live markup (mutation XSS)"),
+                    line, col))
+            match = _MXSS_CONTEXT_CLOSE_RE.search(surface)
+            if match and "close" not in seen:
+                seen.add("close")
+                findings.append(self._finding(
+                    "MXSS_CONTEXT_CONFUSION", "medium", "style", None,
+                    match.group(0),
+                    ("style element content hides a close tag that terminates a"
+                     " raw-text or foreign context in browsers, resurfacing the"
+                     " following markup as live (mutation XSS marker)"),
+                    line, col))
         return findings
 
     def _audit_cdata_events(self, events) -> list[dict[str, Any]]:
@@ -813,19 +874,37 @@ class HtmlAuditTool(Tool):
         joined = "".join(
             text[len("CDATA["):] if text.startswith("CDATA[") else text
             for text in (e["text"] for e in decl_events))
+        first = decl_events[0]
         if _classify_url(joined) or _inline_danger(_probe(joined)):
-            first = decl_events[0]
             return [self._finding(
                 "DANGEROUS_URL_SCHEME", "high", "#cdata", None,
                 joined,
                 "CDATA declarations smuggle a dangerous URL scheme when concatenated",
                 first["line"], first["col"])]
+        # Element markup smuggled inside CDATA: inert in plain HTML context
+        # but live in polyglot/foreign-content parses, and invisible to every
+        # other check because the declarations hide it from the tokenizer.
+        for surface in (joined, _probe(joined)):
+            match = _EMBEDDED_TAG_RE.search(surface)
+            if match:
+                tag = re.match(r"<([a-zA-Z][a-zA-Z0-9-]*)", match.group(0))
+                severity, reason = _DANGEROUS_TAGS.get(
+                    (tag.group(1).lower() if tag else ""), ("medium", ""))
+                return [self._finding(
+                    "DANGEROUS_TAG", severity, "#cdata", None,
+                    joined,
+                    f"CDATA declaration smuggles dangerous element markup that "
+                    f"polyglot/foreign-content parsers treat as live: {reason or 'embedded markup'}",
+                    first["line"], first["col"])]
         return []
 
     def _audit_nested(self, value: str, depth: int) -> list[str]:
         """Audit srcdoc content; returns the dangerous codes found inside.
 
-        Recursion is bounded so srcdoc-in-srcdoc chains cannot loop.
+        Recursion is bounded so srcdoc-in-srcdoc chains cannot loop. The
+        nested pass runs the same checks as a top-level audit (event audit,
+        CDATA concatenation probe, raw-source recovery of tokenizer-dropped
+        tags) so srcdoc content cannot hide behind the recovery gap.
         """
         if depth > _NESTED_AUDIT_DEPTH:
             return ["SRCDOC_CHAIN_DEPTH"]
@@ -834,7 +913,12 @@ class HtmlAuditTool(Tool):
         except _CapViolation:
             return ["input_too_large"]
         nested = self._audit_events(value, tokenizer.events, depth)
-        return sorted({f["code"] for f in nested if f["severity"] in ("high", "medium")})
+        codes = {f["code"] for f in nested if f["severity"] in ("high", "medium")}
+        raw_findings, _capped = self._audit_raw_source(value, tokenizer.events)
+        codes |= {f["code"] for f in raw_findings if f["severity"] in ("high", "medium")}
+        codes |= {f["code"] for f in self._audit_cdata_events(tokenizer.events)
+                  if f["severity"] in ("high", "medium")}
+        return sorted(codes)
 
     def _audit_raw_source(self, source: str, events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
         """Cross-check the raw source for tags the tokenizer dropped.

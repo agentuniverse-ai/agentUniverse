@@ -831,6 +831,122 @@ class HostileReviewRegressionTest(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Second-pass hostile review: mutation-XSS context confusion (mXSS) vectors
+# that hide inside <style> raw text, nested srcdoc audit parity, CDATA
+# element-markup smuggling, and IE backtick attribute quoting.
+# ---------------------------------------------------------------------------
+
+MXSS_VECTORS = [
+    # style raw text hides handler markup (math/mtext foreign-content mXSS)
+    ("<form><math><mtext></form><form><mglyph><style></math><img src onerror=alert(1)>",
+     "MXSS_CONTEXT_CONFUSION", "high"),
+    ("<math><mtext><mglyph><style><img src onerror=alert(1)></style></mglyph></mtext></math>",
+     "MXSS_CONTEXT_CONFUSION", "high"),
+    ("<form><math><mtext><form><mglyph><style></math><img src onerror=alert(1)>",
+     "MXSS_CONTEXT_CONFUSION", "high"),
+    ('<math><annotation-xml encoding="text/html"><style><img src onerror=alert(1)>'
+     "</style></annotation-xml></math>", "MXSS_CONTEXT_CONFUSION", "high"),
+    # entity-encoded handler markup inside style text (decoded surface)
+    ("<math><style>&lt;img src=x onerror=alert(1)&gt;</style></math>",
+     "MXSS_CONTEXT_CONFUSION", "high"),
+    # close tag of a raw-text context inside style text resurfaces markup
+    ("<noscript><style></noscript><img src=x onerror=alert(1)></noscript>",
+     "MXSS_CONTEXT_CONFUSION", "high"),
+    ("<math><mtext><style></mtext><img src=x onerror=alert(1)>",
+     "MXSS_CONTEXT_CONFUSION", "high"),
+    # scheme-bearing markup inside style raw text (no on-handler present)
+    ("<style><iframe src=javascript:alert(1)></iframe></style>",
+     "MXSS_CONTEXT_CONFUSION", "high"),
+    # close-tag marker alone (medium) when no handler/scheme follows
+    ("<noscript><style></noscript>plain text here</noscript>",
+     "MXSS_CONTEXT_CONFUSION", "medium"),
+]
+
+
+class SecondPassMxssCorpusTest(unittest.TestCase):
+    """Every mXSS context-confusion vector must be flagged with severity."""
+
+    def setUp(self):
+        self.tool = HtmlAuditTool()
+
+    def test_every_mxss_vector_flagged(self):
+        for index, (vector, code, severity) in enumerate(MXSS_VECTORS):
+            with self.subTest(index=index, vector=vector[:70]):
+                result = self.tool.execute(vector, mode="audit")
+                self.assertEqual(result["status"], "success", result)
+                matches = [f for f in result["findings"]
+                           if f["code"] == code and f["severity"] == severity]
+                self.assertTrue(matches, f"vector #{index} missing {code}/{severity}")
+
+    def test_benign_style_content_not_flagged(self):
+        # Honest false-positive guard: plain CSS never trips the mXSS rules.
+        for css in ("circle { fill: red; }", "a { content: '<' }",
+                    "@media (max-width: 5px) { p { color: red } }"):
+            with self.subTest(css=css):
+                result = self.tool.execute(f"<style>{css}</style>", mode="audit")
+                self.assertEqual(result["status"], "success")
+                self.assertNotIn("MXSS_CONTEXT_CONFUSION", codeset(result))
+
+
+class SecondPassRegressionTest(unittest.TestCase):
+    """Regressions from the second hostile pass."""
+
+    def setUp(self):
+        self.tool = HtmlAuditTool()
+
+    def test_srcdoc_nested_audit_matches_top_level(self):
+        # The img is swallowed into the title attribute of the srcdoc
+        # document; only the raw-source recovery finds it, and the nested
+        # audit previously lacked that check.
+        srcdoc = ("<noscript><p title=&quot;</noscript>"
+                  "<img src=x onerror=alert(1)>&quot;>")
+        html = f'<iframe srcdoc="{srcdoc}"></iframe>'
+        result = self.tool.execute(html, mode="audit")
+        self.assertEqual(result["status"], "success")
+        self.assertIn("SRCDOC_DANGEROUS_CONTENT", codeset(result))
+        finding = next(f for f in result["findings"]
+                       if f["code"] == "SRCDOC_DANGEROUS_CONTENT")
+        self.assertIn("EVENT_HANDLER_ATTR", finding["reason"])
+
+    def test_cdata_smuggled_element_markup_flagged(self):
+        # Element markup (not just URL schemes) inside CDATA declarations
+        # was previously silent.
+        result = self.tool.execute("<![CDATA[<script>alert(1)</script>]]>", mode="audit")
+        self.assertEqual(result["status"], "success")
+        self.assertIn("DANGEROUS_TAG", codeset(result))
+        finding = next(f for f in result["findings"] if f["code"] == "DANGEROUS_TAG")
+        self.assertEqual(finding["element"], "#cdata")
+
+    def test_backtick_url_attribute_flagged(self):
+        # IE-family backtick quoting: whitespace splits the unquoted value so
+        # scheme probing only sees a prefix. The quirk itself must be flagged.
+        result = self.tool.execute("<a href=`java\nscript:alert(1)`>x</a>", mode="audit")
+        self.assertEqual(result["status"], "success")
+        matches = [f for f in result["findings"]
+                   if f["code"] == "MALFORMED_MARKUP" and f["attr"] == "href"]
+        self.assertTrue(matches)
+        # The no-whitespace backtick form still classifies the scheme.
+        result = self.tool.execute("<a href=`javascript:alert(1)`>x</a>", mode="audit")
+        self.assertIn("DANGEROUS_URL_SCHEME", codeset(result))
+
+    def test_newline_replacing_colon_is_not_a_scheme(self):
+        # javascript&NewLine;alert(1) decodes without a colon: no browser
+        # treats it as a scheme URL, and the tool must agree (honesty).
+        result = self.tool.execute('<iframe src="javascript&NewLine;alert(1)"></iframe>',
+                                   mode="audit")
+        self.assertEqual(result["status"], "success")
+        self.assertNotIn("DANGEROUS_URL_SCHEME", codeset(result))
+
+    def test_style_mxss_finding_position(self):
+        html = "<div>\n<style><img src onerror=alert(1)></style>\n</div>"
+        result = self.tool.execute(html, mode="audit")
+        finding = next(f for f in result["findings"]
+                       if f["code"] == "MXSS_CONTEXT_CONFUSION")
+        self.assertEqual(finding["element"], "style")
+        self.assertEqual(finding["line"], 2)
+
+
+# ---------------------------------------------------------------------------
 # allowlist_diff / text / stats modes.
 # ---------------------------------------------------------------------------
 
