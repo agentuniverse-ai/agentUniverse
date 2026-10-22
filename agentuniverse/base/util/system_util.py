@@ -115,12 +115,14 @@ def process_yaml_func(func_expr: str, yaml_func_instance: Any) -> str:
         ValueError: If @FUNC expression is provided but `yaml_func_instance` is None.
         Exception: If an error occurs while calling the method.
     """
-    # Return an empty string if the function expression is None
-    if not func_expr or yaml_func_instance is None:
+    if not func_expr:
         return func_expr
 
     if func_expr.startswith('@FUNC(') and yaml_func_instance is None:
         raise ValueError(f"yaml_func_extension.py is required to resolve @FUNC expression {func_expr}.")
+
+    if yaml_func_instance is None:
+        return func_expr
 
     # Process @FUNC expressions
     if func_expr.startswith('@FUNC(') and func_expr.endswith(')'):
@@ -135,6 +137,15 @@ def process_yaml_func(func_expr: str, yaml_func_instance: Any) -> str:
         # Ensure the expression is a function call
         if not isinstance(parsed_expr.body, ast.Call):
             raise ValueError(f"Expected a function call, got: {func_expr}")
+
+        # Only simple method calls can be resolved against the extension
+        # instance.  Attribute chains such as ``obj.method()`` must not
+        # reach ``.id`` below because they otherwise raise an opaque
+        # AttributeError.
+        if not isinstance(parsed_expr.body.func, ast.Name):
+            raise ValueError(
+                f"Expected a simple function name, got: {func_expr}"
+            )
 
         # Extract function name and arguments
         func_name = parsed_expr.body.func.id
