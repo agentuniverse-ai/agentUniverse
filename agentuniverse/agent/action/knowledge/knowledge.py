@@ -184,18 +184,23 @@ class Knowledge(ComponentBase):
             stores = kwargs["stores"]
         else:
             stores = self.stores
-        for _store_code in stores:
-            futures.append(
-                self.insert_executor.submit(
-                    StoreManager().get_instance_obj(_store_code, strict=True).insert_document,
-                    document_list))
-        wait(futures, return_when=ALL_COMPLETED)
-        for future in futures:
+        store_methods = [(code, StoreManager().get_instance_obj(
+            code, strict=True).insert_document) for code in stores]
+        for _store_code, method in store_methods:
+            futures.append((self.insert_executor.submit(
+                method, document_list), _store_code))
+        wait([future for future, _ in futures], return_when=ALL_COMPLETED)
+        failures = []
+        for future, store_code in futures:
             try:
                 future.result()
             except Exception as e:
-                traceback.print_exc()
-                LOGGER.error(f"Exception occurred in knowledge insert: {e}")
+                LOGGER.error("Knowledge insert failed in store {}: {}", store_code, e)
+                failures.append((store_code, e))
+        if failures:
+            raise RuntimeError(
+                f"Knowledge insert failed in stores: {', '.join(code for code, _ in failures)}"
+            ) from failures[0][1]
         LOGGER.info("Knowledge insert complete.")
 
     def update_knowledge(self, **kwargs) -> None:
@@ -210,18 +215,23 @@ class Knowledge(ComponentBase):
             stores = kwargs["stores"]
         else:
             stores = self.stores
-        for _store_code in stores:
-            futures.append(
-                self.insert_executor.submit(
-                    StoreManager().get_instance_obj(_store_code, strict=True).update_document,
-                    document_list))
-        wait(futures, return_when=ALL_COMPLETED)
-        for future in futures:
+        store_methods = [(code, StoreManager().get_instance_obj(
+            code, strict=True).update_document) for code in stores]
+        for _store_code, method in store_methods:
+            futures.append((self.insert_executor.submit(
+                method, document_list), _store_code))
+        wait([future for future, _ in futures], return_when=ALL_COMPLETED)
+        failures = []
+        for future, store_code in futures:
             try:
                 future.result()
             except Exception as e:
-                traceback.print_exc()
-                LOGGER.error(f"Exception occurred in knowledge update: {e}")
+                LOGGER.error("Knowledge update failed in store {}: {}", store_code, e)
+                failures.append((store_code, e))
+        if failures:
+            raise RuntimeError(
+                f"Knowledge update failed in stores: {', '.join(code for code, _ in failures)}"
+            ) from failures[0][1]
         LOGGER.info("Knowledge update complete.")
 
     def _route_rag(self, query: Query):
