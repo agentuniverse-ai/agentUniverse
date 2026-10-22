@@ -350,6 +350,7 @@ class WwwAuthenticateTool(Tool):
         quote_segment = -1
         index = 0
         control_seen = -1
+        control_in_quotes = False
         while index < len(value):
             char = value[index]
             if in_quotes:
@@ -360,6 +361,11 @@ class WwwAuthenticateTool(Tool):
                     continue
                 if char == '"':
                     in_quotes = False
+                elif char < " " and char != "\t" and control_seen < 0:
+                    # Control bytes inside a quoted string are kept (replacing them
+                    # would corrupt the value) but are just as invalid in a header.
+                    control_seen = index
+                    control_in_quotes = True
                 buffer.append(char)
             elif char == '"':
                 in_quotes = True
@@ -384,7 +390,8 @@ class WwwAuthenticateTool(Tool):
             problems.append(
                 (
                     "control_character",
-                    f"control character at offset {control_seen} is not valid in a header value; replaced with a space",
+                    f"control character at offset {control_seen} is not valid in a header value; "
+                    + ("kept inside the quoted string" if control_in_quotes else "replaced with a space"),
                 )
             )
         if in_quotes:
@@ -531,7 +538,11 @@ class WwwAuthenticateTool(Tool):
                 f"challenge '{challenge['scheme']}' repeats param '{lowered}'; the last value wins (documented choice)",
             )
         challenge["params"][lowered] = value
-        challenge["raw"] = f"{challenge['raw']}, {lowered}={self._render_value(value)}"
+        # The first param of a challenge is separated from the scheme token by a
+        # single space, exactly like the grammar's ``auth-scheme 1*SP auth-param``;
+        # later params are comma-joined.
+        separator = " " if challenge["raw"] == challenge["scheme_raw"] else ", "
+        challenge["raw"] = f"{challenge['raw']}{separator}{lowered}={self._render_value(value)}"
 
     def _parse_value(self, raw: str, index: int, name: str) -> tuple[str, list[tuple[str, str]]]:
         problems: list[tuple[str, str]] = []
@@ -829,7 +840,11 @@ class WwwAuthenticateTool(Tool):
             parts.append(self._build_one(scheme, params or {}, token68, errors))
         if any(part is None for part in parts):
             return {"status": "error", "mode": "build", "errors": errors}
-        value = ", ".join(part for part in parts if part)
+        non_empty = [part for part in parts if part]
+        total_chars = sum(len(part) for part in non_empty) + 2 * max(len(non_empty) - 1, 0)
+        if total_chars > self.max_header_chars:
+            raise ValueError(f"built header exceeds max_header_chars ({self.max_header_chars})")
+        value = ", ".join(non_empty)
         return {
             "status": "success" if not errors else "partial",
             "mode": "build",

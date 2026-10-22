@@ -672,6 +672,49 @@ class PathologicalTest(unittest.TestCase):
         self.assertTrue(any(error["code"] == "error_list_truncated" for error in result["errors"]))
 
 
+class HostileReviewRegressionTest(unittest.TestCase):
+    """Regressions found by a fresh hostile probe battery (seeds independent of the corpus above)."""
+
+    def setUp(self):
+        self.tool = WwwAuthenticateTool()
+
+    def test_build_output_is_acceptable_to_parse(self):
+        """build must never emit a header longer than its own max_header_chars cap."""
+        oversized = [
+            {"scheme": f"X{i}", "params": {f"p{j}": "v" * 8000 for j in range(60)}, "token68": None}
+            for i in range(2)
+        ]
+        result = self.tool.execute(mode="build", challenges=oversized)
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "validation_error")
+        self.assertIn("max_header_chars", result["error"])
+        # a large but under-cap build still succeeds and parses back
+        under_cap = [
+            {"scheme": f"X{i}", "params": {"p": "v" * 8000}, "token68": None} for i in range(30)
+        ]
+        built = self.tool.execute(mode="build", challenges=under_cap)
+        self.assertEqual(built["status"], "success")
+        self.assertLessEqual(len(built["value"]), self.tool.max_header_chars)
+        self.assertEqual(self.tool.execute(mode="parse", header=built["value"])["status"], "success")
+
+    def test_raw_field_renders_scheme_param_separator_correctly(self):
+        """The reconstructed raw text joins the scheme and its first param with a space, not a comma."""
+        result = self.tool.execute(mode="parse", header='Basic realm="x", charset=UTF-8')
+        self.assertEqual(result["challenges"][0]["raw"], "Basic realm=x, charset=UTF-8")
+        continuation = self.tool.execute(mode="parse", header='Newauth realm="apps", type=1')
+        self.assertEqual(continuation["challenges"][0]["raw"], "Newauth realm=apps, type=1")
+
+    def test_control_character_inside_quoted_value_is_flagged(self):
+        """Control bytes inside a quoted value are kept but reported, like their outside-quote twins."""
+        result = self.tool.execute(mode="parse", header='Basic realm="a\x01b"')
+        self.assertEqual(result["challenges"][0]["params"]["realm"], "a\x01b")
+        self.assertTrue(any(error["code"] == "control_character" for error in result["errors"]))
+        detail = next(error["detail"] for error in result["errors"] if error["code"] == "control_character")
+        self.assertIn("quoted string", detail)
+        outside = self.tool.execute(mode="parse", header="Basic realm=a\x01b")
+        self.assertTrue(any(error["code"] == "control_character" for error in outside["errors"]))
+
+
 class WwwAuthenticateRegistrationTest(unittest.TestCase):
     """Unit tests for registering the shipped www_auth_tool.yaml as a tool component."""
 
