@@ -410,7 +410,7 @@ class Agent(ComponentBase, ABC):
         return "\n\n".join(tool_results)
 
     async def async_invoke_tools(self, input_object: InputObject, **kwargs) -> str:
-        tool_names = kwargs.get('tool_names') or self.agent_model.action.get('tool', [])
+        tool_names = kwargs.get('tool_names') or self.tool_names
         if not tool_names:
             return ''
         tool_results: list = list()
