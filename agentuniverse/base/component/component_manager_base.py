@@ -28,7 +28,7 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         self._instance_obj_map: dict[str, ComponentTypeVar] = {}
         self._component_type: ComponentEnum = component_type
 
-    def register(self, component_instance_name: str, component_instance_obj: ComponentTypeVar):
+    def register(self, component_instance_name: str, component_instance_obj: ComponentTypeVar) -> None:
         """Register the component instance."""
         if component_instance_name in self._instance_obj_map.keys():
             if is_system_builtin(component_instance_obj):
@@ -42,7 +42,7 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         if component_instance_obj.default_symbol:
             self._instance_obj_map["__default_instance__"] = component_instance_obj
 
-    def unregister(self, component_instance_name: str):
+    def unregister(self, component_instance_name: str) -> None:
         """Unregister the component instance abstractmethod."""
         self._instance_obj_map.pop(component_instance_name)
 
