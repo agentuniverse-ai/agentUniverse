@@ -2,6 +2,11 @@ name: 'financial_indicator_extractor'
 description: 'Extract financial indicators from reports including metrics, temporal context, and comparisons'
 extract_temporal: true
 extract_comparisons: true
+# Comparative percentages preserve explicit +/- signs; unsigned declines and
+# decreases are negative. Overlapping patterns report each numeric occurrence
+# only once, in source order. Separate equal-valued occurrences remain separate.
+# Examples: "YoY decline of 12%" -> -12; "-0.5% QoQ" -> -0.5.
+# Malformed numbers (e.g. 12,34 or 1.2.3) are not partially extracted.
 currency_normalization: true
 use_llm: false
 skip_on_error: true
