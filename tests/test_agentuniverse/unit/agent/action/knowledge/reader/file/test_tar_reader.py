@@ -190,6 +190,36 @@ class TestTarReader(unittest.TestCase):
         self.assertEqual(docs[0].metadata["archive_path"], "folder/archive.tar/inner/data.txt")
         self.assertEqual(docs[0].metadata["archive_depth"], 1)
 
+    def test_nested_compressed_tar_is_expanded(self) -> None:
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w:gz") as nested:
+            self._add_member(nested, "inner/data.txt", "nested compressed")
+        archive_path = Path(self.temp_dir.name) / "outer.tar"
+        with tarfile.open(archive_path, "w") as archive:
+            self._add_member(archive, "folder/archive.tar.gz", buffer.getvalue())
+
+        docs = self.reader._load_data(archive_path)
+
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0].text, "nested compressed")
+        self.assertEqual(docs[0].metadata["archive_path"], "folder/archive.tar.gz/inner/data.txt")
+        self.assertEqual(docs[0].metadata["archive_depth"], 1)
+
+    def test_nested_compressed_bomb_is_rejected(self) -> None:
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w:gz") as nested:
+            self._add_member(nested, "repetitive.txt", "a" * 100000)
+        archive_path = Path(self.temp_dir.name) / "nested_bomb.tar"
+        with tarfile.open(archive_path, "w") as archive:
+            self._add_member(archive, "nested.tar.gz", buffer.getvalue())
+
+        # The outer archive is a plain, uncompressed TAR, so only a per-archive
+        # ratio check can spot the highly compressible nested member.
+        strict_reader = TarReader(max_compression_ratio=10)
+        with self.assertRaises(ValueError) as context:
+            strict_reader._load_data(archive_path)
+        self.assertIn("compression ratio", str(context.exception))
+
     def test_nested_tar_depth_limit(self) -> None:
         current = self._make_tar_bytes("data.txt", "deepest")
         for index in range(10):
@@ -277,6 +307,28 @@ class TestTarReader(unittest.TestCase):
 
         self.assertEqual(len(docs), 1)
         self.assertEqual(docs[0].metadata["file_name"], "real.txt")
+
+    def test_directory_members_are_skipped(self) -> None:
+        archive_path = Path(self.temp_dir.name) / "dirs.tar"
+        with tarfile.open(archive_path, "w") as archive:
+            directory = tarfile.TarInfo("folder")
+            directory.type = tarfile.DIRTYPE
+            directory.size = 0
+            archive.addfile(directory)
+            self._add_member(archive, "folder/file.txt", "content")
+
+        docs = self.reader._load_data(archive_path)
+
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0].metadata["file_name"], "file.txt")
+        self.assertEqual(docs[0].metadata["archive_path"], "folder/file.txt")
+
+    def test_empty_tar_returns_no_documents(self) -> None:
+        archive_path = Path(self.temp_dir.name) / "empty.tar"
+        with tarfile.open(archive_path, "w"):
+            pass
+
+        self.assertEqual(self.reader._load_data(archive_path), [])
 
     def test_custom_metadata_is_propagated(self) -> None:
         archive_path = Path(self.temp_dir.name) / "meta.tar"

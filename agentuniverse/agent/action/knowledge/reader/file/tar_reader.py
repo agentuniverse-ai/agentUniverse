@@ -93,16 +93,12 @@ class TarReader(Reader):
             ".xlsx": XlsxReader,
             ".epub": EpubReader,
         }
-        # ``tarfile`` does not expose the compressed size of an individual
-        # member, so the decompression-bomb guard compares the cumulative
-        # decompressed size against the archive size on disk. A plain .tar
-        # stays near a ratio of 1, while a compressed archive whose members
-        # expand far beyond the file size trips the configured limit.
-        self._archive_size = max(file.stat().st_size, 1)
-
         ext_meta = dict(ext_info or {})
         # mode="r:*" transparently handles plain .tar as well as the gzip, bzip2
         # and xz compressed variants (.tar.gz/.tgz/.tar.bz2/.tar.xz).
+        # The file size on disk is the reference for the decompression-ratio
+        # guard; nested archives pass their own compressed size instead.
+        archive_size = max(file.stat().st_size, 1)
         with tarfile.open(str(file), mode="r:*") as archive:
             with tempfile.TemporaryDirectory() as temp_dir:
                 return self._iterate_archive(
@@ -112,6 +108,7 @@ class TarReader(Reader):
                     ext_meta,
                     0,
                     [],
+                    archive_size,
                 )
 
     def _iterate_archive(
@@ -122,8 +119,10 @@ class TarReader(Reader):
         ext_meta: Dict,
         depth: int,
         path_stack: List[str],
+        archive_size: int,
     ) -> List[Document]:
         documents: List[Document] = []
+        processed_size = 0
         for member in archive.getmembers():
             # Directories, symlinks, hard links, devices and fifos never carry
             # ingestible content, and following links could escape the archive
@@ -133,7 +132,8 @@ class TarReader(Reader):
             member_path = self._normalize_member(member.name)
             if member_path is None:
                 continue
-            self._enforce_limits(member)
+            self._enforce_limits(member, archive_size, processed_size)
+            processed_size += member.size
             current_stack = path_stack + [member_path.as_posix()]
             metadata = self._build_metadata(archive_path, current_stack, depth, ext_meta)
 
@@ -190,6 +190,7 @@ class TarReader(Reader):
                     ext_meta,
                     depth + 1,
                     current_stack,
+                    max(len(data), 1),
                 )
         except tarfile.TarError as exc:
             raise ValueError("Invalid nested tar content") from exc
@@ -295,7 +296,12 @@ class TarReader(Reader):
             text_chunks.append(chunk)
         return "".join(text_chunks)
 
-    def _enforce_limits(self, member: tarfile.TarInfo) -> None:
+    def _enforce_limits(
+        self,
+        member: tarfile.TarInfo,
+        archive_size: int,
+        processed_size: int,
+    ) -> None:
         size = member.size
 
         if size > self.max_file_size:
@@ -305,8 +311,13 @@ class TarReader(Reader):
         if self._file_count + 1 > self.max_files:
             raise ValueError("Tar archive exceeds maximum file count")
 
-        projected_total = self._total_size + size
-        if projected_total / self._archive_size > self.max_compression_ratio:
+        # ``tarfile`` does not expose the compressed size of an individual
+        # member, so the ratio is computed per archive: the cumulative
+        # decompressed size of its members against its own compressed size.
+        # Keeping the ratio local means a bomb hidden in a nested .tar.gz is
+        # still detected even when the outer archive itself is uncompressed.
+        projected_size = processed_size + size
+        if projected_size / archive_size > self.max_compression_ratio:
             raise ValueError(f"Tar entry has suspicious compression ratio: {member.name}")
 
         self._total_size += size
