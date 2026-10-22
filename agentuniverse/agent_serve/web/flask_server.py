@@ -43,6 +43,16 @@ def localproxy_reduce_ex(self, protocol):
 LocalProxy.__reduce_ex__ = localproxy_reduce_ex
 
 
+def _run_with_timeout(func, timeout):
+    """Run a callable without waiting for its worker after a timeout."""
+    executor = ThreadPoolExecutorWithReturnValue()
+    try:
+        return executor.submit(func).result(timeout=timeout)
+    finally:
+        # A timed-out call keeps running; joining it would delay the 504 response.
+        executor.shutdown(wait=False)
+
+
 # log stream response
 def timed_generator(generator, start_time, context_prefix):
     try:
@@ -124,14 +134,10 @@ def service_run(service_id: str, params: dict, saved: bool = False):
         params = {} if params is None else params
         request_task = RequestTask(ServiceInstance(service_id).run, saved,
                                    **params)
-        executor = ThreadPoolExecutorWithReturnValue()
-        try:
-            future = executor.submit(copy_current_request_context(request_task.run))
-            result = future.result(timeout=FlaskServerManager().sync_service_timeout)
-        finally:
-            # wait=False: a timed-out service call keeps running in the
-            # background; joining it here would delay the 504 response.
-            executor.shutdown(wait=False)
+        result = _run_with_timeout(
+            copy_current_request_context(request_task.run),
+            FlaskServerManager().sync_service_timeout
+        )
     except TimeoutError:
         return make_standard_response(success=False,
                                       message="AU sync service timeout",
@@ -258,13 +264,10 @@ def openai_protocol_chat(model: str, messages: list):
         params = {} if params is None else params
         request_task = RequestTask(ServiceInstance(params.get('service_id')).run, False,
                                    **params)
-        executor = ThreadPoolExecutorWithReturnValue()
-        try:
-            future = executor.submit(request_task.run)
-            result = future.result(timeout=FlaskServerManager().sync_service_timeout)
-        finally:
-            # Same as service_run: don't join a timed-out service call.
-            executor.shutdown(wait=False)
+        result = _run_with_timeout(
+            request_task.run,
+            FlaskServerManager().sync_service_timeout
+        )
     except TimeoutError:
         return make_standard_response(success=False,
                                       message="AU sync service timeout",
