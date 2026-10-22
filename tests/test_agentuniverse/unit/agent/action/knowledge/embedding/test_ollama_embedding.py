@@ -19,6 +19,8 @@ class OllamaEmbeddingTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Set up the test fixture before each test.
+        """
         self.embedding = OllamaEmbedding()
         self.embedding.ollama_base_url = "http://localhost:11434"
         self.embedding.embedding_model_name = "mxbai-embed-large"
