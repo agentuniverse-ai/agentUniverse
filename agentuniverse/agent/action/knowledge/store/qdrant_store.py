@@ -173,9 +173,10 @@ class QdrantStore(Store):
             text = payload.get("text")
             metadata = payload.get("metadata")
             vector = scored_point.vector
-            if vector and isinstance(vector, dict):
+            if isinstance(vector, dict):
+                # A collection with several named vectors returns a mapping; pick ours.
                 vector = vector.get(QdrantStore.VECTOR_NAME, [])
-            else:
+            elif vector is None:
                 vector = []
             documents.append(
                 Document(
