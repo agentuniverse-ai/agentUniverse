@@ -222,8 +222,8 @@ class ContractClauseFragmenter(DocProcessor):
 
         # Article patterns
         if re.match(r'^(Article|ARTICLE)\s+', header, re.IGNORECASE):
-            match = re.search(r'[IVX\d]+', header)
-            clause_id = match.group(0) if match else 'unknown'
+            match = re.match(r'^Article\s+([IVX\d]+)', header, re.IGNORECASE)
+            clause_id = match.group(1).upper() if match else 'unknown'
             return ('article', f'article_{clause_id}')
 
         # Section patterns
