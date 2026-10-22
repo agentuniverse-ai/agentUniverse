@@ -1,0 +1,26 @@
+name: 'stopword_remover'
+description: 'strip common function words (stopwords) from document text before splitting and embedding'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.stopword_remover'
+  class: 'StopwordRemover'
+
+# Language codes whose passes run: 'en' enables the Latin word pass
+# (word-level removal, chunks re-joined with single spaces), 'zh' the
+# CJK character pass (char-level removal, no segmenter needed).
+languages: ['en', 'zh']
+
+# Extra stopwords merged into the built-in lists: Latin entries are
+# matched by the 'en' word pass, single CJK characters by the 'zh'
+# character pass. Entries must be non-empty strings; [] adds nothing.
+custom_stopwords: []
+
+# When false (default) custom_stopwords extends the built-in lists; when
+# true it replaces them entirely (requires a non-empty custom_stopwords).
+replace_builtin: false
+
+# 'remove' (default) rewrites the text with stopwords deleted; 'tag'
+# leaves the text untouched and only stamps metadata['stopword_removed_count']
+# and metadata['stopword_ratio'] = removed / considered tokens.
+mode: 'remove'
