@@ -26,5 +26,6 @@ class SessionSpanProcessor(SpanProcessor):
     def shutdown(self):
         pass
 
-    def force_flush(self, timeout_millis=30000):
-        pass
+    def force_flush(self, timeout_millis=30000) -> bool:
+        """Report success immediately: this processor has no buffered spans."""
+        return True
