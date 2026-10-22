@@ -1,0 +1,40 @@
+name: markdown_beautify_tool
+description: Format, normalize, and analyze Markdown text — beautify whole documents, normalize heading levels, fix list markers and numbering, align tables, or compute structural stats. Pure regex, zero extra dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.markdown_beautify_tool
+  class: MarkdownBeautifyTool
+input_keys:
+  - mode
+  - markdown
+max_input_chars: 1000000
+default_list_marker: '-'
+default_ordered_delimiter: '.'
+args_model:
+  mode:
+    type: string
+    description: Operation — beautify (full pipeline), normalize_headings (setext to ATX plus level shift), fix_lists (unify markers and renumber), fix_tables (align columns), or stats (structural counts).
+    required: true
+  markdown:
+    type: string
+    description: The Markdown source text to process.
+    required: true
+  heading_shift:
+    type: number
+    description: Heading level shift for normalize_headings/beautify; positive demotes (deeper), negative promotes. Clamped so levels stay in 1-6. Default 0.
+    required: false
+    default: 0
+  list_marker:
+    type: string
+    description: Unordered-list marker for fix_lists/beautify — '-', '*' or '+'. Defaults to the tool's default_list_marker.
+    required: false
+  ordered_delimiter:
+    type: string
+    description: Delimiter after ordered-list numbers — '.' or ')'. Defaults to the tool's default_ordered_delimiter.
+    required: false
+  renumber_ordered:
+    type: boolean
+    description: Renumber ordered lists from 1 per contiguous list. Default true.
+    required: false
+    default: true

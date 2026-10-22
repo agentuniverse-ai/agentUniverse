@@ -636,3 +636,34 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+## MarkdownBeautifyTool
+
+`MarkdownBeautifyTool` formats, normalizes, and analyzes Markdown text with pure-regex rules and zero extra dependencies, covering the "other tools" direction of issue #252. It supports five modes: `beautify`, `normalize_headings`, `fix_lists`, `fix_tables`, and `stats`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.markdown_beautify_tool import MarkdownBeautifyTool
+
+tool = MarkdownBeautifyTool()
+result = tool.execute(
+    mode="beautify",
+    markdown="#  Title ##\n* item one\n+ item two\n3. third\n9. ninth\nA|B\n--|--\nx | y\n",
+)
+print(result["markdown"])
+# # Title
+#
+# - item one
+# - item two
+# 1. third
+# 2. ninth
+# | A   | B   |
+# | --- | --- |
+# | x   | y   |
+```
+
+- `beautify` runs the full pipeline: setext underlines become ATX headings, heading levels are repaired to a gap-free hierarchy, trailing whitespace is stripped, blank-line runs collapse to one (with spacing forced only around headings and code fences), `~~~` fences are re-fenced with backticks and a trimmed lowercase info string, list markers are unified and ordered lists renumbered, and GFM tables are column-aligned.
+- `normalize_headings` converts setext to ATX and shifts every level by `heading_shift` (positive demotes, negative promotes), clamped to 1-6.
+- `fix_lists` unifies unordered markers to `list_marker` (`-` default) and renumbers ordered lists from 1 per contiguous list (`renumber_ordered=False` keeps original numbers; `ordered_delimiter` selects `.` or `)`); loose lists keep counting across blank lines.
+- `fix_tables` pads or truncates rows to the header width, rebuilds each table with aligned columns (minimum width 3) and a normalized separator preserving `:---` / `:---:` / `---:` alignment; escaped pipes are respected.
+- `stats` returns structural counts: lines, words, headings per level (setext included), paragraphs, list items with nesting depth, tables, fenced/inline code with languages, links, images, blockquote lines and thematic breaks.
+
+Fenced code blocks and inline code are protected from every transformation via placeholder substitution, so markup inside code is never rewritten. CRLF input is normalized, and `beautify` is idempotent. Inputs longer than `max_input_chars` (default 1,000,000) are rejected, and invalid arguments return a structured `{"status": "error", "error_type": "validation_error", ...}` result instead of raising.
