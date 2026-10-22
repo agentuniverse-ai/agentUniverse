@@ -123,6 +123,8 @@ class ChromaHierarchicalStore(ChromaStore):
     def _initialize_by_component_configer(self,
                                           chroma_store_configer: ComponentConfiger) -> 'DocProcessor':
         super()._initialize_by_component_configer(chroma_store_configer)
+        if hasattr(chroma_store_configer, "similarity_top_k_list"):
+            self.similarity_top_k_list = chroma_store_configer.similarity_top_k_list
         if hasattr(chroma_store_configer, "search_depth"):
             self.search_depth = chroma_store_configer.search_depth
         return self
