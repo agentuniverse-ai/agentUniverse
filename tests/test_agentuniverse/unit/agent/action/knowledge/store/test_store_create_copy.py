@@ -11,11 +11,14 @@ Store. The fix copies mutable state deeply for instance isolation, with live
 clients kept as shared references.
 """
 
+import os
+import tempfile
 import threading
 import unittest
 
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
+from agentuniverse.agent.action.knowledge.store.sqlite_store import SQLiteStore
 from agentuniverse.agent.action.knowledge.store.store import Store
 
 
@@ -139,6 +142,59 @@ class TestStoreCreateCopyNestedIsolation(unittest.TestCase):
         self.assertIs(copied.async_client, lock)
         self.assertIs(copied.options["connection"], lock)
         self.assertIsNot(copied.options, store.options)
+
+
+class TestStoreCreateCopyBuiltinSQLiteStore(unittest.TestCase):
+    """Review regression (issue #1183, P1): the built-in SQLiteStore keeps
+    its live ``sqlite3.Connection`` in ``conn`` — not ``client`` — and does
+    not override ``create_copy``. A whole-object deepcopy with a
+    client-only memo raised ``TypeError: cannot pickle 'sqlite3.Connection'
+    object`` on an initialized store. The per-field sharing fallback must
+    keep initialized built-in stores working with ``new_instance=True``.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.db_path = os.path.join(self._tmp.name, "real_store.db")
+        self.store = SQLiteStore(name="sqlite_copy_probe", db_path=self.db_path)
+        # Really initialize: live connection + tables, exactly the state a
+        # registered store has after the post-fork hook ran.
+        self.store._new_client()
+        self.addCleanup(self.store.conn.close)
+
+    def test_create_copy_succeeds_on_initialized_store(self) -> None:
+        # Raised TypeError (cannot pickle sqlite3.Connection) before the fix.
+        copied = self.store.create_copy()
+        self.assertIsNot(copied, self.store)
+        self.assertIsInstance(copied, SQLiteStore)
+
+    def test_copy_shares_the_live_connection(self) -> None:
+        copied = self.store.create_copy()
+        self.assertIs(copied.conn, self.store.conn)
+
+    def test_shared_connection_stays_operational_from_the_copy(self) -> None:
+        copied = self.store.create_copy()
+        with copied.conn:
+            copied.conn.execute("CREATE TABLE IF NOT EXISTS probe (x INTEGER)")
+            copied.conn.execute("INSERT INTO probe (x) VALUES (42)")
+        row = self.store.conn.execute("SELECT x FROM probe").fetchone()
+        self.assertEqual(row[0], 42)
+
+    def test_copy_isolates_sqlite_config_fields(self) -> None:
+        copied = self.store.create_copy()
+        copied.similarity_top_k = 99
+        copied.k1 = 0.1
+        copied.db_path = os.path.join(self._tmp.name, "other.db")
+        self.assertEqual(self.store.similarity_top_k, 10)
+        self.assertEqual(self.store.k1, 1.5)
+        self.assertEqual(self.store.db_path, self.db_path)
+
+    def test_successive_copies_of_initialized_store_are_distinct(self) -> None:
+        first = self.store.create_copy()
+        second = self.store.create_copy()
+        self.assertIsNot(first, second)
+        self.assertIs(first.conn, second.conn)
 
 
 if __name__ == "__main__":
