@@ -1,0 +1,36 @@
+name: phonetic_alphabet_tool
+description: NATO / ICAO spelling-alphabet tool — pure Python stdlib, no network required. Spells text into phonetic words per character (mode='spell', A→Alfa … Z→Zulu, 0→Zero … 9→Niner, spaces become a configurable marker, punctuation passed through flagged), reads phonetic words back to text case-insensitively with unknown words rejected by name and position (mode='read'), and lists the full letter and digit tables (mode='list').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.phonetic_alphabet_tool
+  class: PhoneticAlphabetTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — spell, read or list.
+    required: true
+  text:
+    type: string
+    description: The text to spell, or the phonetic words to read back. Required for the spell and read modes; not used by list mode.
+    required: false
+  space_marker:
+    type: string
+    description: Token representing a space character (default '[space]'; '·' is a common compact alternative). Must be non-empty, whitespace-free, must not collide with a phonetic word and must not be a single alphanumeric character.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["spell", "read", "list"]
+      description: Operation mode.
+    text:
+      type: string
+      description: Text to spell, or phonetic words to read back (spell / read modes).
+    space_marker:
+      type: string
+      description: Token representing a space character (spell / read modes).
+  required: ["mode"]
