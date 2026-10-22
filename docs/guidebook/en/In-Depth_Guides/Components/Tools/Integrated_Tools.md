@@ -636,3 +636,19 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## IcalTool
+
+`IcalTool` provides offline iCalendar (.ics) analysis per RFC 5545 with four modes: `parse`, `lint`, `events`, and `fold`. It uses only the Python standard library (`re` and `datetime`), never touches the network, and is fully deterministic; `python-dateutil` expands recurrence rules opportunistically when installed and is never required.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.ical_tool import IcalTool
+
+tool = IcalTool()
+tree = tool.execute(mode="parse", text=ics_text)      # component tree + fold-site log
+findings = tool.execute(mode="lint", text=ics_text)   # RFC 5545 structural/semantic findings
+events = tool.execute(mode="events", text=ics_text)   # ISO-normalized events + next occurrences
+folded = tool.execute(mode="fold", text=unfolded_text)  # re-fold at 75 octets
+```
+
+`parse` unfolds the RFC 5545 3.1 folding grammar (CRLF plus one SPACE/HTAB removed), splits every content line into name, parameters, and value, and returns the nested component tree: VCALENDAR holding VEVENT/VTODO/VJOURNAL/VFREEBUSY/VTIMEZONE, VALARM inside VEVENT/VTODO/VJOURNAL, and STANDARD/DAYLIGHT inside VTIMEZONE. It also reports the fold sites (physical line plus continuation count), the line-ending inventory (CRLF versus bare LF/CR), and the calendar-level VERSION/PRODID/CALSCALE properties with findings for the ones the RFC requires. `lint` checks BEGIN/END nesting and closure, the 75-octet line limit measured in UTF-8 octets (multibyte characters count more than one octet per character), leading-space lines that the 3.1 grammar must treat as continuations but that read like new properties, missing required properties per component (VEVENT needs UID, DTSTAMP, and DTSTART per 3.6.1), DATE versus DATE-TIME form mismatches, TZID parameters without a matching VTIMEZONE, RRULE grammar (FREQ required, COUNT and UNTIL mutually exclusive, UNTIL form must match DTSTART form), value checks (PRIORITY 0-9, SEQUENCE non-negative, CALSCALE), parameter quoting, and TEXT escapes (`\n`, `\N`, `\,`, `\;`, `\\`). Bare LF input is accepted with an information finding because real-world files use it; RFC 5545 requires CRLF. `events` returns ISO-normalized events with all-day detection, implied end resolution (DTEND, then DURATION, then the next calendar date for DATE values or the same instant per 3.6.1), alarm counts, and recurrence normalization with the next occurrences generated forward from DTSTART - never from the wall clock - by the built-in engine (DAILY/WEEKLY/MONTHLY/YEARLY with INTERVAL, COUNT, UNTIL, WKST, weekly BYDAY, and monthly positive BYMONTHDAY) or by python-dateutil when available; the `engine` field always discloses which engine answered, and rules outside the subset are reported rather than guessed. `fold` re-folds text at character boundaries so every physical line fits 75 octets (no UTF-8 sequence is ever split) and self-verifies the unfold(fold(x)) == x round trip. IANA time-zone arithmetic is intentionally out of scope; occurrences keep the DTSTART wall time. Text size, logical lines, components, findings, events, occurrences, and scan periods are capped with explicit truncation flags, and invalid inputs return structured errors.
