@@ -25,7 +25,8 @@ class AgentModel(BaseModel):
             dict: The parameters for the LLM.
         """
         params = {}
-        for key, value in self.profile.get('llm_model').items():
+        llm_model = (self.profile or {}).get('llm_model') or {}
+        for key, value in llm_model.items():
             if key == 'name' or key == 'prompt_processor':
                 continue
             if key == 'model_name':

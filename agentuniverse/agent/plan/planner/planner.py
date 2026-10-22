@@ -156,7 +156,7 @@ class Planner(ComponentBase):
         Returns:
             LLM: The language model.
         """
-        llm_name = agent_model.profile.get('llm_model').get('name')
+        llm_name = (agent_model.profile or {}).get('llm_model', {}).get('name')
         llm: LLM = LLMManager().get_instance_obj(component_instance_name=llm_name)
         return llm
 
