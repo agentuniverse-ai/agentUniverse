@@ -1,0 +1,30 @@
+name: 'checklist_completeness_analyzer'
+description: 'analyze checkbox task lists and stamp completeness ratio and missing items into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.checklist_completeness_analyzer'
+  class: 'ChecklistCompletenessAnalyzer'
+
+# Optional filter mode: when set, documents whose completion ratio
+# (checked / total checkboxes) falls below min_ratio (or above
+# max_ratio) are dropped. Documents without any checkbox are always
+# kept. Leave both unset (null) for the default stamp-only behaviour.
+min_ratio: null
+max_ratio: null
+
+# Metadata key the analysis dictionary is written to on every document;
+# '' disables stamping. The dictionary holds total / checked / unchecked /
+# empty_labels counts, ratio (checked/total rounded to 4 decimals, null
+# when no checkbox was found), missing_items (labels of unchecked items,
+# capped) and missing_truncated.
+checklist_key: 'checklist'
+
+# Metadata key the note for documents without any checkbox is written
+# to ('no checkboxes found'); '' disables the note.
+note_key: 'checklist_note'
+
+# Maximum number of unchecked item labels kept in missing_items; 0 keeps
+# none. When unchecked labels are omitted because of this cap, the
+# missing_truncated flag is set to true.
+max_items_reported: 25
