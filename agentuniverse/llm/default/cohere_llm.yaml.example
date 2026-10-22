@@ -1,0 +1,13 @@
+name: 'default_cohere_llm'
+description: 'default cohere llm powered by the Cohere Command models'
+model_name: 'command-a-03-2025'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${COHERE_API_KEY}'
+api_base: 'https://api.cohere.com/compatibility/v1'
+proxy: '${COHERE_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.cohere_llm'
+  class: 'CohereLLM'
