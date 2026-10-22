@@ -636,3 +636,51 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Text Diff Tool
+
+`TextDiffTool` compares two texts using the Python standard library
+`difflib` module — zero network access, zero extra dependencies. It
+supports three modes: `unified` mode renders a unified diff in the
+exact `difflib.unified_diff` format (`--- text1` / `+++ text2`
+headers, `@@ -a,b +c,d @@` hunks, `' '`/`'-'`/`'+'` line prefixes)
+together with the hunk count and added/removed/equal line counts,
+with a configurable `context_lines` window (default 3, range 0..50);
+`summary` mode returns change statistics — the `SequenceMatcher`
+similarity ratio of the two line sequences, added/removed/equal line
+counts, per-text line totals, and `identical` /
+`equal_after_normalization` flags; and `words` mode tokenizes both
+texts into whitespace-separated words and lists every non-equal
+word-level opcode (insert/delete/replace region) with word-index
+ranges and the changed words.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.text_diff_tool import TextDiffTool
+
+tool = TextDiffTool()
+patch = tool.execute(mode="unified", text1="one\ntwo\nthree", text2="one\nTWO\nthree")["result"]
+stats = tool.execute(mode="summary", text1="one\ntwo\nthree", text2="one\nTWO\nthree")
+words = tool.execute(mode="words", text1="the quick brown fox", text2="the very quick fox")
+```
+
+Two normalization options apply to all modes: `ignore_case` compares
+lines (and words) case-insensitively, and `ignore_whitespace` ignores
+leading and trailing whitespace of each line. Matching always runs on
+the normalized lines while unified output renders the original lines,
+so case- or whitespace-only changes disappear from the diff without
+altering the shown content. With no options active, `unified` output
+is byte-for-byte identical to `difflib.unified_diff` — including the
+empty string for identical texts.
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, unknown mode, non-boolean flags,
+`context_lines` outside 0..50, texts over 100,000 characters) raise a
+`ValueError`. Empty texts are valid input (every line of the
+counterpart becomes an insertion or deletion); lines come from
+`str.splitlines()`, so one trailing newline is not distinguished from
+its absence. A unified diff larger than 200,000 characters — possible
+with two maximal inputs that differ everywhere — is returned as a
+structured `error` payload (`{"type": "diff_too_large", "message":
+...}`) suggesting `summary` mode instead of raising. The words-mode
+payload is bounded: at most 100 change opcodes are listed and at most
+20 words per side per opcode, while all counts stay exact.
