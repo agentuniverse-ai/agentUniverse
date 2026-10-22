@@ -52,7 +52,16 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml): Reads text content from local PDF files.
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml): Reads text content from local PPTX files.
 - [default_txt_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/txt_reader.yaml): Reads text content from TXT files.
+- [default_jsonl_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/jsonl_reader.yaml): Reads JSONL and NDJSON files as one Document per non-empty line, preserving the source line number in metadata.
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml): Reads ZIP archive files, supports nested ZIP structures and multiple file formats.
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml): Reads text content from PDF files found on the web.
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml): Reads text content from local Markdown files.
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml): Reads text content from RAR archive files (.rar).
+
+### JSONL and NDJSON reader
+
+`default_jsonl_reader` accepts `.jsonl` and `.ndjson` files. Each non-empty line
+must contain one valid JSON value and becomes an independent `Document`. Blank
+lines are ignored, while `metadata["line_number"]` records the original physical
+line number so a source record can be traced back to the file. Objects, arrays,
+and primitive JSON values are supported.
