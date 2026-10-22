@@ -1,0 +1,67 @@
+name: csv_json_tool
+description: CSV <-> JSON conversion tool — pure Python stdlib csv + json, no network required. to_json mode parses CSV text into a JSON array of row objects (first row as headers by default, or generated column_1..column_n keys; optional int/float/bool/null type inference that keeps leading-zero strings like '007' untouched; delimiter auto-sniffed among , ; tab | or set explicitly). to_csv mode serializes a JSON array of objects back to CSV text (header from the union of keys in first-seen order or an explicit key_order, ragged rows fill missing cells, nested values JSON-stringified, RFC 4180 quoting).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.csv_json_tool
+  class: CsvJsonTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Conversion mode — to_json (CSV text to JSON records) or to_csv (JSON records to CSV text).
+    required: true
+  csv_text:
+    type: string
+    description: The CSV text to parse. Required for the to_json mode; not used by to_csv.
+    required: false
+  json_text:
+    type: string
+    description: The JSON text to serialize — must parse to an array of objects. Required for the to_csv mode; not used by to_json.
+    required: false
+  delimiter:
+    type: string
+    description: Optional explicit delimiter — one of "," ";" "\t" "|". When omitted, to_json sniffs the delimiter by counting candidates outside quoted sections (ties prefer ",") and to_csv writes ",".
+    required: false
+  has_header:
+    type: boolean
+    description: to_json only — treat the first row as object keys (default true); false keys rows column_1..column_n. Accepts booleans or "true"/"false" strings.
+    required: false
+  type_inference:
+    type: boolean
+    description: to_json only — coerce cells to int/float/bool/null (default true); false keeps every value a string. Leading-zero strings such as 007 are never coerced.
+    required: false
+  key_order:
+    type: array
+    description: to_csv only — explicit leading header keys as a list (or JSON-array string); remaining union keys are appended in first-seen order.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["to_json", "to_csv"]
+      description: Conversion mode.
+    csv_text:
+      type: string
+      description: CSV text to parse (to_json mode).
+    json_text:
+      type: string
+      description: JSON array-of-objects text to serialize (to_csv mode).
+    delimiter:
+      type: string
+      enum: [",", ";", "\t", "|"]
+      description: Explicit delimiter; omitted means auto-sniff (to_json) or comma (to_csv).
+    has_header:
+      type: boolean
+      description: Treat the first CSV row as object keys (to_json mode, default true).
+    type_inference:
+      type: boolean
+      description: Coerce CSV cells to int/float/bool/null (to_json mode, default true).
+    key_order:
+      type: array
+      items:
+        type: string
+      description: Explicit leading header keys (to_csv mode).
+  required: ["mode"]
