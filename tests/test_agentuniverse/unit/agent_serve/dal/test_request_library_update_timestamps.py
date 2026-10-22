@@ -12,6 +12,7 @@ from agentuniverse.agent_serve.web.dal.request_library import RequestLibrary
 from agentuniverse.agent_serve.web.request_task import RequestTask
 from agentuniverse.base.config.application_configer.application_config_manager \
     import ApplicationConfigManager
+from agentuniverse.database.sqldb_wrapper_manager import SQLDBWrapperManager
 
 
 class _StubConfiger:
@@ -30,27 +31,59 @@ class _StubAppConfiger:
     base_info_appname = 'timestamp_test_app'
 
 
+def _singleton_cache() -> dict | None:
+    """Return the closure dict caching singleton instances, if reachable."""
+    for cell in (RequestLibrary.__closure__ or ()):
+        cached = cell.cell_contents
+        if isinstance(cached, dict) and RequestLibrary in cached:
+            return cached
+    return None
+
+
 @pytest.fixture()
 def request_library(tmp_path):
     """Build a RequestLibrary bound to a scratch sqlite file.
 
-    RequestLibrary is a closure-based singleton, so the cached instance is
-    dropped before construction to make the scenario repeatable.
+    Constructing the library mutates three pieces of process-global state:
+    the closure-based RequestLibrary singleton, the SQLDBWrapperManager
+    registry (the constructor registers its wrapper there), and the global
+    ApplicationConfigManager app_configer swapped for a stub here. Each is
+    snapshotted before the swap-in and restored on teardown, and the scratch
+    engine is disposed, so repeated setups with separate temporary
+    directories cannot leak singleton, database or configuration state into
+    other tests.
     """
-    ApplicationConfigManager().app_configer = _StubAppConfiger()
-    for cell in (RequestLibrary.__closure__ or ()):
-        cached = cell.cell_contents
-        if isinstance(cached, dict) and RequestLibrary in cached:
-            del cached[RequestLibrary]
-            break
+    config_manager = ApplicationConfigManager()
+    try:
+        prev_app_configer = config_manager.app_configer
+    except ValueError:
+        # The getter raises while no AppConfiger is set; restoring None
+        # reproduces that exact unset state.
+        prev_app_configer = None
+    prev_registered = dict(SQLDBWrapperManager()._instance_obj_map)
+    singleton_cache = _singleton_cache()
+    prev_library_instance = (singleton_cache.get(RequestLibrary)
+                             if singleton_cache else None)
+
+    config_manager.app_configer = _StubAppConfiger()
+    if singleton_cache is not None:
+        singleton_cache.pop(RequestLibrary, None)
     db_uri = f'sqlite:///{tmp_path / "request_task.db"}'
     library = RequestLibrary(_StubConfiger(db_uri))
     yield library
-    for cell in (RequestLibrary.__closure__ or ()):
-        cached = cell.cell_contents
-        if isinstance(cached, dict) and RequestLibrary in cached:
-            del cached[RequestLibrary]
-            break
+
+    # Close the sqlite pool so the scratch file is released with its tmp dir.
+    library.sqldb_wrapper.sql_database._engine.dispose()
+
+    registry = SQLDBWrapperManager()._instance_obj_map
+    registry.clear()
+    registry.update(prev_registered)
+    if singleton_cache is not None:
+        if prev_library_instance is None:
+            singleton_cache.pop(RequestLibrary, None)
+        else:
+            singleton_cache[RequestLibrary] = prev_library_instance
+    config_manager.app_configer = prev_app_configer
 
 
 def _make_do(request_id: str, gmt: datetime) -> RequestDO:
