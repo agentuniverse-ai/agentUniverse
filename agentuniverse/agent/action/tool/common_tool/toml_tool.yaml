@@ -1,0 +1,36 @@
+name: toml_tool
+description: Read-only TOML inspection tool — pure Python stdlib (tomllib, Python 3.11+), no network required. Parse TOML text into a nested JSON-safe dict with datetime/date/time values ISO-stringified (mode='parse'), check validity with root key count, table list and error line/column (mode='validate'), resolve a dotted path with quoted-key and array-index segments (mode='get'), or list every leaf path with its type, capped at 500 entries (mode='paths'). Read-only by design — writing TOML round-trip-safe needs the non-core tomli-w package.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.toml_tool
+  class: TomlTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Inspection mode — parse, validate, get or paths.
+    required: true
+  text:
+    type: string
+    description: The TOML document to inspect. Required and non-empty for the parse, get and paths modes; validate also accepts the empty string (a valid TOML document with zero keys).
+    required: false
+  path:
+    type: string
+    description: "get mode only — the dotted path to resolve, e.g. server.auth.user, a.\"b.c\" (double-quoted key with escapes), a.'b.c' (literal single-quoted key) or items[0].name (array index). Ignored by the other modes."
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "validate", "get", "paths"]
+      description: Inspection mode.
+    text:
+      type: string
+      description: TOML document to inspect (parse, validate, get, paths modes).
+    path:
+      type: string
+      description: Dotted path with quoted-key and array-index segments (get mode).
+  required: ["mode"]
