@@ -180,7 +180,7 @@ class PGVectorStore(Store):
             )
 
     def _top_k(self, query: Query) -> int:
-        top_k = query.similarity_top_k or self.similarity_top_k
+        top_k = self.similarity_top_k if query.similarity_top_k is None else query.similarity_top_k
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
             raise ValueError("similarity_top_k must be a positive integer")
         return top_k
