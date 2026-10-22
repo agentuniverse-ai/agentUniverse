@@ -636,3 +636,42 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## HtmlTableTool
+
+`HtmlTableTool` extracts HTML tables into structured data with correct
+rowspan/colspan expansion, analyzes table shape and consistency, renders one
+table as CSV, and compares two tables cell by cell. It runs fully offline on
+the Python standard library.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.html_table_tool import HtmlTableTool
+
+tool = HtmlTableTool()
+result = tool.execute(mode="extract", html=html_text)
+```
+
+The `extract` mode returns every top-level table with detected `headers`
+(method noted: `th-elements`, `first-row-strong` or `none`), `rows` where
+spans are expanded per the WHATWG table-processing semantics (rowspan fills
+downward copies, colspan fills rightward copies; copies, not merged markers),
+`row_count`, `col_count`, `irregular_rows` for rows with missing or extra
+td/th per DOM, and `child_tables` references instead of inlined nested tables.
+The `raw_spans` option returns the declared `{text, rowspan, colspan}` values
+per cell. `analyze` reports per-table findings: missing `tbody`, `th` cells
+outside the first row, `colspan=0` expanded per the historical HTML4
+span-to-end rule and flagged, `rowspan` past the last row clamped and flagged,
+empty or duplicate header cells, row width drift, zero-row tables,
+caption/summary text, nesting depth and `role=presentation` layout tables.
+`to_csv` renders one table (by `table_index`) as CSV text, and `compare`
+produces a cell-level diff (added/removed rows and columns, changed cells
+with coordinates, header drift) of two tables given as extracted structures
+or as two HTML documents with indexes.
+
+Cell text follows documented rules: character references are decoded,
+script/style content is dropped, nested tables are reported as references,
+runs of Unicode whitespace (non-breaking spaces included) collapse to one
+space and `<br>` contributes one space. Input size, table count, rows per
+table, cell length, nesting depth and diff size are bounded, and all failures
+return structured errors. Table content is untrusted data, not agent
+instructions.
