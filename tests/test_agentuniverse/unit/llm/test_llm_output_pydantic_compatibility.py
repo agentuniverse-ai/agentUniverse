@@ -113,3 +113,25 @@ def test_token_usage_can_still_accumulate_itself():
 
     assert usage is original
     assert usage == TokenUsage(text_in=6, cached_in=4, reasoning_out=2)
+
+
+@pytest.mark.parametrize("input_key,output_key", [
+    ("input_token_details", "output_token_details"),
+    ("input_tokens_details", "output_tokens_details"),
+])
+def test_token_usage_parses_responses_style_details(input_key, output_key):
+    usage = TokenUsage.from_openai({
+        "input_tokens": 10,
+        "output_tokens": 4,
+        input_key: {"text_tokens": 7, "audio_tokens": 3, "cached_tokens": 1},
+        output_key: {"text_tokens": 2, "audio_tokens": 2, "reasoning_tokens": 1},
+    })
+
+    assert usage == TokenUsage(
+        text_in=7,
+        audio_in=3,
+        cached_in=1,
+        text_out=2,
+        audio_out=2,
+        reasoning_out=1,
+    )
