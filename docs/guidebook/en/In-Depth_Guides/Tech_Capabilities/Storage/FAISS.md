@@ -58,6 +58,20 @@ metadata:
 | `similarity_top_k` | int | No | Default number of results to return (default: 10) |
 | `index_config` | dict | No | FAISS index configuration |
 
+### Validation and Input Contract
+
+`FAISSStore` validates general configuration and supplied vectors before passing them to native FAISS operations:
+
+- A configured `similarity_top_k` and every effective query-level result count must be a positive integer. A query override may be used when the store default is `None`. A value larger than the number of indexed vectors is safely truncated to the current index size; zero and negative values are errors rather than aliases for the default.
+- `index_config.dimension`, when provided, must be a positive integer and every document/query vector must have that exact dimension. If it is omitted, the first accepted document batch determines the index dimension, and later vectors must match the native index.
+- Embeddings supplied to the store must be non-empty lists of finite numeric values that can be converted to finite `float32` values without overflow. Values that remain non-numeric at the store boundary, `NaN`, positive/negative infinity, and values that overflow `float32` are rejected before FAISS receives them. `Document` and `Query` apply their existing Pydantic numeric coercion before this store-level validation.
+- Every vector in an insert batch must have the same dimension, and document IDs must be unique within that batch. Validation is completed before index creation, so an invalid item cannot leave a newly created partial index or partial ID mappings.
+- Documents without an embedding retain the existing behavior: the configured embedding component is tried, or the document is skipped when no embedding can be produced.
+- `FAISSStore.query` accepts one embedding vector per call. Multiple query vectors are rejected instead of silently returning results for only the first row.
+- Index-specific integer parameters must be positive. `IndexIVFPQ` additionally requires `dimension` to be divisible by `m` and `nbits` no greater than FAISS's supported maximum of 24.
+
+These checks cover general configuration and vector validity. IVF training-set size requirements remain index- and workload-specific; provide enough representative vectors for the configured IVF/PQ index before training.
+
 ### Index Configuration Options
 
 The `index_config` parameter allows you to specify the type and parameters of the FAISS index:
