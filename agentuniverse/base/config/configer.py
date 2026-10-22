@@ -199,6 +199,6 @@ class Configer(object):
             dict: the value of the yaml file
         """
         with open(path, 'r', encoding='utf-8') as stream:
-            config_data = yaml.safe_load(stream)
+            config_data = yaml.safe_load(stream) or {}
         config_data = PlaceholderResolver().resolve(config_data)
         return config_data
