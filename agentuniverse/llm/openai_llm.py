@@ -11,10 +11,9 @@ import httpx
 from langchain_core.language_models.base import BaseLanguageModel
 from openai import OpenAI, AsyncOpenAI
 from pydantic import Field
-import tiktoken
 
 from agentuniverse.llm.langchain_instance import LangchainOpenAI
-from agentuniverse.llm.llm import LLM, LLMOutput
+from agentuniverse.llm.llm import LLM, LLMOutput, get_encoding_for_model
 from agentuniverse.base.util.env_util import get_from_env
 
 OPENAI_MAX_CONTEXT_LENGTH = {
@@ -168,11 +167,8 @@ class OpenAILLM(LLM):
         Returns:
             The integer number of tokens in the text.
         """
-        try:
-            encoding = tiktoken.encoding_for_model(self.model_name)
-        except KeyError:
-            encoding = tiktoken.get_encoding("cl100k_base")
-        return len(encoding.encode(text))
+        encoding = get_encoding_for_model(self.model_name)
+        return len(encoding.encode(text, disallowed_special=()))
 
     @staticmethod
     def parse_result(chunk):

@@ -5,9 +5,10 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: llm.py
+import threading
 from abc import abstractmethod
 from copy import deepcopy
-from typing import Optional, Any, AsyncIterator, Iterator, Union
+from typing import Dict, Optional, Any, AsyncIterator, Iterator, Union
 
 import tiktoken
 from langchain_core.language_models.base import BaseLanguageModel
@@ -22,6 +23,39 @@ from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.llm.llm_channel.llm_channel import LLMChannel
 from agentuniverse.llm.llm_channel.llm_channel_manager import LLMChannelManager
 from agentuniverse.llm.llm_output import LLMOutput
+
+_ENCODING_CACHE: Dict[Optional[str], tiktoken.Encoding] = {}
+_ENCODING_CACHE_LOCK = threading.Lock()
+
+
+def get_encoding_for_model(model_name: Optional[str]) -> tiktoken.Encoding:
+    """Return the tiktoken encoding for the given model, resolved once per model name.
+
+    `tiktoken.encoding_for_model` re-runs its registry lookup on every call,
+    and for model names it does not know -- the common case for the non-OpenAI
+    models this framework targets -- it raises a `KeyError` before the
+    `cl100k_base` fallback applies. Resolution therefore happens once per
+    model name here and the result is shared by every LLM instance; tiktoken
+    encodings are immutable and safe to reuse across threads.
+
+    Args:
+        model_name (Optional[str]): The name of the model to tokenize for.
+
+    Returns:
+        tiktoken.Encoding: The encoding for the model, falling back to
+        `cl100k_base` when the model is not known to tiktoken.
+    """
+    encoding = _ENCODING_CACHE.get(model_name)
+    if encoding is None:
+        with _ENCODING_CACHE_LOCK:
+            encoding = _ENCODING_CACHE.get(model_name)
+            if encoding is None:
+                try:
+                    encoding = tiktoken.encoding_for_model(model_name)
+                except KeyError:
+                    encoding = tiktoken.get_encoding("cl100k_base")
+                _ENCODING_CACHE[model_name] = encoding
+    return encoding
 
 
 class LLM(ComponentBase):
@@ -185,11 +219,8 @@ class LLM(ComponentBase):
         Returns:
             The integer number of tokens in the text.
         """
-        try:
-            encoding = tiktoken.encoding_for_model(self.model_name)
-        except KeyError:
-            encoding = tiktoken.get_encoding("cl100k_base")
-        return len(encoding.encode(text))
+        encoding = get_encoding_for_model(self.model_name)
+        return len(encoding.encode(text, disallowed_special=()))
 
     def as_langchain_runnable(self, params=None) -> Runnable:
         """Get the langchain llm class."""

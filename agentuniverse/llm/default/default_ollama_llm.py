@@ -1,7 +1,6 @@
 import json
 from typing import Any, Union, AsyncIterator, Iterator, Optional, List, Sequence
 
-import tiktoken
 from langchain_core.language_models import BaseLanguageModel
 from ollama import Options
 from pydantic import Field
@@ -9,7 +8,7 @@ from pydantic import Field
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.base.util.system_util import process_yaml_func
-from agentuniverse.llm.llm import LLM
+from agentuniverse.llm.llm import LLM, get_encoding_for_model
 from agentuniverse.llm.llm_output import LLMOutput
 from agentuniverse.llm.ollama_langchain_instance import OllamaLangchainInstance
 
@@ -95,8 +94,5 @@ class OllamaLLM(LLM):
         return self
 
     def get_num_tokens(self, text: str) -> int:
-        try:
-            encoding = tiktoken.encoding_for_model(self.model_name)
-        except KeyError:
-            encoding = tiktoken.get_encoding("cl100k_base")
-        return len(encoding.encode(text))
+        encoding = get_encoding_for_model(self.model_name)
+        return len(encoding.encode(text, disallowed_special=()))
