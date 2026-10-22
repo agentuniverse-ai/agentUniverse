@@ -174,15 +174,17 @@ class Memory(ComponentBase):
                             type=role
                         ))
 
-                    # Select messages within budget (most recent first)
+                    # Select messages within budget, most recent first: walk
+                    # backwards so the newest turns survive budget pressure,
+                    # matching the fallback branch below.
                     selected_messages = []
                     current_tokens = 0
                     agent_llm_name = self.agent_llm_name if hasattr(self, 'agent_llm_name') else None
 
-                    for message in messages:
+                    for message in reversed(messages):
                         message_tokens = get_memory_tokens([message], agent_llm_name)
                         if current_tokens + message_tokens <= allocated_tokens:
-                            selected_messages.append(message)
+                            selected_messages.insert(0, message)
                             current_tokens += message_tokens
                         else:
                             break  # Budget exceeded
