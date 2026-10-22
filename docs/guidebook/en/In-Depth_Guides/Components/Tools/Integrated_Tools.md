@@ -636,3 +636,16 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Command Result Lookup
+
+`RunCommandTool` returns an integer `thread_id` for each invocation. Treat this
+legacy field as an opaque command handle, and pass it unchanged to
+`CommandStatusTool.execute(thread_id)` to retrieve that invocation's status and
+output. It is not an operating-system thread ID. Later commands, including
+commands run on the same worker thread or another tool instance, receive their
+own handles and do not replace earlier results.
+
+Handles and results are local to the current Python process and do not survive
+restarts or transfer between server processes. Command execution requires the
+existing `allow_command_execution=True` opt-in.
