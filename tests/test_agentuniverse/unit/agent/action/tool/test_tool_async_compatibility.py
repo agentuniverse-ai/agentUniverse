@@ -1,6 +1,7 @@
 import asyncio
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.common_tool.mock_search_tool import MockSearchTool
 
 
 class LegacyInputTool(Tool):
@@ -44,6 +45,15 @@ def test_async_langchain_run_supports_legacy_tool_input_signature():
 
     assert result == "from-langchain"
 
+
+def test_mock_search_tool_supports_standard_async_input():
+    tool = MockSearchTool(input_keys=["input"])
+
+    result = asyncio.run(
+        Tool.async_run.__wrapped__(tool, input="Buffett BYD")
+    )
+
+    assert "比亚迪" in result
 
 def test_langchain_run_supports_no_input_tool():
     tool = NoInputTool()
