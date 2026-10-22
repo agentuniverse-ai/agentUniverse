@@ -1,0 +1,37 @@
+name: 'discourse_connective_analyzer'
+description: 'count discourse connectives across six rhetorical categories and classify a discourse profile into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.discourse_connective_analyzer'
+  class: 'DiscourseConnectiveAnalyzer'
+
+# Total connective density strictly below this value (per 100 sentences)
+# yields the 'narrative' profile. Default 2: storytelling and plain
+# reporting rarely mark their rhetoric. Must be >= 0.
+narrative_max_density: 2.0
+
+# Minimum total density (per 100 sentences) required for the
+# 'argumentative' profile, paired with argumentative_min_share below.
+# Must be >= 0.
+argumentative_min_density: 5.0
+
+# Minimum share of contrast+cause connectives among all connectives for
+# the 'argumentative' profile, in (0, 1]. Default 0.6.
+argumentative_min_share: 0.6
+
+# Minimum share of sequence connectives among all connectives for the
+# 'procedural' profile, in (0, 1]. Default 0.4. 'argumentative' takes
+# precedence when both rules match.
+procedural_min_share: 0.4
+
+# Metadata key the per-document tally dict is written under: sentence
+# count, one count per category (addition, cause, concession, contrast,
+# exemplification, sequence), total, density per 100 sentences and the
+# dominant category (ties break alphabetically). '' disables stamping.
+discourse_key: 'discourse'
+
+# Metadata key the profile label is written under: 'narrative',
+# 'argumentative', 'procedural' or 'descriptive' — None for documents
+# without a word-bearing sentence. '' disables stamping.
+profile_key: 'discourse_profile'
