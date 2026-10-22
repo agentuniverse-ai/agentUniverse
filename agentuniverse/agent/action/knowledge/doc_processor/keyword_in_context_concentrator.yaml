@@ -1,0 +1,35 @@
+name: 'keyword_in_context_concentrator'
+description: 'extract keyword-in-context windows around keyword occurrences into metadata for snippet display'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.keyword_in_context_concentrator'
+  class: 'KeywordInContextConcentrator'
+
+# Keywords whose occurrences are concentrated into snippets, applied to
+# every batch in this order (duplicates and blank entries are dropped).
+keywords: ['rate', 'inflation']
+
+# When true, the query's own keyword set is merged into the effective
+# keywords (alphabetically sorted, after the static list above), so the
+# component also works at recall time with live query terms.
+use_query_keywords: true
+
+# Characters of context kept on each side of an occurrence; 0 narrows
+# the snippet to the keyword itself. Must be >= 0.
+window_size: 60
+
+# Maximum snippets stored per document, in text order; per-keyword
+# counts and the total always cover every occurrence. Must be >= 1.
+max_snippets: 10
+
+# Minimum total keyword occurrences for a document to be kept; 0 keeps
+# every document (stamp-only). Must be >= 0.
+min_occurrences: 0
+
+# When false (default) keywords match regardless of case.
+case_sensitive: false
+
+# Metadata key the concordance record is written to on kept documents;
+# '' disables stamping.
+kwic_key: 'kwic'
