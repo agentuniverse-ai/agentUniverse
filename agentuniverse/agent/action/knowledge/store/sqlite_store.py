@@ -125,6 +125,10 @@ class SQLiteStore(Store):
                 metadata = json.dumps(
                     document.metadata) if document.metadata else None
                 self.conn.execute(
+                    'DELETE FROM inverted_index WHERE doc_id = ?',
+                    (document.id,)
+                )
+                self.conn.execute(
                     'INSERT OR REPLACE INTO documents (id, text, word_count, metadata) VALUES (?, ?, ?, ?)',
                     (document.id, document.text, len(jieba.lcut(document.text)), metadata)
                 )
