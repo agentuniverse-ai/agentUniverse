@@ -17,7 +17,7 @@ Use cases:
 """
 
 import json
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Iterable
 from datetime import datetime, timedelta
 
 from agentuniverse.agent.context.context_store import ContextStore
@@ -133,7 +133,10 @@ class RedisContextStore(ContextStore):
         limit: int = 100,
         **kwargs
     ) -> List[ContextSegment]:
-        """Retrieve segments from Redis.
+        """Retrieve newest segments using bounded index and hash reads.
+
+        Filters and corrupt records may require scanning additional pages.
+        Missing or count-mismatched indexes use a legacy full-hash fallback.
 
         Args:
             session_id: Session identifier
@@ -145,19 +148,52 @@ class RedisContextStore(ContextStore):
         Returns:
             List of matching segments
         """
-        if not self._redis:
+        if not self._redis or limit <= 0:
             return []
 
         key = self._make_session_key(session_id)
+        index_key = self._make_index_key(session_id)
 
-        # Get all segments for the session
-        segment_data_dict = self._redis.hgetall(key)
+        # Older or interrupted writes may leave an absent/incomplete index.
+        # Keep those hash records readable rather than silently omitting them.
+        if self._redis.zcard(index_key) != self._redis.hlen(key):
+            segments = self._deserialize_matching_segments(
+                self._redis.hgetall(key).values(), context_type, priority
+            )
+            segments.sort(key=lambda s: s.metadata.created_at, reverse=True)
+            return segments[:limit]
 
-        if not segment_data_dict:
-            return []
-
+        # The sorted set already orders records by creation time. Filtering and
+        # corrupt records can require additional pages before filling the limit.
+        batch_size = min(128, max(16, limit) if context_type or priority else limit)
+        offset = 0
         segments = []
-        for segment_id, segment_data in segment_data_dict.items():
+        while len(segments) < limit:
+            segment_ids = self._redis.zrevrange(
+                index_key, offset, offset + batch_size - 1
+            )
+            if not segment_ids:
+                break
+            segment_data = self._redis.hmget(key, segment_ids)
+            segments.extend(self._deserialize_matching_segments(
+                segment_data, context_type, priority
+            ))
+            offset += len(segment_ids)
+            if len(segment_ids) < batch_size:
+                break
+        return segments[:limit]
+
+    def _deserialize_matching_segments(
+        self,
+        values: Iterable[Optional[bytes]],
+        context_type: Optional[ContextType],
+        priority: Optional[ContextPriority],
+    ) -> List[ContextSegment]:
+        """Decode a bounded batch, ignoring missing/corrupt or filtered records."""
+        segments = []
+        for segment_data in values:
+            if segment_data is None:
+                continue
             try:
                 segment = self._deserialize_segment(segment_data)
 
@@ -169,13 +205,11 @@ class RedisContextStore(ContextStore):
 
                 segments.append(segment)
 
-            except Exception as e:
+            except Exception:
                 # Skip corrupted segments
                 continue
 
-        # Sort by created_at (newest first) and apply limit
-        segments.sort(key=lambda s: s.metadata.created_at, reverse=True)
-        return segments[:limit]
+        return segments
 
     def search(
         self,
