@@ -176,7 +176,7 @@ class SemanticDeduplicator(DocProcessor):
 
                         # Handle duplicate based on merge strategy
                         if self.merge_strategy == 'keep_best':
-                            if self._is_better_doc(docs[j], doc):
+                            if self._is_better_doc(docs[j], unique_docs[-1]):
                                 # Replace with better document
                                 unique_docs[-1] = docs[j]
                         elif self.merge_strategy == 'merge':
@@ -265,12 +265,14 @@ class SemanticDeduplicator(DocProcessor):
                 if key not in merged_metadata:
                     merged_metadata[key] = deepcopy(value)
                 elif isinstance(value, list) and isinstance(merged_metadata[key], list):
-                    # Merge JSON-compatible lists while preserving first-seen order.
-                    merged_values = []
+                    # Merge lists
+                    # JSON lists may contain unhashable dictionaries or lists.
+                    # Equality also preserves the first-seen order of values.
+                    combined = []
                     for item in merged_metadata[key] + value:
-                        if not any(item == existing for existing in merged_values):
-                            merged_values.append(deepcopy(item))
-                    merged_metadata[key] = merged_values
+                        if item not in combined:
+                            combined.append(deepcopy(item))
+                    merged_metadata[key] = combined
 
         # Merge keywords
         merged_keywords = doc1.keywords.union(doc2.keywords)

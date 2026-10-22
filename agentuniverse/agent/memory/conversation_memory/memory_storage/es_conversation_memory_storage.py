@@ -137,6 +137,9 @@ class ElasticsearchMemoryStorage(MemoryStorage):
             **kwargs) -> None:
         """Add messages to the Elasticsearch index.
 
+        Bulk item failures raise even when HTTP succeeds. Successful items are
+        not rolled back or retried; the caller must reconcile partial writes.
+
         Args:
             message_list (List[Message]): The list of messages to add.
             session_id (str): The session id of the memory to add.
@@ -158,6 +161,8 @@ class ElasticsearchMemoryStorage(MemoryStorage):
         )
         if response.status_code != 200:
             raise Exception(f"Failed to add documents: {response.text}")
+        if response.json().get("errors"):
+            raise RuntimeError("Elasticsearch bulk item failures; some messages may have been stored.")
 
     def get(self, session_id: str = None, agent_id: str = None, top_k=50, trace_id: str = None, **kwargs) -> List[
         ConversationMessage]:
@@ -292,7 +297,7 @@ class DefaultMemoryConverter:
             "timestamp": message.metadata.get("timestamp", datetime.datetime.now()).isoformat(),
             "params": message.metadata.get("params"),
             "pair_id": message.metadata.get("pair_id"),
-            "additional_args": message.metadata.get("additional_args")
+            "additional_args": message.additional_args
 
         }
         index_info = {

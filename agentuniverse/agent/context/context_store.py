@@ -24,6 +24,10 @@ class ContextStore(ComponentBase):
 
     component_type: ComponentEnum = ComponentEnum.CONTEXT_STORE
 
+    # Component name, matching the other component families (Tool, Toolkit,
+    # Knowledge). ComponentBase.get_instance_code() reads self.name.
+    name: str = ""
+
     # Storage configuration
     storage_tier: str = "warm"  # hot, warm, cold
     max_segments: int = 1000    # Maximum segments per session
