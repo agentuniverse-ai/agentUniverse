@@ -1,0 +1,6 @@
+name: 'default_eml_reader'
+description: 'default eml (RFC 822 / MIME email) reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.eml_reader'
+  class: 'EmlReader'
