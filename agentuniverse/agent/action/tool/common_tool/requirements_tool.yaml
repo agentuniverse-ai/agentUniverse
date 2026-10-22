@@ -1,0 +1,47 @@
+name: requirements_tool
+description: "Requirements.txt inspection and diffing tool — pure Python stdlib, no network required. Parse a requirements.txt into structured entries (mode='parse': per-line raw text, PEP 503 normalized name, verbatim specifier / environment markers, extras, editable / VCS / direct-URL / path lines, --hash options; unparsable lines become errors with line numbers, comments and blank lines are reported distinctly and pip file options like -r / -i / -f are captured as options), lint the file for dependency hygiene (mode='lint': floating bare names, mixed == vs >= pin styles, patch-level exact pins, editables without a path, duplicate names after PEP 503 normalization, URLs without hashes, distribute-era legacy lines, case-inconsistent spellings, mixed relative/absolute editables — each info / warning / error) and diff two snapshots freeze-drift style (mode='diff': added / removed / changed with specifier / marker / extras change flags). Constraint-set resolution is NOT done here — specifiers are validated for shape only (see VersionConstraintTool)."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.requirements_tool
+  class: RequirementsTool
+input_keys:
+  - mode
+max_lines: 10000
+max_line_chars: 10000
+max_text_chars: 4000000
+args_model:
+  mode:
+    type: string
+    description: Operation mode — parse, lint or diff.
+    required: true
+  requirements:
+    type: string
+    description: The requirements.txt text for the parse and lint modes (an empty string is a valid empty file; capped at 10000 lines).
+    required: false
+  requirements_old:
+    type: string
+    description: The old snapshot text for the diff mode (capped at 10000 lines).
+    required: false
+  requirements_new:
+    type: string
+    description: The new snapshot text for the diff mode (capped at 10000 lines).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "lint", "diff"]
+      description: Operation mode.
+    requirements:
+      type: string
+      description: The requirements.txt text (parse and lint modes).
+    requirements_old:
+      type: string
+      description: The old requirements snapshot (diff mode).
+    requirements_new:
+      type: string
+      description: The new requirements snapshot (diff mode).
+  required: ["mode"]
+  additionalProperties: false
