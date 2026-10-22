@@ -1,0 +1,36 @@
+name: line_length_tool
+description: Audit line-length distribution (stats, histogram, over-limit lines) before pasting text into terminals, PRs, or docs.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.line_length_tool
+  class: LineLengthTool
+input_keys:
+  - mode
+  - text
+max_lines: 100000
+max_text_chars: 10000000
+max_offending_lines: 50
+max_find_results: 100
+min_limit: 1
+max_limit: 10000
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [audit, find, stats_only, wrap_preview]
+    text: {type: string}
+    limit:
+      type: integer
+      minimum: 1
+      maximum: 10000
+      default: 80
+    min_length: {type: integer, minimum: 0}
+    direction:
+      type: string
+      enum: [over, under]
+      default: over
+    display_width: {type: boolean, default: false}
+  required: [mode, text]
+  additionalProperties: false
