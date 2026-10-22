@@ -6,7 +6,7 @@
 # @Email   : 2179709293@qq.com
 # @FileName: feishu_reader.py
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment, NavigableString
 import time
 from typing import Dict,List
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -70,7 +70,8 @@ class PublicFeishuReader:
             soup (BeautifulSoup): Parsed HTML document object
 
         Returns:
-            str: Cleaned text content with deduplication
+            str: Cleaned text with each DOM text node read once, paragraph
+                boundaries preserved, and identical blocks deduplicated
 
         Raises:
             ValueError: If document structure is invalid
@@ -92,26 +93,42 @@ class PublicFeishuReader:
         # Define irrelevant class names for filtering
         irrelevant_classes = ['footer', 'nav', 'navigation', 'header', 'comment', 'help', 'login']
 
-        # Try to locate main content container
-        content_div = soup.find('div', class_='doc-content')  # Update class name as needed
-        if content_div:
-            # Extract text from content container
-            for tag in content_div.find_all(['p', 'div', 'span'], recursive=True):
-                if tag.get('class') and any(cls.lower() in irrelevant_classes for cls in tag.get('class')):
-                    continue
-                text = tag.get_text(strip=True)
-                if text and text.strip() and not any(
-                        keyword in text.lower() for keyword in ['login', 'sign up', 'comment', 'help']):
-                    content.append(text)
-        else:
-            # Fallback extraction from body
-            for div in body.find_all('div', recursive=True):
-                if div.get('class') and any(cls.lower() in irrelevant_classes for cls in div.get('class')):
-                    continue
-                text = div.get_text(strip=True)
-                if text and text.strip() and not any(
-                        keyword in text.lower() for keyword in ['login', 'sign up', 'comment', 'help']):
-                    content.append(text)
+        # Visit text nodes once. Reading every ancestor's get_text() repeats
+        # descendant content and concatenates adjacent paragraphs.
+        content_div = soup.find('div', class_='doc-content')
+        root = content_div if content_div is not None else body
+        block_tags = {'div', 'p', 'section', 'article', 'li', 'ul', 'ol',
+                      'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'br'}
+        pending = []
+
+        def flush():
+            text = ''.join(pending).strip()
+            pending.clear()
+            if text and not any(keyword in text.lower()
+                                for keyword in ['login', 'sign up', 'comment', 'help']):
+                content.append(text)
+
+        def visit(node):
+            if isinstance(node, Comment):
+                return
+            if isinstance(node, NavigableString):
+                pending.append(str(node))
+                return
+            if node.get('class') and any(
+                    cls.lower() in irrelevant_classes for cls in node.get('class')):
+                return
+            if node.name in {'script', 'style'}:
+                return
+            is_block = node.name in block_tags
+            if is_block:
+                flush()
+            for child in node.children:
+                visit(child)
+            if is_block:
+                flush()
+
+        visit(root)
+        flush()
 
         # Deduplicate while preserving order
         unique_content = list(dict.fromkeys(content))
