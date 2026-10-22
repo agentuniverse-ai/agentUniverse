@@ -1,0 +1,66 @@
+name: uuid_tool
+description: UUID analysis tool — validate and decode existing UUIDs with the pure Python stdlib, no network required. Strict parsing with RFC 4122 field extraction (mode='parse'), version 1 timestamp / clock sequence / node MAC recovery (mode='v1_decode'), RFC 4122 field-lexicographic comparison of two UUIDs with a string-order note (mode='compare'), brute-force namespace+name verification of v3/v5 UUIDs (mode='namespace_check'), and version/variant histograms with nil detection for a batch (mode='batch_stats').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.uuid_tool
+  class: UuidTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Analysis mode — parse, v1_decode, compare, namespace_check or batch_stats.
+    required: true
+  uuid:
+    type: string
+    description: "The UUID to analyze (hyphenated, urn:uuid: or braced form, any case). Required for the parse, v1_decode and namespace_check modes."
+    required: false
+  uuid_a:
+    type: string
+    description: First UUID of the compare mode.
+    required: false
+  uuid_b:
+    type: string
+    description: Second UUID of the compare mode.
+    required: false
+  namespace:
+    type: string
+    description: namespace_check only — one of the well-known labels dns/url/oid/x500 (case-insensitive) or a custom namespace as a UUID hex string.
+    required: false
+  name:
+    type: string
+    description: namespace_check only — the original name the UUID is supposed to encode.
+    required: false
+  batch:
+    type: list
+    description: batch_stats only — the list of UUID strings to profile (version/variant histograms, nil detection).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "v1_decode", "compare", "namespace_check", "batch_stats"]
+      description: Analysis mode.
+    uuid:
+      type: string
+      description: The UUID to analyze (parse, v1_decode, namespace_check modes).
+    uuid_a:
+      type: string
+      description: First UUID (compare mode).
+    uuid_b:
+      type: string
+      description: Second UUID (compare mode).
+    namespace:
+      type: string
+      description: Well-known namespace label (dns/url/oid/x500) or UUID hex string (namespace_check mode).
+    name:
+      type: string
+      description: Original name the UUID is supposed to encode (namespace_check mode).
+    batch:
+      type: array
+      items:
+        type: string
+      description: List of UUID strings to profile (batch_stats mode).
+  required: ["mode"]
