@@ -119,7 +119,7 @@ def reference_classify(value):
     if (
         6 <= len(value) <= 35
         and value[0] in ASCII_DIGITS
-        and any(ch in value for ch in "-/:")
+        and any(ch in value for ch in "-/.:")
         and reference_parse_datetime(value) is not None
     ):
         return "datetime"
@@ -370,6 +370,22 @@ class ColumnStatsToolTest(unittest.TestCase):
         for value in ("2024-13-45", "2024-02-30"):
             result = self.tool().execute(mode="profile", csv_text=f"d\n{value}\n")
             self.assertEqual(result["columns"][0]["inferred_type"], "text", value)
+
+    def test_dot_dates_parse_and_dotted_non_dates_stay_text(self):
+        """DD.MM.YYYY reaches the documented format list; other dotted forms stay text."""
+        cases = {
+            "02.01.2024": "datetime",
+            "31.12.2024": "datetime",
+            "2.1.2024": "datetime",
+            "32.13.2024": "text",  # month 13 is impossible
+            "1.2.3": "text",  # too short for a 4-digit year
+            "192.168.1.1": "text",  # four dots, matches no format
+        }
+        for value, expected in cases.items():
+            result = self.tool().execute(mode="profile", csv_text=f"d\n{value}\n")
+            self.assertEqual(result["columns"][0]["inferred_type"], expected, value)
+        dot = self.tool().execute(mode="profile", csv_text="d\n02.01.2024\n31.12.2024\n")
+        self.assertEqual(dot["columns"][0]["stats"]["format_guesses"], [{"format": "d.m.Y", "count": 2}])
 
     def test_column_detail_breakdown(self):
         """column_detail returns frequency, previews, and failed cells with line numbers."""

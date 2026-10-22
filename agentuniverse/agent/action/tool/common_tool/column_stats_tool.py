@@ -22,8 +22,10 @@ Type-inference grammar (checked in this fixed order per non-empty cell):
 4. ``uuid``     — canonical 8-4-4-4-12 lowercase hex.  Uppercase hex is
    ``text``.
 5. ``datetime`` — the value starts with an ASCII digit, is 6-35 characters
-   long, contains ``-``, ``/`` or ``:``, and matches the FIRST entry of the
-   fixed, ordered format list in ``_DATETIME_FORMATS`` (ISO 8601 dates and
+   long, contains ``-``, ``/``, ``.`` or ``:`` (so ``DD.MM.YYYY`` dot dates
+   reach the parser; non-float dotted forms such as ``1.2.3`` or IPv4
+   addresses still fail every format and stay ``text``), and matches the
+   FIRST entry of the fixed, ordered format list in ``_DATETIME_FORMATS`` (ISO 8601 dates and
    datetimes with ``T`` or space separators, optional fractional seconds and
    ``Z``/``±HH:MM`` offsets, then ``YYYY/MM/DD``, ``MM/DD/YYYY`` and
    ``DD.MM.YYYY``).  At most ``len(_DATETIME_FORMATS)`` parse attempts are
@@ -336,7 +338,7 @@ class ColumnStatsTool(Tool):
         if (
             6 <= len(value) <= 35
             and value[0] in cls._ASCII_DIGITS
-            and ("-" in value or "/" in value or ":" in value)
+            and ("-" in value or "/" in value or "." in value or ":" in value)
             and cls._parse_datetime(value) is not None
         ):
             return "datetime"
