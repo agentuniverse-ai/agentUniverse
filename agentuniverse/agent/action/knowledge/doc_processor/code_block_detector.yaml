@@ -1,0 +1,25 @@
+name: 'code_block_detector'
+description: 'locate fenced code blocks and stamp spans plus languages into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.code_block_detector'
+  class: 'CodeBlockDetector'
+
+# When true, each detected block is additionally replaced in the document
+# text by a single placeholder line of the form '⟦code:<lang>:<lines>⟧'
+# (e.g. '⟦code:python:12⟧'), so downstream embedding or splitting sees
+# prose only. Placeholders contain no fence characters, so masking is
+# idempotent: a second pass finds no fences and leaves the text untouched.
+# Default false (detect only).
+mask: false
+
+# Maximum number of per-block detail entries kept in the 'blocks' list of
+# the stamped metadata; must be >= 1. Blocks beyond the cap are still
+# counted in every aggregate (block_count, total_code_lines, languages,
+# longest_block_lines, code_ratio). Default 50.
+max_blocks: 50
+
+# Metadata key the summary mapping is written to; '' disables stamping
+# (useful for mask-only pipelines).
+metadata_key: 'code_blocks'
