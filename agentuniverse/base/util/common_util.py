@@ -7,22 +7,48 @@
 # @FileName: common_util.py
 from __future__ import annotations
 
+import asyncio
 import json
 import re
-from queue import Queue
+from queue import Full, Queue
 from typing import Any, Callable, List
 
+from agentuniverse.base.util.logging.logging_util import LOGGER
 
-def stream_output(output_stream: Queue, data: dict):
+# How long a producer waits for a full stream queue before dropping the
+# chunk. Streaming is auxiliary: a stalled consumer must not fail the run.
+STREAM_PUT_BLOCK_TIMEOUT = 30
+
+
+def stream_output(output_stream: Queue, data: dict,
+                  block_timeout: float | None = None):
     """Add data to the output stream.
+
+    The stream queue is bounded. When it is full the producer blocks for up
+    to block_timeout (backpressure towards a slow consumer) instead of
+    failing the whole run; if the consumer is stalled the chunk is dropped
+    with a warning. asyncio queues cannot block a sync producer, so a full
+    asyncio queue drops the chunk directly.
 
     Args:
         output_stream (Queue): The output stream.
         data (dict): The data to be streamed.
+        block_timeout (float): Seconds to wait on a full queue before
+            dropping the chunk.
     """
     if output_stream is None:
         return
-    output_stream.put_nowait(data)
+    if block_timeout is None:
+        block_timeout = STREAM_PUT_BLOCK_TIMEOUT
+    try:
+        output_stream.put_nowait(data)
+    except Full:
+        try:
+            output_stream.put(data, timeout=block_timeout)
+        except Full:
+            LOGGER.warn("output stream queue is full, dropping stream chunk")
+    except asyncio.QueueFull:
+        LOGGER.warn("async output stream queue is full, dropping stream chunk")
 
 
 def _replace_new_line(match: re.Match[str]) -> str:

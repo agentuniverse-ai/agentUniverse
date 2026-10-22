@@ -29,6 +29,7 @@ from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.prompt.prompt import Prompt
 from agentuniverse.base.util.memory_util import generate_messages, get_memory_string
+from agentuniverse.base.util.common_util import stream_output as safe_stream_output
 
 logging.getLogger().setLevel(logging.ERROR)
 
@@ -185,7 +186,7 @@ class Planner(ComponentBase):
         output_stream: Queue = input_object.get_data('output_stream', None)
         if output_stream is None:
             return
-        output_stream.put_nowait(data)
+        safe_stream_output(output_stream, data)
 
     def invoke_chain(self, agent_model: AgentModel, chain: RunnableSerializable[Any, str], planner_input: dict,
                      chat_history,
