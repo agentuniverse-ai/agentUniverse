@@ -15,6 +15,8 @@ import unittest
 from agentuniverse.agent.action.tool.common_tool.password_strength_tool import (
     PasswordStrengthTool,
     _pool_size,
+    _COMMON,
+    _verdict,
 )
 
 CORPUS = [
@@ -27,6 +29,91 @@ CORPUS = [
     "ünïcödé-pässwörd-2026",                       # unicode
     "Gk7!aQ",                                      # tiny but rich charset
 ]
+
+# ---------------------------------------------------------------------------
+# Independent reference implementations + a deterministic LCG corpus generator
+# (written from scratch here so regressions are caught against a second
+# derivation, not against the module's own code).
+# ---------------------------------------------------------------------------
+
+_RUN_SOURCES = (
+    ("abcdefghijklmnopqrstuvwxyz", "alphabet-run"),
+    ("0123456789", "digit-run"),
+    ("qwertyuiop", "keyboard-run"),
+    ("asdfghjkl", "keyboard-run"),
+    ("zxcvbnm", "keyboard-run"),
+    ("1234567890", "keyboard-run"),
+)
+
+
+def _lcg_passwords(count, seed=0x5EED_2026):
+    chars = ("abcdefghijklmnopqrstuvwxyz"
+             "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+             "0123456789"
+             "!@#$%^&*()-_=+[]{};:,.?/"
+             "äöüßéñ")
+    state = seed
+    out = []
+    for _ in range(count):
+        state = (state * 6364136223846793005 + 1442695040888963407) % (1 << 63)
+        n = 6 + state % 12
+        buf = []
+        for _ in range(n):
+            state = (state * 6364136223846793005 + 1442695040888963407) % (1 << 63)
+            buf.append(chars[state % len(chars)])
+        # splice run-shaped material into a third of the corpus so the
+        # sequence detector gets nested/overlapping/palindrome cases too
+        state = (state * 6364136223846793005 + 1442695040888963407) % (1 << 63)
+        pwd = "".join(buf)
+        if state % 3 == 0:
+            mat = "abcdefghijklmnopqrstuvwxyz0123456789qwertyuiop"
+            state = (state * 6364136223846793005 + 1442695040888963407) % (1 << 63)
+            frag = mat[state % 30: state % 30 + 2 + state % 6]
+            pos = (state // 7) % (len(pwd) - len(frag) + 1)
+            pwd = pwd[:pos] + frag + pwd[pos + len(frag):]
+        out.append(pwd)
+    return out
+
+
+def _ref_longest_run(password):
+    """Brute-force: every window (len>=3) of the lowered password tested
+    against every run source; alphabet/digit win ties over keyboard."""
+    low = password.lower()
+    best_len, best_kind = 0, ""
+    for source, kind in _RUN_SOURCES:
+        for i in range(len(low)):
+            for j in range(i + 3, len(low) + 1):
+                if low[i:j] in source and (
+                        j - i > best_len
+                        or (j - i == best_len
+                            and best_kind == "keyboard-run"
+                            and kind != "keyboard-run")):
+                    best_len, best_kind = j - i, kind
+    return best_len, best_kind
+
+
+def _ref_longest_repeat(password):
+    low = password.lower()
+    best = 0
+    i = 0
+    while i < len(low):
+        j = i
+        while j + 1 < len(low) and low[j + 1] == low[i]:
+            j += 1
+        best = max(best, j - i + 1)
+        i = j + 1
+    return best
+
+
+def _ref_effective_bits(password):
+    pool = _pool_size(password)  # pool classes pinned by the equality test below
+    raw = len(password) * math.log2(pool) if password else 0.0
+    run_len, _ = _ref_longest_run(password)
+    rep_len = _ref_longest_repeat(password)
+    run_pen = (run_len - 2) * 2.0 if run_len >= 3 else 0.0
+    rep_pen = (rep_len - 1) * 1.5 if rep_len >= 3 else 0.0
+    common = raw * 0.9 if password.lower() in _COMMON else 0.0
+    return max(0.0, raw - run_pen - rep_pen - common)
 
 
 class PasswordStrengthToolTest(unittest.TestCase):
@@ -226,6 +313,137 @@ class PasswordStrengthToolTest(unittest.TestCase):
         for classic in ("123456", "password", "qwerty", "letmein", "admin"):
             out = self.tool.execute(mode="entropy", password=classic)
             self.assertTrue(out["penalties"]["common_password"]["hit"], classic)
+
+    # -- hostile-review regressions (seeded corpora + second derivation) ---- #
+
+    def test_entropy_matches_reference_on_seeded_corpus(self):
+        for pwd in _lcg_passwords(300):
+            out = self.tool.execute(mode="entropy", password=pwd)
+            self.assertEqual(out["pool_size"], _pool_size(pwd))
+            self.assertEqual(out["raw_bits"], round(
+                len(pwd) * math.log2(_pool_size(pwd)) if pwd else 0.0, 1))
+            self.assertEqual(out["effective_bits"],
+                             round(_ref_effective_bits(pwd), 1))
+            seq = out["penalties"]["sequence"]
+            rep = out["penalties"]["repetition"]
+            run_len, run_kind = _ref_longest_run(pwd)
+            rep_len = _ref_longest_repeat(pwd)
+            self.assertEqual(seq["run_length"], run_len)
+            self.assertEqual(seq["kind"], run_kind if run_len else "")
+            self.assertEqual(seq["bits"], round(
+                (run_len - 2) * 2.0 if run_len >= 3 else 0.0, 1))
+            self.assertEqual(rep["run_length"], rep_len)
+            self.assertEqual(rep["bits"], round(
+                (rep_len - 1) * 1.5 if rep_len >= 3 else 0.0, 1))
+
+    def test_sequence_detector_matches_bruteforce_reference(self):
+        corpus = _lcg_passwords(300) + [
+            "QwErTyUiOpZ9", "z9XcVbNm,", "01234567890z", "abcabcabcZ1",
+            "XmnoZ1!", "CBAdefgZ9", "ijkZ1!", "zzyxwvu8Q", "PonmlZ2!",
+        ]
+        for pwd in corpus:
+            got = self.tool.execute(mode="entropy", password=pwd
+                                    )["penalties"]["sequence"]
+            want_len, want_kind = _ref_longest_run(pwd)
+            self.assertEqual(got["run_length"], want_len, pwd[:6] + "***")
+            self.assertEqual(got["kind"], want_kind if want_len else "",
+                             pwd[:6] + "***")
+
+    def test_repetition_mixed_case_mixes(self):
+        # Contract (case-insensitive): 'aAaAaA' is one run of 6; in mixed
+        # material the longest case-folded run wins.
+        for pwd, want in (("aAaBbb9!", 3), ("aAaAaA", 6), ("ZzZzZzZz1!", 8),
+                          ("xXyYyYq2#", 4), ("abBAba1!", 2)):
+            out = self.tool.execute(mode="entropy", password=pwd)
+            self.assertEqual(out["penalties"]["repetition"]["run_length"],
+                             want, pwd)
+
+    def test_verdict_boundaries_exact_values(self):
+        # Boundaries are exact on the unrounded quantity: at exactly 28/40/60
+        # bits the HIGHER tier applies; one ulp below stays in the lower tier.
+        for bits, want in ((0.0, "weak"), (27.999999999, "weak"), (28.0, "fair"),
+                           (39.999999999, "fair"), (40.0, "moderate"),
+                           (59.999999999, "moderate"), (60.0, "strong"),
+                           (1e9, "strong")):
+            self.assertEqual(_verdict(bits, 8, False), want, str(bits))
+        # short passwords stay weak even with huge entropy budgets
+        self.assertEqual(_verdict(1e9, 7, False), "weak")
+        # blocklist overrides everything
+        self.assertEqual(_verdict(1e9, 64, True), "very_weak")
+
+    def test_username_type_validation(self):
+        for bad in (12345, ["a"], {"x": 1}, 4.5):
+            with self.assertRaises(ValueError):
+                self.tool.execute(mode="audit", password="Zebra2026!Moon",
+                                  username=bad)
+        # absent / empty / proper string all fine
+        self.tool.execute(mode="audit", password="Zebra2026!Moon", username=None)
+        self.tool.execute(mode="audit", password="Zebra2026!Moon", username="")
+
+    def _all_blobs(self, password):
+        parts = [
+            json.dumps(self.tool.execute(mode="audit", password=password,
+                                         username="bob")),
+            json.dumps(self.tool.execute(mode="entropy", password=password)),
+            json.dumps(self.tool.execute(mode="policy_check", password=password)),
+            json.dumps(self.tool.execute(mode="compare", password=password,
+                                         password_b="Zx9$qpL2mQq")),
+        ]
+        return "".join(parts)
+
+    def test_masking_seeded_corpus_no_four_char_fragments(self):
+        # Random passwords must never collide with any output text at the
+        # 4+-character granularity (numeric-only fragments are excluded: the
+        # numeric length/pool/bit fields are reported by design).
+        for pwd in _lcg_passwords(150):
+            blob = self._all_blobs(pwd)
+            for start in range(len(pwd) - 3):
+                frag = pwd[start:start + 4]
+                if not frag.isdigit():
+                    self.assertNotIn(frag, blob, f"fragment {frag!r} leaked")
+
+    def test_masking_adversarial_collisions_are_static_not_derived(self):
+        # Passwords built from the tool's own output vocabulary ("information",
+        # "Composition", "recommended", "screening", ...) DO collide with the
+        # fixed label constants. The honest, pinned claim: every colliding
+        # fragment also appears verbatim in the output for UNRELATED passwords
+        # of the same structural shape, proving the text is a constant, not an
+        # echo of the audited password.
+        sentinels = [
+            "Zx9$qpL2mVn4Rt7uYw1bAB",   # strong, all findings absent
+            "Zx9$qpL2m",                # moderate, below_recommended_length
+            "kqvpmwzx",                 # fair
+            "aaaa1",                    # weak, repeated_character
+            "Ab1!",                     # too_short_nist_min
+            "123456",                   # very_weak, common_password
+            "abcd1234wxyz9Q#",          # contains_sequence (alphabet+digit)
+            "qwertyZx9$qpL2m",          # contains_sequence (keyboard)
+            "bobcat2026!Zebra",         # contains_username for "bob"
+            "PaSsWoRd1!Xy2#",           # policy/compare shapes
+        ]
+        static_text = "".join(self._all_blobs(p) for p in sentinels)
+        adversarial = [
+            "information2026", "Composition1!", "recommended4U",
+            "necessary9X", "score1234A!", "weak12", "strong1A!",
+            "Screening2026!", "characters8Z!", "length2026!Q",
+            "alphabetabcd1", "qwertykeyboard", "verdicts2026!Q",
+            "effectivebits7", "moderate2B!", "sufficient8Q",
+        ]
+        checked = 0
+        for pwd in adversarial:
+            blob = self._all_blobs(pwd)
+            for size in range(4, min(len(pwd), 12) + 1):
+                for start in range(len(pwd) - size + 1):
+                    frag = pwd[start:start + size]
+                    if frag.isdigit():
+                        continue
+                    if frag in blob:
+                        checked += 1
+                        self.assertIn(
+                            frag, static_text,
+                            f"fragment {frag!r} of {pwd!r} appears in output "
+                            f"but is NOT part of the static label vocabulary — "
+                            f"it would be a real password echo")
 
 
 if __name__ == "__main__":

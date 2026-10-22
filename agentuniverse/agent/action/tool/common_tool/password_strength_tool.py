@@ -11,9 +11,19 @@ instead every finding names its reason so a caller can weigh it.
 
 Guarantees:
 - No network, no storage, no hashing against external databases.
-- Output NEVER contains the password or any substring of it longer than
-  three characters; all previews are masked (first char + length only at
-  most, and only when the caller asks for structure examples).
+- Output never contains password-DERIVED content: no preview, no masked
+  form, not even a first character or per-position feedback is ever
+  constructed from the password. The only structural fact reported is the
+  numeric length. Caveat, stated honestly: verdict names, finding codes
+  and note sentences are fixed constants that contain ordinary English
+  words, so a password that itself contains one of those words (e.g.
+  "information2026" vs the note word "information") coincides with part
+  of a constant in the serialized output. Such collisions are provably
+  not echoes — the same text is emitted for every password with the same
+  shape — and the masking regression suite pins both halves: no password
+  fragment of 4+ non-numeric characters appears in output over a random
+  corpus, and every collision found for adversarial word-passwords also
+  appears in the output of structurally identical unrelated passwords.
 
 Modes:
   audit        -- full findings report with an overall verdict
@@ -176,6 +186,10 @@ class PasswordStrengthTool(Tool):
         """
         if mode not in _MODES:
             raise ValueError(f"mode must be one of {_MODES}; got {mode!r:.64}")
+        if username and not isinstance(username, str):
+            raise ValueError(
+                f"username must be a string, got {type(username).__name__}"
+            )
         if mode == "compare":
             return self._compare(password, password_b)
         pwd = self._check_password(password)
