@@ -1,7 +1,15 @@
 #!/bin/bash
-wget https://mirrors.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/Miniforge3-Linux-x86_64.sh --no-check-certificate
-chmod +x Miniforge3-Linux-x86_64.sh
-./Miniforge3-Linux-x86_64.sh -b -p /usr/local/etc/workspace/miniforge
+set -euo pipefail
+
+MINIFORGE_VERSION="26.3.2-3"
+MINIFORGE_INSTALLER="Miniforge3-${MINIFORGE_VERSION}-Linux-x86_64.sh"
+MINIFORGE_SHA256="848194851a98903134187fbb4ab50efe87b003e0c0f808f97644b7524a62bf2c"
+MINIFORGE_URL="https://github.com/conda-forge/miniforge/releases/download/${MINIFORGE_VERSION}/${MINIFORGE_INSTALLER}"
+
+wget -O "${MINIFORGE_INSTALLER}" "${MINIFORGE_URL}"
+echo "${MINIFORGE_SHA256}  ${MINIFORGE_INSTALLER}" | sha256sum -c -
+chmod +x "${MINIFORGE_INSTALLER}"
+"./${MINIFORGE_INSTALLER}" -b -p /usr/local/etc/workspace/miniforge
 
 /usr/local/etc/workspace/miniforge/bin/conda init
 source /root/.bashrc
