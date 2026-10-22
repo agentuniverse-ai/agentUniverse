@@ -7,7 +7,7 @@
 # @FileName: api_tool.py
 import json
 from typing import Any, Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 import httpx
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
@@ -188,7 +188,9 @@ class APITool(Tool):
 
         # replace path parameters
         for name, value in path_params.items():
-            url = url.replace(f'{{{name}}}', f'{value}')
+            # A path parameter is one URL path segment. Encode reserved
+            # characters so values cannot change the request path or query.
+            url = url.replace(f'{{{name}}}', quote(str(value), safe=''))
 
         # parse http body data if needed, for GET/HEAD/OPTIONS/TRACE
         if 'Content-Type' in headers:
