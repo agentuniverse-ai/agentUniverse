@@ -636,3 +636,40 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Random Data Generator Tool
+
+`RandomDataGeneratorTool` generates the synthetic values agents need when
+fabricating fixtures, seeding demo environments, or minting opaque tokens —
+built purely on the Python standard library (`random`, `uuid`) with zero
+network access. `name` mode draws person names from curated pools of 48 first
+and 48 last names (`style` = `first` / `last` / `full`, default
+`"First Last"`); `email` mode builds `first.last##@domain` addresses whose
+domain is drawn from the RFC 2606 reserved `example.com` / `example.org` /
+`example.net` pool — so generated addresses can never reach a real mailbox —
+or from a custom validated `domain` argument; `hex` mode mints lowercase
+hexadecimal tokens of 1-256 random bytes with an optional ASCII `prefix` such
+as `tok_`; and `uuid` mode produces RFC 4122 UUID v4 values. Every mode takes
+`count` (1-50) and reports the Shannon entropy of one value as `entropy_bits`
+(for example 128 bits for a 16-byte hex token, 122 bits for a UUID v4).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.random_data_generator_tool import RandomDataGeneratorTool
+
+tool = RandomDataGeneratorTool()
+names = tool.execute(mode="name", count=3)["result"]
+emails = tool.execute(mode="email", count=3)["result"]
+tokens = tool.execute(mode="hex", count=3, bytes=32, prefix="tok_")["result"]
+uids = tool.execute(mode="uuid", count=3)["result"]
+```
+
+All parameters are validated strictly before any value is generated: an
+unknown mode or style, a `count` outside 1-50, `bytes` outside 1-256, a
+`prefix` with whitespace or non-ASCII characters, or a malformed `domain`
+(missing dot, leading or trailing hyphen, non-hostname characters) raises a
+`ValueError`. The random source is injectable — the `random_gen` attribute
+defaults to `random.SystemRandom`, and tests substitute
+`random.Random(seed)` for fully deterministic output. Generated names and
+emails are synthetic data for fixtures and demos; the hex and UUID modes are
+for opaque identifiers and tokens, not for password storage (use a dedicated
+password generator or KDF for that).
