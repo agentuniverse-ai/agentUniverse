@@ -1,0 +1,65 @@
+name: time_range_tool
+description: "Clock-time range arithmetic tool — pure Python stdlib, no network required, times are strict 24h HH:MM and range ends are exclusive. Measure shared minutes of two ranges with midnight-crossing support (mode='overlap': 22:00-06:00 vs 05:00-07:00 -> 60), test membership of a single time (mode='contains'), subtract one range from another into remaining sub-ranges (mode='subtract'), coalesce a list of overlapping or touching ranges into a sorted cover (mode='merge', day-local normalization for wraparound inputs, full-day flag), get the idle minutes between two ranges (mode='gap') or a range's duration and crosses_midnight flag with its day-local segments (mode='info')."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.time_range_tool
+  class: TimeRangeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — overlap, contains, subtract, merge, gap or info.
+    required: true
+  start:
+    type: string
+    description: First range start HH:MM (inclusive). Required by every mode except merge.
+    required: false
+  end:
+    type: string
+    description: First range end HH:MM (exclusive; a start later than the end crosses midnight). Required by every mode except merge; must differ from start.
+    required: false
+  start2:
+    type: string
+    description: Second range start HH:MM. Required by the overlap, subtract (range to remove) and gap modes.
+    required: false
+  end2:
+    type: string
+    description: Second range end HH:MM (exclusive), together with start2. Required by the overlap, subtract and gap modes.
+    required: false
+  time:
+    type: string
+    description: A single strict HH:MM clock time to test. Required by the contains mode.
+    required: false
+  ranges:
+    type: array
+    description: Input ranges for the merge mode — up to 100 items, each a 2-element list/tuple of HH:MM strings or an 'HH:MM-HH:MM' string.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["overlap", "contains", "subtract", "merge", "gap", "info"]
+      description: Clock-time range operation mode.
+    start:
+      type: string
+      description: First range start HH:MM, inclusive (all modes except merge).
+    end:
+      type: string
+      description: First range end HH:MM, exclusive; start > end denotes a midnight-crossing range.
+    start2:
+      type: string
+      description: Second range start HH:MM (overlap, subtract, gap modes).
+    end2:
+      type: string
+      description: Second range end HH:MM, exclusive (overlap, subtract, gap modes).
+    time:
+      type: string
+      description: Single HH:MM time to test (contains mode).
+    ranges:
+      type: array
+      maxItems: 100
+      description: Ranges to coalesce (merge mode); items are [start, end] HH:MM pairs or 'HH:MM-HH:MM' strings.
+  required: ["mode"]
