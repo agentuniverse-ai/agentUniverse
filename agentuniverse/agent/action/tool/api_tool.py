@@ -146,7 +146,7 @@ class APITool(Tool):
         body = {}
         cookies = {}
         # check parameters
-        for parameter in self.openapi_spec.get('operation').get('parameters', []):
+        for parameter in (self.openapi_spec.get('operation') or {}).get('parameters', []):
             value = self.get_parameter_value(parameter, parameters)
             if value is not None:
                 if parameter['in'] == 'path':
