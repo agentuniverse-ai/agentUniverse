@@ -38,7 +38,7 @@ class LangchainOpenAI(ChatOpenAI):
         init_params['temperature'] = llm.temperature if llm.temperature else 0.7
         init_params['request_timeout'] = llm.request_timeout
         init_params['max_tokens'] = llm.max_tokens
-        init_params['max_retries'] = llm.max_retries if llm.max_retries else 2
+        init_params['max_retries'] = llm.max_retries if llm.max_retries is not None else 2
         init_params['streaming'] = llm.streaming if llm.streaming else False
         init_params['openai_api_key'] = llm.openai_api_key if llm.openai_api_key else 'blank'
         init_params['openai_organization'] = llm.openai_organization
