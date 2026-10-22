@@ -1,0 +1,14 @@
+name: notebook_evidence_reader
+description: Notebook cell sources and explicitly selected unverified cached output
+include_text_outputs: false
+include_error_outputs: false
+max_file_bytes: 20000000
+max_cells: 5000
+max_outputs: 10000
+max_source_chars: 200000
+max_output_chars: 200000
+max_total_chars: 2000000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.notebook_evidence_reader
+  class: NotebookEvidenceReader

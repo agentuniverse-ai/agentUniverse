@@ -48,6 +48,7 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 ```
 
 ## Prebuilt Readers in agentUniverse:
+- [Notebook evidence reader](Notebook_Evidence_Reader.md): Opt-in local notebook cell sources and explicitly selected unverified cached outputs.
 - [default_docx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/docx_reader.yaml): Reads text content from local Docx files.
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml): Reads text content from local PDF files.
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml): Reads text content from local PPTX files.
