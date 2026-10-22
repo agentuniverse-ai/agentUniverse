@@ -1,0 +1,51 @@
+name: wordplay_tool
+description: Wordplay tool — anagram, palindrome and letter-score utilities, pure Python stdlib, no network required. Check whether one text is a palindrome (letters-only basis, or exact raw characters with strict=True) or whether two texts are anagrams (mode='check'), list anagram candidates of a word from a small built-in common-English demo word list (mode='anagrams_of'), find the longest palindromic substring plus all palindromic substrings of length >= 3 (mode='palindrome_parts'), and score a word with standard English Scrabble tile values (mode='letter_score').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.wordplay_tool
+  class: WordplayTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Wordplay mode — check, anagrams_of, palindrome_parts or letter_score.
+    required: true
+  text:
+    type: string
+    description: The text to analyse. Required for every mode.
+    required: false
+  second_text:
+    type: string
+    description: check mode with anagram — the text to compare against (anagram checking is a two-text operation). Required when check is 'is_anagram' or 'both'.
+    required: false
+  check:
+    type: string
+    description: check mode only — is_anagram, is_palindrome or both.
+    required: false
+  strict:
+    type: boolean
+    description: check mode palindrome only — when true the verdict compares the raw characters exactly (no case folding, nothing stripped); default false uses the letters-only reduction.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["check", "anagrams_of", "palindrome_parts", "letter_score"]
+      description: Wordplay mode.
+    text:
+      type: string
+      description: Text to analyse (all modes).
+    second_text:
+      type: string
+      description: Comparison text (check mode, anagram).
+    check:
+      type: string
+      enum: ["is_anagram", "is_palindrome", "both"]
+      description: Which property to check (check mode).
+    strict:
+      type: boolean
+      description: Compare raw characters exactly for the palindrome verdict (check mode).
+  required: ["mode"]
