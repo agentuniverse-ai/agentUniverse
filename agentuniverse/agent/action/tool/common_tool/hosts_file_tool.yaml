@@ -65,3 +65,4 @@ args_model_schema:
         type: string
       description: Hostname-to-IP mapping (generate mode).
   required: ["mode"]
+  additionalProperties: false
