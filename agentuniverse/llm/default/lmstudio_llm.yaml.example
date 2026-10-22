@@ -1,0 +1,14 @@
+name: 'default_lmstudio_llm'
+description: 'default lm studio llm powered by locally served GGUF models'
+model_name: 'qwen2.5-7b-instruct'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+max_context_length: 32768
+api_key: '${LMSTUDIO_API_KEY}'
+api_base: '${LMSTUDIO_API_BASE}'
+proxy: '${LMSTUDIO_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.lmstudio_llm'
+  class: 'LMStudioLLM'
