@@ -7,6 +7,9 @@ metadata:
   class: RequirementsTool
 input_keys:
   - mode
+max_lines: 10000
+max_line_chars: 10000
+max_text_chars: 4000000
 args_model:
   mode:
     type: string
@@ -41,3 +44,4 @@ args_model_schema:
       type: string
       description: The new requirements snapshot (diff mode).
   required: ["mode"]
+  additionalProperties: false

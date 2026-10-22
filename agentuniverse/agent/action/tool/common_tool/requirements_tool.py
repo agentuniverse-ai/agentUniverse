@@ -1334,6 +1334,10 @@ class RequirementsTool(Tool):
 
     MODES: ClassVar[tuple] = ("parse", "lint", "diff")
 
+    max_lines: int = _MAX_LINES
+    max_line_chars: int = _MAX_LINE_CHARS
+    max_text_chars: int = _MAX_TEXT_CHARS
+
     # ------------------------------------------------------------------ #
     # Public entry point
     # ------------------------------------------------------------------ #
@@ -1383,31 +1387,30 @@ class RequirementsTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"requirements_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, value: Any, name: str) -> str:
+    def _validate_text(self, value: Any, name: str) -> str:
         """Validate a requirements-text parameter (type and caps)."""
         if (
             value is None
             or isinstance(value, bool)
             or not isinstance(value, str)
         ):
-            cls._invalid(f"{name} must be a string (got {value!r})")
-        if len(value) > _MAX_TEXT_CHARS:
-            cls._invalid(
-                f"{name} exceeds the {_MAX_TEXT_CHARS:,}-character "
+            self._invalid(f"{name} must be a string (got {value!r})")
+        if len(value) > self.max_text_chars:
+            self._invalid(
+                f"{name} exceeds the {self.max_text_chars:,}-character "
                 f"limit (got {len(value):,} characters)"
             )
         lines = value.splitlines()
-        if len(lines) > _MAX_LINES:
-            cls._invalid(
-                f"{name} exceeds the {_MAX_LINES:,}-line limit (got "
+        if len(lines) > self.max_lines:
+            self._invalid(
+                f"{name} exceeds the {self.max_lines:,}-line limit (got "
                 f"{len(lines):,} lines)"
             )
         for number, line in enumerate(lines, start=1):
-            if len(line) > _MAX_LINE_CHARS:
-                cls._invalid(
+            if len(line) > self.max_line_chars:
+                self._invalid(
                     f"line {number} of {name} exceeds the "
-                    f"{_MAX_LINE_CHARS:,}-character limit (got "
+                    f"{self.max_line_chars:,}-character limit (got "
                     f"{len(line):,} characters)"
                 )
         return value
