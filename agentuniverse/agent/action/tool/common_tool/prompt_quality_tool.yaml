@@ -1,0 +1,34 @@
+name: prompt_quality_tool
+description: Analyze prompt structure and return deterministic optimization suggestions without an external model.
+tool_type: api
+input_keys:
+  - prompt
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.prompt_quality_tool
+  class: PromptQualityTool
+args_model_schema:
+  type: object
+  properties:
+    prompt:
+      type: string
+    min_length:
+      type: integer
+      minimum: 0
+      default: 20
+    max_length:
+      type: integer
+      minimum: 1
+      default: 8000
+    required_sections:
+      type: array
+      items:
+        type: string
+    require_output:
+      type: boolean
+      default: true
+    require_constraints:
+      type: boolean
+      default: true
+  required: [prompt]
+  additionalProperties: false
