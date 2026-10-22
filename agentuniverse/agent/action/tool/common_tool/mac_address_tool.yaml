@@ -7,6 +7,7 @@ metadata:
   class: MacAddressTool
 input_keys:
   - mode
+max_address_chars: 64
 args_model:
   mode:
     type: string
@@ -57,3 +58,4 @@ args_model_schema:
       enum: ["ffff", "fffe"]
       description: Informational EUI-64 marker used by parse (ffff = IEEE encapsulation, fffe = IPv6 convention).
   required: ["mode"]
+  additionalProperties: false
