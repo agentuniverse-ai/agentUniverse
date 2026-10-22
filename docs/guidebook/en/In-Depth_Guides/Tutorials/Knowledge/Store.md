@@ -1,5 +1,21 @@
 # Store
 
+## OpenSearch vector store
+
+`OpenSearchVectorStore` persists agentUniverse `Document` embeddings in an OpenSearch k-NN HNSW index and implements synchronous and asynchronous insert, upsert, update, delete, and query operations. Copy `opensearch_vector_store.yaml.example` into an application component directory and configure the vector dimension, distance metric, index, connection arguments, and exact-match metadata fields.
+
+```python
+store.upsert_document([
+    Document(id="1", text="hello", metadata={"tenant": "acme"}, embedding=[0.1, 0.2])
+])
+results = store.query(
+    Query(embeddings=[[0.1, 0.2]], similarity_top_k=5),
+    metadata_filter={"tenant": "acme"},
+)
+```
+
+Supported distance metrics are `cosine`, `l2`, and `inner_product`. Metadata filters are accepted only for fields declared in `filter_fields`. Set `OPENSEARCH_VECTOR_URL` to inject a connection URL when `connection_args.hosts` is omitted. The optional `store_ext` extra installs the resolver-compatible OpenSearch Python client 2.8.x; this client interoperates with current OpenSearch servers without raising the core project's pinned gRPC requirement.
+
 `Store` is responsible for storing `Document` objects and providing query capabilities during the knowledge retrieval phase. The specific form of a `Store` can vary, including relational databases, vector databases, graph databases, and more. Therefore, the same `Document` can be stored in different Stores in various formats, and the retrieval methods are tied to the capabilities of the specific `Store`.
 
 The Store is defined as follows:
