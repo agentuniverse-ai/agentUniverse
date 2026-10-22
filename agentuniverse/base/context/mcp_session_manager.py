@@ -746,26 +746,31 @@ class MCPSessionManager:
         return session
 
     def safe_close_stack(self) -> None:
+        stack = self.__exit_stack.get(None)
+        if stack is None:
+            self.__mcp_session_dict.set(None)
+            return
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            if isinstance(self.exit_stack, SyncAsyncExitStack):
-                self.exit_stack.close()
-            elif isinstance(self.exit_stack, AsyncExitStack):
-                asyncio.run(self.exit_stack.aclose())
+            if isinstance(stack, SyncAsyncExitStack):
+                stack.close()
+            elif isinstance(stack, AsyncExitStack):
+                asyncio.run(stack.aclose())
         else:
-            if isinstance(self.exit_stack, AsyncExitStack):
-                loop.create_task(self.exit_stack.aclose())
-            elif isinstance(self.exit_stack, SyncAsyncExitStack):
-                self.exit_stack.close()
+            if isinstance(stack, AsyncExitStack):
+                loop.create_task(stack.aclose())
+            elif isinstance(stack, SyncAsyncExitStack):
+                stack.close()
         self.__exit_stack.set(None)
         self.__mcp_session_dict.set(None)
 
     async def safe_close_stack_async(self) -> None:
-        if isinstance(self.exit_stack, AsyncExitStack):
-            await self.exit_stack.aclose()
-        elif isinstance(self.exit_stack, SyncAsyncExitStack):
-            self.exit_stack.close()
+        stack = self.__exit_stack.get(None)
+        if isinstance(stack, AsyncExitStack):
+            await stack.aclose()
+        elif isinstance(stack, SyncAsyncExitStack):
+            stack.close()
         self.__exit_stack.set(None)
         self.__mcp_session_dict.set(None)
 

@@ -1,7 +1,7 @@
 """Invalid embedding responses must not corrupt fallback documents or scores."""
 
 from copy import deepcopy
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -114,6 +114,9 @@ def test_valid_batch_is_committed_and_ranked():
         ).process_docs(docs, Query(query_str="q"))
     assert [doc.text for doc in result] == ["b", "a"]
     assert [doc.embedding for doc in docs] == [[0, 1], [1, 0]]
+    assert model.get_embeddings.call_args_list == [
+        call(["a", "b"]), call(["q"], text_type="query")
+    ]
 
 
 def test_missing_query_text_does_not_publish_unusable_model_vectors():

@@ -94,6 +94,18 @@ class TestFormatters(unittest.TestCase):
         # Volumes with thousands separators.
         self.assertIn("1,000", out)
 
+    def test_format_intraday_history_preserves_distinct_timestamps(self) -> None:
+        rows = [
+            {"datetime": "2024-01-02 10:30:00-05:00", "close": 102.0},
+            {"datetime": "2024-01-02 09:30:00-05:00", "close": 101.0},
+        ]
+
+        out = self.tool._format_history("AAPL", rows)
+
+        self.assertIn("2024-01-02 10:30:00-05:00", out)
+        self.assertIn("2024-01-02 09:30:00-05:00", out)
+        self.assertLess(out.index("10:30"), out.index("09:30"))
+
     def test_format_history_empty(self) -> None:
         out = self.tool._format_history("AAPL", [])
         self.assertIn("no historical data", out)
@@ -227,6 +239,9 @@ class TestExecute(unittest.TestCase):
             def __init__(self, records):
                 self._records = records
 
+            def tail(self, count):
+                return _FakeHistory(self._records[-count:])
+
             def reset_index(self):
                 return self
 
@@ -251,6 +266,37 @@ class TestExecute(unittest.TestCase):
         self.assertIn("101.00", out)
         # newest first → the 01-02 row precedes the 01-01 row.
         self.assertLess(out.index("2024-01-02"), out.index("2024-01-01"))
+
+    def test_history_limits_rows_before_converting_to_dicts(self) -> None:
+        class _FakeHistory:
+            empty = False
+
+            def __init__(self, records):
+                self.records = records
+                self.converted_count = None
+
+            def tail(self, count):
+                return _FakeHistory(self.records[-count:])
+
+            def reset_index(self):
+                return self
+
+            def rename(self, columns=None):
+                return self
+
+            def to_dict(self, orient="records"):
+                self.converted_count = len(self.records)
+                if self.converted_count > 2:
+                    raise AssertionError("unbounded history converted to dictionaries")
+                return self.records
+
+        ticker = Mock()
+        ticker.history.return_value = _FakeHistory([{"date": str(day)} for day in range(100)])
+        tool = YahooFinanceTool(max_history_rows=2)
+
+        rows = tool._fetch_history(ticker, period="max", interval="1d")
+
+        self.assertEqual(rows, [{"date": "99"}, {"date": "98"}])
 
     def test_execute_symbol_uppercased_before_fetch(self) -> None:
         ticker = self._mock_ticker({"regularMarketPrice": 1.0})

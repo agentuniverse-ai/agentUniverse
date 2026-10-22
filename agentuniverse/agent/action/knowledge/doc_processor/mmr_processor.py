@@ -197,7 +197,9 @@ class MMRProcessor(DocProcessor):
                 # Only a freshly computed embedding shares the configured model's
                 # space; a precomputed Query.embeddings value has no verifiable
                 # provenance (equal dimension does NOT imply same model).
-                computed_query = list(model.get_embeddings([query.query_str]))
+                # Preserve the query role required by asymmetric models.
+                computed_query = list(model.get_embeddings(
+                    [query.query_str], text_type="query"))
                 if len(computed_query) != 1:
                     raise ValueError("MMR requires exactly one query embedding.")
                 query_embedding = list(computed_query[0])

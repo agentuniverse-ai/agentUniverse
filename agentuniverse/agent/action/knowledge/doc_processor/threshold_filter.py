@@ -29,7 +29,8 @@ class ThresholdFilter(DocProcessor):
         logic_operator: Logic operator for combining multiple filters ('AND' or 'OR').
         score_field: Metadata field name containing relevance scores.
         default_score: Default score for documents without score metadata.
-        preserve_order: Whether to maintain original document order in results.
+        preserve_order: Whether to restore original document order in results.
+            When False, combined results follow the first filter's order.
 
     Example:
         ```yaml
@@ -226,7 +227,8 @@ class ThresholdFilter(DocProcessor):
     def _combine_results(self, results: List[List[Document]], logic: str) -> List[Document]:
         """Combine filter results using AND/OR logic.
 
-        AND logic: Returns intersection - documents present in ALL result sets.
+        AND logic: Returns intersection - documents present in ALL result sets,
+        ordered by the first filter's results.
         OR logic: Returns union - documents present in ANY result set.
 
         Args:
@@ -249,10 +251,15 @@ class ThresholdFilter(DocProcessor):
             for result in results[1:]:
                 result_set &= set(id(doc) for doc in result)
 
-            # Reconstruct documents preserving metadata
-            # Build map from all results to ensure we get the document objects
-            doc_map = {id(doc): doc for result in results for doc in result}
-            return [doc_map[doc_id] for doc_id in result_set if doc_id in doc_map]
+            # Keep the first filter's ranking while returning each object once.
+            seen = set()
+            combined = []
+            for doc in results[0]:
+                doc_id = id(doc)
+                if doc_id in result_set and doc_id not in seen:
+                    seen.add(doc_id)
+                    combined.append(doc)
+            return combined
 
         else:  # OR
             # Union: documents present in ANY result set
