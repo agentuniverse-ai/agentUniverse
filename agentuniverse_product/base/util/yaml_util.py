@@ -72,19 +72,15 @@ def write_yaml_file(file_path, config_data) -> None:
 
 
 def delete_yaml_file(file_path: str) -> None:
-    """Deletes the YAML file with the specified file path.
+    """Delete a YAML file, allowing an already-absent file but not I/O failures.
 
     Args:
         file_path (str): The path to the YAML file.
     """
     try:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"YAML file '{file_path}' has been deleted.")
-        else:
-            print(f"File '{file_path}' does not exist.")
-    except Exception as e:
-        print(f"An error occurred while trying to delete the file: {e}")
+        os.remove(file_path)
+    except FileNotFoundError:
+        pass
 
 
 def read_yaml_file(file_path) -> Dict[str, Any]:

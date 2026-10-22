@@ -17,6 +17,8 @@ from agentuniverse.agent.action.tool.tool import ToolInput
 
 
 class FakeArxivClient:
+    """Minimal arXiv client used by the focused unit tests."""
+
     def results(self, search: Any) -> Iterator[Any]:
         return iter([])
 
@@ -27,6 +29,7 @@ class ArxivToolTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Set up a fresh tool for each test."""
         self.tool = ArxivTool()
 
     def test_search_uses_default_options(self) -> None:
@@ -140,12 +143,13 @@ class ArxivToolTest(unittest.TestCase):
     def test_invalid_max_results(self) -> None:
         for max_results in (0, 101, True, "3"):
             with self.subTest(max_results=max_results):
-                with self.assertRaisesRegex(ValueError, "max_results must be an integer between 1 and 100"):
+                with self.assertRaises(ValueError) as context:
                     self.tool.execute(
                         input="machine learning",
                         mode="search",
                         max_results=max_results,
                     )
+                self.assertIn(repr(max_results), str(context.exception))
 
     def test_invalid_sort_options(self) -> None:
         invalid_options = (
@@ -154,14 +158,22 @@ class ArxivToolTest(unittest.TestCase):
         )
         for option, value in invalid_options:
             with self.subTest(option=option, value=value):
-                with self.assertRaises(ValueError):
+                with self.assertRaises(ValueError) as context:
                     self.tool.execute(
                         input="machine learning",
                         mode=SearchMode.SEARCH.value,
                         **{option: value},
                     )
+                self.assertIn(repr(value), str(context.exception))
+
+    def test_empty_or_non_string_input(self) -> None:
+        for input_value in ("", "  ", None):
+            with self.subTest(input_value=input_value):
+                with self.assertRaisesRegex(ValueError, "input must be a non-empty string"):
+                    self.tool.execute(input=input_value, mode=SearchMode.SEARCH.value)
 
     def test_get_paper_detail(self) -> None:
+        """Test that detail mode delegates to the paper text retriever."""
         tool_input = ToolInput({"input": "1605.08386v1", "mode": SearchMode.DETAIL.value})
         fake_arxiv = SimpleNamespace(Client=FakeArxivClient)
         with patch.dict("sys.modules", {"arxiv": fake_arxiv}):
@@ -173,9 +185,11 @@ class ArxivToolTest(unittest.TestCase):
         mock_detail.assert_called_once_with(self.tool, "1605.08386v1")
 
     def test_invalid_mode(self) -> None:
+        """Test that an invalid mode is rejected with its value shown."""
         tool_input = ToolInput({"input": "test", "mode": "invalid_mode"})
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as context:
             self.tool.execute(tool_input)
+        self.assertIn(repr("invalid_mode"), str(context.exception))
 
 
 if __name__ == "__main__":

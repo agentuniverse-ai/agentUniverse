@@ -123,7 +123,7 @@ class TavilyTool(Tool):
             else:
                 # 搜索模式
                 query = input
-                if not query:
+                if not isinstance(query, str) or not query.strip():
                     return {"error": "未提供搜索查询"}
                 
                 # 搜索参数

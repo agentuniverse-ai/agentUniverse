@@ -53,7 +53,9 @@ _STOP_WORDS = frozenset({
 _WORD_RE = re.compile(r"[A-Za-z0-9]+|[一-鿿]")
 # Sentence boundaries: latin terminal punctuation, CJK terminal punctuation,
 # and newlines. Trailing empty fragments are dropped by the caller.
-_SENTENCE_SPLIT_RE = re.compile(r"[。！？!?\.…]|\n+")
+# Dots between digits belong to numeric facts (including version strings),
+# not sentence boundaries. Keep them intact when selecting summary sentences.
+_SENTENCE_SPLIT_RE = re.compile(r"[。！？!?…]|\n+|(?<!\d)\.|\.(?!\d)")
 
 # Default system instruction for the LLM summarizer.
 _DEFAULT_SUMMARY_INSTRUCTION = (
@@ -103,7 +105,7 @@ class SummarizationProcessor(DocProcessor):
             List[Document]: A one-element list containing the summary document.
             An empty input yields an empty list.
         """
-        if not origin_docs:
+        if not origin_docs or self.max_input_docs <= 0:
             return []
 
         # Bound the input size; recall results are typically relevance-ordered
@@ -221,7 +223,9 @@ class SummarizationProcessor(DocProcessor):
         """Split text into sentences on latin/CJK terminal punctuation.
 
         Delimiters are consumed; tiny fragments (< 2 chars after stripping) are
-        dropped to avoid noise.
+        dropped to avoid noise. Dots between digits are retained so values
+        such as 98.75 and version strings such as 1.2.3 remain intact. This is
+        not a general abbreviation or URL-aware sentence tokenizer.
         """
         raw = _SENTENCE_SPLIT_RE.split(text)
         return [s.strip() for s in raw if s and len(s.strip()) >= 2]

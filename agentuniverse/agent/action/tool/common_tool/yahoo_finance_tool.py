@@ -153,9 +153,10 @@ class YahooFinanceTool(Tool):
         df = ticker.history(period=period, interval=interval)
         if df is None or getattr(df, "empty", True):
             return []
-        # Reset the date index into a column, then take the most recent rows.
-        rows = df.reset_index().rename(columns=str.lower).to_dict(orient="records")
-        return rows[::-1][:self.max_history_rows]
+        # Select the newest rows while they are still a DataFrame; converting
+        # the full history to dictionaries can be expensive for period="max".
+        rows = df.tail(self.max_history_rows).reset_index().rename(columns=str.lower).to_dict(orient="records")
+        return rows[::-1]
 
     @retry(3, 1.0)
     def _fetch_info(self, ticker) -> Dict[str, Any]:
@@ -182,13 +183,15 @@ class YahooFinanceTool(Tool):
         """Render historical bars as a compact, aligned table."""
         if not rows:
             return f"{symbol} — no historical data available."
-        columns = ["date", "open", "high", "low", "close", "volume"]
+        columns = ["date/time", "open", "high", "low", "close", "volume"]
         header = " | ".join(col.ljust(8) for col in columns)
         body = []
         for row in rows:
-            date = self._row_value(row, "date", "index")
+            timestamp = self._row_value(row, "datetime")
+            date = timestamp if timestamp is not None else self._row_value(row, "date", "index")
             cells = [
-                str(date)[:10].ljust(8) if date is not None else "-".ljust(8),
+                (str(date) if timestamp is not None else str(date)[:10]).ljust(9)
+                if date is not None else "-".ljust(9),
                 self._fmt_num(self._row_value(row, "open")),
                 self._fmt_num(self._row_value(row, "high")),
                 self._fmt_num(self._row_value(row, "low")),
@@ -234,12 +237,13 @@ class YahooFinanceTool(Tool):
 
     @staticmethod
     def _safe_info(ticker) -> Dict[str, Any]:
-        """Best-effort ``ticker.info``; tolerates yfinance returning None."""
-        try:
-            info = ticker.info
-        except Exception:  # noqa: BLE001
-            return {}
-        return info or {}
+        """Normalize absent info while letting fetch failures reach retries.
+
+        The decorated callers retry exceptions and ``execute`` reports a
+        fetch error once retries are exhausted. An actual empty response
+        remains a successful no-data result.
+        """
+        return ticker.info or {}
 
     @staticmethod
     def _row_value(row: Dict[str, Any], *keys: str) -> Any:
@@ -247,7 +251,6 @@ class YahooFinanceTool(Tool):
         for key in keys:
             if key in row and row[key] is not None:
                 return row[key]
-        return None
 
     @staticmethod
     def _fmt_num(value: Any) -> str:

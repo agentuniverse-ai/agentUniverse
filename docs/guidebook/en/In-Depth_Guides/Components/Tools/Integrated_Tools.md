@@ -2,6 +2,8 @@
 
 In the current agentUniverse's sample project, the following tools are integrated.
 
+HTTP-based API tools use the SSRF proxy helper for outbound requests. See [SSRF proxy environment variables](./SSRF_Proxy.md) for `SSRF_PROXY_*` configuration.
+
 ## 1. Search Tools
 
 ### 1.1 Google Search
@@ -104,6 +106,203 @@ Add configuration in custom_key.toml under the config directory of the project:
 SEARCHAPI_API_KEY="xxxxxx"
 ```
 
+
+### 1.4 PubMed Paper Search
+
+The paper list follows the PMID order returned by ESearch for the requested sort and page, even if EFetch returns records in a different order. Missing fetched records are omitted; unrequested or unidentified records are not added to the page. Repeated PMIDs appear once (the first fetched record is used). `total_results` remains the search total, while `returned_results` counts the matched records actually returned. This does not add support for additional EFetch record types.
+
+The PubMed tool uses [NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/) to search biomedical and life-sciences literature. Basic searches do not require an API key.
+
+[Tool configuration](../../../../../../examples/sample_standard_app/intelligence/agentic/tool/buildin/pubmed_tool.yaml)
+
+Tool configuration:
+
+```yaml
+name: 'pubmed_tool'
+description: |
+  Search PubMed for biomedical and life-sciences papers and return structured metadata.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.pubmed_tool'
+  class: 'PubMedTool'
+```
+
+Usage example:
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj('pubmed_tool')
+result = tool.run(
+    query='large language models in medicine',
+    max_results=5,
+    page=2,
+    sort='pub_date',
+    mindate='2024-01-01',
+    maxdate='2024-12-31',
+    datetype='pdat',
+)
+```
+
+Parameters:
+
+- `query`: Required PubMed keywords or search expression.
+- `max_results`: Optional number of papers per page, from 1 to 20. The default is 5.
+- `page`: Optional one-based page number. The default is 1. The combination of `page` and `max_results` can address only PubMed's first 9,999 results; the tool rejects larger ranges before sending a request.
+- `sort`: Optional result order: `relevance`, `pub_date`, `author`, or `journal`. The default is `relevance`.
+- `mindate`, `maxdate`: Optional date-range bounds in `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` format. Supply both values together; the tool rejects an incomplete range because NCBI would not apply the expected filter.
+- `datetype`: Optional PubMed date field: `pdat` (publication), `edat` (Entrez), `mdat` (modification), or `crdt` (creation). The default is `pdat`.
+
+The response contains query, paging, and result-count context plus a normalized paper list. A paper can include its PMID, title, authors, abstract, journal and ISSN, publication date and types, keywords, MeSH terms, languages, DOI, and PubMed URL. MeSH entries preserve descriptors, qualifiers, unique identifiers, and major-topic flags. Missing scalar and collection fields use empty values. The tool returns metadata only; it does not download or summarize full text.
+
+Network, HTTP, and parsing failures use a structured `error` field. Errors explicitly reported by NCBI in ESearch JSON or EFetch XML use the `api_error` type and retain NCBI's message so callers can distinguish an empty result from a failed request. You may set `NCBI_EMAIL` and `NCBI_API_KEY`; basic searches continue to work without an API key.
+
+### 1.5 Crossref Scholarly Metadata
+
+The Crossref tool uses the [Crossref REST API](https://www.crossref.org/documentation/retrieve-metadata/rest-api/) to search scholarly works across disciplines or retrieve publication metadata by DOI. The public API can be used without registration.
+
+[Tool configuration](../../../../../../examples/sample_standard_app/intelligence/agentic/tool/buildin/crossref_tool.yaml)
+
+Tool configuration:
+
+```yaml
+name: 'crossref_tool'
+description: |
+  Search Crossref for scholarly works or retrieve one work by DOI.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.crossref_tool'
+  class: 'CrossrefTool'
+```
+
+Search example:
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj('crossref_tool')
+result = tool.run(
+    query='large language models in medicine',
+    mode='search',
+    max_results=5,
+    page=2,
+    sort='citation_count',
+    order='desc',
+    from_pub_date='2020-01-01',
+    until_pub_date='2025-12-31',
+)
+```
+
+DOI lookup example:
+
+```python
+result = tool.run(
+    query='https://doi.org/10.1128/mbio.01735-25',
+    mode='doi',
+)
+```
+
+Parameters:
+
+- `query`: Required search text in `search` mode, or a DOI, `doi:` identifier, or DOI URL in `doi` mode.
+- `mode`: Optional operation mode, either `search` or `doi`. The default is `search`.
+- `max_results`: Optional search result count from 1 to 20. The default is 5. DOI mode returns at most one record.
+- `page`: Optional one-based search page. The default is 1. The calculated Crossref offset must remain below 10,000.
+- `cursor`: Optional deep-paging cursor. Use `*` for the first cursor request, then pass the returned `next_cursor`. Cursor requests require `page` to remain 1, and Crossref cursors expire after five minutes of inactivity.
+- `sort`: Optional search sort field. Supported fields are `created`, `deposited`, `indexed`, `is-referenced-by-count`, `issued`, `published`, `published-online`, `published-print`, `references-count`, `relevance`, `score`, and `updated`. Underscores may replace hyphens; `citation_count`, `publication_date`, and `reference_count` are accepted aliases. The default is `relevance`.
+- `order`: Optional search order, either `asc` or `desc`. The default is `desc`.
+- `from_pub_date`, `until_pub_date`: Optional inclusive publication-date bounds in `YYYY`, `YYYY-MM`, or `YYYY-MM-DD` format. Either bound can be used independently; when both are present, the lower bound cannot be later than the upper bound.
+
+The response preserves operation, query, paging, sorting, date-filter, and result-count context and returns a normalized `works` list. Cursor searches also return `next_cursor`. A work can include DOI, title and subtitle, authors, abstract, journal or conference, publication date, publisher, type, URL, ISSN, ISBN, subjects, language, volume, issue, pages, citation and reference counts, funders, and licenses. Crossref metadata is deposited by publishers and completeness varies by record; missing values use empty strings, empty lists, or zero counts. The tool returns metadata only.
+
+Timeouts, HTTP errors, connection failures, invalid JSON, and Crossref API failures use a structured `error` field. Set the optional `CROSSREF_EMAIL` environment variable to identify requests and use the Crossref polite pool.
+
+### 1.6 Semantic Scholar Discovery and Citation Graphs
+
+The Semantic Scholar tool uses the [Semantic Scholar Academic Graph API](https://api.semanticscholar.org/api-docs/graph) to search papers, retrieve one paper, explore citation and reference relationships, or look up several identifiers in one request. Most endpoints support basic anonymous use. If Semantic Scholar has issued an API key to you, configure it with `S2_API_KEY`.
+
+[Tool configuration](../../../../../../examples/sample_standard_app/intelligence/agentic/tool/buildin/semantic_scholar_tool.yaml)
+
+Tool configuration:
+
+```yaml
+name: 'semantic_scholar_tool'
+description: |
+  Search Semantic Scholar, retrieve paper metadata, explore citation relationships,
+  or look up multiple papers in one request.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool'
+  class: 'SemanticScholarTool'
+```
+
+Filtered search example:
+
+```python
+from agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool import SemanticScholarTool
+
+tool = SemanticScholarTool()
+result = tool.execute(
+    query='large language models in medicine',
+    mode='search',
+    max_results=5,
+    page=1,
+    year='2020-',
+    fields_of_study=['Medicine', 'Computer Science'],
+    min_citation_count=10,
+    open_access_only=True,
+)
+```
+
+Citation example:
+
+```python
+result = tool.execute(
+    query='DOI:10.18653/v1/2020.acl-main.447',
+    mode='citations',
+    max_results=5,
+    page=1,
+    publication_date_or_year='2020:',
+)
+```
+
+Batch example:
+
+```python
+result = tool.execute(
+    query=[
+        'DOI:10.18653/v1/2020.acl-main.447',
+        'PMID:19872477',
+    ],
+    mode='batch',
+)
+```
+
+Parameters:
+
+- `query`: Required search text in `search` mode; one paper identifier in `paper`, `citations`, or `references` mode; or an identifier list in `batch` mode. Supported identifiers include DOI, PMID, PMCID, ArXiv, CorpusId, MAG, ACL, `URL:`, and Semantic Scholar paper IDs. DOI, ArXiv, and Semantic Scholar URLs are accepted.
+- `mode`: Optional operation mode: `search`, `paper`, `citations`, `references`, or `batch`. The default is `search`. Citations are papers that cite the target; references are papers cited by the target. Batch mode accepts 1 to 20 unique identifiers and enforces a 32 KiB serialized output limit.
+- `max_results`: Optional page size from 1 to 20 for search and relationship modes. The default is 5. Paper mode returns one record; batch size is determined by its identifier list.
+- `page`: Optional one-based page for search and relationship modes. Relevance search exposes only the first 1,000 results.
+- `year`: Optional search-only filter in `YYYY`, `YYYY-YYYY`, `YYYY-`, or `-YYYY` form.
+- `publication_date_or_year`: Optional search and citation filter. Accepts `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, or an inclusive colon-delimited range such as `2020-01:2024-06-30`, `2020:`, or `:2024-06`. Do not combine it with `year` in search mode. Citation mode applies it to citing papers; the references endpoint does not support this filter.
+- `publication_types`: Optional search-only publication type or list, such as `Review`, `JournalArticle`, `ClinicalTrial`, `Conference`, or `Dataset`.
+- `fields_of_study`: Optional search-only field or list, such as `Medicine`, `Computer Science`, `Biology`, or `Physics`.
+- `venue`: Optional search-only venue name or list.
+- `min_citation_count`: Optional non-negative search-only citation threshold.
+- `open_access_only`: Optional search-only flag. Set it to `true` to require a public PDF.
+
+Every mode returns a normalized `papers` list. Full paper metadata can include Semantic Scholar paper ID, CorpusId, external identifiers, title, authors, abstract, venue, publication date and year, publication types, fields of study, citation and reference counts, open-access status and PDF, and URL. Citation and reference entries also include relationship `contexts`, `intents`, and `is_influential` metadata.
+
+Search and relationship modes return `page`, `offset`, and `next_offset`. Citation endpoints do not report a total, so relationship-mode `total_results` is `null`. Batch mode returns `requested_results`, `not_found_ids`, and compact paper fields; titles are capped at 500 characters and venues at 200 characters. Use `paper` mode when full metadata is required. Missing fields use empty values, and the tool never downloads or summarizes full text.
+
+Semantic Scholar relevance search does not expose server-side sorting, so the tool does not misleadingly reorder a single local page. For large offline workloads, use the bulk search or dataset APIs instead of increasing an agent tool's response size. Network and API failures use a structured `error` field and preserve operation context. Anonymous users share a rate limit and may receive HTTP 429; retry later when limited.
 
 ## 2. Code Tool
 
@@ -331,3 +530,122 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
+
+## NVD CVE Tool
+
+`NvdCveTool` queries the official National Vulnerability Database CVE API 2.0. A
+`CVE-YYYY-NNNN` query performs an exact identifier lookup; any other query searches
+vulnerability descriptions. Keyword calls support a bounded `max_results`, a
+zero-based `start_index`, and optional exact-phrase matching.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.nvd_cve_tool import NvdCveTool
+
+tool = NvdCveTool()
+record = tool.execute(query="CVE-2021-44228")
+results = tool.execute(
+    query="Apache HTTP Server",
+    max_results=5,
+    exact_match=True,
+)
+```
+
+Results normalize the highest available CVSS v4/v3/v2 metric, CWE weaknesses,
+references, affected CPE criteria, CVE tags, CISA KEV fields, record status, and
+the NVD detail URL. Descriptions and nested collections have explicit limits.
+Each execution makes one request; the tool is not a bulk dataset downloader.
+
+Anonymous use follows NVD's public rate limit. Set `NVD_API_KEY` to send a key in
+the `apiKey` header for the higher authenticated limit. Timeouts, HTTP failures,
+rate limits, malformed JSON, and invalid response shapes return a structured
+`error` without exposing the key. Every response includes the NVD source link and
+the attribution notice required by NVD API guidance.
+
+## deps.dev Package Intelligence Tool
+
+`DepsDevPackageTool` uses the official deps.dev Open Source Insights API to
+inspect one exact package version. It supports Go, RubyGems, npm, Cargo, Maven,
+PyPI, and NuGet package coordinates.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.deps_dev_package_tool import DepsDevPackageTool
+
+tool = DepsDevPackageTool()
+metadata = tool.execute(
+    name="jinja2",
+    system="PYPI",
+    version="2.4.1",
+)
+graph = tool.execute(
+    name="react",
+    system="NPM",
+    version="18.2.0",
+    mode="dependencies",
+    max_nodes=100,
+    max_edges=200,
+)
+```
+
+The default `version` mode returns the canonical package key, publication and
+deprecation state, licenses, directly affecting OSV advisory IDs, safe external
+links, SLSA provenance, attestations, registries, related projects, and project
+status. The `dependencies` mode returns a resolved graph for npm, Cargo, Maven,
+and PyPI. Node indices are preserved, and edges whose endpoints are not in the
+bounded node result are omitted so the returned graph cannot contain dangling
+references.
+
+The tool uses fixed endpoints, percent-encodes package coordinates, makes one
+request per call, and needs no API key. Inputs, scalar text, URLs, collections,
+nodes, edges, and node errors are bounded; collection counts and truncation
+metadata expose omitted data. Timeout, connection, HTTP, not-found, rate-limit,
+JSON, and response-shape failures are structured. Package metadata and graph
+text are untrusted external data rather than agent instructions, and non-HTTP(S)
+links are omitted.
+
+## OpenSSF Scorecard Tool
+
+`OpenSsfScorecardTool` retrieves a published repository security-posture result
+from the official OpenSSF Scorecard API. It accepts `owner/repo`,
+`github.com/owner/repo`, or an HTTPS GitHub repository URL. An exact 40-character
+commit SHA can optionally select a specific published analysis.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.openssf_scorecard_tool import OpenSsfScorecardTool
+
+tool = OpenSsfScorecardTool()
+result = tool.execute(
+    repository="ossf/scorecard",
+    max_checks=30,
+    max_details_per_check=10,
+)
+```
+
+The normalized result contains the analysis date, analyzed repository and
+commit, Scorecard version, aggregate score, and individual checks with their
+scores, reasons, evidence details, and safe documentation links. Check counts,
+evidence counts, text truncation, and omitted links remain visible in the
+returned metadata.
+
+Repository coordinates are validated and percent-encoded before one request to
+a fixed endpoint. The tool rejects credentials, non-GitHub URLs, extra path
+segments, dot path segments, malformed commits, non-finite scores, and invalid
+response shapes. Inputs, checks, evidence, metadata, text, and URLs are bounded;
+non-HTTP(S) links are omitted. Timeout, connection, HTTP, not-found, rate-limit,
+and JSON failures return structured errors.
+
+A Scorecard result measures repository security practices at a point in time;
+it does not prove that the repository is vulnerability-free. Upstream reasons,
+evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Command Result Lookup
+
+`RunCommandTool` returns an integer `thread_id` for each invocation. Treat this
+legacy field as an opaque command handle, and pass it unchanged to
+`CommandStatusTool.execute(thread_id)` to retrieve that invocation's status and
+output. It is not an operating-system thread ID. Later commands, including
+commands run on the same worker thread or another tool instance, receive their
+own handles and do not replace earlier results.
+
+Handles and results are local to the current Python process and do not survive
+restarts or transfer between server processes. Command execution requires the
+existing `allow_command_execution=True` opt-in.

@@ -17,12 +17,29 @@ from agentuniverse.base.annotation.retry import retry
 
 
 class SearchMode(Enum):
+    """Operation modes supported by :class:`ArxivTool`.
+
+        Attributes:
+            SEARCH: Search papers by an abstract/keyword query.
+            DETAIL: Retrieve the full text of a paper by its arXiv ID.
+    """
     SEARCH = "search"
     DETAIL = "detail"
 
 
 @dataclass
 class PaperSummary:
+    """Summary of a single paper returned by an arXiv search.
+
+        Attributes:
+            paper_id: arXiv paper identifier (the trailing part of the PDF URL).
+            title: Paper title.
+            authors: List of author names as strings.
+            publish_date: Publication date (``YYYY-MM-DD``).
+            summary: The paper abstract, with newlines collapsed to spaces.
+            pdf_url: Direct URL to the paper PDF.
+    """
+
     paper_id: str
     title: str
     authors: list[str]
@@ -32,6 +49,14 @@ class PaperSummary:
 
 
 class ArxivTool(Tool):
+    """Tool for searching and retrieving papers on arXiv.
+
+        Attributes:
+            sch_engine: The ``arxiv.Client`` instance used for queries; created
+                lazily on first use.
+            MAX_QUERY_LENGTH: Maximum length of a search query string.
+    """
+
     SORT_CRITERIA: ClassVar[dict[str, str]] = {
         "relevance": "Relevance",
         "submitted_date": "SubmittedDate",
@@ -66,7 +91,7 @@ class ArxivTool(Tool):
           Formatted search results or the extracted full text of a paper.
 
         Raises:
-          ValueError: If the mode or a search option is invalid.
+          ValueError: If the input, mode, or a search option is invalid.
           ImportError: If the ``arxiv`` or ``pypdf`` package is not installed.
         """
         if isinstance(input, ToolInput):
@@ -78,20 +103,25 @@ class ArxivTool(Tool):
             input = params.get("input")
 
         if mode not in [m.value for m in SearchMode]:
-            raise ValueError(f"Invalid mode: {mode}. Must be one of {[m.value for m in SearchMode]}")
+            raise ValueError(f"Invalid mode: {mode!r}. Must be one of {[m.value for m in SearchMode]}")
+
+        if not isinstance(input, str) or not input.strip():
+            raise ValueError("input must be a non-empty string")
 
         if mode == SearchMode.SEARCH.value and (
             isinstance(max_results, bool) or not isinstance(max_results, int) or not 1 <= max_results <= 100
         ):
-            raise ValueError("max_results must be an integer between 1 and 100")
+            raise ValueError(
+                f"max_results must be an integer between 1 and 100; got {max_results!r}"
+            )
 
         if mode == SearchMode.SEARCH.value:
             if not isinstance(sort_by, str) or sort_by not in self.SORT_CRITERIA:
                 options = ", ".join(self.SORT_CRITERIA)
-                raise ValueError(f"sort_by must be one of: {options}")
+                raise ValueError(f"sort_by must be one of: {options}; got {sort_by!r}")
             if not isinstance(sort_order, str) or sort_order not in self.SORT_ORDERS:
                 options = ", ".join(self.SORT_ORDERS)
-                raise ValueError(f"sort_order must be one of: {options}")
+                raise ValueError(f"sort_order must be one of: {options}; got {sort_order!r}")
 
         try:
             import arxiv
@@ -112,6 +142,15 @@ class ArxivTool(Tool):
         return self.retrieve_full_paper_text(query)
 
     def _process_query(self, query: str) -> str:
+        """Truncate a query to ``MAX_QUERY_LENGTH`` at a word boundary.
+
+                Args:
+                    query: The raw query string.
+
+                Returns:
+                    The query truncated to at most ``MAX_QUERY_LENGTH`` characters,
+                    preserving whole words.
+        """
         if len(query) <= self.MAX_QUERY_LENGTH:
             return query
 
@@ -145,6 +184,9 @@ class ArxivTool(Tool):
 
         Returns:
           A formatted list of matching papers, or a no-results message.
+
+        Raises:
+          ImportError: If the ``arxiv`` package is not installed.
         """
         try:
             import arxiv
@@ -173,12 +215,26 @@ class ArxivTool(Tool):
 
     @retry(3, 1.0)
     def retrieve_full_paper_text(self, paper_id: str) -> str:
+        """Download and extract the full text of a paper by arXiv ID.
+
+                Args:
+                    paper_id: arXiv paper identifier.
+
+                Returns:
+                    The extracted text content of the paper, with pages joined by
+                    blank lines.
+
+                Raises:
+                    ImportError: If the ``arxiv`` or ``pypdf`` package is not installed.
+        """
         try:
             import arxiv
         except ImportError:
             raise ImportError("arxiv is required. Install with: pip install arxiv")
         search = arxiv.Search(id_list=[paper_id])
-        paper = next(self.sch_engine.results(search))
+        paper = next(self.sch_engine.results(search), None)
+        if paper is None:
+            raise ValueError(f"No arXiv paper found for ID: {paper_id}")
         paper.download_pdf(filename="downloaded-paper.pdf")
 
         try:
@@ -192,6 +248,15 @@ class ArxivTool(Tool):
         return "\n\n".join(text_content)
 
     def _format_paper_results(self, papers: list[PaperSummary]) -> str:
+        """Format a list of paper summaries into a readable string.
+
+                Args:
+                    papers: The papers to format.
+
+                Returns:
+                    A human-readable, numbered description of each paper, or
+                    ``"No papers found."`` when the list is empty.
+        """
         if not papers:
             return "No papers found."
 

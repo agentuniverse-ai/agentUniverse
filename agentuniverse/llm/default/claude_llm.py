@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/5/21 17:49
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: claude_llm.py
 from typing import Optional, Any, Union, Iterator, AsyncIterator
@@ -90,8 +90,8 @@ class ClaudeLLM(LLM):
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
-        self.client = self._new_async_client()
-        chat_completion = await self.client.messages.create(
+        self.async_client = self._new_async_client()
+        chat_completion = await self.async_client.messages.create(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
             temperature=kwargs.pop('temperature', self.temperature),
@@ -106,6 +106,8 @@ class ClaudeLLM(LLM):
 
     @staticmethod
     def parse_result(data):
+        if not data.content:
+            raise ValueError("Claude LLM returned a response with no content blocks")
         text = data.content[0].text
         if not text:
             return
@@ -120,7 +122,6 @@ class ClaudeLLM(LLM):
 
     async def agenerate_stream_result(self, chat_completion: AsyncIterator):
         async for chunk in chat_completion:
-            print(chunk)
             if chunk.type != 'content_block_delta':
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
@@ -152,7 +153,7 @@ class ClaudeLLM(LLM):
     async def aclose(self):
         """Async close the client."""
         if hasattr(self, 'async_client') and self.async_client:
-            await self.async_client.aclose()
+            await self.async_client.close()
 
     def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'ClaudeLLM':
         super().initialize_by_component_configer(component_configer)

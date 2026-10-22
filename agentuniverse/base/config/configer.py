@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/12 14:29
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: configer.py
 import os
@@ -104,7 +104,7 @@ class Configer(object):
             Configer: the Configer object
         """
         # Check the file format.
-        file_format = path.split('.')[-1]
+        file_format = path.rsplit('.', 1)[-1].lower()
         if file_format not in self.__SUPPORTED_FILE_FORMATS:
             raise ValueError(f"Unsupported file format: {file_format}")
 
@@ -161,8 +161,8 @@ class Configer(object):
             Optional[Callable]: the load method
         """
         # Define the regular expression and the corresponding method map.
-        toml_re = re.compile(r'.*\.toml')
-        yaml_re = re.compile(r'.*\.yaml')
+        toml_re = re.compile(r'.*\.toml$', re.IGNORECASE)
+        yaml_re = re.compile(r'.*\.yaml$', re.IGNORECASE)
 
         re_method_map = {
             toml_re: self.__load_toml_file,
@@ -199,6 +199,6 @@ class Configer(object):
             dict: the value of the yaml file
         """
         with open(path, 'r', encoding='utf-8') as stream:
-            config_data = yaml.safe_load(stream)
+            config_data = yaml.safe_load(stream) or {}
         config_data = PlaceholderResolver().resolve(config_data)
         return config_data

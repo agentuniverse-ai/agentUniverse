@@ -38,10 +38,11 @@ from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
 
-# ATX header: 1-6 leading '#', mandatory whitespace, then the title text. A
-# trailing run of '#' (closed ATX syntax) and surrounding whitespace are
-# stripped. A line such as "#no-space" or "####### seven" is not a header.
-_HEADER_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
+# ATX markers allow up to three leading spaces and require an ASCII space/tab
+# or end of line after 1-6 hashes. Keep the separator in the captured remainder:
+# it also makes an all-hash closing sequence (e.g. '# ###') an empty title.
+_HEADER_RE = re.compile(r"^ {0,3}(#{1,6})(?=[ \t]|$)(.*)$")
+_HEADER_CLOSE_RE = re.compile(r"(?<=[ \t])#+$")
 
 # Fenced code blocks (CommonMark). An opening fence is up to three leading
 # spaces followed by three or more backticks or tildes; a backtick fence may
@@ -56,6 +57,10 @@ _FENCE_CLOSE_RE = re.compile(r"^( {0,3})(`{3,}|~{3,})[ \t]*$")
 
 class MarkdownHeaderTextSplitter(DocProcessor):
     """Split markdown documents by their ATX header structure.
+
+    Recognizes empty headings and up to three spaces of indentation. A closing
+    hash sequence needs preceding space/tab; literal titles such as C# and raw
+    inline markup are retained in the header path.
 
     Attributes:
         max_header_level (int): Deepest ATX header level to split on (1–6).
@@ -163,7 +168,9 @@ class MarkdownHeaderTextSplitter(DocProcessor):
         level = len(match.group(1))
         if level > self.max_header_level:
             return None
-        return level, match.group(2).strip()
+        remainder = match.group(2).rstrip(" \t")
+        title = _HEADER_CLOSE_RE.sub("", remainder).strip(" \t")
+        return level, title
 
     @staticmethod
     def _match_fence(line: str, closing: bool) -> Optional[Tuple[str, int]]:
