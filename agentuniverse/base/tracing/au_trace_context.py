@@ -138,9 +138,11 @@ class AuTraceContext:
             asyncio.get_running_loop()
         except RuntimeError:
             with self._token_count_lock:
-                self._token_count_dict[span_id] += token_usage
+                usage = self._token_count_dict.setdefault(span_id, TokenUsage())
+                usage += token_usage
         else:
-            self._token_count_dict[span_id] += token_usage
+            usage = self._token_count_dict.setdefault(span_id, TokenUsage())
+            usage += token_usage
 
     def add_current_token_usage_to_parent(self, token_usage=None, parent_span_id=None):
         if not token_usage:
@@ -158,7 +160,7 @@ class AuTraceContext:
         span_id = span_id or trace.get_current_span().get_span_context().span_id
         if not span_id:
             return TokenUsage()
-        return self._token_count_dict[span_id]
+        return self._token_count_dict.get(span_id, TokenUsage())
 
 
     def to_dict(self) -> dict:
