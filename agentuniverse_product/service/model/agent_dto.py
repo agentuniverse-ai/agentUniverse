@@ -17,6 +17,8 @@ from agentuniverse_product.service.model.tool_dto import ToolDTO
 
 
 class AgentDTO(BaseModel):
+    """DTO model describing a agent.
+    """
     id: str = Field(description="ID")
     nickname: Optional[str] = Field(description="agent nickname", default="")
     avatar: Optional[str] = Field(description="agent avatar path", default="")
