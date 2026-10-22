@@ -1,0 +1,97 @@
+name: yaml_lint_tool
+description: >-
+  Structural quality linting for YAML documents — pure stdlib plus the
+  framework's existing PyYAML, no file I/O, no network. lint mode checks
+  the stream against a documented 13-rule table (mode='lint'): parser
+  errors mapped precisely to PyYAML's own problem marks; UTF-8 BOM; tab
+  indentation with block-scalar protection; trailing spaces; duplicate
+  mapping keys that plain PyYAML silently collapses to the last value,
+  detected via a duplicate-key-safe SafeLoader subclass; plain scalars
+  that resolve as octal (010 -> 8) or as booleans (yes/no/on/off, with a
+  quoting suggestion); implicit empty values; nesting deeper than a
+  configurable depth (default 12); non-string keys; plain multi-line
+  scalars whose line breaks fold away; contentless documents;
+  multi-document streams (info, suppressible with
+  allow_multiple_documents=true) — each finding carrying severity,
+  1-based line/column, message and hint. profile mode reports topology
+  statistics (mode='profile'): mapping/key/scalar/list counts, max depth
+  with path, longest list, scalar type histogram, anchor and alias usage
+  with recursive detection, and key naming-style consistency (snake vs
+  kebab vs camel). fix_hints mode computes exact safe textual edits only
+  (mode='fix_hints'): BOM strip, trailing-space strip, single-quoting
+  yes/no/on/off — each with line/column/original/replacement, applied
+  into fixed_text and re-linted; it never restructures.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.yaml_lint_tool
+  class: YamlLintTool
+input_keys:
+  - mode
+  - yaml_text
+args_model:
+  mode:
+    type: string
+    description: Tool mode — lint, profile or fix_hints.
+    required: true
+  yaml_text:
+    type: string
+    description: The YAML stream to examine (capped at 1,000,000 characters). Blank and comment-only streams lint to document_without_content instead of erroring.
+    required: true
+  allow_multiple_documents:
+    type: boolean
+    description: Suppress the multiple_documents finding while still reporting the count. Default false. Lint mode only.
+    required: false
+  max_depth:
+    type: integer
+    description: Nesting threshold for the deeply_nested rule. Default 12, range 1..128. Lint mode only.
+    required: false
+  rules:
+    type: object
+    description: Map a rule code (YML001..YML013) to false to disable that single rule for the call, e.g. {"YML004":false}. Unknown codes or non-boolean values raise ValueError. Lint mode only.
+    required: false
+  remove_bom:
+    type: boolean
+    description: Offer the BOM strip edit. Default true. fix_hints mode only.
+    required: false
+  strip_trailing_spaces:
+    type: boolean
+    description: Offer trailing-space strip edits (block scalar content is never touched). Default true. fix_hints mode only.
+    required: false
+  quote_bool_words:
+    type: boolean
+    description: Offer single-quoting edits for plain yes/no/on/off scalars. Default true. fix_hints mode only.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "profile", "fix_hints"]
+      description: Tool mode.
+    yaml_text:
+      type: string
+      description: YAML text (PyYAML SafeLoader parsing; findings carry 1-based lines/columns).
+    allow_multiple_documents:
+      type: boolean
+      description: Allow multi-document streams without a finding (default false).
+    max_depth:
+      type: integer
+      minimum: 1
+      maximum: 128
+      description: deeply_nested threshold (default 12).
+    rules:
+      type: object
+      description: Per-rule enable/disable map, code -> boolean.
+      additionalProperties:
+        type: boolean
+    remove_bom:
+      type: boolean
+      description: Offer the BOM strip edit when fixing (default true).
+    strip_trailing_spaces:
+      type: boolean
+      description: Offer trailing-space strips when fixing (default true).
+    quote_bool_words:
+      type: boolean
+      description: Offer quoting of bool words when fixing (default true).
+  required: ["mode", "yaml_text"]
