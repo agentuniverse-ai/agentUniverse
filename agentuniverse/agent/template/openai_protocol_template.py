@@ -44,18 +44,10 @@ class OpenAIProtocolTemplate(AgentTemplate):
                 raise ValueError(f"{key} is not in agent input")
         messages = agent_input.get('messages')
         convert_messages, image_urls = self.convert_message(messages)
-        content = messages[-1].get('content')
+        content = convert_messages[-1].content
 
         if isinstance(content, str):
             agent_input['input'] = content
-        elif isinstance(content, list):
-            for item in content:
-                if item.get('type') == 'text':
-                    agent_input['input'] = item.get('text')
-                elif item.get('type') == 'image_url':
-                    image_urls.append(item.get('image_url'))
-                else:
-                    raise ValueError(f"{item} is not support")
         else:
             raise ValueError(f"{content} is not support")
         if len(convert_messages) > 1:
@@ -71,21 +63,26 @@ class OpenAIProtocolTemplate(AgentTemplate):
 
     def convert_message(self, messages: List[Dict]):
         image_urls = []
+        converted_messages = []
         for message in messages:
+            message = message.copy()
             content = message.get('content')
             if isinstance(content, list):
-                text = ""
+                text_parts = []
                 for item in content:
                     if item.get('type') == 'text':
-                        text += item.get('text') or ''
+                        text_parts.append(item.get('text') or '')
                     elif item.get('type') == 'image_url':
                         image_urls.append(item.get('image_url'))
-                message['content'] = text
+                    else:
+                        raise ValueError(f"{item} is not support")
+                message['content'] = ''.join(text_parts)
             if message.get('role') == 'user':
                 message['type'] = 'human'
             elif message.get('role') == 'assistant':
                 message['type'] = 'ai'
-        return [Message.from_dict(message) for message in messages], image_urls
+            converted_messages.append(Message.from_dict(message))
+        return converted_messages, image_urls
 
 
     def parse_openai_protocol_output(self, output_object: OutputObject) -> OutputObject:
