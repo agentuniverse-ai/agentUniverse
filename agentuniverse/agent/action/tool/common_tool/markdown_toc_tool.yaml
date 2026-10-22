@@ -1,0 +1,55 @@
+name: markdown_toc_tool
+description: Markdown table-of-contents tool — pure Python stdlib, no network required. Generate a linked, indented bullet-list TOC from ATX headings with GitHub-style anchors and refresh an existing TOC in place (mode='generate', levels bounded by min_level/max_level, default 2-3), list every heading with its computed slug and duplicate-suffix evidence (mode='anchors'), or check that every local anchor link resolves to a heading slug (mode='check').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.markdown_toc_tool
+  class: MarkdownTocTool
+input_keys:
+  - mode
+max_input_chars: 1000000
+args_model:
+  mode:
+    type: string
+    description: TOC mode — generate, anchors or check.
+    required: true
+  markdown:
+    type: string
+    description: The Markdown source text. ATX headings only; fenced code blocks and inline code spans are ignored. CRLF line endings are supported.
+    required: false
+  min_level:
+    type: integer
+    description: generate mode — shallowest heading level included (1-6, default 2).
+    required: false
+  max_level:
+    type: integer
+    description: generate mode — deepest heading level included (1-6, default 3).
+    required: false
+  replace:
+    type: boolean
+    description: generate mode — when an existing all-anchor bullet block is detected, refresh it in place at the same position (true, the default) or append the fresh TOC at the end instead (false).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["generate", "anchors", "check"]
+      description: TOC operation.
+    markdown:
+      type: string
+      description: Markdown source text.
+    min_level:
+      type: integer
+      minimum: 1
+      maximum: 6
+      description: Shallowest heading level included by generate.
+    max_level:
+      type: integer
+      minimum: 1
+      maximum: 6
+      description: Deepest heading level included by generate.
+    replace:
+      type: boolean
+      description: Refresh a detected existing TOC in place (default) or append.
+  required: ["mode"]
