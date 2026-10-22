@@ -1,0 +1,33 @@
+name: 'qa_pair_extractor'
+description: 'extract question-answer pairs from FAQ-style documents into paired documents'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.qa_pair_extractor'
+  class: 'QAPairExtractor'
+
+# FAQ conventions to detect, as a non-empty subset of
+# ['prefix', 'numbered', 'heading']:
+# - prefix:   'Q:'/'A:', 'Question:'/'Answer:' (optional item number, e.g.
+#             'Q1:') and '问：'/'答：', '问题：'/'回答：', '提问：'
+# - numbered: '1. What is X? — Answer.', '2、如何安装？——答案' (inline
+#             separator) or the answer on the lines below the item
+# - heading:  '## What is X?' / '**What is X?**' followed by the answer
+#             paragraph
+formats: ['prefix', 'numbered', 'heading']
+
+# Minimum answer length in characters for a pair to be kept; >= 0.
+min_answer_chars: 1
+
+# Maximum answer length in characters; 0 means unlimited. When > 0 it
+# must be >= min_answer_chars.
+max_answer_chars: 0
+
+# Maximum number of pairs emitted per source document; >= 1.
+max_pairs: 100
+
+# false (default): a document with extracted pairs is replaced by those
+# pair documents. true: the source document is kept in place and the pair
+# documents are appended after it. Documents without any pair always pass
+# through unchanged.
+keep_source: false
