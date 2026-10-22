@@ -1,0 +1,76 @@
+name: text_histogram_tool
+description: Text histogram tool — pure Python stdlib, no network required. Character frequency with optional case folding and whitespace filtering (mode='chars'), word frequency with min_length and builtin EN/ZH or custom stopwords (mode='words'), word n-gram frequency for n=2..5 (mode='ngrams'), and a summary with total chars/words/lines, unique counts, top-5 chars/words and the Shannon entropy in bits of the character distribution (mode='summary'). All tables return counts, percentages, top_n (default 20) and a deterministic count-desc / lexicographic tie-break order.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_histogram_tool
+  class: TextHistogramTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Histogram mode — chars, words, ngrams or summary.
+    required: true
+  text:
+    type: string
+    description: The text to analyse. Required in every mode; a non-empty string of at most 100,000 characters.
+    required: false
+  top_n:
+    type: integer
+    description: Number of table rows to return, 1..500, default 20. Applies to the chars / words / ngrams tables; summary always reports exactly five rows.
+    required: false
+  case_insensitive:
+    type: boolean
+    description: Fold characters / words to lowercase before counting, default false. Applies to chars / words / ngrams modes; summary always uses the raw case-sensitive distribution.
+    required: false
+  ignore_whitespace:
+    type: boolean
+    description: Chars mode only — skip whitespace characters entirely (default true). When false, spaces, tabs and newlines are counted like any other character.
+    required: false
+  min_length:
+    type: integer
+    description: Words mode only — drop word tokens shorter than this many characters, 1..50, default 1.
+    required: false
+  stopwords:
+    type: string
+    description: Words mode only — none (default), builtin (small built-in EN+ZH list), en or zh (case-insensitive labels), or a list of non-empty strings used as a custom stopword list.
+    required: false
+  n:
+    type: integer
+    description: Ngrams mode only — the n-gram size, an integer between 2 and 5 (required for the ngrams mode).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["chars", "words", "ngrams", "summary"]
+      description: Histogram mode.
+    text:
+      type: string
+      description: Text to analyse (all modes).
+    top_n:
+      type: integer
+      minimum: 1
+      maximum: 500
+      description: Table row limit (chars / words / ngrams modes).
+    case_insensitive:
+      type: boolean
+      description: Lowercase folding before counting (chars / words / ngrams modes).
+    ignore_whitespace:
+      type: boolean
+      description: Skip whitespace characters (chars mode).
+    min_length:
+      type: integer
+      minimum: 1
+      maximum: 50
+      description: Minimum word token length (words mode).
+    stopwords:
+      description: Stopword selector — none / builtin / en / zh or a custom list of strings (words mode).
+    n:
+      type: integer
+      minimum: 2
+      maximum: 5
+      description: Word n-gram size (ngrams mode).
+  required: ["mode"]
