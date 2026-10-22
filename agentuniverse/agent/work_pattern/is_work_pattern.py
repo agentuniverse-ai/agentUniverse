@@ -74,10 +74,11 @@ class ISWorkPattern(WorkPattern):
 
             # Check if correction is needed
             needs_correction = supervision_result.get('needs_correction', False)
+            correction_applied = False
 
             if needs_correction and execution_context['corrections_made'] < max_corrections:
                 # Execute correction
-                correction_result = self._invoke_correction(
+                self._invoke_correction(
                     input_object,
                     supervision_result,
                     checkpoint_result,
@@ -86,13 +87,14 @@ class ISWorkPattern(WorkPattern):
                     execution_context
                 )
                 execution_context['corrections_made'] += 1
+                correction_applied = True
 
             # Store checkpoint history
             execution_context['checkpoint_history'].append({
                 'checkpoint': checkpoint_idx,
                 'implementation': implementation_result,
                 'supervision': supervision_result,
-                'corrected': needs_correction
+                'corrected': correction_applied
             })
 
             is_results.append(checkpoint_result)
@@ -148,10 +150,11 @@ class ISWorkPattern(WorkPattern):
 
             # Check if correction is needed
             needs_correction = supervision_result.get('needs_correction', False)
+            correction_applied = False
 
             if needs_correction and execution_context['corrections_made'] < max_corrections:
                 # Execute correction
-                correction_result = await self._async_invoke_correction(
+                await self._async_invoke_correction(
                     input_object,
                     supervision_result,
                     checkpoint_result,
@@ -160,13 +163,14 @@ class ISWorkPattern(WorkPattern):
                     execution_context
                 )
                 execution_context['corrections_made'] += 1
+                correction_applied = True
 
             # Store checkpoint history
             execution_context['checkpoint_history'].append({
                 'checkpoint': checkpoint_idx,
                 'implementation': implementation_result,
                 'supervision': supervision_result,
-                'corrected': needs_correction
+                'corrected': correction_applied
             })
 
             is_results.append(checkpoint_result)
