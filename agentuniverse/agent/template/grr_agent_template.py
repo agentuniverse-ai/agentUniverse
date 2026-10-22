@@ -312,10 +312,16 @@ class GRRAgentTemplate(AgentTemplate):
                 if self.agent_model.profile.get('rewriting') is not None else planner_config.get('rewriting')
 
         # Initialize configuration parameters
-        if self.agent_model.profile.get('eval_threshold') or planner_config.get('eval_threshold'):
-            self.eval_threshold = self.agent_model.profile.get('eval_threshold') or planner_config.get('eval_threshold')
-        if self.agent_model.profile.get('retry_count') or planner_config.get('retry_count'):
-            self.retry_count = self.agent_model.profile.get('retry_count') or planner_config.get('retry_count')
+        if self.agent_model.profile.get('eval_threshold') is not None \
+                or planner_config.get('eval_threshold') is not None:
+            self.eval_threshold = self.agent_model.profile.get('eval_threshold') \
+                if self.agent_model.profile.get('eval_threshold') is not None \
+                else planner_config.get('eval_threshold')
+        if self.agent_model.profile.get('retry_count') is not None \
+                or planner_config.get('retry_count') is not None:
+            self.retry_count = self.agent_model.profile.get('retry_count') \
+                if self.agent_model.profile.get('retry_count') is not None \
+                else planner_config.get('retry_count')
         if self.agent_model.profile.get('expert_framework') or planner_config.get('expert_framework'):
             self.expert_framework = \
                 self.agent_model.profile.get('expert_framework') or planner_config.get('expert_framework')

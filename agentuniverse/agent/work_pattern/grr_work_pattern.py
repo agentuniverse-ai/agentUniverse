@@ -67,7 +67,7 @@ class GRRWorkPattern(WorkPattern):
             reviewing_result = self._invoke_reviewing(input_object, grr_round_results)
 
             # Check if quality threshold met
-            if reviewing_result.get('score') and reviewing_result.get('score') >= eval_threshold:
+            if reviewing_result.get('score') is not None and reviewing_result.get('score') >= eval_threshold:
                 grr_results.append(grr_round_results)
                 break
 
@@ -120,7 +120,7 @@ class GRRWorkPattern(WorkPattern):
             reviewing_result = await self._async_invoke_reviewing(input_object, grr_round_results)
 
             # Check if quality threshold met
-            if reviewing_result.get('score') and reviewing_result.get('score') >= eval_threshold:
+            if reviewing_result.get('score') is not None and reviewing_result.get('score') >= eval_threshold:
                 grr_results.append(grr_round_results)
                 break
 
