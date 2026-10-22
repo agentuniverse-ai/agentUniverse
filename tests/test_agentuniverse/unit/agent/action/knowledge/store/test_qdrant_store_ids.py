@@ -1,11 +1,14 @@
 import uuid
 from unittest.mock import Mock
 
+from qdrant_client import QdrantClient
+
 from agentuniverse.agent.action.knowledge.store.qdrant_store import QdrantStore
 
 
 def test_delete_normalizes_non_uuid_document_ids():
-    client = Mock()
+    client = QdrantClient(location=":memory:")
+    client.delete = Mock()
     store = QdrantStore(client=client)
 
     store.delete_document("order-42")
