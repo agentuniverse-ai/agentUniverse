@@ -24,11 +24,16 @@ class JsonOutputValidatorTool(Tool):
         if not isinstance(text, str):
             return self._error("invalid_input", "text must be a string")
         try:
-            value = json.loads(self._strip_code_fence(text))
+            value = json.loads(
+                self._strip_code_fence(text),
+                parse_constant=self._reject_non_json_constant,
+            )
         except json.JSONDecodeError as exc:
             return self._error(
                 "invalid_json", f"Invalid JSON at line {exc.lineno}, column {exc.colno}"
             )
+        except ValueError as exc:
+            return self._error("invalid_json", f"Invalid JSON: {exc}")
         if not isinstance(value, dict):
             return self._error("expected_object", "JSON output must be an object")
 
@@ -63,6 +68,10 @@ class JsonOutputValidatorTool(Tool):
         stripped = text.strip()
         match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, re.IGNORECASE | re.DOTALL)
         return match.group(1).strip() if match else stripped
+
+    @staticmethod
+    def _reject_non_json_constant(value: str) -> None:
+        raise ValueError(f"non-finite numeric constant is not valid JSON: {value}")
 
     @staticmethod
     def _matches_type(value: Any, expected_type: str) -> bool:

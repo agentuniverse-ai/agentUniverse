@@ -39,3 +39,28 @@ def test_json_output_validator_rejects_invalid_or_non_object_json():
 
     assert invalid["issues"][0]["code"] == "invalid_json"
     assert array["issues"][0]["code"] == "expected_object"
+
+
+def test_json_output_validator_rejects_non_json_numeric_constants():
+    validator = JsonOutputValidatorTool()
+
+    for constant in ("NaN", "Infinity", "-Infinity"):
+        result = validator.execute(
+            text=f'{{"score": {constant}}}',
+            type_expectations={"score": "number"},
+        )
+        assert result["valid"] is False
+        assert result["issues"][0]["code"] == "invalid_json"
+
+
+def test_json_output_validator_accepts_finite_json_numbers():
+    result = JsonOutputValidatorTool().execute(
+        text='{"zero": 0, "integer": 7, "decimal": 1.25}',
+        type_expectations={
+            "zero": "number",
+            "integer": "integer",
+            "decimal": "number",
+        },
+    )
+
+    assert result["valid"] is True
