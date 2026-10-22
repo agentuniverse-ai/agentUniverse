@@ -1,0 +1,14 @@
+name: parquet_reader
+description: Project Parquet columns into bounded row documents with source metadata.
+text_columns: []
+metadata_columns: []
+id_column: null
+batch_size: 256
+max_file_bytes: 33554432
+max_rows: 10000
+max_row_chars: 100000
+max_output_chars: 10000000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.parquet_reader
+  class: ParquetReader
