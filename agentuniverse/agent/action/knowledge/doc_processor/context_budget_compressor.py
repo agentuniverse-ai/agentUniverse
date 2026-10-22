@@ -118,6 +118,19 @@ class ContextBudgetCompressor(DocProcessor):
     # Counting / truncation
     # ------------------------------------------------------------------ #
     def _count(self, text: str) -> int:
+        """Measure the size of ``text`` using the configured counter.
+
+        ``"char"`` counts characters, ``"word"`` counts whitespace-separated
+        words, and ``"tiktoken"`` uses the real BPE token count when available.
+        The default ``"estimate"`` (also the tiktoken-unavailable fallback)
+        returns ``max(1, len(text) // 4)``.
+
+        Args:
+            text: The text to measure.
+
+        Returns:
+            The size of the text in the unit of ``counter``, at least 1.
+        """
         if self.counter == "char":
             return len(text)
         if self.counter == "word":
