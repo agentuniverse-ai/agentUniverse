@@ -1,0 +1,62 @@
+name: json_schema_tool
+description: Json schema tool — validate a JSON document against a practical subset of JSON Schema (draft 2020-12 core — type with multiple allowed values, properties/required/additionalProperties(bool), items, minItems/maxItems/uniqueItems, numeric bounds, minLength/maxLength, pattern (re.search), enum/const, format (email/date/date-time/uuid/url/ipv4 family profiles), nested $defs/$ref with cycle guard), purely on the Python stdlib, no network required. validate reports dot-path errors {path, schema_rule, message, actual} plus an applied_rules count, collects out-of-subset keywords (anyOf/allOf/oneOf/not/patternProperties/...) in unsupported_keywords with a note instead of failing, and lists declared defaults report-only (never applied) (mode='validate'); infer_schema derives a skeleton subset schema from a document with inferred types/formats and examples masked as *** for secret-ish keys (KEY/SECRET/PASSWORD/TOKEN) (mode='infer_schema'); simplify_errors condenses a long error list into a grouped-by-path summary (mode='simplify_errors').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.json_schema_tool
+  class: JsonSchemaTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Json schema mode — validate, infer_schema or simplify_errors.
+    required: true
+  document:
+    type: object
+    description: The JSON document — a native JSON value (object, array or scalar; null allowed) or a string parsed as JSON text; required for validate and infer_schema.
+    required: false
+  schema:
+    type: object
+    description: The draft 2020-12 subset schema (must be an object) — required for the validate mode.
+    required: false
+  errors:
+    type: array
+    description: The error list to condense (entries as emitted by validate) — required for the simplify_errors mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["validate", "infer_schema", "simplify_errors"]
+      description: Json schema mode.
+    document:
+      type: object
+      description: >
+        The JSON document for validate / infer_schema. Accepts any
+        native JSON value (an object, array, string, number, boolean
+        or null — null is the JSON null document) or a string, which
+        is parsed as JSON text; unparseable text returns a structured
+        invalid_json error payload.
+    schema:
+      type: object
+      description: >
+        The schema for validate mode: a draft 2020-12 subset object.
+        Supported keywords — type (string|number|integer|boolean|null|
+        array|object, single or duplicate-free list), properties,
+        required (non-empty duplicate-free list), additionalProperties
+        (boolean), items (single schema), minItems/maxItems/
+        uniqueItems, minimum/maximum/exclusiveMinimum/exclusiveMaximum,
+        minLength/maxLength, pattern (re.search semantics), enum
+        (non-empty list), const, format (email|date|date-time|uuid|url|
+        ipv4), $defs/$ref (local #/$defs/<name> pointers only) and the
+        annotations title/description/default/examples/... (default is
+        report-only, never applied). Out-of-subset keywords
+        (anyOf/allOf/oneOf/not/patternProperties/...) are collected in
+        unsupported_keywords with a note and skipped; invalid values of
+        supported keywords raise ValueError naming the schema location.
+    errors:
+      type: array
+      description: The error list for simplify_errors mode (the shape validate emits; off-shape entries are passed through unparseable).
+  required: ["mode"]
