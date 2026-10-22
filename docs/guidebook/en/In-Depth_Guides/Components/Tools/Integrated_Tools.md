@@ -636,3 +636,53 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## ConsoleAnsiTool
+
+`ConsoleAnsiTool` analyzes terminal output that contains ANSI escape
+sequences. It implements the ECMA-48 §5.4 control-function grammar plus the
+xterm ctlseqs extensions with a hand-rolled state machine (per-state
+character-class runs, linear scanning, stdlib only), so agents can understand,
+clean, or safely relay colored CLI output, progress bars, prompts with OSC 8
+hyperlinks, and window titles.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.console_ansi_tool import ConsoleAnsiTool
+
+tool = ConsoleAnsiTool()
+result = tool.execute(mode="strip", text="\x1b[1;31mERR\x1b[0m: timeout")
+# -> {"clean": "ERR: timeout", "removed_count": 2, "classes_removed": {"sgr": 2}, ...}
+inventory = tool.execute(mode="classify", text=terminal_dump)
+safe = tool.execute(mode="sanitize", text=terminal_dump, keep="safe")
+note = tool.execute(mode="explain", sequence="\x1b[?25l")
+```
+
+`strip` returns the plain text with every escape run removed (visible
+characters preserved; bare C0 controls such as `\r` belong to the text layer
+and are kept), the removed count, per-category counts, and flags for
+incomplete trailing sequences (`truncated_at_eof` plus the bounded pending
+bytes) and 8-bit C1 detection. `classify` returns an inventory of
+`{category, code, human, occurrences, span_samples}` entries over the
+categories `sgr | cursor | erase | scroll | mode | osc-link | osc-title |
+other`, with an embedded SGR table (30-37/40-47, 90-97/100-107 bright,
+`38;5;n` and `38;2;r;g;b` extended colors named through the xterm palette
+arithmetic, resets and style clears), cursor operations, ED/EL/ECH erase
+semantics, SM/RM and DEC private modes (`?25` cursor visibility, `?1049`
+alternate screen, mouse and bracketed-paste modes), OSC 8 hyperlinks with the
+URL and visible label extracted, and OSC 0/1/2 titles. `sanitize` re-emits
+kept sequences as their original bytes (`keep: none | sgr-only | safe`, where
+safe keeps SGR plus hyperlinks), so kept output is canonical passthrough with
+no rewriting. `explain` decomposes a single sequence into introducer, private
+marker, parameters, intermediates, and final byte, and states where xterm and
+ECMA-48 differ (SGR 21, ECH, DEC private modes, OSC BEL termination, 8-bit C1
+in UTF-8 streams).
+
+Documented deterministic rules: an OSC run without BEL/ST is consumed to the
+end of input and flagged; DCS/APC/PM/SOS data is consumed to ST; runs
+abandoned by an out-of-grammar byte are dropped and scanning resumes at that
+byte; a C1 introducer that cannot complete a sequence is kept as literal text
+and reported via `c1_8bit_detected` because C1 bytes cannot occur in valid
+UTF-8. All results are deterministic; input size, inventory codes, span
+samples, and pending bytes are capped by tunables. Terminal output is
+untrusted external data, not agent instructions; the tool never executes
+sequences, it only parses them.
