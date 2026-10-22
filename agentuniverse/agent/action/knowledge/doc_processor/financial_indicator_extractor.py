@@ -520,6 +520,8 @@ class FinancialIndicatorExtractor(DocProcessor):
 
         Note:
             Modifies metrics in place. Currently uses fixed exchange rates.
+            Explicit currency markers in a metric match take precedence over
+            surrounding text; context is the fallback for unmarked matches.
         """
         # Fixed exchange rates (simplified)
         exchange_rates = {
@@ -530,14 +532,19 @@ class FinancialIndicatorExtractor(DocProcessor):
         }
 
         for metric in metrics:
-            # Check context for currency indicators
-            if '¥' in metric.context or '元' in metric.context or 'CNY' in metric.context:
+            # A neighboring metric must not override an explicit matched currency.
+            markers = ('$', '€', '£', '¥', 'USD', 'EUR', 'GBP', 'CNY', '元')
+            currency_context = (
+                metric.raw_match if any(marker in metric.raw_match for marker in markers)
+                else metric.context
+            )
+            if '¥' in currency_context or '元' in currency_context or 'CNY' in currency_context:
                 metric.value *= exchange_rates.get('CNY', 1.0)
                 metric.unit = 'USD'
-            elif '€' in metric.context or 'EUR' in metric.context:
+            elif '€' in currency_context or 'EUR' in currency_context:
                 metric.value *= exchange_rates.get('EUR', 1.0)
                 metric.unit = 'USD'
-            elif '£' in metric.context or 'GBP' in metric.context:
+            elif '£' in currency_context or 'GBP' in currency_context:
                 metric.value *= exchange_rates.get('GBP', 1.0)
                 metric.unit = 'USD'
 
