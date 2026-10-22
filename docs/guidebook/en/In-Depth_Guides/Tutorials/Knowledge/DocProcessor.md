@@ -274,6 +274,14 @@ Configuration is validated eagerly. Unknown entities, malformed custom entries, 
 
 Each match is replaced with `replacement` (default `[REDACTED]`); a per-document `redaction_summary` records how many of each entity were removed.
 
+Built-in numeric identifiers (`credit_card`, `id_card`, `ssn`, `ip_address`, and
+enabled `phone`) can directly touch non-ASCII prose, such as Chinese labels and
+suffixes. For example, `身份证号11010519491231002X已确认` becomes
+`身份证号[REDACTED]已确认`. Adjacent ASCII letters, underscores, or Unicode decimal
+digits prevent matching an identifier inside a longer token. Semantic checks
+still apply, `phone` remains opt-in, and custom patterns retain their own regex
+boundary rules.
+
 The component definition file is as follows:
 ```yaml
 name: 'sensitive_data_redactor'

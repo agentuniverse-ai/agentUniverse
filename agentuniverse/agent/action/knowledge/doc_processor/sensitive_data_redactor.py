@@ -46,20 +46,29 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 logger = logging.getLogger(__name__)
 
+# Numeric identifiers may touch non-ASCII prose, but must not be embedded in
+# ASCII identifiers or longer sequences of Unicode decimal digits.
+_NUMERIC_START = r"(?<![A-Za-z_\d])"
+_NUMERIC_END = r"(?![A-Za-z_\d])"
+
 # High-precision built-in patterns. Each matches a structured identifier shape
 # rather than a loose guess, to keep false positives low.
 _BUILTIN_PATTERNS: Dict[str, str] = {
     "email": r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
-    "credit_card": r"\b\d{13,16}\b",
+    "credit_card": _NUMERIC_START + r"\d{13,16}" + _NUMERIC_END,
     # China resident identity card (18 digits, last may be X), date-structured.
-    "id_card": r"\b[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])"
-               r"(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]\b",
-    "ssn": r"\b\d{3}-\d{2}-\d{4}\b",
-    "ip_address": r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+    "id_card": _NUMERIC_START + r"[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])"
+               r"(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]" + _NUMERIC_END,
+    "ssn": _NUMERIC_START + r"\d{3}-\d{2}-\d{4}" + _NUMERIC_END,
+    "ip_address": _NUMERIC_START + r"(?:\d{1,3}\.){3}\d{1,3}" + _NUMERIC_END,
     "api_key": r"(?:sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
                r"gh[pousr]_[A-Za-z0-9]{36,}|glpat-[A-Za-z0-9_-]{20,})",
     # Opt-in: phone matching is fuzzier, so it is not on by default.
-    "phone": r"(?:\b1[3-9]\d{9}\b|\b\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b)",
+    # Check the U.S. numeric boundary after the optional opening parenthesis.
+    "phone": (
+        r"(?:" + _NUMERIC_START + r"1[3-9]\d{9}" + _NUMERIC_END
+        + r"|\(?" + _NUMERIC_START + r"\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}" + _NUMERIC_END + r")"
+    ),
 }
 
 # Semantic validators for built-in entities whose shape alone is not enough.

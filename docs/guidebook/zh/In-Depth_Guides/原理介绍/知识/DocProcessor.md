@@ -272,6 +272,12 @@ metadata:
 
 每个匹配被替换为 `replacement`（默认 `[REDACTED]`）；每篇文档的 `redaction_summary` 会记录各类实体被脱敏的数量。
 
+内置数字标识符（`credit_card`、`id_card`、`ssn`、`ip_address` 及启用后的 `phone`）
+可以直接紧邻中文等非 ASCII 文本。例如，`身份证号11010519491231002X已确认`会变为
+`身份证号[REDACTED]已确认`。标识符紧邻 ASCII 字母、下划线或 Unicode 十进制数字时不会匹配，
+以免截取较长标识符的一部分。语义校验仍然生效，`phone` 仍需显式启用；
+自定义模式继续使用各自正则表达式的边界规则。
+
 组件定义文件如下：
 ```yaml
 name: 'sensitive_data_redactor'
