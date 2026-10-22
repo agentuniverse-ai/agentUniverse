@@ -1,0 +1,43 @@
+name: text_chunker_tool
+description: Text chunker tool — pure Python stdlib, no network required. Split text into overlapping chunks for embedding, retrieval or map-reduce processing — fixed-size character windows (strategy='char'), whitespace-word windows that preserve the original spans (strategy='word'), or sentence-aware packing under a character budget with sentence overlap (strategy='sentence'). Every chunk reports its character offsets in the original text.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_chunker_tool
+  class: TextChunkerTool
+input_keys:
+  - strategy
+args_model:
+  strategy:
+    type: string
+    description: Chunking strategy — char, word or sentence.
+    required: true
+  text:
+    type: string
+    description: The text to chunk; a non-empty string of at most 1,000,000 characters.
+    required: false
+  chunk_size:
+    type: integer
+    description: Chunk target size — characters for the char and sentence strategies, words for the word strategy. Defaults to 200; must be at least 1.
+    required: false
+  overlap:
+    type: integer
+    description: Overlap between consecutive chunks — characters (char), words (word) or sentences (sentence). Defaults to 0; must be non-negative and strictly smaller than chunk_size in the char and word modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    strategy:
+      type: string
+      enum: ["char", "word", "sentence"]
+      description: Chunking strategy.
+    text:
+      type: string
+      description: Text to chunk.
+    chunk_size:
+      type: integer
+      description: Chunk target size in characters (char / sentence) or words (word).
+    overlap:
+      type: integer
+      description: Overlap between consecutive chunks in characters, words or sentences.
+  required: ["strategy"]
