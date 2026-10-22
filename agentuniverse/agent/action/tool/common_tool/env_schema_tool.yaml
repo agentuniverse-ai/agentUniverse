@@ -1,0 +1,50 @@
+name: env_schema_tool
+description: Env schema tool — validate a dotenv (.env) payload against a declared schema of required variables and types, purely on the Python stdlib, no network required. check mode reports missing variables (with default-injection suggestions), applied defaults, undeclared extras, type mismatches (string|int|float|bool|url|email|path with documented coercion rules) and enum/min/max violations, masking values of secret-ish names (KEY/SECRET/PASSWORD/TOKEN) as *** (mode='check'); suggest_schema infers a ready-to-edit schema from an existing .env text (mode='suggest_schema'); diff compares two .env texts with the same masking rules (mode='diff').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.env_schema_tool
+  class: EnvSchemaTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Env schema mode — check, suggest_schema or diff.
+    required: true
+  text:
+    type: string
+    description: The .env text — required for every mode (may be empty); the A side of diff mode.
+    required: false
+  schema:
+    type: object
+    description: Declared schema mapping variable name -> rule (required/type/default/min/max/enum) — required for the check mode.
+    required: false
+  text_b:
+    type: string
+    description: The second .env text (the B side) — required for the diff mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["check", "suggest_schema", "diff"]
+      description: Env schema mode.
+    text:
+      type: string
+      description: The primary .env text (all modes); the A side of diff.
+    schema:
+      type: object
+      description: >
+        Declared schema for check mode. Each rule may set required
+        (bool, default true), type (string|int|float|bool|url|email|path,
+        default string), default (string), min/max (numbers, numeric types
+        only) and enum (non-empty list of allowed raw values). The
+        informational sample_masked / inferred_enum keys emitted by
+        suggest_schema are accepted and ignored, so a suggested schema
+        can be edited and fed straight back into check.
+    text_b:
+      type: string
+      description: The second .env text (diff mode, B side).
+  required: ["mode"]
