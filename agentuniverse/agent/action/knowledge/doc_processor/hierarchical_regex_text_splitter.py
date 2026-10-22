@@ -19,7 +19,12 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 
 class HierarchicalRegexTextSplitter(DocProcessor):
-    """Splits text into hierarchical structure based on regex patterns."""
+    """Split text into a hierarchy using the nearest active shallower heading.
+
+    A new heading closes deeper levels from the previous branch. Missing
+    intermediate levels do not create synthetic nodes; without a shallower
+    heading, the node's parent is ``root``.
+    """
     merge_first: bool = False
     hierarchical_index: List[dict] = [
         {
@@ -66,10 +71,15 @@ class HierarchicalRegexTextSplitter(DocProcessor):
                 match = pattern.match(line)
                 if match:
                     _ptr = levels.index((level_name, pattern))
-                    parent_level = \
-                        levels[_ptr - 1][0] if _ptr > 0 else 'root'
-                    parent_id = current_level[parent_level].id if \
-                        current_level[parent_level] else 'root'
+                    # A sibling/ancestor heading closes the old deeper branch.
+                    for deeper_level, _ in levels[_ptr + 1:]:
+                        current_level[deeper_level] = None
+                    parent_id = 'root'
+                    for ancestor_level, _ in reversed(levels[:_ptr]):
+                        ancestor = current_level[ancestor_level]
+                        if ancestor is not None:
+                            parent_id = ancestor.id
+                            break
                     # use uuid4 to generate a random id, because chapter name can always duplicate
                     node = Document(
                         id=str(uuid.uuid4()),

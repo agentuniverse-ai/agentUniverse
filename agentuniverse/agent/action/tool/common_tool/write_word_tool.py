@@ -3,6 +3,7 @@ import json
 from typing import Any, Dict
 
 from agentuniverse.agent.action.tool.tool import Tool
+from agentuniverse.agent.action.tool.common_tool.tool_input_utils import parse_strict_bool
 
 
 class WriteWordDocumentTool(Tool):
@@ -14,6 +15,13 @@ class WriteWordDocumentTool(Tool):
         if not file_path.lower().endswith(".docx"):
             return json.dumps(
                 {"error": "The target file must have a .docx extension.", "file_path": file_path, "status": "error"}
+            )
+
+        try:
+            append = parse_strict_bool(append, "append", default=False)
+        except ValueError as e:
+            return json.dumps(
+                {"error": str(e), "file_path": file_path, "status": "error"}
             )
 
         directory = os.path.dirname(file_path)

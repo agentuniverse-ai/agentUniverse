@@ -58,8 +58,8 @@ def test_inserted_values_are_not_expanded(node_type, template, values, expected)
 @pytest.mark.parametrize("node_type", [EndNode, LLMNode])
 @pytest.mark.parametrize("value", [0, False, [], None, ""])
 def test_existing_falsey_semantics_are_unchanged(node_type, value):
-    """This fix deliberately leaves the separate EndNode falsey-value issue alone."""
-    expected = str(value) if node_type is LLMNode and value is not None else ""
+    """Preserve falsey values, including the EndNode behavior merged in #3763."""
+    expected = str(value) if value is not None else ""
     assert render(node_type, "before {{value}} after", {"value": value}) == f"before {expected} after"
 
 

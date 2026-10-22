@@ -24,6 +24,8 @@ class _CrossrefAPIError(Exception):
 class _MarkupTextExtractor(HTMLParser):
     """Extract text from HTML or JATS-style abstract markup."""
 
+    BLOCK_TAGS: ClassVar[set[str]] = {"p", "div", "sec", "title", "li", "br", "tr"}
+
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: List[str] = []
@@ -31,8 +33,16 @@ class _MarkupTextExtractor(HTMLParser):
     def handle_data(self, data: str) -> None:
         self.parts.append(data)
 
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.rpartition(":")[-1] in self.BLOCK_TAGS:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.rpartition(":")[-1] in self.BLOCK_TAGS:
+            self.parts.append(" ")
+
     def text(self) -> str:
-        return " ".join(" ".join(self.parts).split())
+        return " ".join("".join(self.parts).split())
 
 
 class CrossrefTool(Tool):

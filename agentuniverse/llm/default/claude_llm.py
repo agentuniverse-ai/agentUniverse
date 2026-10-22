@@ -154,7 +154,7 @@ class ClaudeLLM(LLM):
     async def aclose(self):
         """Async close the client."""
         if hasattr(self, 'async_client') and self.async_client:
-            await self.async_client.aclose()
+            await self.async_client.close()
 
     def initialize_by_component_configer(self, component_configer: LLMConfiger) -> 'ClaudeLLM':
         super().initialize_by_component_configer(component_configer)

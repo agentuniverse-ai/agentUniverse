@@ -48,7 +48,7 @@ class EndNode(Node):
             prompt_val = re.sub(
                 r'\{\{(.*?)\}\}',
                 lambda match: str(end_node_input_params[match.group(1)])
-                if end_node_input_params[match.group(1)] else '',
+                if end_node_input_params[match.group(1)] is not None else '',
                 prompt_val,
             )
         except KeyError as e:

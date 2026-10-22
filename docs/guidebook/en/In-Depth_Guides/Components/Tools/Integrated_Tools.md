@@ -109,6 +109,8 @@ SEARCHAPI_API_KEY="xxxxxx"
 
 ### 1.4 PubMed Paper Search
 
+The paper list follows the PMID order returned by ESearch for the requested sort and page, even if EFetch returns records in a different order. Missing fetched records are omitted; unrequested or unidentified records are not added to the page. Repeated PMIDs appear once (the first fetched record is used). `total_results` remains the search total, while `returned_results` counts the matched records actually returned. This does not add support for additional EFetch record types.
+
 The PubMed tool uses [NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/) to search biomedical and life-sciences literature. Basic searches do not require an API key.
 
 [Tool configuration](../../../../../../examples/sample_standard_app/intelligence/agentic/tool/buildin/pubmed_tool.yaml)
