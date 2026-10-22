@@ -12,6 +12,14 @@ AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 
 def chat(question: str):
+    """Run the insurance consult pro agent on the given question and return its answer.
+
+    Args:
+        question: The question to ask the agent.
+
+    Returns:
+        The agent's output text.
+    """
     instance: Agent = AgentManager().get_instance_obj('insurance_consult_pro_agent')
     output = instance.run(input=question)
     return output.get_data('output')
