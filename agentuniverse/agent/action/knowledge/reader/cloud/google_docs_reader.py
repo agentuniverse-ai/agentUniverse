@@ -4,9 +4,13 @@
 # @Time    : 2025/9/29
 # @FileName: google_docs_reader.py
 from typing import List, Optional, Dict
+import logging
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleDocsReader(Reader):
@@ -19,7 +23,7 @@ class GoogleDocsReader(Reader):
     """
 
     def _load_data(self, doc_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        print(f"debugging: GoogleDocsReader start load doc_id={doc_id}")
+        logger.debug("GoogleDocsReader starting document load")
         if not doc_id:
             raise ValueError("GoogleDocsReader requires doc_id")
 
@@ -60,7 +64,7 @@ class GoogleDocsReader(Reader):
     def _export_html(self, drive, file_id: str) -> str:
         from googleapiclient.http import MediaIoBaseDownload  # type: ignore
         import io
-        print("debugging: GoogleDocsReader exporting as HTML")
+        logger.debug("GoogleDocsReader exporting document as HTML")
         request = drive.files().export(fileId=file_id, mimeType='text/html')
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)

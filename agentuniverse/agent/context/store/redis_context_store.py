@@ -392,7 +392,7 @@ class RedisContextStore(ContextStore):
         # Extract session IDs from keys
         prefix_len = len(f"{self.key_prefix}session:")
         session_ids = [
-            key.decode('utf-8')[prefix_len:]
+            (key.decode('utf-8') if isinstance(key, bytes) else str(key))[prefix_len:]
             for key in session_keys
         ]
 
