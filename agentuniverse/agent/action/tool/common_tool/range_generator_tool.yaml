@@ -1,0 +1,76 @@
+name: range_generator_tool
+description: "Range generator tool — deterministic sequence generation, pure Python stdlib, no network required. Arithmetic number ranges with int/float steps via exact Decimal arithmetic (mode='numbers', optional format int/float2/hex/bin/padded-N), ISO date ranges by step_days across month/year/leap boundaries (mode='dates'), single-case a-z/A-Z letter ranges via ord arithmetic (mode='letters'), and the next N occurrences of a named weekday from a start date (mode='weekday'). All modes cap output at max_count items (default 500) and report the logical total."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.range_generator_tool
+  class: RangeGeneratorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: "Generation mode — numbers, dates, letters or weekday."
+    required: true
+  start:
+    type: string
+    description: "Range start — a number (numbers), an ISO YYYY-MM-DD date string (dates, weekday) or a single ASCII letter (letters)."
+    required: false
+  end:
+    type: string
+    description: "Range end — a number (numbers) or an ISO YYYY-MM-DD date string (dates); not used by weekday mode."
+    required: false
+  step:
+    type: number
+    description: "numbers mode step, default 1; negative for descending ranges. Must be non-zero; the last value stays <= end (>= end for a negative step) and the end is included exactly when hit."
+    required: false
+  step_days:
+    type: integer
+    description: "dates mode step in whole days, default 1; negative walks backwards. Must be non-zero."
+    required: false
+  count:
+    type: integer
+    description: "weekday mode — how many occurrences of the weekday to list, default 1; a start date already on the target weekday is included as the first item."
+    required: false
+  format:
+    type: string
+    description: "numbers mode value rendering — number (default, native int/float), int, float2 (rounded half-up to two decimals), hex (lowercase, no prefix), bin (no prefix) or padded-N (zero-padded decimal string, width 1-64). int/hex/bin/padded-N require integer start/end/step."
+    required: false
+  weekday:
+    type: string
+    description: "weekday mode — target weekday by full name (monday..sunday) or three-letter abbreviation (mon/tue/wed/thu/fri/sat/sun), case-insensitive."
+    required: false
+  max_count:
+    type: integer
+    description: "Per-call override of the output cap (default 500, range 1-10000); the payload reports count, the logical total and truncated."
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["numbers", "dates", "letters", "weekday"]
+      description: "Generation mode."
+    start:
+      description: "Range start — number, ISO YYYY-MM-DD date string, or single ASCII letter."
+    end:
+      description: "Range end — number or ISO YYYY-MM-DD date string (not used by weekday mode)."
+    step:
+      type: number
+      description: "numbers mode step (default 1, non-zero; negative for descending)."
+    step_days:
+      type: integer
+      description: "dates mode step in days (default 1, non-zero; negative walks backwards)."
+    count:
+      type: integer
+      description: "weekday mode occurrence count (default 1, >= 1)."
+    format:
+      type: string
+      description: "numbers mode rendering — number, int, float2, hex, bin or padded-N."
+    weekday:
+      type: string
+      description: "weekday mode target — full name or three-letter abbreviation, case-insensitive."
+    max_count:
+      type: integer
+      description: "Per-call output cap override (default 500, 1-10000)."
+  required: ["mode"]
