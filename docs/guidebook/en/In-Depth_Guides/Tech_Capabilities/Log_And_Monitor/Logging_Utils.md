@@ -54,7 +54,8 @@ formatting leaves the original context objects unchanged.
 ### Using the Default Configuration Programmatically
 
 The log configuration file is optional. When no `config_path` is supplied, the
-framework must still be able to initialize its loggers:
+framework must still be able to initialize its loggers. Passing `None` or an
+empty string selects the same default configuration:
 
 ```python
 from agentuniverse.base.util.logging.logging_util import init_loggers

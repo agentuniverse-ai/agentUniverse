@@ -79,10 +79,16 @@ class LoggingConfig(object):
 
         Args:
             config_path(str):
-                the path of the toml file
+                the path of the toml file. ``None`` and an empty string both
+                select the default configuration.
         """
         self.__config = None
-        if config_path is None:
+        # ``log_config_path`` is optional in the main configuration file.  The
+        # caller resolves a missing value to ``None``, while callers that build
+        # the path themselves may pass an empty string.  Both mean "use the
+        # defaults"; forwarding either to ``Configer.load_by_path`` would fail
+        # before the fallback below gets a chance to run.
+        if not config_path:
             self._use_default_config()
             return
 

@@ -15,6 +15,7 @@ import os
 
 import pytest
 
+from agentuniverse.base.config.configer import Configer
 from agentuniverse.base.util.logging.logging_config import (
     LoggingConfig,
     init_log_config,
@@ -63,6 +64,7 @@ _DOCUMENTED_DEFAULTS = {
 
 def _assert_defaults_restored():
     """Every class level setting is back to its documented default."""
+    assert set(_DOCUMENTED_DEFAULTS) == set(_CONFIG_ATTRS)
     for name, expected in _DOCUMENTED_DEFAULTS.items():
         actual = getattr(LoggingConfig, name)
         assert actual == expected, f"{name}: {actual!r} != {expected!r}"
@@ -97,6 +99,21 @@ def test_logging_config_without_path_resets_all_settings(restore_logging_config)
 
     # ``TRACE`` is not the default; the fallback must return to ``INFO``.
     assert LoggingConfig.log_level == "INFO"
+    _assert_defaults_restored()
+
+
+def test_logging_config_empty_path_resets_all_settings(restore_logging_config,
+                                                       monkeypatch):
+    """An empty path is treated like an omitted one, not parsed as a file."""
+    _seed_non_default_settings()
+
+    def fail_load_by_path(*args, **kwargs):
+        raise AssertionError("an empty config path must not reach Configer")
+
+    monkeypatch.setattr(Configer, "load_by_path", fail_load_by_path)
+
+    LoggingConfig("")
+
     _assert_defaults_restored()
 
 
@@ -141,6 +158,43 @@ def test_valid_config_then_no_path_resets_all_settings(restore_logging_config):
     assert LoggingConfig.log_path == "./.test_log_dir"
     assert LoggingConfig.log_rotation == "100 MB"
     assert LoggingConfig.log_retention == "7 days"
+
+    LoggingConfig()
+
+    _assert_defaults_restored()
+
+
+def test_sls_config_then_no_path_resets_parsed_values(restore_logging_config,
+                                                     tmp_path):
+    """Values parsed from a real file are discarded by a later fallback."""
+    config = tmp_path / "sls_log_config.toml"
+    config.write_text(
+        "[LOG_CONFIG.BASIC_CONFIG]\n"
+        'log_level = "TRACE"\n'
+        'log_path = "./parsed_log_dir"\n'
+        'log_rotation = "1 MB"\n'
+        'log_retention = "99 days"\n'
+        'log_compression = "tar"\n'
+        "[LOG_CONFIG.EXTEND_MODULE]\n"
+        'sls_log = "True"\n'
+        "[LOG_CONFIG.ALIYUN_SLS_CONFIG]\n"
+        'sls_endpoint = "parsed_endpoint"\n'
+        'sls_project = "parsed_project"\n'
+        'sls_log_store = "parsed_log_store"\n'
+        'access_key_id = "parsed_key_id"\n'
+        'access_key_secret = "parsed_key_secret"\n'
+        "sls_log_queue_max_size = 7\n"
+        "sls_log_send_interval = 9.0\n",
+        encoding="utf-8",
+    )
+
+    LoggingConfig(str(config))
+
+    assert LoggingConfig.log_level == "TRACE"
+    assert LoggingConfig.log_path == "./parsed_log_dir"
+    assert LoggingConfig.log_extend_module_switch["sls_log"] is True
+    assert LoggingConfig.sls_endpoint == "parsed_endpoint"
+    assert LoggingConfig.access_key_secret == "parsed_key_secret"  # noqa: S105
 
     LoggingConfig()
 
