@@ -77,8 +77,14 @@ Four modes:
   overlapping quantifiers ``a*a*a*b``, ``(.*a).*b``). Exponential
   grading requires the ambiguity to compound with input length —
   an unbounded quantifier on the outer scope or on the repeated
-  inner element — so bounded shapes whose re-partitioning space is
-  a constant (the canonical IPv4 octet
+  inner element, and a re-split that crosses iteration boundaries:
+  a mandatory separator disjoint from both runs pins the boundary
+  (the safe ``([0-9]+[a-z]+)+`` and the RFC 5322 host-label
+  ``(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+``, which CPython 3.11
+  handles in linear time — verified live — stays quiet) while an
+  optional (``\s?``) or overlapping (``\w+a``) tail does not, so
+  bounded shapes whose re-partitioning space is a constant (the
+  canonical IPv4 octet
   ``(25[0-5]|2[0-4]\d|[01]?\d?\d)`` under ``{3}``) stay quiet;
   ``redos_untrusted_input`` info notes for unbounded dot runs that
   escaped the graded detectors; ``nested_set_possible`` warning;
@@ -92,15 +98,17 @@ Four modes:
   ``nodes`` (typed tree with spans, per-node quantifier ``{min,
   max, kind}`` and group metadata, capped output), a ``group_map``
   ``{number: name-or-null}`` that byte-agrees with the parser's own
-  ``state.groupdict``, and ``group_spans`` ``{number: [start, end]}``
-  pointing at the real parentheses. A conditional's yes/no split is
-  the first ``|`` at the body's own nesting depth (CPython's rule);
-  conditional ladders nested deeper than 200 levels — deeper than
-  any consumer of the tree looks — are scanned opaquely with their
-  capture groups still counted, so numbering stays correct without
-  the recursive decomposition that would overflow the interpreter
-  stack on ~500-deep ``(?(1)(?(1)...))`` patterns the engine itself
-  compiles fine.
+  ``state.groupdict`` at ANY nesting depth the engine itself
+  compiles (group collection is uncapped — the depth cap bounds
+  detector cost, not numbering correctness), and ``group_spans``
+  ``{number: [start, end]}`` pointing at the real parentheses. A
+  conditional's yes/no split is the first ``|`` at the body's own
+  nesting depth (CPython's rule); conditional ladders nested deeper
+  than 200 levels — deeper than any consumer of the tree looks —
+  are scanned opaquely with their capture groups still counted, so
+  numbering stays correct without the recursive decomposition that
+  would overflow the interpreter stack on ~500-deep
+  ``(?(1)(?(1)...))`` patterns the engine itself compiles fine.
 * ``explain`` — a deterministic human-readable walk: one English
   fragment per top-level alternative, a group index table and
   backreference/lookaround annotations.
@@ -119,6 +127,7 @@ no network, no third-party imports, deterministic output.
 """
 
 import re
+import unicodedata
 import warnings
 from typing import Any, ClassVar, Iterator, Optional
 
@@ -323,14 +332,18 @@ class RegexLintTool(Tool):
         "repeat, a(?i)b misplaced global flags, a{4294967296} "
         "OverflowError and very-deep-nesting RecursionError); "
         "compile-success analyses are severity-graded ReDoS detection "
-        "(redos_exponential warning: (a+)+, (a*)*b, (a|aa)+$, (a|ab)*c, "
-        "(.*a){10}b nested quantifiers and overlapping-prefix "
+        "(redos_exponential warning: (a+)+, ((?:a+))+, (a*)*b, (a|aa)+$, "
+        "(a|ab)*c, (.*a){10}b nested quantifiers and overlapping-prefix "
         "alternations — fired only when the ambiguity can compound with "
         "input length, i.e. an unbounded quantifier on the outer scope "
-        "or the repeated inner element, so the canonical IPv4 octet "
+        "or the repeated inner element AND a re-split that crosses "
+        "iteration boundaries (a mandatory separator disjoint from "
+        "both runs pins the boundary: ([0-9]+[a-z]+)+ and the RFC 5322 "
+        "host-label group stay quiet), so the canonical IPv4 octet "
         "(25[0-5]|2[0-4]\\d|[01]?\\d?\\d) under {3} stays quiet; "
-        "redos_polynomial info: a*a*a*b, (.*a).*b "
-        "adjacent unbounded overlapping quantifiers; redos_untrusted_"
+        "redos_polynomial info: a*a*a*b, a*(?:a*)b, (a*)(a*)b, (.*a).*b "
+        "adjacent unbounded overlapping quantifiers (non-capturing "
+        "wrappers are transparent); redos_untrusted_"
         "input info notes), nested-set [[a][b]] warnings (CPython "
         "warns, POSIX engines diverge), literal-brace {name} format-"
         "template leak info, huge {1,1000000} repeat bounds warning, "
@@ -341,6 +354,8 @@ class RegexLintTool(Tool):
         "scoped-flag syntax absent from 3.10. mode='structure' "
         "returns a deterministic parse-tree summary with typed nodes, "
         "per-node quantifiers, a group_map byte-agreeing with the "
+        "parser's group numbering at any nesting depth the engine "
+        "compiles (group collection is not depth-capped), the "
         "real parser's state.groupdict and group spans pointing at "
         "real parentheses. mode='explain' returns deterministic "
         "English fragments per top-level alternative, a group index "
@@ -776,8 +791,11 @@ class RegexLintTool(Tool):
             node.literal = pattern[start:j + 1]
             return node, j + 1
         if c == "0":
+            # CPython's octal escape is \0 plus at most TWO further
+            # octal digits (verified live: r'\0123' parses as
+            # LITERAL 10 followed by LITERAL '3') — not three.
             k = j + 1
-            while k < n and k - j <= 3 and pattern[k] in "01234567":
+            while k < n and k - j <= 2 and pattern[k] in "01234567":
                 k += 1
             node = _Node(K_LITERAL, start, k)
             node.literal = pattern[start:k]
@@ -821,6 +839,11 @@ class RegexLintTool(Tool):
             return source
         body = source[1:]
         if body and body[0] in _LITERAL_ESCAPE_MAP:
+            # \0 (and, after the scanner's two-digit cap, \0dd) decode
+            # as OCTAL — \077 is '?' (63), not NUL.
+            if body[0] == "0" and len(body) > 1 \
+                    and all(ch in "01234567" for ch in body[1:]):
+                return chr(int(body[1:], 8))
             return _LITERAL_ESCAPE_MAP[body[0]]
         if body[:1] == "x" and len(body) == 3:
             try:
@@ -828,6 +851,11 @@ class RegexLintTool(Tool):
             except ValueError:
                 return body
         if body[:1] == "u" and len(body) == 5:
+            try:
+                return chr(int(body[1:], 16))
+            except ValueError:
+                return body
+        if body[:1] == "U" and len(body) == 9:
             try:
                 return chr(int(body[1:], 16))
             except ValueError:
@@ -857,20 +885,15 @@ class RegexLintTool(Tool):
                 if e in _SHORTHAND:
                     categories.append(e)
                     pending = None
-                elif e == "N" and pattern[j + 2:j + 3] == "{":
-                    close = pattern.find("}", j + 3)
-                    j = n - 2 if close == -1 else close - 1
-                    pending = None
-                elif e == "x" and pattern[j + 3:j + 4] and \
-                        _is_hex(pattern[j + 2]) and _is_hex(pattern[j + 3]):
-                    chars.append(self._escape_char(pattern[j:j + 4]))
-                    pending = chars[-1]
-                    j += 4
+                    j += 2
                     continue
+                char, j2 = self._class_escape(pattern, j)
+                j = j2
+                if char is not None:
+                    chars.append(char)
+                    pending = char
                 else:
-                    chars.append(self._escape_char(pattern[j:j + 2]))
-                    pending = chars[-1]
-                j += 2
+                    pending = None
                 continue
             if c == "[":
                 nested_set = True
@@ -881,16 +904,25 @@ class RegexLintTool(Tool):
                     and pattern[j + 1] != "]":
                 hi_src = pattern[j + 1]
                 if hi_src == "\\" and j + 2 < n:
-                    hi = self._escape_char(pattern[j + 1:j + 3])
-                    j += 2
-                else:
-                    hi = hi_src
-                    j += 1
-                ranges.append([pending, hi])
+                    hi, j2 = self._class_escape(pattern, j + 1)
+                    if hi is None:
+                        # Undecodable bound: report the pieces as plain
+                        # members (the compile oracle owns the verdict).
+                        chars.append("-")
+                        pending = None
+                        j += 1
+                        continue
+                    ranges.append([pending, hi])
+                    if pending in chars:
+                        chars.remove(pending)
+                    pending = None
+                    j = j2
+                    continue
+                ranges.append([pending, hi_src])
                 if pending in chars:
                     chars.remove(pending)
                 pending = None
-                j += 1
+                j += 2
                 continue
             chars.append(c)
             pending = c
@@ -904,6 +936,55 @@ class RegexLintTool(Tool):
             "nested_set": nested_set,
         }
         return node, min(j + 1, n)
+
+    @staticmethod
+    def _class_escape(pattern: str, i: int) -> tuple[Optional[str], int]:
+        """Decode one escape inside a character class.
+
+        Returns ``(char, end)`` where ``char`` is None for escapes this
+        helper cannot decode (shorthand categories are handled by the
+        caller; malformed escapes are the compile oracle's verdict).
+        Mirrors CPython's per-escape lengths exactly: ``\\xhh`` (4),
+        ``\\uhhhh`` (6), ``\\Uhhhhhhhh`` (10), ``\\0`` plus at most two
+        octal digits, ``\\N{NAME}`` through ``unicodedata`` — all
+        verified against ``re._parser`` on CPython 3.11 (``[\\077]`` is
+        the one-member set {'?'}, ``[\\u0041]`` is {'A'}).
+        """
+        n = len(pattern)
+        c = pattern[i + 1]
+        if c == "x":
+            if _is_hex(pattern[i + 2:i + 3]) and \
+                    _is_hex(pattern[i + 3:i + 4]):
+                return chr(int(pattern[i + 2:i + 4], 16)), i + 4
+            return None, i + 2
+        if c == "u":
+            if all(_is_hex(pattern[i + t]) for t in range(2, 6)):
+                return chr(int(pattern[i + 2:i + 6], 16)), i + 6
+            return None, i + 2
+        if c == "U":
+            if all(_is_hex(pattern[i + t]) for t in range(2, 10)):
+                return chr(int(pattern[i + 2:i + 10], 16)), i + 10
+            return None, i + 2
+        if c in "01234567":
+            # Inside a class CPython reads up to three OCTAL digits with
+            # any leading digit ([\101] is 'A', [\1-3] the range 0o1-'3')
+            # and rejects values above 0o377 — the oracle owns rejects.
+            k = i + 2
+            while k < n and k - i <= 3 and pattern[k] in "01234567":
+                k += 1
+            value = int(pattern[i + 1:k], 8)
+            return (chr(value) if value <= 0o377 else None), k
+        if c == "N" and pattern[i + 2:i + 3] == "{":
+            close = pattern.find("}", i + 3)
+            if close == -1:
+                return None, n
+            name = pattern[i + 3:close]
+            try:
+                return unicodedata.lookup(name), close + 1
+            except (ValueError, TypeError):
+                return None, close + 1
+        char = RegexLintTool._escape_char(pattern[i:i + 2])
+        return char, i + 2
 
     def _scan_group_prefix(self, pattern: str, i: int) -> dict:
         """Classify a ``(`` prefix; never raises."""
@@ -1202,12 +1283,11 @@ class RegexLintTool(Tool):
     def _groups_in_order(self, root: _Node) -> list[tuple[int, _Node]]:
         """Capture groups of a tree in open-paren (span) order."""
         found = []
-        for node, _ in self._walk(root):
+        for node in self._walk_all(root):
             if node.is_group() and node.group.get("number"):
                 found.append((node.start, node))
         found.sort(key=lambda item: item[0])
-        return [(g.start, g) for _, g in
-                sorted([(s, g) for s, g in found], key=lambda t: t[0])]
+        return found
 
     def _shift_tree(self, nodes: list[_Node], offset: int) -> None:
         """Shift every span in a subtree by ``offset``."""
@@ -1299,9 +1379,28 @@ class RegexLintTool(Tool):
             for child in reversed(children):
                 stack.append((child, depth + 1))
 
+    def _walk_all(self, root: _Node) -> Iterator[_Node]:
+        """Yield every node depth-first WITHOUT the analysis depth cap.
+
+        The cap exists to bound detector cost; group numbering is a
+        correctness contract (the engine numbers groups at any nesting
+        it compiles — 300-deep ``(((...)))`` ladders compile fine), so
+        the group map must never be truncated by it. Iterative, and
+        bounded by the tree size (≤ pattern length).
+        """
+        stack: list[_Node] = [root]
+        while stack:
+            node = stack.pop()
+            yield node
+            children: list[_Node] = []
+            for branch in node.branches:
+                children.extend(branch)
+            for child in reversed(children):
+                stack.append(child)
+
     def _groups_by_number(self, root: _Node) -> dict[int, _Node]:
         groups: dict[int, _Node] = {}
-        for node, _ in self._walk(root):
+        for node in self._walk_all(root):
             if node.is_group() and node.group.get("number"):
                 groups[node.group["number"]] = node
         return groups
@@ -1482,24 +1581,39 @@ class RegexLintTool(Tool):
                     return None  # too wide to expand — assume overlap
                 chars.update(chr(cp) for cp in range(ord(lo), ord(hi) + 1))
             return frozenset(chars)
-        if node.kind == K_GROUP and node.branches and \
-                all(len(branch) == 1 for branch in node.branches):
-            # Single-element alternation like (a|b): union alphabets.
-            merged: set = set()
-            wildcard = False
-            single = True
-            for branch in node.branches:
-                if len(branch) != 1:
-                    single = False
-                    break
-                alpha = self._alphabet(branch[0])
-                if alpha is None or alpha == "." or \
-                        not isinstance(alpha, frozenset):
-                    wildcard = True
-                    break
-                merged |= alpha
-            if single and not wildcard:
+        if node.kind == K_GROUP and node.branches:
+            # Alternation of single elements like (a|b): union the
+            # branch alphabets. A single-branch group is a plain
+            # sequence — union its children too (anchors and bare
+            # lookarounds consume nothing), so container wrappers like
+            # (?:[a-z0-9-]*[a-z0-9]) keep an enumerable alphabet and
+            # separator pinning stays provable.
+            if len(node.branches) == 1:
+                merged: set = set()
+                for child in node.branches[0]:
+                    if child.kind == K_ANCHOR:
+                        continue
+                    if child.is_group() and child.quant is None and \
+                            child.group.get("kind") in _LOOKAROUND_KINDS:
+                        continue  # zero-width — consumes nothing
+                    alpha = self._alphabet(child)
+                    if alpha is None or alpha == "." or \
+                            not isinstance(alpha, frozenset):
+                        return None
+                    merged |= alpha
                 return frozenset(merged)
+            if all(len(branch) == 1 for branch in node.branches):
+                merged = set()
+                wildcard = False
+                for branch in node.branches:
+                    alpha = self._alphabet(branch[0])
+                    if alpha is None or alpha == "." or \
+                            not isinstance(alpha, frozenset):
+                        wildcard = True
+                        break
+                    merged |= alpha
+                if not wildcard:
+                    return frozenset(merged)
             return None
         return None
 
@@ -1652,13 +1766,26 @@ class RegexLintTool(Tool):
                         or self._is_unbounded(desc.quant)):
                     continue
                 inner_alpha = self._alphabet(desc)
-                can_empty = desc.quant["min"] == 0
-                follows = self._follow_within(desc, node)
-                overlap = any(self._overlaps(inner_alpha,
-                                            self._alphabet(f))
-                              for f in follows)
+                # The (a?)+ empty-split shape only compounds when the
+                # repeated body itself can match empty — otherwise every
+                # iteration consumes something and the split count does
+                # not multiply across iterations (the RFC 5322 host
+                # label group (?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+ is
+                # dot-pinned per iteration and the engine handles it in
+                # linear time — verified live).
+                can_empty = desc.quant["min"] == 0 and \
+                    self._body_can_match_empty(node)
+                # Loop-mediated ambiguity: the element's text can be
+                # re-split against the next iteration's first unit —
+                # unless a mandatory separator that is disjoint from
+                # both sides pins the runs (([0-9]+[a-z]+)+ stays safe,
+                # (\w+\s?)* and (\w+a)* do not — the optional tail can
+                # be skipped, the overlapping tail bleeds into the
+                # split).
+                loop_overlap = self._loop_compounds(desc, node,
+                                                    inner_alpha)
                 body_solo = self._body_is_only(node, desc)
-                if can_empty or overlap or body_solo:
+                if can_empty or loop_overlap or body_solo:
                     outer_desc = "unbounded" if self._is_unbounded(
                         node.quant) else f"{{...,{node.quant['max']}}}"
                     record(
@@ -1780,52 +1907,125 @@ class RegexLintTool(Tool):
         """True when ``desc`` sits inside ``outer``'s body."""
         return self._is_ancestor(outer, desc)
 
-    def _can_match_empty(self, node: _Node) -> bool:
-        """Can this element match the empty string?"""
+    def _can_match_empty(self, node: _Node, depth: int = 0) -> bool:
+        """Can this element match the empty string?
+
+        Recursive but depth-capped: a group without a quantifier can
+        still match empty when some branch is all-optional, and every
+        lookaround is zero-width regardless of its body.
+        """
         if node.kind == K_ANCHOR:
             return True
         if node.quant is not None:
             return node.quant["min"] == 0
+        if depth > 64:
+            return False  # too deep to prove — stay conservative
+        if node.is_group() and node.group.get("kind") in _LOOKAROUND_KINDS:
+            return True
+        if node.kind in (K_GROUP, K_COND):
+            if not node.branches:
+                return True
+            return any(all(self._can_match_empty(child, depth + 1)
+                           for child in branch)
+                       for branch in node.branches)
         return False
 
-    def _tail_can_empty(self, parent: _Node, node: _Node) -> bool:
-        """Can everything after ``node`` in its branch match empty?"""
-        for branch in parent.branches:
-            if node not in branch:
-                continue
-            return all(self._can_match_empty(child)
-                       for child in branch[branch.index(node) + 1:])
-        return False
+    def _body_can_match_empty(self, node: _Node) -> bool:
+        """Can some branch of this group's body match empty?"""
+        return any(all(self._can_match_empty(child)
+                       for child in branch)
+                   for branch in node.branches) if node.branches else True
 
-    def _follow_within(self, node: _Node, scope: _Node) -> list[_Node]:
-        """Units that can follow ``node`` before leaving ``scope``.
-
-        The immediately following sibling found while climbing toward
-        the scope, plus — because the scope group repeats and the rest
-        of the body after ``node`` can match empty — the scope's own
-        first units (the loop-around; this may legitimately be ``node``
-        itself, the (a+|b+)*$ self-overlap shape). Deeper descendants
-        are covered because Rule A runs on every quantified scope.
-        """
-        followers: list[_Node] = []
-        ancestor = node.parent
+    def _tail_units(self, node: _Node, scope: _Node) -> list[_Node]:
+        """Consuming units between ``node`` (through its enclosing
+        chain) and the end of ``scope``'s body — what the current
+        iteration must still consume before it can wrap around."""
+        tail: list[_Node] = []
         current = node
-        while ancestor is not None and ancestor is not scope:
-            follower = self._next_sibling(ancestor, current)
-            if follower is not None:
-                followers.append(follower)
-                break  # only the immediately-following unit matters
-            current = ancestor
-            ancestor = ancestor.parent
-        # Loop-around: reachable only when the body tail can match
-        # empty (otherwise a mandatory separator pins the boundary —
-        # the reason ([0-9]+[a-z]+)+ is safe while (\w+\s?)* is not).
-        if node.parent is scope and self._tail_can_empty(scope, node):
-            for branch in scope.branches:
-                unit = self._first_unit(branch)
-                if unit is not None:
-                    followers.append(unit)
-        return followers
+        up = node.parent
+        guard = 0
+        while up is not None and guard < 200:
+            guard += 1
+            for branch in up.branches:
+                if current in branch:
+                    tail.extend(branch[branch.index(current) + 1:])
+                    break
+            if up is scope:
+                break
+            current = up
+            up = up.parent
+        return [t for t in tail if t.kind != K_ANCHOR]
+
+    def _unit_chars(self, mid: _Node) -> Optional[list[str]]:
+        """The enumerable charset of a potential separator (None when
+        the unit is not provably enumerable — groups, negated or
+        category classes, unbounded ranges)."""
+        if mid.kind == K_LITERAL:
+            text = str(mid.literal)
+            if text.startswith("\\"):
+                return [self._escape_char(text)]
+            return list(text)
+        if mid.kind == K_CLASS and mid.class_info \
+                and not mid.class_info.get("negated") \
+                and not mid.class_info.get("categories"):
+            info = mid.class_info
+            chars = list(info.get("chars", ()))
+            for lo, hi in info.get("ranges", ()):
+                if ord(hi) - ord(lo) > 256:
+                    return None  # not enumerable — no proof
+                chars.extend(chr(cp) for cp in range(ord(lo), ord(hi) + 1))
+            return chars
+        return None
+
+    def _pins_between(self, mid: _Node, alphas: list) -> bool:
+        """True when ``mid`` is a mandatory separator whose charset is
+        provably disjoint from every alphabet in ``alphas`` — it pins
+        the runs on both sides and prevents cross-iteration
+        re-splitting."""
+        if mid.quant is not None and mid.quant["min"] == 0:
+            return False  # optional: may be skipped, cannot pin
+        chars = self._unit_chars(mid)
+        if chars is None:
+            return False
+        for ch in chars:
+            for alpha in alphas:
+                if alpha is None or alpha == ".":
+                    return False
+                if isinstance(alpha, frozenset):
+                    if ch in alpha:
+                        return False
+                elif self._char_in_category(ch, alpha):
+                    return False
+        return True
+
+    def _loop_compounds(self, desc: _Node, scope: _Node,
+                        inner_alpha: Any) -> bool:
+        """Does ``desc``'s ambiguity re-partition text across ``scope``
+        iterations?
+
+        Fires when some next-iteration first unit overlaps ``desc`` and
+        no mandatory tail separator disjoint from BOTH sides pins the
+        boundary: an optional tail (\s?) can be skipped outright, an
+        overlapping tail (\w+ then a, both covering 'a') bleeds into
+        the split, and only a disjoint mandatory separator
+        (([0-9]+[a-z]+)+, the RFC 5322 host label's dot) makes the
+        per-iteration split independent of its neighbours.
+        """
+        tail = self._tail_units(desc, scope)
+        mandatory = [t for t in tail
+                     if t.quant is None or t.quant["min"] >= 1]
+        for branch in scope.branches:
+            unit = self._first_unit(branch)
+            if unit is None:
+                return True  # an empty branch can wrap arbitrarily
+            follower_alpha = self._alphabet(unit)
+            if not self._overlaps(inner_alpha, follower_alpha):
+                continue
+            if any(self._pins_between(s, [inner_alpha, follower_alpha])
+                   for s in mandatory):
+                continue
+            return True
+        return False
 
     def _follow_chain(self, node: _Node,
                       max_hops: int = 12,
@@ -1854,9 +2054,8 @@ class RegexLintTool(Tool):
             for branch in ancestor.branches:
                 if current not in branch:
                     continue
-                for child in branch[branch.index(current) + 1:]:
-                    if child.kind == K_ANCHOR:
-                        continue
+                for child in self._expand_units(
+                        branch[branch.index(current) + 1:]):
                     yield child, list(intermediates)
                     pairs_yielded += 1
                     if pairs_yielded >= max_followers:
@@ -1874,6 +2073,28 @@ class RegexLintTool(Tool):
                             return
             current = ancestor
             ancestor = ancestor.parent
+
+    def _expand_units(self, children: list[_Node], depth: int = 0
+                      ) -> list[_Node]:
+        """The consuming units of a sequence with transparent wrappers
+        spliced inline: an unquantified single-branch capture/named/
+        non-capturing group is just a container, so ``a*(?:a*)b`` and
+        ``(a*)(a*)b`` see the same linear adjacency as ``a*a*b``.
+        Lookarounds, quantified and alternation groups stay opaque
+        (conservative)."""
+        out: list[_Node] = []
+        for child in children:
+            if child.kind == K_ANCHOR:
+                continue
+            if (child.quant is None and child.is_group() and depth < 16
+                    and len(child.branches) == 1
+                    and child.group.get("kind") in (
+                        G_CAPTURE, G_NAMED, G_NONCAP)):
+                out.extend(self._expand_units(child.branches[0],
+                                              depth + 1))
+            else:
+                out.append(child)
+        return out
 
     def _next_sibling(self, parent: _Node, node: _Node) -> Optional[_Node]:
         """The node right after ``node`` in its parent's branch."""
@@ -2268,7 +2489,7 @@ class RegexLintTool(Tool):
                 else "match the empty string"
             fragments.append(f"alternative {index}: {body}")
         groups: list[dict] = []
-        for node, _ in self._walk(root):
+        for node in self._walk_all(root):
             if not node.is_group() or node.group.get("number") is None:
                 continue
             info = node.group
@@ -2291,7 +2512,7 @@ class RegexLintTool(Tool):
             })
         groups.sort(key=lambda g: (g["number"] or 0, g["span"][0]))
         annotations: list[dict] = []
-        for node, _ in self._walk(root):
+        for node in self._walk_all(root):
             if node.kind == K_BACKREF and isinstance(node.literal, str):
                 ref = node.literal
                 numeric = bool(ref) and _ascii_digit_span(ref) == len(ref)
@@ -2504,7 +2725,7 @@ class RegexLintTool(Tool):
         """Why the risk class cannot be pinned down statically."""
         quantified_backref = False
         conditional = False
-        for node, _ in self._walk(root):
+        for node in self._walk_all(root):
             if node.kind == K_BACKREF and node.quant is not None:
                 quantified_backref = True
             if node.kind == K_COND:

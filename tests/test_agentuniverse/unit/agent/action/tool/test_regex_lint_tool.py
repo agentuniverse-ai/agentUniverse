@@ -762,3 +762,129 @@ def test_yaml_config_is_valid_and_in_sync():
         RegexLintTool as _RLT,
     )
     assert data["description"] == _RLT().description
+
+
+# --------------------------------------------------------------------- #
+# Second-pass hostile self-review regressions (fresh probes beyond the
+# first-pass batteries: escape-decode accuracy in classes, separator
+# pinning in Rule A, wrapper transparency, depth-uncapped numbering).
+# --------------------------------------------------------------------- #
+
+def test_class_octal_escapes_match_engine(tool):
+    """CPython reads \\0dd (and, inside classes, any \\ddd) as octal:
+    [\\077] is the one-member set {'?'} — not {NUL, '7'}."""
+    for pattern, expected_chars in (
+        (r"[\077]", ["?"]), (r"[\012]", ["\n"]), (r"[\101]", ["A"]),
+        (r"[\7]", ["\x07"]), (r"[\08]", ["\x00", "8"]),
+        (r"[\077-\101]", []),  # pure range, no loose chars
+    ):
+        structure = tool.execute(mode="structure", pattern=pattern)
+        info = next(n["class"] for n in structure["nodes"]
+                    if n["type"] == "class")
+        assert info["chars"] == expected_chars, (pattern, info["chars"])
+        # oracle: every reported char is a true member of the class
+        rx = re.compile(pattern)
+        for ch in info["chars"]:
+            assert rx.fullmatch(ch), (pattern, ch)
+    structure = tool.execute(mode="structure", pattern=r"[\077-\101]")
+    info = next(n["class"] for n in structure["nodes"] if n["type"] == "class")
+    assert info["ranges"] == [["?", "A"]]
+
+
+def test_class_unicode_and_named_escapes_match_engine(tool):
+    """[\\u0041] is {'A'} and [\\x41-\\x5A] the range A-Z — the scanner
+    previously truncated escapes to two chars and invented the range
+    'x'-'x' / 0x23..'x', which poisoned overlap tests."""
+    for pattern, expected in (
+        (r"[\u0041]", ["A"]), (r"[\U00000041]", ["A"]),
+        (r"[\N{SPACE}]", [" "]),
+        (r"[\N{GREEK SMALL LETTER ALPHA}]", ["\N{GREEK SMALL LETTER ALPHA}"]),
+    ):
+        structure = tool.execute(mode="structure", pattern=pattern)
+        info = next(n["class"] for n in structure["nodes"]
+                    if n["type"] == "class")
+        assert info["chars"] == expected, (pattern, info["chars"])
+    structure = tool.execute(mode="structure", pattern=r"[\x41-\x5A]")
+    info = next(n["class"] for n in structure["nodes"] if n["type"] == "class")
+    assert info["ranges"] == [["A", "Z"]]
+    # the RFC 5322 quoted-string class boundary: 0x23-0x5b must NOT
+    # leak the backslash (0x5c) the way the truncated range 0x23..'x'
+    # did.
+    structure = tool.execute(mode="structure",
+                             pattern=r"[\x23-\x5b\x5d-\x7f]")
+    info = next(n["class"] for n in structure["nodes"] if n["type"] == "class")
+    alphabet = set(info["chars"])
+    for lo, hi in info["ranges"]:
+        alphabet.update(chr(cp) for cp in range(ord(lo), ord(hi) + 1))
+    assert "\\" not in alphabet
+
+
+def test_octal_literal_is_two_digits_then_plain_chars(tool):
+    """r'\\0123' is the escape \\012 followed by '3' — the scanner
+    previously swallowed three digits into one node."""
+    structure = tool.execute(mode="structure", pattern=r"\0123")
+    literals = [n["literal"] for n in structure["nodes"]
+                if n["type"] == "literal"]
+    assert literals == ["\\012", "3"]
+    # alphabet follows: (\\073|\\074)+$ is the disjoint pair (';','<')
+    # and must NOT be graded exponential, exactly like (;|<)+$.
+    for pattern in (r"(\073|\074)+$", r"(;|<)+$"):
+        result = tool.execute(mode="lint", pattern=pattern)
+        assert not any(f["code"] == "redos_exponential"
+                       for f in result["findings"]), pattern
+    # and the \\u class overlap FN is gone: 'a' vs [\\u0061] overlap.
+    result = tool.execute(mode="lint", pattern=r"(a|[\u0061])+x$")
+    assert any(f["code"] == "redos_exponential" for f in result["findings"])
+
+
+@pytest.mark.parametrize("pattern,expected", [
+    (r"(a+)+$", "exponential"), (r"((?:a+))+$", "exponential"),
+    (r"((a+))+$", "exponential"), (r"((a+)+)+$", "exponential"),
+    (r"(a*)*b", "exponential"), (r"((?:a*))*b", "exponential"),
+    (r"(.*a){10}b", "exponential"), (r"(x+x+)+y", "exponential"),
+    (r"((?:x+x+))+y", "exponential"), (r"(\w+a)*", "exponential"),
+    (r"a*a*b", "polynomial"), (r"a*(?:a*)b", "polynomial"),
+    (r"(a*)(a*)b", "polynomial"), (r"(?:a*)a*b", "polynomial"),
+    (r"([0-9]+[a-z]+)+", "linear"), (r"(a+b+)+", "linear"),
+    (r"a+\073+a", "linear"),
+])
+def test_wrapper_and_separator_stability(tool, pattern, expected):
+    """Second-pass invariance battery: adding (?:…)/capturing wrappers
+    or octal-escape spelling must not flip the risk class, and a
+    mandatory separator disjoint from both runs pins the boundary
+    (the RFC 5322 host-label family stays linear — verified live:
+    CPython 3.11 matches 26-char failing inputs instantly)."""
+    estimate = tool.execute(mode="estimate", pattern=pattern,
+                            text_length=32)
+    assert estimate["backtracking_risk_class"] == expected, (
+        pattern, estimate["backtracking_risk_class"])
+
+
+def test_rfc5322_host_label_not_exponential(tool):
+    """The dot-pinned host label group is the canonical production
+    false positive: it must not carry an exponential warning."""
+    host = (r"((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+"
+            r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$")
+    result = tool.execute(mode="lint", pattern=host)
+    assert not any(f["code"] == "redos_exponential"
+                   for f in result["findings"])
+    # and the engine itself is linear on failing inputs (oracle)
+    rx = re.compile(host)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        rx.match("a" * 26 + "!")
+
+
+def test_group_map_complete_beyond_depth_cap(tool):
+    """Group numbering is a correctness contract: a 300-deep ladder
+    compiles fine, so group_map must carry all 300 groups even though
+    analysis_depth_cap is 250."""
+    for depth in (251, 260, 300):
+        pattern = "(" * depth + "a" + ")" * depth
+        rx = re.compile(pattern)
+        assert rx.groups == depth
+        structure = tool.execute(mode="structure", pattern=pattern)
+        expected = {str(i): None for i in range(1, depth + 1)}
+        assert structure["group_map"] == expected, depth
+        # outermost group wraps the whole pattern
+        assert structure["group_spans"]["1"] == [0, 2 * depth + 1]
