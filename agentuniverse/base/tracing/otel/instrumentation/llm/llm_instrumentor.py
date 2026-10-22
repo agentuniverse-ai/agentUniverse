@@ -254,8 +254,6 @@ class StreamingResultProcessor:
                 if chunk.usage:
                     usage = chunk.usage
                 yield chunk
-            if usage:
-                add_current_token_usage(usage, self.span_manager.span.context.span_id)
             self._finalize_streaming_result(llm_output, usage)
 
         except Exception as e:
@@ -287,8 +285,6 @@ class StreamingResultProcessor:
                 if hasattr(chunk, 'usage') and chunk.usage:
                     usage = chunk.usage
                 yield chunk
-            if usage:
-                add_current_token_usage(usage, self.span_manager.span.context.span_id)
             self._finalize_streaming_result(llm_output, usage)
 
         except Exception as e:
