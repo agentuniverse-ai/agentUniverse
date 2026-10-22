@@ -15,6 +15,7 @@ class FlaskRequestLogSink(BaseFileLogSink):
 
 
     def process_record(self, record):
+        """Format the Flask request and remove it from record extras."""
         record["message"] = self.generate_log(
             flask_request=record['extra']['flask_request']
         )
@@ -22,4 +23,5 @@ class FlaskRequestLogSink(BaseFileLogSink):
 
 
     def generate_log(self, flask_request) -> str:
+        """Provide the Flask request formatting hook for subclasses."""
         pass
