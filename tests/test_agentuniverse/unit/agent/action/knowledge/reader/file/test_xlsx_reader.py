@@ -50,6 +50,11 @@ class TestXlsxReader:
         mock_workbook.__getitem__.return_value = mock_worksheet
         mock_workbook.worksheets = [mock_worksheet]
         mock_load_workbook.return_value = mock_workbook
+        for sheet in mock_workbook.worksheets:
+            sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
+                [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
+                for row in range(1, sheet.max_row + 1)
+            ])
 
         # Test with string path
         result = self.reader._load_data('test.xlsx')
@@ -93,6 +98,11 @@ class TestXlsxReader:
         mock_workbook.worksheets = [mock_sheet1, mock_sheet2]
         mock_workbook.__getitem__.side_effect = mock_getitem
         mock_load_workbook.return_value = mock_workbook
+        for sheet in mock_workbook.worksheets:
+            sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
+                [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
+                for row in range(1, sheet.max_row + 1)
+            ])
 
         result = self.reader._load_data('test.xlsx')
         
@@ -121,6 +131,11 @@ class TestXlsxReader:
         mock_workbook.__getitem__.return_value = mock_worksheet
         mock_workbook.worksheets = [mock_worksheet]
         mock_load_workbook.return_value = mock_workbook
+        for sheet in mock_workbook.worksheets:
+            sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
+                [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
+                for row in range(1, sheet.max_row + 1)
+            ])
 
         ext_info = {'custom_key': 'custom_value'}
         result = self.reader._load_data('test.xlsx', ext_info=ext_info)
@@ -143,6 +158,11 @@ class TestXlsxReader:
         mock_workbook.__getitem__.return_value = mock_worksheet
         mock_workbook.worksheets = [mock_worksheet]
         mock_load_workbook.return_value = mock_workbook
+        for sheet in mock_workbook.worksheets:
+            sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
+                [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
+                for row in range(1, sheet.max_row + 1)
+            ])
 
         result = self.reader._load_data('test.xlsx')
         
@@ -163,6 +183,11 @@ class TestXlsxReader:
             mock_workbook.__getitem__.return_value = mock_worksheet
             mock_workbook.worksheets = [mock_worksheet]
             mock_load_workbook.return_value = mock_workbook
+            for sheet in mock_workbook.worksheets:
+                sheet.iter_rows.side_effect = lambda values_only=True, sheet=sheet: iter([
+                    [sheet.cell(row=row, column=col).value for col in range(1, sheet.max_column + 1)]
+                    for row in range(1, sheet.max_row + 1)
+                ])
 
             file_path = Path('test.xlsx')
             result = self.reader._load_data(file_path)
