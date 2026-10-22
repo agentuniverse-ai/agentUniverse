@@ -804,5 +804,98 @@ class IndentLintToolRegistrationTest(unittest.TestCase):
         self.assertIn("IndentLintTool", exported_names)
 
 
+class SelfReviewRegressionTest(unittest.TestCase):
+    """Regressions for defects found by hostile self-review differential
+    probes (compile/tokenize oracles over a wider corpus than the originals)."""
+
+    def setUp(self):
+        self.tool = IndentLintTool()
+
+    def test_mixed_eol_transport_still_tokenizes(self):
+        """Mixed LF/CRLF and CR-only transports must not degrade to the
+        untokenized fallback: the same code gets identical verdicts and
+        string content never produces style findings."""
+        body = (
+            'if True:\n'
+            '    s = """start\n'
+            '\t\tif True:\n'
+            '\t\t\tpass\n'
+            '\t\t\t\tdeeper\n'
+            '"""\n'
+            '    pass\n'
+            'x = [\n'
+            '\t1,\n'
+            '\t\t2,\n'
+            ']\n'
+        )
+        lf = self.tool.execute(mode="lint", source=body)
+        mixed = body.replace("\n", "\r\n", 4)
+        for label, variant in (("mixed", mixed), ("cr", body.replace("\n", "\r"))):
+            result = self.tool.execute(mode="lint", source=variant)
+            self.assertTrue(result["tokenized"], label)
+            self.assertEqual(result["compile"], "ok", label)
+            self.assertNotIn(
+                "W_SPACE_IN_TAB_FILE", [f["code"] for f in result["findings"]], label
+            )
+            self.assertNotIn(
+                "W_TAB_SPACE_MIX", [f["code"] for f in result["findings"]], label
+            )
+        lf_stats = self.tool.execute(mode="stats", source=body)
+        for variant in (mixed, body.replace("\n", "\r")):
+            stats = self.tool.execute(mode="stats", source=variant)
+            self.assertEqual(stats["depth_histogram"], lf_stats["depth_histogram"])
+            self.assertEqual(stats["continuation_lines"], lf_stats["continuation_lines"])
+            self.assertEqual(stats["string_content_lines"], lf_stats["string_content_lines"])
+        conv = self.tool.execute(mode="convert", source=mixed, target="spaces")
+        self.assertFalse(conv["refused"])
+
+    def test_blank_lines_never_rewritten_by_convert(self):
+        """tab -> space -> tab is byte-stable on pure-tab files even when
+        they contain tab-only blank lines."""
+        source = "if True:\n\tx = 1\n\t\t\n\ty = 2\n"
+        to_spaces = self.tool.execute(
+            mode="convert", source=source, target="spaces", tab_width=8
+        )
+        self.assertFalse(to_spaces["refused"])
+        back = self.tool.execute(
+            mode="convert", source=to_spaces["converted"], target="tabs", tab_width=8
+        )
+        self.assertFalse(back["refused"])
+        self.assertEqual(back["converted"], source)
+
+    def test_convert_form_feed_resets_column_like_interpreter(self):
+        """A form feed in the indent prefix resets the column to 0 for BOTH
+        the analyzer and the converter: with tab_width=4 the tab after the
+        form feed expands to 4 spaces (the next multiple of 4 measured from
+        the reset column 0), not to a single space counted from the form
+        feed as if it were one column wide."""
+        source = "if True:\n  \x0c\tpass\n"
+        result = self.tool.execute(mode="convert", source=source, target="spaces", tab_width=4)
+        self.assertFalse(result["refused"])
+        converted_line = result["converted"].split("\n")[1]
+        self.assertEqual(converted_line, "  \x0c    pass")
+
+    def test_convert_preserves_bom_on_output(self):
+        """A refused conversion returns the input byte-identical (BOM
+        included); an accepted one re-attaches the BOM."""
+        broken = "\ufeffif True:\n  pass\n pass\n"
+        refused = self.tool.execute(mode="convert", source=broken, target="spaces")
+        self.assertTrue(refused["refused"])
+        self.assertEqual(refused["converted"], broken)
+        accepted = self.tool.execute(
+            mode="convert", source="\ufeffif True:\n\tpass\n", target="spaces", tab_width=4
+        )
+        self.assertFalse(accepted["refused"])
+        self.assertTrue(accepted["converted"].startswith("\ufeff"))
+
+    def test_explain_bounded_leading_whitespace_echo(self):
+        """The leading-whitespace echo is capped, not the raw prefix."""
+        source = " " * 60000 + "x = 1\n"
+        result = self.tool.execute(mode="explain", source=source, line=1)
+        echo = result["leading_whitespace"]
+        self.assertLess(len(echo), 200)
+        self.assertIn("more whitespace chars", echo)
+
+
 if __name__ == "__main__":
     unittest.main()

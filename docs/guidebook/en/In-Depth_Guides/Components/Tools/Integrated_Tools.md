@@ -669,7 +669,10 @@ start), CRLF or mixed line endings, and a leading BOM. Continuation lines
 (bracket or backslash) and comment lines have free indentation — the
 interpreter accepts any leading whitespace there — so they are only ever
 reported as stylistic notes, and multi-line string content is never mistaken
-for indentation.
+for indentation. Line-ending transport never degrades the analysis: CRLF,
+CR-only, and mixed endings are normalized for tokenization (row-preserving),
+so string content and continuation lines are classified identically whatever
+the transport.
 
 `stats` returns total/blank/indented/tab/space/mixed line counts, the
 inferred style and step, continuation-line and string-content counts, maximum
@@ -678,8 +681,10 @@ derived from the AST.
 
 `convert` rewrites leading indentation to `spaces` or `tabs` using
 `tab_width` (default 4): each tab expands to the next multiple of
-`tab_width`, and pure-space indents become tabs only when they are exact
-multiples. String content is never touched. Because the interpreter compares
+`tab_width` (a form feed resets the column, exactly as the interpreter
+does), and pure-space indents become tabs only when they are exact
+multiples. String content and blank lines are never touched, and a leading
+BOM is preserved on the returned text. Because the interpreter compares
 columns at 8-column tab stops, the result is always verified — the tool
 compares `ast.dump` of the original and converted trees and returns the
 original text with an explanation whenever the rewrite would change

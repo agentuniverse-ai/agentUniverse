@@ -67,12 +67,20 @@ Consistency level (warnings/info; these never claim the file is broken):
 - CRLF line endings (``W_CRLF`` info), mixed line endings
   (``W_MIXED_NEWLINE`` warning) and a leading BOM (``W_BOM`` warning -- the
   interpreter rejects raw ``\\ufeff`` with "invalid non-printable character";
-  the tool strips it before analysis) are reported once per file.
+  the tool strips it before analysis) are reported once per file. Line-ending
+  transport never degrades the analysis: ``\\r\\n`` and lone ``\\r`` are
+  normalized to ``\\n`` for tokenization (row-preserving; a raw ``\\r`` inside
+  a string literal is illegal Python, so the normalization cannot corrupt
+  legal code), so CR-only and mixed-EOL files get the same tokenizer-grade
+  results as LF files.
 
 Conversion (``convert``). Only leading indentation OUTSIDE multi-line string
-literals is rewritten (string content is never touched). Tab-to-space
+literals is rewritten (string content is never touched), and blank lines are
+never rewritten (they carry no indentation, and rewriting them in one
+direction only would break tab -> space -> tab round-trips). Tab-to-space
 expands each tab to the next multiple of ``tab_width`` measured from the
-start of the line; space-to-tab rewrites only pure-space indents that are
+start of the line, with form feeds resetting the column exactly as the
+interpreter does; space-to-tab rewrites only pure-space indents that are
 exact multiples of ``tab_width`` (non-multiple lines are left unchanged and
 counted in ``notes``). Because the interpreter compares columns at 8-column
 tab stops while the conversion uses ``tab_width``, a rewrite that is
@@ -80,8 +88,9 @@ locally plausible can still change block structure, so the result is ALWAYS
 verified: the tool compiles before and after and compares ``ast.dump`` of
 both trees. If the verification fails -- or the source does not compile at
 all -- the ORIGINAL text is returned with ``changed_lines: 0`` and the
-refusal explained in ``notes``. A successful conversion therefore provably
-preserves semantics.
+refusal explained in ``notes`` (a stripped BOM is re-attached, so a refused
+conversion is byte-identical to the input). A successful conversion
+therefore provably preserves semantics.
 """
 
 # Public execute() converts validation exceptions into structured tool errors.
@@ -411,10 +420,14 @@ class IndentLintTool(Tool):
         interpreter's indent stack per row. Failure degrades to a raw
         fallback (all non-blank rows treated as indent-significant)."""
         text = analysis.text
-        if analysis.newline_style not in ("lf", "crlf"):
-            # tokenize counts rows on \\n only; bare-CR transport mismatches.
-            self._fallback_rows(analysis)
-            return
+        if "\r" in text:
+            # tokenize reads \\n-terminated lines, while compile() accepts
+            # \\r\\n and lone \\r as line endings. Normalizing both to \\n is
+            # row-preserving (identical line boundaries), and a raw \\r
+            # inside a string literal is illegal Python (compile rejects
+            # "unterminated string literal"), so the normalization cannot
+            # corrupt legal code.
+            text = text.replace("\r\n", "\n").replace("\r", "\n")
         try:
             tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
         except (tokenize.TokenError, IndentationError, SyntaxError, ValueError, RecursionError):
@@ -834,12 +847,16 @@ class IndentLintTool(Tool):
     def _convert_result(self, analysis: FileAnalysis, target_value: Any, tab_width: int) -> dict[str, Any]:
         target = self._target(target_value)
         notes: list[str] = []
+        # A stripped BOM is transport, not content: re-attach it to whatever
+        # text is returned so a refused conversion really is byte-identical
+        # to the input and an accepted one preserves the file's encoding.
+        bom = "\ufeff" if analysis.bom else ""
         if isinstance(analysis.compile_error, SyntaxError):
             notes.append(
                 "refused: the source does not compile, so semantics cannot be verified; "
                 "the original text is returned unchanged"
             )
-            return self._converted(analysis.text, analysis, 0, notes, refused=True)
+            return self._converted(bom + analysis.text, analysis, 0, notes, refused=True)
         converted_lines: list[str] = []
         changed = 0
         skipped_strings = 0
@@ -848,6 +865,11 @@ class IndentLintTool(Tool):
             line_text = facts.text
             if facts.number in analysis.string_rows:
                 skipped_strings += 1
+            elif facts.classification in ("empty", "blank"):
+                # Blank lines carry no indentation semantics, and rewriting
+                # them in one direction only (tabs->spaces) would make
+                # tab -> space -> tab round-trips unstable.
+                pass
             elif target == "spaces":
                 if facts.has_tab:
                     column = 0
@@ -857,6 +879,11 @@ class IndentLintTool(Tool):
                             nxt = (column // tab_width + 1) * tab_width
                             rebuilt.append(" " * (nxt - column))
                             column = nxt
+                        elif char == "\f":
+                            # Same reset semantics as _expand_columns and the
+                            # interpreter: a form feed returns to column 0.
+                            rebuilt.append(char)
+                            column = 0
                         else:
                             rebuilt.append(char)
                             column += 1
@@ -893,15 +920,17 @@ class IndentLintTool(Tool):
             notes.append(
                 "refused: the converted text does not parse; the original text is returned unchanged"
             )
-            return self._converted(analysis.text, analysis, 0, notes, refused=True)
+            return self._converted(bom + analysis.text, analysis, 0, notes, refused=True)
         if ast.dump(before_tree) != ast.dump(after_tree):
             notes.append(
                 "refused: ast.dump differs between original and converted text (ambiguous "
                 "tab/space columns), so the original text is returned unchanged"
             )
-            return self._converted(analysis.text, analysis, 0, notes, refused=True)
+            return self._converted(bom + analysis.text, analysis, 0, notes, refused=True)
+        if bom:
+            notes.append("the leading BOM was preserved on the returned text")
         notes.append("verified: ast.dump of the converted tree equals the original tree")
-        return self._converted(converted, analysis, changed, notes, refused=False)
+        return self._converted(bom + converted, analysis, changed, notes, refused=False)
 
     @staticmethod
     def _converted(text: str, analysis: FileAnalysis, changed: int, notes: list[str], refused: bool) -> dict[str, Any]:
@@ -988,12 +1017,17 @@ class IndentLintTool(Tool):
                 )
         elif exc is not None:
             why = f"this line is fine indentation-wise; compile fails elsewhere: {exc.msg}"
+        lead = facts.lead
+        if len(lead) > 64:
+            lead_echo = f"{lead[:64]!r} + {len(lead) - 64} more whitespace chars"
+        else:
+            lead_echo = repr(lead)
         return {
             "status": "success",
             "mode": "explain",
             "line": focus,
             "text": facts.text[:120],
-            "leading_whitespace": repr(facts.lead),
+            "leading_whitespace": lead_echo,
             "classification": facts.classification,
             "interpreter_column": facts.interp_column(),
             "visual_column": facts.visual_column(analysis.tab_width),
