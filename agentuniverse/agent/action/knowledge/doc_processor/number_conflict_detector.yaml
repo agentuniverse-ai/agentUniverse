@@ -1,0 +1,41 @@
+name: 'number_conflict_detector'
+description: 'flag the same measured claim repeated with different numbers (5万 vs 60000) as a data-quality signal for RAG ingestion'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.number_conflict_detector'
+  class: 'NumberConflictDetector'
+
+# Maximum sentence distance for two mentions of the same anchor to be
+# compared; the default 3 groups mentions inside a sliding 3-sentence
+# window. Mentions further apart fall into separate groups and never
+# conflict. Range [1, 5].
+window_size: 3
+
+# Maximum number of conflicts stored in metadata['number_conflicts'];
+# metadata['conflict_count'] still reflects every conflict found. Must
+# be an integer >= 1.
+max_conflicts: 20
+
+# Absolute value difference tolerated before two values disagree.
+# Default 0 enforces exact comparison after normalization.
+tolerance: 0
+
+# Relative difference tolerated before two values disagree (fraction of
+# the larger magnitude). Default 0.001 keeps rounding drift of 0.1%
+# consistent; a conflict requires a wider gap than this.
+near_conflict_ratio: 0.001
+
+# Metadata key the conflict list is written to; '' disables stamping.
+conflicts_key: 'number_conflicts'
+
+# Metadata key the full conflict count is written to; '' disables.
+count_key: 'conflict_count'
+
+# Metadata key the overall verdict ('consistent' | 'conflicts_found')
+# is written to; '' disables stamping.
+consistency_key: 'numeric_consistency'
+
+# Metadata key the count of anchor groups repeating a value identically
+# is written to; '' disables stamping.
+repeats_key: 'consistent_repeats'
