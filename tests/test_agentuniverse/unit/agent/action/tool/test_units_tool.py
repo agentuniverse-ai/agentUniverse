@@ -173,6 +173,26 @@ class UnitsToolTest(unittest.TestCase):
 
     # -- validation ------------------------------------------------------- #
 
+    def test_mismatch_suggestion_lists_target_dimension(self):
+        # The suggestion names the TARGET dimension's units (design pinned
+        # during hostile review: it answers "what can I convert to here?").
+        out = self._conv(1, "kg", "m")
+        self.assertEqual(out["error"], "dimension_mismatch")
+        self.assertIn("units available in length", out["suggestion"])
+        self.assertIn(", m,", " " + out["suggestion"] + " ")
+
+    def test_fractional_temperature_matrix(self):
+        for c in ("36.6", "-17.3", "0.125"):
+            C = Fraction(c)
+            want = {"degF": C * Fraction(9, 5) + 32,
+                    "K": C + Fraction("273.15"),
+                    "degR": (C + Fraction("273.15")) * Fraction(9, 5)}
+            for target, expected in want.items():
+                got = self._conv(c, "degC", target)["to"]["value"]
+                self.assertEqual(Fraction(got), expected, (c, target))
+                back = self._conv(got, target, "degC")["to"]["value"]
+                self.assertEqual(Fraction(back), C)
+
     def test_validation(self):
         with self.assertRaises(ValueError):
             self.tool.execute(mode="nope")
