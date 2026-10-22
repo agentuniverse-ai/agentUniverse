@@ -1,0 +1,41 @@
+name: html_table_tool
+description: Extract HTML tables to structured data with rowspan/colspan expansion, analyze table shape, render CSV and compare tables.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.html_table_tool
+  class: HtmlTableTool
+input_keys:
+  - mode
+  - html
+max_input_bytes: 4194304
+max_tables: 50000
+max_rows_per_table: 100000
+max_cell_chars: 1000000
+max_table_depth: 3
+max_changed_cells: 10000
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [extract, analyze, to_csv, compare]
+    html:
+      type: string
+    html2:
+      type: string
+    table_index:
+      type: integer
+      default: 0
+    table_index2:
+      type: integer
+      default: 0
+    table_a:
+      type: object
+    table_b:
+      type: object
+    raw_spans:
+      type: boolean
+      default: false
+  required: [mode, html]
+  additionalProperties: false
