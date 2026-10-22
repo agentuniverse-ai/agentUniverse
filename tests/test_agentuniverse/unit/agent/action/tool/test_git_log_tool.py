@@ -222,6 +222,23 @@ class GitLogToolFormatFixturesTest(unittest.TestCase):
         self.assertEqual(out["commits"][0]["numstat"][1],
                          {"added": None, "deleted": None, "path": "bin/blob.dat"})
 
+    def test_custom_pretty_parsed_as_oneline(self):
+        # --pretty=format:'%h %s' output has no 'commit ' prefix; the parser
+        # treats hash+subject lines as oneline commits (pinned behavior).
+        text = "abc1234 fix something\ndef5678 feat other thing\n"
+        out = self.tool.execute(mode="parse", log_text=text)
+        self.assertEqual(out["commit_count"], 2)
+        self.assertEqual(out["commits"][0]["sha"], "abc1234")
+        self.assertEqual(out["commits"][0]["message"], "fix something")
+
+    def test_full_decoration_chain(self):
+        text = ("commit " + "a" * 40 + " (HEAD -> refs/heads/main, tag: refs/tags/v1.0, refs/heads/deco)\n"
+                "Author: A <a@t>\nDate:   Thu Jul 9 10:00:01 2026 +0800\n\n    m\n")
+        out = self.tool.execute(mode="parse", log_text=text)
+        self.assertEqual(
+            out["commits"][0]["decoration"],
+            "HEAD -> refs/heads/main, tag: refs/tags/v1.0, refs/heads/deco")
+
     def test_validation(self):
         with self.assertRaises(ValueError):
             self.tool.execute(mode="nope", log_text="")
