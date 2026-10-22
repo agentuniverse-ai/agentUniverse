@@ -1,0 +1,56 @@
+name: envsubst_tool
+description: Envsubst tool — expand and analyze shell-style ${VAR} templates with the bash parameter-expansion dialect (basic $VAR/${VAR}, ${VAR:-default} with the unset-vs-empty colon distinction, ${VAR:=default} assignment reported back, ${VAR:?err} guards, ${VAR:+alt}, ${#VAR} length, ${VAR%pat}/${VAR#pat} glob stripping, ${VAR:offset:length} substrings, ${VAR^^pat} case modifiers, recursive operands), purely on the Python stdlib — nothing is ever evaluated; $(...), backticks, $((...)) and process substitution are rejected with structured errors. expand mode returns the expanded text plus which variables resolved, which are unresolved (with the default that applied) and any assignments (mode='expand'); analyze statically reports the variables a template needs, per-variable forms and defaults (mode='analyze'); check_env audits a mapping against a template (missing required variables, triggered :? guards, unused entries, assignment-overwrite and reserved-name shadowing notes) (mode='check_env'); quote renders the expansion as a safely single-quoted shell literal (mode='quote').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.envsubst_tool
+  class: EnvsubstTool
+input_keys:
+  - mode
+max_template_chars: 2000000
+max_env_vars: 10000
+max_value_chars: 100000
+max_total_env_chars: 2000000
+args_model:
+  mode:
+    type: string
+    description: Envsubst mode — expand, analyze, check_env or quote.
+    required: true
+  template:
+    type: string
+    description: The template text — required for every mode (may be empty).
+    required: false
+  env:
+    type: object
+    description: Mapping of variable name -> string value — required for expand, check_env and quote; ignored by analyze.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["expand", "analyze", "check_env", "quote"]
+      description: Envsubst mode.
+    template:
+      type: string
+      description: >
+        The template text. Supports $NAME, ${NAME}, ${NAME:-word} /
+        ${NAME-word} (the colon form triggers on unset or empty, the
+        plain form only on unset), ${NAME:=word} / ${NAME=word}
+        (assignment reported in the output), ${NAME:?word} /
+        ${NAME?word} guards, ${NAME:+word} / ${NAME+word},
+        ${#NAME} length, ${NAME%pat} / ${NAME%%pat} / ${NAME#pat} /
+        ${NAME##pat} glob-pattern stripping, ${NAME:offset:length}
+        substrings (whitespace around the integers allowed, negative
+        offsets count from the end) and ${NAME^pat} / ${NAME^^pat} /
+        ${NAME,pat} / ${NAME,,pat} case modifiers, with nested
+        expansions inside operands (depth <= 8).
+    env:
+      type: object
+      description: >
+        Mapping of variable name -> string value used for expansion.
+        A working copy is used: := assignments mutate the copy and are
+        reported, never the caller's mapping. The process environment
+        is never read.
+  required: ["mode"]
+  additionalProperties: false
