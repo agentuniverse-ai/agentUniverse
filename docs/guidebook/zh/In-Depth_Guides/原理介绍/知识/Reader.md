@@ -48,6 +48,7 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 ```
 
 ## agentUniverse目前内置有以下Reader:
+- [default_sitemap_reader](SitemapReader.md)：有界读取 XML Sitemap 清单，并可继续加载筛选后的页面正文。
 - [default_docx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/docx_reader.yaml)：读取本地Docx文件中的文本内容
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml)：读取本地Pdf文件中的文本内容
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml)：读取本地Pptx文件中的文本内容
