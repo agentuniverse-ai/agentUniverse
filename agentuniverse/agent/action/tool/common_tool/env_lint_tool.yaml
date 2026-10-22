@@ -1,0 +1,35 @@
+name: env_lint_tool
+description: Env lint tool — lint a dotenv (.env) file for style, consistency and syntax problems with no schema needed, purely on the Python stdlib, no network required. lint mode reports findings [{code, severity, line, message}] from 17 deterministic rules (duplicate keys, case collisions, quote/export/spacing consistency, unquoted spaces and '#' in values, empty values without a default marker, bare lines, keys with spaces, lowercase keys, trailing whitespace, final newline, CRLF, BOM, very long lines, alphabetical block breaks) (mode='lint'); fix_hints applies only the safe textual fixes with exact line edits and re-lints the result (mode='fix_hints'); stats summarizes variable counts, quoted ratio, comment/blank lines and grouping (mode='stats'). Values of secret-ish names (KEY/SECRET/PASSWORD/TOKEN) are never echoed in full.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.env_lint_tool
+  class: EnvLintTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Env lint mode — lint, fix_hints or stats.
+    required: true
+  text:
+    type: string
+    description: The .env text (required for every mode; may be empty).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "fix_hints", "stats"]
+      description: Env lint mode.
+    text:
+      type: string
+      description: >
+        The .env text (all modes; may be empty — an empty file lints
+        clean). lint reports style/consistency/syntax findings;
+        fix_hints applies the safe textual fixes (strip BOM, CRLF to
+        LF, trailing whitespace, quoting values with spaces or '#',
+        final newline) and re-lints the result; stats summarizes
+        counts, quoted ratio and grouping.
+  required: ["mode"]
