@@ -79,6 +79,10 @@ Regional Logistics Corp distributes in Asia.
         entities = result[0].metadata.get('entities', [])
         distributors = [e for e in entities if e.get('type') == 'distributor']
         self.assertGreater(len(distributors), 0)
+        entity_map = {(e['name'], e['type']) for e in entities}
+        self.assertIn(('Global Distributors Ltd', 'distributor'), entity_map)
+        self.assertIn(('Regional Logistics Corp', 'logistics_provider'), entity_map)
+        self.assertNotIn(('Global Distributors Ltd', 'customer'), entity_map)
 
     def test_warehouse_entity_extraction(self):
         """Test extraction of warehouse entities."""
@@ -202,6 +206,11 @@ Revenue: $100M annually.
             for e in entities
         )
         self.assertTrue(has_attributes)
+        abc = next(e for e in entities if e['name'] == 'ABC Corp')
+        self.assertEqual(
+            abc['attributes'],
+            {'location': 'Shanghai, China', 'founded': '2010', 'revenue': '$100M'}
+        )
 
     def test_confidence_scoring(self):
         """Test confidence scores for extractions."""
@@ -235,6 +244,72 @@ ABC公司向XYZ制造商供应零部件。
         # Should extract entities from Chinese text
         entities = result[0].metadata.get('entities', [])
         self.assertGreater(len(entities), 0)
+        entity_map = {(e['name'], e['type']) for e in entities}
+        self.assertIn(('ABC公司', 'supplier'), entity_map)
+        self.assertIn(('XYZ制造商', 'manufacturer'), entity_map)
+        self.assertIn(('上海仓库', 'warehouse'), entity_map)
+        self.assertIn(('零部件', 'product'), entity_map)
+        self.assertIn(('成品', 'product'), entity_map)
+
+        relationship_map = {
+            (r['source'], r['target'], r['type'])
+            for r in result[0].metadata.get('relationships', [])
+        }
+        self.assertIn(('ABC公司', 'XYZ制造商', 'supplies'), relationship_map)
+        self.assertIn(('上海仓库', '成品', 'stores'), relationship_map)
+
+    def test_attributes_do_not_leak_between_entities(self):
+        """Attributes belong to the nearby entity, not an earlier company."""
+        text = (
+            "ABC Corp supplies components. "
+            "XYZ Corp (founded 2010) is located in Shanghai, China. "
+            "Revenue: $100M."
+        )
+        entities = self.extractor._extract_entities_with_patterns(text)
+        entity_map = {entity.name: entity for entity in entities}
+
+        self.assertEqual(entity_map['ABC Corp'].attributes, {})
+        self.assertEqual(
+            entity_map['XYZ Corp'].attributes,
+            {'location': 'Shanghai, China', 'founded': '2010', 'revenue': '$100M'}
+        )
+
+    def test_attributes_stay_with_each_repeated_company_context(self):
+        """Separate attribute clauses are associated deterministically."""
+        text = (
+            "ABC Corp was founded in 2001. Revenue: $10M. "
+            "XYZ Ltd was founded in 2012. Revenue: $20M."
+        )
+        entities = self.extractor._extract_entities_with_patterns(text)
+        entity_map = {entity.name: entity.attributes for entity in entities}
+
+        self.assertEqual(entity_map['ABC Corp'], {'founded': '2001', 'revenue': '$10M'})
+        self.assertEqual(entity_map['XYZ Ltd'], {'founded': '2012', 'revenue': '$20M'})
+
+    def test_generic_role_phrases_are_not_entities(self):
+        """Headings and generic plural roles must not become named entities."""
+        text = "Regional distributors report quarterly. Supplier Analysis is complete."
+        entities = self.extractor._extract_entities_with_patterns(text)
+
+        self.assertEqual(entities, [])
+
+    def test_chinese_entities_in_separate_sentences_are_not_related(self):
+        """Proximity fallback must not create cross-sentence Chinese edges."""
+        text = "ABC公司采购零部件。XYZ制造商生产组件。"
+        entities = self.extractor._extract_entities_with_patterns(text)
+        relationships = self.extractor._extract_relationships_with_patterns(text, entities)
+
+        self.assertFalse(any(rel.source == 'ABC公司' and rel.target == 'XYZ制造商' for rel in relationships))
+
+    def test_entity_deduplication_keeps_stable_semantic_type(self):
+        """Repeated legal names produce one role-specific entity."""
+        text = "Global Distributors Ltd handles distribution. Global Distributors Ltd expanded."
+        entities = self.extractor._extract_entities_with_patterns(text)
+
+        matches = [entity for entity in entities if entity.name == 'Global Distributors Ltd']
+        self.assertEqual([(entity.name, entity.entity_type) for entity in matches], [
+            ('Global Distributors Ltd', 'distributor')
+        ])
 
     def test_complex_supply_chain(self):
         """Test extraction from complex supply chain description."""
