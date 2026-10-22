@@ -1,0 +1,10 @@
+name: cached_embedding
+description: Opt-in bounded memory cache for a configured embedding backend.
+backend_name: openai_embedding
+# Change this explicit version when provider settings or model revision change.
+cache_version: example-v1
+max_entries: 1024
+metadata:
+  type: EMBEDDING
+  module: agentuniverse.agent.action.knowledge.embedding.cached_embedding
+  class: CachedEmbedding
