@@ -6,8 +6,8 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: chat_prompt.py
 import base64
-from typing import List, Optional
 import re
+from typing import List, Optional
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
@@ -26,6 +26,8 @@ image_extensions = (
     ".gif",
     ".webp",
 )
+
+_WINDOWS_DRIVE_PATH = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 class ChatPrompt(Prompt):
@@ -74,12 +76,13 @@ class ChatPrompt(Prompt):
                     self.messages.append(Message(type=ChatMessageEnum.HUMAN.value, content=content))
                     continue
                 parsed_url = urlparse(image_url)
+                is_windows_path = bool(_WINDOWS_DRIVE_PATH.match(image_url))
                 # Check if the URL is a valid HTTP or HTTPS URL.
                 if parsed_url.scheme in ["http", "https"]:
                     content = [{"type": "image_url", "image_url": {"url": image_url}}]
                     self.messages.append(Message(type=ChatMessageEnum.HUMAN.value, content=content))
                 # Check if the URL is a local file.
-                elif parsed_url.scheme == "file" or not parsed_url.scheme:
+                elif parsed_url.scheme == "file" or not parsed_url.scheme or is_windows_path:
                     # Decode file URIs, but keep literal characters in filesystem paths.
                     file_path = url2pathname(parsed_url.path) if parsed_url.scheme == "file" else image_url
                     if file_path.lower().endswith(image_extensions):
