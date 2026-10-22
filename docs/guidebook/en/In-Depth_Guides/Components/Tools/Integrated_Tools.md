@@ -527,6 +527,20 @@ tool.execute(mode="extract", file_path="reports.zip", output_dir="restored", mem
 
 All paths are confined to `base_dir`. Extraction rejects absolute/traversal paths, links, special TAR files, encrypted ZIPs, duplicate members, excessive compression ratios, and configured size/count limits. Destinations are preflighted before extraction and files are written through same-directory temporary files.
 
+## FXMacroDataTool
+
+`FXMacroDataTool` looks up official central-bank and statistics-office data for 22 currencies through the [FXMacroData](https://fxmacrodata.com/documentation) REST API. It has four modes: `history` (an indicator's release history with the value, previous value, reference period and publication time of each release), `calendar` (upcoming scheduled releases), `catalogue` (the indicators published for a currency) and `fx` (daily FX rates).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.fxmacrodata_tool import FXMacroDataTool
+
+tool = FXMacroDataTool()
+tool.execute(mode="history", currency="USD", indicator="inflation", limit=6)
+tool.execute(mode="calendar", currency="USD", indicator="non_farm_payrolls")
+```
+
+USD releases from the last 90 days (published with a 15-minute delay), the USD calendar and every currency's catalogue work without a key; keyless results carry those limits in a `notices` list. Set `FXMACRODATA_API_KEY` for other currencies, full history, real-time releases and FX rates. The key is held as a `SecretStr`, sent only as an `X-API-Key` header, redirects are refused, and the key is removed from every result and error. Inputs are checked before any request: three-letter currency codes, indicator slugs, real `YYYY-MM-DD` dates in order, and `limit` from 1 to 100. Note that `period` (and the calendar's `reference_period`) is the period the figure describes; the publication time is `announced_at_utc` or `release_time_utc`.
+
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
