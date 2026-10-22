@@ -8,6 +8,9 @@ metadata:
 input_keys:
   - mode
   - tag
+max_tag_length: 512
+max_subtags: 64
+max_findings: 32
 args_model:
   mode:
     type: string
