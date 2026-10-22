@@ -7,6 +7,8 @@ metadata:
   class: ApiDocTool
 input_keys:
   - mode
+  - document
+max_text: 1000000
 args_model:
   mode:
     type: string
@@ -34,3 +36,4 @@ args_model_schema:
       type: string
       description: The previous spec text, diff mode only.
   required: ["mode", "document"]
+  additionalProperties: false
