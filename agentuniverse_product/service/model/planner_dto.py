@@ -11,6 +11,14 @@ from pydantic import BaseModel, Field
 
 
 class PlannerDTO(BaseModel):
+    """Data transfer object for a planner.
+
+    Attributes:
+        id: Planner ID.
+        nickname: Planner nickname.
+        members: Planner members.
+        workflow_id: Associated workflow ID.
+    """
     id: str = Field(description="ID")
     nickname: Optional[str] = Field(description="planner nickname", default="")
     members: Optional[list] = Field(description="planner members", default=[])
