@@ -43,8 +43,13 @@ class ReaderManager(ComponentManagerBase[Reader]):
 
     def get_file_default_reader(self,
                                 file_type: str,
-                                new_instance: bool = False) -> Reader | None:
+                                new_instance: bool = True) -> Reader | None:
+        """Return a copy by default, or the registered reader when explicitly requested.
+
+        The True default preserves historical lookup behavior. Pass False only
+        when intentionally sharing the reader and its mutable per-read state.
+        """
         if file_type in self.DEFAULT_READER:
-            return self.get_instance_obj(self.DEFAULT_READER[file_type])
+            return self.get_instance_obj(self.DEFAULT_READER[file_type], new_instance=new_instance)
         else:
             return None

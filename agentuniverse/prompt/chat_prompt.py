@@ -9,6 +9,7 @@ import base64
 from typing import List, Optional
 import re
 from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -79,12 +80,14 @@ class ChatPrompt(Prompt):
                     self.messages.append(Message(type=ChatMessageEnum.HUMAN.value, content=content))
                 # Check if the URL is a local file.
                 elif parsed_url.scheme == "file" or not parsed_url.scheme:
-                    if parsed_url.path.lower().endswith(image_extensions):
-                        with open(parsed_url.path, "rb") as image_file:
+                    # Decode file URIs, but keep literal characters in filesystem paths.
+                    file_path = url2pathname(parsed_url.path) if parsed_url.scheme == "file" else image_url
+                    if file_path.lower().endswith(image_extensions):
+                        with open(file_path, "rb") as image_file:
                             base64_image = base64.b64encode(image_file.read()).decode(
                                 "utf-8",
                             )
-                            extension = parsed_url.path.lower().split(".")[-1]
+                            extension = file_path.lower().split(".")[-1]
                             mime_type = "image/jpeg" if extension in ("jpg", "jpeg") else f"image/{extension}"
                             content = [
                                 {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}}]
