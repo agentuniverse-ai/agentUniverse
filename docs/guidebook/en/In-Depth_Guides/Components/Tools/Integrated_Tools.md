@@ -634,3 +634,84 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Envsubst Tool
+
+`EnvsubstTool` expands shell-style `${VAR}` templates with the
+bash/POSIX **parameter-expansion dialect** — the layer between "a
+template full of variable references" and "the text a shell would
+produce" — as pure string operations on the Python standard library.
+Nothing is ever evaluated: there is no subprocess, no filesystem
+access and no reading of the process environment; templates expand
+against a caller-supplied `env` mapping. Every rule is verified
+byte-for-byte against the real `bash` binary by the test suite.
+
+The dialect: `$NAME` and `${NAME}` basic forms; `${NAME:-word}` /
+`${NAME-word}` defaults with the classic colon distinction (`:-`
+triggers when the variable is unset **or empty**, `-` only when
+**unset**); `${NAME:=word}` / `${NAME=word}` assignment, with every
+assignment reported back in the output and applied to a working copy
+(never the caller's mapping); `${NAME:?word}` / `${NAME?word}` guards
+that fail the whole operation with a structured
+`required_variable_missing` error (bash's own default messages
+mirrored); `${NAME:+word}` / `${NAME+word}` alternates; `${#NAME}`
+length in characters; `${NAME%pat}` / `${NAME%%pat}` / `${NAME#pat}`
+/ `${NAME##pat}` glob-pattern stripping (shortest vs longest,
+`[...]` classes with ranges and negation); `${NAME:offset:length}`
+substrings (whitespace around the integers allowed — `${NAME: -3}`
+counts from the end — and negative lengths follow bash >= 4.2);
+`${NAME^pat}` / `${NAME^^pat}` / `${NAME,pat}` / `${NAME,,pat}` case
+modification. Operands support nested expansions (`${A:-${B:-c}}`),
+single quotes as literal grouping characters, double quotes with
+quote removal, and bash's exact backslash table — all mirroring the
+context of an expansion inside double quotes, which is how the tests
+verify every case against real bash.
+
+Execution-flavored constructs are rejected with structured
+`not_supported` errors rather than interpreted or preserved: command
+substitution `$(...)` and backticks anywhere, arithmetic `$((...))`,
+process substitution `<(...)` / `>(...)`, positional and special
+parameters (`$1`, `$?`, `$$`, `$@`, `$*`, `$#`, `$0`), `${!NAME}`
+indirection, `${NAME[...]}` subscripts, `${NAME@op}` operators and
+the `${NAME/pat/rep}` replacement family. Malformed templates
+(unterminated `${`, empty/invalid names, bad substring specs such as
+`${V:}` or the arithmetic-only `${V:2-3}`, nesting beyond depth 8)
+return `invalid_template` errors mirroring bash's *bad substitution*
+family.
+
+Four modes: `expand` (template + env mapping → the expanded `text`
+plus `expanded` names, `unresolved` names each with the default that
+applied, and `assignments`); `analyze` (template alone → `variables`
+with per-name `forms_used` and `occurrences`, `required` names used
+without a fallback, `optional_with_default`, `conditionally_required`
+from `:?` guards, `referenced_in_defaults`, and the distinct
+`expansion_forms_exercised`); `check_env` (template + env →
+`missing_required`, `triggered_error_forms` distinguishing unset from
+empty, `unused` mapping entries never referenced, and `shadowing`
+notes for `:=` assignments that would overwrite a provided value or
+mapping names colliding with shell-reserved variables such as
+`IFS`/`PATH`); `quote` (expand, then render the result as a safely
+single-quoted shell literal — embedded single quotes spelled `'\''` —
+that reproduces the text byte-for-byte in a POSIX shell, verified
+against real `bash`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.envsubst_tool import EnvsubstTool
+
+tool = EnvsubstTool()
+tool.execute(mode="expand", template="${HOST:?host required}:${PORT:-8080}",
+             env={"HOST": "db.local"})["text"]          # 'db.local:8080'
+report = tool.execute(mode="analyze", template="${A} ${B:-x} ${C:?need C}")
+report["required"], report["optional_with_default"], report["conditionally_required"]
+audit = tool.execute(mode="check_env", template="${A} ${B:-x}", env={"B": "1", "EXTRA": "z"})
+audit["missing_required"], audit["unused"]
+tool.execute(mode="quote", template="it's $MODE", env={"MODE": "live"})["quoted"]
+# "'it'\\''s live'"
+```
+
+Malformed parameters (unknown mode, non-string template, NUL
+characters, non-dict env, non-string values, invalid variable-name
+keys, oversized inputs) raise `ValueError` before any computation;
+caps: 2,000,000 template characters, 10,000 env entries, 100,000
+characters per value and 2,000,000 total. Everything is deterministic
+— no clock, no randomness, no network.
