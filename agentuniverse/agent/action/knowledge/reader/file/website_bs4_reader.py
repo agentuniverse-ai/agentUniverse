@@ -117,6 +117,9 @@ class WebsiteBs4Reader(Reader):
 
     def _extract_main_content(self, soup: BeautifulSoup) -> str:
         """Extract main content from webpage
+
+        If the usual content blocks contain no text, retain a short semantic
+        region or visible body/fragment text instead of discarding the page.
         
         Args:
             soup: BeautifulSoup object
@@ -136,23 +139,38 @@ class WebsiteBs4Reader(Reader):
         ]
 
         # Try each selector pattern
+        fallback_content = ""
         for tag, class_name in content_selectors:
             element = soup.find(tag, class_=class_name)
             if element:
                 text = element.get_text(strip=True, separator=" ")
                 if len(text) > 200:  # Only return if substantial content found
                     return text
+                if text and not fallback_content:
+                    fallback_content = text
 
         # Fallback: Extract largest text block
         all_elements = soup.find_all(['div', 'section'])
         if all_elements:
-            return max(
+            text = max(
                 [e.get_text(strip=True, separator=" ") for e in all_elements],
                 key=len,
                 default=""
             )
+            if text:
+                return text
+
+        if fallback_content:
+            return fallback_content
             
-        return ""
+        container = soup.body if soup.body is not None else soup
+        return " ".join(
+            text.strip() for text in container.strings
+            if text.strip() and not any(
+                parent.name in {"head", "script", "style", "template"}
+                for parent in text.parents
+            )
+        )
     
     def _crawl_website(self, url: str) -> Dict[str, str]:
         """Execute website crawling
