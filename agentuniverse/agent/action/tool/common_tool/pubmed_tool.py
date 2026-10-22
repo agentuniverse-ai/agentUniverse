@@ -123,6 +123,13 @@ class PubMedTool(Tool):
             total_results = int(search_result.get("count", 0))
 
             papers = self._fetch_articles(pmids) if pmids else []
+            # ESearch owns the requested sort order. Do not let a reordered,
+            # partial or duplicate EFetch response change this result window.
+            papers_by_id = {}
+            for paper in papers:
+                if paper.get("pmid"):
+                    papers_by_id.setdefault(paper["pmid"], paper)
+            papers = [papers_by_id[pmid] for pmid in dict.fromkeys(pmids) if pmid in papers_by_id]
             return {
                 "query": query,
                 "max_results": max_results,
