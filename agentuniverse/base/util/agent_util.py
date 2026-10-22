@@ -5,10 +5,38 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: agent_util.py
+from agentuniverse.agent.action.toolkit.toolkit_manager import ToolkitManager
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.config.custom_configer.default_llm_configer import DefaultLLMConfiger
 from agentuniverse.base.util.memory_util import get_memory_string
+
+
+def resolve_tool_names(action: dict) -> list[str]:
+    """Resolve every configured tool name for an agent action block.
+
+    Tools can be declared directly under ``action.tool`` or provided by a
+    toolkit listed under ``action.toolkit``.  Callers that only read
+    ``action.tool`` silently drop toolkit tools, so both the synchronous Agent
+    path and the planners share this resolver to keep the configuration
+    semantics identical.
+
+    Args:
+        action (dict): The agent action configuration.  Both ``tool`` and
+            ``toolkit`` are optional and may be missing or ``None``.
+
+    Returns:
+        list[str]: Direct tool names followed by toolkit tool names, in
+            configuration order.  Unknown toolkit names are skipped so one
+            stale entry cannot hide the remaining tools.
+    """
+    tool_names = list(action.get('tool') or [])
+    for toolkit_name in action.get('toolkit') or []:
+        toolkit = ToolkitManager().get_instance_obj(toolkit_name)
+        if toolkit is None:
+            continue
+        tool_names.extend(toolkit.tool_names or [])
+    return tool_names
 
 
 def assemble_memory_input(memory: Memory, agent_input: dict, query_params: dict = None) -> list[Message]:
