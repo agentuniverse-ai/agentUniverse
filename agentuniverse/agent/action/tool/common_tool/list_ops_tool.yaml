@@ -1,0 +1,61 @@
+name: list_ops_tool
+description: List algebra tool — pure Python stdlib, no network required. Set-style operations on JSON lists with stable, documented ordering — union (list-a first occurrences then unseen list-b elements), intersection and difference (list-a order) and symmetric_difference (a-only then b-only) over two lists (mode='union'/'intersection'/'difference'/'symmetric_difference'), stable first-occurrence dedupe with removed-count and capped preview (mode='dedupe'), distinct counting with per-value counts and optional top_n (mode='unique_count'), and nested-list flattening to a requested depth with a cycle guard (mode='flatten'). Scalar mode compares values (strings, numbers, booleans, null; 1, 1.0 and true collapse per Python equality); object mode (key='id' or nested 'meta.id') compares objects by key value, preserving the first element per key. Inputs accept lists or JSON array strings, capped at 10,000 elements; results carry a counts dict with a, b, result, removed and kept.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.list_ops_tool
+  class: ListOpsTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: List operation — union, intersection, difference, symmetric_difference, dedupe, unique_count or flatten.
+    required: true
+  a:
+    type: array
+    description: The primary list — a JSON array string or list. Required for every mode; may be empty. Capped at 10,000 elements.
+    required: false
+  b:
+    type: array
+    description: The second list for the four set modes (union/intersection/difference/symmetric_difference); required there, rejected everywhere else. Same format and cap as a.
+    required: false
+  key:
+    type: string
+    description: Object mode — compare elements by the value at this key path; dotted paths like 'meta.id' address nested keys. Valid for the set modes, dedupe and unique_count; the first element per key value is preserved. Missing keys and non-object elements raise structured errors listing the element index.
+    required: false
+  top_n:
+    type: integer
+    description: unique_count mode only — cap the per-value counts list at this many entries (1-10000), sorted by count descending with ties in first-occurrence order.
+    required: false
+  depth:
+    type: integer
+    description: flatten mode only — flatten up to this many nesting levels (0-100); omit to flatten completely. A list containing itself raises a cycle error.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["union", "intersection", "difference", "symmetric_difference", "dedupe", "unique_count", "flatten"]
+      description: List operation to perform.
+    a:
+      type: array
+      description: The primary list (JSON array string or list).
+    b:
+      type: array
+      description: The second list for the four set modes.
+    key:
+      type: string
+      description: Object-mode key path used for comparison (set modes, dedupe, unique_count).
+    top_n:
+      type: integer
+      minimum: 1
+      maximum: 10000
+      description: Cap for the per-value counts list (unique_count mode).
+    depth:
+      type: integer
+      minimum: 0
+      maximum: 100
+      description: Nesting levels to flatten (flatten mode; omit for full flattening).
+  required: ["mode"]
