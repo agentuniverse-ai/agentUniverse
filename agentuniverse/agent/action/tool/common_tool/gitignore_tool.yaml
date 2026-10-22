@@ -7,6 +7,10 @@ metadata:
   class: GitignoreTool
 input_keys:
   - mode
+max_rules_chars: 65536
+max_rule_lines: 4096
+max_path_chars: 4096
+max_path_segments: 64
 args_model:
   mode:
     type: string
@@ -48,3 +52,4 @@ args_model_schema:
       type: string
       description: The single rule line (explain mode).
   required: ["mode"]
+  additionalProperties: false
