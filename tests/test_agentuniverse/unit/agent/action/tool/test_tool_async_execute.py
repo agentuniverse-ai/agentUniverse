@@ -4,7 +4,7 @@ from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 
 
 class AsyncExecuteTool(Tool):
-    name = "async_execute_tool"
+    name: str = "async_execute_tool"
 
     async def execute(self, value):
         await asyncio.sleep(0)
@@ -12,7 +12,7 @@ class AsyncExecuteTool(Tool):
 
 
 class LegacyAsyncExecuteTool(Tool):
-    name = "legacy_async_execute_tool"
+    name: str = "legacy_async_execute_tool"
 
     async def execute(self, tool_input: ToolInput):
         await asyncio.sleep(0)
