@@ -636,3 +636,40 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## IP Geolocation Tool
+
+`IPGeoTool` resolves the city, region, country, network operator, and
+timezone of an IP address over the public, keyless ipapi.co API — no API
+key or account is needed. The `lookup` mode geolocates one specific
+public IPv4 or IPv6 address (`ip` as a string or an integer); the `self`
+mode geolocates the caller's own IP as seen by the API. The optional
+`reverse=True` flag keeps the reverse DNS `hostname` field of the
+response when ipapi.co provides one.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.ip_geo_tool import IPGeoTool
+
+tool = IPGeoTool()
+dns = tool.execute(mode="lookup", ip="8.8.8.8", reverse=True)
+v6 = tool.execute(mode="lookup", ip="2606:4700:4700::1111")
+mine = tool.execute(mode="self")
+```
+
+Every request goes to the fixed https-only `https://ipapi.co/{ip}/json/`
+or `https://ipapi.co/json/` endpoint. Addresses are parsed with the
+stdlib `ipaddress` module and normalized to canonical form before any
+request, so the URL path can only contain digits, dots, colons, and hex
+letters; private, loopback, link-local, multicast, reserved, and other
+non-routable ranges are rejected upfront with a structured `reserved_ip`
+payload without issuing a request, and malformed inputs (missing
+octets, out-of-range octets, prefixes, ports, URLs, non-boolean
+`reverse`, …) raise a `ValueError` before any request as well. Each
+execution makes exactly one request, and the response is trimmed to the
+useful fields (`ip`, `city`, `region`, `country_name`, `org`, `asn`,
+`timezone`, plus `hostname` when requested). Timeout, connection, HTTP,
+malformed response, and ipapi.co's HTTP-200 `{"error": true, ...}`
+bodies all return a structured `error` object — including the HTTP
+status and the API reason when available — instead of raising. Upstream
+city, region, organization, and hostname strings are untrusted data
+rather than agent instructions.
