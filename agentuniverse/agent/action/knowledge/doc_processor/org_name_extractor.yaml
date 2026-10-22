@@ -1,0 +1,21 @@
+name: 'org_name_extractor'
+description: 'extract organization names into document metadata via suffix anchors'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.org_name_extractor'
+  class: 'OrgNameExtractor'
+
+# Maximum number of organizations stamped into metadata['organizations'].
+# The distinct count found before capping is still written to
+# metadata['org_count'], so a count above max_orgs signals truncation.
+# Must be >= 1.
+max_orgs: 50
+
+# Metadata key the [{"name", "span"}] list is written to; '' disables
+# stamping the list.
+organizations_key: 'organizations'
+
+# Metadata key the distinct-organization count is written to; '' disables
+# stamping the count.
+count_key: 'org_count'
