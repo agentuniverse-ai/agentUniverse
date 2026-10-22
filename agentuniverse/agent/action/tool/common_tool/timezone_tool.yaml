@@ -7,6 +7,7 @@ metadata:
   class: TimezoneTool
 input_keys:
   - mode
+max_window_zones: 8
 args_model:
   mode:
     type: string
@@ -76,3 +77,4 @@ args_model_schema:
       type: string
       description: ISO date YYYY-MM-DD the window applies to (window mode).
   required: ["mode"]
+  additionalProperties: false
