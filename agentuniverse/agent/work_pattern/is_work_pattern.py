@@ -188,7 +188,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             implementation_result = self.implementation.run(**checkpoint_input)
-            checkpoint_result['implementation_result'] = implementation_result.to_dict()
+        checkpoint_result['implementation_result'] = implementation_result.to_dict()
         input_object.add_data('implementation_result', implementation_result)
         return implementation_result.to_dict()
 
@@ -207,7 +207,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             implementation_result = await self.implementation.async_run(**checkpoint_input)
-            checkpoint_result['implementation_result'] = implementation_result.to_dict()
+        checkpoint_result['implementation_result'] = implementation_result.to_dict()
         input_object.add_data('implementation_result', implementation_result)
         return implementation_result.to_dict()
 
@@ -223,7 +223,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             supervision_result = self.supervision.run(**supervision_input)
-            checkpoint_result['supervision_result'] = supervision_result.to_dict()
+        checkpoint_result['supervision_result'] = supervision_result.to_dict()
         input_object.add_data('supervision_result', supervision_result)
         return supervision_result.to_dict()
 
@@ -239,7 +239,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             supervision_result = await self.supervision.async_run(**supervision_input)
-            checkpoint_result['supervision_result'] = supervision_result.to_dict()
+        checkpoint_result['supervision_result'] = supervision_result.to_dict()
         input_object.add_data('supervision_result', supervision_result)
         return supervision_result.to_dict()
 
@@ -259,7 +259,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             correction_result = self.implementation.run(**correction_input)
-            checkpoint_result['correction_result'] = correction_result.to_dict()
+        checkpoint_result['correction_result'] = correction_result.to_dict()
         return correction_result.to_dict()
 
     async def _async_invoke_correction(self, input_object: InputObject, supervision_result: dict,
@@ -278,7 +278,7 @@ class ISWorkPattern(WorkPattern):
                 'execution_context': execution_context
             }
             correction_result = await self.implementation.async_run(**correction_input)
-            checkpoint_result['correction_result'] = correction_result.to_dict()
+        checkpoint_result['correction_result'] = correction_result.to_dict()
         return correction_result.to_dict()
 
     def _validate_work_pattern_members(self):
