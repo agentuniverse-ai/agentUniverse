@@ -13,6 +13,7 @@ from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.base.util.env_util import get_from_env
 from loguru import logger
 import html
+from urllib.parse import quote, urlencode
 
 
 jina_read_url = "https://r.jina.ai/"
@@ -180,7 +181,7 @@ class JinaAITool(Tool):
             }
         ]
         """
-        full_url = f"{jina_search_url}{query}"
+        full_url = f"{jina_search_url}?{urlencode({'q': query})}"
         
         content = self._make_api_request(full_url, self.timeout, "Error executing search")
         if isinstance(content, str): 
@@ -216,7 +217,7 @@ class JinaAITool(Tool):
         }
         """
 
-        full_url = f"{jina_check_fact_url}{query}"
+        full_url = f"{jina_check_fact_url}{quote(query, safe='')}"
         # check_fact is very slow, so we set a longer timeout
         content = self._make_api_request(full_url, self.timeout * 3, "Error executing check fact")
         if isinstance(content, str): 

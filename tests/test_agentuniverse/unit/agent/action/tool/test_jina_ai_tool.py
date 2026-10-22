@@ -78,6 +78,20 @@ class JinaAIToolTLSTest(unittest.TestCase):
         self.assertIn("HTTP Error", result)
         self.assertIn("connection failed", result)
 
+    def test_search_preserves_special_characters_in_query(self) -> None:
+        tool = JinaAITool()
+        with patch.object(tool, "_make_api_request", return_value={"data": []}) as request:
+            tool.search_query("C++ & AI")
+
+        self.assertEqual(request.call_args.args[0], "https://s.jina.ai/?q=C%2B%2B+%26+AI")
+
+    def test_fact_check_preserves_url_metacharacters_in_statement(self) -> None:
+        tool = JinaAITool()
+        with patch.object(tool, "_make_api_request", return_value={"data": {}}) as request:
+            tool.check_fact("Claim #1? yes")
+
+        self.assertEqual(request.call_args.args[0], "https://g.jina.ai/Claim%20%231%3F%20yes")
+
 
 if __name__ == "__main__":
     unittest.main()
