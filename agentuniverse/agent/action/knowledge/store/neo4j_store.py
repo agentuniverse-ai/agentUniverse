@@ -74,11 +74,14 @@ class Neo4jStore(Store):
 
 
     def query(self, query: Query, **kwargs) -> List[Document]:
-        query_type = query.ext_info.get("query_type", "")
+        if query is None:
+            raise ValueError("query is required")
+        query_ext_info = query.ext_info if isinstance(query.ext_info, dict) else {}
+        query_type = query_ext_info.get("query_type", "")
 
         if query_type == "direct_cypher":
             cypher_query = query.query_str
-            query_params = query.ext_info.get("query_params", {})
+            query_params = query_ext_info.get("query_params", {})
             records = self.execute_cypher(cypher_query, query_params)
             return self._records_to_documents(cypher_query, records)
 
@@ -89,7 +92,7 @@ class Neo4jStore(Store):
                 query.query_str,
                 schema_info
             )
-            query_params = query.ext_info.get("query_params", {})
+            query_params = query_ext_info.get("query_params", {})
             records = self.execute_cypher(llm_cypher, query_params)
             return self._records_to_documents(query.query_str, records)
 
@@ -99,7 +102,7 @@ class Neo4jStore(Store):
                 return []
             node_ids = self._parse_node_ids(node_ids_raw)
             node_query, node_params = self._build_node_ids_query(node_ids)
-            query_params = {**query.ext_info.get("query_params", {}), **node_params}
+            query_params = {**query_ext_info.get("query_params", {}), **node_params}
             records = self.execute_cypher(node_query, query_params)
             return self._records_to_documents(node_ids_raw, records)
         else:
