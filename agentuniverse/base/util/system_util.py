@@ -239,14 +239,20 @@ def is_system_builtin(component_instance: ComponentBase) -> bool:
         if not path_components:
             return False
 
-        # Join the path components using OS-specific separator
-        system_path = os.path.join(*path_components)
-
         # Normalize the config path to handle platform-specific separators
         normalized_config_path = os.path.normpath(component_instance.component_config_path)
-
-        # Check if the system path is part of the normalized config path
-        return system_path in normalized_config_path
+        normalized_parts = tuple(
+            os.path.normcase(part)
+            for part in Path(normalized_config_path).parts
+        )
+        normalized_system_parts = tuple(
+            os.path.normcase(part) for part in path_components
+        )
+        width = len(normalized_system_parts)
+        return any(
+            normalized_parts[index:index + width] == normalized_system_parts
+            for index in range(len(normalized_parts) - width + 1)
+        )
     except Exception as e:
         print(f"An error occurred while checking if the component is system-built-in: {str(e)}")
         return False
