@@ -145,8 +145,9 @@ class APITool(Tool):
         path_params = {}
         body = {}
         cookies = {}
+        operation = self.openapi_spec.get('operation', {})
         # check parameters
-        for parameter in self.openapi_spec.get('operation').get('parameters', []):
+        for parameter in operation.get('parameters', []):
             value = self.get_parameter_value(parameter, parameters)
             if value is not None:
                 if parameter['in'] == 'path':
@@ -162,13 +163,13 @@ class APITool(Tool):
                     headers[parameter['name']] = value
 
         # check if there is a request body and handle it
-        if 'requestBody' in self.openapi_spec and self.openapi_spec['requestBody'] is not None:
+        request_body = operation.get('requestBody', self.openapi_spec.get('requestBody'))
+        if request_body is not None:
             # handle json request body
-            if 'content' in self.openapi_spec['requestBody']:
-                for content_type in self.openapi_spec['requestBody']['content']:
+            if 'content' in request_body:
+                for content_type in request_body['content']:
                     headers['Content-Type'] = content_type
-                    body_schema = self.openapi_spec[
-                        'requestBody']['content'][content_type]['schema']
+                    body_schema = request_body['content'][content_type]['schema']
                     required = body_schema.get('required', [])
                     properties = body_schema.get('properties', {})
                     for name, property in properties.items():

@@ -105,8 +105,14 @@ def parse_tool_input(openapi: dict) -> list[str]:
     """
     # convert parameters
     parameters = []
-    if 'parameters' in openapi['operation']:
-        for parameter in openapi['operation'].get('parameters'):
-            if parameter.get('required'):
-                parameters.append(parameter['name'])
+    operation = openapi['operation']
+    for parameter in operation.get('parameters', []):
+        if parameter.get('required'):
+            parameters.append(parameter['name'])
+
+    request_body = operation.get('requestBody', {})
+    for content in request_body.get('content', {}).values():
+        schema = content.get('schema', {})
+        parameters.extend(schema.get('required', []))
+        break
     return parameters
