@@ -12,6 +12,14 @@ AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 
 def chat(question: str):
+    """Ask the recommend SOP agent a question and return its response.
+
+    Args:
+        question (str): The user question to send to the agent.
+
+    Returns:
+        The agent output produced by the recommend SOP agent.
+    """
     instance: Agent = AgentManager().get_instance_obj('recommend_sop_agent')
     return instance.run(input=question)
 
