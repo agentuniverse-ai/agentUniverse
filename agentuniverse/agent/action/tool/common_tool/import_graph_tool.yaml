@@ -1,5 +1,5 @@
 name: import_graph_tool
-description: Python import dependency mapping tool — pure stdlib ast, no execution and no network. Extracts every import statement from Python source text with line numbers, aliasing, relative levels, star/future flags and try/except conditional-import info (mode='scan'), classifies dependencies into stdlib (sys.stdlib_module_names), external and internal relative (mode='deps'), detects self-imports, star imports and conditional fallback chains per file and — over a {filename: source} batch — builds the filename-stem import graph with Tarjan cycle detection and orphan modules (mode='analyze'), and renders that graph as Graphviz DOT source with cycles highlighted dashed (mode='to_dot').
+description: "Python import dependency mapping tool — pure stdlib ast, no execution and no network. Extracts every import statement from Python source text with line numbers, aliasing, relative levels, star/future flags and try/except conditional-import info (mode='scan'), classifies dependencies into stdlib (sys.stdlib_module_names), external and internal relative (mode='deps'), detects self-imports, star imports and conditional fallback chains per file and — over a {filename: source} batch — builds the filename-stem import graph with Tarjan cycle detection and orphan modules (mode='analyze'), and renders that graph as Graphviz DOT source with cycles highlighted dashed (mode='to_dot')."
 tool_type: api
 metadata:
   type: TOOL
@@ -50,3 +50,4 @@ args_model_schema:
       type: string
       description: Graph name for to_dot (sanitized to [A-Za-z0-9_]).
   required: ["mode"]
+  additionalProperties: false
