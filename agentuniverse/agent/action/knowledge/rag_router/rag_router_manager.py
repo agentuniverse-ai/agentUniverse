@@ -17,4 +17,6 @@ class RagRouterManager(ComponentManagerBase[RagRouter]):
     """A singleton manager class of the RagRouter."""
 
     def __init__(self):
+        """Initialize the rag router manager.
+        """
         super().__init__(ComponentEnum.RAG_ROUTER)
