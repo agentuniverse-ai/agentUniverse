@@ -1,0 +1,13 @@
+name: 'default_reka_llm'
+description: 'default reka llm powered by the Reka AI multimodal model family'
+model_name: 'reka-flash'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${REKA_API_KEY}'
+api_base: 'https://api.reka.ai/v1'
+proxy: '${REKA_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.reka_llm'
+  class: 'RekaLLM'
