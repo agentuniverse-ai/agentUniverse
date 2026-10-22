@@ -1,0 +1,32 @@
+name: zip_inspect_tool
+description: Read-only ZIP archive inspection, extraction safety auditing, and CRC integrity verification.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.zip_inspect_tool
+  class: ZipInspectTool
+input_keys:
+  - mode
+base_dir: .
+max_read_bytes: 67108864
+max_base64_bytes: 16777216
+max_reported_entries: 200
+max_scan_entries: 200000
+excessive_entry_count: 10000
+max_entry_ratio: 100
+max_total_ratio: 200
+bomb_total_bytes: 4294967296
+max_symlink_target_bytes: 4096
+max_comment_bytes: 1024
+max_verify_bytes: 268435456
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [inspect, audit_safety, verify_integrity]
+    file_path: {type: string}
+    base64_archive: {type: string}
+    max_total_bytes: {type: integer}
+  required: [mode]
+  additionalProperties: false
