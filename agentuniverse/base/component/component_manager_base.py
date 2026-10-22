@@ -44,7 +44,9 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
 
     def unregister(self, component_instance_name: str):
         """Unregister the component instance abstractmethod."""
-        self._instance_obj_map.pop(component_instance_name)
+        component_instance = self._instance_obj_map.pop(component_instance_name)
+        if self._instance_obj_map.get("__default_instance__") is component_instance:
+            self._instance_obj_map.pop("__default_instance__")
 
     def get_instance_obj(self, component_instance_name: str,
                          appname: str = None, new_instance: bool = True,
