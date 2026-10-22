@@ -1,0 +1,57 @@
+name: reading_time_tool
+description: >-
+  Reading, speaking and listening time estimation plus inverse word
+  budgets with zero dependencies and no network access: reading time
+  at slow/average/fast speeds (150/238/350 wpm, the 238 average from
+  the Brysbaert 2019 meta-analysis), speaking time at 140/160/180 wpm
+  tiers and the 30-60 s per slide or bullet deck rule, custom wpm or
+  seconds-per-char durations for char-based media (subtitle standard
+  17 chars/s), and plan-mode word budgets (+/-10%) for a target time
+  slot. CJK-aware word counting (one word per Han/kana/Hangul
+  character).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.reading_time_tool
+  class: ReadingTimeTool
+input_keys: [mode]
+args_model:
+  mode: {type: string, required: true, description: estimate, speaking, custom, or plan}
+  text: {type: string, required: false, description: Input text for estimate, speaking word tiers and custom modes; leading/trailing whitespace is trimmed}
+  reading_wpm: {type: number, required: false, description: Override words-per-minute for estimate, replacing the three standard speeds (50-1000)}
+  wpm: {type: number, required: false, description: Words per minute for custom and plan modes (50-1000, default 238)}
+  seconds_per_char: {type: number, required: false, description: Seconds per character for char-based media such as subtitles; the standard is 17 chars/s, i.e. 1/17 = 0.0588 (0 < value <= 10)}
+  target_minutes: {type: number, required: false, description: Time-slot length for plan mode in minutes (> 0)}
+  deck_count: {type: integer, required: false, description: Slide or bullet count for the speaking deck rule (1 slide = 30-60 s; 1-10000)}
+  deck_unit: {type: string, required: false, description: slides or bullets for the deck rule (default slides)}
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [estimate, speaking, custom, plan]
+      description: Reading-time operation to run.
+    text:
+      type: string
+      description: Input text for estimate, speaking (word tiers) and custom modes; required unless speaking uses deck_count instead.
+    reading_wpm:
+      type: number
+      description: Optional words-per-minute override for estimate; when given the result carries a single custom speed instead of the standard slow 150 / average 238 (Brysbaert 2019) / fast 350 trio.
+    wpm:
+      type: number
+      description: Words per minute for custom and plan modes (bounds 50-1000, default 238).
+    seconds_per_char:
+      type: number
+      description: Seconds per character for char-based media — subtitles follow the ~17 chars/s standard, i.e. seconds_per_char = 1/17 = 0.0588; mutually exclusive with wpm.
+    target_minutes:
+      type: number
+      description: Length of the time slot to fill, in minutes; must be greater than zero.
+    deck_count:
+      type: integer
+      description: Number of slides (or bullets with deck_unit=bullets) for the speaking deck rule — one unit takes 30-60 seconds, so the result is a min-max range plus midpoint.
+    deck_unit:
+      type: string
+      enum: [slides, bullets]
+      description: Unit counted by deck_count; bullets applies the same 30-60 s pacing to bullet talking points.
+  required: [mode]
+  additionalProperties: false
