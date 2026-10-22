@@ -1,0 +1,96 @@
+name: ascii_table_tool
+description: ASCII table tool — render tabular data as aligned tables, pure Python stdlib, no network required. Modes: render (list-of-list rows plus optional header), transpose (swap rows and columns), from_csv / from_tsv (parse delimited text with the stdlib csv module, delimiter option). Styles: markdown pipe table (default), ascii with +-+ borders, grid with row separators, simple aligned columns. CJK east-asian width aware (wide characters count as two columns); global or per-column left/center/right alignment and max_col_width truncation with a trailing ellipsis.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.ascii_table_tool
+  class: AsciiTableTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Table mode — render, transpose, from_tsv or from_csv.
+    required: true
+  rows:
+    type: array
+    description: The row matrix (list of lists of scalar cells — str, int, float, bool or None). Required for the render and transpose modes; not used by the delimited modes.
+    required: false
+  header:
+    type: array
+    description: Optional header row (same cell rules as rows). For transpose it becomes the first column of the result.
+    required: false
+  text:
+    type: string
+    description: The delimited text to parse. Required for the from_csv and from_tsv modes.
+    required: false
+  style:
+    type: string
+    description: Output style — markdown (default), ascii, grid or simple.
+    required: false
+  align:
+    type: string
+    description: left, center or right globally, or a list with one entry per column. Defaults to left alignment everywhere.
+    required: false
+  max_col_width:
+    type: integer
+    description: Truncate cells whose display width exceeds this many columns, marking the cut with an ellipsis (…).
+    required: false
+  ragged:
+    type: string
+    description: How to treat rows of inconsistent length — error (default, rejects) or pad (right-pads short rows with empty cells).
+    required: false
+  delimiter:
+    type: string
+    description: One-character field delimiter for the delimited modes; defaults to a tab for from_tsv and a comma for from_csv.
+    required: false
+  has_header:
+    type: boolean
+    description: Delimited modes only — treat the first parsed row as the header (default true).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["render", "transpose", "from_tsv", "from_csv"]
+      description: Table mode.
+    rows:
+      type: array
+      items:
+        type: array
+      description: Row matrix (render and transpose modes).
+    header:
+      type: array
+      description: Optional header row (render and transpose modes).
+    text:
+      type: string
+      description: Delimited text (from_csv / from_tsv modes).
+    style:
+      type: string
+      enum: ["markdown", "ascii", "grid", "simple"]
+      description: Output style.
+    align:
+      description: Global alignment string or per-column list of left/center/right.
+      oneOf:
+        - type: string
+          enum: ["left", "center", "right"]
+        - type: array
+          items:
+            type: string
+            enum: ["left", "center", "right"]
+    max_col_width:
+      type: integer
+      minimum: 1
+      description: Cell truncation limit in display columns.
+    ragged:
+      type: string
+      enum: ["error", "pad"]
+      description: Policy for rows of inconsistent length.
+    delimiter:
+      type: string
+      description: Field delimiter (from_csv / from_tsv modes).
+    has_header:
+      type: boolean
+      description: Treat the first parsed row as the header.
+  required: ["mode"]
