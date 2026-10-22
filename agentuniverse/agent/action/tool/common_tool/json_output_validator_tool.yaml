@@ -1,0 +1,21 @@
+name: json_output_validator_tool
+description: Parse and validate JSON model output without executing it.
+tool_type: api
+input_keys:
+  - text
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.json_output_validator_tool
+  class: JsonOutputValidatorTool
+args_model_schema:
+  type: object
+  properties:
+    text:
+      type: string
+    required_keys:
+      type: array
+      items: {type: string}
+    type_expectations:
+      type: object
+  required: [text]
+  additionalProperties: false
