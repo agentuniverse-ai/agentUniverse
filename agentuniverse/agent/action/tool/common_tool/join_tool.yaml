@@ -1,0 +1,97 @@
+name: join_tool
+description: List joining tool — pure Python stdlib, no network required. Join a list of items with a delimiter (default ', ') in plain, oxford ('a, b, and c'; two items give 'a and b'), and ('a, b and c', no final comma) or or ('a, b, or c') style, keeping empty-string items by default or dropping them (mode='join'), join [key, value] pairs or single-key dicts as 'a=1, b=2' with custom kv_sep and item_delim (mode='join_pairs'), prefix running numbers as '1. a' / '1) a' with a custom start (mode='numbered'), or prefix a bullet character (default '-') (mode='bullet'). Strings, ints, floats and bools are coerced with one documented rule; an empty list yields a structured note or '' per option; inputs are capped and strictly validated.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.join_tool
+  class: JoinTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Joining operation — join, join_pairs, numbered or bullet.
+    required: true
+  items:
+    type: array
+    description: The input items. A list of strings/ints/floats/bools for join, numbered and bullet; a list of two-item [key, value] lists or single-key dicts for join_pairs. Non-string scalars are coerced with one documented rule (str() for numbers, 'true'/'false' for booleans).
+    required: false
+  delimiter:
+    type: string
+    description: Join mode only — separator between items (default ', '). Must be non-empty whenever two or more items remain after drop_empty; at most 10000 characters.
+    required: false
+  style:
+    type: string
+    description: Join mode only — plain (default, 'a, b, c'), oxford ('a, b, and c'; two items give 'a and b' without a comma), and ('a and b' / 'a, b and c', documented without the final comma) or or ('a or b' / 'a, b, or c').
+    required: false
+  drop_empty:
+    type: boolean
+    description: Join mode only — drop empty-string items before joining and report how many were dropped; by default empty strings are kept.
+    required: false
+  empty_as:
+    type: string
+    description: Every mode — result for an empty item list, note (default, the structured note '(no items to join)') or empty (an empty string).
+    required: false
+  kv_sep:
+    type: string
+    description: join_pairs mode only — separator between each key and value (default '=', always non-empty).
+    required: false
+  item_delim:
+    type: string
+    description: join_pairs mode only — separator between formatted pairs (default ', ').
+    required: false
+  number_format:
+    type: string
+    description: Numbered mode only — number prefix style, dot ("1. a") or paren ("1) a"). Defaults to dot.
+    required: false
+  start:
+    type: integer
+    description: Numbered mode only — first number (default 1, range 0-999999).
+    required: false
+  bullet:
+    type: string
+    description: Bullet mode only — the bullet prefix (default '-', non-empty, at most 16 characters).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["join", "join_pairs", "numbered", "bullet"]
+      description: Joining operation to perform.
+    items:
+      type: array
+      description: The input items (scalars, or [key, value] pairs / single-key dicts in join_pairs mode).
+    delimiter:
+      type: string
+      description: Separator between items (join mode).
+    style:
+      type: string
+      enum: ["plain", "oxford", "and", "or"]
+      description: Conjunction treatment (join mode).
+    drop_empty:
+      type: boolean
+      description: Drop empty-string items before joining (join mode).
+    empty_as:
+      type: string
+      enum: ["note", "empty"]
+      description: Result for an empty item list (every mode).
+    kv_sep:
+      type: string
+      description: Separator between each key and value (join_pairs mode).
+    item_delim:
+      type: string
+      description: Separator between formatted pairs (join_pairs mode).
+    number_format:
+      type: string
+      enum: ["dot", "paren"]
+      description: Number prefix style (numbered mode).
+    start:
+      type: integer
+      minimum: 0
+      maximum: 999999
+      description: First number (numbered mode).
+    bullet:
+      type: string
+      description: Bullet prefix (bullet mode).
+  required: ["mode"]
