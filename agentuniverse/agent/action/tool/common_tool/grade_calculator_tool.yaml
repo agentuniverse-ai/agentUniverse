@@ -1,0 +1,76 @@
+name: grade_calculator_tool
+description: "Grade calculator tool — pure Python stdlib, no network required. Education-scenario score aggregation: mode='weighted' (assignments [{name, score, weight}] with plain 0-100 scores or raw {score, max} pairs whose percent is computed → weighted mean sum(percent*weight)/sum(weight), per-assignment contribution table, total weight with a warning field when it is not 100, unweighted mean for comparison), mode='drop_lowest' (same plus drop_n: remove the drop_n assignments with the lowest weighted impact percent*weight — not the lowest raw scores — and recompute the mean over the survivors), mode='letter' (map a 0-100 score to a letter via the default American A>=90/B>=80/C>=70/D>=60/F table or a validated strictly-descending custom threshold table, with 4.0-scale grade points evenly spaced from 4.0 down to 0.0) and mode='curve' (curve a scores list with flat_add, adding a positive amount capped at 100, or scale_to_max, the linear rescale curved = score * 100 / max(scores)). Malformed parameters raise ValueError; content-level failures return structured error payloads."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.grade_calculator_tool
+  class: GradeCalculatorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Calculation mode — weighted, drop_lowest, letter or curve.
+    required: true
+  assignments:
+    type: string
+    description: "weighted / drop_lowest only — the assignments to aggregate, as a JSON array string or a sequence of {name?, score, weight} mappings. score is a plain 0-100 number, a nested {score, max} pair or a raw number with a sibling max key (the percent is score / max * 100, rounded to 2 decimals); weight is a finite number >= 0. Between 1 and 500 entries; unknown keys, missing score/weight, negative weights, zero-or-lower maxima and raw scores above their max are rejected."
+    required: false
+  drop_n:
+    type: integer
+    description: drop_lowest only — how many of the lowest-impact (percent * weight) assignments to drop. An integer with 1 <= drop_n < assignment count; defaults to 1.
+    required: false
+  score:
+    type: number
+    description: letter only — the score to map, between 0 and 100.
+    required: false
+  thresholds:
+    type: string
+    description: "letter only — a custom letter table replacing the default A>=90/B>=80/C>=70/D>=60/F scale: a JSON array of {letter, min_score} objects (or an equivalently ordered mapping). 2 to 10 bands, unique non-empty letters, min_score in 0..100, strictly descending."
+    required: false
+  scores:
+    type: string
+    description: curve only — the scores to curve, as a JSON array string or a sequence of numbers between 0 and 100 (1 to 10000 values).
+    required: false
+  curve:
+    type: string
+    description: "curve only — flat_add (add a positive amount to every score, capped at 100) or scale_to_max (linear rescale curved = score * 100 / max(scores))."
+    required: false
+  amount:
+    type: number
+    description: flat_add only — the positive number of points added to every score (each result caps at 100). Must be omitted for scale_to_max.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["weighted", "drop_lowest", "letter", "curve"]
+      description: Calculation mode.
+    assignments:
+      type: string
+      description: Assignments to aggregate (JSON array string or a sequence for programmatic callers).
+    drop_n:
+      type: integer
+      minimum: 1
+      description: Number of lowest-impact assignments to drop (drop_lowest mode only).
+    score:
+      type: number
+      minimum: 0
+      maximum: 100
+      description: Score to map to a letter (letter mode only).
+    thresholds:
+      type: string
+      description: Custom letter threshold table (letter mode only).
+    scores:
+      type: string
+      description: Scores to curve (curve mode only).
+    curve:
+      type: string
+      enum: ["flat_add", "scale_to_max"]
+      description: Curving method (curve mode only).
+    amount:
+      type: number
+      exclusiveMinimum: 0
+      description: Flat points to add (flat_add curve only).
+  required: ["mode"]
