@@ -59,5 +59,7 @@ class RamMemoryStorage(MemoryStorage):
         Returns:
             List[Message]: The list of aU messages.
         """
+        if top_k <= 0:
+            return []
         memories = self.messages.get(session_id, {}).get(agent_id, [])
         return memories[-top_k:]

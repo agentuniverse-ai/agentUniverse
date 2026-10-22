@@ -35,3 +35,18 @@ def test_financial_events_with_same_summary_keep_distinct_ids():
     assert len(result) == 2
     assert {doc.id for doc in result} == {doc.metadata["event_id"] for doc in result}
     assert len({doc.id for doc in result}) == 2
+
+
+def test_extractive_summary_preserves_decimal_and_chinese_sentence_boundaries():
+    aggregator = FinancialEventAggregator(
+        name="test_aggregator",
+        use_embeddings=False,
+        use_llm=False,
+    )
+
+    summary = aggregator._generate_extractive_summary([
+        Document(id="decimal", text="Revenue reached 3.14 billion dollars. Next quarter outlook."),
+        Document(id="chinese", text="公司发布季度业绩。后续将扩大投资。"),
+    ])
+
+    assert summary == "Revenue reached 3.14 billion dollars. 公司发布季度业绩。"

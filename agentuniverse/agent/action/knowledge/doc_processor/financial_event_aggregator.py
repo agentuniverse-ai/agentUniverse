@@ -54,7 +54,7 @@ class FinancialEventAggregator(DocProcessor):
     4. Tracks source attribution and credibility
 
     Attributes:
-        similarity_threshold: Similarity threshold for clustering (0.0-1.0).
+        similarity_threshold: Inclusive minimum similarity for clustering (0.0-1.0).
         use_embeddings: Whether to use embeddings for similarity.
         embedding_name: Name of embedding model to use.
         clustering_method: Clustering algorithm ('dbscan', 'hierarchical').
@@ -250,7 +250,7 @@ class FinancialEventAggregator(DocProcessor):
                 continue
 
             # Find neighbors
-            neighbors = [j for j in range(n) if distance_matrix[i][j] < eps and j != i]
+            neighbors = [j for j in range(n) if distance_matrix[i][j] <= eps and j != i]
 
             if len(neighbors) < 1:
                 # Singleton cluster
@@ -272,7 +272,7 @@ class FinancialEventAggregator(DocProcessor):
                     cluster_docs.append(docs[j])
 
                     # Find neighbors of j
-                    j_neighbors = [k for k in range(n) if distance_matrix[j][k] < eps and k != j]
+                    j_neighbors = [k for k in range(n) if distance_matrix[j][k] <= eps and k != j]
                     queue.extend([k for k in j_neighbors if k not in visited])
 
                 cluster = self._create_cluster(cluster_docs)
@@ -518,6 +518,8 @@ Summary:"""
     def _generate_extractive_summary(self, docs: List[Document]) -> str:
         """Generate extractive summary (fallback method).
 
+        Keep short non-empty sentences as well as longer news excerpts.
+
         Args:
             docs: Documents to summarize.
 
@@ -527,9 +529,11 @@ Summary:"""
         # Simple extractive: concatenate first sentences from each document
         summary_parts = []
         for doc in docs[:5]:  # Limit to first 5 docs
-            # Keep short but meaningful sentences and support common punctuation.
+            # Keep short but meaningful sentences and support common punctuation
+            # without splitting decimal numbers such as 3.14.
             text = doc.text.strip()
-            first_sentence = re.split(r'(?<=[.!?。！？])\s*', text, maxsplit=1)[0]
+            boundary = re.search(r'(?<!\d)[.!?](?=\s|$)|[。！？]', text)
+            first_sentence = text[:boundary.end()] if boundary else text
             if first_sentence:
                 summary_parts.append(first_sentence)
 
@@ -634,7 +638,8 @@ Summary:"""
         keywords = set(['financial_event', cluster.event_type])
         keywords.update(cluster.entities_involved)
 
-        # Create aggregated document
+        # Source-cluster identity stays stable when the summary changes and
+        # separates independent events that happen to have identical summaries.
         aggregated_doc = Document(
             id=cluster.event_id,
             text=summary,

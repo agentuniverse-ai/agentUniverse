@@ -29,13 +29,15 @@ Counting is explicit and honestly named via ``counter``:
   when that package is installed; falls back to the estimate with a warning if
   it is not.
 * ``"char"`` — exact character count.
-* ``"word"`` — exact whitespace word count.
+* ``"word"`` — exact whitespace word count; truncation preserves the original
+  spacing before and between retained words.
 
 The budget is interpreted in the unit of the chosen counter, so the contract is
 never "tokens" while silently counting words.
 """
 
 import logging
+import re
 from typing import Dict, List, Optional
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import \
@@ -125,7 +127,8 @@ class ContextBudgetCompressor(DocProcessor):
         if self.counter == "tiktoken":
             encoder = _tiktoken_encoder(self.tiktoken_encoding)
             if encoder is not None:
-                return len(encoder.encode(text))
+                # Recalled documents contain literal text, not control tokens.
+                return len(encoder.encode(text, disallowed_special=()))
             logger.warning(
                 "tiktoken is not available; counting with the chars/4 estimate "
                 "instead. Install tiktoken or set counter to 'estimate'/'char'/"
@@ -140,16 +143,21 @@ class ContextBudgetCompressor(DocProcessor):
         if self.counter == "char":
             return text[:remaining]
         if self.counter == "word":
-            return " ".join(text.split()[:remaining])
+            for word_count, match in enumerate(re.finditer(r"\S+", text), 1):
+                if word_count == remaining:
+                    return text[:match.end()]
+            return text
         if self.counter == "tiktoken":
             encoder = _tiktoken_encoder(self.tiktoken_encoding)
             if encoder is not None:
                 # A token boundary can split a UTF-8 character. Decode only
                 # complete characters, then recheck the re-encoded size: BPE
                 # token counts are not necessarily stable at a shorter prefix.
-                prefix = encoder.decode(encoder.encode(text)[:remaining],
+                tokens = encoder.encode(text, disallowed_special=())
+                prefix = encoder.decode(tokens[:remaining],
                                         errors="ignore")
-                while prefix and len(encoder.encode(prefix)) > remaining:
+                while prefix and len(encoder.encode(
+                        prefix, disallowed_special=())) > remaining:
                     prefix = prefix[:-1]
                 return prefix
         # "estimate" (and the tiktoken-unavailable fallback): ~4 chars per unit.
