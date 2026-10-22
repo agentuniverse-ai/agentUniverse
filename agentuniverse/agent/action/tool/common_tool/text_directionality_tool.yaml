@@ -1,0 +1,29 @@
+name: text_directionality_tool
+description: Text directionality tool — pure Python stdlib unicodedata, no network required. Detect the dominant direction of text (ltr/rtl/mixed/neutral) from Unicode bidi classes with per-class counts and ratio (mode='detect'), analyze each paragraph split on blank lines and flag mixed paragraphs (mode='per_paragraph'), locate explicit bidi control characters LRM/RLM, U+202A-202E embedding/override marks and U+2066-2069 isolates with a display-spoofing security note (mode='bidi_chars'), and strip those controls returning the cleaned text with removal counts (mode='strip_bidi').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_directionality_tool
+  class: TextDirectionalityTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Analysis mode — detect, per_paragraph, bidi_chars or strip_bidi.
+    required: true
+  text:
+    type: string
+    description: The text to analyze. Required for every mode; non-empty, at most 100,000 characters.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["detect", "per_paragraph", "bidi_chars", "strip_bidi"]
+      description: Analysis mode.
+    text:
+      type: string
+      description: The text to analyze (all modes).
+  required: ["mode", "text"]
