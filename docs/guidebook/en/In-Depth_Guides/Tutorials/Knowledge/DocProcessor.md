@@ -292,6 +292,46 @@ metadata:
 - custom_patterns: Extra `{"name", "pattern"}` regex entries for domain-specific identifiers. Invalid entries fail component initialization.
 - log_key: Metadata key recording a `{entity: count}` summary per document; set to null to omit.
 
+### [SensitiveWordFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sensitive_word_filter.yaml)
+
+`SensitiveWordFilter` applies an operator-owned compliance vocabulary to Knowledge documents. Unlike a profanity policy with a built-in word set, it ships with no policy terms: applications provide literal words inline and/or in UTF-8 word-list files. This makes it suitable for multilingual, domain-specific policies without imposing one project's moderation vocabulary on every user.
+
+The matcher performs Unicode compatibility normalization and case folding by default, ignores invisible Unicode format characters commonly used to evade literal filters, uses whole-word boundaries for terms whose normalized form is ASCII, and uses substring matching for other terms such as Chinese. Matching is leftmost-longest, so when both `敏感` and `敏感词` are configured, `敏感词` is replaced once. Terms are always literals; characters such as `.`, `+`, and `[` never become regular expressions.
+
+The built-in YAML is intentionally `enabled: false`. Copy it into the application's DocProcessor package, enable it, and define a policy:
+
+```yaml
+name: 'company_sensitive_word_filter'
+description: 'Apply the company Knowledge content policy'
+enabled: true
+words:
+  - 'internal-only'
+  - '内部术语'
+word_list_paths:
+  - 'resources/compliance_words.txt'
+action: 'mask'                  # mask | drop_document | raise
+replacement: '[FILTERED]'
+case_sensitive: false
+ascii_word_boundary: true
+metadata_key: 'sensitive_word_filter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_word_filter'
+  class: 'SensitiveWordFilter'
+```
+
+- `words`: Inline literal terms. The component hides them from its representation and serialized model output.
+- `word_list_paths`: UTF-8 or UTF-8-BOM files with one term per line. Relative paths resolve from the component YAML directory; blank lines and lines beginning with `#` are ignored. Files are loaded once when the component is initialized.
+- `action`: `mask` replaces every match, `drop_document` removes every matching document, and `raise` blocks the batch with a `SensitiveWordDetectedError`. All actions use strict any-match semantics; there is no ratio threshold that can allow a configured term through.
+- `replacement`: Literal replacement for `mask`.
+- `case_sensitive`: Preserve case when true; otherwise use Unicode case folding.
+- `ascii_word_boundary`: Prevent an ASCII term such as `bad` from matching `badminton`. Non-ASCII terms continue to use substring matching.
+- `metadata_key`: Stores only `{"action": ..., "match_count": ...}`. It never stores matched terms, text snippets, or positions; set it to null to omit metadata.
+
+Configuration is validated before use. An enabled component with no effective terms, a missing/non-UTF-8 word-list file, malformed entries, or an unsupported action raises instead of silently disabling protection.
+
+This is a **Knowledge pipeline** component, not a global Agent guardrail. It scans only `Document.text`, not metadata values, identifiers, keywords, or embeddings. Putting it only in `post_processors` protects recalled text before later Knowledge processors/the LLM, but does not remove the original text already stored in a Store. To filter before persistence, configure it in `insert_processors` and `update_processors` as well. Place it before any processor that sends document text to an external service.
+
 ### [ContextBudgetCompressor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/context_budget_compressor.yaml)
 
 This component fits the recalled documents into a fixed cumulative size budget (typically the LLM context window). It walks the recalled list — already ranked by the store or an earlier reranker / fusion processor — keeping documents in order while their total size stays within `budget`; the boundary document that would overflow is optionally truncated so the budget is used as fully as possible without exceeding it. It addresses the *context-window management* direction of issue #248.

@@ -83,7 +83,7 @@ doc_processor = ['sample_standard_app.intelligence.agentic.knowledge.doc_process
 
 ## agentUniverse内置有以下DocProcessor:
 ### [CharacterTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/character_text_splitter.yaml)
-该组件根据字符数对原始文本进行拆分。  
+该组件根据字符数对原始文本进行拆分。
 组件定义文件如下：
 ```yaml
 name: 'character_text_splitter'
@@ -143,7 +143,7 @@ metadata:
 - separators: 指定的分隔符列表，按顺序尝试使用分隔符进行切分。如果第一个分隔符不能满足条件，则递归地使用下一个分隔符。
 
 ### [JiebaKeywordExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/jieba_keyword_extractor.yaml)
-该组件使用结巴（Jieba）分词库从文本中提取关键词。它可以根据设定的 top_k 参数提取出最重要的几个关键词，用于后续作为倒排索引。  
+该组件使用结巴（Jieba）分词库从文本中提取关键词。它可以根据设定的 top_k 参数提取出最重要的几个关键词，用于后续作为倒排索引。
 组件定义文件如下：
 ```yaml
 name: 'jieba_keyword_extractor'
@@ -289,6 +289,46 @@ metadata:
 - replacement: 替换每个匹配的文本。
 - custom_patterns: 额外的 `{"name","pattern"}` 正则项，用于领域专属标识符；非法配置会导致组件初始化失败。
 - log_key: 记录每篇文档 `{实体: 数量}` 汇总的 metadata 键；设为 null 则不写入。
+
+### [SensitiveWordFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sensitive_word_filter.yaml)
+
+`SensitiveWordFilter` 使用运营方自有合规词库处理 Knowledge 文档。它不同于自带固定词表的辱骂内容审核策略：组件本身不提供任何政策词，应用通过内联配置和/或 UTF-8 词表文件提供字面量词条，因此适合多语言、领域专属的合规政策，也不会把某一套审核口径强加给所有用户。
+
+匹配器默认执行 Unicode 兼容归一化与大小写折叠，并忽略常用于绕过字面过滤的不可见 Unicode 格式字符。归一化后为 ASCII 的词条采用整词边界，中文等其他词条采用子串匹配；重叠时使用“从左到右、同起点最长匹配”，因此同时配置 `敏感` 与 `敏感词` 时，`敏感词` 只替换一次。所有词条都是字面量，`.`、`+`、`[` 等字符不会被当成正则表达式。
+
+内置 YAML 有意设置为 `enabled: false`。请复制到应用的 DocProcessor 包，启用后配置自己的政策：
+
+```yaml
+name: 'company_sensitive_word_filter'
+description: '执行公司 Knowledge 内容合规策略'
+enabled: true
+words:
+  - 'internal-only'
+  - '内部术语'
+word_list_paths:
+  - 'resources/compliance_words.txt'
+action: 'mask'                  # mask | drop_document | raise
+replacement: '[FILTERED]'
+case_sensitive: false
+ascii_word_boundary: true
+metadata_key: 'sensitive_word_filter'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_word_filter'
+  class: 'SensitiveWordFilter'
+```
+
+- `words`: 内联字面量词条；组件的对象表示和序列化结果不会包含这些词条。
+- `word_list_paths`: UTF-8 或带 BOM 的 UTF-8 文件，每行一个词条。相对路径以组件 YAML 所在目录为基准；空行和以 `#` 开头的行会被忽略。文件只在组件初始化时加载一次。
+- `action`: `mask` 替换每个命中，`drop_document` 丢弃每篇命中文档，`raise` 使用 `SensitiveWordDetectedError` 阻断整批文档。三种动作都是“任一命中即生效”，不存在可能放过已配置词条的比例阈值。
+- `replacement`: `mask` 使用的字面替换文本。
+- `case_sensitive`: 为 true 时区分大小写；否则使用 Unicode 大小写折叠。
+- `ascii_word_boundary`: 避免 ASCII 词条 `bad` 误匹配 `badminton`；非 ASCII 词条仍采用子串匹配。
+- `metadata_key`: 只写入 `{"action": ..., "match_count": ...}`，绝不保存命中词、原文片段或位置；设为 null 可关闭 metadata。
+
+配置会在使用前严格校验。启用后没有有效词条、词表文件不存在或不是合法 UTF-8、词条格式错误、动作不支持时都会直接报错，不会静默失效。
+
+这是 **Knowledge pipeline** 组件，不是全局 Agent 安全钩子。它只扫描 `Document.text`，不会把 metadata 值、标识符、关键词或 embedding 作为过滤输入。仅配置在 `post_processors` 时，它会保护召回后送往后续 Knowledge 处理器/LLM 的文本，但不会删除 Store 中已经存在的原文。若需要入库前保护，还应把它配置到 `insert_processors` 和 `update_processors`；若后续处理器会把文档发送给外部服务，应将本过滤器排在这些处理器之前。
 
 ### [ContextBudgetCompressor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/context_budget_compressor.yaml)
 
