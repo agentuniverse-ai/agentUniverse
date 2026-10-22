@@ -328,6 +328,71 @@ class JwkToolMutationTest(unittest.TestCase):
             self.assertIn("66 bytes, not 64 or 65", json.dumps(result["errors"]))
         self.assertEqual(cases, 24)
 
+    def test_ec_private_key_length_checked_for_every_curve(self):
+        """Regression: the EC private key d must match the coordinate byte
+        length (RFC 7518 6.2.2.1) for every supported curve, exactly as OKP
+        validates d and EC validates x/y."""
+        for crv, size in (("P-256", 32), ("P-384", 48), ("P-521", 66), ("P-256K", 32), ("secp256k1", 32)):
+            for delta in (-1, 1):
+                key = ec_public_jwk(self.rng, crv, size)
+                key["d"] = b64u(random_bytes(self.rng, size + delta))
+                result = self.tool.execute(mode="analyze", jwk=key)
+                self.assertIn("ec_coordinate_length", self.error_codes(result), (crv, delta))
+                entry = next(
+                    e for e in result["errors"]
+                    if e["code"] == "ec_coordinate_length" and e.get("param") == "d"
+                )
+                self.assertEqual(entry["actual"], size + delta)
+                self.assertEqual(entry["expected"], size)
+                self.assertEqual(result["strength"]["d_bytes"], size + delta)
+        # A correctly sized d passes with no structural error (private-material warning only).
+        key = ec_public_jwk(self.rng, "P-521", 66)
+        key["d"] = b64u(random_bytes(self.rng, 66))
+        result = self.tool.execute(mode="analyze", jwk=key)
+        self.assertEqual(self.error_codes(result), set())
+        self.assertTrue(result["contains_private_material"])
+
+    def test_invalid_character_not_echoed_for_private_parameters(self):
+        """Regression: base64url defects in private parameters must not echo
+        the offending character (it is key material); public parameters keep
+        the diagnostic character."""
+        secret_oct = oct_jwk(self.rng, 32)
+        mutated = dict(secret_oct)
+        mutated["k"] = secret_oct["k"][:10] + "+" + secret_oct["k"][11:]
+        result = self.tool.execute(mode="analyze", jwk=mutated)
+        self.assertIn("base64url_invalid_character", self.error_codes(result))
+        entry = next(e for e in result["errors"] if e["code"] == "base64url_invalid_character")
+        self.assertEqual(entry["param"], "k")
+        self.assertEqual(entry["position"], 10)
+        self.assertNotIn("'+'", entry["detail"])
+        self.assertIn("withheld", entry["detail"])
+        rendered = json.dumps(result)
+        for fragment in (mutated["k"], secret_oct["k"][:16], secret_oct["k"][-16:]):
+            self.assertNotIn(fragment, rendered)
+        # EC d: same rule.
+        key = ec_public_jwk(self.rng, "P-384", 48)
+        d_value = b64u(random_bytes(self.rng, 48))
+        key["d"] = d_value[:20] + "/" + d_value[21:]
+        result = self.tool.execute(mode="analyze", jwk=key)
+        entry = next(e for e in result["errors"] if e["code"] == "base64url_invalid_character")
+        self.assertEqual(entry["param"], "d")
+        self.assertEqual(entry["position"], 20)
+        self.assertNotIn("'/'", entry["detail"])
+        self.assertNotIn(d_value, json.dumps(result))
+        # Public parameters keep the character for diagnosis.
+        key = dict(self.base_rsa)
+        key["n"] = key["n"][:5] + "#" + key["n"][6:]
+        result = self.tool.execute(mode="analyze", jwk=key)
+        entry = next(e for e in result["errors"] if e["code"] == "base64url_invalid_character")
+        self.assertIn("'#'", entry["detail"])
+        # Padding defects stay diagnosable on private parameters: '=' is
+        # structural, not value material, so the message is unchanged.
+        key = oct_jwk(self.rng, 32)
+        key["k"] += "="
+        result = self.tool.execute(mode="analyze", jwk=key)
+        self.assertIn("base64url_padding_present", self.error_codes(result))
+        self.assertIn("padding", json.dumps(result["errors"]))
+
     def test_bad_base64url_positions(self):
         cases = [
             ("n", "AQ+B", 2, "base64url_invalid_character"),   # '+' is standard base64 only

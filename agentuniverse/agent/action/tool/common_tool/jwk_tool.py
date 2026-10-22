@@ -19,9 +19,9 @@ class JwkTool(Tool):
 
     Scope (structure layer only): RFC 7517 parameter inventory, per-kty required
     parameters, strict base64url validation, parameter-model consistency (RSA
-    modulus/exponent sizes, EC crv to coordinate byte lengths, oct key length,
-    OKP crv to subkey lengths), size/bit-strength reporting, RFC 7638
-    thumbprints, JWKS set-level checks, and public-key extraction.
+    modulus/exponent sizes, EC crv to coordinate and private-key byte lengths,
+    oct key length, OKP crv to subkey lengths), size/bit-strength reporting,
+    RFC 7638 thumbprints, JWKS set-level checks, and public-key extraction.
 
     Explicitly out of scope: signature verification, encryption, point-on-curve
     membership (requires field arithmetic), and any private-key arithmetic.
@@ -363,11 +363,17 @@ class JwkTool(Tool):
                     "detail": f"parameter exceeds max_param_chars ({self.max_param_chars}); length reported, charset/decode and size checks skipped",
                 })
                 continue
-            if self._validate_b64url(name, value, errors):
+            secret = name in self._PRIVATE_PARAMS.get(kty, ())
+            if self._validate_b64url(name, value, errors, secret=secret):
                 decoded[name] = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
-    def _validate_b64url(self, name: str, value: str, errors: list[dict[str, Any]]) -> bool:
-        """Strict RFC 7517 base64url check; reports the exact position of the first defect."""
+    def _validate_b64url(self, name: str, value: str, errors: list[dict[str, Any]], secret: bool = False) -> bool:
+        """Strict RFC 7517 base64url check; reports the exact position of the first defect.
+
+        The offending character itself is echoed only for public parameters; for
+        private parameters (d, p, q, dp, dq, qi, k) it is withheld because it is
+        key material.
+        """
         match = self._INVALID_B64URL_RE.search(value)
         if match is not None:
             position = match.start()
@@ -377,6 +383,13 @@ class JwkTool(Tool):
                 detail = (
                     f"parameter '{name}' position {position}: '=' padding is not used in "
                     "unpadded base64url (RFC 7517 2)"
+                )
+            elif secret:
+                code = "base64url_invalid_character"
+                detail = (
+                    f"parameter '{name}' position {position}: contains a character outside the "
+                    "base64url alphabet (A-Z, a-z, 0-9, '-', '_'); the character is withheld "
+                    "because this parameter is private key material"
                 )
             else:
                 code = "base64url_invalid_character"
@@ -486,15 +499,29 @@ class JwkTool(Tool):
             return report
         report["coordinate_bytes_expected"] = expected
         report["curve_bits"] = {32: 256, 48: 384, 66: 521}[expected]
-        for name in ("x", "y"):
+        # RFC 7518 6.2.1/6.2.2.1: x, y and the private key d are all fixed-size
+        # field elements of exactly the curve's byte length.
+        for name in ("x", "y", "d"):
             if name in decoded:
                 actual = len(decoded[name])
                 report[f"{name}_bytes"] = actual
                 if actual != expected:
+                    if name == "d":
+                        reason = (
+                            "the curve is 521 bits, so the private key d is 66 bytes, not 64 or 65"
+                            if crv == "P-521"
+                            else "the ECC private key d must be the same fixed length as the coordinates (RFC 7518 6.2.2.1)"
+                        )
+                    else:
+                        reason = (
+                            "the curve is 521 bits, so coordinates are 66 bytes, not 64 or 65"
+                            if crv == "P-521"
+                            else "coordinates must be the full fixed field size"
+                        )
                     errors.append(self._entry(
                         "ec_coordinate_length",
                         f"parameter '{name}' is {actual} bytes but crv {crv} requires exactly {expected} bytes "
-                        f"({'the curve is 521 bits, so coordinates are 66 bytes, not 64 or 65' if crv == 'P-521' else 'coordinates must be the full fixed field size'})",
+                        f"({reason})",
                         param=name,
                         expected=expected,
                         actual=actual,

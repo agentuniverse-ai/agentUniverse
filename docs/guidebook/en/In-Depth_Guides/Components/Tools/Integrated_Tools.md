@@ -673,14 +673,15 @@ oct, OKP), a parameter inventory with the RFC 7517 section 4 table meanings
 and private-parameter flags, and structured errors: unknown or missing kty,
 missing kty-required parameters (RSA n+e, EC crv+x+y, oct k, OKP crv+x),
 strict base64url validation with the exact position of the first padding,
-charset, or length defect, and parameter-model consistency. RSA keys get
+charset, or length defect (the offending character itself is withheld for
+private parameters), and parameter-model consistency. RSA keys get
 modulus and exponent size reporting with NIST-aligned strength tiers
 (2048/3072/4096), an even-modulus check, an exponent range check, and an
-e=3 weakness note; EC coordinate byte lengths are matched exactly to the
-curve table (P-256 32, P-384 48, P-521 66 — the curve is 521 bits — and
-P-256K/secp256k1 32); oct key lengths map to the 128/192/256-bit symmetric
-tiers; OKP keys map Ed25519/X25519 to 32 bytes and Ed448/X448 to 57.
-Strength is reported, not enforced.
+e=3 weakness note; EC coordinate and private-key (`d`) byte lengths are
+matched exactly to the curve table (P-256 32, P-384 48, P-521 66 — the
+curve is 521 bits — and P-256K/secp256k1 32); oct key lengths map to the
+128/192/256-bit symmetric tiers; OKP keys map Ed25519/X25519 to 32 bytes
+and Ed448/X448 to 57. Strength is reported, not enforced.
 
 The `analyze_set` mode analyzes every key in a JWKS and reports set-level
 findings: duplicate `kid` values (ambiguous key lookup), RFC 7638 thumbprint
