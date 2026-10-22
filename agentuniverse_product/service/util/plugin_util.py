@@ -6,6 +6,7 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: plugin_util.py
 import re
+import copy
 from typing import Dict, List
 import uuid
 
@@ -13,6 +14,23 @@ from yaml import safe_load
 from agentuniverse_product.base.product_manager import ProductManager
 from agentuniverse_product.service.model.plugin_dto import PluginDTO
 from agentuniverse_product.service.util.common_util import validate_component_id
+
+
+def _resolve_local_reference(openapi: dict, value: dict) -> dict:
+    reference = value.get('$ref')
+    if not reference:
+        return copy.deepcopy(value)
+    if not reference.startswith('#/'):
+        raise ValueError(f'Only local OpenAPI references are supported: {reference}')
+    resolved = openapi
+    try:
+        for key in reference[2:].split('/'):
+            resolved = resolved[key.replace('~1', '/').replace('~0', '~')]
+    except (KeyError, TypeError):
+        raise ValueError(f'Invalid local OpenAPI reference: {reference}') from None
+    if not isinstance(resolved, dict):
+        raise ValueError(f'Invalid local OpenAPI reference: {reference}')
+    return copy.deepcopy(resolved)
 
 
 def validate_create_plugin_parameters(plugin_dto: PluginDTO) -> None:
@@ -89,6 +107,11 @@ def parse_openapi_yaml_to_tool_bundle(yaml: str) -> list:
                 })
     # create tool bundle
     for interface in interfaces:
+        if 'parameters' in interface['operation']:
+            interface['operation']['parameters'] = [
+                _resolve_local_reference(openapi, parameter)
+                for parameter in interface['operation']['parameters']
+            ]
         # check if there is a request body
         if 'requestBody' in interface['operation']:
             request_body = interface['operation']['requestBody']
@@ -100,11 +123,7 @@ def parse_openapi_yaml_to_tool_bundle(yaml: str) -> list:
 
                     if '$ref' in content['schema']:
                         # get the reference
-                        root = openapi
-                        reference = content['schema']['$ref'].split(
-                            '/')[1:]
-                        for ref in reference:
-                            root = root[ref]
+                        root = _resolve_local_reference(openapi, content['schema'])
                         # overwrite the content
                         interface['operation']['requestBody']['content'][content_type]['schema'] = root
 
