@@ -1,0 +1,23 @@
+name: 'outline_extractor'
+description: 'capture the heading hierarchy (ATX, setext, numbered, CJK numbered) of each document into metadata for navigation and filtering'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.outline_extractor'
+  class: 'OutlineExtractor'
+
+# Minimum number of headings a document must contain for the outline to be
+# stamped into its metadata; must be >= 1. Documents with 1..min-1 headings
+# are left untouched, while documents with no heading at all always get an
+# empty outline (section_count 0, max_depth 0) plus a note under
+# metadata['outline_note'] so "processed, no structure" is distinguishable
+# from "not yet processed".
+min_headings: 1
+
+# Metadata key the outline list is written to. Each entry is a mapping of
+# level (1-based depth), text (title with markers stripped), span
+# ([start, end) character offsets into the document text) and number
+# (marker such as '1.1' or '一、'; null for unnumbered Markdown headings).
+# The companion keys 'section_count' and 'max_depth' are fixed; '' disables
+# all stamping.
+outline_key: 'outline'
