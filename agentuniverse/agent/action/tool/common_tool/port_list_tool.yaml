@@ -1,0 +1,32 @@
+name: port_list_tool
+description: Parse, expand, canonicalize, and combine TCP/UDP port specifications with a common-service lookup table.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.port_list_tool
+  class: PortListTool
+input_keys:
+  - mode
+  - spec
+max_spec_chars: 4096
+max_ranges: 1024
+max_expanded_ports: 8192
+max_lookup_ports: 1024
+args_model:
+  mode: {type: string, required: true}
+  spec: {type: string, required: false}
+  other_spec: {type: string, required: false}
+  ports: {type: array, required: false}
+  system_check: {type: boolean, required: false, default: false}
+args_model_schema:
+  type: object
+  properties:
+    mode: {type: string, enum: [parse, expand, compress, lookup, union, intersect]}
+    spec: {type: string}
+    other_spec: {type: string}
+    ports:
+      type: array
+      items: {type: integer, minimum: 0, maximum: 65535}
+    system_check: {type: boolean, default: false}
+  required: [mode]
+  additionalProperties: false

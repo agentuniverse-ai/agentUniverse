@@ -649,3 +649,39 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## PortListTool
+
+`PortListTool` parses, expands, canonicalizes, and combines TCP/UDP port
+specifications such as `22,80-90,443`. It validates every port against the
+0-65535 range, tolerates whitespace, and turns any input into the canonical
+form: sorted, deduplicated, with overlapping and adjacent ranges merged.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.port_list_tool import PortListTool
+
+tool = PortListTool()
+result = tool.execute(mode="parse", spec="443, 85-95, 80-90, 22")
+# result["canonical"] == "22,80-95,443"
+```
+
+Six modes are available. `parse` returns merged ranges, port count, and
+findings (`duplicate_items`, `merged_ranges`, `unsorted_input`,
+`single_port_range`, `leading_zeros`); `expand` returns the explicit port
+list, truncated at `max_expanded_ports` with the full count reported;
+`compress` turns a spec or a raw integer port list back into the minimal
+canonical spec; `lookup` maps ports to common IANA service names from an
+embedded table, reporting misses as `unknown` instead of guessing; `union`
+and `intersect` perform set algebra over two specs or a spec and a port list.
+
+Descending ranges (`90-80`), out-of-range ports, empty or malformed items,
+and over-cap inputs return structured validation errors. The optional
+`system_check=True` flag cross-checks table rows against
+`socket.getservbyname`; because that reads the local services database, a
+disagreement (for example IANA maps `http-alt` to both 591 and 8080) is
+reported as platform information, never as an error.
+
+The tool is stdlib-only and deterministic: no network, filesystem, clock, or
+randomness is involved, and identical inputs always produce identical
+outputs. Spec length, item count, expansion size, and lookup size are bounded
+by configurable caps.
