@@ -1,0 +1,52 @@
+name: phonetic_code_tool
+description: Phonetic code tool — pure Python stdlib, no network required. Classic American Soundex codes for one or more words (mode='soundex', e.g. Robert->R163), simplified NYSIIS keys (mode='nysiis', e.g. Smith->SNAT), a two-word comparison with same-code flags and code distances (mode='compare'), and Soundex-based grouping of a word list for name dedup (mode='batch_group').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.phonetic_code_tool
+  class: PhoneticCodeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Coding mode — soundex, nysiis, compare or batch_group.
+    required: true
+  text:
+    type: string
+    description: The word(s) to encode — a single word or several whitespace-separated words, each fully alphabetic. Required for the soundex and nysiis modes.
+    required: false
+  word1:
+    type: string
+    description: The first of the two single words to compare. Required for the compare mode.
+    required: false
+  word2:
+    type: string
+    description: The second of the two single words to compare. Required for the compare mode.
+    required: false
+  words:
+    type: list
+    description: The list of alphabetic words to group by Soundex code. Required for the batch_group mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["soundex", "nysiis", "compare", "batch_group"]
+      description: Coding mode.
+    text:
+      type: string
+      description: Word(s) to encode — single word or whitespace-separated words, each fully alphabetic (soundex, nysiis modes).
+    word1:
+      type: string
+      description: First single word to compare (compare mode).
+    word2:
+      type: string
+      description: Second single word to compare (compare mode).
+    words:
+      type: array
+      items:
+        type: string
+      description: Word list to group by Soundex code (batch_group mode).
+  required: ["mode"]
