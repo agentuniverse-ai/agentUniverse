@@ -1,0 +1,18 @@
+name: 'tiny_edit_neighborhood_tool'
+description: |
+  levenshtein neighbourhood radius 0 over 10 tokens, casefold on. (au1k series #12, sequence)
+
+  Actions:
+    - action=run: apply the documented default parameterization to x.
+    - action=alt: apply the alternative parameterization (see provenance).
+    - action=meta: return assignment provenance without computing.
+
+  Any p1..p4 passed explicitly overrides the assignment value. The tool runs
+  fully offline on stdlib reasoning; malformed inputs raise ValueError. x is a
+  string, list, dict or number accepted by the wrapped algorithm; outputs are
+  bounded JSON-serializable dicts.
+tool_type: 'func'
+input_keys: ['action']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.au_12_tiny_edit_neighborhood'
