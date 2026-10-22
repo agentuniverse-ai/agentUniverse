@@ -1,0 +1,45 @@
+name: column_stats_tool
+description: Profile CSV columns with type inference and deterministic statistics.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.column_stats_tool
+  class: ColumnStatsTool
+input_keys:
+  - mode
+max_csv_bytes: 8388608
+max_rows: 200000
+max_columns: 4096
+max_cell_bytes: 1048576
+max_distinct: 10000
+max_top_values: 10
+max_value_chars: 120
+max_warnings: 20
+max_conflict_lines: 10
+max_failed_cells: 20
+max_sample_rows: 1000
+max_preview_values: 5
+histogram_bins: 10
+mean_drift_threshold: 0.1
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [profile, column_detail, compare, sample]
+    csv_text: {type: string}
+    csv_text_a: {type: string}
+    csv_text_b: {type: string}
+    column: {type: string}
+    column_index: {type: integer, minimum: 0}
+    n: {type: integer, minimum: 1}
+    sample_mode:
+      type: string
+      enum: [first, last, random]
+      default: first
+    seed: {type: integer, minimum: 0}
+    delimiter: {type: string, default: ","}
+    quotechar: {type: string, default: "\""}
+    header: {type: boolean, default: true}
+  required: [mode]
+  additionalProperties: false
