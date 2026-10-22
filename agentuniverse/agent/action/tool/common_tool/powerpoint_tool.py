@@ -329,6 +329,8 @@ class PowerPointTool(Tool):
                 }
             )
             if budget.chars_exhausted():
+                if slide_number < len(presentation.slides):
+                    budget.mark_truncated()
                 break
 
         return {
@@ -689,6 +691,7 @@ class _ReadBudget:
         if len(normalized) <= self.remaining_chars:
             self.remaining_chars -= len(normalized)
             return normalized, False
+        self.mark_truncated()
         if self.remaining_chars <= 0:
             return "", True
         if self.remaining_chars == 1:

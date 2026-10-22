@@ -207,5 +207,12 @@ Ollama platform model channel: [ollama_llm_channel](../../../../../../agentunive
 
 ## Usage Recommendations
 
+The shared `LLMChannel` stream parser accepts SDK chunk objects and plain
+dictionaries. SDK objects are normalized once with `model_dump()`; dictionary
+chunks are retained directly in `LLMOutput.raw`, including provider metadata.
+Both synchronous and asynchronous channel streams use this parser. Empty-choice
+usage chunks retain their empty text and usage data. Custom dictionary chunks
+with choices should contain a `delta` mapping, as in the SDK streaming format.
+
 1. When configuring model channels, ensure all necessary parameters are correctly set, especially critical parameters like channel_api_key and channel_api_base.
-2. For different channels, model_support_stream and model_support_max_context_length may vary, so it's recommended to configure them according to actual circumstances. 
+2. For different channels, model_support_stream and model_support_max_context_length may vary, so it's recommended to configure them according to actual circumstances.

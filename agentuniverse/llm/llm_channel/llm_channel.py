@@ -268,8 +268,7 @@ class LLMChannel(ComponentBase):
 
     @staticmethod
     def parse_result(chunk):
-        """Generate the result of the stream."""
-        chat_completion = chunk
+        """Parse a dictionary or SDK stream chunk, retaining normalized raw data."""
         if not isinstance(chunk, dict):
             chunk = chunk.model_dump()
 
@@ -284,7 +283,7 @@ class LLMChannel(ComponentBase):
             text = ""
         return LLMOutput(
             text=text,
-            raw=chat_completion.model_dump(),
+            raw=chunk,
             message=Message(content=text, type=role),
             usage=TokenUsage.from_openai(chunk.get('usage', {}))
         )

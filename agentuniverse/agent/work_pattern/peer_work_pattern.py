@@ -20,6 +20,8 @@ class PeerWorkPattern(WorkPattern):
     expressing: ExpressingAgentTemplate = None
     reviewing: ReviewingAgentTemplate = None
 
+    _JUMP_STEPS = ('planning', 'executing', 'expressing', 'reviewing')
+
     def invoke(self, input_object: InputObject, work_pattern_input: dict, **kwargs) -> dict:
         self._validate_work_pattern_members()
 
@@ -30,7 +32,7 @@ class PeerWorkPattern(WorkPattern):
         reviewing_result = dict()
 
         retry_count = work_pattern_input.get('retry_count')
-        jump_step = work_pattern_input.get('jump_step')
+        jump_step = self._resolve_jump_step(work_pattern_input)
         eval_threshold = work_pattern_input.get('eval_threshold')
 
         for _ in range(retry_count):
@@ -66,7 +68,7 @@ class PeerWorkPattern(WorkPattern):
         reviewing_result = dict()
 
         retry_count = work_pattern_input.get('retry_count')
-        jump_step = work_pattern_input.get('jump_step')
+        jump_step = self._resolve_jump_step(work_pattern_input)
         eval_threshold = work_pattern_input.get('eval_threshold')
 
         for _ in range(retry_count):
@@ -163,6 +165,29 @@ class PeerWorkPattern(WorkPattern):
             peer_round_results['reviewing_result'] = reviewing_result.to_dict()
         input_object.add_data('reviewing_result', reviewing_result)
         return reviewing_result.to_dict()
+
+    def _resolve_jump_step(self, work_pattern_input: dict) -> str:
+        """Resolve and validate the jump_step retry-loop parameter.
+
+        Falls back to 'expressing' (the PeerAgentTemplate class default) when
+        the parameter is missing or None, and rejects values outside the four
+        peer steps: an unrecognized value silently skips every step in all
+        retry rounds, leaving empty per-round results.
+
+        Args:
+            work_pattern_input (dict): Work pattern input dictionary.
+
+        Returns:
+            The validated jump step.
+
+        Raises:
+            ValueError: If jump_step is not one of the peer steps.
+        """
+        jump_step = work_pattern_input.get('jump_step') or 'expressing'
+        if jump_step not in self._JUMP_STEPS:
+            raise ValueError(
+                f"jump_step must be one of {list(self._JUMP_STEPS)}, got {jump_step!r}.")
+        return jump_step
 
     def _validate_work_pattern_members(self):
         if self.planning and not isinstance(self.planning, PlanningAgentTemplate):
