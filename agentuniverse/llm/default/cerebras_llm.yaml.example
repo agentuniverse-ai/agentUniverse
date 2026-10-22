@@ -1,0 +1,13 @@
+name: 'default_cerebras_llm'
+description: 'default cerebras llm powered by the Cerebras Wafer-Scale Engine inference service'
+model_name: 'llama-3.3-70b'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${CEREBRAS_API_KEY}'
+api_base: 'https://api.cerebras.ai/v1'
+proxy: '${CEREBRAS_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.cerebras_llm'
+  class: 'CerebrasLLM'
