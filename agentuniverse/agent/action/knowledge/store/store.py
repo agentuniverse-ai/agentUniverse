@@ -5,6 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: store.py
+import inspect
 from typing import Any, List, Optional
 
 from agentuniverse.base.component.component_base import ComponentEnum
@@ -47,8 +48,9 @@ class Store(ComponentBase):
 
         Args:
             store_configer(ComponentConfiger): A configer contains store
-            basic info. The client will be created in post fork due to
-            conflicts that may occur in a multithreaded scenario.
+            basic info. Synchronous client factories run after fork. Coroutine
+            factories are awaited lazily by the store on its operating event
+            loop; creating them in a temporary startup loop is unsafe.
         Returns:
             Store: A store instance.
         """
@@ -57,7 +59,8 @@ class Store(ComponentBase):
         if store_configer.description:
             self.description = store_configer.description
         add_post_fork(self._new_client)
-        add_post_fork(self._new_async_client)
+        if not inspect.iscoroutinefunction(self._new_async_client):
+            add_post_fork(self._new_async_client)
         return self
 
     def query(self, query: Query, **kwargs) -> List[Document]:
