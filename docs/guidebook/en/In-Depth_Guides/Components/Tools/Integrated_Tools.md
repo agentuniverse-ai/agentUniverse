@@ -636,3 +636,45 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Text Codec Tool
+
+`TextCodecTool` is a text encoding / hashing / ID utility built purely on
+the Python standard library — `base64`, `urllib.parse`, `hashlib` and
+`uuid` — with zero network access. It covers the identifier plumbing
+agents often need: `base64` mode encodes and decodes standard Base64 of
+UTF-8 text; `url` mode percent encodes and decodes according to RFC
+3986 with an optional `safe` extra-unescaped character string; `hex`
+mode encodes and decodes lowercase hexadecimal; `hash` mode computes
+MD5 / SHA-1 / SHA-256 / SHA-512 digests (lowercase hex) with an
+optional salt prefixed to the text; and `uuid` mode generates UUID v4
+random values or deterministic UUID v5 values from a namespace and
+name, using the well-known `dns` / `url` / `oid` / `x500` namespaces or
+a custom namespace given as a UUID hex string.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.text_codec_tool import TextCodecTool
+
+tool = TextCodecTool()
+b64 = tool.execute(mode="base64", operation="encode", text="hello")["result"]
+url = tool.execute(mode="url", operation="encode", text="hello world/é")["result"]
+digest = tool.execute(mode="hash", text="hello", algorithm="sha256", salt="pepper")["result"]
+uid = tool.execute(mode="uuid", version=5, namespace="dns", name="python.org")["result"]
+```
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, empty text in the encode/decode modes,
+unknown mode / operation / algorithm / version, missing UUID v5
+`name` or `namespace`, whitespace or non-ASCII `safe` characters,
+text over 100,000 characters) raise a `ValueError` (the `hash` mode
+also accepts the empty string, whose digest is well-defined). Errors that depend on the content
+being processed — invalid Base64, dangling or non-hex `%` escapes,
+invalid hex digits, decoded bytes that are not valid UTF-8, and a
+namespace that is neither a well-known label nor a valid UUID — are
+returned as a structured `error` payload (`{"type": ..., "message":
+...}`) instead of raising. All encode/decode modes round-trip exactly,
+UUID v5 values are deterministic for the same namespace and name, and
+UUID v4 values are random and unique per call. Hash digests are plain
+hex strings — use them for identifiers and checksums, not for
+passwords (use a dedicated password KDF such as argon2 or scrypt for
+that).
