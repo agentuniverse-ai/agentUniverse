@@ -81,7 +81,12 @@ beautifulsoup4 = "^4.12.0"
 redis = { version = "^5.0.0", optional = true }
 # qdrant-client = "^1.15.1" unsupportable version due to numpy version limit
 
+xarray = { version = ">=2024.10,<2025.0", optional = true }
+netCDF4 = { version = "^1.7.2", optional = true }
+cftime = { version = "^1.6.4", optional = true }
+
 [tool.poetry.extras]
+netcdf_ext = ["xarray", "netCDF4", "cftime"]
 log_ext = ["aliyun-log-python-sdk"]
 store_ext = ["pymilvus", "psycopg", "pgvector", "redis"]
 office_ext = ["python-docx", "python-pptx"]
