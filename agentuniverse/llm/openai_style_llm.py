@@ -18,6 +18,7 @@ from agentuniverse.base.config.component_configer.configers.llm_configer import 
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.base.util.system_util import process_yaml_func
 from agentuniverse.llm.llm import LLM, LLMOutput
+from agentuniverse.llm.llm_output import TokenUsage
 from agentuniverse.llm.openai_style_langchain_instance import LangchainOpenAIStyleInstance
 
 OPENAI_MAX_CONTEXT_LENGTH = {
@@ -223,14 +224,16 @@ class OpenAIStyleLLM(LLM):
         chat_completion = chunk
         if not isinstance(chunk, dict):
             chunk = chunk.dict()
+        usage_data = chunk.get("usage")
+        usage = TokenUsage.from_openai(usage_data) if usage_data else None
         if len(chunk["choices"]) == 0:
-            return LLMOutput(text="", raw=chat_completion.model_dump())
+            return LLMOutput(text="", raw=chat_completion.model_dump(), usage=usage)
         choice = chunk["choices"][0]
         message = choice.get("delta")
         text = message.get("content")
         if text is None:
             text = ""
-        return LLMOutput(text=text, raw=chat_completion.model_dump())
+        return LLMOutput(text=text, raw=chat_completion.model_dump(), usage=usage)
 
     def generate_stream_result(self, stream: openai.Stream):
         """Generate the result of the stream."""

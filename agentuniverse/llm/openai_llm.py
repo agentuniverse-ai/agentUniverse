@@ -15,6 +15,7 @@ import tiktoken
 
 from agentuniverse.llm.langchain_instance import LangchainOpenAI
 from agentuniverse.llm.llm import LLM, LLMOutput
+from agentuniverse.llm.llm_output import TokenUsage
 from agentuniverse.base.util.env_util import get_from_env
 
 OPENAI_MAX_CONTEXT_LENGTH = {
@@ -180,14 +181,18 @@ class OpenAILLM(LLM):
         chat_completion = chunk
         if not isinstance(chunk, dict):
             chunk = chunk.dict()
+        usage_data = chunk.get("usage")
+        usage = TokenUsage.from_openai(usage_data) if usage_data else None
         if len(chunk["choices"]) == 0:
+            if usage is not None:
+                return LLMOutput(text="", raw=chat_completion.model_dump(), usage=usage)
             return
         choice = chunk["choices"][0]
         message = choice.get("delta")
         text = message.get("content")
         if not text:
             return
-        return LLMOutput(text=text, raw=chat_completion.model_dump())
+        return LLMOutput(text=text, raw=chat_completion.model_dump(), usage=usage)
 
     @classmethod
     def generate_stream_result(cls, stream: Iterator) -> Iterator[LLMOutput]:
