@@ -33,7 +33,7 @@ def test_retry_reraises_the_final_exception_instance():
 
 @pytest.mark.parametrize(
     ("max_retries", "delay"),
-    [(0, 0), (True, 0), (1, -1), (1, True)],
+    [(0, 0), (True, 0), (1, -1), (1, True), (1, float("nan")), (1, float("inf"))],
 )
 def test_retry_rejects_invalid_configuration(max_retries, delay):
     with pytest.raises(ValueError):
