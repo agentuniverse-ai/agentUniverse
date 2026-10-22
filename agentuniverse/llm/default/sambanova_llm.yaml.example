@@ -1,0 +1,13 @@
+name: 'default_sambanova_llm'
+description: 'default sambanova llm powered by the SambaNova Cloud open models'
+model_name: 'Meta-Llama-3.3-70B-Instruct'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${SAMBANOVA_API_KEY}'
+api_base: 'https://api.sambanova.ai/v1'
+proxy: '${SAMBANOVA_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.sambanova_llm'
+  class: 'SambaNovaLLM'
