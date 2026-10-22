@@ -15,3 +15,21 @@ background `append_steps` paths already separated state from persistence.
 This change does not alter SSE payloads, cancellation, successful async
 completion, timeout polling, or database-write failure handling. It does not
 catch cancellation or other `BaseException` subclasses.
+
+## Regression coverage
+
+The regression suite covers both direct consumer generators and the public
+`stream_run`, `user_stream_run`, and `async_stream_run` entry points. Public
+entry-point tests use actual worker threads (with Flask test request context
+copying) and scheduled coroutine producers. Each producer emits a partial
+chunk before raising, then signals EOF. Tests verify chunk format, the
+`running` state during partial output, the `fail` state and recorded error
+before the error event is consumed, and cleanup after exhaustion or early
+consumer close. Saved requests update persistence once; unsaved requests
+never instantiate the persistence library.
+Direct consumer tests also cover both supported end markers, `EOF_SIGNAL`
+and `None`, for synchronous and asynchronous failure paths.
+
+Persistence and trace-ID lookup are mocked. These are local integration tests,
+not a live HTTP/provider/database test. EOF-free worker failures, database
+write failures and cancellation remain outside this regression's scope.
