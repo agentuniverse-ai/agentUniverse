@@ -146,7 +146,7 @@ class APITool(Tool):
         body = {}
         cookies = {}
         # check parameters
-        for parameter in self.openapi_spec.get('operation').get('parameters', []):
+        for parameter in (self.openapi_spec.get('operation') or {}).get('parameters', []):
             value = self.get_parameter_value(parameter, parameters)
             if value is not None:
                 if parameter['in'] == 'path':
@@ -178,7 +178,7 @@ class APITool(Tool):
                                 property, parameters[name])
                         elif name in required:
                             raise Exception(
-                                f"Missing required parameter {name} in operation {self.plugin_api_model.operation_id}"
+                                f"Missing required parameter {name} in operation {self.openapi_spec.get('operation', {}).get('operationId', self.name)}"
                             )
                         elif 'default' in property:
                             body[name] = property['default']
