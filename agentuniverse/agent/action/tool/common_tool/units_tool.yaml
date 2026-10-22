@@ -1,0 +1,31 @@
+name: units_tool
+description: Dimension-aware unit conversion with exact rational arithmetic and affine temperature handling.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.units_tool
+  class: UnitsTool
+input_keys:
+  - mode
+max_unit_chars: 64
+max_table_units: 64
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [convert, analyze, compatible, table]
+    value:
+      description: Numeric value to convert (int, float, or decimal string).
+    from_unit:
+      type: string
+    to_unit:
+      type: string
+    expression:
+      type: string
+      description: "For analyze mode: '<value> <unit>', e.g. '5 km' or '72 F'."
+    dimension:
+      type: string
+      description: "For table mode: one dimension name or '*' for all."
+  required: [mode]
+  additionalProperties: false

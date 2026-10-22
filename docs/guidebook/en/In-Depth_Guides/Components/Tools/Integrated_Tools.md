@@ -649,3 +649,28 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## UnitsTool
+
+`UnitsTool` converts values between units of the same dimension — length,
+mass, time, speed, pressure, energy, and temperature — using exact rational
+arithmetic, so no rounding happens inside the conversion itself. Temperature
+uses the correct affine formulas (`K = C + 273.15`, `K = (F + 459.67) * 5/9`),
+and every factor is a defined constant with its provenance noted in the
+result.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.units_tool import UnitsTool
+
+tool = UnitsTool()
+result = tool.execute(mode="convert", value=100, from_unit="degC", to_unit="degF")
+# value_decimal '212', exact
+```
+
+Modes: `convert` (with a factor-chain audit trail), `analyze` (parse `'5 km'`
+or `'72 F'` into an SI-canonical value), `compatible` (dimension check with
+suggestions on mismatch), and `table` (list units and exact factors per
+dimension). Converting across dimensions is refused with the list of units
+available in the target dimension. The classic spelling traps are handled
+deliberately: `Cal`/`Calorie` is the food kilocalorie while `cal` is the
+small calorie, and `C`/`F`/`R`/`K` are temperature scales.
