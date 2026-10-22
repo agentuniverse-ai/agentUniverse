@@ -65,24 +65,28 @@ class WorkflowService:
         workflow: Workflow = WorkflowManager().get_instance_obj(component_instance_name=workflow_dto.id, new_instance=False)
         if workflow is None:
             raise ValueError("The workflow instance corresponding to the workflow_id cannot be found.")
-        workflow_update_config = {
-            'name': workflow_dto.name,
-            'description': workflow_dto.description,
-            'graph_config': workflow_dto.graph
+        field_mapping = {
+            'name': 'name',
+            'description': 'description',
+            'graph': 'graph_config'
         }
-        # Update the workflow attributes if they are provided
-        updated_fields = {key: value for key, value in workflow_update_config.items() if value is not None}
+        updated_fields = {
+            workflow_field: getattr(workflow_dto, dto_field)
+            for dto_field, workflow_field in field_mapping.items()
+            if dto_field in workflow_dto.model_fields_set
+            and getattr(workflow_dto, dto_field) is not None
+        }
 
         # set workflow attributes
         for key, value in updated_fields.items():
             setattr(workflow, key, value)
 
         if updated_fields:
-            # only persist the graph when the update actually carries one,
-            # otherwise the None default would wipe the stored graph
-            if 'graph_config' in updated_fields:
-                updated_fields['graph'] = updated_fields.pop('graph_config')
-            update_nested_yaml_value(workflow.component_config_path, updated_fields)
+            persisted_fields = {
+                'graph' if key == 'graph_config' else key: value
+                for key, value in updated_fields.items()
+            }
+            update_nested_yaml_value(workflow.component_config_path, persisted_fields)
         return workflow_dto.id
 
     @staticmethod
