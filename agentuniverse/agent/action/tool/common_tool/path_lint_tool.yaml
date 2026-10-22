@@ -7,6 +7,7 @@ metadata:
   class: PathLintTool
 input_keys:
   - mode
+max_path_chars: 4096
 args_model:
   mode:
     type: string
@@ -49,3 +50,4 @@ args_model_schema:
       enum: ["posix", "windows", "auto", "both"]
       description: Platform option (validate mode).
   required: ["mode"]
+  additionalProperties: false

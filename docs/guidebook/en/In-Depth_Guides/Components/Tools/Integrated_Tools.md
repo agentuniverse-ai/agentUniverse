@@ -525,21 +525,6 @@ tool.execute(mode="extract", file_path="reports.zip", output_dir="restored", mem
 
 All paths are confined to `base_dir`. Extraction rejects absolute/traversal paths, links, special TAR files, encrypted ZIPs, duplicate members, excessive compression ratios, and configured size/count limits. Destinations are preflighted before extraction and files are written through same-directory temporary files.
 
-## PathLintTool
-
-`PathLintTool` lints filesystem path strings for cross-platform portability and safety on the Python standard library only — pure text analysis, no filesystem access (file existence is NOT checked), no network. Three modes: `lint` (one path string into ordered findings `{line (always 1), code, message, severity}`), `compare` (two paths into a same-file analysis with `posixpath`/`ntpath` normalization, documented Windows case-insensitivity via `ntpath.normcase`, and a case-only rename-collision hint) and `validate` (per-platform verdicts via `platform` = `posix` / `windows` / `auto` / `both`).
-
-```python
-from agentuniverse.agent.action.tool.common_tool import PathLintTool
-
-tool = PathLintTool()
-tool.execute(mode="lint", path="logs/NUL/report ..txt")   # reserved name, trailing dot
-tool.execute(mode="compare", path_a="Foo/Bar", path_b="foo/bar")  # alias on Windows only
-tool.execute(mode="validate", path="CON", platform="both")
-```
-
-The lint checks run in a fixed order with at most one finding per code: null bytes and control characters (Unicode `Cc`, lone surrogates), separator homoglyphs (fullwidth `／` U+FF0F, `＼` U+FF3C, fraction slash and others) and non-NFC Unicode, mixed `/` and `\` separators, UNC and `\\?\` prefix validation, the drive-relative `C:x` quirk, Windows reserved characters `< > : " | ? *` and reserved device names CON PRN AUX NUL COM1-COM9 LPT1-LPT9 (case-insensitive, with or without extension, hand-embedded from the Microsoft naming docs), trailing dots/spaces that Win32 strips, `.`/`..` semantics with parent-escape detection, empty segments with UNC tolerance, tilde prefixes, and the 260-character MAX_PATH / 255-character component limits. Every check is attributed to the platforms where it bites, which drives the `validate` verdicts. Deterministic by construction; path inputs are capped at `max_path_chars` (default 4,096, overridable via the tool instance).
-
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
@@ -649,3 +634,18 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## PathLintTool
+
+`PathLintTool` lints filesystem path strings for cross-platform portability and safety on the Python standard library only — pure text analysis, no filesystem access (file existence is NOT checked), no network. Three modes: `lint` (one path string into ordered findings `{line (always 1), code, message, severity}`), `compare` (two paths into a same-file analysis with `posixpath`/`ntpath` normalization, documented Windows case-insensitivity via `ntpath.normcase`, and a case-only rename-collision hint) and `validate` (per-platform verdicts via `platform` = `posix` / `windows` / `auto` / `both`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool import PathLintTool
+
+tool = PathLintTool()
+tool.execute(mode="lint", path="logs/NUL/report ..txt")   # reserved name, trailing dot
+tool.execute(mode="compare", path_a="Foo/Bar", path_b="foo/bar")  # alias on Windows only
+tool.execute(mode="validate", path="CON", platform="both")
+```
+
+The lint checks run in a fixed order with at most one finding per code: null bytes and control characters (Unicode `Cc`, lone surrogates), separator homoglyphs (fullwidth `／` U+FF0F, `＼` U+FF3C, fraction slash and others) and non-NFC Unicode, mixed `/` and `\` separators, UNC and `\\?\` prefix validation, the drive-relative `C:x` quirk, Windows reserved characters `< > : " | ? *` and reserved device names CON PRN AUX NUL COM1-COM9 LPT1-LPT9 (case-insensitive, with or without extension, hand-embedded from the Microsoft naming docs), trailing dots/spaces that Win32 strips, `.`/`..` semantics with parent-escape detection, empty segments with UNC tolerance, tilde prefixes, and the 260-character MAX_PATH / 255-character component limits. Every check is attributed to the platforms where it bites, which drives the `validate` verdicts. Deterministic by construction; path inputs are capped at `max_path_chars` (default 4,096, overridable via the tool instance).
