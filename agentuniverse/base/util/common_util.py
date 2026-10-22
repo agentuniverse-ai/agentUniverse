@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from queue import Queue
+from queue import Full, Queue
 from typing import Any, Callable, List
 
 
@@ -22,7 +22,10 @@ def stream_output(output_stream: Queue, data: dict):
     """
     if output_stream is None:
         return
-    output_stream.put_nowait(data)
+    try:
+        output_stream.put_nowait(data)
+    except Full:
+        output_stream.put(data)
 
 
 def _replace_new_line(match: re.Match[str]) -> str:
@@ -202,4 +205,3 @@ def parse_and_check_json_markdown(text: str, expected_keys: List[str] | None) ->
                 f"to be present, but got {json_obj}"
             )
     return json_obj
-
