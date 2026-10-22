@@ -1,0 +1,38 @@
+name: indent_lint_tool
+description: Audit, measure, convert, and explain Python source indentation.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.indent_lint_tool
+  class: IndentLintTool
+input_keys:
+  - mode
+  - source
+max_input_bytes: 2097152
+max_lines: 200000
+max_line_bytes: 1048576
+warn_line_bytes: 65536
+max_findings: 200
+max_functions: 5000
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [lint, stats, convert, explain]
+      description: Operation to run on the Python source text.
+    source:
+      type: string
+      description: Python source text to audit.
+    line:
+      type: integer
+      description: Focus line number; required for explain.
+    target:
+      type: string
+      enum: [spaces, tabs]
+      description: Conversion target style; required for convert.
+    tab_width:
+      type: integer
+      description: Visual tab width used for analysis and conversion (default 4).
+  required: [mode, source]
+  additionalProperties: false
