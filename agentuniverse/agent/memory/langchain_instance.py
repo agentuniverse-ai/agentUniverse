@@ -69,14 +69,18 @@ class AuConversationSummaryBufferMemory(ConversationSummaryBufferMemory):
         """
         if self.messages is None:
             return
-        # save system messages
+        # save system messages without mutating the supplied message history
+        conversation_messages = []
         for message in self.messages:
             if message.type.lower() == ChatMessageEnum.SYSTEM.value:
                 self.moving_summary_buffer += message.content
-                self.messages.remove(message)
+            else:
+                conversation_messages.append(message)
         # generate pairs of Human and AI conversation messages and save to the memory buffer
-        for i in range(0, len(self.messages), 2):
-            inputs, outputs = self.generate_chat_messages(self.messages[i], self.messages[i + 1])
+        for i in range(0, len(conversation_messages) - 1, 2):
+            inputs, outputs = self.generate_chat_messages(
+                conversation_messages[i], conversation_messages[i + 1]
+            )
             self.save_context(inputs, outputs)
 
     def generate_chat_messages(self, *pairs: Message):
@@ -160,13 +164,16 @@ class AuConversationTokenBufferMemory(ConversationTokenBufferMemory):
         """
         if self.messages is None:
             return
-        # discard system messages
-        for message in self.messages:
-            if message.type.lower() == ChatMessageEnum.SYSTEM.value:
-                self.messages.remove(message)
+        # discard system messages without mutating the supplied message history
+        conversation_messages = [
+            message for message in self.messages
+            if message.type.lower() != ChatMessageEnum.SYSTEM.value
+        ]
         # generate pairs of Human and AI conversation messages and save to the memory buffer
-        for i in range(0, len(self.messages), 2):
-            inputs, outputs = self.generate_chat_messages(self.messages[i], self.messages[i + 1])
+        for i in range(0, len(conversation_messages) - 1, 2):
+            inputs, outputs = self.generate_chat_messages(
+                conversation_messages[i], conversation_messages[i + 1]
+            )
             self.save_context(inputs, outputs)
 
     def generate_chat_messages(self, *pairs: Message):
