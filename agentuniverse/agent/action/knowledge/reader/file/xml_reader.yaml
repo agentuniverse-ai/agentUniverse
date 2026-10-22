@@ -1,0 +1,6 @@
+name: 'default_xml_reader'
+description: 'default XML reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.xml_reader'
+  class: 'XmlReader'
