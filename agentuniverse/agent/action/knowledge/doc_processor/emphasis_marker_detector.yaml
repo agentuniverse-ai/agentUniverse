@@ -1,0 +1,30 @@
+name: 'emphasis_marker_detector'
+description: 'detect bold/italic/highlight markers and CAPS runs into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.emphasis_marker_detector'
+  class: 'EmphasisMarkerDetector'
+
+# Known acronyms exempt from caps-run detection; entries are
+# case-insensitive. The default empty allowlist reports every caps run,
+# so populate it (e.g. [NASA, GDPR]) to silence domain acronyms.
+caps_allowlist: []
+
+# Maximum number of hits stamped into metadata['emphasis']; the counts
+# and terms stamps are derived from this capped list so all three agree.
+# Must be >= 1.
+max_hits: 100
+
+# Maximum number of deduplicated emphasized texts stamped into
+# metadata['emphasis_terms'] (first-occurrence order). Must be >= 1.
+max_terms: 20
+
+# Metadata key the hit list is written to; '' disables the stamp.
+emphasis_key: 'emphasis'
+
+# Metadata key the per-kind counts are written to; '' disables the stamp.
+counts_key: 'emphasis_counts'
+
+# Metadata key the deduplicated terms are written to; '' disables it.
+terms_key: 'emphasis_terms'
