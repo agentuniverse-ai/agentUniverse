@@ -425,13 +425,14 @@ _knowledge_wrapper_sync = _default_knowledge_wrapper_sync
 def trace_knowledge(func):
     """Annotation: @trace_knowledge
 
-    Decorator to trace the knowledge invocation.
+    Decorator to trace the knowledge invocation. Async functions execute the
+    target and finish tracing within the caller's single await.
     """
     @functools.wraps(func)
     async def wrapper_async(*args, **kwargs):
         impl = globals().get('_knowledge_wrapper_async',
                              _default_knowledge_wrapper_async)
-        return impl(func, *args, **kwargs)
+        return await impl(func, *args, **kwargs)
 
     @functools.wraps(func)
     def wrapper_sync(*args, **kwargs):

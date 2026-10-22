@@ -2,6 +2,15 @@
 
 The agentUniverse monitor module focuses primarily on tracking and recording the LLM invocation and token expenses during the agent's runtime. In this document, we will provide a detailed introduction on how to utilize the LLM and agent invocation tracking capabilities that are currently available in agentUniverse.
 
+## Tracing custom knowledge functions
+
+Custom knowledge functions can use `trace_knowledge` from
+`agentuniverse.base.annotation.trace`. Call decorated synchronous functions
+normally and asynchronous functions with one `await`, such as
+`documents = await retrieve(query)`. The async call returns the target result
+and finishes input/output tracing within that await. Target exceptions propagate
+to the caller, and the parent invocation chain is restored on completion or failure.
+
 ## Monitor Configuration
 
 Configure the settings for the monitor module in the main configuration file`config.toml` oof agentUniverse as follows:
