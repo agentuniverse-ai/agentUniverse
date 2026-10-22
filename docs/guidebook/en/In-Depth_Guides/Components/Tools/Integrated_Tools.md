@@ -636,3 +636,44 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Case Converter Tool
+
+`CaseConverterTool` is a text case / style converter built purely on
+the Python standard library — plain `str` methods, two small regular
+expressions and `unicodedata` for the slug fold — with zero network
+access. It covers the identifier plumbing agents often need:
+`upper` / `lower` for whole-text Unicode-aware casing; `title` for
+Title Case with small-word handling (the English words `a` / `an` /
+`the` / `of` / `and` stay lowercase unless they are the first or last
+word, and punctuation and whitespace are preserved exactly);
+`sentence` for sentence case (first cased character uppercased, every
+other cased character lowercased); `snake`, `kebab`, `camel`, `pascal`
+and `constant` for `snake_case`, `kebab-case`, `camelCase`,
+`PascalCase` and `CONSTANT_CASE` identifiers; and `slug` for URL
+slugs — NFKD ascii-folding that strips diacritics (`José` becomes
+`jose`), lowercases, and turns every non-alphanumeric run into a
+single trimmed `-`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.case_converter_tool import CaseConverterTool
+
+tool = CaseConverterTool()
+snake = tool.execute(mode="snake", text="getHTTPResponse-code")["result"]      # get_http_response_code
+title = tool.execute(mode="title", text="the lord of the rings")["result"]     # The Lord of the Rings
+slug = tool.execute(mode="slug", text="José MÜLLER: Top 10 cafés")["result"]   # jose-muller-top-10-cafes
+```
+
+Multi-word input is split automatically: runs of whitespace,
+underscores, dashes and any other non-alphanumeric characters are
+separators, and camel humps are split with acronym-safe rules — a
+lowercase-to-uppercase transition (`getHTTP` → `get` + `HTTP`) and
+the boundary between an uppercase run and the last uppercase letter
+that starts a cased word (`HTTPServer` → `HTTP` + `Server`). Digits
+never create a boundary (`model2vec` stays one word). Inputs are
+validated strictly before any computation: an unknown mode, a missing
+/ empty / non-string text, or text over 100,000 characters raises a
+`ValueError`. Unicode handling: caseless scripts such as CJK pass
+through untouched in the case modes and are kept as words in the
+identifier and slug modes; only `slug` folds diacritics. All
+conversions are deterministic and offline.
