@@ -1,0 +1,44 @@
+name: number_to_words_tool
+description: Number-to-words tool — pure Python stdlib, no network required. Renders a number as English words (American short scale, hyphenated compounds, no 'and') or Chinese words (standard 万/亿 grouping with canonical 零 insertion), and parses such words back into an exact number. Integers up to 999,999,999,999 and fractional parts up to 12 digits; negatives via minus/negative/负; decimals read digit by digit after point/点. Both directions round-trip exactly.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.number_to_words_tool
+  class: NumberToWordsTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Conversion direction — number_to_words renders a number as words, words_to_number parses words back into a number.
+    required: true
+  number:
+    type: string
+    description: The number to render — an int or a digit string such as "1234", "-42" or "3.14" (no separators, no '+', no leading zeros). Required for the number_to_words mode.
+    required: false
+  words:
+    type: string
+    description: The words to parse, e.g. "one thousand two hundred thirty-four" or "一千二百三十四". Required for the words_to_number mode.
+    required: false
+  lang:
+    type: string
+    description: Language — en (default, English) or zh (Chinese).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["number_to_words", "words_to_number"]
+      description: Conversion direction.
+    number:
+      type: string
+      description: Number to render as words (number_to_words mode).
+    words:
+      type: string
+      description: Words to parse into a number (words_to_number mode).
+    lang:
+      type: string
+      enum: ["en", "zh"]
+      description: Output/parsing language.
+  required: ["mode"]
