@@ -1,0 +1,33 @@
+name: jwt_tool
+description: Decode JWT structure, analyze registered claims and time math, and audit header algorithm safety without secrets or signature verification.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.jwt_tool
+  class: JwtTool
+input_keys:
+  - mode
+  - token
+max_token_bytes: 65536
+max_payload_bytes: 262144
+max_claims: 200
+max_array_items: 50
+max_depth: 8
+max_nested_depth: 1
+mask_length: 24
+max_unmasked_preview: 512
+mask_strings: true
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [decode, analyze_claims, audit_alg, explain]
+    token: {type: string}
+    now: {type: string}
+    skew_seconds: {type: integer, default: 0}
+    expected_aud: {type: string}
+    expected_iss: {type: string}
+    mask_strings: {type: boolean, default: true}
+  required: [mode, token]
+  additionalProperties: false
