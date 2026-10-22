@@ -14,6 +14,8 @@ Two layers of coverage:
 """
 
 import unittest
+import uuid
+from contextlib import suppress
 from unittest.mock import MagicMock
 
 try:
@@ -27,11 +29,11 @@ from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 
 
-def _build_store(search_depth, similarity_top_k, top_k_list):
+def _build_store(search_depth, similarity_top_k, top_k_list, collection_name="hier_test"):
     from agentuniverse.agent.action.knowledge.store.chroma_hierarchical_store import ChromaHierarchicalStore
 
     return ChromaHierarchicalStore(
-        collection_name="hier_test",
+        collection_name=collection_name,
         similarity_top_k=similarity_top_k,
         search_depth=search_depth,
         similarity_top_k_list=top_k_list,
@@ -93,7 +95,7 @@ class TestChromaHierarchicalStoreQueryMocked(unittest.TestCase):
             },
         ]
         collection = MagicMock()
-        collection.query.side_effect = [level0_result] + child_results
+        collection.query.side_effect = [level0_result, *child_results]
         store.collection = collection
 
         docs = store.query(Query(query_str="parents", embeddings=[[1.0, 0.0]]))
@@ -107,9 +109,22 @@ class TestChromaHierarchicalStoreQueryMocked(unittest.TestCase):
 class TestChromaHierarchicalStoreQueryInMemory(unittest.TestCase):
     """End-to-end tests against an in-memory chroma collection."""
 
+    def setUp(self):
+        # EphemeralClient instances created with the same settings share the
+        # underlying in-memory system, so every test gets its own collection
+        # and removes it afterwards to stay independent of test order.
+        self._collection_name = f"hier_test_{uuid.uuid4().hex}"
+        self._client = None
+
+    def tearDown(self):
+        if self._client is not None:
+            with suppress(Exception):
+                self._client.delete_collection(self._collection_name)
+
     def _build_and_seed(self, top_k_list):
-        store = _build_store(search_depth=2, similarity_top_k=2, top_k_list=top_k_list)
-        store._new_client()
+        store = _build_store(search_depth=2, similarity_top_k=2, top_k_list=top_k_list,
+                             collection_name=self._collection_name)
+        self._client = store._new_client()
         store.insert_document([
             Document(id="parent_1", text="parent one",
                      metadata={"hierarchical_level": 0}, embedding=[1.0, 0.0]),
@@ -148,8 +163,9 @@ class TestChromaHierarchicalStoreQueryInMemory(unittest.TestCase):
 
     def test_depth_one_returns_level_zero_only(self):
         """search_depth=1 keeps the previous behaviour: only level-0 documents."""
-        store = _build_store(search_depth=1, similarity_top_k=2, top_k_list=[2])
-        store._new_client()
+        store = _build_store(search_depth=1, similarity_top_k=2, top_k_list=[2],
+                             collection_name=self._collection_name)
+        self._client = store._new_client()
         store.insert_document([
             Document(id="parent_1", text="parent one",
                      metadata={"hierarchical_level": 0}, embedding=[1.0, 0.0]),
