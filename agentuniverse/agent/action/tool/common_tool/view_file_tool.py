@@ -82,14 +82,22 @@ class ViewFileTool(Tool):
             content_lines = []
             total_lines = 0
             with open(file_path, 'r', encoding='utf-8') as file:
+                start_line = max(0, start_line)
+                requested_end_line = end_line
+                content_lines = []
+                total_lines = 0
                 for line_number, line in enumerate(file):
                     total_lines = line_number + 1
-                    if line_number >= start_line and (end_line is None or line_number < end_line):
+                    if line_number >= start_line and (
+                        requested_end_line is None
+                        or line_number < requested_end_line
+                    ):
                         content_lines.append(line)
-            if end_line is None:
+
+            if requested_end_line is None:
                 end_line = total_lines
-            start_line = max(0, start_line)
-            end_line = min(total_lines, end_line)
+            else:
+                end_line = min(total_lines, max(0, requested_end_line))
 
             content = ''.join(content_lines)
             return json.dumps({
