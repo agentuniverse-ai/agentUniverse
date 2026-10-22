@@ -63,6 +63,8 @@ class KIMIOpenAIStyleLLM(OpenAIStyleLLM):
 
     def get_num_tokens(self, text: str) -> int:
         # Get the token count via HTTP
+        """Get num tokens.
+        """
         messages = [{"role": "user", "content": text}]
         body = {"model": self.model_name, "messages": messages}
         headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.api_key}'}
