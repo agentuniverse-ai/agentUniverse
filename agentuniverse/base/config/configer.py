@@ -21,6 +21,7 @@ class PlaceholderResolver:
         self._resolvers = []
         self.register_resolver(r'\${(.+?)}',
                                lambda match: os.getenv(match.group(1), ''))
+        self._root_package_resolver = None
 
     def register_resolver(self, pattern, func):
         """Register a new resolver with a regex pattern and its corresponding function."""
@@ -32,8 +33,19 @@ class PlaceholderResolver:
         Args:
             root_package_name: The value to replace ${ROOT_PACKAGE}.
         """
-        if root_package_name:
-            self._resolvers.insert(0, (re.compile(r'\${ROOT_PACKAGE}'), lambda _: root_package_name))
+        if not root_package_name:
+            return
+
+        resolver = (
+            re.compile(r'\${ROOT_PACKAGE}'),
+            lambda _: root_package_name,
+        )
+        if self._root_package_resolver is None:
+            self._resolvers.insert(0, resolver)
+        else:
+            resolver_index = self._resolvers.index(self._root_package_resolver)
+            self._resolvers[resolver_index] = resolver
+        self._root_package_resolver = resolver
 
     def resolve(self, value):
         """Resolve placeholders in a given value based on registered resolvers."""
