@@ -1,0 +1,51 @@
+name: relative_time_tool
+description: Relative time tool — humanized timestamps ('3 hours ago' / 'in 2 days' / '3小时前' / '2天后' / '刚刚') converted in both directions, pure Python stdlib, no network required. mode='to_relative' renders a datetime against a reference 'now' with the standard moment.js-style threshold ladder in English or Chinese (language='en'|'zh'); mode='from_relative' parses such expressions back into the datetime at the same offset from the reference 'now'.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.relative_time_tool
+  class: RelativeTimeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Conversion mode — to_relative (datetime to humanized string) or from_relative (humanized string to datetime).
+    required: true
+  datetime:
+    type: string
+    description: ISO 8601 datetime to humanize. Required for the to_relative mode; not used by from_relative.
+    required: false
+  text:
+    type: string
+    description: Relative expression to parse — '3 hours ago', 'in 2 days', '2 days from now', 'a minute ago', '3小时前', '2天后', '刚刚' or '刚才' (English is case-insensitive, common unit abbreviations accepted). Required for the from_relative mode.
+    required: false
+  reference_datetime:
+    type: string
+    description: Optional ISO 8601 reference 'now'. Defaults to the injectable _now class attribute; the real UTC clock is only read when both are unset.
+    required: false
+  language:
+    type: string
+    description: Output style for to_relative — en (default) or zh. from_relative parses English and Chinese expressions regardless of this option.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["to_relative", "from_relative"]
+      description: Conversion direction.
+    datetime:
+      type: string
+      description: ISO 8601 datetime to humanize (to_relative mode).
+    text:
+      type: string
+      description: Relative expression to parse (from_relative mode).
+    reference_datetime:
+      type: string
+      description: Optional ISO 8601 reference 'now' for deterministic results.
+    language:
+      type: string
+      enum: ["en", "zh"]
+      description: Output language for to_relative mode.
+  required: ["mode"]
