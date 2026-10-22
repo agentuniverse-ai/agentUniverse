@@ -1,0 +1,120 @@
+name: dot_graph_tool
+description: Graphviz DOT source generation tool — pure Python stdlib, no rendering and no Graphviz binary dependency. Builds directed-graph DOT source from nodes/edges/clusters specs (mode='digraph'), the undirected variant (mode='graph'), runs a basic sanity lint (declaration keyword, balanced braces/brackets, unterminated quotes, missing optional semicolons, edge operators that contradict the declared graph kind, unknown edge endpoints) over DOT source (mode='validate'), and parses node/edge/cluster counts back out of DOT source (mode='stats').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.dot_graph_tool
+  class: DotGraphTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Diagram mode — digraph, graph, validate or stats.
+    required: true
+  name:
+    type: string
+    description: Graph name, sanitized like node ids and reported in id_mapping when changed (defaults to G). Generation modes only.
+    required: false
+  nodes:
+    type: array
+    description: Node specs, each {id, label?, shape?, style?, fillcolor?, fontsize?} with shape one of box (default), ellipse, diamond, circle, hexagon, cylinder, record; style one of filled/dotted/dashed/bold/rounded; attributes are emitted in the stable order label, shape, style, fillcolor, fontsize (label and fillcolor values are emitted double-quoted). Ids are sanitized to [A-Za-z0-9_] deterministically and the mapping is reported. Required for the generation modes.
+    required: false
+  edges:
+    type: array
+    description: Edge specs, each {from, to, label?, style?, dir?, weight?} with style one of solid (default), dashed, dotted, bold; dir (digraph only) one of none/both/back; endpoints reference declared node ids and accept the 'node:port' form. Optional for the generation modes.
+    required: false
+  clusters:
+    type: array
+    description: Optional cluster specs, each {name, label?, node_ids}; the name is prefixed with cluster_ when needed so Graphviz draws the box, node_ids must reference declared nodes with each node in at most one cluster.
+    required: false
+  source:
+    type: string
+    description: The DOT source string to validate (basic sanity pass, not a full parser) or to stat. Required for the validate / stats modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["digraph", "graph", "validate", "stats"]
+      description: Diagram mode.
+    name:
+      type: string
+      description: Graph name (sanitized to [A-Za-z0-9_]).
+    nodes:
+      type: array
+      description: Node specs ({id, label?, shape?, style?, fillcolor?, fontsize?}).
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: Node identifier (sanitized to [A-Za-z0-9_]; leading digits gain a '_' prefix and reserved DOT keywords gain a trailing '_').
+          label:
+            type: string
+            description: Optional node label (double quotes become \", newlines become the two-character \n).
+          shape:
+            type: string
+            enum: ["box", "ellipse", "diamond", "circle", "hexagon", "cylinder", "record"]
+            description: Node shape (default box, always emitted).
+          style:
+            type: string
+            enum: ["filled", "dotted", "dashed", "bold", "rounded"]
+            description: Optional node style.
+          fillcolor:
+            type: string
+            description: Optional fill color (hex like #2196f3/#f00/#2196f380 or an alphabetic color name).
+          fontsize:
+            type: number
+            description: Optional font size (a number > 0).
+        required: ["id"]
+    edges:
+      type: array
+      description: Edge specs ({from, to, label?, style?, dir?, weight?}).
+      items:
+        type: object
+        properties:
+          from:
+            type: string
+            description: Source node id or 'node:port' compass/record reference (must be declared).
+          to:
+            type: string
+            description: Target node id or 'node:port' compass/record reference (must be declared).
+          label:
+            type: string
+            description: Optional edge label (same escaping as node labels).
+          style:
+            type: string
+            enum: ["solid", "dashed", "dotted", "bold"]
+            description: Line style (default solid).
+          dir:
+            type: string
+            enum: ["none", "both", "back"]
+            description: Arrowhead direction — digraph mode only (forward is the default and not emitted).
+          weight:
+            type: number
+            description: Optional edge weight (a finite number).
+        required: ["from", "to"]
+    clusters:
+      type: array
+      description: Cluster specs ({name, label?, node_ids}).
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Cluster name (prefixed with cluster_ when it does not already start with 'cluster').
+          label:
+            type: string
+            description: Optional cluster label (drawn as the cluster box title).
+          node_ids:
+            type: array
+            items:
+              type: string
+            description: Declared node ids placed inside the cluster (each node in at most one cluster).
+        required: ["name", "node_ids"]
+    source:
+      type: string
+      description: DOT source to validate / stat (validate / stats modes).
+  required: ["mode"]
