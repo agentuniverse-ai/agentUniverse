@@ -1,0 +1,58 @@
+name: tokenizer_tool
+description: Tokenizer tool — pure Python stdlib, no network required. Split text into tokens with exact character offsets using one of seven strategies (whitespace, word runs with apostrophes, NLTK-style word_punct, char, char_no_space, sentence with abbreviation guards, per-ideograph cjk), with optional lowercasing and built-in English+Chinese stopword removal (mode='tokenize'), verify the offset invariant text[start:end] == token over all strategies (mode='span_check'), and report token/type counts with an optional side-by-side comparison of all strategies (mode='count').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.tokenizer_tool
+  class: TokenizerTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — tokenize, span_check or count.
+    required: true
+  text:
+    type: string
+    description: The text to tokenize. Required for every mode; at most 100,000 characters.
+    required: false
+  strategy:
+    type: string
+    description: Tokenization strategy — whitespace, word, word_punct, char, char_no_space, sentence or cjk. Required for tokenize; defaults to word for count; omitted means all strategies for span_check.
+    required: false
+  lowercase:
+    type: boolean
+    description: tokenize/count modes — lowercase the token fields / count types case-insensitively and match stopwords on the lowercased form (default false; offsets never move).
+    required: false
+  drop_stopwords:
+    type: boolean
+    description: tokenize/count modes — drop tokens in the built-in English+Chinese stopword lists (default false).
+    required: false
+  compare_strategies:
+    type: boolean
+    description: count mode — add a side-by-side table of token and type totals for all seven strategies under the same options (default false).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["tokenize", "span_check", "count"]
+      description: Operation mode.
+    text:
+      type: string
+      description: The text to tokenize (all modes).
+    strategy:
+      type: string
+      enum: ["whitespace", "word", "word_punct", "char", "char_no_space", "sentence", "cjk"]
+      description: Tokenization strategy (tokenize required; count defaults to word; span_check omitted = all).
+    lowercase:
+      type: boolean
+      description: Lowercase token fields / fold case in type counts and stopword matching (tokenize and count modes).
+    drop_stopwords:
+      type: boolean
+      description: Drop built-in English+Chinese stopword tokens (tokenize and count modes).
+    compare_strategies:
+      type: boolean
+      description: Add per-strategy token/type totals (count mode).
+  required: ["mode"]
