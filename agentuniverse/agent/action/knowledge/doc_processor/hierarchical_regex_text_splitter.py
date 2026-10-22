@@ -102,7 +102,18 @@ class HierarchicalRegexTextSplitter(DocProcessor):
                 hierarchy[_inserted_id].text += "\n" + line
                 _inserted_id = hierarchy[_inserted_id].metadata['hierarchical_parent']
         hierarchy.pop("root")
+        if not hierarchy:
+            return [doc]
         hierarchical_docs = []
+        if root.text.strip():
+            hierarchical_docs.append(Document(
+                id=doc.id,
+                text=root.text.strip(),
+                metadata={**(doc.metadata or {}),
+                          'hierarchical_parent': 'root',
+                          'hierarchical_info': '',
+                          'hierarchical_level': -1},
+            ))
 
         # summary the text if docs hierarchical_level need summary
         for k, v in hierarchy.items():
@@ -137,9 +148,9 @@ class HierarchicalRegexTextSplitter(DocProcessor):
         # merge all documents first
         merged_docs = origin_docs
         if self.merge_first:
-            for _doc in origin_docs[1:]:
-                origin_docs[0].text += "\n" + _doc.text
-            merged_docs = [origin_docs[0]]
+            merged_docs = [origin_docs[0].model_copy(update={
+                "text": "\n".join(_doc.text for _doc in origin_docs),
+            })]
         hierarchical_docs = []
         for _doc in merged_docs:
             hierarchical_docs.extend(self._hierarchical_split_single_doc(_doc))

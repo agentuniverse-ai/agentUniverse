@@ -50,6 +50,23 @@ class ChromaHierarchicalStore(ChromaStore):
                 self.embedding_model
             ).get_embeddings([query.query_str], text_type="query")[0]
 
+        preamble_result = None
+        if self.search_depth and self.search_depth > 0:
+            preamble_top_k = self.similarity_top_k_list[0] if len(
+                self.similarity_top_k_list) >= 1 else self.similarity_top_k
+            if len(embedding) > 0:
+                preamble_result = self.collection.query(
+                    n_results=preamble_top_k,
+                    query_embeddings=embedding,
+                    where={"hierarchical_level": -1}
+                )
+            else:
+                preamble_result = self.collection.query(
+                    n_results=preamble_top_k,
+                    query_texts=[query.query_str],
+                    where={"hierarchical_level": -1}
+                )
+
         top_k_ids = []
         query_result = []
 
@@ -118,7 +135,30 @@ class ChromaHierarchicalStore(ChromaStore):
             documents = self.to_documents(query_result)
             top_k_ids = [doc.id for doc in documents]
 
-        return self.to_documents(query_result)
+        if preamble_result is None:
+            return self.to_documents(query_result)
+
+        result_limit = self.similarity_top_k_list[self.search_depth - 1] if len(
+            self.similarity_top_k_list) >= self.search_depth else self.similarity_top_k
+        ranked_documents = {}
+        for result in (query_result, preamble_result):
+            if result is None:
+                continue
+            result_documents = self.to_documents(result)
+            distances = result.get("distances")
+            for index, document in enumerate(result_documents):
+                distance = (
+                    distances[0][index]
+                    if distances and distances[0] and index < len(distances[0])
+                    else float("inf")
+                )
+                current = ranked_documents.get(document.id)
+                if current is None or distance < current[0]:
+                    ranked_documents[document.id] = (distance, document)
+
+        return [document for _, document in sorted(
+            ranked_documents.values(), key=lambda item: item[0]
+        )[:result_limit]]
 
     def _initialize_by_component_configer(self,
                                           chroma_store_configer: ComponentConfiger) -> 'DocProcessor':
