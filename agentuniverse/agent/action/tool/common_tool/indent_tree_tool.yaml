@@ -1,0 +1,65 @@
+name: indent_tree_tool
+description: Indentation tree tool — pure Python stdlib, no network required. Parses indentation-based hierarchies (file-explorer outlines, org charts, plain-text trees) into nested {text, level, children} structures (mode='parse', with auto-detected or explicit 2/4/8/tab indent units and tolerant clamping of malformed indents), flattens a tree into {text, level, path, order} outline rows (mode='flatten'), lists leaf paths with depth filters (mode='paths'), reports max depth / per-level counts / widest level (mode='depth_stats'), and renders a tree as ATX markdown nested by level (mode='to_markdown').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.indent_tree_tool
+  class: IndentTreeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — parse, flatten, paths, depth_stats or to_markdown.
+    required: true
+  text:
+    type: string
+    description: The indented plain text to parse (parse mode). Blank input yields an empty tree; input made purely of ATX headings is parsed by heading rank.
+    required: false
+  tree:
+    type: array
+    description: The nested [{text, level, children}] structure (flatten, paths, depth_stats and to_markdown modes). level is recomputed from the nesting position.
+    required: false
+  indent_unit:
+    type: string
+    description: "parse mode only — auto (smallest observed indent of at least 2 columns dividing all others; tabs count as 4 columns), 2, 4, 8 or tab."
+    required: false
+  min_depth:
+    type: integer
+    description: paths mode only — smallest leaf level kept (inclusive); defaults to 1.
+    required: false
+  max_depth:
+    type: integer
+    description: paths mode only — largest leaf level kept (inclusive); defaults to unbounded.
+    required: false
+  min_level:
+    type: integer
+    description: to_markdown mode only — heading rank of level-1 nodes (1-6); defaults to 1. Deeper ranks clamp at 6 with a warning.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "flatten", "paths", "depth_stats", "to_markdown"]
+      description: Operation mode.
+    text:
+      type: string
+      description: Indented plain text to parse (parse mode).
+    tree:
+      type: array
+      description: Nested [{text, level, children}] structure (flatten, paths, depth_stats, to_markdown modes).
+    indent_unit:
+      type: string
+      enum: ["auto", "tab", "2", "4", "8"]
+      description: Indent unit for the parse mode.
+    min_depth:
+      type: integer
+      description: Minimum leaf level kept (paths mode).
+    max_depth:
+      type: integer
+      description: Maximum leaf level kept (paths mode).
+    min_level:
+      type: integer
+      description: Heading rank of level-1 nodes, 1-6 (to_markdown mode).
+  required: ["mode"]
