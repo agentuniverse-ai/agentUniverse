@@ -7,6 +7,10 @@ metadata:
   class: EnvsubstTool
 input_keys:
   - mode
+max_template_chars: 2000000
+max_env_vars: 10000
+max_value_chars: 100000
+max_total_env_chars: 2000000
 args_model:
   mode:
     type: string
@@ -49,3 +53,4 @@ args_model_schema:
         reported, never the caller's mapping. The process environment
         is never read.
   required: ["mode"]
+  additionalProperties: false
