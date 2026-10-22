@@ -96,6 +96,18 @@ class WriteFileToolTest(unittest.TestCase):
         with open(file_path, 'r', encoding='utf-8') as f:
             self.assertEqual(f.read(), 'new content')
 
+    def test_failed_overwrite_preserves_existing_file(self):
+        file_path = os.path.join(self.temp_dir, 'important.txt')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('keep me')
+
+        result = json.loads(self.tool.execute(file_path, 'invalid surrogate: \ud800'))
+
+        self.assertEqual(result['status'], 'error')
+        with open(file_path, 'r', encoding='utf-8') as f:
+            self.assertEqual(f.read(), 'keep me')
+        self.assertEqual(os.listdir(self.temp_dir), ['important.txt'])
+
     def test_typo_append_value_returns_error_without_writing(self):
         """Verify a misspelled append value errors without modifying the file."""
         file_path = os.path.join(self.temp_dir, 'test_append_typo.txt')

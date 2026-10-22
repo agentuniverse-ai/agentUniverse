@@ -55,6 +55,13 @@ We will provide detailed descriptions of each component within the configuration
 
 All provided Agent components will have their corresponding `module` and `class` details copied into this section. This section serves to integrate all configurations and behaviors of the agent into a cohesive whole. If you have extended the behavior of the agent, you need to fill in this section according to the actual path and class name. We will further elaborate on this  in the "Creating from an Existing Agent Object" section later in the document.
 
+When both `metadata.module` and `meta_class` are omitted, agentUniverse infers the
+module from the Python file beside the YAML file, relative to the application's
+project root. For example, `/work/app/workspace/app/intelligence/demo_agent.yaml`
+with project root `/work/app/workspace/app` resolves to `app.intelligence.demo_agent`.
+Same-named ancestor directories are excluded; same-named packages inside the
+project remain part of the module path. Explicit metadata remains unchanged.
+
 ### An actual example of an agent configuration.
 ```yaml
 info:
