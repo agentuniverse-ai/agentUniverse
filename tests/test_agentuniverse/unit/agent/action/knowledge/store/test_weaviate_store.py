@@ -5,6 +5,9 @@
 # @Author  : dxz0069
 # @FileName: test_weaviate_store.py
 
+import os
+import sys
+import types
 import unittest
 from unittest.mock import MagicMock
 
@@ -14,12 +17,56 @@ try:
     WEAVIATE_AVAILABLE = True
 except ImportError:
     WEAVIATE_AVAILABLE = False
+    # Inject a minimal fake of the client library so the component's lazy
+    # imports resolve and the behavioral tests below still run everywhere;
+    # the fake only provides module level symbols, all client behavior is
+    # mocked by the tests themselves.
+    _fake_weaviate = types.ModuleType("weaviate")
+    _fake_weaviate.connect_to_custom = MagicMock()
+
+    class _VectorDistances:
+        COSINE = "cosine"
+        DOT = "dot"
+        L2_SQUARED = "l2-squared"
+        MANHATTAN = "manhattan"
+        HAMMING = "hamming"
+
+    class _NamedVectorsFactory:
+        @staticmethod
+        def none(name, vector_index_config=None):
+            return {"name": name, "vector_index_config": vector_index_config}
+
+    class _VectorIndexFactory:
+        @staticmethod
+        def hnsw(**kwargs):
+            return {"hnsw": kwargs}
+
+    class _Configure:
+        NamedVectors = _NamedVectorsFactory
+        VectorIndex = _VectorIndexFactory
+
+    class _AuthApiKey:
+        def __init__(self, api_key):
+            self.api_key = api_key
+
+    _fake_config = types.ModuleType("weaviate.classes.config")
+    _fake_config.VectorDistances = _VectorDistances
+    _fake_config.Configure = _Configure
+    _fake_classes = types.ModuleType("weaviate.classes")
+    _fake_classes.config = _fake_config
+    _fake_auth = types.ModuleType("weaviate.auth")
+    _fake_auth.AuthApiKey = _AuthApiKey
+    _fake_weaviate.classes = _fake_classes
+    _fake_weaviate.auth = _fake_auth
+    sys.modules.setdefault("weaviate", _fake_weaviate)
+    sys.modules.setdefault("weaviate.classes", _fake_classes)
+    sys.modules.setdefault("weaviate.classes.config", _fake_config)
+    sys.modules.setdefault("weaviate.auth", _fake_auth)
 
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 
 
-@unittest.skipUnless(WEAVIATE_AVAILABLE, "weaviate-client not available")
 class TestWeaviateStore(unittest.TestCase):
     """Test cases for the Weaviate store, run against mocked clients."""
 
@@ -137,6 +184,61 @@ class TestWeaviateStore(unittest.TestCase):
         self.assertTrue(kwargs["http_secure"])
         self.assertEqual(kwargs["grpc_host"], "localhost")
         self.assertIsNotNone(kwargs["auth_credentials"])
+
+
+@unittest.skipUnless(
+    WEAVIATE_AVAILABLE and os.environ.get("WEAVIATE_HTTP_HOST"),
+    "real integration test: install weaviate-client, start Weaviate "
+    "(docker run -p 8080:8080 -p 50051:50051 cr.weaviate.io/semitechnologies/weaviate:latest) "
+    "and set WEAVIATE_HTTP_HOST to run",
+)
+class TestWeaviateStoreIntegration(unittest.TestCase):
+    """Integration tests against a real Weaviate server.
+
+    Start a server and set the endpoint to run:
+        docker run -d --name weaviate -p 8080:8080 -p 50051:50051 \\
+            cr.weaviate.io/semitechnologies/weaviate:latest
+        WEAVIATE_HTTP_HOST=localhost python -m pytest \\
+            tests/test_agentuniverse/unit/agent/action/knowledge/store/test_weaviate_store.py
+    """
+
+    def test_roundtrip(self):
+        from agentuniverse.agent.action.knowledge.store.weaviate_store import WeaviateStore
+        import uuid as uuid_module
+
+        collection = "test_" + uuid_module.uuid4().hex[:8]
+        store = WeaviateStore(
+            collection_name=collection,
+            connection_args={
+                "http_host": os.environ["WEAVIATE_HTTP_HOST"],
+                "http_port": int(os.environ.get("WEAVIATE_HTTP_PORT", "8080")),
+                "http_secure": os.environ.get("WEAVIATE_HTTP_SECURE", "false") == "true",
+                "grpc_host": os.environ.get("WEAVIATE_GRPC_HOST", os.environ["WEAVIATE_HTTP_HOST"]),
+                "grpc_port": int(os.environ.get("WEAVIATE_GRPC_PORT", "50051")),
+                "grpc_secure": os.environ.get("WEAVIATE_HTTP_SECURE", "false") == "true",
+            },
+        )
+        store.client = store._new_client()
+        try:
+            documents = [
+                Document(id="doc1", text="hello world", embedding=[1.0, 0.0], metadata={"k": "v"}),
+                Document(id="doc2", text="goodbye world", embedding=[0.0, 1.0]),
+            ]
+            store.insert_document(documents)
+            results = store.query(Query(query_str="hi", embeddings=[[1.0, 0.0]], similarity_top_k=1))
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].text, "hello world")
+            store.upsert_document([Document(id="doc1", text="updated", embedding=[1.0, 0.1])])
+            results = store.query(Query(query_str="hi", embeddings=[[1.0, 0.0]], similarity_top_k=10))
+            texts = {document.text for document in results}
+            self.assertIn("updated", texts)
+            self.assertNotIn("hello world", texts)
+            store.delete_document("doc1")
+            results = store.query(Query(query_str="hi", embeddings=[[1.0, 0.0]], similarity_top_k=10))
+            self.assertEqual([document.text for document in results], ["goodbye world"])
+        finally:
+            store.client.collections.delete(collection)
+            store.client.close()
 
 
 if __name__ == "__main__":
