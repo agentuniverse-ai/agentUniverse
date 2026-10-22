@@ -965,7 +965,7 @@ class SecretScanToolRegistrationTest(unittest.TestCase):
         ApplicationConfigManager().app_configer = app
         tool = ToolManager().get_instance_obj(configer.name)
         self.assertIsInstance(tool, SecretScanTool)
-        self.assertEqual(tool.input_keys, ["mode", "text"])
+        self.assertEqual(tool.input_keys, ["mode"])
 
     def test_package_export(self):
         """SecretScanTool is exported from the common_tool package."""
