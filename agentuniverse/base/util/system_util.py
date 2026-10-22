@@ -28,12 +28,20 @@ def get_project_root_path() -> Path:
     # deeper working directory.  The fixed ``parents[1]`` assumption points
     # outside the project in the first two cases.
     candidates = (current_work_directory, *current_work_directory.parents)
+    # ``intelligence`` is commonly nested below ``app`` while ``config``
+    # lives at the application root. Prefer the config marker when both are
+    # present in the ancestor chain; otherwise a nested intelligence package
+    # can be mistaken for the project root.
     root_path = next(
-        (candidate for candidate in candidates
-         if (candidate / 'config').is_dir() or (candidate / 'intelligence').is_dir()),
-        current_work_directory.parents[1] if len(current_work_directory.parents) > 1
-        else current_work_directory,
+        (candidate for candidate in candidates if (candidate / 'config').is_dir()),
+        None,
     )
+    if root_path is None:
+        root_path = next(
+            (candidate for candidate in candidates if (candidate / 'intelligence').is_dir()),
+            current_work_directory.parents[1] if len(current_work_directory.parents) > 1
+            else current_work_directory,
+        )
     PROJECT_ROOT_PATH = root_path
     return root_path
 
