@@ -14,9 +14,11 @@ Supported subset (anything outside this list is rejected with a clear
 * identity ``.``
 * field access ``.a``, chains ``.a.b``, quoted ``."key"``, ``.["key"]``
 * optional access ``.a?`` (``?`` may follow any single field / index /
-  slice / iteration step and suppresses only that step's errors;
-  ``(...)?`` wraps a whole parenthesised expression and keeps the outputs
-  produced before an error, like jq's ``try``)
+  slice / iteration step and suppresses only that step's errors), and
+  postfix ``?`` after a parenthesised expression, builtin call or
+  construction — ``(expr)?``, ``add?``, ``[.x]?`` — which wraps the whole
+  term in jq's ``try`` semantics (outputs produced before an error are
+  kept)
 * iteration ``.[]``, ``.[]?``, ``.a[]``
 * element index ``.a[0]`` (integer literals; negatives index from the end)
 * slices ``.[2:5]``, ``.[start:]``, ``.[:end]`` (integer-literal endpoints,
@@ -24,8 +26,10 @@ Supported subset (anything outside this list is rejected with a clear
 * pipe ``|`` and comma ``,`` with full multi-output stream semantics
 * parentheses
 * array construction ``[...]`` and object construction ``{a: .b, "k": .v}``
-  (including ``{a}`` shorthand; multi-output values build the cartesian
-  product in jq's order)
+  (including ``{a}`` shorthand; jq also accepts keyword and logic-word keys
+  such as ``{true: 1}`` or ``{and: 1}`` and string-key shorthand ``{"a"}``,
+  all supported here; multi-output values build the cartesian product in
+  jq's order)
 * literals: numbers (jq 1.7 preserves the original literal, e.g. ``1.0``
   stays ``1.0`` and ``1e2`` is printed ``1E+2``), strings, ``true`` /
   ``false`` / ``null``
@@ -50,7 +54,9 @@ outside the list above.
 
 The runtime is standard-library only (``json`` plus a hand-written parser).
 Outputs and traces are capped, evaluation is deterministic, object key order
-is preserved exactly like jq, and numbers round-trip with jq's formatting.
+is preserved exactly like jq, and numbers round-trip with jq's formatting
+(the JavaScript constants ``NaN`` / ``Infinity`` are accepted by ``execute``
+and print like jq: ``null`` and ``1.7976931348623157e+308``).
 Only ``execute`` reads a JSON document; no shell commands, filesystem paths
 or network access are involved.
 """
@@ -61,6 +67,8 @@ or network access are involved.
 from __future__ import annotations
 
 import json
+import math
+import re
 from collections.abc import Generator
 from typing import Any, ClassVar
 
@@ -176,6 +184,52 @@ def _normalize_exponent_lexeme(lexeme: str) -> str:
     return sign + digits[0] + "." + digits[1:] + "E" + adjusted_text
 
 
+_DBL_MAX_TEXT = "1.7976931348623157e+308"
+
+
+def _dump_computed_double(number: float) -> str:
+    """Serialize a computed double exactly like jq's dtoa formatter.
+
+    jq formats computed doubles with David Gay's ``g_fmt`` on top of the
+    shortest round-trip digits: fixed notation when the decimal point sits
+    at ``decpt >= -3`` and ``decpt - digits <= 15`` (so ``1e16`` is ``1e+16``
+    but ``1.5e16`` is ``15000000000000000``), otherwise scientific notation
+    with a lowercase ``e`` and a signed, at-least-two-digit exponent
+    (``1e-07``, ``1.5e+17``).  jq prints NaN as ``null`` and infinity as
+    the double-maximum text.
+    """
+    if math.isnan(number):
+        return "null"
+    if math.isinf(number):
+        return ("-" + _DBL_MAX_TEXT) if number < 0 else _DBL_MAX_TEXT
+    if number == 0.0:
+        return "0"
+    sign = "-" if number < 0 else ""
+    text = repr(abs(number))
+    if "e" in text:
+        mantissa, _, exponent_text = text.partition("e")
+        int_part, _, frac_part = mantissa.partition(".")
+        decpt = int(exponent_text) + 1
+    else:
+        int_part, _, frac_part = text.partition(".")
+        decpt = len(int_part)
+    raw_digits = int_part + frac_part
+    digits = raw_digits.lstrip("0")
+    decpt -= len(raw_digits) - len(digits)
+    digits = digits.rstrip("0")
+    count = len(digits)
+    if decpt >= -3 and decpt - count <= 15:
+        if decpt <= 0:
+            return sign + "0." + "0" * (-decpt) + digits
+        if decpt >= count:
+            return sign + digits + "0" * (decpt - count)
+        return sign + digits[:decpt] + "." + digits[decpt:]
+    exponent = decpt - 1
+    exponent_text = f"{abs(exponent):02d}"
+    mantissa = digits if count == 1 else digits[0] + "." + digits[1:]
+    return f"{sign}{mantissa}e{'+' if exponent >= 0 else '-'}{exponent_text}"
+
+
 def _dump_number(value: Any) -> str:
     """Serialize a number exactly like ``jq -c`` would print it."""
     lexeme = getattr(value, "lexeme", None)
@@ -185,15 +239,7 @@ def _dump_number(value: Any) -> str:
         return lexeme
     if isinstance(value, int) and not isinstance(value, bool):
         return str(value)
-    # Computed float: jq prints integral doubles without a fraction part and
-    # uses uppercase-E scientific notation otherwise.
-    number = float(value)
-    if number.is_integer() and abs(number) < 1e17:
-        return str(int(number))
-    lexeme = repr(number)
-    if "e" in lexeme or "E" in lexeme:
-        return _normalize_exponent_lexeme(lexeme)
-    return lexeme
+    return _dump_computed_double(float(value))
 
 
 # --------------------------------------------------------------------------
@@ -223,6 +269,27 @@ def jq_truthy(value: Any) -> bool:
     return value is not None and value is not False
 
 
+_JQ_STRING_ESCAPES = {"\\": "\\\\", '"': '\\"', "\b": "\\b", "\f": "\\f", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+def dump_string(text: str) -> str:
+    """Serialize a string exactly like jq: standard escapes plus ``\\uXXXX``
+    for every control character below 0x20 and for DEL (0x7f)."""
+    if "\x7f" not in text:
+        return json.dumps(text, ensure_ascii=False)
+    parts = ['"']
+    for char in text:
+        escape = _JQ_STRING_ESCAPES.get(char)
+        if escape is not None:
+            parts.append(escape)
+        elif char < " " or char == "\x7f":
+            parts.append(f"\\u{ord(char):04x}")
+        else:
+            parts.append(char)
+    parts.append('"')
+    return "".join(parts)
+
+
 def dump_compact(value: Any) -> str:
     """Serialize one JSON value exactly like one line of ``jq -c`` output."""
     if value is None:
@@ -232,18 +299,27 @@ def dump_compact(value: Any) -> str:
     if isinstance(value, (int, float)):
         return _dump_number(value)
     if isinstance(value, str):
-        return json.dumps(value, ensure_ascii=False)
+        return dump_string(value)
     if isinstance(value, list):
         return "[" + ",".join(dump_compact(item) for item in value) + "]"
     return (
         "{"
-        + ",".join(json.dumps(key, ensure_ascii=False) + ":" + dump_compact(item) for key, item in value.items())
+        + ",".join(dump_string(key) + ":" + dump_compact(item) for key, item in value.items())
         + "}"
     )
 
 
+def _is_nan(value: Any) -> bool:
+    return isinstance(value, float) and math.isnan(value)
+
+
 def jq_cmp(left: Any, right: Any) -> int:  # noqa: C901
-    """jq's total ordering: null < false < true < numbers < strings < arrays < objects."""
+    """jq's total ordering: null < false < true < numbers < strings < arrays < objects.
+
+    NaN is special (decNumber semantics): as the left operand it compares
+    less than everything (including itself), which is what jq's ``sort``,
+    ``unique``, ``min`` and ``max`` observe.
+    """
     left_type, right_type = jq_type(left), jq_type(right)
     left_order, right_order = _TYPE_ORDER[left_type], _TYPE_ORDER[right_type]
     if left_order != right_order:
@@ -253,6 +329,10 @@ def jq_cmp(left: Any, right: Any) -> int:  # noqa: C901
     if left_type == "boolean":
         return (1 if left else 0) - (1 if right else 0)
     if left_type == "number":
+        if _is_nan(left):
+            return -1
+        if _is_nan(right):
+            return 1
         if left < right:
             return -1
         return 1 if left > right else 0
@@ -275,6 +355,25 @@ def jq_cmp(left: Any, right: Any) -> int:  # noqa: C901
         if order:
             return order
     return 0
+
+
+def jq_equal(left: Any, right: Any) -> bool:
+    """jq's ``==`` semantics, which differ from :func:`jq_cmp` for NaN:
+    ``NaN == NaN`` is true even though ``NaN < NaN`` also holds."""
+    left_type, right_type = jq_type(left), jq_type(right)
+    if left_type != right_type:
+        return False
+    if left_type == "number":
+        if _is_nan(left) or _is_nan(right):
+            return _is_nan(left) and _is_nan(right)
+        return left == right
+    if left_type == "array":
+        return len(left) == len(right) and all(jq_equal(a, b) for a, b in zip(left, right, strict=False))
+    if left_type == "object":
+        if left.keys() != right.keys():
+            return False
+        return all(jq_equal(item, right[key]) for key, item in left.items())
+    return left == right
 
 
 class _SortKey:
@@ -495,7 +594,7 @@ def lex(query: str) -> list[Token]:  # noqa: C901
 _STRING_ESCAPES = {'"': '"', "\\": "\\", "/": "/", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t"}
 
 
-def _lex_string(query: str, start: int) -> tuple[str, int]:
+def _lex_string(query: str, start: int) -> tuple[str, int]:  # noqa: C901
     """Lex a double-quoted string literal beginning at ``start``.
 
     Returns the decoded text and the index just past the closing quote.
@@ -523,7 +622,35 @@ def _lex_string(query: str, start: int) -> tuple[str, int]:
             if esc == "u":
                 hex_text = query[index + 1 : index + 5]
                 if len(hex_text) == 4 and all(c in "0123456789abcdefABCDEF" for c in hex_text):
-                    chunks.append(chr(int(hex_text, 16)))
+                    code = int(hex_text, 16)
+                    if 0xD800 <= code <= 0xDBFF:
+                        # jq requires a high surrogate to be followed by a
+                        # low one and combines the pair into one code point.
+                        low_text = query[index + 5 : index + 11]
+                        if not (low_text.startswith("\\u") and len(low_text) == 6):
+                            raise JqParseError(
+                                "Invalid \\uXXXX\\uXXXX surrogate pair escape", index - 1
+                            )
+                        low_hex = low_text[2:]
+                        if not all(c in "0123456789abcdefABCDEF" for c in low_hex):
+                            raise JqParseError(
+                                "Invalid \\uXXXX\\uXXXX surrogate pair escape", index - 1
+                            )
+                        low_code = int(low_hex, 16)
+                        if not 0xDC00 <= low_code <= 0xDFFF:
+                            raise JqParseError(
+                                "Invalid \\uXXXX\\uXXXX surrogate pair escape", index - 1
+                            )
+                        combined = 0x10000 + ((code - 0xD800) << 10) + (low_code - 0xDC00)
+                        chunks.append(chr(combined))
+                        index += 11
+                        continue
+                    if 0xDC00 <= code <= 0xDFFF:
+                        # an unpaired low surrogate degrades to U+FFFD, like jq
+                        chunks.append("\ufffd")
+                        index += 5
+                        continue
+                    chunks.append(chr(code))
                     index += 5
                     continue
             raise JqParseError(f"invalid escape sequence at position {index - 1}", index - 1)
@@ -655,8 +782,21 @@ class _Parser:
                 self.advance()
                 name = self.advance().value
                 node = ("field", node, name, self._opt())
+            elif token.kind == "DOT" and self.peek(1).kind == "LBRACKET":
+                # jq accepts a redundant '.' before an index/iteration
+                # bracket ("X.[0]", "X.[]") but not before a slice.
+                self.advance()
+                bracket = self._parse_brackets(node)
+                if bracket[0] == "slice":
+                    raise JqParseError("a slice cannot follow '.' (jq rejects .[x:y] there too)", token.position)
+                node = bracket
             elif token.kind == "LBRACKET":
                 node = self._parse_brackets(node)
+            elif token.kind == "QUESTION" and node[0] in ("call", "array", "object"):
+                # jq allows postfix '?' on any term; for builtins and
+                # constructions it behaves like "(term)?" (try semantics).
+                self.advance()
+                node = ("try", node)
             else:
                 break
         return node
@@ -810,17 +950,17 @@ class _Parser:
             return ("object", tuple(entries))
         while True:
             token = self.peek()
-            if token.kind in ("IDENT", "STRING", "KEYWORD"):
+            if token.kind in ("IDENT", "STRING", "KEYWORD", "LOGIC"):
+                # jq accepts identifiers, keywords and logic words as object
+                # keys; without a colon the key is {key} shorthand for
+                # .["key"], including string keys ({"a b"}).
                 key = token.value
                 self.advance()
                 if self.peek().kind == "COLON":
                     self.advance()
                     entries.append((key, self.parse_object_value()))
-                elif token.kind == "IDENT":
-                    entries.append((key, ("field", ("id",), key, False)))
                 else:
-                    position = token.position
-                    raise JqParseError(f"expected ':' after object key at position {position}", position)
+                    entries.append((key, ("field", ("id",), key, False)))
             else:
                 position = token.position
                 raise JqParseError(f"expected an object key at position {position}", position)
@@ -999,15 +1139,18 @@ def _eval(node, value: Any, limit: int | None = None) -> Generator[Any, None, No
         op = node[1]
         for left_value in _eval(node[2], value, limit):
             for right_value in _eval(node[3], value, limit):
-                order = jq_cmp(left_value, right_value)
-                yield {
-                    "==": order == 0,
-                    "!=": order != 0,
-                    "<": order < 0,
-                    "<=": order <= 0,
-                    ">": order > 0,
-                    ">=": order >= 0,
-                }[op]
+                if op == "==":
+                    yield jq_equal(left_value, right_value)
+                elif op == "!=":
+                    yield not jq_equal(left_value, right_value)
+                else:
+                    order = jq_cmp(left_value, right_value)
+                    yield {
+                        "<": order < 0,
+                        "<=": order <= 0,
+                        ">": order > 0,
+                        ">=": order >= 0,
+                    }[op]
     elif kind == "array":
         if node[1] is None:
             yield []
@@ -1031,18 +1174,24 @@ def _collect(stream, limit: int | None) -> list:
 
 
 def _object(entries, value: Any, limit: int | None) -> Generator[dict, None, None]:
-    results: list[dict] = [{}]
-    for key, value_expr in entries:
-        next_results: list[dict] = []
-        for partial in results:
-            for entry_value in _eval(value_expr, value, limit):
-                combined = dict(partial)
-                combined[key] = entry_value
-                next_results.append(combined)
-                if limit is not None and len(next_results) > limit:
-                    raise JqResourceError(f"object construction exceeds the cap ({limit})")
-        results = next_results
-    yield from results
+    """Build object outputs jq-style: each cartesian combination is emitted
+    as soon as it is complete, so an error partway through the product
+    keeps every object that was already produced (jq's partial outputs)."""
+
+    def build(index: int, partial: list[tuple[str, Any]]):
+        if index == len(entries):
+            yield dict(partial)
+            return
+        key, value_expr = entries[index]
+        for entry_value in _eval(value_expr, value, limit):
+            partial.append((key, entry_value))
+            yield from build(index + 1, partial)
+            partial.pop()
+
+    for count, obj in enumerate(build(0, []), start=1):
+        if limit is not None and count > limit:
+            raise JqResourceError(f"object construction exceeds the cap ({limit})")
+        yield obj
 
 
 def _field(value: Any, name: str) -> Any:
@@ -1196,24 +1345,41 @@ def _call(name: str, args: tuple, value: Any, limit: int | None) -> Generator[An
         yield _sorted(value)
         return
     if name == "sort_by":
-        decorated = [(_collect(_eval(args[0], element, limit), limit), element) for element in _elements(value)]
+        elements = value if isinstance(value, list) else _elements(value)
+        decorated = [(_collect(_eval(args[0], element, limit), limit), element) for element in elements]
+        if not isinstance(value, list):
+            # jq's _sort_by_impl rejects non-arrays even though map() has
+            # already iterated an object's values; the message shows those
+            # decorations ([[f-output], ...]).
+            decorations = [decorated_outputs for decorated_outputs, _ in decorated]
+            raise JqRuntimeError(
+                f"{jq_type(value)} ({_err_dump(value)}) and array ({_err_dump(decorations)}) "
+                "cannot be sorted, as they are not both arrays"
+            )
         decorated.sort(key=lambda pair: _SortKey(pair[0]))
         yield [element for _, element in decorated]
         return
     if name == "unique":
+        elements = _elements(value)
+        if not isinstance(value, list):
+            decorations = [[element] for element in elements]
+            raise JqRuntimeError(
+                f"{jq_type(value)} ({_err_dump(value)}) and array ({_err_dump(decorations)}) "
+                "cannot be sorted, as they are not both arrays"
+            )
         output: list[Any] = []
-        for element in _sorted(_elements(value)):
+        for element in _sorted(elements):
             if not output or jq_cmp(output[-1], element) != 0:
                 output.append(element)
         yield output
         return
     if name in ("min", "max"):
-        if not isinstance(value, (list, dict)):
+        if not isinstance(value, list):
             # jq's min/max go through its internal reduce, whose non-array
             # error reads like this (value shown twice, truncated like jq).
             kind, shown = jq_type(value), _err_dump(value)
             raise JqRuntimeError(f"{kind} ({shown}) and {kind} ({shown}) cannot be iterated over")
-        elements = _elements(value)
+        elements = value
         if not elements:
             yield None
             return
@@ -1231,15 +1397,19 @@ def _call(name: str, args: tuple, value: Any, limit: int | None) -> Generator[An
                 yield ""
                 continue
             # jq evaluates the separator only from the second element on, so
-            # single-element arrays never fail on a non-string separator.
+            # single-element arrays never fail on a non-string separator;
+            # a null separator adds nothing (["a","b"] | join(null) is "ab").
             accumulator = _join_part("", elements[0])
             for element in elements[1:]:
-                if not isinstance(separator, str):
+                if separator is None:
+                    pass
+                elif isinstance(separator, str):
+                    accumulator = accumulator + separator
+                else:
                     raise JqRuntimeError(
                         f"string ({_err_dump(accumulator)}) and {jq_type(separator)} "
                         f"({_err_dump(separator)}) cannot be added"
                     )
-                accumulator = accumulator + separator
                 accumulator = accumulator + _join_part(accumulator, element)
             yield accumulator
         return
@@ -1491,8 +1661,13 @@ def _is_ident(name: str) -> bool:
     return bool(name) and name[0] in _IDENT_START and all(char in _IDENT_CHARS for char in name)
 
 
+_RESERVED_KEY_WORDS = {"and", "or", "true", "false", "null"}
+
+
 def _key_text(name: str) -> str:
-    return name if _is_ident(name) else json.dumps(name, ensure_ascii=False)
+    if _is_ident(name) and name not in _RESERVED_KEY_WORDS:
+        return name
+    return json.dumps(name, ensure_ascii=False)
 
 
 def to_source(node) -> str:  # noqa: C901
@@ -1668,13 +1843,53 @@ def _stage_trace(
     return trace
 
 
+_JSON_CONSTANTS = {"NaN": float("nan"), "Infinity": float("inf"), "-Infinity": float("-inf")}
+
+# Lone surrogates can only enter through \uXXXX escapes (json.loads combines
+# valid pairs), so the scan runs only when one might be present.
+_SURROGATE_RE = re.compile(r"[\ud800-\udfff]")
+
+
+class _InvalidSurrogate(JqLiteError):
+    """The JSON input contains an unpaired high surrogate escape."""
+
+
+def _sanitize_text(text: str) -> str:
+    """Reject unpaired high surrogates and degrade unpaired low ones to
+    U+FFFD, exactly like jq's JSON parser."""
+    for char in text:
+        if "\ud800" <= char <= "\udbff":
+            raise _InvalidSurrogate("Invalid \\uXXXX\\uXXXX surrogate pair escape")
+    return "".join("\ufffd" if "\udc00" <= char <= "\udfff" else char for char in text)
+
+
+def _sanitize_surrogates(value: Any) -> Any:
+    if isinstance(value, str):
+        return _sanitize_text(value)
+    if isinstance(value, list):
+        return [_sanitize_surrogates(item) for item in value]
+    if isinstance(value, dict):
+        return {_sanitize_text(key): _sanitize_surrogates(item) for key, item in value.items()}
+    return value
+
+
 def _load_json(text: str) -> Any:
-    """Parse JSON text keeping exact number literals (jq 1.7 behaviour)."""
-    return json.loads(
+    """Parse JSON text keeping exact number literals (jq 1.7 behaviour).
+
+    jq accepts the JavaScript constants NaN / Infinity / -Infinity (NaN
+    prints as null, infinity as the double-maximum text) and rejects
+    unpaired high surrogate escapes while replacing unpaired low ones with
+    U+FFFD; both are mirrored here.
+    """
+    parsed = json.loads(
         text,
         parse_int=lambda lexeme: JInt(int(lexeme), lexeme),
         parse_float=lambda lexeme: JFloat(float(lexeme), lexeme),
+        parse_constant=_JSON_CONSTANTS.get,
     )
+    if "\\u" in text or _SURROGATE_RE.search(text):
+        return _sanitize_surrogates(parsed)
+    return parsed
 
 
 # --------------------------------------------------------------------------
@@ -1822,6 +2037,11 @@ class JqLiteTool(Tool):
             root = _load_json(json_text)
         except json.JSONDecodeError as exc:
             return self._error("json_error", f"invalid JSON input: {exc.msg} (line {exc.lineno}, column {exc.colno})")
+        except _InvalidSurrogate as exc:
+            return self._error("json_error", f"invalid JSON input: {exc}")
+        except RecursionError:
+            # extremely deep documents; jq itself refuses beyond 256 levels
+            return self._error("json_error", "invalid JSON input: nesting is too deep to parse")
         try:
             result = run_pipeline(
                 ast,
@@ -1834,6 +2054,8 @@ class JqLiteTool(Tool):
             )
         except JqResourceError as exc:
             return self._error("resource_limit", str(exc))
+        except RecursionError:
+            return self._error("resource_limit", "json_text nesting is too deep to process")
         if "error" in result:
             return {
                 "status": "error",

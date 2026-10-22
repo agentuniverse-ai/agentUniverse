@@ -870,6 +870,254 @@ class JqLiteToolTest(unittest.TestCase):
         self.assertEqual(result["outputs"], ["2", "3"])
 
 
+class JqLiteSelfReviewRegressionTest(unittest.TestCase):
+    """Regressions found by hostile differential probing against jq 1.7.1.
+
+    Each test pins a behaviour where the tool previously disagreed with the
+    real jq binary (jq is the specification here).
+    """
+
+    def setUp(self):
+        self.tool = JqLiteTool()
+
+    def _run(self, query, json_text):
+        return self.tool.execute(mode="execute", query=query, json_text=json_text)
+
+    def _assert_matches_jq(self, query, json_text):
+        returncode, lines, core = run_jq(query, json_text)
+        result = self._run(query, json_text)
+        if returncode == 0:
+            self.assertEqual(result.get("status"), "success", result)
+            self.assertEqual(result.get("outputs"), lines)
+        else:
+            self.assertEqual(result.get("status"), "error", result)
+            self.assertEqual(result.get("error_type"), "jq_error", result)
+            self.assertEqual(result.get("message"), core)
+            self.assertEqual(result.get("outputs"), lines)
+
+    # -- surrogate pairs in query string literals ---------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_surrogate_pairs_in_query_literals(self):
+        cases = [
+            ('"\\ud83d\\ude00"', "null", ['"\U0001F600"']),
+            ('["\\ud83d\\ude00"]', "null", ['["\U0001F600"]']),
+            ('"a\\ud83d\\ude00b"', "null", ['"a\U0001F600b"']),
+            ('"\\ud83d\\udc00\\ud83d\\udc00"', "null", ['"\U0001F400\U0001F400"']),
+            ('"\\ude00\\ud83d\\ude00"', "null", ['"\ufffd\U0001F600"']),
+            ('"\\ude00 alone"', "null", ['"\ufffd alone"']),
+            ('.["\\ud83d\\ude00"]', '{"\\ud83d\\ude00": 1}', ["1"]),
+        ]
+        for query, json_text, expected in cases:
+            with self.subTest(query=query):
+                self._assert_matches_jq(query, json_text)
+                self.assertEqual(self._run(query, json_text)["outputs"], expected)
+
+    def test_lone_high_surrogate_literal_is_parse_error(self):
+        for query in ('"\\ud83d"', '"\\ud83d\\ud83d"', '"\\ud83dx"', '"\\ud83d\\u0041"'):
+            with self.subTest(query=query):
+                result = self.tool.execute(mode="execute", query=query, json_text="null")
+                self.assertEqual(result["status"], "error")
+                self.assertEqual(result["error_type"], "parse_error")
+                self.assertIn("surrogate pair", result["message"])
+
+    # -- surrogate escapes inside the JSON input -----------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_surrogates_in_json_input(self):
+        for json_text in ('"\\ud83d\\ude00"', '"\\ude00 lone"', '{"\\ude00": 1}'):
+            with self.subTest(input=json_text):
+                self._assert_matches_jq(".", json_text)
+        # jq rejects these with a parse error; the tool maps input problems
+        # to its json_error classification (documented mapping).
+        for bad in ('"\\ud800"', '"\\ud83d\\ud83d"', '"\\ud83dx"', '{"\\ud800": 1}', '{"a": "\\ud800"}'):
+            with self.subTest(input=bad):
+                returncode, _lines, _core = run_jq(".", bad)
+                self.assertNotEqual(returncode, 0)
+                result = self._run(".", bad)
+                self.assertEqual(result["status"], "error", result)
+                self.assertEqual(result["error_type"], "json_error", result)
+                self.assertIn("surrogate pair", result["message"])
+
+    def test_lone_high_surrogate_input_is_json_error(self):
+        result = self._run(".", '"\\ud800"')
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "json_error")
+        self.assertIn("surrogate pair", result["message"])
+
+    # -- NaN / Infinity inputs ----------------------------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_nan_and_infinity_inputs(self):
+        cases = [
+            (".", "NaN"),
+            (".", '{"a": NaN}'),
+            (".", "Infinity"),
+            (".", '{"a": -Infinity}'),
+            (".", "[NaN, Infinity]"),
+            ("type", "NaN"),
+            (". == .", "NaN"),
+            (". == 1", "NaN"),
+            ("1 == .", "NaN"),
+            (". < 1", "NaN"),
+            ("1 < .", "NaN"),
+            (". < .", "NaN"),
+            ("[.] == [.]", "NaN"),
+            ("sort", "[1, NaN, -5]"),
+            ("unique", "[NaN, NaN, 1]"),
+            ("min", "[1, NaN, -5]"),
+            ("max", "[1, NaN, -5]"),
+            ("length", "NaN"),
+            ("length", "Infinity"),
+            ("add", "[NaN, 1]"),
+            ('join(",")', "[NaN]"),
+            ("keys", "NaN"),
+        ]
+        for query, json_text in cases:
+            with self.subTest(query=query, input=json_text):
+                self._assert_matches_jq(query, json_text)
+
+    # -- computed double formatting (g_fmt rule) ------------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_computed_double_formatting_matches_jq(self):
+        literals = [
+            "1e14", "1e15", "1.5e15", "1.234567890123456e15", "9e15", "9.9e15",
+            "1e16", "1.1e16", "1.2e16", "1.5e16", "1.23e16", "1.2345678901234567e16",
+            "1e17", "1.5e17", "1.23e17", "1e18", "1e20", "1e21", "1e100",
+            "123456789012345678", "1234567890123456789", "12345678901234567890",
+            "9007199254740993", "18446744073709551616",
+            "1.7976931348623157e308", "5e-324", "2.2250738585072014e-308",
+            "1e-1", "1e-4", "1e-5", "1.5e-5", "1.23e-5", "1e-6", "1e-7", "1.5e-7", "1.23e-8",
+            "0.0001", "0.000015", "0.00015", "0.1", "3.141592653589793",
+            "123456789.123456789", "0.30000000000000004", "-1.5e16", "-1e-7", "-0.0", "-0",
+        ]
+        for literal in literals:
+            with self.subTest(literal=literal):
+                self._assert_matches_jq("length", literal)
+                self._assert_matches_jq(".", literal)
+
+    # -- DEL and control-character string escaping ---------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_del_character_escaped_like_jq(self):
+        for json_text in ('"\\u007f"', '"del\\u007fchar"', '["\\u0001\\u001f\\u007f"]', '"\\b\\f\\n\\r\\t\\u0000"'):
+            with self.subTest(input=json_text):
+                self._assert_matches_jq(".", json_text)
+
+    # -- min/max/sort_by/unique on objects ------------------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_min_max_sort_by_unique_on_objects_error_like_jq(self):
+        cases = [
+            ("min", '{"a":3,"b":1}'),
+            ("max", '{"a":3,"b":1}'),
+            ("min", "{}"),
+            ("sort_by(.)", '{"a":2,"b":1}'),
+            ("sort_by(.x)", '{"a":2,"b":1}'),
+            ("unique", '{"a":1}'),
+            ("unique", '{"a":1,"b":2,"c":3}'),
+        ]
+        for query, json_text in cases:
+            with self.subTest(query=query, input=json_text):
+                self._assert_matches_jq(query, json_text)
+
+    # -- object keys: keywords, logic words, string shorthand -----------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_object_keyword_and_string_keys(self):
+        cases = [
+            ("{and: 1}", "null", ['{"and":1}']),
+            ("{or: 1}", "null", ['{"or":1}']),
+            ("{null: 1, false: 2}", "null", ['{"null":1,"false":2}']),
+            ("{true: .a}", '{"a": 5}', ['{"true":5}']),
+            ("{and}", "null", ['{"and":null}']),
+            ("{or}", "null", ['{"or":null}']),
+            ("{true}", '{"true": 9}', ['{"true":9}']),
+            ('{"a b"}', '{"a b": 3}', ['{"a b":3}']),
+            ('{a, "b"}', '{"a":1,"b":2}', ['{"a":1,"b":2}']),
+            ("{a: 1, and: 2}", "null", ['{"a":1,"and":2}']),
+        ]
+        for query, json_text, expected in cases:
+            with self.subTest(query=query):
+                self._assert_matches_jq(query, json_text)
+                self.assertEqual(self._run(query, json_text)["outputs"], expected)
+        # canonical queries stay re-parseable (transpile_check round trip)
+        for query, _json, _expected in cases:
+            with self.subTest(round_trip=query):
+                result = self.tool.execute(mode="transpile_check", query=query)
+                self.assertTrue(result["valid"], result)
+                self.assertTrue(result["round_trip"], result)
+
+    # -- join(null) concatenates without a separator --------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_join_null_and_empty_separator(self):
+        cases = [
+            ("join(null)", '["a","b"]', ['"ab"']),
+            ("join(null)", '["a"]', ['"a"']),
+            ("join(null)", "[]", ['""']),
+            ("join(null)", '[null,"b"]', ['"b"']),
+            ("join(null)", "[1,2]", ['"12"']),
+            ("join(empty)", '["a","b"]', []),
+        ]
+        for query, json_text, expected in cases:
+            with self.subTest(query=query, input=json_text):
+                self._assert_matches_jq(query, json_text)
+                self.assertEqual(self._run(query, json_text).get("outputs"), expected)
+
+    # -- postfix '?' after builtin calls and constructions --------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_postfix_question_after_calls(self):
+        cases = [
+            ("add?", '{"a":1}', ["1"]),
+            ("keys?", "[1]", ["[0]"]),
+            ('join(",")?', "[1,2,3]", ['"1,2,3"']),
+            ("length?", "5", ["5"]),
+            ("unique?", "[1,1]", ["[1]"]),
+            ("[.a]?", "5", []),
+        ]
+        for query, json_text, expected in cases:
+            with self.subTest(query=query, input=json_text):
+                self._assert_matches_jq(query, json_text)
+                self.assertEqual(self._run(query, json_text)["outputs"], expected)
+
+    # -- redundant '.' before index/iterate brackets ---------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_dotted_bracket_forms(self):
+        cases = [
+            (".a.[1]", '{"a":[1,2,3]}', ["2"]),
+            (".a.[]", '{"a":[1,2,3]}', ["1", "2", "3"]),
+            (".a.[1]?", '{"a":5}', []),
+        ]
+        for query, json_text, expected in cases:
+            with self.subTest(query=query):
+                self._assert_matches_jq(query, json_text)
+                self.assertEqual(self._run(query, json_text)["outputs"], expected)
+        # jq (and the tool) reject a slice in the dotted-bracket position
+        result = self._run(".a.[1:2]", '{"a":[1,2,3]}')
+        self.assertEqual(result["status"], "error")
+        jq_rc, _lines, _core = run_jq(".a.[1:2]", '{"a":[1,2,3]}')
+        self.assertNotEqual(jq_rc, 0)
+
+    # -- object construction streams partial outputs ---------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_object_construction_partial_outputs_before_error(self):
+        doc = '{"list": [3, 1, 2], "flag": false, "name": "x"}'
+        for query in ('{"c": .[][-1]}', '{"foo": .c, c: .[][-1]}'):
+            with self.subTest(query=query):
+                self._assert_matches_jq(query, doc)
+        result = self._run('{"foo": .c, c: .[][-1]}', doc)
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "jq_error")
+        self.assertEqual(result["outputs"], ['{"foo":null,"c":2}'])
+
+    # -- deep documents get correctly-labelled errors ---------------------------
+    def test_deep_json_error_labels(self):
+        deep = "[" * 5000 + "1" + "]" * 5000
+        result = self._run(".", deep)
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "json_error")
+        self.assertIn("nesting is too deep", result["message"])
+        deep2 = "[" * 500 + "1" + "]" * 500
+        result = self._run(".[]?" * 100, deep2)
+        self.assertEqual(result["status"], "error")
+        self.assertIn(result["error_type"], ("resource_limit", "json_error"))
+        self.assertIn("nesting is too deep", result["message"])
+
+
 class JqLiteRegistrationTest(unittest.TestCase):
     """Unit tests for registering the shipped jq_lite_tool.yaml as a tool component."""
 

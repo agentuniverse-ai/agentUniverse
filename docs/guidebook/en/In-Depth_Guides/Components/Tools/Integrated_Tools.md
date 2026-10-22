@@ -659,12 +659,17 @@ round_trip = tool.execute(mode="transpile_check", query="map(.a) | sort_by(.b) |
 ```
 
 The supported subset covers identity `.`, field access `.a`, `."quoted key"`,
-`.["key"]` and optional chains `.a?`; iteration `.[]`; indices `.a[0]`;
+`.["key"]` and optional chains `.a?` (postfix `?` also works after builtin
+calls and constructions, e.g. `add?` / `[.x]?`); iteration `.[]`; indices
+`.a[0]` (a redundant `.` before the bracket, `X.[0]`, is accepted like jq);
 slices `.[2:5]`; pipes `|`; commas `,` with jq's full multi-output stream
 semantics; array `[...]` and object `{a: .b, "k": .v}` construction
-(including `{a}` shorthand and the cartesian product over multi-output
-values); number/string/boolean/null literals (jq 1.7 preserves input
-literals such as `1.0`); the alternative operator `//` with jq's falsiness
+(including `{a}` shorthand, jq's keyword/logic-word keys such as
+`{true: 1}` / `{and: 1}`, string-key shorthand `{"a"}`, and the cartesian
+product over multi-output values); number/string/boolean/null literals (jq
+1.7 preserves input literals such as `1.0`; the JavaScript constants
+`NaN` / `Infinity` are accepted and print like jq, as `null` and
+`1.7976931348623157e+308`); the alternative operator `//` with jq's falsiness
 rule (only `null`/`false` trigger the alternative, so `false // 5` is `5`
 while `0 // 5` is `0`); comparisons `==  !=  <  <=  >  >=` under jq's total
 ordering; boolean `and`/`or`/`not`; and the builtin filters `length`,
