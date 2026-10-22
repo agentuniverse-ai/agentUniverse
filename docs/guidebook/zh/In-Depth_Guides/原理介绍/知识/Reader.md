@@ -56,3 +56,4 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml)：读取本地Docx文件中的文本内容
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml)：读取本地Markdown文件中的文本内容
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml)：读取 RAR 压缩文件（.rar）中的文本内容。
+参见[WARC历史网页证据](WARC_Evidence_Reader.md)，按需接入离线网页快照。

@@ -1,0 +1,13 @@
+name: warc_evidence_reader
+description: Local archived HTTP evidence with explicit incomplete-revisit reporting
+max_file_bytes: 32000000
+max_archive_bytes: 128000000
+max_records: 10000
+max_record_bytes: 8000000
+max_payload_bytes: 8000000
+max_text_chars: 2000000
+max_total_chars: 10000000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.warc_evidence_reader
+  class: WarcEvidenceReader
