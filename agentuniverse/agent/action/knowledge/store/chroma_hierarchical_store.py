@@ -41,7 +41,8 @@ class ChromaHierarchicalStore(ChromaStore):
             the embedding data of the query is automatically obtained by the embedding model.
 
         Returns:
-            List[Document]: List of documents retrieved by the query.
+            List[Document]: Documents from the final requested level, or an empty
+                list if any level has no matches within the selected branches.
         """
 
         embedding = query.embeddings
@@ -116,6 +117,10 @@ class ChromaHierarchicalStore(ChromaStore):
                     )
 
             documents = self.to_documents(query_result)
+            if not documents:
+                # An exhausted frontier cannot restart a global search
+                # at the next level.
+                return []
             top_k_ids = [doc.id for doc in documents]
 
         return self.to_documents(query_result)
