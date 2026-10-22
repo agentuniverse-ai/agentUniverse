@@ -1,0 +1,6 @@
+name: 'default_bounded_xml_reader'
+description: 'default bounded XML (.xml) reader, stdlib-only'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.bounded_xml_reader'
+  class: 'BoundedXmlReader'

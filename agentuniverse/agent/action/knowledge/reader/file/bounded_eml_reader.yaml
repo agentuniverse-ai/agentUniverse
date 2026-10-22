@@ -1,0 +1,6 @@
+name: 'default_bounded_eml_reader'
+description: 'default bounded EML (RFC 822 / MIME email) reader, stdlib-only'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.bounded_eml_reader'
+  class: 'BoundedEmlReader'
