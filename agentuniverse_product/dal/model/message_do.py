@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 
 class MessageDO(BaseModel):
+    """Data object representing a persisted message record."""
     id: Optional[int] = Field(description="ID", default=None)
     session_id: str = Field(description="Session id")
     ext_info: Optional[dict] = Field(description="Message ext info.", default={})
