@@ -1,0 +1,88 @@
+name: text_wrap_tool
+description: Text wrap tool — pure Python stdlib, no network required, with east-asian (CJK) display-width awareness. Wrap text to a width and return the line list (mode='wrap'), reflow to a single string with a configurable separator (mode='fill'), strip the common leading whitespace of every line (mode='dedent'), add a prefix to non-blank lines (mode='indent'), or collapse and truncate to the width with a '…' placeholder (mode='shorten'). Wide CJK/fullwidth characters count as two columns, so mixed CJK and latin text aligns to the requested width.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_wrap_tool
+  class: TextWrapTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Wrap mode — wrap, fill, dedent, indent or shorten.
+    required: true
+  text:
+    type: string
+    description: The text to process (non-empty string, at most 100,000 characters).
+    required: true
+  width:
+    type: integer
+    description: Display width in columns for the wrap, fill and shorten modes — 1 to 200, default 80. Wide (CJK / fullwidth) characters count as two columns.
+    required: false
+  break_long_words:
+    type: boolean
+    description: Break words longer than the line (default true, matching textwrap).
+    required: false
+  break_on_hyphens:
+    type: boolean
+    description: Break latin words after hyphens (default true, matching textwrap).
+    required: false
+  max_lines:
+    type: integer
+    description: wrap/fill modes only — emit at most this many lines, appending the overflow marker "… [+N chars]" to the last line when content was dropped.
+    required: false
+  initial_indent:
+    type: string
+    description: wrap/fill modes only — prefix for the first output line (default ""). Must be narrower than width and contain no hard newlines.
+    required: false
+  subsequent_indent:
+    type: string
+    description: wrap/fill modes only — prefix for every following output line (default ""). Must be narrower than width and contain no hard newlines.
+    required: false
+  separator:
+    type: string
+    description: fill mode only — string joining the wrapped lines (default "\n").
+    required: false
+  prefix:
+    type: string
+    description: indent mode only — the prefix added to every non-blank line (at most 200 characters).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["wrap", "fill", "dedent", "indent", "shorten"]
+      description: Wrap mode.
+    text:
+      type: string
+      description: Text to process.
+    width:
+      type: integer
+      minimum: 1
+      maximum: 200
+      description: Display width in columns (wrap, fill, shorten modes); wide characters count as two columns.
+    break_long_words:
+      type: boolean
+      description: Break words longer than the line (wrap, fill, shorten modes).
+    break_on_hyphens:
+      type: boolean
+      description: Break latin words after hyphens (wrap, fill, shorten modes).
+    max_lines:
+      type: integer
+      minimum: 1
+      description: Emit at most this many lines with an overflow marker (wrap, fill modes).
+    initial_indent:
+      type: string
+      description: Prefix for the first output line (wrap, fill modes).
+    subsequent_indent:
+      type: string
+      description: Prefix for every following output line (wrap, fill modes).
+    separator:
+      type: string
+      description: Line separator used when joining wrapped lines (fill mode).
+    prefix:
+      type: string
+      description: Prefix added to every non-blank line (indent mode).
+  required: ["mode", "text"]
