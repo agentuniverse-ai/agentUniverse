@@ -16,6 +16,7 @@ class EmbeddingTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Configure an AzureOpenAIEmbedding instance for the test methods."""
         self.embedding = AzureOpenAIEmbedding()
         self.embedding.azure_api_key = "Your_API_Key"
         self.embedding.resource_name = "Your_Resource_Name"
@@ -23,6 +24,7 @@ class EmbeddingTest(unittest.TestCase):
         self.embedding.azure_api_version = '2023-05-15'
 
     def test_get_embeddings(self) -> None:
+        """Verify that get_embeddings returns a 1536-dim vector for one text."""
         res = self.embedding.get_embeddings(texts=["hello world"])
         print(res)
         self.assertIsInstance(res, list)
@@ -30,6 +32,7 @@ class EmbeddingTest(unittest.TestCase):
         self.assertEqual(len(res[0]), 1536)
 
     def test_async_get_embeddings(self) -> None:
+        """Verify that async_get_embeddings returns a 1536-dim vector for one text."""
         res = asyncio.run(
             self.embedding.async_get_embeddings(texts=["hello world"]))
         print(res)
@@ -38,6 +41,7 @@ class EmbeddingTest(unittest.TestCase):
         self.assertEqual(len(res[0]), 1536)
 
     def test_as_langchain(self) -> None:
+        """Verify that as_langchain produces a working langchain embedding wrapper."""
         langchain_embedding = self.embedding.as_langchain()
         res = langchain_embedding.embed_documents(texts=["hello world"])
         print(res)
