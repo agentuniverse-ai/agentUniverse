@@ -222,11 +222,18 @@ class TruncateCompressor(ContextCompressor):
         # Truncate content
         truncated_content = segment.content[:target_chars] + self.truncate_marker
 
-        # This is a shorter revision, not a removed/replaced segment. Keep its
-        # identity and scope without sharing mutable metadata with the source.
+        # Copy the complete segment so identity, scope, relationships, and
+        # nested metadata remain attached to the compressed context item.
+        # ``update_content`` also refreshes the content hash used for change
+        # detection instead of leaving the copy with a stale identity state.
         truncated_seg = segment.model_copy(deep=True)
         truncated_seg.update_content(truncated_content, target_tokens)
         truncated_seg.metadata.compressed = True
+        truncated_seg.metadata.original_tokens = segment.tokens
+        truncated_seg.metadata.compression_ratio = (
+            target_tokens / segment.tokens if segment.tokens > 0 else 0.0
+        )
+        truncated_seg.metadata.compression_method = "truncate"
 
         return truncated_seg
 
