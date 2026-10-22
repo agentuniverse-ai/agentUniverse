@@ -8,6 +8,8 @@
 
 import hashlib
 import logging
+import math
+from numbers import Real
 from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -136,10 +138,24 @@ class FinancialEventAggregator(DocProcessor):
             # Compute embeddings
             texts = [doc.text for doc in docs]
             embeddings = embedding_model.get_embeddings(texts)
-
-            # Update document embeddings
-            for doc, embedding in zip(docs, embeddings):
-                doc.embedding = embedding
+            # Validate the whole response before mutating any source document.
+            # Otherwise fallback can leave a partially replaced embedding batch.
+            if len(embeddings) != n:
+                raise ValueError("embedding count must match document count")
+            dimensions = None
+            validated_embeddings = []
+            for vector in embeddings:
+                if not isinstance(vector, (list, tuple, np.ndarray)) or len(vector) == 0:
+                    raise ValueError("embeddings must be non-empty numeric vectors")
+                if any(isinstance(value, (bool, np.bool_)) or not isinstance(value, Real)
+                       or not math.isfinite(value) for value in vector):
+                    raise ValueError("embeddings must contain finite real numbers")
+                if dimensions is None:
+                    dimensions = len(vector)
+                if len(vector) != dimensions:
+                    raise ValueError("embedding dimensions must match")
+                validated_embeddings.append([float(value) for value in vector])
+            embeddings = validated_embeddings
 
             # Compute similarity matrix
             for i in range(n):
@@ -150,6 +166,10 @@ class FinancialEventAggregator(DocProcessor):
                         sim = self._cosine_similarity(embeddings[i], embeddings[j])
                         similarity_matrix[i][j] = sim
                         similarity_matrix[j][i] = sim
+
+            # Commit only after the complete similarity calculation succeeds.
+            for doc, embedding in zip(docs, embeddings):
+                doc.embedding = list(embedding)
 
         except Exception as e:
             logger.error(f"Failed to compute embeddings: {e}")
@@ -168,14 +188,17 @@ class FinancialEventAggregator(DocProcessor):
         Returns:
             Cosine similarity score.
         """
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
-        magnitude1 = sum(a * a for a in vec1) ** 0.5
-        magnitude2 = sum(b * b for b in vec2) ** 0.5
-
-        if magnitude1 == 0 or magnitude2 == 0:
+        # Scaling first avoids overflow/underflow when squaring finite values.
+        scale1 = max((abs(value) for value in vec1), default=0)
+        scale2 = max((abs(value) for value in vec2), default=0)
+        if scale1 == 0 or scale2 == 0:
             return 0.0
-
-        return dot_product / (magnitude1 * magnitude2)
+        scaled1 = [value / scale1 for value in vec1]
+        scaled2 = [value / scale2 for value in vec2]
+        magnitude1 = math.sqrt(math.fsum(value * value for value in scaled1))
+        magnitude2 = math.sqrt(math.fsum(value * value for value in scaled2))
+        similarity = math.fsum(a * b for a, b in zip(scaled1, scaled2)) / (magnitude1 * magnitude2)
+        return max(-1.0, min(1.0, similarity))
 
     def _compute_text_similarity_matrix(self, docs: List[Document]) -> np.ndarray:
         """Compute similarity matrix using text overlap (fallback method).
