@@ -1,0 +1,72 @@
+name: cidr_calculator_tool
+description: "CIDR / subnet calculator tool — pure Python stdlib ipaddress module, no network required. Network report for a CIDR or address+prefix (mode='info'; netmask, wildcard, broadcast, host range, size), membership check of addresses in a network (mode='contains'), split into subnets with capped output (mode='subnet'), enclosing supernet (mode='supernet'), single address classification and forms (mode='ip_info'), and merging of addresses/CIDRs into summary ranges (mode='summarize'). IPv4 and IPv6 are both supported."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.cidr_calculator_tool
+  class: CidrCalculatorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Calculation mode — info, contains, subnet, supernet, ip_info or summarize.
+    required: true
+  network:
+    type: string
+    description: The network for the info, contains, subnet and supernet modes — a CIDR string (192.168.1.0/24) or a bare address combined with the prefix argument.
+    required: false
+  address:
+    type: string
+    description: The single IPv4/IPv6 address for the ip_info mode.
+    required: false
+  prefix:
+    type: integer
+    description: Prefix length when network is a bare address — 0-32 for IPv4, 0-128 for IPv6; without it a bare address denotes its host network (/32 or /128).
+    required: false
+  new_prefix:
+    type: integer
+    description: Target prefix length — strictly longer than the input prefix for the subnet mode, strictly shorter for the supernet mode.
+    required: false
+  addresses:
+    type: array
+    description: List of addresses to test against the network (contains mode); every address gets its own contained/not-contained/invalid verdict.
+    required: false
+  networks:
+    type: array
+    description: List of addresses / CIDRs merged into minimal summary ranges (summarize mode); adjacent and overlapping inputs are collapsed.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["info", "contains", "subnet", "supernet", "ip_info", "summarize"]
+      description: Calculation mode.
+    network:
+      type: string
+      description: Network as CIDR or bare address plus prefix (info, contains, subnet, supernet modes).
+    address:
+      type: string
+      description: Single address (ip_info mode).
+    prefix:
+      type: integer
+      minimum: 0
+      maximum: 128
+      description: Prefix length for a bare-address network input.
+    new_prefix:
+      type: integer
+      minimum: 0
+      maximum: 128
+      description: Target prefix length (subnet / supernet modes).
+    addresses:
+      type: array
+      items:
+        type: string
+      description: Addresses to test (contains mode).
+    networks:
+      type: array
+      items:
+        type: string
+      description: Addresses / CIDRs to merge (summarize mode).
+  required: ["mode"]
