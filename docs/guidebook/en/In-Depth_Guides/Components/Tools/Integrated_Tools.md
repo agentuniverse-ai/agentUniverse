@@ -525,20 +525,6 @@ tool.execute(mode="extract", file_path="reports.zip", output_dir="restored", mem
 
 All paths are confined to `base_dir`. Extraction rejects absolute/traversal paths, links, special TAR files, encrypted ZIPs, duplicate members, excessive compression ratios, and configured size/count limits. Destinations are preflighted before extraction and files are written through same-directory temporary files.
 
-## PyprojectLintTool
-
-`PyprojectLintTool` lints `pyproject.toml` project metadata (the PEP 621 `[project]` table) fully offline with the standard library. `mode="lint"` returns structured findings `{code, severity, field, message}` — 38 rules covering missing/invalid name, missing or non-PEP 440 version, `requires-python` clause grammar aligned with `packaging` 23.x, the PEP 639 deprecated license table form, dangling readme/license file references against a caller-supplied `available_files` listing, authors/maintainers shapes with email syntax, keywords/classifiers/urls shapes, dependencies and optional-dependencies checked as PEP 508 strings (parenthesized clause lists accepted; wildcards only with `==`/`!=`; local versions only with `==`/`===`/`!=`) with duplicate and overlap rules after PEP 503 normalization, dynamic fields also set statically, scripts/entry-points names and dotted targets, and a missing build-system. `mode="project_summary"` returns the quick look: layout, name, version, requires-python min/max bounds, dependency count, optional groups, entry-points count, dynamic fields.
-
-```python
-from agentuniverse.agent.action.tool.common_tool.pyproject_lint_tool import PyprojectLintTool
-
-tool = PyprojectLintTool()
-result = tool.execute(mode="lint", pyproject=text, available_files=["README.md"])
-summary = tool.execute(mode="project_summary", pyproject=text)
-```
-
-Poetry-style `[tool.poetry]` projects get documented best-effort mapping notes (info severity), never errors. Content-level problems — including recursion-limit-deep TOML nesting — are findings, never exceptions; parameter-level mistakes raise `ValueError` before any parsing. The five input caps (lines, line characters, text characters, file entries, entry length) are live per-instance configuration fields.
-
 ## 4. PDF Tool
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
@@ -648,3 +634,17 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## PyprojectLintTool
+
+`PyprojectLintTool` lints `pyproject.toml` project metadata (the PEP 621 `[project]` table) fully offline with the standard library. `mode="lint"` returns structured findings `{code, severity, field, message}` — 38 rules covering missing/invalid name, missing or non-PEP 440 version, `requires-python` clause grammar aligned with `packaging` 23.x, the PEP 639 deprecated license table form, dangling readme/license file references against a caller-supplied `available_files` listing, authors/maintainers shapes with email syntax, keywords/classifiers/urls shapes, dependencies and optional-dependencies checked as PEP 508 strings (parenthesized clause lists accepted; wildcards only with `==`/`!=`; local versions only with `==`/`===`/`!=`) with duplicate and overlap rules after PEP 503 normalization, dynamic fields also set statically, scripts/entry-points names and dotted targets, and a missing build-system. `mode="project_summary"` returns the quick look: layout, name, version, requires-python min/max bounds, dependency count, optional groups, entry-points count, dynamic fields.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.pyproject_lint_tool import PyprojectLintTool
+
+tool = PyprojectLintTool()
+result = tool.execute(mode="lint", pyproject=text, available_files=["README.md"])
+summary = tool.execute(mode="project_summary", pyproject=text)
+```
+
+Poetry-style `[tool.poetry]` projects get documented best-effort mapping notes (info severity), never errors. Content-level problems — including recursion-limit-deep TOML nesting — are findings, never exceptions; parameter-level mistakes raise `ValueError` before any parsing. The five input caps (lines, line characters, text characters, file entries, entry length) are live per-instance configuration fields.

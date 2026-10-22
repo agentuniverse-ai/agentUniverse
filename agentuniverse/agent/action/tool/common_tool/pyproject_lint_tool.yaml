@@ -7,6 +7,11 @@ metadata:
   class: PyprojectLintTool
 input_keys:
   - mode
+max_lines: 10000
+max_line_chars: 10000
+max_text_chars: 4000000
+max_files: 5000
+max_file_entry_chars: 4096
 args_model:
   mode:
     type: string
@@ -36,3 +41,4 @@ args_model_schema:
         type: string
       description: Project files that exist (enables the dangling-reference checks).
   required: ["mode"]
+  additionalProperties: false
