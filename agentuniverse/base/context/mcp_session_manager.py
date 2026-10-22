@@ -135,7 +135,8 @@ class MCPTempClient:
                     MCPTempClient: self with `session` field initialized.
 
                 Raises:
-                    Exception: Propagates connection/initialization errors.
+                    BaseException: Propagates connection/initialization failures,
+                        including cancellation, after closing acquired resources.
                 """
         try:
             session = await MCPSessionManager().connect_to_server(
@@ -145,7 +146,7 @@ class MCPTempClient:
             )
             self.__session = session
             return self
-        except Exception:
+        except BaseException:
             await self.exit_stack.aclose()
             raise
 
