@@ -43,7 +43,7 @@ class RenderedWebPageReader(Reader):
             raise ImportError(
                 "playwright is required for RenderedWebPageReader. "
                 "Install with `pip install playwright` and run `playwright install`"
-            )
+            ) from e
 
         print("debugging: RenderedWebPageReader using playwright")
         with sync_playwright() as p:

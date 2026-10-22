@@ -64,7 +64,10 @@ class WebPageReader(Reader):
                 resp.raise_for_status()
                 return resp.text
             except Exception as e_requests:
-                raise RuntimeError(f"Failed to fetch url: {url}. httpx_error={e_httpx}, requests_error={e_requests}")
+                raise RuntimeError(
+                    f"Failed to fetch url: {url}. "
+                    f"httpx_error={e_httpx}, requests_error={e_requests}"
+                ) from e_requests
 
     def _extract_main_text(self, html: str, url: str) -> (str, Dict):
         # Try trafilatura
@@ -105,4 +108,4 @@ class WebPageReader(Reader):
             raise RuntimeError(
                 "Install one of the extractors: `pip install trafilatura` or "
                 "`pip install readability-lxml beautifulsoup4 lxml`"
-            )
+            ) from e_bs
