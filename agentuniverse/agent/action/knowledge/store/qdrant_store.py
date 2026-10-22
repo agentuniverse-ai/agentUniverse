@@ -124,9 +124,33 @@ class QdrantStore(Store):
     def insert_document(self, documents: List[Document], **kwargs):
         self.upsert_document(documents, **kwargs)
 
+    @staticmethod
+    def _to_qdrant_point_id(document_id: str) -> str:
+        """Convert a document id to a Qdrant-compatible point id.
+
+        Qdrant point ids must be UUIDs or unsigned integers. Document ids in
+        agentUniverse are arbitrary strings, so a non-UUID id is mapped to a
+        deterministic UUID5. This MUST be applied symmetrically on insert and
+        on delete — the previous delete_document passed the raw document id,
+        which never matched the UUID5 the upsert stored, so deletes silently
+        no-op'd for every non-UUID id.
+        """
+        try:
+            return str(uuid.UUID(str(document_id)))
+        except (ValueError, AttributeError, TypeError):
+            return str(uuid.uuid5(uuid.NAMESPACE_URL, str(document_id)))
+
     def upsert_document(self, documents: List[Document], **kwargs):
         if self.client is None:
             return
+
+        # Determine the expected vector dimension up front so every point in
+        # the batch is checked against one value. The previous code called
+        # _ensure_collection(dim=len(vector)) inside the loop with each doc's
+        # own dimension; the first doc fixed the collection dimension and
+        # every later doc with a different dimension silently failed at the
+        # server side with an opaque error (or worse, was partially written).
+        expected_dim = self._infer_expected_dimension(documents)
 
         points: List[PointStruct] = []
         for document in documents:
@@ -136,14 +160,21 @@ class QdrantStore(Store):
             if not vector or len(vector) == 0:
                 continue
 
-            self._ensure_collection(dim=len(vector))
+            # Reject dimension mismatches explicitly instead of letting the
+            # server reject the whole batch with an opaque error.
+            if expected_dim is not None and len(vector) != expected_dim:
+                raise ValueError(
+                    f"Document {document.id!r} has a {len(vector)}-dimensional "
+                    f"embedding but the {self.collection_name!r} collection "
+                    f"(or another document in this batch) uses "
+                    f"{expected_dim}-dimensional vectors; a Qdrant collection "
+                    f"has a single fixed vector size. Re-embed with a "
+                    f"consistent model.")
+
+            self._ensure_collection(dim=expected_dim if expected_dim is not None else len(vector))
 
             payload = {"text": document.text, "metadata": document.metadata}
-            try:
-                point_id = str(uuid.UUID(str(document.id)))
-            except Exception:
-                # fallback to deterministic UUID5 if document id is not UUID
-                point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, str(document.id)))
+            point_id = self._to_qdrant_point_id(document.id)
             points.append(
                 PointStruct(
                     id=point_id,
@@ -155,13 +186,39 @@ class QdrantStore(Store):
         if points:
             self.client.upsert(collection_name=self.collection_name, points=points)
 
+    def _infer_expected_dimension(self, documents: List[Document]) -> Optional[int]:
+        """Return the dimension every vector in this batch must agree on.
+
+        Prefers the dimension of the collection if it already exists; falls
+        back to the first non-empty embedding in the batch so the first
+        insert creates the collection with a concrete size. Returns None
+        only when neither is available (e.g. all vectors will be computed
+        on demand and no collection exists yet).
+        """
+        if self.client is not None and self.client.collection_exists(self.collection_name):
+            try:
+                info = self.client.get_collection(self.collection_name)
+                cfg = (info.config.params.vectors or {}).get(self.VECTOR_NAME)
+                if cfg is not None and getattr(cfg, "size", None) is not None:
+                    return cfg.size
+            except Exception:
+                pass
+        for doc in documents:
+            if doc.embedding and len(doc.embedding) > 0:
+                return len(doc.embedding)
+        return None
+
     def update_document(self, documents: List[Document], **kwargs):
         self.upsert_document(documents, **kwargs)
 
     def delete_document(self, document_id: str, **kwargs):
         if self.client is None:
             return
-        self.client.delete(collection_name=self.collection_name, points_selector=[document_id])
+        # Apply the SAME id mapping as upsert; otherwise a non-UUID document
+        # id never matches the UUID5 point id stored by upsert, and the delete
+        # silently no-ops.
+        point_id = self._to_qdrant_point_id(document_id)
+        self.client.delete(collection_name=self.collection_name, points_selector=[point_id])
 
     @staticmethod
     def to_documents(results) -> List[Document]:
