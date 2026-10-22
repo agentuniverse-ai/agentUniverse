@@ -236,6 +236,11 @@ class Knowledge(ComponentBase):
         query = Query(**kwargs)
         query = self._paraphrase_query(query)
         query_tasks = self._route_rag(query)
+        # Routers may reuse one Query across stores. Stores may enrich/mutate it
+        # (e.g. SQLite keywords), so snapshot every task before dispatching any.
+        # A failed deepcopy must not leave a partially dispatched recall batch.
+        query_tasks = [(deepcopy(routed_query), store_code)
+                       for routed_query, store_code in query_tasks]
 
         futures = []
         for query_task in query_tasks:
