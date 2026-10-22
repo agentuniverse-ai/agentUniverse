@@ -1,0 +1,84 @@
+name: token_estimator_tool
+description: Token estimator tool — LLM token counting and cost estimation for prompt budgeting, no network required. Single-text token count with character and word counts (mode='estimate'), chat message list token count with the standard 4 + 2 per-message framing overhead (mode='estimate_chat'), and USD cost of a token volume from an indicative 13-model price table or custom per-1M prices with an inputs/outputs split (mode='cost'). Uses tiktoken cl100k_base when installed, otherwise a documented CJK-aware character heuristic; the result always reports which method was used.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.token_estimator_tool
+  class: TokenEstimatorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Estimation mode — estimate, estimate_chat or cost.
+    required: true
+  text:
+    type: string
+    description: The text to count. Required for the estimate mode (the empty string is allowed and counts as zero tokens); not used by the other modes.
+    required: false
+  messages:
+    type: array
+    description: Chat message list of {role, content} dicts. Required for the estimate_chat mode; roles are restricted to system, user, assistant, tool and function.
+    required: false
+  model:
+    type: string
+    description: Cost mode only — a model name from the embedded indicative price table (case-insensitive), e.g. gpt-4o. Mutually exclusive with the custom price arguments.
+    required: false
+  input_tokens:
+    type: integer
+    description: Cost mode only — input (prompt) token count; at least one of input_tokens / output_tokens must be given.
+    required: false
+  output_tokens:
+    type: integer
+    description: Cost mode only — output (completion) token count.
+    required: false
+  input_price_per_m:
+    type: number
+    description: Cost mode only — custom input price, USD per 1M tokens; requires output_price_per_m too and excludes model.
+    required: false
+  output_price_per_m:
+    type: number
+    description: Cost mode only — custom output price, USD per 1M tokens.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["estimate", "estimate_chat", "cost"]
+      description: Estimation mode.
+    text:
+      type: string
+      description: Text to count (estimate mode).
+    messages:
+      type: array
+      items:
+        type: object
+        properties:
+          role:
+            type: string
+            enum: ["system", "user", "assistant", "tool", "function"]
+          content:
+            type: string
+        required: ["role", "content"]
+      description: Chat message list (estimate_chat mode).
+    model:
+      type: string
+      description: Model name from the indicative price table (cost mode).
+    input_tokens:
+      type: integer
+      minimum: 0
+      description: Input (prompt) token count (cost mode).
+    output_tokens:
+      type: integer
+      minimum: 0
+      description: Output (completion) token count (cost mode).
+    input_price_per_m:
+      type: number
+      minimum: 0
+      description: Custom input price, USD per 1M tokens (cost mode).
+    output_price_per_m:
+      type: number
+      minimum: 0
+      description: Custom output price, USD per 1M tokens (cost mode).
+  required: ["mode"]
