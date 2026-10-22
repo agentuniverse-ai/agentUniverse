@@ -8,6 +8,7 @@ from typing import List, Literal
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
 class PromptInjectionGuard(DocProcessor):
@@ -24,13 +25,19 @@ class PromptInjectionGuard(DocProcessor):
     ]
     metadata_key: str = "security_flags"
 
+    def _initialize_by_component_configer(self,
+                                          doc_processor_configer: ComponentConfiger) \
+            -> 'PromptInjectionGuard':
+        super()._initialize_by_component_configer(doc_processor_configer)
+        for attribute in ("mode", "patterns", "metadata_key"):
+            if hasattr(doc_processor_configer, attribute):
+                setattr(self, attribute, getattr(doc_processor_configer, attribute))
+        self._validate_configuration()
+        return self
+
     def _process_docs(self, origin_docs: List[Document],
                       query: Query = None) -> List[Document]:
-        if self.mode not in {"filter", "annotate"}:
-            raise ValueError("mode must be either 'filter' or 'annotate'")
-        if not isinstance(self.metadata_key, str) or not self.metadata_key.strip():
-            raise ValueError("metadata_key must be a non-empty string")
-        compiled_patterns = self._compile_patterns()
+        compiled_patterns = self._validate_configuration()
 
         result: List[Document] = []
         for document in origin_docs:
@@ -50,6 +57,13 @@ class PromptInjectionGuard(DocProcessor):
             else:
                 result.append(document)
         return result
+
+    def _validate_configuration(self) -> List[re.Pattern[str]]:
+        if self.mode not in {"filter", "annotate"}:
+            raise ValueError("mode must be either 'filter' or 'annotate'")
+        if not isinstance(self.metadata_key, str) or not self.metadata_key.strip():
+            raise ValueError("metadata_key must be a non-empty string")
+        return self._compile_patterns()
 
     def _compile_patterns(self) -> List[re.Pattern[str]]:
         if not isinstance(self.patterns, list) or not self.patterns:
