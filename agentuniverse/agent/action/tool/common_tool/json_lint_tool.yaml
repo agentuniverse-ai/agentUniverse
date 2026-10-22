@@ -1,0 +1,29 @@
+name: json_lint_tool
+description: JSON document quality and style linting tool — pure Python stdlib, no network required. Lint a JSON text (mode='lint') for style and quality findings with exact line/col positions — duplicate keys across escape spellings (json.loads silently keeps the last value), trailing commas, raw control characters in strings, a leading BOM, the non-standard NaN/Infinity literals json.loads nonetheless accepts, integer-valued floats (1.0 vs 1), very long lines, deep nesting, nesting beyond the parser's own recursion limit (reported as a finding, never crashing), mixed camelCase/snake_case keys and scalar roots. Profile a document's structure (mode='profile' — type counts, int/float split, max depth, key statistics, array and string length statistics). Get safe fix hints (mode='fix_hints' — the BOM strip as the only auto-applicable textual fix, everything else suggestion-only with exact positions; structural changes are never proposed).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.json_lint_tool
+  class: JsonLintTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lint, profile or fix_hints.
+    required: true
+  document:
+    type: string
+    description: The JSON document TEXT to inspect (required in every mode). Linting lives in the text — parsed values have lost duplicate keys and every other defect this tool detects. Capped at 1,000,000 characters.
+    required: true
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "profile", "fix_hints"]
+      description: Operation mode.
+    document:
+      type: string
+      description: The JSON document text to inspect.
+  required: ["mode", "document"]
