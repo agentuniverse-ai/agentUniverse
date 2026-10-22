@@ -17,4 +17,6 @@ class DocProcessorManager(ComponentManagerBase[DocProcessor]):
     """A singleton manager class of the DocProcessor."""
 
     def __init__(self):
+        """Initialize the doc processor manager.
+        """
         super().__init__(ComponentEnum.DOC_PROCESSOR)
