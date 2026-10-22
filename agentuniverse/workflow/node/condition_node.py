@@ -29,9 +29,7 @@ class ConditionNode(Node):
 
     def _run(self, workflow_output: WorkflowOutput) -> NodeOutput:
         inputs: ConditionNodeInputParams = self._data.inputs
-        condition_branches: List[ConditionBranchParams] = inputs.branches
-        condition_branch: ConditionBranchParams = condition_branches[0]
-        condition: ConditionParams = condition_branch.conditions[0]
+        condition_branches: List[ConditionBranchParams] = inputs.branches or []
 
         def resolve_value(node_input: NodeInputParams):
             if node_input.value.type == 'reference':
@@ -43,20 +41,34 @@ class ConditionNode(Node):
                     None)
             return node_input.value.content
 
-        left_val = resolve_value(condition.left)
-        right_val = resolve_value(condition.right) if condition.right else None
+        def _eval_condition(condition: ConditionParams) -> bool:
+            left_val = resolve_value(condition.left)
+            right_val = resolve_value(condition.right) if condition.right else None
+            compare: str = condition.compare
+            if compare == ConditionComparisonEnum.EQUAL.value:
+                return left_val == right_val
+            elif compare == ConditionComparisonEnum.NOT_EQUAL.value:
+                return left_val != right_val
+            elif compare == ConditionComparisonEnum.BLANK.value:
+                return left_val is None
+            # Unknown comparator: fail closed (treat as not matching) so the
+            # branch falls through to default rather than silently matching.
+            return False
 
-        compare: str = condition.compare
-        res = False
+        # Evaluate each branch in order; a branch matches when ALL of its
+        # conditions are true (AND semantics). The first matching branch
+        # wins; if none match, fall through to the default edge.
+        # The previous code only inspected branches[0].conditions[0], so any
+        # branch beyond the first was dead configuration.
+        matched_branch_name = 'branch-default'
+        for condition_branch in condition_branches:
+            conditions = condition_branch.conditions or []
+            if conditions and all(_eval_condition(c) for c in conditions):
+                matched_branch_name = condition_branch.name or 'branch-default'
+                break
 
-        if compare == ConditionComparisonEnum.EQUAL.value:
-            res = left_val == right_val
-        elif compare == ConditionComparisonEnum.NOT_EQUAL.value:
-            res = left_val != right_val
-        elif compare == ConditionComparisonEnum.BLANK.value:
-            res = left_val is None
         return NodeOutput(
             node_id=self.id,
             status=NodeStatusEnum.SUCCEEDED,
-            edge_source_handler=condition_branch.name if res else 'branch-default'
+            edge_source_handler=matched_branch_name
         )
