@@ -1,26 +1,24 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
-import json
 # @Time    : 2024/10/10 19:10
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: chroma_conversation_memory_storage.py
 
+import json
 import uuid
 from datetime import datetime
-from urllib.parse import urlparse
-from typing import Optional, List, Any
+from typing import Any, List, Optional
 
-import chromadb
-from pydantic import SkipValidation
-from chromadb.config import Settings
 from chromadb.api.models.Collection import Collection
+from pydantic import SkipValidation
 
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
 from agentuniverse.agent.memory.conversation_memory.conversation_message import ConversationMessage
-from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageEnum, ConversationMessageSourceType
+from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageSourceType
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+from agentuniverse.base.util.chroma_util import create_chroma_client
 
 
 class ChromaConversationMemoryStorage(MemoryStorage):
@@ -57,19 +55,7 @@ class ChromaConversationMemoryStorage(MemoryStorage):
 
     def _init_collection(self) -> Any:
         """Initialize the ChromaDB collection."""
-        if self.persist_path.startswith('http') or self.persist_path.startswith('https'):
-            parsed_url = urlparse(self.persist_path)
-            settings = Settings(
-                chroma_api_impl="chromadb.api.fastapi.FastAPI",
-                chroma_server_host=parsed_url.hostname,
-                chroma_server_http_port=str(parsed_url.port)
-            )
-        else:
-            settings = Settings(
-                is_persistent=True,
-                persist_directory=self.persist_path
-            )
-        client = chromadb.Client(settings)
+        client = create_chroma_client(self.persist_path)
         self._collection = client.get_or_create_collection(name=self.collection_name)
         return client
 
