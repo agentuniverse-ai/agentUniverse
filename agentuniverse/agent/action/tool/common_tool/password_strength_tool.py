@@ -2,10 +2,12 @@
 """PasswordStrengthTool: offline password auditing with masked output.
 
 Scores passwords against NIST SP 800-63B guidance and transparent entropy
-estimates — character-pool entropy, repetition and sequence penalties, and a
-common-password blocklist. The tool never learns "the truth" about strength
-(offline heuristics cannot); instead every finding names its reason so a
-caller can weigh it.
+estimates — character-pool entropy, repetition and sequence penalties (both
+compared case-insensitively so alternating case cannot mask them), and a
+common-password blocklist. Blocklist screening is an exact, case-insensitive
+match; the blocklist embedded inside a longer password is NOT screened. The
+tool never learns "the truth" about strength (offline heuristics cannot);
+instead every finding names its reason so a caller can weigh it.
 
 Guarantees:
 - No network, no storage, no hashing against external databases.
@@ -29,7 +31,6 @@ from agentuniverse.agent.action.tool.tool import Tool
 _MODES = ("audit", "policy_check", "entropy", "compare")
 
 _MAX_PASSWORD_CHARS = 1024
-_MAX_BLOCKLIST = 1000
 
 # Public common-password blocklist (the classic top of every breached-list
 # study). Lowercased for comparison; stored verbatim — these are published
@@ -89,30 +90,38 @@ def _longest_run(password: str) -> tuple:
     return best_len, best_kind
 
 
-def _longest_repeat(password: str) -> tuple:
-    best_len, best_ch = 0, ""
+def _longest_repeat(password: str) -> int:
+    """Longest consecutive repeat, compared case-insensitively ('aAa' is a
+    run of 3) so alternating case cannot mask repetition from the auditor
+    (sequence detection is already case-insensitive; this matches it)."""
+    lower = password.lower()
+    best_len = 0
     i = 0
-    while i < len(password):
+    while i < len(lower):
         j = i
-        while j + 1 < len(password) and password[j + 1] == password[i]:
+        while j + 1 < len(lower) and lower[j + 1] == lower[i]:
             j += 1
         if j - i + 1 > best_len:
-            best_len, best_ch = j - i + 1, password[i]
+            best_len = j - i + 1
         i = j + 1
-    return best_len, best_ch
+    return best_len
 
 
-def _entropy_bits(password: str) -> dict:
+def _entropy_detail(password: str) -> tuple:
+    """Return (rounded entropy dict, exact unrounded effective bits).
+
+    Tier verdicts and comparisons use the exact value so the 28/40/60-bit
+    boundaries apply to the real quantity, not to its display rounding."""
     pool = _pool_size(password)
     raw = len(password) * math.log2(pool) if password else 0.0
     run_len, run_kind = _longest_run(password)
-    rep_len, rep_ch = _longest_repeat(password)
+    rep_len = _longest_repeat(password)
     run_penalty = (run_len - 2) * 2.0 if run_len >= 3 else 0.0
     rep_penalty = (rep_len - 1) * 1.5 if rep_len >= 3 else 0.0
     common_hit = password.lower() in _COMMON
     common_penalty = raw * 0.9 if common_hit else 0.0
     effective = max(0.0, raw - run_penalty - rep_penalty - common_penalty)
-    return {
+    info = {
         "pool_size": pool,
         "raw_bits": round(raw, 1),
         "penalties": {
@@ -122,6 +131,11 @@ def _entropy_bits(password: str) -> dict:
         },
         "effective_bits": round(effective, 1),
     }
+    return info, effective
+
+
+def _entropy_bits(password: str) -> dict:
+    return _entropy_detail(password)[0]
 
 
 def _verdict(effective_bits: float, length: int, common_hit: bool) -> str:
@@ -165,13 +179,13 @@ class PasswordStrengthTool(Tool):
         if mode == "compare":
             return self._compare(password, password_b)
         pwd = self._check_password(password)
-        entropy = _entropy_bits(pwd)
+        entropy, exact_bits = _entropy_detail(pwd)
         if mode == "entropy":
             return {"mode": "entropy", "length": len(pwd), **entropy}
         if mode == "policy_check":
             return self._policy(pwd, min_length, max_length, require_lower,
                                 require_upper, require_digit, require_symbol)
-        return self._audit(pwd, username, entropy)
+        return self._audit(pwd, username, entropy, exact_bits)
 
     # ------------------------------------------------------------------ #
 
@@ -187,7 +201,7 @@ class PasswordStrengthTool(Tool):
             )
         return password
 
-    def _audit(self, pwd: str, username: str, entropy: dict) -> dict:
+    def _audit(self, pwd: str, username: str, entropy: dict, exact_bits: float) -> dict:
         common_hit = entropy["penalties"]["common_password"]["hit"]
         findings = []
         if len(pwd) < 8:
@@ -212,7 +226,7 @@ class PasswordStrengthTool(Tool):
         if entropy["penalties"]["repetition"]["run_length"] >= 3:
             findings.append({"code": "repeated_character",
                              "severity": "low",
-                             "detail": "a single character repeats "
+                             "detail": "a single character (case-insensitive) repeats "
                              + str(entropy["penalties"]["repetition"]["run_length"])
                              + " times in a row"})
         if username:
@@ -233,7 +247,7 @@ class PasswordStrengthTool(Tool):
             "length": len(pwd),
             "composition": classes,
             "entropy": entropy,
-            "verdict": _verdict(entropy["effective_bits"], len(pwd), common_hit),
+            "verdict": _verdict(exact_bits, len(pwd), common_hit),
             "findings": findings,
             "notes": [
                 "Offline heuristics; a high score is necessary, not sufficient",
@@ -273,16 +287,15 @@ class PasswordStrengthTool(Tool):
     def _compare(self, pwd_a: str, pwd_b: str) -> dict:
         a = self._check_password(pwd_a)
         b = self._check_password(pwd_b)
-        ea, eb = _entropy_bits(a), _entropy_bits(b)
-        va = _verdict(ea["effective_bits"], len(a),
-                      ea["penalties"]["common_password"]["hit"])
-        vb = _verdict(eb["effective_bits"], len(b),
-                      eb["penalties"]["common_password"]["hit"])
+        ea, exact_a = _entropy_detail(a)
+        eb, exact_b = _entropy_detail(b)
+        va = _verdict(exact_a, len(a), ea["penalties"]["common_password"]["hit"])
+        vb = _verdict(exact_b, len(b), eb["penalties"]["common_password"]["hit"])
         rank = {"very_weak": 0, "weak": 1, "fair": 2, "moderate": 3, "strong": 4}
         if rank[va] != rank[vb]:
             which, why = ("a", "verdict") if rank[va] > rank[vb] else ("b", "verdict")
-        elif ea["effective_bits"] != eb["effective_bits"]:
-            which = "a" if ea["effective_bits"] > eb["effective_bits"] else "b"
+        elif exact_a != exact_b:
+            which = "a" if exact_a > exact_b else "b"
             why = "effective_bits"
         else:
             which, why = "tie", "identical verdicts and effective bits"

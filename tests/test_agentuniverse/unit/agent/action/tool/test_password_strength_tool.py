@@ -67,7 +67,61 @@ class PasswordStrengthToolTest(unittest.TestCase):
         out = self.tool.execute(mode="entropy", password="Paaaaaa2!")
         self.assertEqual(out["penalties"]["repetition"]["run_length"], 6)
         out = self.tool.execute(mode="entropy", password="aA1!aA1!aA1!")
-        self.assertEqual(out["penalties"]["repetition"]["run_length"], 1)
+        self.assertEqual(out["penalties"]["repetition"]["run_length"], 2)
+
+    def test_repetition_case_insensitive(self):
+        # Alternating case must not mask repetition from the auditor; the
+        # sequence detector lowercases, so the repeat detector must too.
+        out = self.tool.execute(mode="entropy", password="aAaAaAaAaAaAaA")
+        self.assertEqual(out["penalties"]["repetition"]["run_length"], 14)
+        self.assertEqual(out["penalties"]["repetition"]["bits"], 19.5)
+        audit = self.tool.execute(mode="audit", password="aAaAaAaAaAaAaA")
+        self.assertTrue(any(f["code"] == "repeated_character" for f in audit["findings"]))
+        out = self.tool.execute(mode="entropy", password="aAaAaA")
+        self.assertEqual(out["penalties"]["repetition"]["run_length"], 6)
+
+    def test_verdict_uses_exact_bits_not_rounded(self):
+        # 12 chars, pool 62, alphabet-run 4 (penalty 4.0) and repeat run 6
+        # (penalty 7.5): exact effective = 12*log2(62) - 4.0 - 7.5
+        # = 59.950356... which ROUNDS UP to 60.0 for display. The verdict
+        # ladder must follow the exact value (< 60 => moderate), not the
+        # rounded display figure.
+        pwd = "abcdkkkkkk9Z"
+        out = self.tool.execute(mode="entropy", password=pwd)
+        self.assertEqual(out["effective_bits"], 60.0)  # display rounds up
+        audit = self.tool.execute(mode="audit", password=pwd)
+        self.assertEqual(audit["verdict"], "moderate")
+        cmp_out = self.tool.execute(mode="compare", password=pwd,
+                                    password_b="Zx9$qpL2mVn4Rt7uYw1b")
+        self.assertEqual(cmp_out["stronger"], "b")
+
+    def test_blocklist_case_handling_and_exact_match_contract(self):
+        # Exact match is case-insensitive: every casing of a blocklist entry
+        # is caught and verdicted very_weak.
+        for pwd in ("Password1", "PASSWORD1", "password1"):
+            out = self.tool.execute(mode="entropy", password=pwd)
+            self.assertTrue(out["penalties"]["common_password"]["hit"], pwd)
+            self.assertEqual(self.tool.execute(mode="audit", password=pwd)["verdict"],
+                             "very_weak")
+        # Screening is exact-match only (documented): a blocklist entry
+        # embedded in a longer password is NOT screened. Pinned honestly so
+        # the contract is explicit rather than assumed.
+        for pwd in ("xpassword1x", " password1", "password10"):
+            out = self.tool.execute(mode="entropy", password=pwd)
+            self.assertFalse(out["penalties"]["common_password"]["hit"], pwd)
+
+    def test_sequence_contract_forward_only(self):
+        # The run detector matches contiguous FORWARD runs in its sources;
+        # descending runs are out of contract and must report zero, so the
+        # limitation stays visible instead of half-firing.
+        out = self.tool.execute(mode="entropy", password="zyxwv987654")
+        self.assertEqual(out["penalties"]["sequence"]["run_length"], 0)
+
+    def test_length_cap_boundary(self):
+        self.assertEqual(
+            self.tool.execute(mode="audit", password="q" * 1024)["length"], 1024)
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="audit", password="q" * 1025)
 
     def test_common_password_penalty(self):
         out = self.tool.execute(mode="entropy", password="qwerty")
