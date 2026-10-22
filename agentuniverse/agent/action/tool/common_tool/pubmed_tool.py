@@ -352,9 +352,11 @@ class PubMedTool(Tool):
             if collective_name:
                 authors.append(collective_name)
                 continue
-            fore_name = cls._element_text(author.find("ForeName"))
+            fore_name = (cls._element_text(author.find("ForeName"))
+                         or cls._element_text(author.find("Initials")))
             last_name = cls._element_text(author.find("LastName"))
-            full_name = " ".join(part for part in (fore_name, last_name) if part)
+            suffix = cls._element_text(author.find("Suffix"))
+            full_name = " ".join(part for part in (fore_name, last_name, suffix) if part)
             if full_name:
                 authors.append(full_name)
 
