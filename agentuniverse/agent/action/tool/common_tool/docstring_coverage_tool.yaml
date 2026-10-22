@@ -1,0 +1,56 @@
+name: docstring_coverage_tool
+description: "Docstring coverage tool — Python module docstring / API-coverage auditing with pure stdlib ast, no network required, source is parsed never executed. Measures where documentation gaps are: mode='scan' returns the full inventory (module_docstring plus one row per def/async def/class: kind, __qualname__-style qualname, line, has_docstring, is_public/_nested/_dunder, @override / @abstractmethod / functools.wraps exemptions, property+setter pairs counted once, lambdas skipped, async counted, nested defs with <locals>. qualnames); mode='summary' returns the CI-gate numbers (total/documented/exempt public items, coverage_pct at 1 decimal, round-half-to-even on exact halves, by_kind counts, undocumented offenders capped at 50); mode='check' applies min_module (0/1), min_public and min_class (0-100 percentage gates, default 0) with pass/fail per threshold and the offending names. Public = not _-prefixed; dunders and non-importable nested defs are excluded from the requirement; a syntax error returns a structured error payload, never an exception. One module's source text per call."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.docstring_coverage_tool
+  class: DocstringCoverageTool
+input_keys:
+  - mode
+  - text
+max_text_chars: 10000000
+max_items: 10000
+max_undocumented: 50
+args_model:
+  mode:
+    type: string
+    description: Operation mode — scan, summary or check.
+    required: true
+  text:
+    type: string
+    description: The full source text of one Python module (single-text contract; batch one call per file). Parsed with ast, never executed.
+    required: true
+  min_module:
+    type: integer
+    description: Check mode only — 0 or 1; when 1 the module docstring is required. Default 0; rejected in the other modes.
+    required: false
+  min_public:
+    type: number
+    description: Check mode only — minimum overall public coverage percentage, 0-100, default 0. Compared against the reported 1-decimal coverage_pct.
+    required: false
+  min_class:
+    type: number
+    description: Check mode only — minimum coverage percentage over the class API surface (public classes plus their public methods), 0-100, default 0; 100.0 when the module declares no public class API.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["scan", "summary", "check"]
+      description: Operation mode.
+    text:
+      type: string
+      description: The Python module source text to audit.
+    min_module:
+      type: integer
+      enum: [0, 1]
+      description: Require the module docstring in check mode (default 0).
+    min_public:
+      type: number
+      description: Minimum overall public coverage percentage in check mode (default 0).
+    min_class:
+      type: number
+      description: Minimum class API coverage percentage in check mode (default 0).
+  required: ["mode", "text"]
+  additionalProperties: false
