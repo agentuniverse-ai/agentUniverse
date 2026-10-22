@@ -11,6 +11,7 @@ import json
 import queue
 import traceback
 import uuid
+from collections.abc import Mapping
 from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Thread
 from typing import List, Optional
@@ -213,12 +214,12 @@ class ConversationMemoryModule:
 
     def _add_trace(self, start_info, target_info: dict, type: str, params: dict, session_id: str, trace_id: str,
                    pair_id: str):
-        if "kwargs" in params:
-            params = params['kwargs']
-        if params is str:
+        if isinstance(params, str):
             params = {
                 type: params
             }
+        elif isinstance(params, Mapping) and "kwargs" in params:
+            params = params['kwargs']
 
         kwargs = {'source': start_info['source'], 'source_type': start_info['type'], 'target': target_info['source'],
                   'target_type': target_info['type'], 'type': type, 'params': params, 'trace_id': trace_id,
