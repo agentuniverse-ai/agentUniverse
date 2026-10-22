@@ -10,6 +10,8 @@ from typing import TypedDict
 
 
 class CodeMetrics(TypedDict):
+    """Code metrics.
+    """
     line_count: int
     code_line_count: int
     avg_line_length: float
