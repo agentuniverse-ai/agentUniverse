@@ -65,6 +65,10 @@ agentUniverse provides a standard Knowledge class that you can use directly in t
 : Converts the retrieved documents into a format suitable for input to a Large Language Model (LLM), concatenating all document texts for further processing.
 
 
+## Isolation when writing to multiple stores
+
+`insert_knowledge` and `update_knowledge` run their processors once, then give each selected store a deep copy of the resulting document batch. A store's embeddings, keywords, nested metadata and list mutations therefore cannot contaminate another store or the processed input. Document values and identifiers are preserved. This costs memory proportional to the number of target stores, and custom metadata objects must support deep copying. It does not make multi-store writes atomic: existing per-store failure logging and partial-success behavior remain unchanged.
+
 ## Pay Attention to the Package Path of Your Defined Knowledge
 With the above Knowledge configuration and definition, you have mastered all the steps required to create Knowledge. Next, before using these Knowledge components, ensure that they are in the correct package scan path.
 
