@@ -1,6 +1,7 @@
 """Offline request-level coverage for OpenAPI cookie parameters."""
 
 import unittest
+from http.cookies import SimpleCookie
 from unittest.mock import patch
 
 import httpx
@@ -50,7 +51,10 @@ class TestAPIToolCookies(unittest.TestCase):
     def test_supplied_and_default_cookies_reach_request(self):
         self.assertEqual(self.call(q="query", **{"X-Test": "header"}), "ok")
         request = self.requests[0]
-        self.assertEqual(request.headers["Cookie"], "session=synthetic; locale=en")
+        self.assertEqual(
+            {name: cookie.value for name, cookie in SimpleCookie(request.headers["Cookie"]).items()},
+            {"session": "synthetic", "locale": "en"},
+        )
         self.assertEqual(request.url.path, "/items/one")
         self.assertEqual(request.url.params["q"], "query")
         self.assertEqual(request.headers["X-Test"], "header")
@@ -58,7 +62,20 @@ class TestAPIToolCookies(unittest.TestCase):
 
     def test_supplied_cookie_overrides_default(self):
         self.call(locale="fr")
-        self.assertEqual(self.requests[0].headers["Cookie"], "session=synthetic; locale=fr")
+        self.assertEqual(
+            {name: cookie.value for name, cookie in SimpleCookie(self.requests[0].headers["Cookie"]).items()},
+            {"session": "synthetic", "locale": "fr"},
+        )
+
+    def test_cookie_parameters_are_order_independent(self):
+        self.tool.openapi_spec["operation"]["parameters"].reverse()
+        for parameters, locale in (({}, "en"), ({"locale": "fr"}, "fr")):
+            with self.subTest(parameters=parameters):
+                self.call(**parameters)
+                self.assertEqual(
+                    {name: cookie.value for name, cookie in SimpleCookie(self.requests[-1].headers["Cookie"]).items()},
+                    {"session": "synthetic", "locale": locale},
+                )
 
     def test_empty_cookie_value_is_preserved(self):
         self.call(session="")
