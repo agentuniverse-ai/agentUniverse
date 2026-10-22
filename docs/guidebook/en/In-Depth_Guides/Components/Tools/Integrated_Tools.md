@@ -634,3 +634,46 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Tar Inspect Tool
+
+`TarInspectTool` performs read-only tar archive inspection, extraction safety
+auditing, and extraction path planning. It never extracts and never writes to
+the filesystem; every mode is pure analysis of the archive bytes. An archive is
+supplied either as a file path — read once inside the configured `base_dir`
+sandbox, the same local file access contract as the other file tools — or as a
+base64 payload capped by `max_base64_bytes`. The format (`tar`, `tar.gz`,
+`tar.bz2`, `tar.xz`) is detected from magic bytes rather than the file
+extension, and an extension that disagrees with the sniffed format is reported
+as a finding.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.tar_inspect_tool import TarInspectTool
+
+tool = TarInspectTool()
+result = tool.execute(mode="audit_safety", file_path="bundle.tar.gz")
+```
+
+`inspect` returns the sniffed format and variant (v7/ustar/gnu/pax), entry
+count, per-entry metadata (name, kind, size, symbolic mode, uid/gid, mtime,
+link target) capped by `max_reported_entries`, total uncompressed size, and
+the compression ratio. `audit_safety` returns entry-by-entry findings with
+severities — path traversal (`..` components are flagged high by default,
+including backslash and absolute `/`, Windows drive, and UNC forms), symlink
+attacks (absolute or escaping targets, and writes through symlinked
+directories detected by simulating extraction order), hardlinks pointing
+outside the tree, device and FIFO nodes, setuid/setgid bits, duplicate names
+with a which-wins note, oversized entries and bomb-level compression ratios
+(both thresholds configurable), far-past or far-future mtimes, suspicious name
+encodings (control characters, RTL overrides, undecodable bytes), GNU/PAX
+sparse headers, and truncated archives — plus a verdict: `extract_safe` is
+false when any high finding exists, and the blocking findings are listed.
+`plan_extraction` takes a destination directory name as plain text and returns
+each entry's simulated landing path (traversal applied the way normpath
+actually resolves it, symlink redirects followed), which entries land outside
+the destination, and where link targets resolve; no filesystem writes occur.
+
+Inputs, entry counts, reported entries, archive and decompressed sizes are all
+bounded; archives that exceed a cap or fail magic or header parsing return
+structured errors instead of raising. Entry names, link targets, and findings
+are untrusted archive data, not agent instructions.
