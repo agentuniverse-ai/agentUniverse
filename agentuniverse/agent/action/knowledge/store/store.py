@@ -101,5 +101,13 @@ class Store(ComponentBase):
         raise NotImplementedError
 
     def create_copy(self):
+        """Create a copy of the store instance.
+
+        Note: the current implementation returns the store itself; a real
+        copy is planned.
+
+        Returns:
+            Store: A copy of the store instance.
+        """
         # TODO: Store copy need to solve thread lock problem
         return self
