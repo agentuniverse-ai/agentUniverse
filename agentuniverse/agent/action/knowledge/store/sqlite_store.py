@@ -125,6 +125,10 @@ class SQLiteStore(Store):
                 metadata = json.dumps(
                     document.metadata) if document.metadata else None
                 self.conn.execute(
+                    'DELETE FROM inverted_index WHERE doc_id = ?',
+                    (document.id,)
+                )
+                self.conn.execute(
                     'INSERT OR REPLACE INTO documents (id, text, word_count, metadata) VALUES (?, ?, ?, ?)',
                     (document.id, document.text, len(jieba.lcut(document.text)), metadata)
                 )
@@ -217,7 +221,8 @@ class SQLiteStore(Store):
 
             document = Document(id=doc_row[0], text=doc_row[1],
                                 word_count=doc_row[2],
-                                metadata=json.loads(doc_row[3]))
+                                metadata=json.loads(doc_row[3])
+                                if doc_row[3] else None)
             results.append(document)
 
         return results
@@ -228,10 +233,19 @@ class SQLiteStore(Store):
 
         if query_result is None:
             return []
+        ids = query_result.get('ids') or []
+        texts = query_result.get('documents') or []
+        metadatas = query_result.get('metadatas') or []
+        if not ids or not texts:
+            return []
+
+        ids = ids[0]
+        texts = texts[0]
+        metadata_row = metadatas[0] if metadatas else []
         documents = []
-        for i in range(len(query_result['ids'][0])):
-            documents.append(Document(id=query_result['ids'][0][i],
-                                      text=query_result['documents'][0][i],
-                                      embedding=[],
-                                      metadata=json.loads(query_result[2]) if query_result[2] else None))
+        for i, (document_id, text) in enumerate(zip(ids, texts)):
+            metadata = metadata_row[i] if i < len(metadata_row) else None
+            if isinstance(metadata, str):
+                metadata = json.loads(metadata) if metadata else None
+            documents.append(Document(id=document_id, text=text, embedding=[], metadata=metadata))
         return documents

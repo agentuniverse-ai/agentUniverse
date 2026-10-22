@@ -100,7 +100,7 @@ class Tool(ComponentBase):
             """Deprecated in future, use kwargs as tool input instead of ToolInput."""
             tool_input = ToolInput(kwargs)
             parse_result = self.parse_react_input(args[0])
-            for key in self.input_keys:
+            for key in self.input_keys or []:
                 tool_input.add_data(key, parse_result[key])
             return self.execute(tool_input)
         else:
@@ -116,7 +116,7 @@ class Tool(ComponentBase):
         if self.check_execute_signature_deprecated():
             tool_input = ToolInput(kwargs)
             parse_result = self.parse_react_input(args[0])
-            for key in self.input_keys:
+            for key in self.input_keys or []:
                 tool_input.add_data(key, parse_result[key])
             return await asyncio.to_thread(self.execute, tool_input)
         try:
@@ -130,6 +130,8 @@ class Tool(ComponentBase):
             parse react string to you input
             you can define your own logic here by override this function
         """
+        if not self.input_keys:
+            return {}
         return {
             self.input_keys[0]: input_str
         }

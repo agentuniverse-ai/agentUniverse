@@ -46,8 +46,8 @@ class XlsxReader(Reader):
         document_list = []
 
         # Process each worksheet
-        for sheet_name in workbook.sheetnames:
-            worksheet = workbook[sheet_name]
+        for worksheet in workbook.worksheets:
+            sheet_name = worksheet.title
             
             # Extract data from the worksheet
             sheet_data = []

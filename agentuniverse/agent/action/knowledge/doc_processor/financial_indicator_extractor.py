@@ -186,7 +186,9 @@ class FinancialIndicatorExtractor(DocProcessor):
             text: Financial report text.
 
         Returns:
-            List of extracted FinancialMetric objects.
+            List of extracted FinancialMetric objects. Monetary values include
+            the matched million/billion scale, including amount-before-revenue
+            phrases such as "$3 billion in revenue".
         """
         metrics = []
 
@@ -197,7 +199,7 @@ class FinancialIndicatorExtractor(DocProcessor):
                 r'sales\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
                 r'total\s+revenue\s*(?:of\s+|:\s*|for\s+[A-Z0-9\s]+)?(?:reached\s+|was\s+|totaled\s+)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
                 r'营收[达到]?(-?[0-9,.]+)\s*(万|亿)?',
-                r'[\$€£¥](-?[0-9,.]+)\s*(?:million|billion|M|B)\s+(?:in\s+)?revenue',
+                r'[\$€£¥](-?[0-9,.]+)\s*(million|billion|M|B)\s+(?:in\s+)?revenue',
             ],
             'sales': [
                 r'sales\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
@@ -448,14 +450,10 @@ class FinancialIndicatorExtractor(DocProcessor):
                 try:
                     # Extract the percentage value (might be in group 1 or 2)
                     change_percent_str = None
-                    for i in range(1, match.lastindex + 1 if match.lastindex else 1):
-                        try:
-                            val = match.group(i)
-                            if val and re.match(r'^[0-9,.]+$', val):
-                                change_percent_str = val
-                                break
-                        except:
-                            continue
+                    for val in match.groups():
+                        if val and re.match(r'^[0-9,.]+$', val):
+                            change_percent_str = val
+                            break
 
                     if not change_percent_str:
                         continue
