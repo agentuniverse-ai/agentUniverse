@@ -7,6 +7,11 @@ metadata:
   class: StrftimeLintTool
 input_keys:
   - mode
+  - fmt
+max_format_chars: 4000
+max_dt_chars: 64
+max_pitfalls: 6
+max_codepoints_listed: 5
 args_model:
   mode:
     type: string
@@ -18,7 +23,7 @@ args_model:
     required: true
   dt:
     type: string
-    description: Probe mode only — an ISO 8601 datetime string the directives are rendered against (default: the fixed reference datetime 2024-02-29T13:45:06.123456+00:00). Rejected in the other modes.
+    description: "Probe mode only — an ISO 8601 datetime string the directives are rendered against (default: the fixed reference datetime 2024-02-29T13:45:06.123456+00:00). Rejected in the other modes."
     required: false
 args_model_schema:
   type: object
@@ -34,3 +39,4 @@ args_model_schema:
       type: string
       description: Optional ISO 8601 datetime for probe mode.
   required: ["mode", "fmt"]
+  additionalProperties: false

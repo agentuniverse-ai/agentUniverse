@@ -398,10 +398,10 @@ class StrftimeLintTool(Tool):
 
     MODES: ClassVar[tuple] = ("lint", "explain", "probe", "roundtrip_check")
 
-    max_format_chars: ClassVar[int] = 4_000
-    max_dt_chars: ClassVar[int] = 64
-    max_pitfalls: ClassVar[int] = 6
-    max_codepoints_listed: ClassVar[int] = 5
+    max_format_chars: int = 4_000
+    max_dt_chars: int = 64
+    max_pitfalls: int = 6
+    max_codepoints_listed: int = 5
 
     # ------------------------------------------------------------------ #
     # Public entry point
@@ -455,30 +455,28 @@ class StrftimeLintTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"strftime_lint_tool: {message}")
 
-    @classmethod
-    def _validate_fmt(cls, fmt: Any) -> str:
+    def _validate_fmt(self, fmt: Any) -> str:
         """Validate the format string (empty is allowed, oversized is not)."""
         if fmt is None or isinstance(fmt, bool) or not isinstance(fmt, str):
-            cls._invalid(f"fmt must be a string (got {fmt!r})")
-        if len(fmt) > cls.max_format_chars:
-            cls._invalid(
-                f"fmt exceeds the {cls.max_format_chars:,}-character limit "
+            self._invalid(f"fmt must be a string (got {fmt!r})")
+        if len(fmt) > self.max_format_chars:
+            self._invalid(
+                f"fmt exceeds the {self.max_format_chars:,}-character limit "
                 f"(got {len(fmt):,} characters)"
             )
         return fmt
 
-    @classmethod
-    def _validate_dt(cls, dt: Any) -> datetime:
+    def _validate_dt(self, dt: Any) -> datetime:
         """Validate the optional probe datetime; default to the reference."""
         if dt is None:
             return REFERENCE_DATETIME
         if isinstance(dt, bool) or not isinstance(dt, str):
-            cls._invalid(f"dt must be an ISO 8601 datetime string (got {dt!r})")
+            self._invalid(f"dt must be an ISO 8601 datetime string (got {dt!r})")
         if not dt:
-            cls._invalid("dt must be an ISO 8601 datetime string (got '')")
-        if len(dt) > cls.max_dt_chars:
-            cls._invalid(
-                f"dt exceeds the {cls.max_dt_chars}-character limit "
+            self._invalid("dt must be an ISO 8601 datetime string (got '')")
+        if len(dt) > self.max_dt_chars:
+            self._invalid(
+                f"dt exceeds the {self.max_dt_chars}-character limit "
                 f"(got {len(dt)} characters)"
             )
         normalized = dt.strip()
@@ -487,7 +485,7 @@ class StrftimeLintTool(Tool):
         try:
             parsed = datetime.fromisoformat(normalized)
         except ValueError:
-            cls._invalid(
+            self._invalid(
                 f"dt must be an ISO 8601 datetime string (got {dt!r})"
             )
         return parsed
@@ -745,8 +743,7 @@ class StrftimeLintTool(Tool):
             parts.append(f"'{':' * token.colons}' colon form")
         return f"{' '.join(parts)} in {token.text!r}"
 
-    @classmethod
-    def _lint_non_ascii(cls, fmt: str,
+    def _lint_non_ascii(self, fmt: str,
                         findings: list[dict[str, Any]]) -> None:
         """Flag non-ASCII characters (one info finding at the first)."""
         positions = [i for i, ch in enumerate(fmt) if ord(ch) > 0x7F]
@@ -754,11 +751,11 @@ class StrftimeLintTool(Tool):
             return
         line = fmt.count("\n", 0, positions[0]) + 1
         codepoints = ", ".join(
-            f"U+{ord(fmt[i]):04X}" for i in positions[:cls.max_codepoints_listed]
+            f"U+{ord(fmt[i]):04X}" for i in positions[:self.max_codepoints_listed]
         )
-        if len(positions) > cls.max_codepoints_listed:
+        if len(positions) > self.max_codepoints_listed:
             codepoints += ", ..."
-        cls._finding(
+        self._finding(
             findings, "non_ascii_literal", "info", line, positions[0],
             f"{len(positions)} non-ASCII character(s) in the format "
             f"(first at line {line}: {codepoints}) — literal text renders "
