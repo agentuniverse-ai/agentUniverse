@@ -38,8 +38,9 @@ class BAICHUANOpenAIStyleLLM(OpenAIStyleLLM):
     organization: Optional[str] = Field(default_factory=lambda: get_from_env("BAICHUAN_ORGANIZATION"))
 
     def max_context_length(self) -> int:
-        if super().max_context_length():
-            return super().max_context_length()
+        # The OpenAI transport fallback must not hide this provider's table.
+        if self._max_context_length:
+            return self._max_context_length
         return BAICHUAN_Max_CONTEXT_LENGTH.get(self.model_name, 8000)
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
