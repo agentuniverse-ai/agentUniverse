@@ -177,7 +177,7 @@ class OpenAILLM(LLM):
     @staticmethod
     def parse_result(chunk):
         """Generate the result of the stream."""
-        chat_completion = chunk
+        raw = chunk if isinstance(chunk, dict) else chunk.model_dump()
         if not isinstance(chunk, dict):
             chunk = chunk.dict()
         if len(chunk["choices"]) == 0:
@@ -187,7 +187,7 @@ class OpenAILLM(LLM):
         text = message.get("content")
         if not text:
             return
-        return LLMOutput(text=text, raw=chat_completion.model_dump())
+        return LLMOutput(text=text, raw=raw)
 
     @classmethod
     def generate_stream_result(cls, stream: Iterator) -> Iterator[LLMOutput]:

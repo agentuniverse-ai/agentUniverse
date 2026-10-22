@@ -220,17 +220,17 @@ class OpenAIStyleLLM(LLM):
     @staticmethod
     def parse_result(chunk):
         """Generate the result of the stream."""
-        chat_completion = chunk
+        raw = chunk if isinstance(chunk, dict) else chunk.model_dump()
         if not isinstance(chunk, dict):
             chunk = chunk.dict()
         if len(chunk["choices"]) == 0:
-            return LLMOutput(text="", raw=chat_completion.model_dump())
+            return LLMOutput(text="", raw=raw)
         choice = chunk["choices"][0]
         message = choice.get("delta")
         text = message.get("content")
         if text is None:
             text = ""
-        return LLMOutput(text=text, raw=chat_completion.model_dump())
+        return LLMOutput(text=text, raw=raw)
 
     def generate_stream_result(self, stream: openai.Stream):
         """Generate the result of the stream."""
