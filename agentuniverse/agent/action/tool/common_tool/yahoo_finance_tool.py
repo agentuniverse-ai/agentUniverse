@@ -237,12 +237,13 @@ class YahooFinanceTool(Tool):
 
     @staticmethod
     def _safe_info(ticker) -> Dict[str, Any]:
-        """Best-effort ``ticker.info``; tolerates yfinance returning None."""
-        try:
-            info = ticker.info
-        except Exception:  # noqa: BLE001
-            return {}
-        return info or {}
+        """Normalize absent info while letting fetch failures reach retries.
+
+        The decorated callers retry exceptions and ``execute`` reports a
+        fetch error once retries are exhausted. An actual empty response
+        remains a successful no-data result.
+        """
+        return ticker.info or {}
 
     @staticmethod
     def _row_value(row: Dict[str, Any], *keys: str) -> Any:
