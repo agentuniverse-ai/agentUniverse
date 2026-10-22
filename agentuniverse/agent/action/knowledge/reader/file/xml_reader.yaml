@@ -1,0 +1,18 @@
+name: 'default_xml_reader'
+description: 'default xml reader: structure-preserving extraction of local XML files via the stdlib parser, with DTD/XXE/entity-bomb refusal and depth/size bounds'
+
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.xml_reader'
+  class: 'XmlReader'
+
+# --- Safety bounds (validated at init) ---
+# Enforced via stat() before reading a path / bounded read for streams.
+max_file_bytes: 10485760
+# Nesting cap checked before recursion; rejects pathologically deep documents.
+max_depth: 64
+
+# --- Extraction ---
+# When true, each element's attributes are emitted as an extra
+# 'path [attributes]: k="v" ...' line.
+include_attributes: false

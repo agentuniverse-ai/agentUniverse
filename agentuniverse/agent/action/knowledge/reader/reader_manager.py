@@ -25,6 +25,7 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "markdown": "default_markdown_reader",
         "csv": "default_csv_reader",
         "json": "default_json_reader",
+        "xml": "default_xml_reader",
         "rar": "default_rar_reader",
         "zip": "default_zip_reader",
         "sevenzip": "default_sevenzip_reader",
