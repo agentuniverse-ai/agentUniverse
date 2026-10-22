@@ -7,6 +7,8 @@ metadata:
   class: CfgLintTool
 input_keys:
   - mode
+  - text
+max_text_chars: 100000
 args_model:
   mode:
     type: string
@@ -15,7 +17,7 @@ args_model:
   text:
     type: string
     description: The INI text (required for every mode; may be empty).
-    required: false
+    required: true
   options:
     type: object
     description: Check mode only — policy option name to boolean map.
@@ -44,4 +46,5 @@ args_model_schema:
         require_unique_sections, require_unique_options,
         require_final_newline, forbid_inline_comments, forbid_tabs,
         forbid_bom. Omitted options take their documented defaults.
-  required: ["mode"]
+  required: ["mode", "text"]
+  additionalProperties: false

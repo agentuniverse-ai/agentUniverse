@@ -636,7 +636,7 @@ it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
 
 
-## 4.CfgLintTool
+## CfgLintTool
 
 [Tool Path](../../../../../../agentuniverse/agent/action/tool/common_tool/cfg_lint_tool.yaml)
 The tool lints INI-style configuration text (`.ini` / `.cfg`) with the Python standard library `configparser` semantics as ground truth — purely offline, no network required. Its configuration information is:

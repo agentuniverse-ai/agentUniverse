@@ -301,14 +301,13 @@ class CfgLintTool(Tool):
         """Raise the standard input-validation error."""
         raise ValueError(f"cfg_lint_tool: {message}")
 
-    @classmethod
-    def _validate_text(cls, text: Any) -> str:
+    def _validate_text(self, text: Any) -> str:
         """Validate the INI text input (may be empty, must be str)."""
         if text is None or isinstance(text, bool) or not isinstance(text, str):
-            cls._invalid(f"text must be a string (got {text!r})")
-        if len(text) > _MAX_TEXT_CHARS:
-            cls._invalid(
-                f"text exceeds the {_MAX_TEXT_CHARS:,}-character limit "
+            self._invalid(f"text must be a string (got {text!r})")
+        if len(text) > self.max_text_chars:
+            self._invalid(
+                f"text exceeds the {self.max_text_chars:,}-character limit "
                 f"(got {len(text):,} characters)"
             )
         return text
