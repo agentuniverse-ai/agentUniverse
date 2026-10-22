@@ -1,0 +1,57 @@
+name: front_matter_tool
+description: Markdown front-matter tool — pure stdlib plus the framework's existing PyYAML, no network required. Parse a markdown text into its front-matter mapping and body (mode='parse'; YAML fences --- and ..., TOML fences +++ parsed with tomllib or reported as raw_string), return the body only (mode='strip'), set one key/value pair — dotted keys address nested paths — with a line-level patch that preserves key order and comments above the patched key (mode='set'), and merge the front matter of two markdown texts with documented per-key precedence in both directions plus the second text's body (mode='merge').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.front_matter_tool
+  class: FrontMatterTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — parse, strip, set or merge.
+    required: true
+  text:
+    type: string
+    description: The markdown text to operate on. Required by every mode; for merge this is the first document whose front matter is merged over the second one's.
+    required: false
+  other_text:
+    type: string
+    description: Merge mode only — the second markdown document; the merged front matter is returned with this document's body.
+    required: false
+  key:
+    type: string
+    description: Set mode only — the key to set. A dotted key such as a.b.c addresses the nested path a -> b -> c, creating intermediate mappings as needed.
+    required: false
+  value:
+    type: string
+    description: Set mode only — the value to store (string, number, boolean or null; strings are kept as strings).
+    required: false
+  precedence:
+    type: string
+    description: Merge mode only — "second" (default) keeps the second document's value when a key exists in both front matters; "first" keeps the first one's.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "strip", "set", "merge"]
+      description: Operation mode.
+    text:
+      type: string
+      description: The markdown text to operate on (all modes; first document for merge).
+    other_text:
+      type: string
+      description: Second markdown document (merge mode).
+    key:
+      type: string
+      description: Dotted key path to set (set mode).
+    value:
+      description: Value to store — string, number, boolean or null (set mode).
+    precedence:
+      type: string
+      enum: ["second", "first"]
+      description: Which document wins per conflicting key (merge mode; default second).
+  required: ["mode"]
