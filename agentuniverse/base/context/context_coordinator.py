@@ -35,6 +35,25 @@ class ContextPack:
     otel_context: Optional[Context] = None
 
 
+@dataclass
+class RecoveredContext:
+    """Lifecycle handle for tracing contexts restored in a worker."""
+    opentracing_scope: Any = None
+    otel_token: Any = None
+
+    def close(self):
+        otel_token = self.otel_token
+        opentracing_scope = self.opentracing_scope
+        self.otel_token = None
+        self.opentracing_scope = None
+        try:
+            if otel_token is not None:
+                otel_context.detach(otel_token)
+        finally:
+            if opentracing_scope is not None:
+                opentracing_scope.close()
+
+
 class ContextCoordinator:
     """Coordinates capture and restoration of multiple kinds of context.
 
@@ -77,26 +96,33 @@ class ContextCoordinator:
                     context_pack: The snapshot previously created by `save_context()`.
 
                 Returns:
-                    Any: An OTEL context token if an OTEL context was attached; otherwise None.
+                    RecoveredContext: A handle that releases all restored tracing contexts.
 
                 Example:
-                    >>> token = ContextCoordinator.recover_context(pack)
+                    >>> recovered_context = ContextCoordinator.recover_context(pack)
                     >>> # ... do work ...
-                    >>> if token is not None:
-                    ...     otel_context.detach(token)
+                    >>> recovered_context.close()
                 """
         for var_name, var_value in context_pack.framework_context.items():
             FrameworkContextManager().set_context(var_name, var_value)
         AuTraceManager().recover_trace(context_pack.trace_context)
         MCPSessionManager().recover_mcp_session(**context_pack.mcp_session)
+        opentracing_scope = None
         if context_pack.opentracing_span:
-            opentracing.tracer.scope_manager.activate(
+            opentracing_scope = opentracing.tracer.scope_manager.activate(
                 context_pack.opentracing_span, finish_on_close=False
             )
 
+        otel_token = None
         if context_pack.otel_context:
-            token = otel_context.attach(context_pack.otel_context)
-            return token
+            try:
+                otel_token = otel_context.attach(context_pack.otel_context)
+            except Exception:
+                if opentracing_scope is not None:
+                    opentracing_scope.close()
+                raise
+
+        return RecoveredContext(opentracing_scope, otel_token)
 
     @classmethod
     def end_context(cls):
