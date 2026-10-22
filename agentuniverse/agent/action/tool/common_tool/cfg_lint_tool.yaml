@@ -1,0 +1,50 @@
+name: cfg_lint_tool
+description: Cfg lint tool — lint INI configuration text with the Python stdlib configparser semantics as ground truth, purely offline, no network required. lint mode reports findings [{code, severity, line, message}] from 13 deterministic rules (missing section header with configparser-faithful line citation, duplicate sections, duplicate options including lowercased case collisions, keys without values, unparseable lines, repeated DEFAULT blocks, BOM, inline-comment and interpolation portability risks, missing final newline, trailing whitespace, tab indentation) plus an explicit configparser_would_reject verdict (mode='lint'); parse returns a structured section/key/comment report built by the same line-mode scan even when configparser would reject the text (mode='parse'); check evaluates named policy options (require_section_header, require_parseable, require_unique_sections, require_unique_options, require_final_newline, forbid_inline_comments, forbid_tabs, forbid_bom) into a pass/fail summary (mode='check'). Values of secret-ish keys (KEY/SECRET/PASSWORD/TOKEN) are never echoed in full.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.cfg_lint_tool
+  class: CfgLintTool
+input_keys:
+  - mode
+  - text
+max_text_chars: 100000
+args_model:
+  mode:
+    type: string
+    description: Cfg lint mode — lint, parse or check.
+    required: true
+  text:
+    type: string
+    description: The INI text (required for every mode; may be empty).
+    required: true
+  options:
+    type: object
+    description: Check mode only — policy option name to boolean map.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "parse", "check"]
+      description: Cfg lint mode.
+    text:
+      type: string
+      description: >
+        The INI text (all modes; may be empty — an empty file lints
+        clean). lint reports findings plus the configparser_would_
+        reject verdict mirroring a strict configparser read; parse
+        returns the structured section/key/comment report even when
+        configparser would reject the text; check evaluates the
+        named policy options into a pass/fail summary.
+    options:
+      type: object
+      description: >
+        check mode only — a map of policy option name to boolean:
+        require_section_header, require_parseable,
+        require_unique_sections, require_unique_options,
+        require_final_newline, forbid_inline_comments, forbid_tabs,
+        forbid_bom. Omitted options take their documented defaults.
+  required: ["mode", "text"]
+  additionalProperties: false
