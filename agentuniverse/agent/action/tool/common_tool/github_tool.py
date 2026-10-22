@@ -55,14 +55,21 @@ class GitHubTool(Tool):
         return headers
 
     def _make_request(self, url: str, params: Optional[Dict] = None) -> Dict[str, Any]:
-        """发送HTTP请求"""
+        """发送HTTP请求；超时或连接失败时最多尝试三次，间隔一秒。"""
         try:
-            response = requests.get(
-                url, 
-                headers=self._get_headers(), 
-                params=params, 
-                timeout=self.timeout
-            )
+            for attempt in range(3):
+                try:
+                    response = requests.get(
+                        url,
+                        headers=self._get_headers(),
+                        params=params,
+                        timeout=self.timeout
+                    )
+                    break
+                except (requests.Timeout, requests.ConnectionError):
+                    if attempt == 2:
+                        raise
+                    time.sleep(1.0)
             response.raise_for_status()
             return response.json()
         except requests.HTTPError as e:
