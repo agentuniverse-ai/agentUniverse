@@ -614,8 +614,9 @@ class SemanticScholarTool(Tool):
         doi_url = re.match(r"^https?://(?:dx\.)?doi\.org/(.*)$", paper_id, flags=re.I)
         if doi_url:
             paper_id = "DOI:" + unquote(doi_url.group(1))
+        if re.match(r"^https?://arxiv\.org/pdf/", paper_id, flags=re.I):
+            paper_id = re.sub(r"\.pdf$", "", paper_id, flags=re.I)
         paper_id = re.sub(r"^https?://arxiv\.org/(?:abs|pdf)/", "ARXIV:", paper_id, flags=re.I)
-        paper_id = re.sub(r"\.pdf$", "", paper_id, flags=re.I)
 
         prefix_match = re.match(
             r"^(doi|arxiv|pmid|pmcid|corpusid|mag|acl|url)\s*:\s*(.+)$",

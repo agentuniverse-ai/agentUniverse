@@ -252,9 +252,11 @@ class WordDocumentTool(Tool):
                 table = document.add_table(rows=len(rows), cols=width)
                 if block.get("style"):
                     table.style = block["style"]
-                for row_index, row in enumerate(rows):
-                    for column in range(width):
-                        table.cell(row_index, column).text = row[column] if column < len(row) else ""
+                # Table.cell() rebuilds the full table grid for each lookup.
+                # Traverse each freshly created row once instead.
+                for table_row, row in zip(table.rows, rows):
+                    for column, cell in enumerate(table_row.cells):
+                        cell.text = row[column] if column < len(row) else ""
 
     def _read(self, path: str) -> dict[str, Any]:
         self._check_archive(path)
