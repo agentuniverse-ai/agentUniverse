@@ -7,6 +7,12 @@ metadata:
   class: RegexLintTool
 input_keys:
   - mode
+max_pattern_chars: 4000
+max_findings: 200
+max_nodes_out: 2000
+analysis_depth_cap: 250
+huge_repeat_threshold: 100000
+max_text_length: 1000000000
 args_model:
   mode:
     type: string
@@ -43,3 +49,4 @@ args_model_schema:
       type: integer
       description: Optional sample text length for the estimate mode.
   required: ["mode", "pattern"]
+  additionalProperties: false
