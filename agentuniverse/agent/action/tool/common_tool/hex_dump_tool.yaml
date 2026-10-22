@@ -1,0 +1,70 @@
+name: hex_dump_tool
+description: Hex dump tool — pure Python stdlib, no network required. Classic offset-aligned byte views for debugging (xxd style) — render 8/16/32-byte-per-line hexdump lines of text or Base64-encoded bytes with an ASCII column (mode='dump'), find hex patterns with ?? wildcard bytes and get match offsets plus context dump lines (mode='find'), and apply bounds-checked {offset, hex} patches to Base64 bytes returning patched Base64 (mode='patch').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.hex_dump_tool
+  class: HexDumpTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — dump, find or patch.
+    required: true
+  data:
+    type: string
+    description: The input to process — UTF-8 text (default) or a standard Base64 string, selected by input_encoding.
+    required: false
+  input_encoding:
+    type: string
+    description: How to interpret data — utf8-text (default) or base64.
+    required: false
+  width:
+    type: integer
+    description: Bytes per dump line — 8, 16 or 32 (default 16). Used by dump mode and find context lines.
+    required: false
+  pattern:
+    type: string
+    description: Find mode only — hex pattern, two hex digits per byte (case-insensitive), where the token ?? matches any single byte; no spaces, no prefix.
+    required: false
+  patches:
+    type: array
+    description: Patch mode only — a non-empty list of {'offset' (non-negative int), 'hex' (even-length hex string)} objects applied in list order; the patched bytes are returned as Base64.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["dump", "find", "patch"]
+      description: Operation mode.
+    data:
+      type: string
+      description: UTF-8 text or Base64 input (see input_encoding).
+    input_encoding:
+      type: string
+      enum: ["utf8-text", "base64"]
+      description: How to interpret data.
+    width:
+      type: integer
+      enum: [8, 16, 32]
+      description: Bytes per dump line.
+    pattern:
+      type: string
+      description: Hex pattern with optional ?? wildcard bytes (find mode).
+    patches:
+      type: array
+      items:
+        type: object
+        properties:
+          offset:
+            type: integer
+            minimum: 0
+            description: Byte offset where the patch is applied.
+          hex:
+            type: string
+            description: Even-length hex string written at the offset.
+        required: ["offset", "hex"]
+      description: Patches applied in list order (patch mode).
+  required: ["mode"]
