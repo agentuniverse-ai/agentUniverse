@@ -636,3 +636,19 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## UnicodeCaseTool
+
+`UnicodeCaseTool` provides offline Unicode casing analysis with four modes: `case_map`, `equivalence`, `style_audit`, and `char_case_info`. It uses only the Python standard library (`str` case methods plus `unicodedata`), never touches the network, and is fully deterministic.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.unicode_case_tool import UnicodeCaseTool
+
+tool = UnicodeCaseTool()
+mapping = tool.execute(mode="case_map", text="straße", target="upper")         # STRASSE: sharp s expands 1->2
+verdict = tool.execute(mode="equivalence", text_a="Straße", text_b="STRASSE")  # casefold_equal=True, lower_equal=False
+audit = tool.execute(mode="style_audit", identifier="getHTTPResponse", target_style="snake_case")
+info = tool.execute(mode="char_case_info", codepoint="U+212A")                 # KELVIN SIGN folds to ASCII 'k'
+```
+
+`case_map` returns the mapped text alongside per-character mappings and curated notes for the non-obvious behaviors: length-changing mappings (sharp s to `SS`, dotted capital I to `i` plus a combining dot, ligatures), the position-sensitive final sigma rule (with the in-context result shown next to the isolated mapping), compatibility collisions (Kelvin sign, ohm sign, long s, micro sign, Angstrom sign), and bicameral scripts such as Cherokee and Deseret. Turkish/Azeri divergences are documented rather than emulated because Python case mapping is locale-independent. `equivalence` compares two strings via casefold (the correct case-insensitive comparison), via lower (shown to diverge exactly where lower does not fold, for example `Straße` versus `STRASSE`), and via NFC plus casefold (the canonical identifier comparison), explaining the differences character by character. `style_audit` detects snake_case, camelCase, PascalCase, SCREAMING_SNAKE, kebab-case, and mixed styles with per-word evidence (acronyms such as `HTTPServer` and `XMLHttpRequest` are split correctly), audits violations against a target style, and returns the deterministic rename, which round-trips with word preservation. `char_case_info` reports the character name, category, cased/upper/lower/title mirrors, all five mappings, and a simple-versus-full mapping explanation; the `Cased` and `Case_Ignorable` mirrors are frozen tables derived from the stdlib SpecialCasing machinery. Text length, per-character entries, findings, differences, and word counts are capped with explicit truncation flags, inputs are strictly validated, and cross-mode parameters are rejected.
