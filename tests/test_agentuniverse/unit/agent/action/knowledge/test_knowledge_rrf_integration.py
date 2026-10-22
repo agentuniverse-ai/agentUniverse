@@ -42,6 +42,24 @@ class _FakeStore:
 class TestKnowledgeRrfIntegration(unittest.TestCase):
     """Multi-store recall fused by RRF through the Knowledge pipeline."""
 
+    def test_custom_channel_key_preserves_each_stores_contribution(self):
+        stores = {
+            "vector_store": _FakeStore([Document(text="shared", metadata={"source": "report"})]),
+            "keyword_store": _FakeStore([Document(text="shared", metadata={"source": "report"})]),
+        }
+        knowledge = self._build_knowledge(stores)
+        self.addCleanup(knowledge.insert_executor.shutdown)
+        self.addCleanup(knowledge.query_executor.shutdown)
+        rrf = ReciprocalRankFusionProcessor(channel_key="custom_channel", k=60)
+
+        out = self._run_query(knowledge, stores, rrf)
+
+        self.assertEqual(len(out), 1)
+        self.assertAlmostEqual(out[0].metadata["relevance_score"], 2.0 / 61)
+        self.assertEqual(out[0].metadata["custom_channel"], "vector_store")
+        self.assertEqual(out[0].metadata[RECALL_CHANNEL_KEY], "vector_store")
+        self.assertEqual(out[0].metadata["source"], "report")
+
     def _build_knowledge(self, stores):
         return Knowledge(
             name="rrf_knowledge",
