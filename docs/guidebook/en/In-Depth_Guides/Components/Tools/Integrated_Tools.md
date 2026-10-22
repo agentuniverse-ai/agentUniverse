@@ -636,3 +636,36 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## Wikipedia Tool
+
+`WikipediaTool` searches Wikipedia and fetches page summaries / extracts
+over the public, keyless MediaWiki API — no API key or account is needed.
+The `search` mode performs a full-text search returning titles, clean text
+snippets, and page URLs; the `summary` mode returns the compact REST
+summary card (title, short description, lead extract, thumbnail, page
+URL); the `details` mode returns the full plain-text extract with an
+optional sentence (`sentences`, 1-10) or character (`chars`, 1-1200) limit.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.wikipedia_tool import WikipediaTool
+
+tool = WikipediaTool()
+results = tool.execute(mode="search", query="theory of relativity", max_results=5)
+summary = tool.execute(mode="summary", title="Albert Einstein")
+extract = tool.execute(mode="details", title="Albert Einstein", sentences=3)
+zh_summary = WikipediaTool(language="zh").execute(mode="summary", title="阿尔伯特·爱因斯坦")
+```
+
+The language edition is configurable (`language`, default `en`; e.g. `zh`,
+`pt-br`) and every request goes to the fixed https-only
+`https://{language}.wikipedia.org` endpoint. All inputs are validated
+strictly before any network request is made: `max_results` is bounded from
+1 to 25, page titles may not contain `# < > [ ] | { }` or control
+characters, and `sentences` and `chars` cannot be combined — invalid
+inputs raise a `ValueError` without issuing a request. Each execution
+makes exactly one request. Timeout, connection, HTTP, and malformed
+response failures return a structured `error` object that includes the
+HTTP status and the MediaWiki error `code` when available, instead of
+raising; a missing page in `details` mode is reported as a regular
+`found: False` result rather than an error.
