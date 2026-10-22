@@ -1,0 +1,48 @@
+name: 'bounded_query_paraphraser'
+description: 'Bounded dual-strategy query paraphraser: HyDE hypothetical passages (answer-space) or multi-query reformulations (question-space) in one component superseding #3322 #3325. Best-effort by contract; configuration errors fail loudly with the offending value quoted.'
+
+metadata:
+  type: 'QUERY_PARAPHRASER'
+  module: 'agentuniverse.agent.action.knowledge.query_paraphraser.bounded_query_paraphraser'
+  class: 'BoundedQueryParaphraser'
+
+# --- Strategy ---
+# hyde:  num_docs (1-5) hypothetical passages, one LLM call each, joined by a
+#        blank line. (answer-space; theirs: #3322)
+# multi: ONE LLM call, one numbered variant per line, decoration stripped,
+#        capped at num_queries (1-10), joined by newlines. (question-space;
+#        theirs: #3325)
+strategy: 'hyde'
+
+# --- LLM ---
+# Registered LLM component. Empty = best-effort pass-through with a warning,
+# so this yaml stays loadable without any model credentials.
+llm_model: ''
+
+# --- Bounds ---
+# Hard truncation applied to every generated passage / parsed variant.
+max_doc_chars: 2000
+max_query_chars: 512
+
+# --- Expansion sizes ---
+num_docs: 1
+num_queries: 3
+
+# --- Query rewriting ---
+# append: original query followed by the expansion (default).
+# replace: expansion only (classical HyDE).
+mode: 'append'
+
+# --- Prompt ---
+# Custom user-prompt template; must contain the literal {query} placeholder and
+# may contain {num} (replaced first, so other braces are safe). Defaults are
+# strategy-specific built-ins.
+# prompt_template: 'Rewrite {num} ways: {query}'
+
+# --- Provenance (ext_info keys) ---
+# The untouched original query string is recorded under origin_query_key
+# (first expansion wins); the final passage list under documents_key and the
+# final variant list under variants_key.
+origin_query_key: 'paraphrase_origin_query_str'
+documents_key: 'paraphrase_hyde_documents'
+variants_key: 'paraphrase_multi_variants'
