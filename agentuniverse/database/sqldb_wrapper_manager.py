@@ -9,5 +9,7 @@ class SQLDBWrapperManager(ComponentManagerBase[SQLDBWrapper]):
     """A singleton manager class of the DBWrapper."""
 
     def __init__(self):
+        """Initialize the sqldb wrapper manager.
+        """
         super().__init__(ComponentEnum.SQLDB_WRAPPER)
 
