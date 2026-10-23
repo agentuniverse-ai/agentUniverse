@@ -25,10 +25,12 @@ Two operating modes are supported:
 
 The processor always returns a single :class:`Document` whose ``text`` is the
 summary; its ``metadata`` records the operating mode and how many source
-documents were summarized.
+documents were summarized. Inherited source metadata is deep-copied so edits
+to a summary or its source do not affect the other document.
 """
 
 import re
+from copy import deepcopy
 from typing import List, Optional, Dict, Any
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -131,7 +133,8 @@ class SummarizationProcessor(DocProcessor):
         # first document without clobbering our own keys.
         if source_docs[0].metadata:
             for k, v in source_docs[0].metadata.items():
-                metadata.setdefault(k, v)
+                if k not in metadata:
+                    metadata[k] = deepcopy(v)
 
         return [Document(text=summary_text, metadata=metadata)]
 
