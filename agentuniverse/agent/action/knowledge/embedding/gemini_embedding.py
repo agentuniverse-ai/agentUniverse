@@ -37,12 +37,15 @@ class GeminiEmbedding(Embedding):
             
         model_name = self.embedding_model_name or "text-embedding-004"  # default model
 
+        config = {}
+        if self.embedding_dims is not None:
+            config["output_dimensionality"] = self.embedding_dims
+
         try:
             response = self.client.models.embed_content(
                 model=model_name,
                 contents=texts,
-                # gemini default 768, and only support 768
-                # config=EmbedContentConfig(output_dimensionality=(self.embedding_dims or 768))
+                **({"config": config} if config else {}),
             )
             return [embedding.values for embedding in response.embeddings]
         except Exception as e:
