@@ -23,6 +23,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = "^3.10"
 requests = "^2.32.0"
+warcio = { version = ">=1.7.5,<2", optional = true }
 cffi = "^1.15.1"
 flask = "^2.3.2"
 werkzeug = "^3.0.3"
@@ -78,16 +79,15 @@ opentracing = ">=2.4.0,<3.0.0"
 jsonlines = "^4.0.0"
 EbookLib = "^0.18"
 beautifulsoup4 = "^4.12.0"
-warcio = { version = ">=1.7.5,<2", optional = true }
 redis = { version = "^5.0.0", optional = true }
 # qdrant-client = "^1.15.1" unsupportable version due to numpy version limit
 
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
+warc_ext = ["warcio"]
 store_ext = ["pymilvus", "psycopg", "pgvector", "redis"]
 office_ext = ["python-docx", "python-pptx"]
 pdf_ext = ["pypdf"]
-warc_ext = ["warcio"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
