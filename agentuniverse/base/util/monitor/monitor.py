@@ -357,6 +357,8 @@ class Monitor(BaseModel):
     def filter_and_serialize(self, obj):
         """Recursively filter out non-serializable values from an object."""
 
+        unserializable = object()
+
         def is_json_serializable(value):
             """Check if value is a JSON serializable object."""
             try:
@@ -365,15 +367,24 @@ class Monitor(BaseModel):
             except (TypeError, OverflowError):
                 return False
 
-        def filter_dict(d):
-            return {k: v for k, v in d.items() if is_json_serializable(v)}
-
         def recursive_filter(o):
             if isinstance(o, dict):
-                return filter_dict({k: recursive_filter(v) for k, v in o.items()})
+                filtered = {}
+                for key, value in o.items():
+                    value = recursive_filter(value)
+                    if value is not unserializable:
+                        filtered[key] = value
+                return filtered
             elif isinstance(o, list):
-                return [recursive_filter(i) for i in o if is_json_serializable(i)]
-            else:
+                filtered = []
+                for item in o:
+                    item = recursive_filter(item)
+                    if item is not unserializable:
+                        filtered.append(item)
+                return filtered
+            elif is_json_serializable(o):
                 return o
+            return unserializable
 
-        return recursive_filter(obj)
+        filtered_obj = recursive_filter(obj)
+        return None if filtered_obj is unserializable else filtered_obj
