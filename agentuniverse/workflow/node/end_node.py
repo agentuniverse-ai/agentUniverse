@@ -52,7 +52,7 @@ class EndNode(Node):
                 prompt_val,
             )
         except KeyError as e:
-            raise ValueError(f"Error processing template variables: {e}")
+            raise ValueError(f"Error processing template variables: {e}") from e
 
         output_params: List[NodeOutputParams] = self._data.outputs
         output_param: NodeOutputParams = output_params[0]

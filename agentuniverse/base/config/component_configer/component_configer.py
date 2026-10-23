@@ -101,7 +101,7 @@ class ComponentConfiger(object):
                 self.__metadata_type = ComponentEnum.PROMPT.value
             self.__meta_class = configer.value.get('meta_class')
         except Exception as e:
-            raise Exception(f"Failed to parse the component configuration: {e}")
+            raise Exception(f"Failed to parse the component configuration: {e}") from e
 
         return self
 

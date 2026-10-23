@@ -94,5 +94,5 @@ class ProductConfiger(ComponentConfiger):
             if self.__type not in PRODUCT_COMPONENT_TYPE:
                 raise ValueError(f"Invalid product type: {self.__type}")
         except Exception as e:
-            raise Exception(f"Failed to parse the Product configuration: {e}")
+            raise Exception(f"Failed to parse the Product configuration: {e}") from e
         return self
