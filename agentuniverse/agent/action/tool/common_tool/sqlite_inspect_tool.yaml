@@ -1,0 +1,30 @@
+name: sqlite_inspect_tool
+description: Read-only SQLite database introspection covering schema inventory, structural audit findings, and integrity verdicts. Never executes caller SQL.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.sqlite_inspect_tool
+  class: SqliteInspectTool
+input_keys:
+  - mode
+  - db_path
+base_dir: .
+max_read_bytes: 536870912
+max_objects: 2000
+max_scan_objects: 10000
+max_sql_chars: 16384
+max_integrity_findings: 20
+max_fk_violations: 30
+max_audit_findings: 100
+freelist_vacuum_threshold: 64
+lock_timeout: 2.0
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [schema, audit, integrity, compact]
+    db_path:
+      type: string
+  required: [mode, db_path]
+  additionalProperties: false

@@ -649,3 +649,58 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## SqliteInspectTool
+
+`SqliteInspectTool` inspects an existing local SQLite database file without
+executing any caller-supplied SQL. It answers metadata questions an agent
+typically has before touching data: what tables, columns, views, indexes, and
+triggers exist, whether the schema carries structural anti-patterns, and
+whether the file itself is consistent.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.sqlite_inspect_tool import SqliteInspectTool
+
+tool = SqliteInspectTool()
+result = tool.execute(mode="schema", db_path="app.db")
+```
+
+`db_path` is a local file resolved under the configured `base_dir` (the same
+sandbox contract as the archive and file tools). The file is always opened
+through a `file:...?mode=ro` URI, so the engine itself refuses any write on the
+handle; the tool never opens the database read-write and never creates or
+upgrades it. Only the `sqlite_master` catalog and whitelisted PRAGMA statements
+(`table_info`, `index_list`, `index_xinfo`, `foreign_key_list`,
+`integrity_check`, `quick_check`, `foreign_key_check`, and the page/journal/
+version pragmas) are issued.
+
+Four modes are available. `schema` returns the full object inventory: tables
+with columns (name, type, notnull, default, primary-key position) and a
+`rowid` flag derived from `WITHOUT ROWID`, views, indexes with uniqueness,
+origin (`create_index`, `primary_key`, `unique_constraint`), covered columns
+and partial-index detection, plus triggers with timing and event. `audit`
+returns structural findings only: tables without any primary key, primary-key
+columns that permit NULL (SQLite allows NULL in non-INTEGER PRIMARY KEY
+columns of rowid tables; an exact single `INTEGER PRIMARY KEY` is recognized
+as the rowid alias and not flagged), redundant indexes covering the same
+column set, triggers that write to other tables, and trigger/view SQL
+referring to `ATTACH` or three-part `schema.table.column` names. When foreign
+keys are declared, the audit reports that `PRAGMA foreign_keys` shows the
+default value 0 on a fresh connection — enforcement is per-connection, so the
+constraints may be unenforced by the application. `integrity` returns
+`integrity_check`/`quick_check` verdicts (bounded error lists), mapped
+`foreign_key_check` violations with their definitions, page and freelist
+accounting with a VACUUM-candidate hint, journal mode, `user_version`, and
+`application_id`. `compact` reports file size, page math, and per-table column
+counts; row estimates are deliberately excluded because they would require
+scanning or sampling data.
+
+Analysis is sample-free by policy: no row values are ever read, so results are
+deterministic and no database content leaks into tool output. Cardinality- or
+statistics-based judgments (for example, whether an index is selective) are
+out of scope for the same reason. Trigger and view scans are shallow text
+matches, and a zero-byte file is reported as a valid empty database, matching
+SQLite's own behavior. Missing files, non-database files, locked databases,
+and oversized files return structured errors. Object listings, stored SQL
+text, integrity findings, violations, and audit findings are all bounded by
+configurable caps, with truncation flags and exact totals preserved.
