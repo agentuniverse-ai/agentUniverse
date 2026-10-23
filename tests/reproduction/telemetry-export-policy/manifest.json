@@ -1,0 +1,14 @@
+{
+  "feature": "feat(tracing): add explicit span export field policies",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4212",
+  "tested_code_commit": "8dc021b608efdfd694ddb82d2965f0595e1496aa",
+  "tests": [
+    "tests/test_agentuniverse/unit/base/tracing/test_policy_span_exporter.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt",
+    "sdk1.45.1": "requirements-sdk1.45.1.txt"
+  }
+}

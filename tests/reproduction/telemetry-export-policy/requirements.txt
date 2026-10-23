@@ -1,0 +1,2 @@
+pytest==7.4.4
+opentelemetry-sdk==1.25.0
