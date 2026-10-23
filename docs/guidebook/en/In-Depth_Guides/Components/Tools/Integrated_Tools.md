@@ -401,6 +401,19 @@ Parameter Description:
     response_content_type: the output format for the HTTP request result. If set to 'json', the result will be returned in JSON format; if set to 'text', it will be returned as plain text.
 This tool can be used directly without  requiring any keys.
 
+With `json_parser: true`, the input JSON contains `url`, optional `data` for
+POST/PUT, and request options such as `params` and `timeout`. For example:
+
+```json
+{"url": "https://example.com/search", "params": {"q": "agentUniverse"}, "timeout": 5}
+```
+
+The same options can be passed as keyword arguments to
+`execute_by_method()` or `async_execute_by_method()`. They are forwarded to
+the configured LangChain wrapper and its `requests` (sync) or `aiohttp`
+(async) backend; option values must be supported by that backend. Configure
+HTTP headers through the tool's `headers` setting.
+
 
 ## 4. Office Tools
 
