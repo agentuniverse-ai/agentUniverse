@@ -1,0 +1,21 @@
+name: 'sensitive_word_filter'
+description: 'word list based sensitive content interception and masking with Aho-Corasick matching'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_word_filter'
+  class: 'SensitiveWordFilter'
+
+# Sensitive words: inline list and/or a word file (one word per line, '#' comments)
+words:
+  - '敏感词'
+  - 'banned word'
+# word_file: './config/sensitive_words.txt'
+
+# mask: replace matches with mask_char inside the text, keep the document
+# block: drop documents whose unique match count reaches block_threshold
+mode: 'mask'
+mask_char: '*'
+case_sensitive: false
+block_threshold: 1
+record_hits: true   # write matched words into metadata under sensitive_word_hits

@@ -317,3 +317,32 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [SensitiveWordFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sensitive_word_filter.yaml)
+
+This component intercepts and masks sensitive words based on a configurable word list. All documents are scanned with an Aho-Corasick automaton built from the configured words, then processed in one of two modes: `mask` replaces every match with the mask character (overlapping matches are merged so no fragment stays visible) while keeping the document, `block` drops documents whose unique match count reaches `block_threshold`. Words can be configured inline and/or loaded from a word file (one word per line, `#` starts a comment), and matching is case-insensitive by default.
+
+The component definition file is as follows:
+```yaml
+name: 'sensitive_word_filter'
+description: 'word list based sensitive content interception and masking'
+words:
+  - '敏感词'
+  - 'banned word'
+mode: 'mask'
+mask_char: '*'
+case_sensitive: false
+block_threshold: 1
+record_hits: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_word_filter'
+  class: 'SensitiveWordFilter'
+```
+- words: The inline sensitive word list; can be combined with `word_file`.
+- word_file: Path of a word list file, one word per line, `#` starts a comment.
+- mode: `mask` to replace matches inside the text, `block` to drop whole documents.
+- mask_char: The character used to replace matches in `mask` mode.
+- case_sensitive: Whether matching is case sensitive, default false.
+- block_threshold: In `block` mode, the unique match count at which a document is dropped.
+- record_hits: When true, the matched words are written into document metadata under `sensitive_word_hits`.
