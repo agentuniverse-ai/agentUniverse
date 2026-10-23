@@ -1,0 +1,18 @@
+{
+  "feature": "feat(knowledge): retrieve bounded relational schema context",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4221",
+  "tested_code_commit": "4cbbf82ddf5d68edfdf3f2cc9f3dce2ff92f74e2",
+  "tests": [
+    "tests/test_agentuniverse/integration/test_relational_schema_live.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_rrf_integration.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_registration_errors.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_reader_lookup.py"
+  ],
+  "required_environment": [
+    "AU_SCHEMA_POSTGRES_URL"
+  ],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
