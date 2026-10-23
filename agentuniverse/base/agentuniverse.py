@@ -260,7 +260,7 @@ class AgentUniverse(object):
                 try:
                     component_configer = ComponentConfiger().load_by_configer(configer)
                 except Exception as ex:
-                    if configer.value is None:
+                    if not isinstance(configer.value, dict):
                         LOGGER.warn(f"Config file is blank, path={configer.path}")
                     else:
                         raise ex
