@@ -289,6 +289,23 @@ class CrossrefToolTest(unittest.TestCase):
         self.assertEqual(result["query"], "10.1000/a#b")
         self.assertEqual(mock_get.call_args.args[0], "https://api.crossref.org/v1/works/10.1000%2Fa%23b")
 
+    @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
+    def test_doi_resolver_discards_query_and_fragment(self, mock_get: Mock) -> None:
+        mock_get.return_value = response_mock(
+            json_data={"status": "ok", "message-type": "work", "message": SAMPLE_WORK}
+        )
+
+        result = self.tool.execute(
+            query="https://doi.org/10.1000/example?utm_source=share#references",
+            mode="doi",
+        )
+
+        self.assertEqual(result["query"], "10.1000/example")
+        self.assertEqual(
+            mock_get.call_args.args[0],
+            "https://api.crossref.org/v1/works/10.1000%2Fexample",
+        )
+
     def test_invalid_input(self) -> None:
         with self.assertRaisesRegex(ValueError, "query must not be empty"):
             self.tool.execute(query="  ")
