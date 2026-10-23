@@ -44,7 +44,10 @@ class ExecutingPlanner(Planner):
         assemble_memory_input(memory, planner_input)
 
         chain = prompt.as_langchain() | llm.as_langchain_runnable(agent_model.llm_params()) | StrOutputParser()
-        res = chain.invoke(input=planner_input)
+        # Route through the shared helper so an ``output_stream`` receives
+        # token chunks for this planner as well.  Calling ``chain.invoke``
+        # directly silently disabled streaming for every executing agent.
+        res = self.invoke_chain(agent_model, chain, planner_input, None, input_object)
 
         assemble_memory_output(memory=memory,
                                agent_input=planner_input,
