@@ -18,6 +18,8 @@ class ImageOCRReader(Reader):
     """OCR reader for image files.
 
     Preferred engine: PaddleOCR. Fallback: Tesseract or easyocr.
+    Tesseract's Pillow input is closed before returning or trying easyocr,
+    including when recognition fails before decoding the image.
     Install tips:
       - pip install paddleocr paddlepaddle  (or CPU/GPU variant)
       - or pip install pytesseract pillow
@@ -61,8 +63,8 @@ class ImageOCRReader(Reader):
             from PIL import Image  # type: ignore
             import pytesseract  # type: ignore
             logger.debug("ImageOCRReader trying pytesseract")
-            img = Image.open(file)
-            text = pytesseract.image_to_string(img, lang='chi_sim+eng')
+            with Image.open(file) as img:
+                text = pytesseract.image_to_string(img, lang='chi_sim+eng')
             return text, "pytesseract"
         except Exception as e_tess:
             logger.debug("ImageOCRReader pytesseract failed; trying easyocr", exc_info=True)
