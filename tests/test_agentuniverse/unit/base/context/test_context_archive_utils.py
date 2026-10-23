@@ -31,6 +31,13 @@ class TestContextArchivePersistence(unittest.TestCase):
         second = get_current_context_archive()
         self.assertIn('hand_written', second)
 
+    def test_empty_archive_keeps_public_reference(self) -> None:
+        archive = get_current_context_archive()
+
+        update_context_archive('retrieval', 'evidence', 'retrieved context')
+
+        self.assertEqual(archive['retrieval']['data'], 'evidence')
+
 
 if __name__ == '__main__':
     unittest.main()
