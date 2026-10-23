@@ -109,10 +109,9 @@ class Graph(nx.DiGraph):
                 None
             )
             source_handler = predecessor_node_output.edge_source_handler if predecessor_node_output else None
-            successors = self.successors(predecessor_node.id)
+            successors = list(self.successors(predecessor_node.id))
             if not successors:
                 return None
-            successors = list(successors)
             if source_handler:
                 for s in successors:
                     if self.get_edge_data(predecessor_node.id, s).get('source_handler') == source_handler:
