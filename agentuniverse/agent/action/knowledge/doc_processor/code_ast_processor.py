@@ -290,6 +290,11 @@ class CodeAstProcessor(DocProcessor):
 
     def _initialize_by_component_configer(
             self, doc_processor_configer: ComponentConfiger) -> 'DocProcessor':
+        """Load AST settings, preferring max_node_len over max_node_text_length.
+
+        Both names configure the node-text inclusion threshold. If omitted,
+        the current constructor/default value is retained.
+        """
         super()._initialize_by_component_configer(doc_processor_configer)
         try:
             from tree_sitter import Parser
@@ -313,6 +318,8 @@ class CodeAstProcessor(DocProcessor):
         if hasattr(doc_processor_configer, "chunk_overlap"):
             self.chunk_overlap = doc_processor_configer.chunk_overlap
 
-        if hasattr(doc_processor_configer, "max_node_text_length"):
+        if hasattr(doc_processor_configer, "max_node_len"):
             self.max_node_len = doc_processor_configer.max_node_len
+        elif hasattr(doc_processor_configer, "max_node_text_length"):
+            self.max_node_len = doc_processor_configer.max_node_text_length
         return self
