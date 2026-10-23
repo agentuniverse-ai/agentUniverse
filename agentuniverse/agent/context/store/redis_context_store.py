@@ -83,6 +83,25 @@ class RedisContextStore(ContextStore):
 
         return self
 
+    def _initialize_by_component_configer(self, component_configer) -> 'RedisContextStore':
+        """Copy Redis and inherited storage settings before connecting."""
+        for field in (
+            "name",
+            "storage_tier",
+            "max_segments",
+            "ttl_hours",
+            "enable_metrics",
+            "redis_host",
+            "redis_port",
+            "redis_db",
+            "redis_password",
+            "key_prefix",
+            "default_ttl_seconds",
+        ):
+            if hasattr(component_configer, field):
+                setattr(self, field, getattr(component_configer, field))
+        return self
+
     def add(
         self,
         segments: List[ContextSegment],
