@@ -637,6 +637,32 @@ A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
 
+## GitHub Tool
+
+`GitHubTool` searches GitHub for repositories, users, issues and code, and reads
+a single repository's metadata. `mode` is required and selects the operation:
+
+| mode | required args | what it returns |
+|---|---|---|
+| `repository` | `query` | repository search hits |
+| `user` | `query` | user search hits |
+| `issue` | `query` | issue search hits |
+| `code` | `query` | code search hits |
+| `repo_info` | `owner`, `repo` | that repository's metadata |
+
+`sort` and `order` refine the four search modes; `order` defaults to `desc`.
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj("github_tool")
+result = tool.execute(mode="repo_info", owner="agentuniverse-ai", repo="agentUniverse")
+```
+
+The tool is shipped as `agentuniverse/agent/action/tool/common_tool/github_tool.yaml`
+and needs a component `metadata` block to be registered — without one the YAML is
+skipped and `get_instance_obj("github_tool")` returns nothing.
+
 ## Command Result Lookup
 
 `RunCommandTool` returns an integer `thread_id` for each invocation. Treat this
