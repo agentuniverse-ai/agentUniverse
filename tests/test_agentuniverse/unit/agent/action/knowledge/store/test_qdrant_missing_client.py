@@ -90,3 +90,37 @@ def test_qdrant_store_imports_when_the_client_is_installed():
     )
 
     assert hasattr(module, "QdrantStore")
+
+
+def test_every_imported_qdrant_symbol_still_exists():
+    """The guard must only fire for a *missing package*, not a missing symbol.
+
+    `qdrant_memory_storage` imported `NamedVector`, which qdrant-client dropped
+    in 1.20 while qdrant_store did not need it. With a current client installed
+    the module therefore raised "qdrant-client is required ... install it" even
+    though the package was present, and `QdrantMemoryStorage` was unusable. Every
+    name the two modules import must exist in the installed client.
+    """
+    qdrant = pytest.importorskip("qdrant_client")
+    pytest.importorskip("qdrant_client.models")
+
+    import ast
+    import pathlib
+
+    for module_path in (
+        "agentuniverse/agent/action/knowledge/store/qdrant_store.py",
+        "agentuniverse/agent/memory/memory_storage/qdrant_memory_storage.py",
+    ):
+        source = pathlib.Path(module_path).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if not (node.module or "").startswith("qdrant_client"):
+                continue
+            target = importlib.import_module(node.module)
+            for alias in node.names:
+                assert hasattr(target, alias.name), (
+                    f"{module_path} imports {alias.name} from {node.module}, "
+                    f"which qdrant-client {getattr(qdrant, '__version__', '?')} does not provide"
+                )
