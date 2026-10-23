@@ -36,6 +36,13 @@ metadata:
 ## Usage
 The SQLDBWrapper class offers the following functions for users:
 
+Calling `initialize_by_component_configer()` again replaces the wrapper's
+configuration and invalidates its cached database and session factory. The
+next query or `get_session()` call lazily uses the new database URI and options,
+including changes to `sql_database_args` at the same URI. Sessions already
+obtained by callers keep their original database binding and should be closed
+normally by those callers.
+
 ### run
 The `run` function accepts a `str` type parameter command, which represents an SQL statement. It executes this SQL statement via SQLAlchemy and returns the results. If the command is a query statement, the result will be a list, where each element is a dictionary representing a row in the database. The dictionary keys correspond to column names, and the values correspond to the respective data in those columns.
 ```python
