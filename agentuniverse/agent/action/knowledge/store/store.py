@@ -60,17 +60,17 @@ class Store(ComponentBase):
 
         Args:
             store_configer(ComponentConfiger): A configer contains store
-            basic info. The client will be created in post fork due to
-            conflicts that may occur in a multithreaded scenario.
+            basic info. Synchronous client factories run after fork. Coroutine
+            factories are awaited lazily by the store on its operating event
+            loop; creating them in a temporary startup loop is unsafe.
         Returns:
             Store: A store instance.
         """
-        if hasattr(store_configer, "name") and store_configer.name:
+        if store_configer.name:
             self.name = store_configer.name
-        if hasattr(store_configer, "description") and store_configer.description:
+        if store_configer.description:
             self.description = store_configer.description
-        if not _is_coroutine_callable(self._new_client):
-            add_post_fork(self._new_client)
+        add_post_fork(self._new_client)
         if not _is_coroutine_callable(self._new_async_client):
             add_post_fork(self._new_async_client)
         return self

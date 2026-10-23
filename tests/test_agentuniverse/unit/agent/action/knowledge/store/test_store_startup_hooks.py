@@ -14,6 +14,13 @@ from agentuniverse.agent_serve.web.post_fork_queue import POST_FORK_QUEUE
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
+def _make_configer(name="test_store", description="test store description"):
+    configer = ComponentConfiger()
+    configer.name = name
+    configer.description = description
+    return configer
+
+
 class SyncStore(Store):
     """Store with synchronous client factories."""
 
@@ -88,9 +95,7 @@ class TestStoreStartupHooks(unittest.TestCase):
     def test_sync_factories_registered_and_executed(self):
         """Synchronous client factories should be enqueued in POST_FORK_QUEUE."""
         store = SyncStore()
-        configer = ComponentConfiger()
-        configer.name = "test_sync_store"
-        configer.description = "test sync store desc"
+        configer = _make_configer("test_sync_store", "test sync store desc")
 
         store._initialize_by_component_configer(configer)
 
@@ -120,7 +125,7 @@ class TestStoreStartupHooks(unittest.TestCase):
                 return self.async_client
 
         store = SyncAsyncSdkStore()
-        configer = ComponentConfiger()
+        configer = _make_configer()
         store._initialize_by_component_configer(configer)
 
         registered_funcs = [item[0] for item in POST_FORK_QUEUE]
@@ -137,8 +142,7 @@ class TestStoreStartupHooks(unittest.TestCase):
     def test_coroutine_factory_not_enqueued_in_post_fork(self):
         """Coroutine factories should not be enqueued in synchronous startup hooks."""
         store = AsyncCoroutineStore()
-        configer = ComponentConfiger()
-        configer.name = "test_async_store"
+        configer = _make_configer("test_async_store")
 
         store._initialize_by_component_configer(configer)
 
@@ -152,8 +156,7 @@ class TestStoreStartupHooks(unittest.TestCase):
     def test_warning_free_startup_when_queue_executed(self):
         """Executing startup hooks must produce no RuntimeWarning about unawaited coroutines."""
         store = AsyncCoroutineStore()
-        configer = ComponentConfiger()
-        configer.name = "test_async_store"
+        configer = _make_configer("test_async_store")
 
         store._initialize_by_component_configer(configer)
 
@@ -174,7 +177,7 @@ class TestStoreStartupHooks(unittest.TestCase):
     def test_deferred_initialization_on_active_event_loop(self):
         """True coroutine factories should run lazily when awaited on an active event loop."""
         store = AsyncCoroutineStore()
-        configer = ComponentConfiger()
+        configer = _make_configer()
         store._initialize_by_component_configer(configer)
 
         self.assertIsNone(store.async_client)
@@ -190,7 +193,7 @@ class TestStoreStartupHooks(unittest.TestCase):
         """Initialization errors in coroutine factories must propagate to awaiting caller."""
         expected_error = ConnectionError("database connection timeout")
         store = AsyncCoroutineStore(init_error=expected_error)
-        configer = ComponentConfiger()
+        configer = _make_configer()
         store._initialize_by_component_configer(configer)
 
         # Startup runner does not raise any error since coroutine was not enqueued
@@ -207,7 +210,7 @@ class TestStoreStartupHooks(unittest.TestCase):
     def test_coroutine_callable_object_not_enqueued(self):
         """Async callable objects should also not be enqueued in POST_FORK_QUEUE."""
         store = AsyncCallableStore()
-        configer = ComponentConfiger()
+        configer = _make_configer()
         store._initialize_by_component_configer(configer)
 
         registered_funcs = [item[0] for item in POST_FORK_QUEUE]
@@ -223,8 +226,7 @@ class TestStoreStartupHooks(unittest.TestCase):
             dimensions=128,
             create_index=False,
         )
-        configer = ComponentConfiger()
-        configer.name = "test_redis"
+        configer = _make_configer("test_redis")
         with patch.object(store, "_validate_config"):
             store._initialize_by_component_configer(configer)
 
@@ -242,14 +244,41 @@ class TestStoreStartupHooks(unittest.TestCase):
             dimensions=128,
             create_table=False,
         )
-        configer = ComponentConfiger()
-        configer.name = "test_pgvector"
+        configer = _make_configer("test_pgvector")
         with patch.object(store, "_validate_config"):
             store._initialize_by_component_configer(configer)
 
         registered_funcs = [item[0] for item in POST_FORK_QUEUE]
         self.assertIn(store._new_client, registered_funcs)
         self.assertNotIn(store._new_async_client, registered_funcs)
+
+    def test_post_fork_runner_executes_without_coroutine_warning(self):
+        """Verify startup post-fork queue execution runs warning-free and defers async client."""
+        from agentuniverse.agent.action.knowledge.store.redis_vector_store import RedisVectorStore
+
+        store = RedisVectorStore(
+            connection_url="redis://localhost:6379",
+            index_name="test_index",
+            dimensions=128,
+            create_index=False,
+        )
+        configer = _make_configer("test_redis")
+        with patch.object(store, "_validate_config"), patch.object(store, "_new_client") as mock_new_client:
+            store._initialize_by_component_configer(configer)
+            with warnings.catch_warnings(record=True) as caught_warnings:
+                warnings.simplefilter("always")
+                for func, args, kwargs in POST_FORK_QUEUE:
+                    func(*args, **kwargs)
+
+            # Sync factory was executed by post_fork
+            mock_new_client.assert_called_once()
+            # No RuntimeWarning regarding unawaited coroutines
+            coroutine_warnings = [
+                w for w in caught_warnings
+                if issubclass(w.category, RuntimeWarning) and "coroutine" in str(w.message).lower()
+            ]
+            self.assertEqual(len(coroutine_warnings), 0)
+            self.assertIsNone(store.async_client)
 
 
 if __name__ == "__main__":
