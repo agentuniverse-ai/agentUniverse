@@ -6,6 +6,7 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: api_tool.py
 import json
+import re
 from typing import Any, Optional
 from urllib.parse import urlencode
 import httpx
@@ -13,6 +14,60 @@ import httpx
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
 from agentuniverse.agent.action.tool.utils import ssrf_proxy
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
+
+_SENSITIVE_QUERY_KEYS = frozenset({
+    'key', 'apikey', 'token', 'accesstoken', 'refreshtoken',
+    'secret', 'clientsecret', 'password', 'passwd', 'pwd',
+    'auth', 'credential', 'signature', 'session', 'sessionid',
+    'sig', 'bearer', 'cookie',
+})
+_SENSITIVE_BODY_PATTERNS = (
+    re.compile(r'sk-[A-Za-z0-9_\-]{10,}'),
+    re.compile(r'(?i)bearer\s+[A-Za-z0-9._\-]{8,}'),
+    re.compile(r'AKIA[0-9A-Z]{16}'),
+    re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}'),
+    re.compile(r'eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}'),
+)
+_SENSITIVE_KV_PATTERN = re.compile(
+    r'(?i)(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token'
+    r'|password|secret|authorization)\b["\']?\s*[=:]\s*["\']?)'
+    r'[^&\s"\',;}]{4,}')
+
+
+def _is_sensitive_query_key(key: str) -> bool:
+    """Whole-part match: ``api_key``/``X-Auth-Token`` hit, ``design`` does not."""
+    lowered = key.lower()
+    if lowered in _SENSITIVE_QUERY_KEYS:
+        return True
+    return any(part in _SENSITIVE_QUERY_KEYS
+               for part in re.split(r'[_\-.]', lowered) if part)
+
+
+def _sanitize_url_for_error(url: Any) -> str:
+    """Drop userinfo and mask sensitive query parameter values in a URL."""
+    text = str(url)
+    text = re.sub(r'//[^/?#]*@', '//***@', text)
+    if '?' in text:
+        base, _, query = text.partition('?')
+        masked = []
+        for pair in query.split('&'):
+            key, sep, value = pair.partition('=')
+            if sep and _is_sensitive_query_key(key):
+                masked.append(f'{key}=***')
+            else:
+                masked.append(pair)
+        text = base + '?' + '&'.join(masked)
+    return text
+
+
+def _sanitize_secrets_from_text(text: str) -> str:
+    """Replace common credential shapes in free text.
+
+    Key/value hits keep the key name so the log still shows which field leaked.
+    """
+    for pattern in _SENSITIVE_BODY_PATTERNS:
+        text = pattern.sub('[REDACTED]', text)
+    return _SENSITIVE_KV_PATTERN.sub(r'\1[REDACTED]', text)
 
 
 class APITool(Tool):
@@ -227,11 +282,12 @@ class APITool(Tool):
         """Validate and parse the response from the tool response."""
         if isinstance(response, httpx.Response):
             if response.status_code >= 400:
-                body_text = response.text or ""
+                body_text = _sanitize_secrets_from_text(response.text or "")
                 if len(body_text) > 500:
                     body_text = body_text[:500] + "..."
+                safe_url = _sanitize_url_for_error(response.request.url)
                 raise Exception(
-                    f"Request to {response.request.url} failed with status code "
+                    f"Request to {safe_url} failed with status code "
                     f"{response.status_code} ({response.reason_phrase}). "
                     f"Response body (truncated): {body_text!r}")
             if not response.content:
