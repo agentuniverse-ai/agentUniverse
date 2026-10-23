@@ -258,7 +258,8 @@ class Monitor(BaseModel):
         trace_id = AuTraceManager().get_trace_id()
         if trace_id is not None:
             FrameworkContextManager().del_context(trace_id + '_token_usage')
-        FrameworkContextManager().del_context('trace_id')
+        # 'trace_id' 键属于 ConversationMemoryModule（会话 trace 续接），
+        # 不是 Monitor 的——删除它破坏了同 session 跨请求的记忆 trace 连续性。
 
     @staticmethod
     def get_token_usage():
