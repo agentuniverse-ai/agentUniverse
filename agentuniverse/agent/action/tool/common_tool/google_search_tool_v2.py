@@ -35,6 +35,7 @@ class GoogleSearchTool(Tool):
         - 可配置返回结果数量
         - 支持地理位置和语言设置
         - 提供详细的搜索结果信息
+        - **kwargs 透传 page、location 等参数；tbs 通过封装器配置传递
 
     注意:
         需要在 https://serper.dev 注册免费账户获取API密钥（每月2500次免费查询）。
@@ -76,9 +77,10 @@ class GoogleSearchTool(Tool):
                 k=k, 
                 gl=gl, 
                 hl=hl, 
-                type=search_type
+                type=search_type,
+                tbs=kwargs.pop("tbs", None)
             )
-            result = search.run(query=query)
+            result = search.run(query=query, **kwargs)
             return self._format_search_result(result, query, search_type)
         except Exception as e:
             return f"搜索出错: {str(e)}"
@@ -101,9 +103,10 @@ class GoogleSearchTool(Tool):
                 k=k, 
                 gl=gl, 
                 hl=hl, 
-                type=search_type
+                type=search_type,
+                tbs=kwargs.pop("tbs", None)
             )
-            result = await search.arun(query=query)
+            result = await search.arun(query=query, **kwargs)
             return self._format_search_result(result, query, search_type)
         except Exception as e:
             return f"搜索出错: {str(e)}"
@@ -160,6 +163,7 @@ class GoogleScholarSearchTool(Tool):
         - 支持按年份、作者、期刊等筛选
         - 提供论文引用信息
         - 支持多种学术搜索参数
+        - **kwargs 支持 page、location、tbs，以及 gl/hl 地区和语言配置
 
     注意:
         需要在 https://serper.dev 注册免费账户获取API密钥。
@@ -198,11 +202,12 @@ class GoogleScholarSearchTool(Tool):
             search = GoogleSerperAPIWrapper(
                 serper_api_key=self.serper_api_key, 
                 k=k, 
-                gl="us", 
-                hl="en", 
-                type="search"
+                gl=kwargs.pop("gl", "us"),
+                hl=kwargs.pop("hl", "en"),
+                type="search",
+                tbs=kwargs.pop("tbs", None)
             )
-            result = search.run(query=scholar_query)
+            result = search.run(query=scholar_query, **kwargs)
             return self._format_scholar_result(result, query, scholar_query)
         except Exception as e:
             return f"学术搜索出错: {str(e)}"
@@ -220,11 +225,12 @@ class GoogleScholarSearchTool(Tool):
             search = GoogleSerperAPIWrapper(
                 serper_api_key=self.serper_api_key, 
                 k=k, 
-                gl="us", 
-                hl="en", 
-                type="search"
+                gl=kwargs.pop("gl", "us"),
+                hl=kwargs.pop("hl", "en"),
+                type="search",
+                tbs=kwargs.pop("tbs", None)
             )
-            result = await search.arun(query=scholar_query)
+            result = await search.arun(query=scholar_query, **kwargs)
             return self._format_scholar_result(result, query, scholar_query)
         except Exception as e:
             return f"学术搜索出错: {str(e)}"
