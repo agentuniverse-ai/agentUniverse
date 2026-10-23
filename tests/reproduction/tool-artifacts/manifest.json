@@ -1,0 +1,14 @@
+{
+  "feature": "feat(tool): add opt-in large result artifact references",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4227",
+  "tested_code_commit": "9ee074cb470ce07dc1759216de6622da5b837cf1",
+  "tests": [
+    "tests/test_agentuniverse/unit/agent/action/tool/test_result_artifacts.py",
+    "tests/test_agentuniverse/unit/agent/action/tool/test_tool_async_compatibility.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
