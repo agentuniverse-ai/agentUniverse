@@ -27,13 +27,18 @@ logger = logging.getLogger(__name__)
 
 
 class ToolInput(BaseModel):
-    """The basic class for tool input."""
+    """Tool input with attribute access for keys that do not shadow its API.
+
+    Colliding keys remain available through get_data and serialization.
+    """
 
     def __init__(self, params: dict, **kwargs):
         super().__init__(**kwargs)
         self.__origin_params = params
         for k, v in params.items():
-            self.__dict__[k] = v
+            if k != '_ToolInput__origin_params' and (
+                    not isinstance(k, str) or not hasattr(type(self), k)):
+                self.__dict__[k] = v
 
     def to_dict(self):
         return self.__origin_params
@@ -43,7 +48,9 @@ class ToolInput(BaseModel):
 
     def add_data(self, key, value):
         self.__origin_params[key] = value
-        self.__dict__[key] = value
+        if key != '_ToolInput__origin_params' and (
+                not isinstance(key, str) or not hasattr(type(self), key)):
+            self.__dict__[key] = value
 
     def get_data(self, key, default=None):
         return self.__origin_params.get(key, default)
