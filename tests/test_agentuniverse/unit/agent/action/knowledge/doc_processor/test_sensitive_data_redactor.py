@@ -54,6 +54,24 @@ class TestSensitiveDataEntities(unittest.TestCase):
         self.assertNotIn("110101199003073917", doc.text)
         self.assertEqual(doc.metadata["redaction_summary"], {"id_card": 1})
 
+    def test_redacts_numeric_entities_adjacent_to_chinese_text(self) -> None:
+        """Numeric identifiers are detected without ASCII word boundaries."""
+        text = "身份证号110101199003073917已确认，卡号4111111111111111已冻结"
+        doc = _run(text)
+        self.assertNotIn("110101199003073917", doc.text)
+        self.assertNotIn("4111111111111111", doc.text)
+        self.assertEqual(
+            doc.metadata["redaction_summary"],
+            {"credit_card": 1, "id_card": 1},
+        )
+
+    def test_numeric_entities_do_not_match_substrings_of_identifiers(self) -> None:
+        """Adjacent ASCII letters, underscores, or extra digits remain intact."""
+        text = "x110101199003073917 id_110101199003073917 41111111111111110"
+        doc = _run(text)
+        self.assertEqual(doc.text, text)
+        self.assertEqual(doc.metadata["redaction_summary"], {})
+
     def test_redacts_ssn(self) -> None:
         """SSN values are detected and replaced."""
         doc = _run("ssn 123-45-6789 here")

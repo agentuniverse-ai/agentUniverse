@@ -50,16 +50,24 @@ logger = logging.getLogger(__name__)
 # rather than a loose guess, to keep false positives low.
 _BUILTIN_PATTERNS: Dict[str, str] = {
     "email": r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
-    "credit_card": r"\b\d{13,16}\b",
+    # Numeric identifiers may be adjacent to CJK prose.  Guard only against
+    # identifier characters and Unicode digits so a valid value is still
+    # detected in "身份证号110101...已确认" without matching a substring of a
+    # larger identifier.
+    "credit_card": r"(?<![A-Za-z_])(?<!\d)\d{13,16}(?![A-Za-z_])(?!\d)",
     # China resident identity card (18 digits, last may be X), date-structured.
-    "id_card": r"\b[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])"
-               r"(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]\b",
-    "ssn": r"\b\d{3}-\d{2}-\d{4}\b",
-    "ip_address": r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+    "id_card": r"(?<![A-Za-z_])(?<!\d)[1-9]\d{5}(?:19|20)\d{2}"
+               r"(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]"
+               r"(?![A-Za-z_])(?!\d)",
+    "ssn": r"(?<![A-Za-z_])(?<!\d)\d{3}-\d{2}-\d{4}(?![A-Za-z_])(?!\d)",
+    "ip_address": r"(?<![A-Za-z_])(?<!\d)(?:\d{1,3}\.){3}\d{1,3}"
+                  r"(?![A-Za-z_])(?!\d)",
     "api_key": r"(?:sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
                r"gh[pousr]_[A-Za-z0-9]{36,}|glpat-[A-Za-z0-9_-]{20,})",
     # Opt-in: phone matching is fuzzier, so it is not on by default.
-    "phone": r"(?:\b1[3-9]\d{9}\b|\b\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b)",
+    "phone": r"(?:(?<![A-Za-z_])(?<!\d)1[3-9]\d{9}(?![A-Za-z_])(?!\d)|"
+              r"(?<![A-Za-z_])(?<!\d)\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}"
+              r"(?![A-Za-z_])(?!\d))",
 }
 
 # Semantic validators for built-in entities whose shape alone is not enough.
