@@ -1,0 +1,110 @@
+{
+  "tested_source_commit": "a3b675311af74ea47e3a945af32969d15e3b146a",
+  "source_note": "Production/test source snapshot committed after the executions without source changes; reports are local executions on 2026-10-23, not hosted CI.",
+  "environments_fully_locked": false,
+  "normalization": "Machine hostname attributes removed from XML; line endings normalized; outcomes unchanged. Hashes refer to original local files.",
+  "runs": [
+    {
+      "label": "Windows 3.10 real model + pipeline",
+      "slug": "windows-py310",
+      "tests": 35,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-23T11:24:12.358790",
+      "seconds": 62.219,
+      "original_junit_sha256": "79770D8507486EE6582ABF98DA119A690AA7A06D01C34C176ABF40E829777503",
+      "file": "junit-windows-py310.xml",
+      "environment_file": "environment-windows-py310.json",
+      "controlled_fixture": [
+        {
+          "query": "Which database operation undoes pending changes?",
+          "colbert_reciprocal_rank": 0.5,
+          "bm25_reciprocal_rank": 0.25,
+          "colbert_ndcg_at_10": 0.6309297535714575,
+          "bm25_ndcg_at_10": 0.43067655807339306,
+          "input_order_reciprocal_rank": 1,
+          "rss_before_bytes": 553185280,
+          "rss_after_bytes": 565620736,
+          "seconds": 0.15289060000213794,
+          "max_score_cells": 608
+        },
+        {
+          "query": "Which sorting algorithm guarantees O(n log n) worst-case time?",
+          "colbert_reciprocal_rank": 1,
+          "bm25_reciprocal_rank": 1,
+          "colbert_ndcg_at_10": 1,
+          "bm25_ndcg_at_10": 1,
+          "input_order_reciprocal_rank": 0.2,
+          "rss_before_bytes": 565620736,
+          "rss_after_bytes": 565239808,
+          "seconds": 0.14369700000679586,
+          "max_score_cells": 608
+        },
+        {
+          "query": "How are text tokens compared in ColBERT?",
+          "colbert_reciprocal_rank": 1,
+          "bm25_reciprocal_rank": 1,
+          "colbert_ndcg_at_10": 1,
+          "bm25_ndcg_at_10": 1,
+          "input_order_reciprocal_rank": 0.1111111111111111,
+          "rss_before_bytes": 565239808,
+          "rss_after_bytes": 563171328,
+          "seconds": 0.14019679999910295,
+          "max_score_cells": 608
+        }
+      ]
+    },
+    {
+      "label": "Windows 3.12 real model + pipeline",
+      "slug": "windows-py312",
+      "tests": 35,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-23T11:24:11.014899",
+      "seconds": 63.634,
+      "original_junit_sha256": "BFB8288FF573205C6A219C1595885E0FC130796ED8AB4105F82A6602BDBA0486",
+      "file": "junit-windows-py312.xml",
+      "environment_file": "environment-windows-py312.json",
+      "controlled_fixture": [
+        {
+          "query": "Which database operation undoes pending changes?",
+          "colbert_reciprocal_rank": 0.5,
+          "bm25_reciprocal_rank": 0.25,
+          "colbert_ndcg_at_10": 0.6309297535714575,
+          "bm25_ndcg_at_10": 0.43067655807339306,
+          "input_order_reciprocal_rank": 1,
+          "rss_before_bytes": 605700096,
+          "rss_after_bytes": 618426368,
+          "seconds": 0.15084679999563377,
+          "max_score_cells": 608
+        },
+        {
+          "query": "Which sorting algorithm guarantees O(n log n) worst-case time?",
+          "colbert_reciprocal_rank": 1,
+          "bm25_reciprocal_rank": 1,
+          "colbert_ndcg_at_10": 1,
+          "bm25_ndcg_at_10": 1,
+          "input_order_reciprocal_rank": 0.2,
+          "rss_before_bytes": 618426368,
+          "rss_after_bytes": 618078208,
+          "seconds": 0.14509569999063388,
+          "max_score_cells": 608
+        },
+        {
+          "query": "How are text tokens compared in ColBERT?",
+          "colbert_reciprocal_rank": 1,
+          "bm25_reciprocal_rank": 1,
+          "colbert_ndcg_at_10": 1,
+          "bm25_ndcg_at_10": 1,
+          "input_order_reciprocal_rank": 0.1111111111111111,
+          "rss_before_bytes": 618078208,
+          "rss_after_bytes": 616304640,
+          "seconds": 0.13967989999218844,
+          "max_score_cells": 608
+        }
+      ]
+    }
+  ]
+}

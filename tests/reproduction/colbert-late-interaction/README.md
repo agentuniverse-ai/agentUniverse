@@ -35,3 +35,14 @@ This tiny fixture checks reproducibility, not general superiority, real-business
 quality or competition value. Tests do not assert an improvement over BM25.
 Screenshots render these real JUnit summaries; they are not fabricated terminal
 captures. Only machine hostnames are removed; original hashes are recorded.
+
+## Checked-in evidence
+
+[Machine-readable results and original hashes](evidence.json) · [rendered report](report.html) · [actual report screenshot](report.png)
+
+| Environment / scope | Passed | Failed | Errors | Skipped | Raw JUnit | Resolved environment |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| Windows 3.10 real model + pipeline | 35 | 0 | 0 | 0 | [XML](junit-windows-py310.xml) | [versions](environment-windows-py310.json) |
+| Windows 3.12 real model + pipeline | 35 | 0 | 0 | 0 | [XML](junit-windows-py312.xml) | [versions](environment-windows-py312.json) |
+
+Implementation source snapshot: `a3b675311af74ea47e3a945af32969d15e3b146a`. This commit was recorded after the runs, with the tested production and test contents unchanged. Evidence files are added in a later documentation commit.
