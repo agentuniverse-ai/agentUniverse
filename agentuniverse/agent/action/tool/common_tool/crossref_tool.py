@@ -8,7 +8,7 @@ from calendar import monthrange
 from datetime import date
 from html.parser import HTMLParser
 from typing import Any, ClassVar, Dict, List, Optional
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlsplit
 
 import requests
 from pydantic import Field
@@ -371,9 +371,15 @@ class CrossrefTool(Tool):
 
     @staticmethod
     def _normalize_doi(value: str) -> str:
+        """Read resolver URLs from their path, decoding percent escapes once.
+
+        URL query/fragment components are not part of the DOI. Encoded path
+        delimiters remain DOI characters after decoding; bare and doi:-prefixed
+        identifiers retain their existing literal interpretation.
+        """
         resolver = re.match(r"^https?://(?:dx\.)?doi\.org/", value, flags=re.IGNORECASE)
         if resolver:
-            doi = unquote(value[resolver.end():]).strip()
+            doi = unquote(urlsplit(value).path[1:]).strip()
         else:
             doi = re.sub(r"^doi:\s*", "", value, flags=re.IGNORECASE).strip()
         if not doi.startswith("10.") or "/" not in doi or any(character.isspace() for character in doi):
