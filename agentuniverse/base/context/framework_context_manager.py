@@ -108,8 +108,25 @@ class FrameworkContextManager:
                     context_values[var_name] = self.get_context(var_name)
         return context_values
 
-    def set_all_contexts(self, context_values: Dict[str, Any]) -> Dict[str, Token]:
-        """Set all context variables and return tokens for restoring them."""
+    def set_all_contexts(self, context_values: Dict[str, Any], *,
+                         replace: bool = False) -> Dict[str, Token]:
+        """Set context variables and return tokens for restoring their values.
+
+        Args:
+            context_values: Names and values to assign in the current context.
+            replace: Remove names absent from context_values instead of merging.
+                Retained names keep their ContextVar identity so existing tokens
+                can still be reset in this context. Returned tokens restore
+                assigned values, not names removed by replacement.
+        """
+        if replace:
+            with self.__dict_edit_lock:
+                current_context = self.context_dict
+                # Bind a new registry: copied contexts may share the old dict.
+                self.__context_dict.set({
+                    name: current_context[name]
+                    for name in context_values if name in current_context
+                })
         context_tokens = {}
         for var_name, var_value in context_values.items():
             context_tokens[var_name] = self.set_context(var_name, var_value)
