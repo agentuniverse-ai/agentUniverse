@@ -117,12 +117,16 @@ class ClaudeLLM(LLM):
         for chunk in chat_completion:
             if chunk.type != 'content_block_delta':
                 continue
+            if getattr(chunk.delta, 'type', None) != 'text_delta':
+                continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
         self.close()
 
     async def agenerate_stream_result(self, chat_completion: AsyncIterator):
         async for chunk in chat_completion:
             if chunk.type != 'content_block_delta':
+                continue
+            if getattr(chunk.delta, 'type', None) != 'text_delta':
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
         await self.aclose()
