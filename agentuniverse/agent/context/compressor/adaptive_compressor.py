@@ -99,7 +99,7 @@ class AdaptiveCompressor(ContextCompressor):
         self._summarize_compressor = SummarizeCompressor(
             name=f"{self.name}_summarize",
             compression_ratio=self.compression_ratio,
-            llm_name=kwargs.get("llm_name", "default_llm")
+            llm_name=getattr(self, "llm_name", None) or "default_llm"
         )
 
         return self
