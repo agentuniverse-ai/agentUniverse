@@ -7,7 +7,7 @@
 # @FileName: llm_output.py
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 from agentuniverse.agent.memory.message import Message
 
@@ -49,6 +49,12 @@ def prune_none(obj):
 
 
 class TokenUsage(BaseModel):
+    """Token counters with optional authoritative provider totals.
+
+    Provider detail counters may overlap: cached input and reasoning output
+    are already included in the provider totals. Manually constructed counters
+    keep the historical additive behavior when no reported totals are present.
+    """
     # ======== Basic fields. ========
     # Input
     text_in: int = 0
@@ -63,13 +69,29 @@ class TokenUsage(BaseModel):
     cached_out: int = 0
     reasoning_out: int = 0
 
+    reported_prompt_tokens: Optional[int] = Field(default=None, repr=False)
+    reported_completion_tokens: Optional[int] = Field(default=None, repr=False)
+
+    @model_serializer(mode="wrap")
+    def _serialize_usage(self, handler):
+        data = handler(self)
+        # Preserve the existing dump shape for manually constructed counters.
+        for name in ("reported_prompt_tokens", "reported_completion_tokens"):
+            if getattr(self, name) is None:
+                data.pop(name, None)
+        return data
+
     @property
     def prompt_tokens(self) -> int:
+        if self.reported_prompt_tokens is not None:
+            return self.reported_prompt_tokens
         return self.text_in + self.image_in + self.audio_in + self.cached_in
 
     @property
     def completion_tokens(self) -> int:
         """Historical field alias: Total of all output tokens."""
+        if self.reported_completion_tokens is not None:
+            return self.reported_completion_tokens
         return (
             self.text_out
             + self.image_out
@@ -114,6 +136,8 @@ class TokenUsage(BaseModel):
                 audio_out=det_out.get("audio_tokens", 0),
                 cached_out=det_out.get("cached_tokens", 0),
                 reasoning_out=det_out.get("reasoning_tokens", 0),
+                reported_prompt_tokens=usage["prompt_tokens"],
+                reported_completion_tokens=usage["completion_tokens"],
             )
 
         # ---------- image/audio ----------
@@ -133,6 +157,8 @@ class TokenUsage(BaseModel):
                 audio_out=det_out.get("audio_tokens", 0),
                 cached_out=det_out.get("cached_tokens", 0),
                 reasoning_out=det_out.get("reasoning_tokens", 0),
+                reported_prompt_tokens=usage["input_tokens"],
+                reported_completion_tokens=usage["output_tokens"],
             )
 
         # ---------- Realtime ----------
@@ -168,6 +194,16 @@ class TokenUsage(BaseModel):
             audio_out=self.audio_out + other.audio_out,
             cached_out=self.cached_out + other.cached_out,
             reasoning_out=self.reasoning_out + other.reasoning_out,
+            reported_prompt_tokens=(
+                self.prompt_tokens + other.prompt_tokens
+                if self.reported_prompt_tokens is not None
+                or other.reported_prompt_tokens is not None else None
+            ),
+            reported_completion_tokens=(
+                self.completion_tokens + other.completion_tokens
+                if self.reported_completion_tokens is not None
+                or other.reported_completion_tokens is not None else None
+            ),
         )
 
     def __iadd__(self, other: "TokenUsage") -> "TokenUsage":

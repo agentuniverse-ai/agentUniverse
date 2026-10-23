@@ -9,3 +9,21 @@ Package path: `agentuniverse.llm.llm_manager.LLMManager`
 
 ## Output Object
 Package path:`agentuniverse.llm.llm_output.LLMOutput`
+
+### Token usage totals
+
+`TokenUsage.from_openai()` preserves the API's input and output totals in
+`reported_prompt_tokens` and `reported_completion_tokens`. Cached input and
+reasoning output are already included in those totals, so summing all detail
+counters can count tokens twice. The original detail counters remain available.
+For example, 100 prompt tokens (40 cached) and 30 completion tokens (10 reasoning)
+remain 130 total tokens. See the [OpenAI usage reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
+
+`+` and `+=` accumulate totals as well as details. Pydantic serialization retains
+reported totals when present, so restoring an `LLMOutput` preserves its counts.
+Monitoring also preserves explicitly reported zero totals. When `LLMOutput.usage`
+is absent, it first checks supported API usage in the raw response. Missing or
+malformed raw usage retains the existing local token estimation fallback.
+Changing a detail counter does not change an explicitly reported provider total.
+Manually constructed `TokenUsage(...)` objects without reported totals retain
+the existing additive behavior and serialized field layout.

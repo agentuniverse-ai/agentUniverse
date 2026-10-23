@@ -290,8 +290,27 @@ class Monitor(BaseModel):
             dict: Dictionary of token usage including the completion_tokens, prompt_tokens, and total_tokens.
         """
         try:
-            if output.usage and output.usage.completion_tokens > 0 and output.usage.prompt_tokens > 0:
-                return output.usage.to_dict()
+            if output.usage is None and isinstance(output.raw, dict):
+                raw_usage = output.raw.get("usage")
+                if isinstance(raw_usage, dict):
+                    try:
+                        parsed_usage = TokenUsage.from_openai(raw_usage)
+                    except (KeyError, TypeError, ValueError):
+                        parsed_usage = None
+                    if (parsed_usage is not None
+                            and parsed_usage.reported_prompt_tokens is not None
+                            and parsed_usage.reported_completion_tokens is not None):
+                        output.usage = parsed_usage
+            if output.usage:
+                reported_totals = (
+                    output.usage.reported_prompt_tokens is not None
+                    and output.usage.reported_completion_tokens is not None
+                )
+                # An explicit provider zero is known usage, not missing usage.
+                if reported_totals or (
+                        output.usage.completion_tokens > 0
+                        and output.usage.prompt_tokens > 0):
+                    return output.usage.to_dict()
 
             if llm_obj is None or llm_input is None:
                 return {}
