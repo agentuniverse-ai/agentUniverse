@@ -1,0 +1,15 @@
+{
+  "feature": "feat(config): add offline component reference preflight",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4213",
+  "tested_code_commit": "fa6c3534e8d955fc7d40173ca4d858d5fe7efb88",
+  "tests": [
+    "tests/test_agentuniverse/unit/base/config/test_preflight.py",
+    "tests/test_agentuniverse/unit/base/config/test_component_configer_load.py",
+    "tests/test_agentuniverse/unit/base/config/test_prompt_config_path.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
