@@ -243,10 +243,10 @@ class Monitor(BaseModel):
         if trace_id is not None:
             old_token_usage: dict = FrameworkContextManager().get_context(trace_id + '_token_usage')
             if old_token_usage is not None:
-                result_usage = {}
+                result_usage = dict(old_token_usage)
                 for key, value in cur_token_usage.items():
                     try:
-                        result_usage[key] = old_token_usage[key] + value if key in old_token_usage else value
+                        result_usage[key] = old_token_usage.get(key, 0) + value
                     except Exception:
                         # not addable value
                         pass
