@@ -316,7 +316,10 @@ Return results in JSON format:
                 # Company name patterns - capture full name INCLUDING suffix
                 r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+Supplier)\b',  # "ABC Supplier"
                 r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Components|Materials))\b',  # "ABC Components", "DEF Materials"
-                r'\b([A-Z][A-Za-z]+公司)\b',  # "ABC公司"
+                # CJK characters are \w in Python's re, so \b never fires between a
+                # CJK character and the following text, and the ASCII-only prefix [A-Z]
+                # missed every purely Chinese company name ending in 公司.
+                r'([\u4e00-\u9fa5A-Za-z]{2,15}公司)',  # "ABC公司", "上海钢铁公司"
             ],
             'manufacturer': [
                 r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Manufacturing|Factory))\b',  # "XYZ Manufacturing"
@@ -327,7 +330,7 @@ Return results in JSON format:
             ],
             'warehouse': [
                 r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Warehouse|Storage))\b',
-                r'\b([A-Z][A-Za-z\u4e00-\u9fa5]{2,15}\s*仓库)\b',
+                r'([\u4e00-\u9fa5A-Za-z]{2,15}\s*仓库)',  # "上海仓库", "ABC仓库"
             ],
             'retailer': [
                 r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Store|Retail|Shop|Market))\b',
