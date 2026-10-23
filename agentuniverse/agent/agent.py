@@ -592,8 +592,10 @@ class Agent(ComponentBase, ABC):
     def get_tool_descriptions(self) -> List[str]:
         description_list = []
         if self.agent_model.action.get('tool', []):
-            for tool in self.agent_model.action.get('tool', []):
+            for tool in self.agent_model.action.get('tool') or []:
                 tool_ins = ToolManager().get_instance_obj(tool)
+                if not tool_ins:
+                    continue
                 description_list.append(f'tool name:{tool_ins.name}\ntool description:{tool_ins.description}\n')
 
         if self.agent_model.action.get('toolkit', []):
