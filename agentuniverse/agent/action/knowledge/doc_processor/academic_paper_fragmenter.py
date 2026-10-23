@@ -68,6 +68,7 @@ class AcademicPaperFragmenter(DocProcessor):
         extract_citations: Whether to extract citation information.
         link_evidence: Whether to link evidence to claims.
         section_patterns: Dictionary of regex patterns for section detection.
+            Defaults match complete headings, with an optional trailing colon.
         min_argument_length: Minimum length for a valid argument (characters).
         skip_on_error: Whether to skip documents that fail processing.
     """
@@ -83,14 +84,14 @@ class AcademicPaperFragmenter(DocProcessor):
         super().__init__(**data)
         if self.section_patterns is None:
             self.section_patterns = {
-                'abstract': r'^(Abstract|ABSTRACT|摘\s*要)',
-                'introduction': r'^(Introduction|INTRODUCTION|1\.?\s*Introduction|引\s*言|绪\s*论|1\.?\s*引言)',
-                'related_work': r'^(Related\s+Work|RELATED\s+WORK|Literature\s+Review|2\.?\s*Related\s+Work|相关工作)',
-                'methods': r'^(Methods?|METHODS?|Methodology|METHODOLOGY|3\.?\s*Method|方\s*法|实验方法)',
-                'results': r'^(Results?|RESULTS?|Experiments?|EXPERIMENTS?|4\.?\s*Results?|实\s*验|结\s*果)',
-                'discussion': r'^(Discussion|DISCUSSION|Analysis|ANALYSIS|5\.?\s*Discussion|讨\s*论|分\s*析)',
-                'conclusion': r'^(Conclusions?|CONCLUSIONS?|6\.?\s*Conclusion|结\s*论)',
-                'references': r'^(References|REFERENCES|Bibliography|参考文献)',
+                'abstract': r'^(Abstract|ABSTRACT|摘\s*要)(?:\s*[:：])?$',
+                'introduction': r'^(Introduction|INTRODUCTION|1\.?\s*Introduction|引\s*言|绪\s*论|1\.?\s*引言)(?:\s*[:：])?$',
+                'related_work': r'^(Related\s+Work|RELATED\s+WORK|Literature\s+Review|2\.?\s*Related\s+Work|相关工作)(?:\s*[:：])?$',
+                'methods': r'^(Methods?|METHODS?|Methodology|METHODOLOGY|3\.?\s*Method|方\s*法|实验方法)(?:\s*[:：])?$',
+                'results': r'^(Results?|RESULTS?|Experiments?|EXPERIMENTS?|4\.?\s*Results?|实\s*验|结\s*果)(?:\s*[:：])?$',
+                'discussion': r'^(Discussion|DISCUSSION|Analysis|ANALYSIS|5\.?\s*Discussion|讨\s*论|分\s*析)(?:\s*[:：])?$',
+                'conclusion': r'^(Conclusions?|CONCLUSIONS?|6\.?\s*Conclusion|结\s*论)(?:\s*[:：])?$',
+                'references': r'^(References|REFERENCES|Bibliography|参考文献)(?:\s*[:：])?$',
             }
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> List[Document]:
@@ -221,6 +222,9 @@ class AcademicPaperFragmenter(DocProcessor):
                             logger.debug(f"Found numbered custom section '{safe_title}' at line {line_idx}")
                             matched = True
 
+            has_terminal_punctuation = line_stripped.endswith(
+                ('.', ',', ';', '!', '?', '。', '，', '；', '！', '？'))
+
             # Detection for simple capitalized headers (more aggressive)
             if not matched and len(line_stripped) > 2 and len(line_stripped) < 50:
                 # Check if line looks like a section header:
@@ -232,9 +236,7 @@ class AcademicPaperFragmenter(DocProcessor):
                 is_chinese = bool(re.match(r'^[\u4e00-\u9fa5]', line_stripped))  # Starts with Chinese char
                 if (len(words) <= 8 and
                     (line_stripped[0].isupper() or is_chinese) and
-                    not line_stripped.endswith('.') and
-                    not line_stripped.endswith(',') and
-                    not line_stripped.endswith(';')):
+                    not has_terminal_punctuation):
 
                     # Try to map to known sections
                     section_title = line_stripped.lower()
@@ -246,7 +248,7 @@ class AcademicPaperFragmenter(DocProcessor):
 
             # Detection for ALL CAPS headers
             if not matched and len(line_stripped) > 3 and len(line_stripped) < 50:
-                if line_stripped.isupper():
+                if line_stripped.isupper() and not has_terminal_punctuation:
                     section_title = line_stripped.lower()
                     section_name = self._map_to_known_section(section_title)
                     if section_name:
@@ -340,7 +342,7 @@ class AcademicPaperFragmenter(DocProcessor):
             argument_type = self._classify_argument(paragraph, section.name)
 
             # Extract citations in this paragraph
-            paragraph_citations = self._extract_paragraph_citations(paragraph)
+            paragraph_citations = self._extract_paragraph_citations(paragraph) if self.extract_citations else []
 
             argument = Argument(
                 text=paragraph,
