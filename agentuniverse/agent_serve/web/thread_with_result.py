@@ -54,12 +54,44 @@ class ThreadWithReturnValue(Thread):
 
 
 class ContextAwareFuture(Future):
-    """A Future that can store context and error information."""
+    """A Future that can store context and error information.
 
-    def __init__(self):
+    `ThreadPoolExecutorWithReturnValue.submit()` builds one of these in front of
+    the real future returned by `super().submit()`, so the two have to agree on
+    their state. `cancel()` is delegated to the underlying future: a `Future`
+    that reports a successful cancel while the work keeps running makes the
+    caller believe a side effect was prevented when it was not.
+    """
+
+    def __init__(self, inner: Future | None = None):
         super().__init__()
         self.error = None
         self._context_pack = None
+        self._inner = inner
+
+    def cancel(self):
+        """Cancel the work through the future that actually owns it."""
+        if self._inner is None:
+            return super().cancel()
+        cancelled = self._inner.cancel()
+        if cancelled:
+            super().cancel()
+        return cancelled
+
+    def cancelled(self):
+        if self._inner is not None and self._inner.cancelled():
+            return True
+        return super().cancelled()
+
+    def running(self):
+        if self._inner is not None:
+            return self._inner.running()
+        return super().running()
+
+    def done(self):
+        if self._inner is not None:
+            return self._inner.done()
+        return super().done()
 
 
 class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
@@ -87,7 +119,10 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
                 if otel_token:
                     otel_context.detach(otel_token)
 
-        super().submit(context_wrapper)
+        # Keep the real future: `ContextAwareFuture.cancel()` has to reach it,
+        # otherwise a cancel reports success while the callable still runs.
+        inner = super().submit(context_wrapper)
+        future._inner = inner
 
         return future
 
