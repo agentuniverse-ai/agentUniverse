@@ -22,6 +22,23 @@ class WebsiteBs4ReaderTest(unittest.TestCase):
         self.assertEqual(reader._visited, set())
         self.assertEqual(reader._urls_to_crawl, [])
 
+    def test_crawl_website_logs_fetch_errors_without_printing(self):
+        reader = WebsiteBs4Reader(max_links=1)
+        url = "https://example.com"
+
+        with patch("agentuniverse.agent.action.knowledge.reader.file.website_bs4_reader.time.sleep"), \
+                patch("agentuniverse.agent.action.knowledge.reader.file.website_bs4_reader.httpx.get",
+                      side_effect=RuntimeError("boom")), \
+                patch("agentuniverse.agent.action.knowledge.reader.file.website_bs4_reader.LOGGER") as mock_logger, \
+                patch("builtins.print") as mock_print:
+            result = reader._crawl_website(url)
+
+        self.assertEqual(result, {})
+        mock_logger.debug.assert_called_once_with(
+            "WebsiteBs4Reader skipped https://example.com due to error: boom"
+        )
+        mock_print.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
