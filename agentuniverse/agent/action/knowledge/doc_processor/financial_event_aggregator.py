@@ -8,6 +8,7 @@
 
 import hashlib
 import logging
+import re
 from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -21,6 +22,13 @@ from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 logger = logging.getLogger(__name__)
+
+# Use ASCII token boundaries so Chinese prose can directly surround acronyms.
+# Keep the common English plural forms without matching ordinary word parts.
+_EVENT_ACRONYM_PATTERNS = {
+    keyword: re.compile(rf'(?<![a-z0-9_]){keyword}s?(?![a-z0-9_])')
+    for keyword in ('ipo', 'ceo', 'cfo')
+}
 
 
 @dataclass
@@ -51,6 +59,10 @@ class FinancialEventAggregator(DocProcessor):
     2. Identifies event types (merger, acquisition, earnings, etc.)
     3. Generates multi-document summaries
     4. Tracks source attribution and credibility
+
+    IPO, CEO and CFO event keywords match complete ASCII tokens (including
+    plurals), not substrings such as "bipolar" or "voiceover". Chinese text
+    may directly surround these acronyms, as in "公司CEO接受采访".
 
     Attributes:
         similarity_threshold: Inclusive minimum similarity for clustering (0.0-1.0).
@@ -408,7 +420,12 @@ class FinancialEventAggregator(DocProcessor):
         # Count matches for each event type
         type_scores = {}
         for event_type, keywords in event_patterns.items():
-            score = sum(1 for keyword in keywords if keyword in text_lower)
+            score = 0
+            for keyword in keywords:
+                pattern = _EVENT_ACRONYM_PATTERNS.get(keyword)
+                if (pattern.search(text_lower) if pattern is not None
+                        else keyword in text_lower):
+                    score += 1
             if score > 0:
                 type_scores[event_type] = score
 
@@ -430,7 +447,6 @@ class FinancialEventAggregator(DocProcessor):
         entities = set()
 
         # Simple extraction: look for capitalized words
-        import re
         for doc in docs:
             # Extract capitalized phrases (potential company/person names)
             matches = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', doc.text)
