@@ -122,7 +122,8 @@ class SensitiveDataRedactor(DocProcessor):
         custom_patterns: Extra ``{"name": ..., "pattern": ...}`` regex entries
             for domain-specific identifiers.
         log_key: Metadata key under which a ``{entity: count}`` summary is
-            stamped on each document; set to ``None`` to omit it.
+            stamped on each document; counts from rules sharing an entity name
+            are accumulated. Set to ``None`` to omit it.
     """
 
     entities: List[str] = [
@@ -168,7 +169,7 @@ class SensitiveDataRedactor(DocProcessor):
 
                     text = pattern.sub(_repl, text)
                 if count:
-                    summary[name] = count
+                    summary[name] = summary.get(name, 0) + count
             doc.text = text
             if self.log_key is not None:
                 metadata = dict(doc.metadata or {})
