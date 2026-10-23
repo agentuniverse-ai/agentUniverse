@@ -63,5 +63,5 @@ class ToolConfiger(ComponentConfiger):
             self.__tool_type = configer.value.get('tool_type')
             self.__input_keys = configer.value.get('input_keys')
         except Exception as e:
-            raise Exception(f"Failed to parse the Tool configuration: {e}")
+            raise Exception(f"Failed to parse the Tool configuration: {e}") from e
         return self

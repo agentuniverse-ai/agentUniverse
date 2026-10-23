@@ -106,5 +106,5 @@ class MemoryConfiger(ComponentConfiger):
             self.__memory_summarize_agent = configer.value.get('memory_summarize_agent')
             self.__context_manager = configer.value.get('context_manager')  # NEW: Phase 2
         except Exception as e:
-            raise Exception(f"Failed to parse the Memory configuration: {e}")
+            raise Exception(f"Failed to parse the Memory configuration: {e}") from e
         return self

@@ -70,5 +70,5 @@ class PlannerConfiger(ComponentConfiger):
             self.__output_key = configer.value.get('output_key')
             self.__memory_key = configer.value.get('memory_key')
         except Exception as e:
-            raise Exception(f"Failed to parse the Planner configuration: {e}")
+            raise Exception(f"Failed to parse the Planner configuration: {e}") from e
         return self
