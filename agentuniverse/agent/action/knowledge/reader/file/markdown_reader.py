@@ -10,36 +10,65 @@ from pathlib import Path
 from typing import List, Optional, Dict
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.utils import detect_file_encoding
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 
-
-
 class MarkdownReader(Reader):
-    """Docx reader."""
+    """Markdown reader.
+
+    Note:
+        The markdown file cannot be process in pagination.
+
+        Markdown is parsed with `unstructured` when it is installed. That
+        package is optional and is not a declared dependency, so the reader
+        falls back to returning the file's text unchanged -- the same content
+        the archive readers emit for a `.md` entry. Install `unstructured` and
+        `markdown` (`pip install unstructured markdown`) to get parsed output.
+    """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
         """Parse the markdown file.
 
-        Note:
-            The markdown file cannot be process in pagination.
-            `unstructured` and `markdown` is required to read markdown files:
-            `pip install unstructured` and `pip install markdown`
-        """
-        try:
-            from langchain_community.document_loaders import \
-                UnstructuredMarkdownLoader
-        except ImportError:
-            raise ImportError(
-                "markdown and unstructured is required to read markdown files: "
-                "please run `pip install unstructured` and `pip install markdown`"
-            )
+        Args:
+            file: Path to the markdown file.
+            ext_info: Metadata merged into the returned document.
 
+        Returns:
+            A single document holding the markdown content.
+        """
         if isinstance(file, str):
             file = Path(file)
-        data = UnstructuredMarkdownLoader(file).load()
+
         metadata = {"file_name": file.name}
         if ext_info is not None:
             metadata.update(ext_info)
 
-        return [Document(text=data[0].page_content, metadata=metadata or {})]
+        parsed = self._load_with_unstructured(file)
+        if parsed is not None:
+            return [Document(text=parsed, metadata=metadata)]
+
+        return [Document(text=self._read_text(file), metadata=metadata)]
+
+    def _load_with_unstructured(self, file: Path) -> Optional[str]:
+        """Return the parsed text, or ``None`` when the optional parser is missing.
+
+        `UnstructuredMarkdownLoader` imports `unstructured` lazily, so the
+        ImportError surfaces from the constructor as well as from `load()`.
+        """
+        try:
+            from langchain_community.document_loaders import UnstructuredMarkdownLoader
+
+            documents = UnstructuredMarkdownLoader(file).load()
+        except ImportError:
+            return None
+        # `load()` returns no documents for an empty or whitespace-only file, so
+        # fall back to the plain-text path instead of indexing an empty list.
+        if not documents:
+            return None
+        return documents[0].page_content
+
+    def _read_text(self, file: Path) -> str:
+        """Read the file as text, matching the other plain-text readers."""
+        with open(file, "r", encoding=detect_file_encoding(file)) as reader:
+            return reader.read()
