@@ -1,0 +1,13 @@
+name: colbert_reranker
+description: Offline CPU late-interaction reranking, fixed answerai-colbert-small-v1 revision
+top_n: 5
+max_documents: 32
+max_query_chars: 1000
+max_document_chars: 4000
+max_total_chars: 64000
+max_score_cells: 9600
+batch_size: 4
+metadata:
+  type: DOC_PROCESSOR
+  module: agentuniverse.agent.action.knowledge.doc_processor.colbert_reranker
+  class: ColbertReranker

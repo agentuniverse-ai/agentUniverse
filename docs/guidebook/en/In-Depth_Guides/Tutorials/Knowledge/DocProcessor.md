@@ -1,5 +1,7 @@
 # DocProcessor
 
+For opt-in offline token-level reranking, see [ColBERT late interaction](ColBERT_Reranker.md).
+
 The DocProcessor is responsible for various processing tasks on Document, such as text splitting, keyword extraction. The input and output of DocProcessor are both List[Document], ensuring that multiple DocProcessors can be stacked to form a processing pipeline for the Document.
 
 The Document is defined as follows:

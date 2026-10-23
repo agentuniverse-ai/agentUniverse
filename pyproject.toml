@@ -24,6 +24,8 @@ classifiers = [
 python = "^3.10"
 requests = "^2.32.0"
 cffi = "^1.15.1"
+sentence-transformers = { version = "6.2.0", optional = true }
+torch = { version = ">=2.6,<3", optional = true }
 flask = "^2.3.2"
 werkzeug = "^3.0.3"
 langchain = "0.1.20"
@@ -85,6 +87,7 @@ redis = { version = "^5.0.0", optional = true }
 log_ext = ["aliyun-log-python-sdk"]
 store_ext = ["pymilvus", "psycopg", "pgvector", "redis"]
 office_ext = ["python-docx", "python-pptx"]
+colbert_ext = ["sentence-transformers", "torch"]
 pdf_ext = ["pypdf"]
 
 [tool.poetry.group.dev.dependencies]
