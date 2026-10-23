@@ -117,7 +117,12 @@ class TokenUsage(BaseModel):
             )
 
         # ---------- image/audio ----------
-        if "input_tokens" in usage:
+        # Realtime payloads use the singular "input_token_details" key and
+        # are handled by the Realtime branch below; keep them out of
+        # this branch so they are not parsed with the plural keys.
+        if ("input_tokens" in usage
+                and "input_token_details" not in usage
+                and "output_token_details" not in usage):
             det_in = usage.get("input_tokens_details", {})
             det_out = usage.get("output_token_details", {})
             det_in = det_in if isinstance(det_in, dict) else {}
