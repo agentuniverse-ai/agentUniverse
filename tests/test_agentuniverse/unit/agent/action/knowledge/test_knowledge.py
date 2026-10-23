@@ -9,6 +9,7 @@ import unittest
 
 from agentuniverse.agent.action.knowledge.embedding.openai_embedding import OpenAIEmbedding
 from agentuniverse.agent.action.knowledge.knowledge import Knowledge
+from chromadb.api.client import SharedSystemClient
 from agentuniverse.agent.action.knowledge.store.chroma_store import ChromaStore
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -20,6 +21,11 @@ class KnowledgeTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        # chromadb caches one process-global system per identifier and refuses a
+        # second one whose Settings differ. Every non-persistent client shares
+        # the identifier "ephemeral", so a client created by another module makes
+        # this setUp raise ValueError instead of the test's own assertion.
+        SharedSystemClient.clear_system_cache()
         init_params = {}
         init_params['name'] = 'test_knowledge'
         init_params['description'] = 'test_knowledge_description'
