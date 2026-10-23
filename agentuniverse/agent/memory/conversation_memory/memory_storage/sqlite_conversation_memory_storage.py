@@ -18,6 +18,7 @@ from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, fun
 from agentuniverse.agent.memory.conversation_memory.conversation_message import ConversationMessage
 from agentuniverse.agent.memory.conversation_memory.enum import ConversationMessageEnum, ConversationMessageSourceType
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
+from agentuniverse.agent.memory.memory_storage.sql_history import query_recent_records
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.database.sqldb_wrapper import SQLDBWrapper
@@ -273,6 +274,10 @@ class SqliteMemoryStorage(MemoryStorage):
             agent_id (str): The agent id of the memory to get.
             top_k (int): The number of messages to get.
 
+        Positive integer limits fetch only the latest rows from SQLite and
+        return them in chronological order, using the mapped primary key to
+        break timestamp ties. Older rows are not materialized as ORM objects.
+
         Returns:
             List[Message]: The list of messages retrieved from the memory.
         """
@@ -321,12 +326,8 @@ class SqliteMemoryStorage(MemoryStorage):
             query = session.query(self.memory_converter.model_class)
             if conditions:
                 query = query.where(and_(*conditions))
-            query = query.order_by(model_class.timestamp.asc())
-
-            # Execute the query and fetch the results
-            records = query.all()
-
-            records = records[-top_k:]
+            records = query_recent_records(query, model_class,
+                                           model_class.timestamp, top_k)
 
             messages = []
             for record in records:
