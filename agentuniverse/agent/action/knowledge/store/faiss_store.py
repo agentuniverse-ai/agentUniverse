@@ -227,7 +227,9 @@ class FAISSStore(Store):
             **kwargs: Arbitrary keyword arguments.
 
         Returns:
-            List[Document]: List of documents retrieved by the query.
+            List[Document]: Retrieved documents, including their stored keywords
+                and a distance score in metadata. Returned keyword sets are
+                independent of the stored documents.
         """
         if not self.faiss_index or self.faiss_index.ntotal == 0:
             return []
@@ -274,6 +276,7 @@ class FAISSStore(Store):
                             text=doc.text,
                             metadata={**(doc.metadata or {}), "score": float(distances[0][i])},
                             embedding=doc.embedding,
+                            keywords=doc.keywords,
                         )
                         documents.append(doc_copy)
             else:
