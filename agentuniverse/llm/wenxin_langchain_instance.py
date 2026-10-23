@@ -24,9 +24,11 @@ class WenXinLangChainInstance(QianfanChatEndpoint):
     def __init__(self, llm: LLM):
         init_params = {"qianfan_ak": llm.api_key, "qianfan_sk": llm.secret_key, "model": llm.model_name,
                        "max_tokens": llm.max_tokens, "timeout": llm.request_timeout,
-                       'max_retries': llm.max_retries if llm.max_retries else 2,
-                       'streaming': llm.streaming if llm.streaming else False,
-                       'temperature': llm.temperature if llm.temperature else 0.7, 'llm': llm}
+                       # 0 是合法配置值（temperature=0 确定性输出、max_retries=0 不重试），
+                       # 只有用 None 判定未设置才能保留它们。
+                       'max_retries': llm.max_retries if llm.max_retries is not None else 2,
+                       'streaming': llm.streaming if llm.streaming is not None else False,
+                       'temperature': llm.temperature if llm.temperature is not None else 0.7, 'llm': llm}
         super().__init__(**init_params)
 
     def _generate(
