@@ -52,3 +52,14 @@ metadata:
 完整工具包定义示例可参考：[docx_toolkit](../../../../../../examples/sample_apps/toolkit_demo_app/intelligence/agentic/toolkit/docx_toolkit.yaml)
 
 工具包调用可参考示例：[demo_agent_with_mcp_toolkit](../../../../../../examples/sample_apps/toolkit_demo_app/intelligence/agentic/agent/agent_instance/demo_agent_with_mcp_toolkit.yaml)
+
+### 分页发现工具
+
+MCP 服务可以通过多次 `tools/list` 分页返回工具。MCPToolkit 会在同一个临时会话中
+继续读取 `nextCursor`，包括带有后续游标的空中间页，读取完成后再注册工具。
+`include` 留空时按服务端顺序选取全部工具；显式填写时也可以选取后续页面中的工具。
+MCPTool 按远端工具名逐页查找，找到后立即停止读取后续页面。
+
+分页游标是不透明字符串，会原样传回服务端。游标重复或分页请求失败时会终止发现，
+不会把不完整列表中的工具注册到工具包。无需添加配置。协议说明见
+[MCP 分页规范](https://modelcontextprotocol.io/specification/2025-06-18/server/utilities/pagination)。
