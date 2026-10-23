@@ -1,0 +1,16 @@
+{
+  "feature": "feat: add coordinate-preserving NetCDF slice reader",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4222",
+  "tested_code_commit": "66458f8564f2fbd28cbffa7b18c5358f9108a492",
+  "tests": [
+    "tests/test_agentuniverse/unit/agent/action/knowledge/reader/test_netcdf_slice_reader.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_rrf_integration.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_registration_errors.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_reader_lookup.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}

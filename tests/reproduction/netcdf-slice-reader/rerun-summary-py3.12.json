@@ -1,0 +1,11 @@
+{
+  "feature": "feat: add coordinate-preserving NetCDF slice reader",
+  "python_requested": "3.12",
+  "variant": "default",
+  "exit_code": 0,
+  "scope": "local targeted tests plus selected existing regressions; not hosted CI",
+  "tests": 36,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0
+}
