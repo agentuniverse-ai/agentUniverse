@@ -124,3 +124,42 @@ def test_get_still_returns_the_rows_it_can_rebuild(store):
     )
 
     assert [document.id for document in store.get(session_id="alpha")] == ["a1"]
+
+
+def test_a_numeric_session_id_is_not_listed_because_get_cannot_read_it(store):
+    """An id that `get()` cannot read back must not be advertised as a session.
+
+    Chroma accepts ints as metadata values, but `get()` rebuilds a
+    `ContextSegment` whose `session_id` is `Optional[str]`, so a row carrying a
+    numeric session_id raises there and yields no segments. Listing the int made
+    callers see a session they could never read; the row is skipped instead.
+    """
+    store.add([_segment("a1")], session_id="alpha")
+    row_id = store._collection.get()["ids"][0]
+    metadata = dict(store._collection.get(include=["metadatas"])["metadatas"][0])
+    metadata["session_id"] = 999
+    store._collection.update(ids=[row_id], metadatas=[metadata])
+
+    sessions = store.get_all_sessions()
+
+    assert 999 not in sessions
+    assert all(isinstance(session, str) for session in sessions)
+    assert store.get(session_id=999) == []
+
+
+def test_every_listed_session_can_actually_be_read(store):
+    """The invariant the previous test protects: listed implies readable."""
+    store.add([_segment("a1")], session_id="alpha")
+    store.add([_segment("b1")], session_id="beta")
+    store._collection.add(
+        ids=["foreign-numeric"],
+        documents=["written by something else"],
+        embeddings=[[0.9, 0.1]],
+        metadatas=[{"session_id": 42}],
+    )
+
+    sessions = store.get_all_sessions()
+
+    assert sorted(sessions) == ["alpha", "beta"]
+    for session in sessions:
+        assert store.get(session_id=session), f"{session} was listed but is empty"
