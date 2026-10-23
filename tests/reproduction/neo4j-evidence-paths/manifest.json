@@ -1,0 +1,18 @@
+{
+  "feature": "feat(knowledge): recall bounded Neo4j evidence paths",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4226",
+  "tested_code_commit": "acaa5d698ad169779d33e874e7cb2d9986fad7e7",
+  "tests": [
+    "tests/test_agentuniverse/integration/test_neo4j_evidence_live.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_rrf_integration.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_registration_errors.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_reader_lookup.py"
+  ],
+  "required_environment": [
+    "AU_EVIDENCE_NEO4J_URI"
+  ],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
