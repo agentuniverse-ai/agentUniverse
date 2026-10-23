@@ -3,6 +3,7 @@
 """Bounded vulnerability discovery through the NVD CVE API 2.0."""
 
 import re
+import math
 from typing import Any, ClassVar, NoReturn
 
 import requests
@@ -379,12 +380,14 @@ class NvdCveTool(Tool):
 
     @staticmethod
     def _safe_float(value: Any) -> float:
+        """Normalize malformed or non-finite scores to the existing 0.0 default."""
         if isinstance(value, bool):
             return 0.0
         try:
-            return float(value or 0.0)
-        except (TypeError, ValueError):
+            parsed = float(value or 0.0)
+        except (TypeError, ValueError, OverflowError):
             return 0.0
+        return parsed if math.isfinite(parsed) else 0.0
 
     @classmethod
     def _unique_strings(cls, values: list[Any], limit: int) -> list[str]:
