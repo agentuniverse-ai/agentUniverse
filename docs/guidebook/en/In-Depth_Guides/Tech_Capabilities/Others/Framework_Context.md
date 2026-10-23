@@ -14,6 +14,12 @@ with FrameworkContext({"context_var1": 1,
     pass
 ```
 By using the `with` keyword to create a `FrameworkContext` instance, which accepts a parameter of  type `dict`, agentUniverse will store all key-value pairs from the parameters within the context manager's scope during with block, and will remove them upon exit from the block.
+
+A `FrameworkContext` instance can be reused in successive `with` blocks. Each
+entry captures the values currently present, and exit restores those values
+even when the block raises an exception. If a key was deleted or the manager
+was cleared between uses, exiting the next block does not restore an older
+value from a previous use.
 #### Method 2:
 ```python
 from agentuniverse.base.context.framework_context_manager import FrameworkContextManager
