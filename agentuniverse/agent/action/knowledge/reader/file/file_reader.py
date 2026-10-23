@@ -11,6 +11,7 @@ from typing import Dict, Type, List, Optional
 from agentuniverse.agent.action.knowledge.reader.file.docx_reader import DocxReader
 from agentuniverse.agent.action.knowledge.reader.file.epub_reader import EpubReader
 from agentuniverse.agent.action.knowledge.reader.file.json_reader import JsonReader
+from agentuniverse.agent.action.knowledge.reader.file.jsonl_reader import JsonlReader
 from agentuniverse.agent.action.knowledge.reader.file.markdown_reader import MarkdownReader
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
@@ -34,6 +35,8 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".markdown": MarkdownReader,
     ".csv": CSVReader,
     ".json": JsonReader,
+    ".jsonl": JsonlReader,
+    ".ndjson": JsonlReader,
     ".rar": RarReader,
     ".zip": ZipReader,
     ".7z": SevenZipReader,
