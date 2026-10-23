@@ -166,6 +166,27 @@ Statistical analysis (p < 0.01) supports our claim.
             'P001'
         )
 
+    def test_original_metadata_is_independent_for_each_fragment(self):
+        doc = Document(
+            text=(
+                "Abstract\n\nThis paper presents a detailed analysis of nested metadata "
+                "and provenance handling for generated fragments.\n\n"
+                "Results\n\nThe experiment demonstrates reliable metadata isolation "
+                "across every generated argument document."
+            ),
+            metadata={"provenance": {"labels": ["original"], "version": 1}},
+        )
+
+        result = self.fragmenter.process_docs([doc])
+
+        self.assertGreaterEqual(len(result), 2)
+        result[0].metadata["original_metadata"]["provenance"]["labels"].append("fragment")
+        result[1].metadata["original_metadata"]["provenance"]["version"] = 2
+
+        self.assertEqual(doc.metadata["provenance"], {"labels": ["original"], "version": 1})
+        self.assertEqual(result[1].metadata["original_metadata"]["provenance"]["labels"], ["original"])
+        self.assertEqual(result[0].metadata["original_metadata"]["provenance"]["version"], 1)
+
     def test_empty_paper(self):
         """Test handling of empty papers."""
         doc = Document(text="")
