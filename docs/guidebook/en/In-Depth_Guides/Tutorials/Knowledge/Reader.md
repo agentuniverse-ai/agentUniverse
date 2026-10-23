@@ -55,5 +55,5 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml): Reads ZIP archive files, supports nested ZIP structures and multiple file formats.
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml): Reads text content from PDF files found on the web.
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml): Reads text content from local Markdown files.
+- [NetCDF coordinate slices](NetCDF_Slice_Reader.md): Bounded labelled array ingestion.
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml): Reads text content from RAR archive files (.rar).
-See [NetCDF coordinate slices](NetCDF_Slice_Reader.md) for bounded labelled array ingestion.
