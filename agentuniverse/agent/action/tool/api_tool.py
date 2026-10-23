@@ -59,7 +59,8 @@ class APITool(Tool):
                 elif 'anyOf' in option and isinstance(option['anyOf'], list):
                     # Recursive call to handle nested anyOf
                     return self.convert_body_property_any_of(property, value, option['anyOf'], max_recursive - 1)
-            except ValueError:
+            except (ValueError, TypeError):
+                # A branch may reject a value valid for another branch (e.g. null).
                 # Conversion failed, try next option
                 continue
         return value
