@@ -372,7 +372,8 @@ class Monitor(BaseModel):
             if isinstance(o, dict):
                 return filter_dict({k: recursive_filter(v) for k, v in o.items()})
             elif isinstance(o, list):
-                return [recursive_filter(i) for i in o if is_json_serializable(i)]
+                filtered_items = [recursive_filter(i) for i in o]
+                return [i for i in filtered_items if is_json_serializable(i)]
             else:
                 return o
 
