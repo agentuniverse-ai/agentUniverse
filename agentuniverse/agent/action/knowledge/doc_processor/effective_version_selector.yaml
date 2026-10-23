@@ -1,0 +1,12 @@
+name: effective_version_selector
+description: Select latest effective recalled versions while preserving their chunks.
+document_key: logical_document_id
+version_key: document_version
+start_key: valid_from
+end_key: valid_to
+as_of_key: as_of
+missing: exclude
+metadata:
+  type: DOC_PROCESSOR
+  module: agentuniverse.agent.action.knowledge.doc_processor.effective_version_selector
+  class: EffectiveVersionSelector
