@@ -1,0 +1,14 @@
+{
+  "feature": "Offline ColBERT late-interaction reranker",
+  "tests": [
+    "tests/test_agentuniverse/unit/agent/action/knowledge/doc_processor/test_colbert_reranker.py",
+    "tests/test_agentuniverse/integration/test_knowledge_processor_pipeline.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {
+    "HF_HUB_OFFLINE": "1"
+  },
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
