@@ -44,25 +44,37 @@ class ClaudeLLM(LLM):
     proxy: Optional[str] = Field(default_factory=lambda: get_from_env('ANTHROPIC_PROXY'))
     connection_pool_limits: Optional[int] = None
 
+    def _http_client_options(self) -> dict:
+        options = {}
+        if self.proxy:
+            options['proxy'] = self.proxy
+        if self.connection_pool_limits is not None:
+            options['limits'] = httpx.Limits(
+                max_connections=self.connection_pool_limits)
+            if not self.proxy:
+                # Match the SDK-owned transport's redirect behavior.
+                options['follow_redirects'] = True
+        return options
+
     def _new_client(self):
+        http_options = self._http_client_options()
         client = anthropic.Anthropic(
             api_key=self.api_key,
             base_url=self.api_url,
             timeout=self.request_timeout if self.request_timeout else 60,
-            max_retries=self.max_retries if self.max_retries else 2,
-            http_client=httpx.Client(proxy=self.proxy) if self.proxy else None,
-            connection_pool_limits=self.connection_pool_limits
+            max_retries=self.max_retries if self.max_retries is not None else 2,
+            http_client=httpx.Client(**http_options) if http_options else None
         )
         return client
 
     def _new_async_client(self):
+        http_options = self._http_client_options()
         client = anthropic.AsyncAnthropic(
             api_key=self.api_key,
             base_url=self.api_url,
             timeout=self.request_timeout if self.request_timeout else 60,
-            max_retries=self.max_retries if self.max_retries else 2,
-            http_client=httpx.AsyncClient(proxy=self.proxy) if self.proxy else None,
-            connection_pool_limits=self.connection_pool_limits
+            max_retries=self.max_retries if self.max_retries is not None else 2,
+            http_client=httpx.AsyncClient(**http_options) if http_options else None
         )
         return client
 

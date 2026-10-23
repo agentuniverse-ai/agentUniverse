@@ -63,3 +63,17 @@ ANTHROPIC_PROXY='xxxx'
 
 ## 4. 注意
 在agentuniverse中，我们已经创建了一个name为default_claude_llm的llm，用户在配置ANTHROPIC_API_KEY之后可以直接使用
+### 原生客户端的连接和重试配置
+
+在 `ClaudeLLM.call()` 和 `acall()` 中，`connection_pool_limits` 是可选整数，
+作为每个客户端连接池的最大连接总数传给 HTTPX，也可与 `proxy` 一起使用。
+不配置时保留现有传输默认值；它不是跨调用的共享连接池或全局并发限制。
+`max_retries: 0` 禁用 SDK 重试，正整数表示首次尝试后的重试次数，
+`null` 保留 SDK 默认的两次重试。
+
+```yaml
+connection_pool_limits: 20
+max_retries: 0
+```
+
+这些配置不改变请求或流式响应的资源所有权，也不改变 LangChain 适配器行为。
