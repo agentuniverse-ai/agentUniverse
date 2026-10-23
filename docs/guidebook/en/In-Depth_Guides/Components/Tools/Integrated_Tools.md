@@ -649,3 +649,25 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## PasswordStrengthTool
+
+`PasswordStrengthTool` audits passwords offline: NIST SP 800-63B guidance
+findings (minimum length, common-password screening, username-embedding),
+transparent entropy estimates with sequence/repetition/common-list
+penalties shown per item, explicit policy checks against caller rules, and
+two-password comparison.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.password_strength_tool import PasswordStrengthTool
+
+tool = PasswordStrengthTool()
+result = tool.execute(mode="audit", password="...", username="alice")
+```
+
+The output never echoes the password: every preview is masked and a test
+enforces that no password fragment appears anywhere in any result. Offline
+heuristics are framed honestly — a good score is necessary, not sufficient —
+and the notes point out that NIST discourages mandatory composition rules in
+favor of length plus screening. The embedded blocklist is a published
+common-password set; input length is capped.
