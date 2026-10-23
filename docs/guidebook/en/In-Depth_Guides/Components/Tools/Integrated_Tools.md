@@ -649,3 +649,27 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## AsciiTableTool
+
+`AsciiTableTool` renders monospace tables whose alignment survives East
+Asian text: wide characters count as two columns, combining marks and
+zero-width joiners as zero, and the width model is pinned against the real
+``wcwidth`` tables in the test suite. Four styles (``ascii``, ``rounded``,
+``unicode`` box drawing, ``markdown`` with GFM alignment markers), per-column
+alignment, optional width-capped truncation that never splits a wide
+character, and minimal-width fitting.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.ascii_table_tool import AsciiTableTool
+
+tool = AsciiTableTool()
+result = tool.execute(mode="render", headers=["名称", "値"],
+                      rows=[["任务", "进行中"]], style="unicode")
+```
+
+Every rendered table satisfies a per-line width invariant — all lines share
+one display width — and markdown output round-trips through the ``csv``
+reader. Emoji ZWJ families are measured per character (summed), which the
+docs state plainly alongside the grapheme-collapsed alternative other
+terminals use.
