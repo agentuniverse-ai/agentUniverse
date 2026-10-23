@@ -15,6 +15,7 @@ from agentuniverse.agent.action.knowledge.reader.file.markdown_reader import Mar
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
 from agentuniverse.agent.action.knowledge.reader.file.txt_reader import TxtReader
+from agentuniverse.agent.action.knowledge.reader.file.tsv_reader import TSVReader
 from agentuniverse.agent.action.knowledge.reader.file.csv_reader import CSVReader
 from agentuniverse.agent.action.knowledge.reader.file.rar_reader import RarReader
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
@@ -30,6 +31,7 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".xlsx": XlsxReader,
     ".epub": EpubReader,
     ".txt": TxtReader,
+    ".tsv": TSVReader,
     ".md": MarkdownReader,
     ".markdown": MarkdownReader,
     ".csv": CSVReader,

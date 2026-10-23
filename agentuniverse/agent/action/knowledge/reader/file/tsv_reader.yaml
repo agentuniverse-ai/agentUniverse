@@ -1,0 +1,6 @@
+name: 'default_tsv_reader'
+description: 'default tab-separated values reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.tsv_reader'
+  class: 'TSVReader'

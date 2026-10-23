@@ -21,6 +21,7 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "pptx": "default_pptx_reader",
         "docx": "default_docx_reader",
         "txt": "default_txt_reader",
+        "tsv": "default_tsv_reader",
         "md": "default_markdown_reader",
         "markdown": "default_markdown_reader",
         "csv": "default_csv_reader",

@@ -52,7 +52,28 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml)：读取本地Pdf文件中的文本内容
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml)：读取本地Pptx文件中的文本内容
 - [default_txt_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/txt_reader.yaml)：读取txt文件中的文本内容
+- [default_tsv_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/tsv_reader.yaml)：读取制表符分隔的表格，支持引号内的制表符与多行字段。
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml)：读取ZIP压缩包文件，支持嵌套ZIP结构和多种文件格式
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml)：读取本地Docx文件中的文本内容
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml)：读取本地Markdown文件中的文本内容
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml)：读取 RAR 压缩文件（.rar）中的文本内容。
+
+### TSV 知识文件
+
+`TSVReader` 将制表符分隔的整张表格读取为一个 Document：
+
+```python
+from agentuniverse.agent.action.knowledge.reader.file.tsv_reader import TSVReader
+
+documents = TSVReader().load_data(
+    file="faq.tsv", ext_info={"collection": "product_faq"}
+)
+```
+
+支持文件路径、文本流和二进制流。引号包围的字段可以包含制表符或换行符；
+若使用单引号包围字段，可指定 `quotechar="'"`。文本规范化、编码检测、
+`file_name` 元数据和 `ext_info` 与 `CSVReader` 一致，不关闭调用者传入的流。
+直接复用现有 CSV 解析器，不增加依赖。
+
+`FileReader` 自动将 `.tsv` 文件（包括 `.TSV`）交给此 Reader；`ReaderManager`
+将文件类型 `tsv` 映射到 YAML 组件 `default_tsv_reader`，可用于常规知识加载流程。
