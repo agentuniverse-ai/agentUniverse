@@ -1,0 +1,26 @@
+name: jwk_tool
+description: Structural analysis of JSON Web Keys (RFC 7517), JWK Sets, OKP keys (RFC 8037), and RFC 7638 thumbprints.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.jwk_tool
+  class: JwkTool
+input_keys:
+  - mode
+  - jwk
+max_set_keys: 10000
+max_param_chars: 1048576
+max_input_chars: 16777216
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [analyze, analyze_set, thumbprint, public_extract]
+    jwk:
+      type: string
+      description: >-
+        JWK JSON object or JSON text for analyze/thumbprint/public_extract;
+        JWK Set {"keys": [...]} for analyze_set.
+  required: [mode, jwk]
+  additionalProperties: false
