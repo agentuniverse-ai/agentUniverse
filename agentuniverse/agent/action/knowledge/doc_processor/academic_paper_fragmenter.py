@@ -8,6 +8,7 @@
 
 import re
 import logging
+from copy import deepcopy
 from typing import List, Optional, Dict, Set, Tuple
 from dataclasses import dataclass
 from datetime import datetime
@@ -133,7 +134,7 @@ class AcademicPaperFragmenter(DocProcessor):
             doc: Academic paper document to fragment.
 
         Returns:
-            List of argument documents.
+            List of argument documents with independent source metadata snapshots.
         """
         text = doc.text
 
@@ -494,7 +495,7 @@ class AcademicPaperFragmenter(DocProcessor):
 
             # Add original metadata
             if original_doc.metadata:
-                metadata['original_metadata'] = original_doc.metadata
+                metadata['original_metadata'] = deepcopy(original_doc.metadata)
 
             # Add citations
             if arg.citations:
