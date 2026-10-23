@@ -90,6 +90,7 @@ pdf_ext = ["pypdf"]
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
 pytest-cov = "^4.0.0"
+pytest-asyncio = "^0.23.0"
 deptry = "^0.6.4"
 pre-commit = "^2.20.0"
 
