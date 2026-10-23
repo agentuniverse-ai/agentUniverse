@@ -1,0 +1,12 @@
+name: footnote_context_splitter
+description: Split paragraphs while carrying explicitly linked Markdown footnotes.
+chunk_chars: 1500
+max_document_chars: 1000000
+max_output_chars: 4000000
+max_references: 10000
+missing: report
+source_key: source
+metadata:
+  type: DOC_PROCESSOR
+  module: agentuniverse.agent.action.knowledge.doc_processor.footnote_context_splitter
+  class: FootnoteContextSplitter
