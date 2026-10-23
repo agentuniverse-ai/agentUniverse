@@ -210,12 +210,15 @@ class RedisVectorStore(Store):
         return vector
 
     def _vectors_for_documents(self, documents: list[Document]) -> list[list[float]]:
+        """Check generated batch length before assigning any source embeddings."""
         missing = [index for index, document in enumerate(documents) if not document.embedding]
         if missing:
             if not self.embedding_model:
                 raise ValueError("documents without embeddings require embedding_model")
             model = EmbeddingManager().get_instance_obj(self.embedding_model, strict=True)
             generated = model.get_embeddings([documents[index].text or "" for index in missing])
+            if len(generated) != len(missing):
+                raise ValueError("embedding count must match the number of documents without embeddings")
             for index, vector in zip(missing, generated, strict=True):
                 documents[index].embedding = vector
         vectors = [document.embedding for document in documents]
