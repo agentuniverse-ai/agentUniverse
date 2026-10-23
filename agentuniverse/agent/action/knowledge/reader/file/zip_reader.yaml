@@ -1,5 +1,12 @@
 name: 'default_zip_reader'
 description: 'ZIP archive reader for knowledge base'
+# Optional resource limits (sizes and chunk size are in bytes):
+# max_total_size: 536870912
+# max_file_size: 67108864
+# max_depth: 5
+# max_files: 4096
+# max_compression_ratio: 100
+# stream_chunk_size: 1048576
 metadata:
   type: 'READER'
   module: 'agentuniverse.agent.action.knowledge.reader.file.zip_reader'

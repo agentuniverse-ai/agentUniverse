@@ -24,6 +24,7 @@ from agentuniverse.agent.action.knowledge.reader.file.txt_reader import TxtReade
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
+from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 TEXT_FALLBACK_EXTENSIONS = {
     ".json",
@@ -41,12 +42,26 @@ TEXT_FALLBACK_EXTENSIONS = {
 
 
 class ZipReader(Reader):
+    """Read ZIP archives with limits configurable through constructor or YAML."""
     max_total_size: int = 512 * 1024 * 1024
     max_file_size: int = 64 * 1024 * 1024
     max_depth: int = 5
     max_files: int = 4096
     max_compression_ratio: int = 100
     stream_chunk_size: int = 1024 * 1024
+
+    def _initialize_by_component_configer(self, reader_configer: ComponentConfiger) -> 'ZipReader':
+        super()._initialize_by_component_configer(reader_configer)
+        settings = {
+            field: getattr(reader_configer, field)
+            for field in ('max_total_size', 'max_file_size', 'max_depth',
+                          'max_files', 'max_compression_ratio', 'stream_chunk_size')
+            if hasattr(reader_configer, field)
+        }
+        validated = type(self).model_validate({**self.model_dump(), **settings})
+        for field in settings:
+            setattr(self, field, getattr(validated, field))
+        return self
 
     def _get_reader(self, suffix: str) -> Reader:
         if suffix not in self._readers:
