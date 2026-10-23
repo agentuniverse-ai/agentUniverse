@@ -17,6 +17,12 @@ from agentuniverse_product.service.model.tool_dto import ToolDTO
 
 
 class AgentDTO(BaseModel):
+    """Data transfer object for an agent product.
+
+    Aggregates the agent identity (id, nickname, avatar, description,
+    opening_speech), its prompt/LLM/planner configuration, bound tools and
+    knowledge bases, memory id and the product's last modification time.
+    """
     id: str = Field(description="ID")
     nickname: Optional[str] = Field(description="agent nickname", default="")
     avatar: Optional[str] = Field(description="agent avatar path", default="")
