@@ -195,7 +195,10 @@ class ChromaContextStore(ContextStore):
         limit: int = 100,
         **kwargs
     ) -> List[ContextSegment]:
-        """Retrieve segments from Chroma.
+        """Retrieve the newest matching segments from Chroma.
+
+        Chroma cannot order get() results by creation time, so all matching
+        records are read before applying the limit to the sorted segments.
 
         Args:
             session_id: Session identifier
@@ -207,7 +210,7 @@ class ChromaContextStore(ContextStore):
         Returns:
             List of matching segments
         """
-        if not self._collection:
+        if limit <= 0 or not self._collection:
             return []
 
         # Build where clause for filtering
@@ -227,7 +230,6 @@ class ChromaContextStore(ContextStore):
         try:
             results = self._collection.get(
                 where=self._combine_filters(where),
-                limit=limit,
             )
 
             if not results or not results["ids"]:
