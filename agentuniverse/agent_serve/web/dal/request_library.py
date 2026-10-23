@@ -30,7 +30,8 @@ class RequestLibrary:
         """Init the database connection. Use uri in config file or use sqlite
         as default database."""
         system_db_uri = None
-        if Configer:
+        configer = configer or Configer()
+        if configer:
             system_db_uri = configer.get('DB', {}).get('system_db_uri')
             if not system_db_uri:
                 system_db_uri = configer.get('DB', {}).get('mysql_uri')
