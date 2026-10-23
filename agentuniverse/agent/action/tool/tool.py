@@ -182,8 +182,19 @@ class Tool(ComponentBase):
         self.name = component_configer.name
         self.description = component_configer.description
         if component_configer.tool_type:
-            self.tool_type = next((member for member in ToolTypeEnum if
-                                   member.value == component_configer.tool_type))
+            _tool_type = next((member for member in ToolTypeEnum if
+                                   member.value == component_configer.tool_type), None)
+            if _tool_type is not None:
+                self.tool_type = _tool_type
+            else:
+                # configer.value 的 setattr 循环已把原始字符串写进 tool_type，
+                # 无法匹配枚举时回退到默认值，避免启动崩溃和类型污染。
+                logger.warning("Unknown tool_type %r for tool %s, falling back to %r. "
+                              "Valid values: %s",
+                              component_configer.tool_type, self.name,
+                              ToolTypeEnum.FUNC.value,
+                              [m.value for m in ToolTypeEnum])
+                self.tool_type = ToolTypeEnum.FUNC
         self.input_keys = component_configer.input_keys
         if hasattr(component_configer, "tracing"):
             self.tracing = component_configer.tracing
