@@ -30,9 +30,14 @@ Supported subset (anything outside this list is rejected with a clear
   such as ``{true: 1}`` or ``{and: 1}`` and string-key shorthand ``{"a"}``,
   all supported here; multi-output values build the cartesian product in
   jq's order)
-* literals: numbers (jq 1.7 preserves the original literal, e.g. ``1.0``
-  stays ``1.0`` and ``1e2`` is printed ``1E+2``), strings, ``true`` /
-  ``false`` / ``null``
+* literals: numbers (jq 1.7 canonicalizes every literal with decNumber's
+  toString: in-range plain decimals are kept verbatim — ``1.0`` stays
+  ``1.0``, ``2.50`` keeps its trailing zeros — while ``1e2`` prints
+  ``1E+2``, ``0.0000001`` prints ``1E-7`` and a zero keeps its written
+  exponent: ``0e2`` is ``0E+2``, ``0.0e1`` is ``0``.  Negative literals in
+  a query are jq's unary minus on the positive literal, i.e. computed
+  doubles: ``[-2.50]`` prints ``[-2.5]`` and ``[-0.0]`` prints ``[-0]``),
+  strings, ``true`` / ``false`` / ``null``
 * the alternative operator ``//`` with jq semantics: only ``null`` and
   ``false`` are falsy (so ``false // 5`` is ``5`` and ``0 // 5`` is ``0``);
   an error on the left side still propagates
@@ -49,8 +54,9 @@ string interpolation ``"\\(...)"``, recursive descent ``..``, ``if/then/else``,
 ``try``/``catch``, ``reduce``/``foreach``, ``def``, variables ``$x`` and ``as``
 bindings, ``limit``, regex helpers (``test``, ``match``, ``capture``, ...),
 format strings (``@base64`` and friends), ``env``/``$ENV``, ``input``/
-``inputs``, slice steps ``.[::2]``, comments ``#`` and every other jq builtin
-outside the list above.
+``inputs``, slice steps ``.[::2]``, the adjacent ``?//`` token (jq's
+destructuring-alternative operator; write ``? //`` with a space), comments
+``#`` and every other jq builtin outside the list above.
 
 The runtime is standard-library only (``json`` plus a hand-written parser).
 Outputs and traces are capped, evaluation is deterministic, object key order
@@ -145,31 +151,38 @@ def _split_exponent(text: str) -> tuple[str, str]:
     return text, ""
 
 
-def _normalize_exponent_lexeme(lexeme: str) -> str:
-    """Canonicalize an exponent-bearing literal the way jq 1.7 (decNumber) does.
+def _canonical_number_lexeme(lexeme: str) -> str:
+    """Canonicalize a number literal the way jq 1.7 (decNumber) does.
 
-    jq keeps plain decimal literals verbatim but rewrites exponent literals:
-    ``1e2`` -> ``1E+2``, ``1e-4`` -> ``0.0001``, ``1.50e1`` -> ``15.0``,
-    ``1e17`` -> ``1E+17``.  The rule is decNumber's: plain notation when the
-    decimal exponent is <= 0 and the adjusted exponent is >= -6, otherwise
-    scientific notation with a signed exponent.
+    jq keeps in-range plain decimals verbatim (``2.50`` stays ``2.50``,
+    ``123.4500`` keeps its trailing zeros) but rewrites everything else by
+    decNumber's toString rule: ``1e2`` -> ``1E+2``, ``1e-4`` -> ``0.0001``,
+    ``1.50e1`` -> ``15.0``, ``1e17`` -> ``1E+17`` and — for literals with no
+    exponent at all — ``0.0000001`` -> ``1E-7`` (plain notation is only used
+    when the decimal exponent is <= 0 and the adjusted exponent is >= -6,
+    otherwise scientific notation with a signed exponent).  Zero keeps its
+    written exponent: ``0e2`` -> ``0E+2``, ``0e-2`` -> ``0.00``,
+    ``0.0e1`` -> ``0`` while ``0.0e0`` -> ``0.0``.
     """
     sign = ""
     body = lexeme
     if body.startswith("-"):
         sign, body = "-", body[1:]
     mantissa, exponent_text = _split_exponent(body)
-    exponent = int(exponent_text)
+    exponent = int(exponent_text) if exponent_text else 0
     if "." in mantissa:
         int_part, frac_part = mantissa.split(".", 1)
         digits = int_part + frac_part
         exponent -= len(frac_part)
     else:
         digits = mantissa
-    digits = digits.lstrip("0")
-    if not digits:
-        return sign + "0"
-    count = len(digits)
+    if not digits.strip("0"):
+        # decNumber keeps a zero coefficient's exponent: it renders with a
+        # single significant "0" digit placed by the same notation rule.
+        digits, count = "0", 1
+    else:
+        digits = digits.lstrip("0")
+        count = len(digits)
     adjusted = exponent + count - 1
     if exponent <= 0 and adjusted >= -6:
         if exponent == 0:
@@ -195,15 +208,15 @@ def _dump_computed_double(number: float) -> str:
     at ``decpt >= -3`` and ``decpt - digits <= 15`` (so ``1e16`` is ``1e+16``
     but ``1.5e16`` is ``15000000000000000``), otherwise scientific notation
     with a lowercase ``e`` and a signed, at-least-two-digit exponent
-    (``1e-07``, ``1.5e+17``).  jq prints NaN as ``null`` and infinity as
-    the double-maximum text.
+    (``1e-07``, ``1.5e+17``).  jq prints NaN as ``null``, infinity as
+    the double-maximum text and negative zero as ``-0``.
     """
     if math.isnan(number):
         return "null"
     if math.isinf(number):
         return ("-" + _DBL_MAX_TEXT) if number < 0 else _DBL_MAX_TEXT
     if number == 0.0:
-        return "0"
+        return "-0" if math.copysign(1.0, number) < 0 else "0"
     sign = "-" if number < 0 else ""
     text = repr(abs(number))
     if "e" in text:
@@ -234,9 +247,7 @@ def _dump_number(value: Any) -> str:
     """Serialize a number exactly like ``jq -c`` would print it."""
     lexeme = getattr(value, "lexeme", None)
     if isinstance(lexeme, str):
-        if "e" in lexeme or "E" in lexeme:
-            return _normalize_exponent_lexeme(lexeme)
-        return lexeme
+        return _canonical_number_lexeme(lexeme)
     if isinstance(value, int) and not isinstance(value, bool):
         return str(value)
     return _dump_computed_double(float(value))
@@ -559,6 +570,16 @@ def lex(query: str) -> list[Token]:  # noqa: C901
             text, index = _lex_string(query, index)
             tokens.append(Token("STRING", text, start))
             continue
+        if char == "?" and query[index + 1 : index + 3] == "//":
+            # jq lexes the adjacent '?//' as its destructuring-alternative
+            # operator token, which is a syntax error after a filter
+            # (`.a?//5` fails; `.a? //5` with the space is the alternative).
+            raise NotInSubsetError(
+                "destructuring alternative",
+                "'?//' (the destructuring alternative operator) is not in the subset; "
+                "jq rejects it after a filter — for the alternative write '? //'",
+                index,
+            )
         if char in _SIMPLE_TOKENS:
             tokens.append(Token(_SIMPLE_TOKENS[char], char, index))
             index += 1
@@ -874,6 +895,13 @@ class _Parser:
         if token.kind == "NUMBER":
             lexeme, is_float = token.value
             self.advance()
+            if lexeme.startswith("-"):
+                # jq parses a negative value literal as unary minus applied
+                # to the positive literal, so the result is a *computed*
+                # double: `[-2.50]` prints `[-2.5]` and `[-0.0]` prints
+                # `[-0]` (literal preservation only applies to JSON input
+                # and positive query literals).
+                return ("lit", float(lexeme))
             value = JFloat(float(lexeme), lexeme) if is_float else JInt(int(lexeme), lexeme)
             return ("lit", value)
         if token.kind == "STRING":
@@ -1292,7 +1320,10 @@ def _call(name: str, args: tuple, value: Any, limit: int | None) -> Generator[An
     if name == "has":
         for key in _eval(args[0], value, limit):
             kind = jq_type(key)
-            if isinstance(value, dict):
+            if value is None:
+                # jq treats null as having no keys at all: has(anything) is false
+                yield False
+            elif isinstance(value, dict):
                 if kind != "string":
                     raise JqRuntimeError(f"Cannot check whether object has a {kind} key")
                 yield key in value

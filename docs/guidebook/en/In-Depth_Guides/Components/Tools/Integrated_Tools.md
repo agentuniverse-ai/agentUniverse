@@ -667,7 +667,11 @@ semantics; array `[...]` and object `{a: .b, "k": .v}` construction
 (including `{a}` shorthand, jq's keyword/logic-word keys such as
 `{true: 1}` / `{and: 1}`, string-key shorthand `{"a"}`, and the cartesian
 product over multi-output values); number/string/boolean/null literals (jq
-1.7 preserves input literals such as `1.0`; the JavaScript constants
+1.7 canonicalizes every literal with decNumber's rule: in-range plain
+decimals are kept verbatim (`1.0`, `2.50`), `1e2` prints `1E+2`,
+`0.0000001` prints `1E-7`, a zero keeps its written exponent (`0e2` is
+`0E+2`), and negative query literals are computed unary-minus doubles
+(`[-2.50]` prints `[-2.5]`, `[-0.0]` prints `[-0]`); the JavaScript constants
 `NaN` / `Infinity` are accepted and print like jq, as `null` and
 `1.7976931348623157e+308`); the alternative operator `//` with jq's falsiness
 rule (only `null`/`false` trigger the alternative, so `false // 5` is `5`
@@ -680,7 +684,9 @@ ordering; boolean `and`/`or`/`not`; and the builtin filters `length`,
 Everything else (arithmetic, string interpolation, recursive descent `..`,
 `if/then/else`, `try`/`catch`, `reduce`, `def`, variables, `limit`, regex
 helpers, `@base64`-style formats, `env`/`$ENV`, `input`/`inputs`, slice
-steps `.[::2]`, comments and all other builtins) is rejected with a
+steps `.[::2]`, the adjacent `?//` token (jq's destructuring-alternative
+operator; write `? //` with a space), comments and all other builtins) is
+rejected with a
 structured `not_in_subset` error that names the construct and its position
 instead of being silently mis-evaluated. `validate` decomposes the query
 into human-readable steps and lists any unsupported constructs; `execute`

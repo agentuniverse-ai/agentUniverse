@@ -1118,6 +1118,404 @@ class JqLiteSelfReviewRegressionTest(unittest.TestCase):
         self.assertIn("nesting is too deep", result["message"])
 
 
+# ---------------------------------------------------------------------------
+# Second-pass hostile review battery (fresh seeds, wider grammar)
+# ---------------------------------------------------------------------------
+
+_WIDE_KEYS = ["a", "b", "c", "name", "x", "id", "val", "key with space", "键", "A", "Z", "é", "ü"]
+_WIDE_LITS = ["0", "1", "2", "3", "-1", "true", "false", "null", '"s"', '"aa"', "1.0", "2.50", "1e2", "1e-4"]
+
+
+def _gen_wide_value(rnd, depth=3):
+    kinds = ["int", "str", "bool", "null", "neg"]
+    if depth > 0:
+        kinds += ["obj", "arr", "obj", "arr"]
+    kind = rnd.choice(kinds)
+    if kind == "int":
+        return rnd.choice([0, 1, 2, 3, 7, 42])
+    if kind == "neg":
+        return rnd.choice([-1, -3, -10])
+    if kind == "str":
+        return rnd.choice(["hello", "", "值", "é", "a b", 'q"s', "tab\there"])
+    if kind == "bool":
+        return rnd.choice([True, False])
+    if kind == "null":
+        return None
+    if kind == "obj":
+        keys = rnd.sample(_WIDE_KEYS, rnd.randint(0, 4))
+        return {key: _gen_wide_value(rnd, depth - 1) for key in keys}
+    return [_gen_wide_value(rnd, depth - 1) for _ in range(rnd.randint(0, 5))]
+
+
+def _gen_wide_query(rnd, tag, depth=2):  # noqa: C901
+    """Generate an in-subset query over the widened grammar (fresh shapes)."""
+    if tag == "obj":
+        choices = ["nestedobj", "field", "altchain", "sel", "objkey", "dupkey",
+                   "unicode_keys", "optalt", "deepcompact", "keys"]
+    elif tag == "arr":
+        choices = ["slice", "idx", "sel", "map_sel", "altchain", "arr3",
+                   "deepcompact", "join", "firstlast", "cartesian3", "nestedobj"]
+    else:
+        choices = ["cmp", "altchain", "lits"]
+    if depth <= 0:
+        choices = ["field", "idx"] if tag != "scalar" else ["lits"]
+    choice = rnd.choice(choices)
+    key = rnd.choice(_WIDE_KEYS)
+    if choice == "nestedobj":
+        multi = rnd.choice([f"({rnd.choice(_WIDE_LITS)}, {rnd.choice(_WIDE_LITS)})", "(., .)", "[.[]?][0:2]"])
+        inner2 = "{b: %s, c: %s}" % (multi, multi)
+        return rnd.choice([
+            "{lvl1: {lvl2: %s}, other: %s}" % (inner2, multi),
+            "{a: {b: {c: %s}}}" % multi,
+            "{x: %s, y: {z: %s}}" % (multi, multi),
+            "{a: (%s, {b: %s})}" % (inner2, multi),
+        ])
+    if choice == "altchain":
+        parts = []
+        for _ in range(rnd.randint(2, 4)):
+            parts.append(rnd.choice([".a", ".b?", "null", "false", "0", '""', "(.a, .b?)", ".[0]?", "empty"]))
+        return " // ".join(parts)
+    if choice == "sel":
+        lit = rnd.choice(_WIDE_LITS)
+        op = rnd.choice(["==", "!=", "<", ">", "<=", ">="])
+        return rnd.choice([
+            f"select(.{key} {op} {lit})",
+            f"select(.{key} != null and .{key} != false)",
+            f"select((.{key}, .{rnd.choice(['a', 'b'])}) | not)",
+            f"select(.{key} == null // false)",
+            f"select(.{key}? // false)",
+            f"select((.{key} == {lit}) or (.{key} == {rnd.choice(_WIDE_LITS)}))",
+        ])
+    if choice == "map_sel":
+        return f"map(select(.{key} != null))"
+    if choice == "objkey":
+        return rnd.choice([f'{{"{key}": ., x: (.a, .b?)}}', f"{{{key}}}", '{"a b"}', "{true: 1}", "{and: 2}", "{null: .}"])
+    if choice == "dupkey":
+        return rnd.choice(["{a: .x, a: .y}", "{a: 1, a: (1, 2)}", '{"k": 1, k: 2}'])
+    if choice == "unicode_keys":
+        return rnd.choice(["keys", "keys_unsorted", ".é"])
+    if choice == "optalt":
+        return rnd.choice([".a? // 5", "(.a, .b)? // 7", ".[]? // 1", ".a?.b? // .c? // 0", "[.[]?][0] // null"])
+    if choice == "deepcompact":
+        return rnd.choice(["[[[.]]]", "{a: {b: {c: [[[.]]]}}}", "[[[[.a?]]]]", "{a: [{b: [{c: .}]}]}"])
+    if choice == "keys":
+        return rnd.choice(["keys", "keys_unsorted"])
+    if choice == "slice":
+        combos = ["", ":2", "1:", "1:3", ":-1", "-2:", "0:0", "-5:-2", "3:1", "-1:1", "0:-1"]
+        return ".[%s]" % rnd.choice(combos)
+    if choice == "idx":
+        return f".[{rnd.choice([0, 1, 2, 5, -1, -3, -100, 100])}]"
+    if choice == "join":
+        return rnd.choice(['join(",")', 'join("")', "join(null)"])
+    if choice == "firstlast":
+        return rnd.choice(["first", "last", "(first, last)", "first // last"])
+    if choice == "arr3":
+        return rnd.choice(["[.[]?, .[0]?, .[-1]?]", "[., ., .]", "[.[] | (.a?, .b?)]"])
+    if choice == "cartesian3":
+        return "{a: (1, 2), b: (3, 4), c: (5, 6)}"
+    if choice == "cmp":
+        return f"{rnd.choice(_WIDE_LITS)} {rnd.choice(['==', '!=', '<', '<=', '>', '>='])} {rnd.choice(_WIDE_LITS)}"
+    return rnd.choice(_WIDE_LITS + ["[1, 2.0, 1e2, 1e-4, -0.0]"])
+
+
+def _gen_wide_pair(rnd):
+    """Generate one (query, json_text) pair; JSON text keeps duplicate keys."""
+    kind = rnd.choice(["obj", "arr", "arr_obj", "scalar", "dupjson", "unicode"])
+    if kind == "obj":
+        keys = rnd.sample(_WIDE_KEYS, rnd.randint(1, 5))
+        doc, tag = {key: _gen_wide_value(rnd, 2) for key in keys}, "obj"
+    elif kind == "arr":
+        doc, tag = [_gen_wide_value(rnd, 1) for _ in range(rnd.randint(0, 6))], "arr"
+    elif kind == "arr_obj":
+        doc, tag = (
+            [
+                {key: rnd.choice([0, 1, 2, -2, "aa", "", None, True, False])
+                 for key in rnd.sample(["a", "b", "c", "name", "x"], rnd.randint(1, 3))}
+                for _ in range(rnd.randint(0, 5))
+            ],
+            "arr",
+        )
+    elif kind == "dupjson":
+        # jq takes the last value for duplicate object keys in the input
+        return _gen_wide_query(rnd, "obj", 2), '{"a": 1, "b": 2, "a": 3, "c": {"x": 1, "x": 2}}'
+    elif kind == "unicode":
+        doc, tag = {"é": 1, "z": 2, "a": 3, "Z": 4, "ü": 5, "A": 6, "中": 7, "€": 8}, "obj"
+    else:
+        doc, tag = _gen_wide_value(rnd, depth=0), "scalar"
+    return _gen_wide_query(rnd, tag, 2), json.dumps(doc, ensure_ascii=False)
+
+
+# Real-jq constructs the subset deliberately rejects; jq 1.7.1 supports them
+# (each entry pairs the query with an input on which the real jq succeeds).
+SECOND_PASS_OUT_OF_SUBSET = [
+    ("while(false; .)", "null"),
+    ("from_entries", '[{"key":"a","value":1}]'),
+    ("until(true; .)", "null"),
+    ("nan", "null"),
+    ("infinite", "null"),
+    ("getpath([])", "null"),
+    ("tostream", "null"),
+    ("tojson", "null"),
+    ("ltrimstr(\"\")", '"ab"'),
+    ("tostring", "null"),
+    ('tonumber', '"5"'),
+    ("walk(.)", "null"),
+    ("env.PATH", "null"),
+    ("builtins", "null"),
+    ("input_filename", "null"),
+]
+
+
+class JqLiteSecondPassRegressionTest(unittest.TestCase):
+    """Second-pass regressions found by a wider-grammar differential battery."""
+
+    def setUp(self):
+        self.tool = JqLiteTool()
+
+    def _run(self, query, json_text):
+        return self.tool.execute(mode="execute", query=query, json_text=json_text)
+
+    def _assert_matches_jq(self, query, json_text):
+        returncode, lines, core = run_jq(query, json_text)
+        result = self._run(query, json_text)
+        if returncode == 0:
+            self.assertEqual(result.get("status"), "success", result)
+            self.assertEqual(result.get("outputs"), lines, result)
+        elif "syntax error" in core or "compile error" in core:
+            # jq refused to compile the query (e.g. raw unicode identifiers
+            # like `.键`); the tool must reject it too, at the parse level.
+            self.assertEqual(result.get("status"), "error", result)
+            self.assertIn(result.get("error_type"), ("parse_error", "not_in_subset", "validation_error"), result)
+        else:
+            self.assertEqual(result.get("status"), "error", result)
+            self.assertEqual(result.get("error_type"), "jq_error", result)
+            self.assertEqual(result.get("message"), core, result)
+            self.assertEqual(result.get("outputs"), lines, result)
+
+    # -- '?//' adjacent token: jq's destructuring alternative is rejected ----
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_adjacent_qslashslash_rejected_like_jq(self):
+        for query in (".a?//5", ".a?// 5", ".a ?//5", "(.a)?//5", ".a[]?//3", ".a?//empty", ".a?//[1]", ".a?//3 | .b"):
+            with self.subTest(query=query):
+                returncode, _lines, _core = run_jq(query, "3")
+                self.assertNotEqual(returncode, 0, "jq must reject the adjacent ?// token")
+                result = self._run(query, "3")
+                self.assertEqual(result["status"], "error", result)
+                self.assertIn(result["error_type"], ("not_in_subset", "parse_error"), result)
+        for query in (".a? //5", ".a ? //5", ".a? // 5", ".a ? // 5"):
+            with self.subTest(query=query):
+                self._assert_matches_jq(query, "3")
+
+    # -- plain decimal literals are canonicalized (decNumber rule) -----------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_plain_decimal_literals_canonicalized_like_jq(self):
+        json_inputs = [
+            "0.0000001", "0.000000000000000000001", "0.000001", "0.00001",
+            "10.0000001", "0.123456", "99999999999999999999.0",
+            "1.000000000000000000000001", "123.4500", "0.10", "100.0", "0.0", "-0.0",
+        ]
+        for literal in json_inputs:
+            with self.subTest(input=literal):
+                self._assert_matches_jq(".", literal)
+        # positive query literals canonicalize identically
+        for query in ("[0.0000001]", "[2.50]", "[123.4500]", "[10.0000001]", "[0.1]", "[100.0]"):
+            with self.subTest(query=query):
+                self._assert_matches_jq(query, "null")
+
+    # -- zero coefficients keep their written exponent ------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_zero_exponent_literals_like_jq(self):
+        literals = [
+            "0e2", "0e-2", "0e0", "-0e0", "-0e2", "-0e-2",
+            "0.0e1", "0.0e0", "0.0e-1", "-0.0e-1", "0.00", "-0.00", "0.000", "0e-0", "-0e-0",
+        ]
+        for literal in literals:
+            with self.subTest(input=literal):
+                self._assert_matches_jq(".", literal)
+                self._assert_matches_jq("[" + literal + "]", "null")
+        self.assertEqual(self._run(".", "0e2")["outputs"], ["0E+2"])
+        self.assertEqual(self._run(".", "0e-2")["outputs"], ["0.00"])
+        self.assertEqual(self._run(".", "0.0e1")["outputs"], ["0"])
+        self.assertEqual(self._run(".", "0.0e0")["outputs"], ["0.0"])
+        self.assertEqual(self._run(".", "-0e2")["outputs"], ["-0E+2"])
+
+    # -- negative query literals are computed doubles (unary minus) -----------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_negative_query_literals_are_computed_doubles(self):
+        cases = [
+            ("[-0.0]", ["[-0]"]),
+            ("[-2.50]", ["[-2.5]"]),
+            ("[-1e2]", ["[-100]"]),
+            ("[-1.0]", ["[-1]"]),
+            ("[-123.4500]", ["[-123.45]"]),
+            ("[-1e16]", ["[-1e+16]"]),
+            ("[-1e-5]", ["[-1e-05]"]),
+            ("[-0]", ["[-0]"]),
+            ("[-0.1e1]", ["[-1]"]),
+            ("[-0.0000001]", ["[-1e-07]"]),
+            ("[1, -2.50, 3]", ["[1,-2.5,3]"]),
+            ("[-1, -2]", ["[-1,-2]"]),
+            ("select(.a < -1)", ['{"a":-2}']),
+        ]
+        for query, expected in cases:
+            with self.subTest(query=query):
+                self._assert_matches_jq(query, '{"a": -2}' if "select" in query else "null")
+                self.assertEqual(self._run(query, '{"a": -2}' if "select" in query else "null")["outputs"], expected)
+        # JSON-input negatives stay canonical literals (not computed)
+        json_cases = [
+            ("-1e2", ["-1E+2"]),
+            ("-1e21", ["-1E+21"]),
+            ("-1.5e2", ["-1.5E+2"]),
+            ("-2.5e-3", ["-0.0025"]),
+            ("-0.0", ["-0.0"]),
+            ("-2.50", ["-2.50"]),
+        ]
+        for literal, expected in json_cases:
+            with self.subTest(input=literal):
+                self._assert_matches_jq(".", literal)
+                self.assertEqual(self._run(".", literal)["outputs"], expected)
+
+    # -- has() on null input is false, not an error ----------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_has_on_null_input_is_false(self):
+        cases = [
+            ('has("a")', "null", ["false"]),
+            ("has(0)", "null", ["false"]),
+            ("has(true)", "null", ["false"]),
+            ("has(null)", "null", ["false"]),
+            ('has("a")', '{"a": 1}', ["true"]),
+            ('has("a")', "3", ["Cannot check whether number has a string key"]),
+        ]
+        for query, json_text, expected in cases:
+            with self.subTest(query=query, input=json_text):
+                self._assert_matches_jq(query, json_text)
+                outputs = self._run(query, json_text)
+                if outputs["status"] == "success":
+                    self.assertEqual(outputs["outputs"], expected)
+                else:
+                    self.assertEqual(outputs["message"], expected[0])
+
+    # -- wider grammar battery: 600 fresh seeded pairs vs the oracle ----------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_oracle_wider_grammar_corpus_600(self):
+        rnd = random.Random(777001)  # noqa: S311 (deterministic corpus)
+        for index in range(600):
+            query, json_text = _gen_wide_pair(rnd)
+            with self.subTest(case=index, query=query, input=json_text[:120]):
+                self._assert_matches_jq(query, json_text)
+
+    # -- 150 hostile error-message parities ------------------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_hostile_error_parity_150(self):
+        cases = []
+        for base in (".a", ".a.b", ".[0]", ".[]", ".[1:2]", ".a[]", ".a[0]", ".a[1:]", ".[:1]", ".a[0:3]"):
+            for doc in ("3", '"s"', "true", "false", "null", "[]", "{}", "[1]", '{"a":1}', "1.5", "-0.0", '"中文"', "[[[1]]]"):
+                cases.append((base, doc))
+        for query in ("keys", "keys_unsorted", "length", "add", "first", "last", "reverse", "sort", "unique",
+                      "min", "max", 'join(",")', "join(null)", "join(1)", "has(0)", 'has("a")', "has(null)",
+                      "has(true)", "sort_by(.a)", "map(.a)", "select(.a)"):
+            for doc in ("3", '"s"', "true", "null", "{}", "[]", '{"a":1}', "[1]", '[1,"a"]', "[[1]]",
+                        "[{},[]]", '{"a":{"b":2}}'):
+                cases.append((query, doc))
+        rnd = random.Random(777003)  # noqa: S311 (deterministic corpus)
+        rnd.shuffle(cases)
+        for index, (query, json_text) in enumerate(cases[:150]):
+            with self.subTest(case=index, query=query, input=json_text):
+                self._assert_matches_jq(query, json_text)
+
+    # -- 150 fresh numeric formatting cases ------------------------------------
+    @unittest.skipUnless(JQ_AVAILABLE, "jq binary >= 1.6 required")
+    def test_numeric_formatting_150(self):
+        literals = [
+            "0", "-0", "1", "-1", "42", "-42", "1000", "1024", "65535", "65536", "1048576",
+            "9007199254740991", "9007199254740992", "9007199254740993", "123456789012345678",
+            "-123456789012345678", "123456789012345678901234567890",
+            "0.0", "-0.0", "1.0", "0.1", "0.5", "1.5", "2.50", "3.14159", "123.456",
+            "1e2", "1e16", "1.5e16", "1e-4", "1e-5", "1e-7", "1e100", "1e-100", "1e308", "1e-308",
+            "1.7976931348623157e308", "5e-324", "1e309", "-1e309", "0.000001", "0.0000001",
+            "0.000000000000000000001", "12345678901234567890", "1.0e2", "1000000000000000000000",
+            "0e2", "0e-2", "0.0e1", "0.0e0", "-0e2", "-0e-2", "0.1e1", "1.0e-5", "0.5e-6",
+            "12.34e-8", "123.4500", "0.10", "10.0000001", "-1e2", "-1.5e2", "-2.5e-3",
+            "1234567890123456.0", "12345678901234567.0", "0.30000000000000004",
+            "7", "-7", "99", "-99", "123456", "-123456", "999999999", "1000000000",
+            "0.25", "0.75", "-0.25", "-0.75", "2.0", "-2.0", "10.5", "-10.5", "100.50",
+            "1e1", "1e3", "1e6", "1e9", "1e12", "2e16", "9e15", "9.9e15", "1.1e16", "1.23e16",
+            "1e17", "1.5e17", "1e18", "1e20", "1e21", "1e22", "1e-1", "1e-2", "1e-3", "1.5e-4",
+            "1.23e-5", "1e-6", "1.5e-7", "1.23e-8", "1e-9", "1e-20", "1e-100", "1e-200",
+            "2.2250738585072014e-308", "4.9e-324", "1.1e308", "1.5e308", "-1e308",
+            "0.001", "0.0001", "0.00001", "0.000000000001", "20.25", "-20.25",
+            "1.0000000000000002", "0.9999999999999999", "-1.0000000000000002",
+            "3.0e5", "7.5e-2", "-7.5e-2", "1e5", "1e-5", "1.5e-5",
+            "12345.6789", "-12345.6789", "99999999.99999999", "0.1234567890123456789",
+            "5000000000000000000000", "-5000000000000000000000", "1.23e45", "-1.23e-45",
+        ]
+        self.assertGreaterEqual(len(literals), 125)
+        computed = [
+            ("length", "[1]"),
+            ("3 | length", "null"),
+            ("-3 | length", "null"),
+            ("1e300 | length", "null"),
+            ("123456789012345678 | length", "null"),
+            ("-123456789012345678 | length", "null"),
+            ("0.5 | length", "null"),
+            ("-0.0 | length", "null"),
+            ("1e-320 | length", "null"),
+            ("9007199254740993 | length", "null"),
+            ("1e15 | length", "null"),
+            ("1e16 | length", "null"),
+            ("1.5e16 | length", "null"),
+            ("[.[0]] | add", "[1]"),
+            (".[0] | length", "[1e300]"),
+            ("[.[0], .[1]] | add", "[1e308, 1]"),
+            ("[.[0], .[1]] | add", "[0.1, 0.2]"),
+            ("[.[0], .[1]] | add", "[1, 2.5]"),
+            ("[.[0], .[1]] | unique", "[1, NaN]"),
+            ("[.[0], .[1]] | min", "[NaN, 1]"),
+            ("[.[0], .[1]] | max", "[NaN, 1]"),
+            ("[.[0], .[1]] | sort", "[NaN, 1]"),
+            ("[.[0], .[1], .[2]] | add", "[0.1, 0.1, 0.1]"),
+            ("add", "[1e308, -1e308, 1]"),
+            ("add", "[1, 2, 3.0, 4.50]"),
+        ]
+        checked = 0
+        for literal in literals:
+            with self.subTest(input=literal):
+                self._assert_matches_jq(".", literal)
+                checked += 1
+        for query, doc in computed:
+            with self.subTest(query=query, input=doc):
+                self._assert_matches_jq(query, doc)
+                checked += 1
+        self.assertGreaterEqual(checked, 150)
+
+    # -- 200k-element iteration stays bounded and truncates ---------------------
+    def test_two_hundred_thousand_elements_bounded(self):
+        big = "[" + ",".join(str(i % 10) for i in range(200000)) + "]"
+        self.assertLess(len(big.encode()), self.tool.max_input_bytes)
+        result = self._run(".[]", big)
+        self.assertEqual(result["status"], "success", result)
+        self.assertTrue(result["truncated"])
+        self.assertEqual(result["output_count"], self.tool.max_outputs)
+        result = self._run("[.[]] | length", big)
+        self.assertEqual(result["status"], "success", result)
+        self.assertEqual(result["outputs"], ["200000"])
+        result = self._run("add", big)
+        self.assertEqual(result["status"], "success", result)
+
+    # -- second-pass out-of-subset pins (jq supports, tool rejects) -------------
+    def test_second_pass_out_of_subset_pins(self):
+        for query, json_text in SECOND_PASS_OUT_OF_SUBSET:
+            with self.subTest(query=query):
+                returncode, _lines, _core = run_jq(query, json_text)
+                self.assertEqual(returncode, 0, "oracle table entries must be real jq constructs")
+                result = self.tool.execute(mode="execute", query=query, json_text=json_text)
+                self.assertEqual(result["status"], "error", result)
+                self.assertEqual(result["error_type"], "not_in_subset", result)
+                validate = self.tool.execute(mode="validate", query=query)
+                self.assertTrue(validate["valid"] is False, validate)
+                self.assertEqual(validate["unsupported_constructs"][0]["construct"], "function call")
+
+
 class JqLiteRegistrationTest(unittest.TestCase):
     """Unit tests for registering the shipped jq_lite_tool.yaml as a tool component."""
 
