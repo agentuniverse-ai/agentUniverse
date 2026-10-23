@@ -1,7 +1,6 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 import copy
-import logging
 from typing import List, Optional, Any
 
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
@@ -11,9 +10,6 @@ from agentuniverse.base.config.application_configer.application_config_manager i
     ApplicationConfigManager
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
-
-
-logger = logging.getLogger(__name__)
 
 
 class Toolkit(ComponentBase):
@@ -68,7 +64,7 @@ class Toolkit(ComponentBase):
                 if key != 'metadata':
                     setattr(self, key, value)
         except Exception as e:
-            logger.error("Toolkit configuration initialization failed", exc_info=True)
+            print(f"Error during configuration initialization: {str(e)}")
         if component_configer.name:
             self.name = component_configer.name
         if component_configer.description:

@@ -15,7 +15,7 @@ class TestClaudeLLMAsyncClientLifecycle(unittest.IsolatedAsyncioTestCase):
         stub_client = MagicMock()
         stub_client.messages.create = AsyncMock(
             return_value=MagicMock(content=[MagicMock(text='hi')]))
-        stub_client.close = AsyncMock()
+        stub_client.aclose = AsyncMock()
 
         with patch.object(ClaudeLLM, '_new_async_client', return_value=stub_client):
             result = await llm._acall(messages=[{'role': 'user', 'content': 'hi'}],
@@ -23,7 +23,7 @@ class TestClaudeLLMAsyncClientLifecycle(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.text, 'hi')
         self.assertIs(llm.async_client, stub_client)
-        stub_client.close.assert_awaited_once()
+        stub_client.aclose.assert_awaited_once()
 
 
 if __name__ == '__main__':

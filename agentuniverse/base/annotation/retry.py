@@ -12,15 +12,6 @@ from typing import Any, Callable
 
 
 def retry(max_retries: int = 3, delay: float = 1.0) -> Callable:
-    """Retry a synchronous callable after exceptions.
-
-    Args:
-        max_retries: Maximum number of invocation attempts.
-        delay: Seconds to wait between failed attempts.
-
-    Returns:
-        A decorator that preserves the wrapped callable's metadata.
-    """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:

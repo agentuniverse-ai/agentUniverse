@@ -202,7 +202,7 @@ class TruncateCompressor(ContextCompressor):
             target_tokens: Target token count
 
         Returns:
-            Independent revision retaining the source identity, scope and relationships
+            New segment with truncated content
         """
         if target_tokens <= 0:
             target_tokens = self.min_segment_tokens
@@ -222,11 +222,21 @@ class TruncateCompressor(ContextCompressor):
         # Truncate content
         truncated_content = segment.content[:target_chars] + self.truncate_marker
 
-        # This is a shorter revision, not a removed/replaced segment. Keep its
-        # identity and scope without sharing mutable metadata with the source.
-        truncated_seg = segment.model_copy(deep=True)
-        truncated_seg.update_content(truncated_content, target_tokens)
+        # Create new segment with truncated content
+        truncated_seg = ContextSegment(
+            type=segment.type,
+            priority=segment.priority,
+            content=truncated_content,
+            tokens=target_tokens,
+            session_id=segment.session_id,
+            parent_id=segment.parent_id,
+            related_ids=segment.related_ids.copy(),
+        )
+
+        # Preserve metadata reference (mark as compressed)
+        truncated_seg.metadata = segment.metadata.model_copy()
         truncated_seg.metadata.compressed = True
+        truncated_seg.metadata.version += 1
 
         return truncated_seg
 

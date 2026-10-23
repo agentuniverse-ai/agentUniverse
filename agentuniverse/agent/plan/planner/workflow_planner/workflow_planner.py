@@ -34,4 +34,5 @@ class WorkflowPlanner(Planner):
             raise Exception('Workflow graph is None, please add nodes and edges to the workflow graph.')
         workflow = workflow.build()
         workflow_output: WorkflowOutput = workflow.run(input_object.to_dict())
+        print(workflow_output.workflow_node_results)
         return workflow_output.workflow_end_params

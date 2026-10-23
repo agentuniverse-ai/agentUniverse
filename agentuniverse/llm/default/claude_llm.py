@@ -122,6 +122,7 @@ class ClaudeLLM(LLM):
 
     async def agenerate_stream_result(self, chat_completion: AsyncIterator):
         async for chunk in chat_completion:
+            print(chunk)
             if chunk.type != 'content_block_delta':
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
@@ -143,7 +144,10 @@ class ClaudeLLM(LLM):
     def max_context_length(self) -> int:
         if super().max_context_length():
             return super().max_context_length()
-        return ClaudeMAXCONTETNLENGTH[self.model_name]
+        # 未知 Claude 模型名不得 KeyError：所有 Claude 3+ 模型的文档化
+        # 上下文下限为 200K，与兄弟实现（zhipu/baichuan/gemini/openai）
+        # 一致地回退默认值而非裸键查。
+        return ClaudeMAXCONTETNLENGTH.get(self.model_name, 200000)
 
     def close(self):
         """Close the client."""

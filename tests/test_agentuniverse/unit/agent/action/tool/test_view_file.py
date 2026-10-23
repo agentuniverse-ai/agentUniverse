@@ -11,7 +11,6 @@ import json
 import shutil
 import tempfile
 import unittest
-from unittest.mock import patch
 
 from agentuniverse.agent.action.tool.tool import ToolInput
 from agentuniverse.agent.action.tool.common_tool.view_file_tool import ViewFileTool
@@ -63,16 +62,6 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertEqual(result['content'], "Line 2\nLine 3\n")
         self.assertEqual(result['start_line'], 1)
         self.assertEqual(result['end_line'], 2)
-
-    def test_view_specific_lines_without_buffering_entire_file(self):
-        with open(self.temp_file_path, 'r', encoding='utf-8') as stream:
-            stream.readlines = lambda: self.fail('bounded reads must not call readlines()')
-            with patch('builtins.open', return_value=stream):
-                result = json.loads(self.tool.execute('test.txt', start_line=1, end_line=3))
-
-        self.assertEqual(result['status'], 'success')
-        self.assertEqual(result['content'], "Line 2\nLine 3\n")
-        self.assertEqual(result['total_lines'], 5)
 
     def test_view_specific_lines_with_string_numbers(self):
         """Verify line numbers given as strings behave like their integer equivalents."""

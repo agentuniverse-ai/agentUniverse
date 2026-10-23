@@ -37,5 +37,3 @@ default_score: 0.0               # default score for documents without scores
 
 # Output configuration
 preserve_order: true  # maintain original document order in results
-# Restore only the occurrence counts retained by the filters, even when the
-# same Document object appears more than once in the input list.

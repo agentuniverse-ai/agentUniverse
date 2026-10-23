@@ -118,8 +118,6 @@ class AzureOpenAIEmbedding(Embedding):
             self.azure_api_key = embedding_configer.azure_api_key
         if hasattr(embedding_configer, "resource_name"):
             self.resource_name = embedding_configer.resource_name
-        if hasattr(embedding_configer, "azure_api_version"):
-            self.azure_api_version = embedding_configer.azure_api_version
         return self
 
 

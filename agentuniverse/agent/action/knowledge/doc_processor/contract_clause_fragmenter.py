@@ -222,8 +222,8 @@ class ContractClauseFragmenter(DocProcessor):
 
         # Article patterns
         if re.match(r'^(Article|ARTICLE)\s+', header, re.IGNORECASE):
-            match = re.match(r'^Article\s+([IVX\d]+)', header, re.IGNORECASE)
-            clause_id = match.group(1).upper() if match else 'unknown'
+            match = re.search(r'[IVX\d]+', header)
+            clause_id = match.group(0) if match else 'unknown'
             return ('article', f'article_{clause_id}')
 
         # Section patterns
@@ -375,11 +375,6 @@ class ContractClauseFragmenter(DocProcessor):
     def _extract_references(self, text: str, all_clauses: List[ClauseNode]) -> List[str]:
         """Extract cross-references to other clauses.
 
-        Resolve complete identifiers at the beginning of target headings, not
-        number prefixes or mentions in their bodies. For example, Section 1
-        does not refer to Section 10 or Section 1.1. This does not disambiguate
-        duplicate section identifiers under different articles.
-
         Args:
             text: Clause text.
             all_clauses: All clauses in the document.
@@ -389,28 +384,21 @@ class ContractClauseFragmenter(DocProcessor):
         """
         references = []
 
-        # Match a complete marker, then compare it with the target's heading.
-        # Substring searches would resolve Section 1 to Section 10/1.1 and
-        # would mistake mentions in another clause's body for definitions.
-        boundary = r'(?!\w|\.\d)'
+        # Common reference patterns
         patterns = [
-            (r'\bArticle\s+([IVX\d]+)' + boundary,
-             r'Article\s+([IVX\d]+)' + boundary),
-            (r'\bSection\s+(\d+(?:\.\d+)*)' + boundary,
-             r'Section\s+(\d+(?:\.\d+)*)' + boundary),
-            (r'\bclause\s+(\d+(?:\.\d+)*)' + boundary,
-             r'(?:clause\s+)?(\d+(?:\.\d+)*)' + boundary),
-            (r'第([一二三四五六七八九十百千\d]+)条',
-             r'第([一二三四五六七八九十百千\d]+)条'),
+            r'(Article|ARTICLE)\s+([IVX\d]+)',
+            r'(Section|SECTION)\s+(\d+(\.\d+)*)',
+            r'clause\s+(\d+(\.\d+)*)',
+            r'第(.+?)条',  # Chinese
         ]
 
-        for pattern, heading_pattern in patterns:
+        for pattern in patterns:
             matches = re.finditer(pattern, text, re.IGNORECASE)
             for match in matches:
-                reference_id = match.group(1).casefold()
+                ref_text = match.group(0)
+                # Try to find matching clause
                 for clause in all_clauses:
-                    heading = re.match(heading_pattern, clause.text.lstrip(), re.IGNORECASE)
-                    if heading and heading.group(1).casefold() == reference_id:
+                    if ref_text.lower() in clause.text.lower()[:100]:  # Check beginning of clause
                         if clause.id not in references:
                             references.append(clause.id)
 

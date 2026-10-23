@@ -46,7 +46,7 @@ class YuqueReader(Reader):
         self.session.mount('https://', HTTPAdapter(max_retries=retries))
 
     def _fetch_url_title(self, url: str) -> str:
-        """Fetch the original page title for matching document TOC entries."""
+        """Fetch page title and clean illegal filename characters"""
         headers = {'Cookie': self.cookies} if self.cookies else {}
         try:
             resp = self.session.get(url, headers=headers, timeout=10)
@@ -56,6 +56,7 @@ class YuqueReader(Reader):
             if not tag or not tag.string:
                 return "Untitled"
             title = tag.string.strip()
+            title = re.sub(r'[\\/:*?"<>|]', '-', title)
             return title.replace(' · 语雀', '')
         except requests.exceptions.RequestException:
             return "Request Error"
@@ -140,7 +141,7 @@ class YuqueReader(Reader):
 
         book_title = self._fetch_url_title(url)
         # sanitize titles for metadata keys if needed
-        chars = '\\/:*?"<>|\n\r'
+        chars = '/:*?"<>|\n\r'
         trans = str.maketrans({c: '_' for c in chars})
 
         documents: List[Document] = []

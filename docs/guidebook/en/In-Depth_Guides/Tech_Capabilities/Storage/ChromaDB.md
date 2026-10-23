@@ -21,13 +21,3 @@ metadata:
 
 ### Usage
 [Knowledge_Define_And_Use](../../../In-Depth_Guides/Tutorials/Knowledge/Knowledge_Define_And_Use.md)
-
-### Hierarchical query results
-
-`ChromaHierarchicalStore` starts at `hierarchical_level=0` and descends through
-children of the matched parents for the configured `search_depth`. If no roots
-match, or none of the selected parents has matching children at a required
-level, the query returns an empty list. It does not restart a global search at a
-deeper level or return descendants of an unselected branch. An individual parent
-with no children does not prevent other selected parents from contributing
-matching children.

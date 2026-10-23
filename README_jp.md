@@ -87,7 +87,7 @@ pip install magent-ui ruamel.yaml
 
 sample_apps/workflow_agent_app/bootstrap/platformの下にある[product_application.py](examples/sample_apps/workflow_agent_app/bootstrap/platform/product_application.py)ファイルを実行して、一括起動します。
 
-詳細については、[製品化プラットフォームの迅速な開始](./docs/guidebook/en/How-to/Guide%20to%20Visual%20Agentic%20Workflow%20Platform/Product_Platform_Quick_Start.md) と [製品化プラットフォームの進階ガイド](./docs/guidebook/en/How-to/Guide%20to%20Visual%20Agentic%20Workflow%20Platform/Product_Platform_Advancement_Guide.md) をご覧ください。本機能は 🔗[difizen](https://github.com/difizen/magent) プロジェクトチームと X agentUniverse プロジェクトチームが共同で提供しています。
+詳細については、[製品化プラットフォームの迅速な開始](./docs/guidebook/en/How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Quick_Start.md) と [製品化プラットフォームの進階ガイド](./docs/guidebook/en/How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Advancement_Guide.md) をご覧ください。本機能は 🔗[difizen](https://github.com/difizen/magent) プロジェクトチームと X agentUniverse プロジェクトチームが共同で提供しています。
 
 ****************************************
 

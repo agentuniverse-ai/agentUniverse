@@ -48,9 +48,9 @@ class CSVReader(Reader):
                 raw_content = file.read()
                 if isinstance(raw_content, bytes):
                     encoding = detect_file_encoding(raw_content)
-                    text_stream = io.StringIO(raw_content.decode(encoding), newline="")
+                    text_stream = io.StringIO(raw_content.decode(encoding))
                 elif isinstance(raw_content, str):
-                    text_stream = io.StringIO(raw_content, newline="")
+                    text_stream = io.StringIO(raw_content)
                 else:
                     raise ValueError("Unsupported file object type")
                 should_close = True

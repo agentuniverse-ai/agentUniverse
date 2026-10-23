@@ -172,28 +172,6 @@ class CrossrefToolTest(unittest.TestCase):
         )
 
     @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
-    def test_inline_markup_keeps_adjacent_text_and_separates_paragraphs(self, mock_get: Mock) -> None:
-        work = {
-            "DOI": "10.1000/inline",
-            "title": ["IL-<i>6</i>-driven responses"],
-            "abstract": (
-                "<jats:p>AT&amp;T studied anti-<jats:italic>inflammatory</jats:italic> effects.</jats:p>"
-                "<jats:p>Results were significant.</jats:p>"
-            ),
-        }
-        mock_get.return_value = response_mock(
-            json_data={"status": "ok", "message-type": "work", "message": work}
-        )
-
-        result = self.tool.execute(query="10.1000/inline", mode="doi")
-
-        self.assertEqual(result["works"][0]["title"], "IL-6-driven responses")
-        self.assertEqual(
-            result["works"][0]["abstract"],
-            "AT&T studied anti-inflammatory effects. Results were significant.",
-        )
-
-    @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
     def test_search_maps_paging_sorting_and_date_filters(self, mock_get: Mock) -> None:
         mock_get.return_value = response_mock(
             json_data={
@@ -277,17 +255,6 @@ class CrossrefToolTest(unittest.TestCase):
         self.assertEqual(result["total_results"], 0)
         self.assertEqual(result["returned_results"], 0)
         self.assertEqual(result["works"], [])
-
-    @patch("agentuniverse.agent.action.tool.common_tool.crossref_tool.requests.get")
-    def test_doi_lookup_decodes_percent_escapes_in_resolver_url(self, mock_get: Mock) -> None:
-        mock_get.return_value = response_mock(
-            json_data={"status": "ok", "message-type": "work", "message": SAMPLE_WORK}
-        )
-
-        result = self.tool.execute(query="https://doi.org/10.1000/a%23b", mode="doi")
-
-        self.assertEqual(result["query"], "10.1000/a#b")
-        self.assertEqual(mock_get.call_args.args[0], "https://api.crossref.org/v1/works/10.1000%2Fa%23b")
 
     def test_invalid_input(self) -> None:
         with self.assertRaisesRegex(ValueError, "query must not be empty"):

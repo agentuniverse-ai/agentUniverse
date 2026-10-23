@@ -18,15 +18,15 @@ class ReasoningOutputParser(StrOutputParser):
         if not result:
             return ""
 
-        generation = result[0]
-        message = getattr(generation, "message", None)
-        additional_kwargs = getattr(message, "additional_kwargs", None) or {}
-        if additional_kwargs:
-            reasoning_text = additional_kwargs.get("reasoning_content", "")
+        reasoning_text = ""
+        if result[0].message.additional_kwargs:
+            additional_kwargs = getattr(result[0].message, "additional_kwargs")
+            if additional_kwargs and "reasoning_content" in additional_kwargs:
+                reasoning_text = result[0].message.additional_kwargs.get("reasoning_content")
             return {
-                "text": generation.text,
+                "text": result[0].text,
                 "reasoning_content": reasoning_text
             }
         return {
-            "text": generation.text,
+            "text": result[0].text,
         }

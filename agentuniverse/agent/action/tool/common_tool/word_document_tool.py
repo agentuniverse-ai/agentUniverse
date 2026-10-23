@@ -14,11 +14,7 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 
 class WordDocumentTool(Tool):
-    """Create, append, read, and inspect DOCX files using structured blocks.
-
-    Heading blocks use their level's built-in style unless an explicit
-    paragraph style is supplied, including styles from a template.
-    """
+    """Create, append, read, and inspect DOCX files using structured blocks."""
 
     base_dir: str = "."
     max_read_bytes: int = 20 * 1024 * 1024
@@ -241,9 +237,7 @@ class WordDocumentTool(Tool):
         for block in blocks:
             kind = block["type"]
             if kind == "heading":
-                heading = document.add_heading(block["text"], level=block["level"])
-                if block["style"] is not None:
-                    heading.style = block["style"]
+                document.add_heading(block["text"], level=block["level"])
             elif kind == "paragraph":
                 document.add_paragraph(block["text"], style=block["style"])
             elif kind == "bullet":
@@ -258,11 +252,9 @@ class WordDocumentTool(Tool):
                 table = document.add_table(rows=len(rows), cols=width)
                 if block.get("style"):
                     table.style = block["style"]
-                # Table.cell() rebuilds the full table grid for each lookup.
-                # Traverse each freshly created row once instead.
-                for table_row, row in zip(table.rows, rows):
-                    for column, cell in enumerate(table_row.cells):
-                        cell.text = row[column] if column < len(row) else ""
+                for row_index, row in enumerate(rows):
+                    for column in range(width):
+                        table.cell(row_index, column).text = row[column] if column < len(row) else ""
 
     def _read(self, path: str) -> dict[str, Any]:
         self._check_archive(path)
@@ -309,11 +301,9 @@ class WordDocumentTool(Tool):
         return paragraphs
 
     def _read_tables(self, document: Any, budget: "_ReadBudget") -> list[list[list[str]]]:
-        """Stop at the text budget, marking only omitted table data truncated."""
         tables: list[list[list[str]]] = []
-        source_tables = document.tables
-        for table_index, table in enumerate(source_tables):
-            if not budget.allow_block() or budget.chars_exhausted():
+        for table in document.tables:
+            if not budget.allow_block():
                 budget.mark_truncated()
                 break
             table_rows: list[list[str]] = []
@@ -322,21 +312,15 @@ class WordDocumentTool(Tool):
                     budget.mark_truncated()
                     break
                 values: list[str] = []
-                cells = row.cells
-                for column_index, cell in enumerate(cells):
+                for column_index, cell in enumerate(row.cells):
                     if column_index >= self.max_table_columns:
                         budget.mark_truncated()
                         break
-                    value, cut = budget.consume_text(cell.text)
+                    value, _cut = budget.consume_text(cell.text)
                     values.append(value)
-                    if budget.chars_exhausted():
-                        if (cut or column_index < len(cells) - 1
-                                or row_index < len(table.rows) - 1
-                                or table_index < len(source_tables) - 1):
-                            budget.mark_truncated()
-                        break
                 table_rows.append(values)
                 if budget.chars_exhausted():
+                    budget.mark_truncated()
                     break
             tables.append(table_rows)
             budget.used_block()

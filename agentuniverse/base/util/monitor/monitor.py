@@ -200,8 +200,6 @@ class Monitor(BaseModel):
     def get_invocation_chain():
         """Get the invocation chain in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
-        if trace_id is None:
-            return []
         current_chain = FrameworkContextManager().get_context(trace_id + '_invocation_chain')
         if isinstance(current_chain, list):
             return current_chain
@@ -215,8 +213,6 @@ class Monitor(BaseModel):
     def get_invocation_chain_bak():
         """Get the invocation chain bak version in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
-        if trace_id is None:
-            return []
         current_chain = FrameworkContextManager().get_context(
             trace_id + '_invocation_chain_bak')
         if isinstance(current_chain, list):

@@ -4,13 +4,9 @@
 # @Time    : 2025/9/29
 # @FileName: confluence_reader.py
 from typing import List, Optional, Dict
-import logging
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
-
-
-logger = logging.getLogger(__name__)
 
 
 class ConfluenceReader(Reader):
@@ -23,7 +19,7 @@ class ConfluenceReader(Reader):
     """
 
     def _load_data(self, page_id: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        logger.debug("ConfluenceReader starting page load")
+        print(f"debugging: ConfluenceReader start load page_id={page_id}")
         if not page_id:
             raise ValueError("ConfluenceReader requires page_id")
 

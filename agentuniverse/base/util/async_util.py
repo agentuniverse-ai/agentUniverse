@@ -21,13 +21,13 @@ def _async_runner_thread_target(coro: Coroutine[Any, Any, T], result_queue: Queu
 
     It creates a new event loop in the current thread (the worker thread),
     runs the provided coroutine within that loop, and puts the result
-    or any exception encountered into the result_queue with a success flag.
+    or any exception encountered into the result_queue.
     """
     try:
         result = asyncio.run(coro)
-        result_queue.put((True, result))
+        result_queue.put(result)
     except Exception as e:
-        result_queue.put((False, e))
+        result_queue.put(e)
 
 
 def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] = None) -> T:
@@ -50,8 +50,7 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
                  If None, waits indefinitely.
 
     Returns:
-        The result returned by the awaited coroutine, including exception
-        objects returned as values rather than raised.
+        The result returned by the awaited coroutine.
 
     Raises:
         TypeError: If the provided 'coro' argument is not a coroutine.
@@ -72,13 +71,13 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
     worker_thread.start()
 
     try:
-        succeeded, result = result_queue.get(timeout=timeout)
+        result = result_queue.get(timeout=timeout)
     except queue.Empty:
         raise TimeoutError(f"Operation timed out after {timeout} seconds")
     finally:
         worker_thread.join(timeout=1.0)
 
-    if not succeeded:
+    if isinstance(result, Exception):
         raise result
     else:
         return result

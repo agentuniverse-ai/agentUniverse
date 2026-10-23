@@ -2,7 +2,6 @@
 # -*- coding:utf-8 -*-
 import asyncio
 import inspect
-import logging
 # @Time    : 2024/3/13 14:29
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
@@ -21,9 +20,6 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.util.common_util import parse_and_check_json_markdown
-
-
-logger = logging.getLogger(__name__)
 
 
 class ToolInput(BaseModel):
@@ -178,7 +174,7 @@ class Tool(ComponentBase):
                 if key != 'metadata' and key != 'meta_class':  # Skip metadata field
                     setattr(self, key, value)
         except Exception as e:
-            logger.error("Tool configuration initialization failed", exc_info=True)
+            print(f"Error during configuration initialization: {str(e)}")
         self.name = component_configer.name
         self.description = component_configer.description
         if component_configer.tool_type:

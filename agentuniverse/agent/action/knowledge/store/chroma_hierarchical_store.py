@@ -19,6 +19,7 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 class ChromaHierarchicalStore(ChromaStore):
     """Object encapsulating the ChromaDB store that has vector search enabled.
+
     The ChromaStore object provides insert and retrieval capabilities.
 
     Attributes:
@@ -41,8 +42,7 @@ class ChromaHierarchicalStore(ChromaStore):
             the embedding data of the query is automatically obtained by the embedding model.
 
         Returns:
-            List[Document]: Documents from the final requested level, or an empty
-                list if any level has no matches within the selected branches.
+            List[Document]: List of documents retrieved by the query.
         """
 
         embedding = query.embeddings
@@ -52,15 +52,14 @@ class ChromaHierarchicalStore(ChromaStore):
             ).get_embeddings([query.query_str], text_type="query")[0]
 
         top_k_ids = []
+        current_level_ids = None
         query_result = []
 
         for depth in range(self.search_depth):
             if len(top_k_ids) > 0:
+                all_results = []
                 top_k = self.similarity_top_k_list[depth] if len(
-                    self.similarity_top_k_list) >= depth + 1 else self.similarity_top_k
-
-                # Collect the children of every parent matched at the previous level.
-                merged_results = []
+                                self.similarity_top_k_list) >= depth + 1 else self.similarity_top_k,
                 for parent_id in top_k_ids:
                     # Query for each parent_id
                     if len(embedding) > 0:
@@ -75,28 +74,13 @@ class ChromaHierarchicalStore(ChromaStore):
                             query_texts=[query.query_str],
                             where={"hierarchical_parent": parent_id}
                         )
-                    for i in range(len(results['ids'][0])):
-                        merged_results.append({
-                            'id': results['ids'][0][i],
-                            'text': results['documents'][0][i] if results['documents'] else None,
-                            'embedding': results['embeddings'][0][i] if results['embeddings'] else [],
-                            'metadata': results['metadatas'][0][i] if results['metadatas'] else None,
-                            'distance': results['distances'][0][i] if results['distances'] else 0.0,
-                        })
+                    all_results.extend(results)
+                sorted_results = sorted(all_results,
+                                        key=lambda x: x['distance'])
 
-                # Rank the merged children by distance and keep the top k.
-                merged_results.sort(key=lambda item: item['distance'])
-                merged_results = merged_results[:top_k]
+                # Select the top k results
+                query_result = sorted_results[:top_k]
 
-                # Rebuild a single QueryResult so that to_documents can parse it.
-                query_result = {
-                    'ids': [[item['id'] for item in merged_results]],
-                    'documents': [[item['text'] for item in merged_results]],
-                    'embeddings': [[item['embedding'] for item in merged_results]] if any(
-                        item['embedding'] for item in merged_results) else None,
-                    'metadatas': [[item['metadata'] for item in merged_results]] if any(
-                        item['metadata'] is not None for item in merged_results) else None,
-                }
             else:
                 filter_condition = {
                    "hierarchical_level": depth
@@ -117,10 +101,6 @@ class ChromaHierarchicalStore(ChromaStore):
                     )
 
             documents = self.to_documents(query_result)
-            if not documents:
-                # An exhausted frontier cannot restart a global search
-                # at the next level.
-                return []
             top_k_ids = [doc.id for doc in documents]
 
         return self.to_documents(query_result)
@@ -128,8 +108,6 @@ class ChromaHierarchicalStore(ChromaStore):
     def _initialize_by_component_configer(self,
                                           chroma_store_configer: ComponentConfiger) -> 'DocProcessor':
         super()._initialize_by_component_configer(chroma_store_configer)
-        if hasattr(chroma_store_configer, "similarity_top_k_list"):
-            self.similarity_top_k_list = chroma_store_configer.similarity_top_k_list
         if hasattr(chroma_store_configer, "search_depth"):
             self.search_depth = chroma_store_configer.search_depth
         return self

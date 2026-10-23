@@ -16,11 +16,9 @@ class AgentInputLogSink(BaseFileLogSink):
     log_type: LogTypeEnum = LogTypeEnum.agent_input
 
     def process_record(self, record):
-        """Replace the record message with the formatted agent input."""
         record["message"] = self.generate_log(
             agent_input=record['extra'].get('agent_input')
         )
 
     def generate_log(self, agent_input: Union[str, dict]) -> str:
-        """Format agent input with the current invocation chain."""
         return Monitor.get_invocation_chain_str() + f" Agent input is {agent_input}"

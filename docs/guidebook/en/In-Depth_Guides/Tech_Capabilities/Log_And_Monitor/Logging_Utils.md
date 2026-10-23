@@ -46,11 +46,6 @@ log_format: str = ("<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> "
 ```
 Where `{extra[context_prefix]}` defaults to `default`, and if `LOG_CONTEXT` exists in the framework context, its contents will be used to replaced the default contents.  For more information related to the framework context, please refer to  the  [Framework_Context](../Others/Framework_Context.md) documentation.
 
-Log context values that JSON cannot encode directly, such as `datetime`, `UUID`,
-`Decimal`, or `pathlib.Path`, are formatted with `str(value)`, including values
-inside lists and dictionaries. JSON-native values retain their types, and
-formatting leaves the original context objects unchanged.
-
 ## Global Log Component
 agentUniverse provides a directly usable log component  `logging_util.Logger`, which you can integrate into your project as follows:
 ```python

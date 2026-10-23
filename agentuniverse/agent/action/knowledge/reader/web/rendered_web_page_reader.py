@@ -3,14 +3,10 @@
 
 # @Time    : 2025/9/29
 # @FileName: rendered_web_page_reader.py
-import logging
 from typing import List, Optional, Dict
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
-
-
-LOGGER = logging.getLogger(__name__)
 
 
 class RenderedWebPageReader(Reader):
@@ -22,12 +18,12 @@ class RenderedWebPageReader(Reader):
     """
 
     def _load_data(self, url: str, ext_info: Optional[Dict] = None) -> List[Document]:
-        LOGGER.debug("RenderedWebPageReader start load url=%s", url)
+        print(f"debugging: RenderedWebPageReader start load url={url}")
         if not isinstance(url, str) or not url:
             raise ValueError("RenderedWebPageReader._load_data requires a non-empty url string")
 
         html = self._render_and_get_html(url)
-        LOGGER.debug("RenderedWebPageReader rendered html length=%s", len(html))
+        print(f"debugging: RenderedWebPageReader rendered html length={len(html)}")
 
         # Reuse extraction logic from WebPageReader by importing on demand
         from .web_page_reader import WebPageReader
@@ -49,7 +45,7 @@ class RenderedWebPageReader(Reader):
                 "Install with `pip install playwright` and run `playwright install`"
             )
 
-        LOGGER.debug("RenderedWebPageReader using playwright")
+        print("debugging: RenderedWebPageReader using playwright")
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             try:

@@ -5,13 +5,9 @@
 # @FileName: image_ocr_reader.py
 from typing import List, Optional, Dict, Union
 from pathlib import Path
-import logging
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
-
-
-logger = logging.getLogger(__name__)
 
 
 class ImageOCRReader(Reader):
@@ -25,14 +21,14 @@ class ImageOCRReader(Reader):
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
-        logger.debug("ImageOCRReader starting image load")
+        print(f"debugging: ImageOCRReader start load file={file}")
         if isinstance(file, str):
             file = Path(file)
         if not isinstance(file, Path) or not file.exists():
             raise FileNotFoundError(f"ImageOCRReader file not found: {file}")
 
         text, engine = self._ocr(file)
-        logger.debug("ImageOCRReader extracted text with engine=%s length=%d", engine, len(text))
+        print(f"debugging: ImageOCRReader extracted by {engine}, length={len(text)}")
 
         metadata: Dict = {"source": "image", "file_name": file.name, "engine": engine}
         if ext_info:
@@ -43,7 +39,7 @@ class ImageOCRReader(Reader):
         # Try PaddleOCR
         try:
             from paddleocr import PaddleOCR  # type: ignore
-            logger.debug("ImageOCRReader trying PaddleOCR")
+            print("debugging: ImageOCRReader using PaddleOCR")
             ocr = PaddleOCR(use_angle_cls=True, lang='ch')
             result = ocr.ocr(str(file), cls=True)
             lines: List[str] = []
@@ -54,23 +50,23 @@ class ImageOCRReader(Reader):
                         lines.append(txt)
             return "\n".join(lines), "paddleocr"
         except Exception as e_paddle:
-            logger.debug("ImageOCRReader PaddleOCR failed; trying pytesseract", exc_info=True)
+            print(f"debugging: ImageOCRReader PaddleOCR failed: {e_paddle}")
 
         # Fallback to pytesseract
         try:
             from PIL import Image  # type: ignore
             import pytesseract  # type: ignore
-            logger.debug("ImageOCRReader trying pytesseract")
+            print("debugging: ImageOCRReader using pytesseract")
             img = Image.open(file)
             text = pytesseract.image_to_string(img, lang='chi_sim+eng')
             return text, "pytesseract"
         except Exception as e_tess:
-            logger.debug("ImageOCRReader pytesseract failed; trying easyocr", exc_info=True)
+            print(f"debugging: ImageOCRReader pytesseract failed: {e_tess}")
 
         # Fallback to easyocr
         try:
             import easyocr  # type: ignore
-            logger.debug("ImageOCRReader trying easyocr")
+            print("debugging: ImageOCRReader using easyocr")
             reader = easyocr.Reader(['ch_sim', 'en'])
             result = reader.readtext(str(file), detail=0)
             return "\n".join(result), "easyocr"

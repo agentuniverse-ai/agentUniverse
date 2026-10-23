@@ -3,7 +3,6 @@
 import asyncio
 import os
 from contextlib import AsyncExitStack, ExitStack
-from functools import partial
 # @Time    : 2024/3/11 16:02
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
@@ -58,13 +57,12 @@ class SyncAsyncExitStack:
         Args:
             func: An async callable (e.g., `session.initialize`).
             *args: Positional args forwarded to the callable.
-            **kwargs: Keyword args bound to the callable before portal dispatch;
-                AnyIO's portal call accepts positional arguments only.
+            **kwargs: Keyword args forwarded to the callable.
 
         Returns:
             Any: The result of the awaited function.
         """
-        return self._portal.call(partial(func, *args, **kwargs))
+        return self._portal.call(func, *args, **kwargs)
 
     def enter_async_context(self, async_cm):
         """Enter an async context manager from sync code.
@@ -79,12 +77,8 @@ class SyncAsyncExitStack:
         return self._stack.enter_context(sync_cm)
 
     def callback(self, func: Callable, *args, **kwargs):
-        """Register deferred cleanup with positional and keyword arguments.
-
-        Registration runs via the portal; the callback is invoked only when
-        the stack closes. Return the original callback as ExitStack does.
-        """
-        return self._portal.call(partial(self._stack.callback, func, *args, **kwargs))
+        """Register a callback on the underlying ExitStack via the portal."""
+        return self._portal.call(self._stack.callback, func, *args, **kwargs)
 
     def close(self):
         """Close the ExitStack and tear down the AnyIO blocking portal."""
@@ -135,8 +129,7 @@ class MCPTempClient:
                     MCPTempClient: self with `session` field initialized.
 
                 Raises:
-                    BaseException: Propagates connection/initialization failures,
-                        including cancellation, after closing acquired resources.
+                    Exception: Propagates connection/initialization errors.
                 """
         try:
             session = await MCPSessionManager().connect_to_server(
@@ -146,7 +139,7 @@ class MCPTempClient:
             )
             self.__session = session
             return self
-        except BaseException:
+        except Exception:
             await self.exit_stack.aclose()
             raise
 
