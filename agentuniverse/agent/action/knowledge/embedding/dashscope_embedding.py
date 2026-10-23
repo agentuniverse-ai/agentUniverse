@@ -7,7 +7,7 @@
 # @FileName: dashscope_embedding.py
 import aiohttp
 import requests
-from typing import List, Generator, Optional
+from typing import Any, List, Generator, Optional
 from pydantic import Field
 import json
 
@@ -31,6 +31,30 @@ class DashscopeEmbedding(Embedding):
     dashscope_api_key: Optional[str] = Field(
         default_factory=lambda: get_from_env("DASHSCOPE_API_KEY")
     )
+
+    @staticmethod
+    def _order_batch_embeddings(data: List[dict[str, Any]], batch_size: int) -> List[dict[str, Any]]:
+        """Validate and order embeddings returned for one request batch."""
+        if not data:
+            return data
+        if any(not isinstance(item, dict) for item in data):
+            raise ValueError("DashScope embedding response contains a non-object row")
+
+        has_indices = any("text_index" in item for item in data)
+        if not has_indices:
+            return data
+
+        indices = []
+        for item in data:
+            index = item.get("text_index")
+            if isinstance(index, bool) or not isinstance(index, int):
+                raise ValueError("DashScope embedding text_index must be an integer")
+            if not 0 <= index < batch_size:
+                raise ValueError("DashScope embedding text_index is outside the request batch")
+            indices.append(index)
+        if len(set(indices)) != len(indices) or len(indices) != batch_size:
+            raise ValueError("DashScope embedding response contains incomplete or duplicate text_index values")
+        return sorted(data, key=lambda item: item["text_index"])
 
     def get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """
@@ -86,6 +110,7 @@ class DashscopeEmbedding(Embedding):
             data = resp_json.get("output")
             if data:
                 data = data["embeddings"]
+                data = self._order_batch_embeddings(data, len(batch))
                 batch_result = [d['embedding'] for d in data if 'embedding' in d]
                 result += batch_result
             else:
@@ -154,6 +179,7 @@ class DashscopeEmbedding(Embedding):
             data = resp_json.get("output")
             if data:
                 data = data["embeddings"]
+                data = self._order_batch_embeddings(data, len(batch))
                 batch_result = [d['embedding'] for d in data if
                                 'embedding' in d]
                 result += batch_result
