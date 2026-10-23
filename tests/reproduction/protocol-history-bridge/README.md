@@ -42,3 +42,19 @@ machine hostnames are removed from checked-in JUnit only; original hashes are
 recorded. Package deprecation/mixed Pydantic warnings and read-only pytest-cache
 warnings remain visible in local logs. No full-repository or paid-provider test,
 merge acceptance, or competition score is claimed.
+
+## Checked-in evidence
+
+[Machine-readable results and original hashes](evidence.json) · [rendered report](report.html) · [actual report screenshot](report.png)
+
+| Environment / scope | Passed | Failed | Errors | Skipped | Raw JUnit | Resolved environment |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| Linux 3.10 full | 61 | 0 | 0 | 0 | [XML](junit-linux-py310.xml) | [versions](environment-linux-py310.json) |
+| Linux 3.12 full | 61 | 0 | 0 | 0 | [XML](junit-linux-py312.xml) | [versions](environment-linux-py312.json) |
+| Windows 3.10 protocol/LLM subset | 49 | 0 | 0 | 0 | [XML](junit-windows-subset-py310.xml) | [versions](environment-windows-subset-py310.json) |
+| Windows 3.12 protocol/LLM subset | 49 | 0 | 0 | 0 | [XML](junit-windows-subset-py312.xml) | [versions](environment-windows-subset-py312.json) |
+| Windows 3.10 expanded | 55 | 6 | 0 | 0 | [XML](junit-windows-expanded-py310.xml) | [versions](environment-windows-expanded-py310.json) |
+| Windows 3.12 expanded | 55 | 6 | 0 | 0 | [XML](junit-windows-expanded-py312.xml) | [versions](environment-windows-expanded-py312.json) |
+| Windows 3.12 upstream image baseline | 6 | 6 | 0 | 0 | [XML](junit-windows-baseline-images-py312.xml) | Same dependency selection; baseline source only |
+
+Implementation source snapshot: `8bd991a9936ee9462fb0a1c7feedb92d343b4e9a`. This commit was recorded after the runs, with the tested production and test contents unchanged. Evidence files are added in a later documentation commit.
