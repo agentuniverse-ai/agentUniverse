@@ -188,7 +188,9 @@ class FinancialIndicatorExtractor(DocProcessor):
         Returns:
             List of extracted FinancialMetric objects. Monetary values include
             the matched million/billion scale, including amount-before-revenue
-            phrases such as "$3 billion in revenue".
+            phrases such as "$3 billion in revenue". Terminal full stops are
+            removed from captured numbers before conversion, so sentence-final
+            decimal facts are retained.
         """
         metrics = []
 
@@ -291,7 +293,7 @@ class FinancialIndicatorExtractor(DocProcessor):
 
                 for match in matches:
                     try:
-                        value_str = match.group(1).replace(',', '')
+                        value_str = match.group(1).replace(',', '').rstrip('.')
                         value = float(value_str)
 
                         # Check if in parentheses (accounting negative)
