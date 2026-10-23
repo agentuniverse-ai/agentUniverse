@@ -8,7 +8,7 @@ import json
 import re
 from datetime import date
 from typing import Any, ClassVar, Dict, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import requests
 from pydantic import Field
@@ -605,12 +605,14 @@ class SemanticScholarTool(Tool):
     @classmethod
     def _normalize_paper_id(cls, value: str) -> str:
         paper_id = value.strip()
-        paper_id = re.sub(
-            r"^https?://(?:www\.)?semanticscholar\.org/paper/(?:[^/]+/)?",
-            "",
-            paper_id,
-            flags=re.I,
-        )
+        parsed_url = urlsplit(paper_id)
+        if (
+            parsed_url.scheme.lower() in {"http", "https"}
+            and parsed_url.netloc.lower().removeprefix("www.") == "semanticscholar.org"
+            and parsed_url.path.lower().startswith("/paper/")
+        ):
+            path_parts = [part for part in parsed_url.path.split("/") if part]
+            paper_id = path_parts[-1] if len(path_parts) >= 2 else ""
         paper_id = re.sub(r"^https?://(?:dx\.)?doi\.org/", "DOI:", paper_id, flags=re.I)
         paper_id = re.sub(r"^https?://arxiv\.org/(?:abs|pdf)/", "ARXIV:", paper_id, flags=re.I)
         paper_id = re.sub(r"\.pdf$", "", paper_id, flags=re.I)
