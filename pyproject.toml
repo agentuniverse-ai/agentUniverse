@@ -86,8 +86,8 @@ redis = { version = "^5.0.0", optional = true }
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
 store_ext = ["pymilvus", "psycopg", "pgvector", "redis"]
-colbert_ext = ["sentence-transformers", "torch"]
 office_ext = ["python-docx", "python-pptx"]
+colbert_ext = ["sentence-transformers", "torch"]
 pdf_ext = ["pypdf"]
 
 [tool.poetry.group.dev.dependencies]
