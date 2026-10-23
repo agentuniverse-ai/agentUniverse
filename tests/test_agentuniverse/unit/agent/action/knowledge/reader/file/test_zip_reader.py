@@ -10,6 +10,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 from agentuniverse.agent.action.knowledge.reader.file.zip_reader import ZipReader
 
@@ -753,11 +754,32 @@ class TestZipReader(unittest.TestCase):
             archive.writestr("image.png", bytes([0x89, 0x50, 0x4E, 0x47] + [0] * 100))
             archive.writestr("data.bin", bytes(range(256)))
             archive.writestr("text.txt", "文本内容")
-        
+
         docs = self.reader._load_data(archive_path)
-        
+
         text_docs = [d for d in docs if d.metadata.get("file_name") == "text.txt"]
         self.assertEqual(len(text_docs), 1)
+
+    def test_reader_failure_is_logged_and_member_skipped(self) -> None:
+        """A reader error on a member is logged (not silently swallowed) and the member is skipped, while healthy members still load."""
+        archive_path = Path(self.temp_dir.name) / "reader_error.zip"
+        with zipfile.ZipFile(archive_path, "w") as archive:
+            archive.writestr("good.txt", "正常内容")
+            archive.writestr("bad.csv", "col1,col2\nval1,val2")
+
+        failing_reader = mock.MagicMock()
+        failing_reader.load_data.side_effect = RuntimeError("simulated reader failure")
+
+        with mock.patch(
+            "agentuniverse.agent.action.knowledge.reader.file.zip_reader.LOGGER"
+        ) as log, mock.patch.object(self.reader, "_get_reader") as get_reader:
+            get_reader.return_value = failing_reader
+            docs = self.reader._load_data(archive_path)
+
+        # The healthy text member still loads; the failing CSV member is skipped.
+        self.assertEqual(len(docs), 1)
+        self.assertEqual(docs[0].metadata["file_name"], "good.txt")
+        log.warning.assert_called()
 
 
 if __name__ == "__main__":
