@@ -17,13 +17,13 @@ class SqlLangchainTool(LangChainTool):
     db_wrapper_name: Optional[str] = ""
     clz: Type[BaseTool] = BaseTool
 
-    def execute(self, input: str, callbacks):
+    def execute(self, input: str, callbacks=None):
         """Initialize the SQL tool lazily and execute the supplied input."""
         if self.tool is None:
             self.get_sql_database()
         return super().execute(input, callbacks)
 
-    async def async_execute(self, input: str, callbacks):
+    async def async_execute(self, input: str, callbacks=None):
         if self.tool is None:
             self.get_sql_database()
         return await super().async_execute(input, callbacks)
