@@ -11,16 +11,22 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional, ClassVar
 import uuid
-from qdrant_client import QdrantClient
-from qdrant_client.models import (
-    Distance,
-    VectorParams,
-    NamedVector,
-    PointStruct,
-    Filter,
-    FieldCondition,
-    MatchValue,
-)
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import (
+        Distance,
+        VectorParams,
+        NamedVector,
+        PointStruct,
+        Filter,
+        FieldCondition,
+        MatchValue,
+    )
+except ImportError as e:
+    raise ImportError(
+        "qdrant-client is required to use QdrantMemoryStorage. "
+        "Install it with: pip install qdrant-client"
+    ) from e
 
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
