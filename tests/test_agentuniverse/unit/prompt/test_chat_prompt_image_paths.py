@@ -1,6 +1,7 @@
 """Local image filenames and file URIs use different escaping rules."""
 
 import base64
+from unittest.mock import mock_open, patch
 
 import pytest
 
@@ -32,3 +33,16 @@ def test_remote_image_url_and_detail_mapping_are_unchanged():
     prompt = ChatPrompt()
     prompt.generate_image_prompt([url, detail])
     assert [message.content[0]["image_url"] for message in prompt.messages] == [{"url": url}, detail]
+
+
+def test_windows_drive_path_is_treated_as_a_local_image():
+    """A drive-qualified Windows path must not be mistaken for a URL scheme."""
+    prompt = ChatPrompt()
+    with patch("builtins.open", mock_open(read_data=PNG)) as opened:
+        prompt.generate_image_prompt([r"C:\\images\\photo.png"])
+
+    opened.assert_called_once_with(r"C:\\images\\photo.png", "rb")
+    assert len(prompt.messages) == 1
+    prefix, data = prompt.messages[0].content[0]["image_url"]["url"].split(",", 1)
+    assert prefix == "data:image/png;base64"
+    assert base64.b64decode(data) == PNG
