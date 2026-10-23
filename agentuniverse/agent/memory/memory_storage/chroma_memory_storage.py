@@ -149,11 +149,14 @@ class ChromaMemoryStorage(MemoryStorage):
             filters["$and"].append({'agent_id': agent_id})
         if source:
             filters["$and"].append({'source': source})
-        if kwargs.get('type'):
-            if isinstance(kwargs.get('type'), list):
-                types = kwargs.get('type')
-            elif isinstance(kwargs.get('type'), str):
-                types = [kwargs.get('type')]
+        type_filter = kwargs.get('type')
+        if type_filter:
+            if isinstance(type_filter, list):
+                types = type_filter
+            elif isinstance(type_filter, str):
+                types = [type_filter]
+            else:
+                raise TypeError("ChromaMemoryStorage type filter must be a string or list")
             filters["$and"].append({'type': {'$in': types}})
         if len(filters["$and"]) < 2:
             filters = filters["$and"][0] if len(filters["$and"]) == 1 else {}
