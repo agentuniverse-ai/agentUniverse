@@ -135,6 +135,11 @@ metadata:
 
 Here, `sqldb_table_name` is the table name for SqlAlchemy, and `sqldb_wrapper_name` is the instance name of the sqldb_wrapper domain component.
 
+Different `sqldb_table_name` values can share one database. New tables use
+table-specific index names, so their indexes do not collide on SQLite or
+PostgreSQL. Existing tables and legacy index names are left unchanged; no
+index migration is required.
+
 An example configuration for mysql_sqldb_wrapper is as follows:
 
 ```yaml

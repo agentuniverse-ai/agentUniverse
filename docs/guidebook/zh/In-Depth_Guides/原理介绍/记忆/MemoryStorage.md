@@ -128,6 +128,9 @@ metadata:
 
 其中`sqldb_table_name`为sqlalchemy的table名称，`sqldb_wrapper_name`为sqldb_wrapper领域组件的实例名称。
 
+不同的 `sqldb_table_name` 可以共用一个数据库。新表的索引名包含表名，避免在 SQLite
+或 PostgreSQL 中与其他记忆表冲突。已有表和旧索引名保持不变，无需迁移索引。
+
 mysql_sqldb_wrapper的示例配置如下：
 
 ```yaml
