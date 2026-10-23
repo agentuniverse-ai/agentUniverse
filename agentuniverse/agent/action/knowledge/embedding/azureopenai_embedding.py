@@ -62,7 +62,7 @@ class AzureOpenAIEmbedding(Embedding):
             return [item.embedding for item in response.data]
 
         except Exception as e:
-            raise Exception(f"Failed to get embeddings: {e}")
+            raise Exception(f"Failed to get embeddings: {e}") from e
 
 
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
@@ -92,7 +92,7 @@ class AzureOpenAIEmbedding(Embedding):
             return [item.embedding for item in response.data]
 
         except Exception as e:
-            raise Exception(f"Failed to get embeddings: {e}")
+            raise Exception(f"Failed to get embeddings: {e}") from e
 
 
     def as_langchain(self) -> Any:
