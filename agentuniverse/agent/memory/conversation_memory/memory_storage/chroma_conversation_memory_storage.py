@@ -124,10 +124,12 @@ class ChromaConversationMemoryStorage(MemoryStorage):
             metadata['target_type'] = message.target_type if message.target_type else ''
             metadata['type'] = message.type if message.type else ''
             metadata['session_id'] = session_id if session_id else message.conversation_id
-            metadata['params'] = message.metadata.get('params')
-            metadata['prefix'] = message.metadata.get('prefix')
-            metadata['pair_id'] = message.metadata.get('pair_id')
+            message_metadata = message.metadata or {}
+            metadata['params'] = message_metadata.get('params')
+            metadata['prefix'] = message_metadata.get('prefix')
+            metadata['pair_id'] = message_metadata.get('pair_id')
             metadata['additional_args'] = json.dumps(message.additional_args)
+            metadata = {key: value for key, value in metadata.items() if value is not None}
             self._collection.add(
                 ids=[message.id if message.id else str(uuid.uuid4())],
                 documents=[message.content],
