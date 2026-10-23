@@ -112,6 +112,7 @@ class TestMultiChannelFusion(unittest.TestCase):
         self.assertEqual(len(out), 2)
         self.assertEqual(out[0].text, "repeat")
         self.assertAlmostEqual(out[0].metadata["relevance_score"], 1.0 / 61)
+        self.assertAlmostEqual(out[1].metadata["relevance_score"], 1.0 / 62)
 
     def test_dedup_by_text(self) -> None:
         """dedup_key='text' collapses documents with equal content."""
