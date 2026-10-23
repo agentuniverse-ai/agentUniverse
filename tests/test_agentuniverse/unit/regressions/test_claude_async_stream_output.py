@@ -1,5 +1,6 @@
 import asyncio
 from types import SimpleNamespace
+from anthropic.types import TextDelta
 
 from agentuniverse.llm.default.claude_llm import ClaudeLLM
 
@@ -24,7 +25,7 @@ def test_claude_async_stream_does_not_write_chunks_to_stdout(capsys):
         SimpleNamespace(type="message_start"),
         SimpleNamespace(
             type="content_block_delta",
-            delta=SimpleNamespace(text="hello"),
+            delta=TextDelta(type="text_delta", text="hello"),
             model_dump=lambda: {"type": "content_block_delta"},
         ),
     ])

@@ -114,15 +114,21 @@ class ClaudeLLM(LLM):
         return LLMOutput(text=text, raw=data)
 
     def generate_stream_result(self, chat_completion: Iterator):
+        """Yield text deltas, skipping tool input and other non-text events."""
         for chunk in chat_completion:
             if chunk.type != 'content_block_delta':
+                continue
+            if chunk.delta.type != 'text_delta':
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
         self.close()
 
     async def agenerate_stream_result(self, chat_completion: AsyncIterator):
+        """Yield text deltas, skipping tool input and other non-text events."""
         async for chunk in chat_completion:
             if chunk.type != 'content_block_delta':
+                continue
+            if chunk.delta.type != 'text_delta':
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
         await self.aclose()
