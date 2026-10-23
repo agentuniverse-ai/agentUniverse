@@ -76,7 +76,8 @@ class SummarizationProcessor(DocProcessor):
             summarizer (documents beyond this count are dropped to bound the
             input size).
         max_sentences (int): Number of sentences kept by the extractive
-            summarizer. Ignored in LLM mode.
+            summarizer. Nonpositive values produce an empty extractive summary.
+            Ignored in LLM mode.
         query_aware (bool): Whether the summary should be biased towards the
             query — extractive mode boosts sentences containing query terms,
             LLM mode asks the model to focus on the query.
@@ -184,7 +185,7 @@ class SummarizationProcessor(DocProcessor):
         order. Texts with fewer sentences than ``max_sentences`` are returned
         unchanged.
         """
-        if not text.strip():
+        if self.max_sentences <= 0 or not text.strip():
             return ""
         sentences = self._split_sentences(text)
         if len(sentences) <= self.max_sentences:
