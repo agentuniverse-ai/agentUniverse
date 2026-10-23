@@ -3,8 +3,9 @@
 
 # @Time    : 2025/9/29
 # @FileName: web_page_reader.py
+from email.message import Message
 import logging
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -25,6 +26,9 @@ class WebPageReader(Reader):
         - readability-lxml (fallback for extraction)
         - beautifulsoup4 (last-resort plain text)
         - httpx or requests
+
+    Explicit HTTP charset declarations are respected. Otherwise, HTML bytes
+    are passed to the extractor so it can read a BOM or in-document charset.
     """
 
     def _load_data(self, url: str, ext_info: Optional[Dict] = None) -> List[Document]:
@@ -45,7 +49,7 @@ class WebPageReader(Reader):
 
         return [Document(text=text, metadata=metadata)]
 
-    def _fetch_html(self, url: str) -> str:
+    def _fetch_html(self, url: str) -> Union[str, bytes]:
         try:
             import httpx  # type: ignore
             LOGGER.debug("WebPageReader using httpx")
@@ -55,7 +59,7 @@ class WebPageReader(Reader):
             }) as client:
                 resp = client.get(url, follow_redirects=True)
                 resp.raise_for_status()
-                return resp.text
+                return self._response_html(resp)
         except Exception as e_httpx:
             LOGGER.debug("WebPageReader httpx failed", exc_info=e_httpx)
             try:
@@ -66,11 +70,20 @@ class WebPageReader(Reader):
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 })
                 resp.raise_for_status()
-                return resp.text
+                return self._response_html(resp)
             except Exception as e_requests:
                 raise RuntimeError(f"Failed to fetch url: {url}. httpx_error={e_httpx}, requests_error={e_requests}")
 
-    def _extract_main_text(self, html: str, url: str) -> (str, Dict):
+    @staticmethod
+    def _response_html(response) -> Union[str, bytes]:
+        """Keep HTML encoding hints unless HTTP explicitly supplies a charset."""
+        content_type = Message()
+        content_type["Content-Type"] = response.headers.get("Content-Type", "")
+        if content_type.get_content_charset():
+            return response.text
+        return response.content
+
+    def _extract_main_text(self, html: Union[str, bytes], url: str) -> (str, Dict):
         # Try trafilatura
         try:
             import trafilatura  # type: ignore
@@ -84,9 +97,13 @@ class WebPageReader(Reader):
         # Fallback to readability
         try:
             from readability import Document as ReadabilityDocument  # type: ignore
-            from bs4 import BeautifulSoup  # type: ignore
+            from bs4 import BeautifulSoup, UnicodeDammit  # type: ignore
             LOGGER.debug("WebPageReader using readability-lxml")
-            article_html = ReadabilityDocument(html).summary(html_partial=True)
+            readability_html = (
+                UnicodeDammit(html, is_html=True).unicode_markup
+                if isinstance(html, bytes) else html
+            )
+            article_html = ReadabilityDocument(readability_html).summary(html_partial=True)
             soup = BeautifulSoup(article_html, "lxml")
             text = soup.get_text("\n")
             text = "\n".join([line.strip() for line in text.splitlines() if line.strip()])
