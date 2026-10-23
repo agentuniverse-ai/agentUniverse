@@ -201,9 +201,8 @@ class TruncateCompressor(ContextCompressor):
             # by the segment's own `tokens`, and `remaining_tokens` stops the
             # loop.
             importance = self._calculate_importance(seg)
-            allocated_tokens = int(
-                math.ceil((importance / total_importance) * target_tokens)
-            ) if total_importance > 0 else 0
+            # `math.ceil()` already returns an int, so no outer `int()` cast.
+            allocated_tokens = math.ceil((importance / total_importance) * target_tokens) if total_importance > 0 else 0
 
             # Ensure minimum tokens
             must_keep = preserve_all or (
