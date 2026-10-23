@@ -26,6 +26,7 @@ class FrameworkContext:
 
     def __enter__(self):
         """Preserve the prior context and set a new one."""
+        self.old_state = {}
         for key, value in self.context.items():
             if FrameworkContextManager().is_context_exist(key):
                 self.old_state[key] = FrameworkContextManager().get_context(key)
