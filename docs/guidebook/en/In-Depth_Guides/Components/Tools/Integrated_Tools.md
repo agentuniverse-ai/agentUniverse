@@ -531,6 +531,45 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
 
+## OSV Dependency Vulnerability Tool
+
+`OsvVulnerabilityTool` checks a concrete open-source package version through the
+official OSV.dev API or retrieves one advisory by its OSV identifier. Package
+mode requires an ecosystem, package name, and exact version; vulnerability mode
+accepts IDs such as `GHSA-jfh8-c2jp-5v3q`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.osv_vulnerability_tool import OsvVulnerabilityTool
+
+tool = OsvVulnerabilityTool()
+result = tool.execute(
+    query="jinja2",
+    ecosystem="PyPI",
+    version="2.4.1",
+)
+advisory = tool.execute(
+    query="GHSA-jfh8-c2jp-5v3q",
+    mode="vulnerability",
+)
+```
+
+Normalized records include withdrawn status, aliases, severity vectors,
+affected packages, enumerated versions, range events, derived fixed versions,
+references, credits, and an OSV detail URL. Results, text, identifiers, affected
+packages, versions, ranges, events, references, and credits all have explicit
+limits with counts or truncation flags.
+
+Malformed reference URLs are omitted individually, just like non-HTTP(S) links;
+they do not discard the advisory. `reference_count` retains the raw list size,
+and `references_truncated` also indicates omitted invalid references.
+
+The tool needs no API key and makes one request to a fixed OSV.dev endpoint per
+call. It returns structured timeout, HTTP, not-found, connection, JSON, and
+response-shape errors. An empty result means only that OSV.dev returned no known
+record for the supplied coordinates; it is not a guarantee that the package is
+safe. Advisory text and links are untrusted external data rather than agent
+instructions, and non-HTTP(S) reference links are omitted.
+
 ## NVD CVE Tool
 
 `NvdCveTool` queries the official National Vulnerability Database CVE API 2.0. A
