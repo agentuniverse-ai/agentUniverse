@@ -11,7 +11,7 @@ import tempfile
 import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
-from typing import Dict, List, Optional, Union, Type
+from typing import Dict, List, Optional, Union
 
 from agentuniverse.agent.action.knowledge.reader.file.code_reader import CODE_FILE_EXTENSIONS, CodeReader
 from agentuniverse.agent.action.knowledge.reader.file.csv_reader import CSVReader
@@ -124,15 +124,11 @@ class ZipReader(Reader):
                     )
                 )
             elif suffix in TEXT_FALLBACK_EXTENSIONS:
-                documents.extend(
-                    self._handle_text_fallback(archive, info, metadata)
-                )
+                documents.extend(self._handle_text_fallback(archive, info, metadata))
             elif suffix in CODE_FILE_EXTENSIONS or suffix in self._reader_classes:
                 reader = self._get_reader(suffix)
                 if reader:
-                    documents.extend(
-                        self._handle_reader_with_temp(archive, info, temp_dir, metadata, reader)
-                    )
+                    documents.extend(self._handle_reader_with_temp(archive, info, temp_dir, metadata, reader))
         return documents
 
     def _handle_nested_zip(
@@ -203,9 +199,11 @@ class ZipReader(Reader):
         temp_dir: Path,
     ) -> Path:
         name = PurePosixPath(info.filename).name
-        if not name:
-            name = uuid.uuid4().hex
-        file_path = temp_dir / f"{uuid.uuid4().hex}_{name}"
+        suffix = PurePosixPath(name).suffix.lower() if name else ""
+        # Archive-controlled names can exceed platform path limits or contain
+        # reserved characters. Readers only need the suffix; metadata keeps
+        # the original member name separately.
+        file_path = temp_dir / f"{uuid.uuid4().hex}{suffix}"
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with archive.open(info) as source, open(file_path, "wb") as target:
             shutil.copyfileobj(source, target, self.stream_chunk_size)

@@ -1,16 +1,164 @@
+import importlib.util
 import os
-import tempfile
 import shutil
-from pathlib import Path
-from typing import List, Union, Optional, Dict, Type
+import tempfile
+import threading
+import uuid
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import Dict, List, NoReturn, Optional, Type, Union
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 
+
+def _raise_reader_error(
+    error_type: type[Exception],
+    message: str,
+    cause: Exception | None = None,
+) -> NoReturn:
+    """Raise a reader error while preserving an optional exception cause."""
+    if cause is None:
+        raise error_type(message)
+    raise error_type(message) from cause
+
+
+class _ExtractionBudget:
+    """Shared limits for one root archive and all of its nested archives."""
+
+    def __init__(self, max_file_size: int, max_total_size: int, max_files: int):
+        self.max_file_size = max_file_size
+        self.max_total_size = max_total_size
+        self.max_files = max_files
+        self.file_count = 0
+        self.reserved_bytes = 0
+        self.written_bytes = 0
+        self.lock = threading.Lock()
+
+    def claim(self, size: int) -> bool:
+        """Reserve a declared member size, returning False when a limit is full."""
+        if size < 0 or size > self.max_file_size:
+            return False
+        with self.lock:
+            if self.file_count >= self.max_files:
+                return False
+            if self.reserved_bytes + size > self.max_total_size:
+                return False
+            self.file_count += 1
+            self.reserved_bytes += size
+        return True
+
+    def reserve_write(self, size: int) -> None:
+        """Enforce the total limit against bytes actually produced by py7zr."""
+        with self.lock:
+            if self.written_bytes + size > self.max_total_size:
+                _raise_reader_error(ValueError, "7Z archive exceeds maximum total size")
+            self.written_bytes += size
+
+
+class _BoundedFileIO:
+    """py7zr-compatible writer backed by a short, generated temporary path."""
+
+    def __init__(
+        self,
+        temp_dir: Path,
+        suffix: str,
+        expected_size: int,
+        budget: _ExtractionBudget,
+    ):
+        self.path = temp_dir / f"{uuid.uuid4().hex}{suffix}"
+        self._file = self.path.open("w+b")
+        self._expected_size = expected_size
+        self._budget = budget
+        self._written = 0
+        self._closed = False
+
+    def write(self, data: Union[bytes, bytearray]) -> int:
+        size = len(data)
+        if self._written + size > self._expected_size:
+            _raise_reader_error(ValueError, "7Z member produced more data than declared")
+        if self._written + size > self._budget.max_file_size:
+            _raise_reader_error(ValueError, "7Z entry exceeds maximum size")
+        self._budget.reserve_write(size)
+        written = self._file.write(data)
+        self._written += written
+        return written
+
+    def read(self, size: Optional[int] = None) -> bytes:
+        return self._file.read(-1 if size is None else size)
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self._file.seek(offset, whence)
+
+    def flush(self) -> None:
+        self._file.flush()
+
+    def size(self) -> int:
+        return self._written
+
+    def close(self) -> None:
+        if not self._closed:
+            try:
+                # File.close() flushes and releases the handle even if flushing
+                # fails. A separate flush here could prevent closing entirely.
+                self._file.close()
+            finally:
+                self._closed = self._file.closed
+
+
+class _BoundedWriterFactory:
+    """Map validated archive names to bounded, generated temporary files."""
+
+    def __init__(
+        self,
+        temp_dir: Path,
+        selected_sizes: Dict[str, int],
+        budget: _ExtractionBudget,
+    ):
+        self.temp_dir = temp_dir.resolve()
+        self.selected_sizes = selected_sizes
+        self.budget = budget
+        self.products: Dict[str, _BoundedFileIO] = {}
+        self.lock = threading.Lock()
+
+    def create(self, filename: str) -> _BoundedFileIO:
+        try:
+            relative = Path(filename).resolve().relative_to(self.temp_dir)
+        except ValueError as exc:
+            _raise_reader_error(ValueError, "7Z extraction target escaped the temporary root", exc)
+        member_name = PurePosixPath(relative.as_posix()).as_posix()
+        if member_name not in self.selected_sizes:
+            _raise_reader_error(ValueError, f"Unexpected 7Z extraction target: {member_name}")
+        suffix = PurePosixPath(member_name).suffix.lower()
+        writer = _BoundedFileIO(
+            self.temp_dir,
+            suffix,
+            self.selected_sizes[member_name],
+            self.budget,
+        )
+        with self.lock:
+            if member_name in self.products:
+                writer.close()
+                _raise_reader_error(ValueError, f"Duplicate 7Z member name: {member_name}")
+            self.products[member_name] = writer
+        return writer
+
+    def close(self) -> None:
+        """Attempt every close, even when one member reports an I/O error."""
+        first_error = None
+        for writer in self.products.values():
+            try:
+                writer.close()
+            except OSError as exc:
+                if first_error is None:
+                    first_error = exc
+        if first_error is not None:
+            raise first_error
+
+
 class SevenZipReader(Reader):
     """
     7Z (.7z) archive reader.
-    
+
     Supports reading various file formats from 7Z archives with security limits,
     nested 7Z handling, and automatic format detection.
     """
@@ -45,43 +193,50 @@ class SevenZipReader(Reader):
         Note:
             需要py7zr库来读取7Z文件：`pip install py7zr`
         """
-        # 尝试导入py7zr库
-        try:
-            import py7zr
-        except ImportError:
-            # 如果py7zr未安装，抛出导入错误
-            raise ImportError(
-                "py7zr is required to read 7Z files: "
-                "`pip install py7zr`"
-            )
-
-        # 将字符串路径转换为Path对象
         if isinstance(file, str):
             file = Path(file)
-
-        # 检查文件是否存在
+        if not isinstance(file, Path):
+            _raise_reader_error(TypeError, "file must be path-like")
         if not file.exists():
-            raise FileNotFoundError(f"7Z file not found: {file}")
+            _raise_reader_error(FileNotFoundError, f"7Z file not found: {file}")
+        for name, value in {
+            "max_file_size": max_file_size,
+            "max_total_size": max_total_size,
+            "max_files": max_files,
+        }.items():
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                _raise_reader_error(ValueError, f"{name} must be a positive integer")
+        if isinstance(max_depth, bool) or not isinstance(max_depth, int) or max_depth < 0:
+            _raise_reader_error(ValueError, "max_depth must be a non-negative integer")
+        if (
+            isinstance(max_compression_ratio, bool)
+            or not isinstance(max_compression_ratio, int | float)
+            or max_compression_ratio <= 0
+        ):
+            _raise_reader_error(ValueError, "max_compression_ratio must be positive")
 
-        # 创建临时目录用于解压文件
+        if importlib.util.find_spec("py7zr") is None:
+            _raise_reader_error(ImportError, 'py7zr is required to read 7Z files: `pip install "py7zr>=1.1.3"`')
+
         temp_dir = tempfile.mkdtemp(prefix="7z_reader_")
         try:
-            # 调用_process_7z方法处理7Z文件
-            documents = self._process_7z(
-                sevenzip_path=file,
-                temp_dir=temp_dir,
-                current_depth=0,  # 当前嵌套深度从0开始
-                max_depth=max_depth,
+            budget = _ExtractionBudget(
                 max_file_size=max_file_size,
                 max_total_size=max_total_size,
                 max_files=max_files,
+            )
+            documents = self._process_7z(
+                sevenzip_path=file,
+                temp_dir=temp_dir,
+                current_depth=0,
+                max_depth=max_depth,
                 max_compression_ratio=max_compression_ratio,
-                base_metadata=ext_info or {},  # 基础元数据
-                archive_root=file.name,  # 归档根文件名
+                base_metadata=ext_info or {},
+                archive_root=file.name,
+                budget=budget,
             )
             return documents
         finally:
-            # 无论处理成功与否，都清理临时目录
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -91,135 +246,133 @@ class SevenZipReader(Reader):
         temp_dir: str,
         current_depth: int,
         max_depth: int,
-        max_file_size: int,
-        max_total_size: int,
-        max_files: int,
         max_compression_ratio: float,
         base_metadata: Dict,
         archive_root: str,
-        parent_path: str = "",  # 父路径，用于构建完整路径
+        budget: _ExtractionBudget,
+        parent_path: str = "",
     ) -> List[Document]:
-        """递归处理7Z归档文件"""
+        """Process a 7Z archive without writing archive-controlled paths."""
         import py7zr
 
-        documents = []  # 存储提取的文档
-        total_extracted = 0  # 已提取文件总大小
-        file_count = 0  # 已处理文件计数
-        with py7zr.SevenZipFile(str(sevenzip_path), 'r') as archive:
-            archive.extractall(path=temp_dir)
-
+        documents: List[Document] = []
         try:
-            # 以只读模式打开7Z文件
-            with py7zr.SevenZipFile(str(sevenzip_path), 'r') as archive:
-                # 获取7Z文件中的所有条目
-                entries = archive.getnames()
-                
-                # 获取每个文件的详细信息
-                file_info_map = {}
-                files_info = archive.list()
-                
-                for file_info in files_info:
-                    file_info_map[file_info.filename] = file_info
+            try:
+                archive_context = py7zr.SevenZipFile(
+                    str(sevenzip_path),
+                    "r",
+                    max_extract_size=budget.max_total_size,
+                )
+            except TypeError as exc:
+                _raise_reader_error(ImportError, "SevenZipReader requires py7zr>=1.1.3 for bounded extraction", exc)
 
-                # 遍历每个条目
-                for entry_name in entries:
-                    # 检查是否达到最大文件数限制
-                    if file_count >= max_files:
-                        break
-
-                    # 跳过目录条目（7z中目录以/结尾）
-                    if entry_name.endswith('/'):
+            with archive_context as archive:
+                selected_sizes: Dict[str, int] = {}
+                for file_info in archive.list():
+                    if getattr(file_info, "is_directory", False):
                         continue
-                    if '.' not in entry_name:
-                        continue
-                    if entry_name=='.':
+                    entry_name = self._normalize_entry_name(file_info.filename)
+                    if entry_name is None:
                         continue
 
-                    # 安全检查：跳过包含".."或绝对路径的文件名
-                    if '..' in entry_name or entry_name.startswith('/'):
+                    uncompressed_size = getattr(file_info, "uncompressed", None)
+                    if not isinstance(uncompressed_size, int):
                         continue
-
-                    # 获取文件信息
-                    file_info = file_info_map.get(entry_name)
-                    if not file_info:
-                        continue
-
-                    # 获取压缩后大小和未压缩大小
-                    compressed_size = file_info.compressed or 0
-                    uncompressed_size = file_info.uncompressed or 0
-
-                    # 检查压缩比，防止压缩炸弹攻击
-                    if compressed_size > 0:
+                    compressed_size = getattr(file_info, "compressed", None)
+                    if isinstance(compressed_size, int) and compressed_size > 0:
                         ratio = uncompressed_size / compressed_size
                         if ratio > max_compression_ratio:
-                            raise ValueError(
-                                f"7Z entry has suspicious compression ratio: {entry_name}"
+                            _raise_reader_error(
+                                ValueError,
+                                f"7Z entry has suspicious compression ratio: {entry_name}",
                             )
 
-                    # 跳过超过单文件大小限制的文件
-                    if uncompressed_size > max_file_size:
+                    suffix = PurePosixPath(entry_name).suffix.lower()
+                    if suffix != ".7z" and self._get_reader_class(suffix) is None:
                         continue
-
-                    # 检查是否超过总大小限制
-                    if total_extracted + uncompressed_size > max_total_size:
+                    if suffix == ".7z" and current_depth >= max_depth:
+                        _raise_reader_error(ValueError, "7Z nesting depth exceeded")
+                    if entry_name in selected_sizes:
+                        continue
+                    if uncompressed_size < 0 or uncompressed_size > budget.max_file_size:
+                        continue
+                    if not budget.claim(uncompressed_size):
                         break
+                    selected_sizes[entry_name] = uncompressed_size
 
-                    # 为每个文件创建独立的解压目录
-                    #extract_dir = os.path.join(temp_dir, f"extract_{file_count}")
-                    extract_dir = temp_dir
-                    os.makedirs(extract_dir, exist_ok=True)
-
+                if not selected_sizes:
+                    return []
+                factory = _BoundedWriterFactory(Path(temp_dir), selected_sizes, budget)
+                try:
+                    archive.extract(
+                        path=Path(temp_dir),
+                        targets=list(selected_sizes),
+                        factory=factory,
+                    )
+                except BaseException:
+                    # py7zr does not close custom writers after failed extraction.
+                    # Release handles before the outer temporary-directory cleanup.
                     try:
-                        # 解压当前条目
-                        #archive.extract(path=extract_dir, targets=[entry_name])
-                        #archive.extract(entry_name,extract_dir)
-                        
-                        # 构建提取后的完整路径
-                        extracted_path = Path(extract_dir) / entry_name
-                        total_extracted += uncompressed_size
-                        file_count += 1
+                        factory.close()
+                    except OSError:
+                        pass  # Keep the original extraction error after cleanup.
+                    raise
+                else:
+                    factory.close()
 
-                        # 构建完整路径（包含父路径信息）
-                        full_path = os.path.join(parent_path, entry_name) if parent_path else entry_name
+            for entry_name in selected_sizes:
+                writer = factory.products.get(entry_name)
+                if writer is None or not writer.path.exists():
+                    continue
+                full_path = f"{parent_path}/{entry_name}" if parent_path else entry_name
+                if PurePosixPath(entry_name).suffix.lower() == ".7z":
+                    documents.extend(
+                        self._process_7z(
+                            sevenzip_path=writer.path,
+                            temp_dir=temp_dir,
+                            current_depth=current_depth + 1,
+                            max_depth=max_depth,
+                            max_compression_ratio=max_compression_ratio,
+                            base_metadata=base_metadata,
+                            archive_root=archive_root,
+                            budget=budget,
+                            parent_path=full_path,
+                        )
+                    )
+                else:
+                    documents.extend(
+                        self._process_file(
+                            file_path=writer.path,
+                            archive_path=full_path,
+                            archive_root=archive_root,
+                            archive_depth=current_depth,
+                            base_metadata=base_metadata,
+                            original_name=PurePosixPath(entry_name).name,
+                        )
+                    )
 
-                        # 如果是嵌套的7Z文件且未达到最大深度，递归处理
-                        if extracted_path.suffix.lower() == '.7z' and current_depth < max_depth:
-                            nested_docs = self._process_7z(
-                                sevenzip_path=extracted_path,
-                                temp_dir=temp_dir,
-                                current_depth=current_depth + 1,
-                                max_depth=max_depth,
-                                max_file_size=max_file_size,
-                                max_total_size=max_total_size - total_extracted,
-                                max_files=max_files - file_count,
-                                max_compression_ratio=max_compression_ratio,
-                                base_metadata=base_metadata,
-                                archive_root=archive_root,
-                                parent_path=full_path,
-                            )
-                            documents.extend(nested_docs)
-                        else:
-                            # 处理普通文件
-                            doc = self._process_file(
-                                file_path=extracted_path,
-                                archive_path=full_path,
-                                archive_root=archive_root,
-                                archive_depth=current_depth,
-                                base_metadata=base_metadata,
-                            )
-                            if doc:
-                                documents.extend(doc)
-
-                    except Exception as e:
-                        # 跳过处理失败的文件，继续处理其他文件
-                        continue
-
-        except (py7zr.Bad7zFile, py7zr.exceptions.Bad7zFile) as e:
-            raise ValueError(f"Failed to read 7Z file: {str(e)}")
-        except Exception as e:
-            raise ValueError(f"Error processing 7Z file: {str(e)}")
+        except (py7zr.Bad7zFile, py7zr.exceptions.Bad7zFile) as exc:
+            _raise_reader_error(ValueError, f"Failed to read 7Z file: {exc!s}", exc)
 
         return documents
+
+    @staticmethod
+    def _normalize_entry_name(entry_name: str) -> Optional[str]:
+        """Return a portable relative member path, or None when it is unsafe."""
+        if not entry_name or "\x00" in entry_name:
+            return None
+        posix_path = PurePosixPath(entry_name.replace("\\", "/"))
+        windows_path = PureWindowsPath(entry_name)
+        if posix_path.is_absolute() or windows_path.is_absolute():
+            return None
+        if windows_path.drive or windows_path.root:
+            return None
+        if ".." in posix_path.parts or ".." in windows_path.parts:
+            return None
+        parts = [part for part in posix_path.parts if part not in {"", "."}]
+        if not parts or any(":" in part for part in parts):
+            return None
+        return PurePosixPath(*parts).as_posix()
 
     def _process_file(
         self,
@@ -228,6 +381,7 @@ class SevenZipReader(Reader):
         archive_root: str,
         archive_depth: int,
         base_metadata: Dict,
+        original_name: Optional[str] = None,
     ) -> List[Document]:
         """处理归档中的单个文件"""
         # 检查文件是否存在且为普通文件
@@ -236,16 +390,17 @@ class SevenZipReader(Reader):
 
         # 根据文件扩展名获取对应的读取器
         reader = self._get_reader_for_file(file_path)
-        
+
         if not reader:
             return []
 
         try:
             # 构建文件元数据
+            display_name = original_name or file_path.name
             metadata = {
-                "file_name": file_path.name,
+                "file_name": display_name,
                 "file_path": f"{archive_root}::{archive_path}",  # 格式：根文件::内部路径
-                "file_suffix": file_path.suffix.lower(),
+                "file_suffix": PurePosixPath(display_name).suffix.lower(),
                 "archive_root": archive_root,
                 "archive_path": archive_path,
                 "archive_depth": archive_depth,
@@ -257,7 +412,7 @@ class SevenZipReader(Reader):
             documents = reader.load_data(file_path, ext_info=metadata)
             return documents
 
-        except Exception as e:
+        except Exception:
             # 处理失败时返回空列表
             return []
 
@@ -283,45 +438,47 @@ class SevenZipReader(Reader):
         """将文件扩展名映射到读取器类"""
         # 定义文件扩展名到读取器名称的映射
         reader_map = {
-            '.pdf': 'PdfReader',
-            '.docx': 'DocxReader',
-            '.pptx': 'PptxReader',
-            '.xlsx': 'XlsxReader',
-            '.epub': 'EpubReader',
-            '.txt': 'TxtReader',
-            '.md': 'MarkdownReader',
-            '.csv': 'CSVReader',
-            '.conf': 'TxtReader',  # 配置文件按文本处理
-            '.log': 'TxtReader',   # 日志文件按文本处理
-            '.ini': 'TxtReader',   # ini文件按文本处理
-            '.cfg': 'TxtReader',   # cfg文件按文本处理
+            ".pdf": "PdfReader",
+            ".docx": "DocxReader",
+            ".pptx": "PptxReader",
+            ".xlsx": "XlsxReader",
+            ".epub": "EpubReader",
+            ".txt": "TxtReader",
+            # Markdown is plain text inside an archive; using TxtReader keeps
+            # archive ingestion deterministic and avoids an optional NLP stack.
+            ".md": "TxtReader",
+            ".csv": "CSVReader",
+            ".conf": "TxtReader",  # 配置文件按文本处理
+            ".log": "TxtReader",  # 日志文件按文本处理
+            ".ini": "TxtReader",  # ini文件按文本处理
+            ".cfg": "TxtReader",  # cfg文件按文本处理
             # 各种编程语言文件使用代码读取器
-            '.py': 'CodeReader',
-            '.js': 'CodeReader',
-            '.ts': 'CodeReader',
-            '.java': 'CodeReader',
-            '.cpp': 'CodeReader',
-            '.c': 'CodeReader',
-            '.h': 'CodeReader',
-            '.hpp': 'CodeReader',
-            '.cs': 'CodeReader',
-            '.go': 'CodeReader',
-            '.rb': 'CodeReader',
-            '.php': 'CodeReader',
-            '.swift': 'CodeReader',
-            '.kt': 'CodeReader',
-            '.rs': 'CodeReader',
-            '.sh': 'CodeReader',
-            '.html': 'CodeReader',
-            '.css': 'CodeReader',
-            '.sql': 'CodeReader',
+            ".py": "CodeReader",
+            ".js": "CodeReader",
+            ".ts": "CodeReader",
+            ".java": "CodeReader",
+            ".cpp": "CodeReader",
+            ".c": "CodeReader",
+            ".h": "CodeReader",
+            ".hpp": "CodeReader",
+            ".cs": "CodeReader",
+            ".go": "CodeReader",
+            ".rb": "CodeReader",
+            ".php": "CodeReader",
+            ".swift": "CodeReader",
+            ".kt": "CodeReader",
+            ".rs": "CodeReader",
+            ".sh": "CodeReader",
+            ".html": "CodeReader",
+            ".css": "CodeReader",
+            ".sql": "CodeReader",
             # 数据格式文件
-            '.json': 'CodeReader',
-            '.xml': 'CodeReader',
-            '.yaml': 'CodeReader',
-            '.yml': 'CodeReader',
+            ".json": "CodeReader",
+            ".xml": "CodeReader",
+            ".yaml": "CodeReader",
+            ".yml": "CodeReader",
             # 7Z特定格式
-            '.7z': 'SevenZipReader',  # 支持嵌套7Z文件
+            ".7z": "SevenZipReader",  # 支持嵌套7Z文件
         }
 
         # 获取对应的读取器名称
@@ -331,34 +488,43 @@ class SevenZipReader(Reader):
 
         try:
             # 动态导入对应的读取器类
-            if reader_name == 'PdfReader':
+            if reader_name == "PdfReader":
                 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
+
                 return PdfReader
-            elif reader_name == 'DocxReader':
+            elif reader_name == "DocxReader":
                 from agentuniverse.agent.action.knowledge.reader.file.docx_reader import DocxReader
+
                 return DocxReader
-            elif reader_name == 'PptxReader':
+            elif reader_name == "PptxReader":
                 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
+
                 return PptxReader
-            elif reader_name == 'XlsxReader':
+            elif reader_name == "XlsxReader":
                 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
+
                 return XlsxReader
-            elif reader_name == 'EpubReader':
+            elif reader_name == "EpubReader":
                 from agentuniverse.agent.action.knowledge.reader.file.epub_reader import EpubReader
+
                 return EpubReader
-            elif reader_name == 'TxtReader':
+            elif reader_name == "TxtReader":
                 from agentuniverse.agent.action.knowledge.reader.file.txt_reader import TxtReader
+
                 return TxtReader
-            elif reader_name == 'MarkdownReader':
+            elif reader_name == "MarkdownReader":
                 from agentuniverse.agent.action.knowledge.reader.file.markdown_reader import MarkdownReader
+
                 return MarkdownReader
-            elif reader_name == 'CSVReader':
+            elif reader_name == "CSVReader":
                 from agentuniverse.agent.action.knowledge.reader.file.csv_reader import CSVReader
+
                 return CSVReader
-            elif reader_name == 'CodeReader':
+            elif reader_name == "CodeReader":
                 from agentuniverse.agent.action.knowledge.reader.file.code_reader import CodeReader
+
                 return CodeReader
-            elif reader_name == 'SevenZipReader':
+            elif reader_name == "SevenZipReader":
                 # 返回自身类型以支持嵌套7Z文件
                 return SevenZipReader
             else:
