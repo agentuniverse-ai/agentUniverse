@@ -55,7 +55,9 @@ _BUILTIN_PATTERNS: Dict[str, str] = {
     "id_card": r"\b[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])"
                r"(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]\b",
     "ssn": r"\b\d{3}-\d{2}-\d{4}\b",
-    "ip_address": r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+    # Do not redact a four-part substring of a longer dotted numeric token.
+    # A sentence-ending dot is still allowed when no digit follows it.
+    "ip_address": r"(?<!\d\.)\b(?:\d{1,3}\.){3}\d{1,3}\b(?!\.\d)",
     "api_key": r"(?:sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
                r"gh[pousr]_[A-Za-z0-9]{36,}|glpat-[A-Za-z0-9_-]{20,})",
     # Opt-in: phone matching is fuzzier, so it is not on by default.
