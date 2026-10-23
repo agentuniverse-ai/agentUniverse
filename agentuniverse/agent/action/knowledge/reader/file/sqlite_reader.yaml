@@ -1,0 +1,18 @@
+name: sqlite_table_reader
+description: Read one ordinary SQLite table snapshot into bounded source-aware row documents.
+# Set explicitly for your source database before registration.
+table_name: documents
+text_columns: []
+metadata_columns: []
+id_columns: []
+batch_size: 256
+max_rows: 10000
+max_file_bytes: 134217728
+max_row_chars: 100000
+max_output_chars: 10000000
+max_vm_steps: 5000000
+max_seconds: 5.0
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.sqlite_reader
+  class: SQLiteTableReader
