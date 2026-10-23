@@ -52,7 +52,7 @@ class ExcelTool(Tool):
     Excel file manipulation tool with read, write, append, and info operations.
 
     Features:
-    - Read Excel files (.xlsx, .xls) with range support
+    - Read Excel files (.xlsx) with range support
     - Write data to new or existing files
     - Append rows to existing files
     - Get file information and structure
@@ -154,6 +154,7 @@ class ExcelTool(Tool):
         except ImportError:
             raise ImportError("openpyxl is required. Install with: pip install openpyxl")
 
+        workbook = None
         try:
             workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
 
@@ -177,14 +178,12 @@ class ExcelTool(Tool):
                 data.append(list(row))
                 row_count += 1
 
-            workbook.close()
-
             return {
                 "status": "success",
                 "file_path": file_path,
                 "sheet_name": sheet.title,
                 "rows_read": len(data),
-                "columns": len(data[0]) if data else 0,
+                "columns": max((len(row) for row in data), default=0),
                 "data": data,
                 "total_rows": sheet.max_row,
                 "total_columns": sheet.max_column
@@ -197,6 +196,9 @@ class ExcelTool(Tool):
                 "error": f"Failed to read Excel file: {str(e)}",
                 "file_path": file_path
             }
+        finally:
+            if workbook is not None:
+                workbook.close()
 
     @retry(3, 1.0)
     def _write_excel(self, file_path: str, data: List[List[Any]],
@@ -217,6 +219,16 @@ class ExcelTool(Tool):
             import openpyxl
         except ImportError:
             raise ImportError("openpyxl is required. Install with: pip install openpyxl")
+
+        # This backend writes OOXML, irrespective of the filename. Keep format
+        # validation here so subclasses can supply a different writer without
+        # replacing the shared path/allowlist checks.
+        if os.path.splitext(file_path)[1].lower() in {'.xls', '.xlsb'}:
+            return {
+                "status": "error",
+                "error": "Unsupported Excel format: Convert .xls or .xlsb files to .xlsx first",
+                "file_path": file_path
+            }
 
         try:
             # Check if file exists
@@ -255,7 +267,7 @@ class ExcelTool(Tool):
                 "file_path": file_path,
                 "sheet_name": sheet_name,
                 "rows_written": len(data),
-                "columns": len(data[0]) if data else 0,
+                "columns": max((len(row) for row in data), default=0),
                 "file_size": file_size,
                 "overwrite": overwrite
             }
@@ -310,7 +322,8 @@ class ExcelTool(Tool):
                 sheet = workbook.active
 
             # Append data
-            start_row = sheet.max_row + 1
+            # Match append's insertion cursor; max_row is 1 even on an empty sheet.
+            start_row = sheet._current_row + 1
             for row_data in data:
                 sheet.append(row_data)
 

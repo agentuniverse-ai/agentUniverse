@@ -2,7 +2,7 @@ name: 'excel_tool'
 description: |
   功能强大且安全的 Excel 文件处理工具，支持读取、写入、追加和信息查询操作。
 
-  支持的文件格式：.xlsx, .xls
+  支持的文件格式：.xlsx（.xls/.xlsb 请先转换为 .xlsx）
 
   安全特性：
   - 路径安全验证（防止路径穿越攻击）
