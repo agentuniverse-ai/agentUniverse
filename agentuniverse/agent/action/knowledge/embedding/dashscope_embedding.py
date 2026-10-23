@@ -32,6 +32,26 @@ class DashscopeEmbedding(Embedding):
         default_factory=lambda: get_from_env("DASHSCOPE_API_KEY")
     )
 
+    @staticmethod
+    def _order_batch_rows(data: List[dict], batch_size: int) -> List[dict]:
+        """Validate batch-local indices before ordering an indexed response.
+
+        Fully unindexed legacy responses retain wire order. Once any row has
+        text_index, every row must have a unique integer index within this
+        request's input range; a count check alone cannot guarantee alignment.
+        """
+        if not any('text_index' in row for row in data):
+            return data
+        seen = set()
+        for row in data:
+            index = row.get('text_index')
+            if type(index) is not int or not 0 <= index < batch_size:
+                raise ValueError('Dashscope text_index must be an integer within the input batch')
+            if index in seen:
+                raise ValueError('Dashscope text_index must be unique within the input batch')
+            seen.add(index)
+        return sorted(data, key=lambda row: row['text_index'])
+
     def get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """
         Retrieve text embeddings for a list of input texts.
@@ -87,7 +107,7 @@ class DashscopeEmbedding(Embedding):
             if data:
                 data = data["embeddings"]
                 # text_index identifies the input within this request batch.
-                data = sorted(data, key=lambda item: item.get("text_index", 0))
+                data = self._order_batch_rows(data, len(batch))
                 batch_result = [d['embedding'] for d in data if 'embedding' in d]
                 result += batch_result
             else:
@@ -156,7 +176,7 @@ class DashscopeEmbedding(Embedding):
             data = resp_json.get("output")
             if data:
                 data = data["embeddings"]
-                data = sorted(data, key=lambda item: item.get("text_index", 0))
+                data = self._order_batch_rows(data, len(batch))
                 batch_result = [d['embedding'] for d in data if
                                 'embedding' in d]
                 result += batch_result

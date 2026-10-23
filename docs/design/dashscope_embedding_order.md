@@ -10,6 +10,11 @@ defines `text_index` as the corresponding input's position. For example, rows
 with indices `[2, 0, 1]` must produce vectors in `[0, 1, 2]` order. Indices are
 local to each request, so sorting the combined result would mix batches.
 
+When any response row includes `text_index`, all rows must have unique integer
+indices within that request's input range. Duplicate, missing, boolean,
+non-integer, or out-of-range indices raise `ValueError` before vectors are
+returned. Checking only the number of rows cannot detect these alignment errors.
+
 Responses without index metadata retain their prior arrival order. Batching,
 request parameters and API error propagation keep their existing behavior.
 
@@ -20,4 +25,6 @@ request parameters and API error propagation keep their existing behavior.
 因此不能在合并结果后全局排序。
 
 例如，响应条目的索引为 `[2, 0, 1]` 时，输出向量应按 `[0, 1, 2]` 排列。
+只要响应中有条目携带 `text_index`，所有条目就必须提供当前批次范围内的唯一整数索引。
+重复、缺失、布尔值、非整数或越界索引会触发 `ValueError`；仅检查返回数量无法发现这些错配。
 未携带索引元数据的响应仍按原顺序返回；分批、请求参数及接口错误传播保持原有行为。
