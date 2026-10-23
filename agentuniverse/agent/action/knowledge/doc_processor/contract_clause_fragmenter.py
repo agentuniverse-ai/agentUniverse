@@ -7,6 +7,7 @@
 # @FileName: contract_clause_fragmenter.py
 
 import re
+from copy import deepcopy
 import logging
 from typing import List, Optional, Dict, Tuple, Any
 from dataclasses import dataclass
@@ -53,6 +54,8 @@ class ContractClauseFragmenter(DocProcessor):
     based on common legal formatting patterns. It preserves the hierarchical structure
     (Article → Section → Subsection) and creates separate documents for each clause
     with rich metadata about relationships and dependencies.
+    Each clause receives an independent deep copy of the source metadata,
+    including the unstructured single-clause fallback.
 
     Attributes:
         preserve_hierarchy: Whether to preserve and track clause hierarchy.
@@ -348,7 +351,7 @@ class ContractClauseFragmenter(DocProcessor):
 
             # Add original metadata
             if original_doc.metadata:
-                metadata['original_metadata'] = original_doc.metadata
+                metadata['original_metadata'] = deepcopy(original_doc.metadata)
 
             # Add hierarchy information
             if self.preserve_hierarchy:
@@ -439,7 +442,7 @@ class ContractClauseFragmenter(DocProcessor):
         }
 
         if original_doc.metadata:
-            metadata['original_metadata'] = original_doc.metadata
+            metadata['original_metadata'] = deepcopy(original_doc.metadata)
 
         return Document(
             text=text,
