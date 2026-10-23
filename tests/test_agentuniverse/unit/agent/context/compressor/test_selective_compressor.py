@@ -312,6 +312,28 @@ class TestSelectiveCompressor:
         assert len(system_task_compressed) == len(system_task_original), \
             "Not all SYSTEM/TASK segments preserved"
 
+    def test_preserve_types_are_kept_when_critical_consumes_budget(self, compressor):
+        critical = ContextSegment(
+            type=ContextType.SYSTEM,
+            priority=ContextPriority.CRITICAL,
+            content="system",
+            tokens=10,
+        )
+        task = ContextSegment(
+            type=ContextType.TASK,
+            priority=ContextPriority.LOW,
+            content="task",
+            tokens=3,
+        )
+
+        compressed, _ = compressor.compress(
+            [critical, task],
+            target_tokens=10,
+            preserve_types=[ContextType.TASK],
+        )
+
+        assert {segment.id for segment in compressed} == {critical.id, task.id}
+
     def test_compression_time(self, compressor, sample_segments):
         """Test that compression completes within time limit."""
         target_tokens = sum(seg.tokens for seg in sample_segments) // 2

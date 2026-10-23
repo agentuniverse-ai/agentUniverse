@@ -135,30 +135,24 @@ class SelectiveCompressor(ContextCompressor):
 
         # Step 2: Always keep CRITICAL priority
         selected = priority_groups.get(ContextPriority.CRITICAL, []).copy()
-        remaining_tokens = target_tokens - self.calculate_total_tokens(selected)
 
-        if remaining_tokens <= 0:
-            # CRITICAL alone exceeds target
-            elapsed_ms = (time.time() - start_time) * 1000
-            metrics = self.create_metrics(
-                original_segments, selected, elapsed_ms, "selective"
-            )
-            return selected, metrics
-
-        # Step 3: Always preserve specified types (e.g., SYSTEM, TASK)
+        # Explicitly preserved types are mandatory even when CRITICAL already
+        # consumes the budget. Apply this guarantee before the early return.
         type_preserved = self._select_by_type(segments, preserve_types, selected)
         if type_preserved:
             selected.extend(type_preserved)
-            remaining_tokens -= self.calculate_total_tokens(type_preserved)
+
+        remaining_tokens = target_tokens - self.calculate_total_tokens(selected)
 
         if remaining_tokens <= 0:
+            # Mandatory segments may legitimately exceed the target.
             elapsed_ms = (time.time() - start_time) * 1000
             metrics = self.create_metrics(
                 original_segments, selected, elapsed_ms, "selective"
             )
             return selected, metrics
 
-        # Step 4: Select HIGH priority segments by relevance
+        # Step 3: Select HIGH priority segments by relevance
         high_selected = self._select_high_priority(
             priority_groups.get(ContextPriority.HIGH, []),
             remaining_tokens,
@@ -168,7 +162,7 @@ class SelectiveCompressor(ContextCompressor):
             selected.extend(high_selected)
             remaining_tokens -= self.calculate_total_tokens(high_selected)
 
-        # Step 5: Sample MEDIUM priority by recency and decay
+        # Step 4: Sample MEDIUM priority by recency and decay
         if remaining_tokens > 0:
             medium_selected = self._select_medium_priority(
                 priority_groups.get(ContextPriority.MEDIUM, []),
@@ -179,7 +173,7 @@ class SelectiveCompressor(ContextCompressor):
                 selected.extend(medium_selected)
                 remaining_tokens -= self.calculate_total_tokens(medium_selected)
 
-        # Step 6: Consider LOW priority if space available
+        # Step 5: Consider LOW priority if space available
         if remaining_tokens > 0:
             low_selected = self._select_low_priority(
                 priority_groups.get(ContextPriority.LOW, []),
@@ -189,7 +183,7 @@ class SelectiveCompressor(ContextCompressor):
             if low_selected:
                 selected.extend(low_selected)
 
-        # Step 7: Ensure minimum segments
+        # Step 6: Ensure minimum segments
         if len(selected) < min_segments and len(segments) >= min_segments:
             # Add highest scoring segments until min_segments reached
             selected_ids = {seg.id for seg in selected}
