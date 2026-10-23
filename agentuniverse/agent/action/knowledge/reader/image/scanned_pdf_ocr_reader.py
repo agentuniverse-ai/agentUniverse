@@ -20,6 +20,9 @@ class ScannedPdfOCRReader(Reader):
     Strategy:
       1) Try to extract text with pypdf. If empty/None, fallback to OCR.
       2) OCR via PaddleOCR -> pytesseract -> easyocr.
+
+    Rendered Pillow pages are converted to BGR arrays for PaddleOCR and
+    EasyOCR. Tesseract continues to receive the original Pillow image.
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
@@ -87,7 +90,7 @@ class ScannedPdfOCRReader(Reader):
             from paddleocr import PaddleOCR  # type: ignore
             logger.debug("ScannedPdfOCRReader trying PaddleOCR")
             ocr = PaddleOCR(use_angle_cls=True, lang='ch')
-            result = ocr.ocr(images[0], cls=True)
+            result = ocr.ocr(self._ocr_pixels(images[0]), cls=True)
             lines = []
             for page in result:
                 for line in page:
@@ -112,7 +115,17 @@ class ScannedPdfOCRReader(Reader):
             import easyocr  # type: ignore
             logger.debug("ScannedPdfOCRReader trying easyocr")
             reader = easyocr.Reader(['ch_sim', 'en'])
-            result = reader.readtext(images[0], detail=0)
+            result = reader.readtext(self._ocr_pixels(images[0]), detail=0)
             return "\n".join(result), "easyocr"
         except Exception:
             return "", "unknown"
+
+    @staticmethod
+    def _ocr_pixels(image):
+        """Convert a rendered Pillow page to a contiguous uint8 BGR array."""
+        import numpy as np
+
+        # Both backends accept OpenCV-style arrays, not pdf2image's default
+        # Pillow PPM images. Normalize grayscale/alpha modes before swapping
+        # channels, and leave the original image intact for Tesseract fallback.
+        return np.array(image.convert("RGB"))[:, :, ::-1].copy()
