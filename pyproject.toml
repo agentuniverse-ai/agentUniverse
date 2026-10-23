@@ -73,6 +73,18 @@ jieba = "^0.42.1"
 networkx = "^3.3"
 httpx = ">=0.27.2"
 tomli = "^2.2"
+# Imported at module scope by the config loader (configer.py:12), so it is a
+# runtime dependency, not an optional one.
+pyyaml = "^6.0"
+# Imported at module scope by dashscope_embedding.py, mcp_session_manager.py
+# and logging_util.py; they used to arrive only as transitive dependencies.
+aiohttp = "^3.8.3"
+anyio = "^4.0.0"
+typing-extensions = "^4.0.0"
+# `agentuniverse_product/base/util/yaml_util.py` imports `ruamel.yaml` at module
+# scope and six product services import that module, so it is required; it uses
+# ruamel's round-trip dumper to keep comments when rewriting user YAML.
+ruamel-yaml = ">=0.17.21"
 mcp = "<1.22.0"
 opentracing = ">=2.4.0,<3.0.0"
 jsonlines = "^4.0.0"
