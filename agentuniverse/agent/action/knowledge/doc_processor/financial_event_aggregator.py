@@ -368,6 +368,10 @@ class FinancialEventAggregator(DocProcessor):
     def _generate_event_id(self, docs: List[Document]) -> str:
         """Generate unique event ID for a cluster.
 
+        Escape backslashes and separators before joining sorted source IDs.
+        IDs without either character retain their previous event identity;
+        IDs containing them use the unambiguous escaped representation.
+
         Args:
             docs: Documents in cluster.
 
@@ -376,7 +380,10 @@ class FinancialEventAggregator(DocProcessor):
         """
         # Create hash from sorted document IDs
         doc_ids = sorted([doc.id for doc in docs])
-        hash_input = '|'.join(doc_ids)
+        hash_input = '|'.join(
+            doc_id.replace('\\', '\\\\').replace('|', '\\|')
+            for doc_id in doc_ids
+        )
         event_hash = hashlib.md5(hash_input.encode()).hexdigest()[:12]
         return f"event_{event_hash}"
 
