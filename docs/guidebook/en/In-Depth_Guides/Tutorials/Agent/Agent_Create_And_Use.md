@@ -26,6 +26,15 @@ We will provide detailed descriptions of each component within the configuration
 
   Note: You can choose any existing LLM or connect to any LLM of your choice. We will not elaborate on this part here; for more details, please refer to the [LLM section](../../../In-Depth_Guides/Tutorials/LLM/LLM.md) .
 
+#### Truncating long prompts
+The default `profile.llm_model.prompt_processor.type` is `truncate`. Its input
+budget is the model's context length minus the reserved output `max_tokens`.
+The complete formatted prompt shares this budget: fixed instructions, other
+input variables, formatted chat role labels and repeated uses of `background` all count.
+Only a fitting prefix of `background` is retained. If the fixed prompt already
+exceeds the budget without that variable, processing raises `ValueError` and
+preserves the input; shorten the template or other inputs before retrying.
+
 ### Setting the agent's action
 **`action` - action of agent**
 * `Tool` : Tools available for the agent's use.
