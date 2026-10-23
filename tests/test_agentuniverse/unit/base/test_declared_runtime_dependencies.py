@@ -16,7 +16,9 @@ take the framework down silently.
 
 import ast
 import sys
-import tomllib
+# `tomllib` only exists on 3.11+, while this project supports ^3.10; `tomli` is
+# already a declared runtime dependency and provides the same API.
+import tomli as tomllib
 from importlib.metadata import packages_distributions, version
 from pathlib import Path
 from typing import Dict, Set
