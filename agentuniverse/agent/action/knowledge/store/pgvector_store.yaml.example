@@ -5,6 +5,7 @@ table_name: agentuniverse_documents
 embedding_model: openai_embedding
 dimensions: 1536
 distance: cosine
+# Query.similarity_top_k=None uses this default; explicit limits must be positive.
 similarity_top_k: 10
 create_table: true
 create_hnsw_index: true
