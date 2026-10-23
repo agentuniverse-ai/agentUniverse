@@ -1,0 +1,7 @@
+name: table_header_splitter
+description: Split Markdown pipe tables with repeated original headers and row provenance.
+max_chars: 2000
+metadata:
+  type: DOC_PROCESSOR
+  module: agentuniverse.agent.action.knowledge.doc_processor.table_header_splitter
+  class: TableHeaderSplitter
