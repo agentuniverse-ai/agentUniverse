@@ -1,0 +1,15 @@
+{
+  "feature": "Protocol-faithful literal history bridge",
+  "tests": [
+    "tests/test_agentuniverse/unit/agent/memory/test_protocol_history.py",
+    "tests/test_agentuniverse/integration/test_protocol_history_sql_provider.py",
+    "tests/test_agentuniverse/unit/llm/test_llm_configuration.py",
+    "tests/test_agentuniverse/unit/prompt/test_chat_prompt.py",
+    "tests/test_agentuniverse/unit/prompt/test_chat_prompt_image_paths.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}

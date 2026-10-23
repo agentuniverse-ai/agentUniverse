@@ -1,5 +1,7 @@
 # Memory
 
+For stored tool exchanges and literal history, see the opt-in [Protocol History bridge](Protocol_History.md).
+
 For agents, memory is a crucial component that allows them to remember past events. In most conversational and task
 scenarios, we want the agents to integrate historical information to provide answers and communicate.
 
