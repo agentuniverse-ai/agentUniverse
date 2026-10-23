@@ -85,6 +85,33 @@ print(f"Resolved {result.conflicts_resolved} conflicts")
 print(f"Updated {result.segments_updated} segments")
 ```
 
+#### Segment Metadata and Traceability
+
+Every segment written by the synchronizer records its origin in
+`segment.metadata.custom`, so a stored segment can be traced back to the
+knowledge document it came from:
+
+```python
+from agentuniverse.agent.context.context_model import ContextType
+
+segments = context_manager.get_context("session_123")
+for segment in segments:
+    if segment.metadata.custom.get("knowledge_id") == "user_manual_v2":
+        print(f"{segment.priority}: {segment.content}")
+```
+
+`ContextManager.add_context(..., metadata=...)` accepts either a
+`ContextMetadata` instance or a plain mapping: keys that name a
+`ContextMetadata` field populate that field, and every other key is stored in
+`ContextMetadata.custom`. This keeps the `metadata={'role': 'user'}` shorthand
+used by the agent integration patterns working without silently dropping the
+value.
+
+`update_knowledge_context` honours the configured
+`ConflictResolutionStrategy`: `NEWEST_WINS` demotes the previously stored
+segments, `CRITICAL_PRESERVED` keeps the CRITICAL ones and demotes the rest,
+while `MERGE` and `VERSION_BOTH` keep the old segments alongside the new ones.
+
 #### Version Tracking
 
 ```python
