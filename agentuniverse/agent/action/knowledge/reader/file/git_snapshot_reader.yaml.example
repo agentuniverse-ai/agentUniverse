@@ -1,0 +1,16 @@
+name: git_snapshot_reader
+description: Read UTF-8 text from a pinned local Git commit with line provenance
+include: ["*.md", "*.txt", "*.py"]
+exclude: [".env", ".env.*", "**/.env", "**/.env.*", "*.pem", "*.key"]
+lines_per_document: 200
+max_documents: 5000
+max_files: 2000
+max_tree_bytes: 2000000
+max_blob_bytes: 2000000
+max_total_bytes: 20000000
+command_timeout_seconds: 10
+total_timeout_seconds: 60
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.git_snapshot_reader
+  class: GitSnapshotReader
