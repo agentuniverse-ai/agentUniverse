@@ -1,0 +1,8 @@
+name: sentence_window_splitter
+description: Store sentences with source-addressed original context windows.
+window_radius: 1
+max_window_chars: 2000
+metadata:
+  type: DOC_PROCESSOR
+  module: agentuniverse.agent.action.knowledge.doc_processor.sentence_window
+  class: SentenceWindowSplitter
