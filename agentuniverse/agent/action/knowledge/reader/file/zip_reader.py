@@ -24,6 +24,7 @@ from agentuniverse.agent.action.knowledge.reader.file.txt_reader import TxtReade
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
+from agentuniverse.base.util.logging.logging_util import LOGGER
 
 TEXT_FALLBACK_EXTENSIONS = {
     ".json",
@@ -178,7 +179,13 @@ class ZipReader(Reader):
         try:
             docs = reader.load_data(file_path, ext_info=dict(metadata))
             return [self._merge_metadata(doc, metadata) for doc in docs]
-        except Exception:
+        except Exception as exc:
+            LOGGER.warning(
+                "ZipReader skipped member %r from %s due to a reader error: %s",
+                info.filename,
+                metadata.get("archive_root"),
+                exc,
+            )
             return []
         finally:
             if file_path.exists():
