@@ -1,0 +1,11 @@
+name: ocr_evidence_reader
+description: Explicit Tesseract word geometry and confidence evidence
+ocr:
+  engine: tesseract
+  language: eng
+  page_segmentation: 6
+  low_confidence_threshold: 60
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.image.ocr_evidence_reader
+  class: OcrEvidenceReader
