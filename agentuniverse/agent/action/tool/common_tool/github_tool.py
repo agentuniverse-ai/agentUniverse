@@ -29,6 +29,10 @@ class GitHubTool(Tool):
     
     提供GitHub仓库、用户、问题和代码的搜索功能
     支持通过GitHub API获取仓库信息、用户信息、问题列表和代码片段
+
+    HTTP 403 is classified as rate limiting only when response headers or the
+    API message indicate it. Other forbidden responses retain the server's
+    error details so permission failures can be diagnosed.
     
     Attributes:
         api_key: GitHub API密钥，从环境变量GITHUB_API_KEY获取
@@ -54,6 +58,19 @@ class GitHubTool(Tool):
             headers["Authorization"] = f"token {self.api_key}"
         return headers
 
+    @staticmethod
+    def _is_rate_limit_response(response: requests.Response) -> bool:
+        """Recognize primary/secondary limits without treating every 403 as one."""
+        if (response.headers.get("x-ratelimit-remaining") == "0"
+                or response.headers.get("retry-after") is not None):
+            return True
+        try:
+            payload = response.json()
+        except ValueError:
+            return False
+        message = payload.get("message") if isinstance(payload, dict) else None
+        return isinstance(message, str) and "rate limit" in message.lower()
+
     def _make_request(self, url: str, params: Optional[Dict] = None) -> Dict[str, Any]:
         """发送HTTP请求"""
         try:
@@ -69,7 +86,7 @@ class GitHubTool(Tool):
             response = e.response
             if response is None:
                 return {"error": f"HTTP Error: {str(e)}"}
-            if response.status_code == 403:
+            if response.status_code == 403 and self._is_rate_limit_response(response):
                 return {"error": "API rate limit exceeded. Please check your API key or try again later."}
             elif response.status_code == 404:
                 return {"error": "Resource not found."}
