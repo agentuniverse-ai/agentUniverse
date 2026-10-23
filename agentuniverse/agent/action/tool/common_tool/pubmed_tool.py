@@ -341,6 +341,11 @@ class PubMedTool(Tool):
 
     @classmethod
     def _parse_article(cls, article: ElementTree.Element) -> Dict[str, Any]:
+        """Parse article metadata, using only valid fallback DOI identifiers.
+
+        PubMed's ELocationID ValidYN defaults to Y; N marks a retained
+        incorrect value and must not become the article's DOI.
+        """
         pmid = cls._element_text(article.find(".//MedlineCitation/PMID"))
         title = cls._element_text(article.find(".//Article/ArticleTitle"))
         journal = cls._element_text(article.find(".//Article/Journal/Title"))
@@ -375,7 +380,8 @@ class PubMedTool(Tool):
                 break
         if not doi:
             for location_id in article.findall(".//MedlineCitation/Article/ELocationID"):
-                if location_id.attrib.get("EIdType") == "doi":
+                if (location_id.attrib.get("EIdType") == "doi"
+                        and location_id.attrib.get("ValidYN", "Y") == "Y"):
                     doi = cls._element_text(location_id)
                     if doi:
                         break
