@@ -57,8 +57,8 @@ class ImageOCRReader(Reader):
             from PIL import Image  # type: ignore
             import pytesseract  # type: ignore
             print("debugging: ImageOCRReader using pytesseract")
-            img = Image.open(file)
-            text = pytesseract.image_to_string(img, lang='chi_sim+eng')
+            with Image.open(file) as img:
+                text = pytesseract.image_to_string(img, lang='chi_sim+eng')
             return text, "pytesseract"
         except Exception as e_tess:
             print(f"debugging: ImageOCRReader pytesseract failed: {e_tess}")
