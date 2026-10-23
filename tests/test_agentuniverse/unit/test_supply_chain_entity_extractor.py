@@ -236,6 +236,23 @@ ABC公司向XYZ制造商供应零部件。
         entities = result[0].metadata.get('entities', [])
         self.assertGreater(len(entities), 0)
 
+    def test_entity_name_does_not_span_lines(self):
+        """A name part separator must not cross a line break.
+
+        The English patterns separate name parts with \s+, which also matches newlines, so
+        with "Supplier Analysis\n\nABC Manufacturing" the heading is swallowed into the
+        entity name (the captured name contains a literal newline).
+        """
+        text = "Supplier Analysis\n\nABC Manufacturing reported growth."
+        doc = Document(text=text)
+        result = self.extractor.process_docs([doc])
+        entities = result[0].metadata.get('entities', [])
+        names = [e.get('name', '') for e in entities]
+
+        self.assertIn('ABC Manufacturing', names)
+        for name in names:
+            self.assertNotIn('\n', name, "entity name must not contain a line break: %r" % name)
+
     def test_complex_supply_chain(self):
         """Test extraction from complex supply chain description."""
         text = """
@@ -336,12 +353,14 @@ Distribution centers in USA and Europe
         result = self.extractor.process_docs([doc])
 
         entities = result[0].metadata.get('entities', [])
-        # Should extract location attributes
-        has_locations = any(
-            e.get('attributes', {}).get('location')
-            for e in entities
-        )
-        self.assertTrue(has_locations or len(entities) > 0)
+        # This prose contains no named supply-chain entity: "Suppliers in Taiwan" is not a
+        # company name.  It never did - the previous assertion (has_locations or len > 0)
+        # was satisfied only by cross-line matches such as "China\nManufacturing", which
+        # the name-part separator \s+ produced by matching newlines.  Assert the real
+        # intent instead: nothing is invented from this text, and no name spans lines.
+        for entity in entities:
+            self.assertNotIn('\n', entity.get('name', ''), "entity name must not span lines")
+        self.assertEqual(len(entities), 0)
 
 
 if __name__ == '__main__':
