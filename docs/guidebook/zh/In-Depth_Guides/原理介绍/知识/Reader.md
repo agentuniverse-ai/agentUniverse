@@ -56,3 +56,8 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml)：读取本地Docx文件中的文本内容
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml)：读取本地Markdown文件中的文本内容
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml)：读取 RAR 压缩文件（.rar）中的文本内容。
+- [default_sevenzip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/sevenzip_reader.yaml)：读取 7Z 压缩文件中的文本内容，支持嵌套压缩包并在解压前执行安全检查。
+
+### 压缩包 Reader 安全说明
+
+`SevenZipReader` 会在解压前校验压缩包中的每个成员。绝对路径、盘符路径、反斜杠、NUL 字节、包含 `..` 的路径、符号链接、特殊文件类型以及加密压缩包都会被拒绝。文件数量、单文件大小、解压后总大小和压缩比限制都会在写入磁盘前根据压缩包元数据执行。嵌套压缩包消耗的字节数和文件数会计入外层压缩包的同一组总额度，后续外层成员必须基于更新后的额度判断；达到最大嵌套深度时也不会再通过会重置额度的 Reader 重新打开压缩包。解压完成后还会确认目标仍位于临时目录内，并且实际大小与声明的未压缩大小一致。

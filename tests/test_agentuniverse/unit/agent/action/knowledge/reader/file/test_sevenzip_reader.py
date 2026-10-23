@@ -1,10 +1,128 @@
-import unittest
-import tempfile
 import os
 import shutil
+import stat
+import sys
+import tempfile
 import time
+import types
+import unittest
 from pathlib import Path
+from unittest import mock
 from agentuniverse.agent.action.knowledge.reader.file.sevenzip_reader import SevenZipReader
+
+
+_UNSET = object()
+
+
+class _Fake7zFileInfo:
+    """Minimal py7zr file metadata used by preflight tests."""
+
+    def __init__(
+        self,
+        filename,
+        uncompressed=0,
+        compressed=_UNSET,
+        is_directory=False,
+        is_symlink=False,
+        attributes=None,
+    ):
+        self.filename = filename
+        self.uncompressed = uncompressed
+        self.compressed = uncompressed if compressed is _UNSET else compressed
+        self.is_directory = is_directory
+        self.is_symlink = is_symlink
+        self.attributes = attributes
+
+
+class _Fake7zArchive:
+    """Context-manager fake that records extraction calls without running py7zr."""
+
+    def __init__(
+        self,
+        entries,
+        needs_password=False,
+        actual_sizes=None,
+        archive_info=None,
+    ):
+        self.entries = entries
+        self.requires_password = needs_password
+        self.actual_sizes = actual_sizes or {}
+        self.archive_info = archive_info
+        self.extracted_targets = []
+        self.extractall_calls = []
+        self.parent_dirs_created = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+    def getnames(self):
+        return [entry.filename for entry in self.entries]
+
+    def list(self):
+        return list(self.entries)
+
+    def needs_password(self):
+        return self.requires_password
+
+    def archiveinfo(self):
+        return self.archive_info
+
+    def extract(self, path=None, targets=None, **kwargs):
+        self.extracted_targets.append(list(targets or []))
+        for target in targets or []:
+            destination = Path(path) / target
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            self.parent_dirs_created.append(destination.parent.is_dir())
+            expected_size = self.actual_sizes.get(target)
+            if expected_size is None:
+                expected_size = next(
+                    entry.uncompressed
+                    for entry in self.entries
+                    if entry.filename == target
+                )
+            destination.write_bytes(b"x" * expected_size)
+
+    def extractall(self, path=None, **kwargs):
+        self.extractall_calls.append(path)
+
+
+def _fake_py7zr_module(archive):
+    class FakeBad7zFile(Exception):
+        pass
+
+    module = types.ModuleType("py7zr")
+    module.Bad7zFile = FakeBad7zFile
+    module.exceptions = types.SimpleNamespace(Bad7zFile=FakeBad7zFile)
+    module.SevenZipFile = lambda *args, **kwargs: archive
+    return module
+
+
+def _fake_py7zr_archive_map(archives):
+    """Return a fake py7zr module that opens archives by file name.
+
+    Nested processing extracts each archive to the same temporary directory,
+    so the name of the opened path is enough to select the recorded fake.
+    """
+
+    class FakeBad7zFile(Exception):
+        pass
+
+    module = types.ModuleType("py7zr")
+    module.Bad7zFile = FakeBad7zFile
+    module.exceptions = types.SimpleNamespace(Bad7zFile=FakeBad7zFile)
+
+    def open_archive(path, *args, **kwargs):
+        archive_name = Path(str(path)).name
+        if archive_name not in archives:
+            raise AssertionError(f"Unexpected archive opened: {archive_name}")
+        return archives[archive_name]
+
+    module.SevenZipFile = open_archive
+    return module
+
 
 class TestSevenZipReaderBasic(unittest.TestCase):
     """SevenZipReader 基础功能测试"""
@@ -82,6 +200,14 @@ class TestSevenZipReaderBasic(unittest.TestCase):
         non_existent_file = os.path.join(self.temp_dir, "non_existent.7z")
         with self.assertRaises(FileNotFoundError):
             self.reader._load_data(non_existent_file)
+    def test_encrypted_archive_is_rejected(self):
+        try:
+            import py7zr
+        except ImportError:
+            self.skipTest("py7zr not available for testing")
+        test_7z_path = self.create_test_7z(password="secret")
+        with self.assertRaisesRegex(ValueError, "Encrypted 7Z archives"):
+            self.reader._load_data(test_7z_path)
     def test_metadata_structure(self):
         try:
             import py7zr
@@ -357,6 +483,361 @@ class TestSevenZipReaderSizeLimits(unittest.TestCase):
             else:
                 raise
 
+class TestSevenZipReaderPreflight(unittest.TestCase):
+    """Security and limit checks must finish before py7zr extracts anything."""
+
+    def setUp(self):
+        self.reader = SevenZipReader()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def _process_fake(self, archive, **limits):
+        settings = {
+            "max_file_size": 1024,
+            "max_total_size": 4096,
+            "max_files": 10,
+            "max_compression_ratio": 1000.0,
+        }
+        settings.update(limits)
+        fake_py7zr = _fake_py7zr_module(archive)
+        with mock.patch.dict(sys.modules, {"py7zr": fake_py7zr}):
+            return self.reader._process_7z(
+                sevenzip_path=Path(self.temp_dir) / "fake.7z",
+                temp_dir=self.temp_dir,
+                current_depth=0,
+                max_depth=5,
+                base_metadata={},
+                archive_root="fake.7z",
+                **settings,
+            )
+
+    def _process_fake_archives(self, archives, max_depth=5, **limits):
+        settings = {
+            "max_file_size": 1024,
+            "max_total_size": 4096,
+            "max_files": 10,
+            "max_compression_ratio": 1000.0,
+        }
+        settings.update(limits)
+        fake_py7zr = _fake_py7zr_archive_map(archives)
+        with mock.patch.dict(sys.modules, {"py7zr": fake_py7zr}):
+            return self.reader._process_7z(
+                sevenzip_path=Path(self.temp_dir) / "outer.7z",
+                temp_dir=self.temp_dir,
+                current_depth=0,
+                max_depth=max_depth,
+                base_metadata={},
+                archive_root="outer.7z",
+                **settings,
+            )
+
+    def test_unsafe_entry_names_are_rejected_before_extraction(self):
+        unsafe_names = [
+            "../escaped.txt",
+            "/absolute.txt",
+            "C:/drive-qualified.txt",
+            "C:\\drive-qualified.txt",
+            "directory\\backslash.txt",
+            "nul\x00byte.txt",
+        ]
+        for entry_name in unsafe_names:
+            with self.subTest(entry_name=entry_name):
+                archive = _Fake7zArchive([
+                    _Fake7zFileInfo(entry_name, uncompressed=4)
+                ])
+                with self.assertRaisesRegex(ValueError, "Unsafe 7Z entry name"):
+                    self._process_fake(archive)
+                self.assertEqual(archive.extracted_targets, [])
+                self.assertEqual(archive.extractall_calls, [])
+
+    def test_symlink_and_special_entries_are_rejected_before_extraction(self):
+        entry_types = [
+            {"is_symlink": True},
+            {"attributes": (stat.S_IFLNK | 0o777) << 16},
+            {"attributes": (stat.S_IFIFO | 0o644) << 16},
+        ]
+        for entry_type in entry_types:
+            with self.subTest(entry_type=entry_type):
+                archive = _Fake7zArchive([
+                    _Fake7zFileInfo(
+                        "special.txt", uncompressed=4, **entry_type
+                    )
+                ])
+                with self.assertRaisesRegex(ValueError, "Unsafe 7Z entry type"):
+                    self._process_fake(archive)
+                self.assertEqual(archive.extracted_targets, [])
+                self.assertEqual(archive.extractall_calls, [])
+
+    def test_encrypted_archive_is_rejected_before_extraction(self):
+        archive = _Fake7zArchive(
+            [_Fake7zFileInfo("secret.txt", uncompressed=4)],
+            needs_password=True,
+        )
+        with self.assertRaisesRegex(ValueError, "Encrypted 7Z archives"):
+            self._process_fake(archive)
+        self.assertEqual(archive.extracted_targets, [])
+        self.assertEqual(archive.extractall_calls, [])
+
+    def test_oversized_member_is_not_in_the_extraction_allowlist(self):
+        archive = _Fake7zArchive([
+            _Fake7zFileInfo(
+                "large.txt",
+                uncompressed=128 * 1024 * 1024,
+                compressed=128 * 1024 * 1024,
+            ),
+            _Fake7zFileInfo("small.txt", uncompressed=5, compressed=5),
+        ])
+        documents = self._process_fake(archive, max_file_size=10)
+
+        self.assertEqual(archive.extracted_targets, [["small.txt"]])
+        self.assertEqual(archive.extractall_calls, [])
+        self.assertEqual(
+            [doc.metadata["file_name"] for doc in documents], ["small.txt"]
+        )
+
+    def test_archive_with_only_oversized_members_is_not_extracted(self):
+        archive = _Fake7zArchive([
+            _Fake7zFileInfo(
+                "large.txt",
+                uncompressed=128 * 1024 * 1024,
+                compressed=128 * 1024 * 1024,
+            )
+        ])
+        documents = self._process_fake(archive, max_file_size=10)
+
+        self.assertEqual(documents, [])
+        self.assertEqual(archive.extracted_targets, [])
+        self.assertEqual(archive.extractall_calls, [])
+
+    def test_total_size_limit_bounds_safe_targets(self):
+        archive = _Fake7zArchive([
+            _Fake7zFileInfo("first.txt", uncompressed=8, compressed=8),
+            _Fake7zFileInfo("second.txt", uncompressed=8, compressed=8),
+        ])
+        self._process_fake(archive, max_file_size=100, max_total_size=10)
+
+        self.assertEqual(archive.extracted_targets, [["first.txt"]])
+        self.assertEqual(archive.extractall_calls, [])
+
+    def test_max_files_limit_bounds_safe_targets(self):
+        archive = _Fake7zArchive([
+            _Fake7zFileInfo("one.txt", uncompressed=2, compressed=2),
+            _Fake7zFileInfo("two.txt", uncompressed=2, compressed=2),
+            _Fake7zFileInfo("three.txt", uncompressed=2, compressed=2),
+        ])
+        self._process_fake(archive, max_files=2)
+
+        # Targets are extracted one by one so a nested archive's actual usage
+        # can be charged before the next sibling is written to disk.
+        self.assertEqual(archive.extracted_targets, [["one.txt"], ["two.txt"]])
+        self.assertEqual(archive.extractall_calls, [])
+
+    def test_nested_extraction_consumes_parent_total_size_budget(self):
+        outer = _Fake7zArchive([
+            _Fake7zFileInfo("nested.7z", uncompressed=10, compressed=10),
+            _Fake7zFileInfo("later.txt", uncompressed=10, compressed=10),
+        ])
+        nested = _Fake7zArchive([
+            _Fake7zFileInfo("a.txt", uncompressed=15, compressed=15),
+            _Fake7zFileInfo("b.txt", uncompressed=15, compressed=15),
+        ])
+        documents = self._process_fake_archives(
+            {"outer.7z": outer, "nested.7z": nested},
+            max_file_size=100,
+            max_total_size=45,
+        )
+
+        # The nested archive's 30 uncompressed bytes are charged on top of its
+        # own 10-byte member, leaving no room for the later 10-byte sibling.
+        self.assertEqual(outer.extracted_targets, [["nested.7z"]])
+        self.assertEqual(nested.extracted_targets, [["a.txt"], ["b.txt"]])
+        self.assertEqual(
+            [doc.metadata["file_name"] for doc in documents], ["a.txt", "b.txt"]
+        )
+        self.assertFalse((Path(self.temp_dir) / "later.txt").exists())
+
+    def test_nested_extraction_consumes_parent_file_budget(self):
+        outer = _Fake7zArchive([
+            _Fake7zFileInfo("nested.7z", uncompressed=5, compressed=5),
+            _Fake7zFileInfo("later.txt", uncompressed=5, compressed=5),
+        ])
+        nested = _Fake7zArchive([
+            _Fake7zFileInfo("one.txt", uncompressed=5, compressed=5),
+            _Fake7zFileInfo("two.txt", uncompressed=5, compressed=5),
+        ])
+
+        self._process_fake_archives(
+            {"outer.7z": outer, "nested.7z": nested},
+            max_files=3,
+        )
+
+        # outer + nested archive itself + two nested members exhaust max_files,
+        # so the later outer sibling must not be extracted.
+        self.assertEqual(outer.extracted_targets, [["nested.7z"]])
+        self.assertEqual(nested.extracted_targets, [["one.txt"], ["two.txt"]])
+        self.assertFalse((Path(self.temp_dir) / "later.txt").exists())
+
+    def test_doubly_nested_usage_is_charged_to_the_outer_archive(self):
+        outer = _Fake7zArchive([
+            _Fake7zFileInfo("mid.7z", uncompressed=5, compressed=5),
+            _Fake7zFileInfo("later.txt", uncompressed=10, compressed=10),
+        ])
+        middle = _Fake7zArchive([
+            _Fake7zFileInfo("inner.7z", uncompressed=5, compressed=5),
+            _Fake7zFileInfo("sibling.txt", uncompressed=5, compressed=5),
+        ])
+        inner = _Fake7zArchive([
+            _Fake7zFileInfo("leaf.txt", uncompressed=5, compressed=5),
+        ])
+
+        documents = self._process_fake_archives(
+            {"outer.7z": outer, "mid.7z": middle, "inner.7z": inner},
+            max_file_size=100,
+            max_total_size=18,
+        )
+
+        # mid.7z + inner.7z + leaf.txt consume 15 bytes. The middle sibling
+        # would exceed its 13-byte share and the outer later.txt is blocked by
+        # the 18-byte aggregate limit.
+        self.assertEqual(outer.extracted_targets, [["mid.7z"]])
+        self.assertEqual(middle.extracted_targets, [["inner.7z"]])
+        self.assertEqual(inner.extracted_targets, [["leaf.txt"]])
+        self.assertEqual(
+            [doc.metadata["file_name"] for doc in documents], ["leaf.txt"]
+        )
+        self.assertFalse((Path(self.temp_dir) / "sibling.txt").exists())
+        self.assertFalse((Path(self.temp_dir) / "later.txt").exists())
+
+    def test_nested_validation_failure_aborts_outer_extraction(self):
+        outer = _Fake7zArchive([
+            _Fake7zFileInfo("nested.7z", uncompressed=5, compressed=5),
+            _Fake7zFileInfo("later.txt", uncompressed=5, compressed=5),
+        ])
+        nested = _Fake7zArchive([
+            _Fake7zFileInfo("../escaped.txt", uncompressed=5, compressed=5),
+        ])
+
+        with self.assertRaisesRegex(ValueError, "Unsafe 7Z entry name"):
+            self._process_fake_archives(
+                {"outer.7z": outer, "nested.7z": nested},
+                max_total_size=100,
+            )
+
+        self.assertEqual(outer.extracted_targets, [["nested.7z"]])
+        self.assertEqual(nested.extracted_targets, [])
+        self.assertFalse((Path(self.temp_dir) / "later.txt").exists())
+
+    def test_nested_archive_at_max_depth_is_not_reopened(self):
+        outer = _Fake7zArchive([
+            _Fake7zFileInfo("inner.7z", uncompressed=5, compressed=5),
+            _Fake7zFileInfo("later.txt", uncompressed=5, compressed=5),
+        ])
+        inner = _Fake7zArchive([
+            _Fake7zFileInfo("../escaped.txt", uncompressed=5, compressed=5),
+        ])
+
+        documents = self._process_fake_archives(
+            {"outer.7z": outer, "inner.7z": inner},
+            max_depth=0,
+        )
+
+        # At the depth limit the nested file must be skipped rather than handed
+        # to _process_file(), which would reopen it with default limits.
+        self.assertEqual(outer.extracted_targets, [["inner.7z"], ["later.txt"]])
+        self.assertEqual(inner.extracted_targets, [])
+        self.assertEqual(
+            [doc.metadata["file_name"] for doc in documents], ["later.txt"]
+        )
+
+    def test_extraction_creates_parent_directories_for_nested_paths(self):
+        archive = _Fake7zArchive([
+            _Fake7zFileInfo("docs/nested/data.txt", uncompressed=5, compressed=5),
+        ])
+
+        documents = self._process_fake(archive)
+
+        extracted = Path(self.temp_dir) / "docs" / "nested" / "data.txt"
+        self.assertTrue(extracted.is_file())
+        self.assertEqual(extracted.read_bytes(), b"xxxxx")
+        self.assertEqual(
+            [doc.metadata["file_name"] for doc in documents], ["data.txt"]
+        )
+
+    def test_load_data_uses_preflight_targets_and_cleans_temporary_directory(self):
+        input_path = Path(self.temp_dir) / "outer.7z"
+        input_path.write_bytes(b"placeholder")
+        staging_dir = Path(self.temp_dir) / "staging"
+        archive = _Fake7zArchive([
+            _Fake7zFileInfo("docs/data.txt", uncompressed=5, compressed=5),
+            _Fake7zFileInfo("large.txt", uncompressed=100, compressed=100),
+        ])
+        fake_py7zr = _fake_py7zr_module(archive)
+
+        with mock.patch.dict(sys.modules, {"py7zr": fake_py7zr}), mock.patch(
+            "agentuniverse.agent.action.knowledge.reader.file."
+            "sevenzip_reader.tempfile.mkdtemp",
+            return_value=str(staging_dir),
+        ):
+            documents = self.reader._load_data(input_path, max_file_size=10)
+
+        # The public entry point must use the same validated allowlist, create
+        # parent directories for the selected target and remove staging data.
+        self.assertEqual(archive.extracted_targets, [["docs/data.txt"]])
+        self.assertEqual(archive.parent_dirs_created, [True])
+        self.assertEqual(
+            [doc.metadata["file_name"] for doc in documents], ["data.txt"]
+        )
+        self.assertFalse(staging_dir.exists())
+
+    def test_compression_ratio_is_rejected_before_extraction(self):
+        archive = _Fake7zArchive([
+            _Fake7zFileInfo("bomb.txt", uncompressed=1000, compressed=10)
+        ])
+        with self.assertRaisesRegex(ValueError, "compression ratio"):
+            self._process_fake(archive, max_compression_ratio=10.0)
+        self.assertEqual(archive.extracted_targets, [])
+        self.assertEqual(archive.extractall_calls, [])
+
+    def test_missing_size_metadata_fails_before_extraction(self):
+        entries = [
+            _Fake7zFileInfo("missing-uncompressed.txt", uncompressed=None),
+            _Fake7zFileInfo(
+                "missing-compressed.txt", uncompressed=5, compressed=None
+            ),
+        ]
+        for entry in entries:
+            with self.subTest(filename=entry.filename):
+                archive = _Fake7zArchive([entry])
+                with self.assertRaisesRegex(ValueError, "size metadata"):
+                    self._process_fake(archive)
+                self.assertEqual(archive.extracted_targets, [])
+                self.assertEqual(archive.extractall_calls, [])
+
+    def test_missing_per_file_compressed_size_uses_archive_ratio(self):
+        archive = _Fake7zArchive(
+            [_Fake7zFileInfo("solid.txt", uncompressed=5, compressed=None)],
+            archive_info=types.SimpleNamespace(compressed=10, uncompressed=5),
+        )
+        documents = self._process_fake(archive, max_compression_ratio=10.0)
+
+        self.assertEqual(archive.extracted_targets, [["solid.txt"]])
+        self.assertEqual(
+            [doc.metadata["file_name"] for doc in documents], ["solid.txt"]
+        )
+
+    def test_extracted_size_must_match_metadata(self):
+        archive = _Fake7zArchive(
+            [_Fake7zFileInfo("data.txt", uncompressed=5, compressed=5)],
+            actual_sizes={"data.txt": 4},
+        )
+        with self.assertRaisesRegex(ValueError, "size does not match"):
+            self._process_fake(archive)
+        self.assertEqual(archive.extracted_targets, [["data.txt"]])
+
+
 class TestSevenZipReaderRealWorldScenarios(unittest.TestCase):
     """SevenZipReader 真实世界场景测试"""
     def setUp(self):
@@ -519,6 +1000,67 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
         self.assertEqual(len(deep_files), 1)
         deep_doc = deep_files[0]
         self.assertIn('level_07', deep_doc.metadata.get('archive_path', ''))
+    def test_path_traversal_entry_is_rejected(self):
+        try:
+            import py7zr
+        except ImportError:
+            self.skipTest("py7zr not available")
+        source = Path(self.temp_dir) / "traversal_source.txt"
+        source.write_text("must not escape", encoding="utf-8")
+        escaped_name = f"sevenzip_escape_{time.time_ns()}.txt"
+        archive_path = Path(self.temp_dir) / "traversal.7z"
+        try:
+            with py7zr.SevenZipFile(archive_path, "w") as archive:
+                archive.write(source, f"../{escaped_name}")
+        except Exception as exc:
+            self.skipTest(f"Failed to create traversal 7Z: {exc}")
+
+        with py7zr.SevenZipFile(archive_path, "r") as archive:
+            names = archive.getnames()
+        if not any(".." in name for name in names):
+            self.skipTest("py7zr normalized the traversal entry name")
+
+        escaped_path = Path(self.temp_dir).parent / escaped_name
+        self.addCleanup(lambda: escaped_path.unlink(missing_ok=True))
+        with self.assertRaisesRegex(ValueError, "Unsafe 7Z entry name"):
+            self.reader._load_data(archive_path)
+        self.assertFalse(escaped_path.exists())
+    def test_symlink_entry_is_rejected(self):
+        try:
+            import py7zr
+        except ImportError:
+            self.skipTest("py7zr not available")
+        target = Path(self.temp_dir) / "symlink_target.txt"
+        target.write_text("target", encoding="utf-8")
+        link = Path(self.temp_dir) / "symlink_entry.txt"
+        try:
+            os.symlink(target, link)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"Symlinks are not available: {exc}")
+
+        archive_path = Path(self.temp_dir) / "symlink.7z"
+        try:
+            with py7zr.SevenZipFile(archive_path, "w") as archive:
+                archive.write(link, "symlink_entry.txt")
+        except Exception as exc:
+            self.skipTest(f"Failed to create symlink 7Z: {exc}")
+
+        with py7zr.SevenZipFile(archive_path, "r") as archive:
+            entries = [info for info in archive.list()
+                       if info.filename == "symlink_entry.txt"]
+        if not entries:
+            self.skipTest("py7zr did not store the symlink entry")
+        attributes = int(getattr(entries[0], "attributes", 0) or 0)
+        mode = attributes >> 16
+        if not (
+            getattr(entries[0], "is_symlink", False)
+            or (mode and stat.S_ISLNK(mode))
+            or attributes & 0x400
+        ):
+            self.skipTest("py7zr did not preserve symlink metadata")
+
+        with self.assertRaisesRegex(ValueError, "Unsafe 7Z entry type"):
+            self.reader._load_data(archive_path)
     def test_path_handling_with_different_types(self):
         try:
             import py7zr
