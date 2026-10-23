@@ -320,8 +320,10 @@ SUMMARY:
         if len(combined) <= target_chars:
             return combined
 
-        # Truncate with ellipsis
-        return combined[:target_chars - 10] + "... [summarized]"
+        # Include the marker inside the same chars/4 estimate allowance.
+        # Clipping it also avoids negative slicing for tiny allowances.
+        marker = "... [summarized]"[:max(0, target_chars)]
+        return combined[:max(0, target_chars - len(marker))] + marker
 
     def _basic_summarization_segment(
         self,
@@ -329,6 +331,10 @@ SUMMARY:
         target_tokens: int
     ) -> ContextSegment:
         """Create basic summary segment (fallback).
+
+        The marker shares the target_tokens * 4 character allowance with
+        source text. Token accounting uses the same chars/4 estimate; this
+        fallback does not guarantee a model-specific tokenizer budget.
 
         Args:
             segments: Segments to summarize
@@ -338,7 +344,7 @@ SUMMARY:
             Summary segment
         """
         summary_text = self._basic_summarization(segments, target_tokens)
-        summary_tokens = min(target_tokens, len(summary_text) // 4)
+        summary_tokens = len(summary_text) // 4
 
         summary_seg = ContextSegment(
             type=segments[0].type,
