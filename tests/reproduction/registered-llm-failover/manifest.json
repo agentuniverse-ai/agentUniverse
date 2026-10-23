@@ -1,0 +1,14 @@
+{
+  "feature": "feat(llm): add explicit registered-provider failover",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4219",
+  "tested_code_commit": "b4d3649bd9d3d0f21eafebf2c24be18ed279ee2b",
+  "tests": [
+    "tests/test_agentuniverse/unit/llm/test_registered_failover.py",
+    "tests/test_agentuniverse/integration/test_registered_failover_http.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
