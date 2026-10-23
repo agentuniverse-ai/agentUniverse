@@ -28,12 +28,14 @@ class ClaudeLangChainInstance(ChatAnthropic):
     def __init__(self, llm: LLM):
         init_params = {}
         init_params['model'] = llm.model_name if llm.model_name else 'Claude-Instant-V1.3'
-        init_params['temperature'] = llm.temperature if llm.temperature else 0.7
+        # 0 是合法配置值（temperature=0 确定性输出、max_retries=0 不重试），
+        # 只有用 None 判定未设置才能保留它们。
+        init_params['temperature'] = llm.temperature if llm.temperature is not None else 0.7
         init_params['default_request_timeout'] = llm.request_timeout
         init_params['streaming'] = llm.streaming if llm.streaming else False
         init_params['anthropic_api_key'] = llm.api_key if llm.api_key else 'blank'
         init_params['max_tokens'] = llm.max_tokens
-        init_params['max_retries'] = llm.max_retries if llm.max_retries else 2
+        init_params['max_retries'] = llm.max_retries if llm.max_retries is not None else 2
         init_params['anthropic_api_url'] = llm.api_url
         init_params['streaming'] = llm.streaming
         init_params['llm'] = llm
