@@ -99,7 +99,11 @@ class ContextAwareFutureTest(unittest.TestCase):
             started.append("side_effect")
 
         self.executor.submit(blocker)
+        # Bounded wait: an unbounded spin would hang the suite instead of failing it
+        # if the worker never picked the task up.
+        deadline = time.monotonic() + 5
         while "blocker" not in started:
+            self.assertLess(time.monotonic(), deadline, "blocker task never started")
             time.sleep(0.01)
 
         future = self.executor.submit(side_effect)
