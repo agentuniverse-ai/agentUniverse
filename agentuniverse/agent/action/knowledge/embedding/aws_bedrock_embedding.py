@@ -22,7 +22,7 @@ class AWSBedrockEmbedding(Embedding):
 
     Supported Models:
         - amazon.titan-embed-text-v1 (1536 dimensions, fixed)
-        - amazon.titan-embed-text-v2 (configurable: 256, 384, 1024 dimensions)
+        - amazon.titan-embed-text-v2 (configurable: 256, 512, 1024 dimensions)
         - cohere.embed-english-v3 (1024 dimensions)
         - cohere.embed-multilingual-v3 (1024 dimensions)
 
@@ -56,6 +56,10 @@ class AWSBedrockEmbedding(Embedding):
         Args:
             texts (List[str]): A list of texts to be embedded.
             **kwargs: Additional arguments for model-specific parameters.
+                For Cohere, text_type="query" selects search_query; other
+                calls default to search_document. An explicit input_type
+                takes precedence. Titan v2 preserves the normalize setting;
+                Titan v1 accepts only inputText.
 
         Returns:
             List[List[float]]: A list of embeddings corresponding to the input texts.
@@ -78,16 +82,19 @@ class AWSBedrockEmbedding(Embedding):
                 # Prepare request body based on model type
                 if "titan" in model_id.lower():
                     body = {"inputText": text}
-                    if self.normalize:
-                        body["normalize"] = True
-                    # Only add dimensions for titan-embed-text-v2
-                    if "v2" in model_id and self.dimensions is not None:
-                        body["dimensions"] = self.dimensions
+                    # Only Titan v2 accepts normalization and dimensions.
+                    if "v2" in model_id:
+                        body["normalize"] = self.normalize
+                        if self.dimensions is not None:
+                            body["dimensions"] = self.dimensions
 
                 elif "cohere" in model_id.lower():
                     body = {
                         "texts": [text],
-                        "input_type": kwargs.get("input_type", "search_document")
+                        "input_type": kwargs.get(
+                            "input_type",
+                            "search_query" if kwargs.get("text_type") == "query" else "search_document"
+                        )
                     }
                 else:
                     raise ValueError(f"Unsupported model: {model_id}")
