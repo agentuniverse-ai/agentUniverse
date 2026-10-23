@@ -42,7 +42,18 @@ def request_param(func):
         else:
             if "application/json" in request.headers.get("Content-Type", ""):
                 raw_data = request.data.decode('utf-8')
-                req_data = json.loads(raw_data)
+                try:
+                    req_data = json.loads(raw_data)
+                except (json.JSONDecodeError, ValueError) as e:
+                    LOGGER.warning(
+                        "Failed to decode JSON body for %s %s: %s",
+                        request.method, request.path, e,
+                    )
+                    return make_standard_response(
+                        False, result=None,
+                        message=f"invalid JSON body: {e}",
+                        status_code=400,
+                    )
             else:
                 req_data = request.form.to_dict()
         # Get the func arguments name and type.
