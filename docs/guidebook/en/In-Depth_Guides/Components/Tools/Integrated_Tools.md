@@ -655,8 +655,13 @@ result = tool.execute(mode="audit_safety", file_path="bundle.tar.gz")
 ```
 
 `inspect` returns the sniffed format and variant (v7/ustar/gnu/pax), entry
-count, per-entry metadata (name, kind, size, symbolic mode, uid/gid, mtime,
-link target) capped by `max_reported_entries`, total uncompressed size, and
+count, per-entry metadata mirroring `tarfile.getmembers()` field by field —
+name (the effective name after PAX `path` overrides), kind, size, symbolic
+mode, uid/gid, uname/gname, mtime (PAX fractional/negative values preserved),
+link target, and a bounded `pax_headers` map with the PAX extended attributes
+(`atime`, `ctime`, `mtime` overrides, GNU sparse markers; informational only,
+never affecting audit verdicts) — capped by `max_reported_entries`, total
+uncompressed size, and
 the compression ratio. `audit_safety` returns entry-by-entry findings with
 severities — path traversal (`..` components are flagged high by default,
 including backslash and absolute `/`, Windows drive, and UNC forms), symlink

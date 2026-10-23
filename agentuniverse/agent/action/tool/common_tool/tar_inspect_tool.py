@@ -43,6 +43,14 @@ class TarInspectTool(Tool):
     base64 payload (size capped). The format is detected from magic bytes, not
     from the file extension, and any extension mismatch is reported as a
     finding.
+
+    Per-entry metadata mirrors stdlib ``tarfile.getmembers()`` field by field:
+    name (the EFFECTIVE name after PAX ``path`` overrides), kind, size, mode
+    (both symbolic and numeric), uid/gid, uname/gname, mtime (PAX fractional
+    and negative mtimes preserved) and link target. PAX extended attributes
+    (``atime``, ``ctime``, ``mtime`` overrides, GNU sparse markers, ...) are
+    surfaced as a bounded ``pax_headers`` map on the entry when present;
+    atime/ctime are informational only and never affect audit verdicts.
     """
 
     base_dir: str = "."
@@ -339,6 +347,8 @@ class TarInspectTool(Tool):
                 "mode_int": int(member.mode),
                 "uid": member.uid,
                 "gid": member.gid,
+                "uname": self._display(member.uname or ""),
+                "gname": self._display(member.gname or ""),
                 "mtime": int(member.mtime) if float(member.mtime).is_integer() else member.mtime,
                 "link_target": member.linkname if member.linkname else None,
                 "pax": bool(getattr(member, "pax_headers", None)),
@@ -346,6 +356,7 @@ class TarInspectTool(Tool):
             entries.append(entry)
             if entry["pax"]:
                 pax_seen = True
+                entry["pax_headers_full"] = dict(member.pax_headers)
                 if any(key.startswith("GNU.sparse") for key in member.pax_headers):
                     notes.append(
                         {
@@ -368,16 +379,27 @@ class TarInspectTool(Tool):
 
     @staticmethod
     def _public_entry(entry: dict[str, Any]) -> dict[str, Any]:
-        return {
+        public = {
             "name": entry["name"],
             "kind": entry["kind"],
             "size": entry["size"],
             "mode": entry["mode"],
             "uid": entry["uid"],
             "gid": entry["gid"],
+            "uname": entry["uname"],
+            "gname": entry["gname"],
             "mtime": entry["mtime"],
             "link_target": TarInspectTool._display(entry["link_target"]) if entry["link_target"] else None,
         }
+        pax_headers = entry.get("pax_headers_full")
+        if pax_headers:
+            # PAX extended attributes (mtime overrides, atime/ctime, path/size
+            # overrides, GNU.sparse.*): surfaced verbatim but bounded so a
+            # hostile header cannot flood the report.
+            public["pax_headers"] = {
+                key: TarInspectTool._display(value)[:200] for key, value in sorted(pax_headers.items())[:16]
+            }
+        return public
 
     # ------------------------------------------------------------- inspection
 

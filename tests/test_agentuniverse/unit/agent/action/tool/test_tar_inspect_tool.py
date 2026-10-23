@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import os
+import posixpath
 import random
 import stat
 import subprocess
@@ -987,6 +988,297 @@ class SelfReviewRegressionTest(TarInspectToolTest):
         result = self.inspect(path)
         self.assertEqual(result["status"], "error")
         self.assertIn(result["error_type"], {"validation_error", "operation_error"})
+
+
+class SecondPassRegressionTest(TarInspectToolTest):
+    """Second hostile pass: wider field parity, deeper attacks, corruption sweep."""
+
+    # -- (a) 250 fresh seeded archives, full field-by-field parity -------------
+    def test_seeded_field_parity_250(self):
+        """uname/gname/uid/gid/link/pax_headers parity on fresh seeded archives."""
+        formats = [tarfile.USTAR_FORMAT, tarfile.PAX_FORMAT, tarfile.GNU_FORMAT]
+        compressions = [None, None, "gz", "bz2", "xz"]
+        checked = 0
+        for seed in range(250):
+            with self.subTest(seed=seed):
+                tar_format = formats[seed % len(formats)]
+                compression = compressions[seed % len(compressions)]
+                suffix = ".tar" if compression is None else f".tar.{compression}"
+                try:
+                    path = self.build(f"sp2-{seed}{suffix}", self._second_pass_builder(seed), compression, tar_format)
+                except ValueError:
+                    continue  # ustar refuses >100-char names; tarfile oracle agrees
+                result = self.inspect(path)
+                self.assertEqual(result["status"], "success", result)
+                with tarfile.open(path, mode="r:*") as archive:
+                    members = archive.getmembers()
+                self.assertEqual(result["entry_count"], len(members))
+                for got, member in zip(result["entries"], members, strict=True):
+                    self.assertEqual(got["name"], member.name)
+                    self.assertEqual(got["kind"], oracle_kind(member))
+                    self.assertEqual(got["size"], member.size)
+                    self.assertEqual(got["uid"], member.uid)
+                    self.assertEqual(got["gid"], member.gid)
+                    self.assertEqual(got["uname"], member.uname or "")
+                    self.assertEqual(got["gname"], member.gname or "")
+                    expected_mtime = int(member.mtime) if float(member.mtime).is_integer() else member.mtime
+                    self.assertEqual(got["mtime"], expected_mtime)
+                    expected_letter = {
+                        "file": "-", "dir": "d", "symlink": "l", "hardlink": "h",
+                        "fifo": "p", "other": "?",
+                        "dev": "c" if member.ischr() else "b",
+                    }[oracle_kind(member)]
+                    self.assertEqual(got["mode"][0], expected_letter)
+                    self.assertEqual(got["mode"][1:], stat.filemode(member.mode)[1:])
+                    self.assertEqual(got["link_target"], member.linkname or None)
+                    if member.pax_headers and len(member.pax_headers) <= 16:
+                        bounded = {key: value[:200] for key, value in sorted(member.pax_headers.items())}
+                        self.assertEqual(got.get("pax_headers"), bounded)
+                    else:
+                        self.assertNotIn("pax_headers", got)
+                checked += 1
+        self.assertGreater(checked, 150)
+
+    @staticmethod
+    def _second_pass_builder(seed):
+        """Deterministic second-pass layout: pax attributes, long names, odd metadata."""
+
+        def builder(archive):
+            rng = random.Random(31000 + seed)  # noqa: S311 - deterministic test data
+            for index in range(rng.randint(1, 6)):
+                roll = rng.random()
+                if roll < 0.4:
+                    info = tarfile.TarInfo(f"file{index}.txt")
+                    payload = bytes(rng.randrange(256) for _ in range(rng.randint(0, 60)))
+                    info.size = len(payload)
+                    info.mode = rng.choice([0o644, 0o755, 0o4755, 0o2750, 0o1777])
+                    info.mtime = rng.choice([SANE_MTIME, 0, 1, 2**31 - 1])
+                    info.uid = rng.randint(0, 60000)
+                    info.gid = rng.randint(0, 60000)
+                    info.uname = rng.choice(["root", "user 一", "", "u" * 30])
+                    info.gname = rng.choice(["wheel", "", "g" * 30])
+                    if rng.random() < 0.5:
+                        info.pax_headers = {"atime": "1575800000.123456789", "ctime": "1575800001.5"}
+                    archive.addfile(info, io.BytesIO(payload))
+                elif roll < 0.6:
+                    add_dir(archive, f"d{index}/")
+                elif roll < 0.75:
+                    add_symlink(archive, f"sym{index}", rng.choice(["t", "../up", "/abs", "a/b/c"]))
+                elif roll < 0.85:
+                    add_hardlink(archive, f"hard{index}", "file0.txt")
+                elif roll < 0.92:
+                    info = tarfile.TarInfo(f"dev{index}")
+                    info.type = rng.choice([tarfile.CHRTYPE, tarfile.BLKTYPE])
+                    info.devmajor, info.devminor = 1, 3
+                    info.mode = rng.choice([0o644, 0o4777])
+                    info.mtime = SANE_MTIME
+                    archive.addfile(info)
+                else:
+                    info = tarfile.TarInfo("L" * 210 + f"/long{index}.txt")  # >200 chars: needs pax/gnu
+                    info.size = 3
+                    info.mtime = SANE_MTIME
+                    archive.addfile(info, io.BytesIO(b"abc"))
+
+        return builder
+
+    # -- pax atime/ctime attributes are surfaced per entry ---------------------
+    def test_pax_attributes_surfaced(self):
+        """atime/ctime pax attributes appear on the entry as a bounded map."""
+        def builder(archive):
+            info = tarfile.TarInfo("f.txt")
+            info.size = 4
+            info.mtime = SANE_MTIME
+            info.pax_headers = {"atime": "1575800000.123456789", "ctime": "1575800001.5"}
+            archive.addfile(info, io.BytesIO(b"data"))
+
+        path = self.build("pax-attrs.tar", builder)
+        result = self.inspect(path)
+        self.assertEqual(result["status"], "success", result)
+        entry = result["entries"][0]
+        self.assertEqual(entry["pax_headers"]["atime"], "1575800000.123456789")
+        self.assertEqual(entry["pax_headers"]["ctime"], "1575800001.5")
+        rules = {finding["rule"] for finding in result["findings"]}
+        self.assertIn("pax_extensions", rules)
+
+    # -- (b) deeper multi-hop symlink farms ------------------------------------
+    def test_composing_three_hop_symlink_escape(self):
+        """A composing 3-hop chain (each link lands on the next) is caught."""
+        path = self.build(
+            "chain3.tar",
+            lambda archive: (
+                add_dir(archive, "m1/"),
+                add_dir(archive, "m1/m2/"),
+                add_file(archive, "m1/real.txt", b"data"),
+                add_file(archive, "m1/m2/real2.txt", b"data"),
+                add_symlink(archive, "hop1", "m1/hop2"),
+                add_symlink(archive, "m1/hop2", "m2/hop3"),
+                add_symlink(archive, "m1/m2/hop3", "../../../etc"),
+                add_file(archive, "hop1/pwned.txt", b"pwn!"),
+            ),
+        )
+        result = self.audit(path)
+        self.assertEqual(result["status"], "success", result)
+        by_rule = {finding["rule"]: finding for finding in result["findings"]}
+        self.assertIn("symlink_redirect", by_rule)
+        self.assertIn("hop1/pwned.txt", by_rule["symlink_redirect"]["entries"])
+        plan = self.tool.execute(mode="plan_extraction", file_path="chain3.tar", dest_dir="out")
+        entry = next(item for item in plan["plans"] if item["name"] == "hop1/pwned.txt")
+        self.assertTrue(entry["escapes_dest"])
+        self.assertEqual(len(entry["redirect_via"]), 3)
+
+    def test_non_composing_chain_is_not_a_redirect(self):
+        """A chain whose redirect path no longer matches a real symlink stops."""
+        path = self.build(
+            "chain-broken.tar",
+            lambda archive: (
+                add_symlink(archive, "a1", "l1/a2"),
+                add_symlink(archive, "l1/a2", "l2/a3"),
+                add_symlink(archive, "l2/a3", "l3/a4"),
+                add_symlink(archive, "l3/a4", "../../../../outside"),
+                add_file(archive, "l1/f.txt", b"x"),
+                add_file(archive, "a1/deep/file.txt", b"x"),
+            ),
+        )
+        result = self.audit(path)
+        rules = {finding["rule"] for finding in result["findings"]}
+        # resolving a1 lands at l1/l2/a3, which is NOT a symlink entry
+        self.assertNotIn("symlink_redirect", rules)
+
+    def test_absolute_hop_chain_redirect(self):
+        """A hop onto an absolute symlink target escapes immediately."""
+        path = self.build(
+            "chain-abs.tar",
+            lambda archive: (
+                add_symlink(archive, "s1", "d/s2"),
+                add_symlink(archive, "d/s2", "/etc"),
+                add_file(archive, "s1/x", b"x"),
+            ),
+        )
+        result = self.audit(path)
+        rules = {finding["rule"] for finding in result["findings"]}
+        self.assertIn("symlink_redirect", rules)
+
+    def test_pax_path_override_is_the_effective_name(self):
+        """Traversal hidden in a pax path header is flagged on the effective name."""
+        def builder(archive):
+            info = tarfile.TarInfo("benign.txt")
+            info.size = 4
+            info.mtime = SANE_MTIME
+            info.pax_headers = {"path": "../../etc/pwned"}
+            archive.addfile(info, io.BytesIO(b"pwn!"))
+
+        path = self.build("pax-trav.tar", builder)
+        result = self.audit(path)
+        rules = {finding["rule"] for finding in result["findings"]}
+        self.assertIn("path_traversal_dotdot", rules)
+        inspected = self.inspect(path)
+        self.assertTrue(any("../" in entry["name"] for entry in inspected["entries"]))
+
+    def test_duplicate_symlink_over_earlier_file(self):
+        """A later symlink duplicating an earlier file name is a duplicate finding."""
+        path = self.build(
+            "dup-sym.tar",
+            lambda archive: (
+                add_file(archive, "shared", b"aaaaa"),
+                add_file(archive, "helper", b"b"),
+                add_symlink(archive, "shared", "helper"),
+            ),
+        )
+        result = self.audit(path)
+        by_rule = {finding["rule"]: finding for finding in result["findings"]}
+        self.assertIn("duplicate_entries", by_rule)
+        self.assertEqual(by_rule["duplicate_entries"]["count"], 1)
+
+    def test_device_nodes_with_odd_modes(self):
+        """Device nodes with setuid/setgid bits trigger both rules."""
+        def builder(archive):
+            for index, mode in enumerate([0o4777, 0o2755, 0o644]):
+                info = tarfile.TarInfo(f"dev{index}")
+                info.type = tarfile.CHRTYPE
+                info.devmajor, info.devminor = 1, index
+                info.mode = mode
+                info.mtime = SANE_MTIME
+                archive.addfile(info)
+            blk = tarfile.TarInfo("blk0")
+            blk.type = tarfile.BLKTYPE
+            blk.devmajor, blk.devminor = 7, 0
+            blk.mtime = SANE_MTIME
+            archive.addfile(blk)
+
+        path = self.build("dev-odd.tar", builder)
+        result = self.audit(path)
+        rules = {finding["rule"] for finding in result["findings"]}
+        self.assertIn("device_special", rules)
+        self.assertIn("setuid_setgid", rules)
+
+    # -- (c) corrupted-archive sweep -------------------------------------------
+    def test_truncation_sweep_every_five_percent(self):
+        """Truncating 20 archives at every 5% boundary stays structured."""
+        for seed in range(20):
+            path = self.build(f"sweep-{seed}.tar", self._second_pass_builder(900 + seed))
+            with open(path, "rb") as stream:
+                data = stream.read()
+            for percent in range(5, 100, 5):
+                with self.subTest(seed=seed, percent=percent):
+                    cut = max(1, len(data) * percent // 100)
+                    truncated = self.path(f"sweep-cut-{seed}-{percent}.bin")
+                    with open(truncated, "wb") as stream:
+                        stream.write(data[:cut])
+                    result = self.audit(truncated)
+                    self.assertIn(result["status"], {"success", "error"}, result)
+                    if result["status"] == "error":
+                        self.assertNotEqual(result["error_type"], "operation_error", result)
+
+    # -- (d) base64 round trip carries the new fields ---------------------------
+    def test_base64_round_trip_uname_gname_pax(self):
+        """The base64 payload path surfaces uname/gname/pax_headers identically."""
+        def builder(archive):
+            info = tarfile.TarInfo("f.txt")
+            info.size = 4
+            info.mtime = SANE_MTIME
+            info.uname = "user 一"
+            info.gname = "wheel"
+            info.pax_headers = {"atime": "1575800000.5"}
+            archive.addfile(info, io.BytesIO(b"data"))
+
+        path = self.build("b64-attrs.tar", builder)
+        with open(path, "rb") as stream:
+            payload = stream.read()
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:") as archive:
+            oracle = archive.getmembers()[0].pax_headers
+        result = self.tool.execute(mode="inspect", base64_archive=base64.b64encode(payload).decode("ascii"))
+        self.assertEqual(result["status"], "success", result)
+        entry = result["entries"][0]
+        self.assertEqual(entry["uname"], "user 一")
+        self.assertEqual(entry["gname"], "wheel")
+        # tarfile mirrors the non-ASCII uname into pax; both views agree
+        self.assertEqual(entry["pax_headers"], {key: value[:200] for key, value in sorted(oracle.items())})
+        self.assertEqual(entry["pax_headers"]["atime"], "1575800000.5")
+
+    # -- (e) plan_extraction vs normpath on 300 fresh names --------------------
+    def test_plan_matches_normpath_300(self):
+        """Plain (non-redirect) plan resolution equals posixpath.normpath(join)."""
+        pool = ["a", "b", "c", "..", ".", "x y", "m", "n"]
+        rng = random.Random(424242)  # noqa: S311 - deterministic test data
+        for index in range(300):
+            with self.subTest(index=index):
+                dest = rng.choice(["out", "./out", "out/sub", "/abs/root", "o u t"])
+                name = "/".join(rng.choice(pool) for _ in range(rng.randint(1, 4)))
+                path = self.build(f"plan2-{index}.tar", lambda archive, n=name: add_file(archive, n, b"z"))
+                result = self.tool.execute(mode="plan_extraction", file_path=os.path.basename(path), dest_dir=dest)
+                self.assertEqual(result["status"], "success", result)
+                root = posixpath.normpath(dest.replace("\\", "/"))
+                want = posixpath.normpath(name) if name.startswith("/") else posixpath.normpath(posixpath.join(root, name))
+                self.assertEqual(result["plans"][0]["resolved_path"], want)
+
+    # -- (f) pathological: a 10MB single name field -----------------------------
+    def test_ten_megabyte_name_field(self):
+        """A single entry whose pax path header is ~10MB is read and reported."""
+        huge = "N" * (10 * 1024 * 1024)
+        path = self.build("huge-name.tar", lambda archive: add_file(archive, huge, b""))
+        result = self.inspect(path)
+        self.assertEqual(result["status"], "success", result)
+        self.assertEqual(result["entries"][0]["name"], huge)
 
 
 class TarInspectRegistrationTest(unittest.TestCase):
