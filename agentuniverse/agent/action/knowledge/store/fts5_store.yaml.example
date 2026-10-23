@@ -1,0 +1,17 @@
+name: sqlite_fts5_store
+description: File-backed full-text SQLite FTS5 retrieval with transactional writes.
+db_path: ./knowledge-fts5.db
+tokenizer: unicode61
+similarity_top_k: 10
+max_batch_documents: 1000
+max_document_chars: 1000000
+max_batch_chars: 10000000
+max_query_chars: 4096
+max_query_terms: 64
+max_result_chars: 4000000
+max_seconds: 5.0
+max_vm_steps: 5000000
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.fts5_store
+  class: SQLiteFTS5Store
