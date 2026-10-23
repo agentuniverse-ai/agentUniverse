@@ -9,7 +9,7 @@ import logging
 import os
 import pickle
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -55,15 +55,15 @@ class FAISSStore(Store):
         index_to_id (Dict[int, str]): Mapping from FAISS index position to document ID.
     """
 
-    index_path: Optional[str] = None
-    metadata_path: Optional[str] = None
-    index_config: Dict = None
-    embedding_model: Optional[str] = None
-    similarity_top_k: Optional[int] = 10
+    index_path: str | None = None
+    metadata_path: str | None = None
+    index_config: dict = None
+    embedding_model: str | None = None
+    similarity_top_k: int | None = 10
     faiss_index: Any = None
-    document_store: Dict[str, Document] = None
-    id_to_index: Dict[str, int] = None
-    index_to_id: Dict[int, str] = None
+    document_store: dict[str, Document] = None
+    id_to_index: dict[str, int] = None
+    index_to_id: dict[int, str] = None
     _next_index: int = 0
 
     def __init__(self, **kwargs):
@@ -162,12 +162,23 @@ class FAISSStore(Store):
                     self.faiss_index = self._create_faiss_index(dimension)
                     break
 
-    def _reset_metadata(self):
+    def _reset_metadata(self) -> None:
         """Reset metadata to empty state."""
         self.document_store = {}
         self.id_to_index = {}
         self.index_to_id = {}
         self._next_index = 0
+
+    def _remove_index_file(self) -> None:
+        """Remove the persisted index; an already missing file is fine."""
+        if not self.index_path:
+            return
+        try:
+            os.remove(self.index_path)
+        except FileNotFoundError:
+            return
+        except OSError:
+            logger.exception("Failed to remove FAISS index file %s", self.index_path)
 
     def _save_index_and_metadata(self):
         """Save FAISS index and metadata to disk."""
@@ -196,7 +207,7 @@ class FAISSStore(Store):
             except Exception:
                 logger.exception("Failed to save metadata")
 
-    def _get_embedding(self, text: str, text_type: str = "document") -> List[float]:
+    def _get_embedding(self, text: str, text_type: str = "document") -> list[float]:
         """Get embedding for a text using the configured embedding model.
 
         Args:
@@ -219,7 +230,7 @@ class FAISSStore(Store):
             logger.warning(f"Failed to get embeddings: {e}")
             return []
 
-    def query(self, query: Query, **kwargs) -> List[Document]:  # noqa: C901
+    def query(self, query: Query, **kwargs) -> list[Document]:  # noqa: C901
         """Query the FAISS index with the given query and return the top k results.
 
         Args:
@@ -260,29 +271,29 @@ class FAISSStore(Store):
 
         try:
             distances, indices = self.faiss_index.search(query_vector, k)
-
-            # Convert results to documents
-            documents = []
-            for i, idx in enumerate(indices[0]):
-                if idx != -1 and idx in self.index_to_id:
-                    doc_id = self.index_to_id[idx]
-                    if doc_id in self.document_store:
-                        doc = self.document_store[doc_id]
-                        # Add distance/score to metadata
-                        doc_copy = Document(
-                            id=doc.id,
-                            text=doc.text,
-                            metadata={**(doc.metadata or {}), "score": float(distances[0][i])},
-                            embedding=doc.embedding,
-                        )
-                        documents.append(doc_copy)
-            else:
-                return documents
         except Exception:
             logger.exception("Error during FAISS search")
             return []
 
-    def insert_document(self, documents: List[Document], **kwargs):  # noqa: C901
+        documents = []
+        for i, idx in enumerate(indices[0]):
+            if idx == -1 or idx not in self.index_to_id:
+                continue
+            document_id = self.index_to_id[idx]
+            document = self.document_store.get(document_id)
+            if document is None:
+                continue
+            documents.append(
+                Document(
+                    id=document.id,
+                    text=document.text,
+                    metadata={**(document.metadata or {}), "score": float(distances[0][i])},
+                    embedding=document.embedding,
+                )
+            )
+        return documents
+
+    def insert_document(self, documents: list[Document], **kwargs) -> None:
         """Insert documents into the FAISS index.
 
         Args:
@@ -291,72 +302,95 @@ class FAISSStore(Store):
         """
         if not documents:
             return
+        new_documents = [
+            document for document in documents if document.id not in self.document_store
+        ]
+        self._add_documents(new_documents)
 
-        # Prepare embeddings and documents
-        embeddings_to_add = []
-        docs_to_add = []
+    def _add_documents(self, documents: list[Document], skip_existing: bool = True) -> None:
+        """Embed, index and persist documents in one pass.
 
-        for document in documents:
-            # Skip if document already exists
-            if document.id in self.document_store:
-                continue
-
-            embedding = document.embedding
-            if len(embedding) == 0:
-                if self.embedding_model is not None:
-                    embedding = self._get_embedding(document.text)
-                else:
-                    logger.warning(
-                        f"No embedding for document {document.id} and no embedding model configured, skipping"
-                    )
-                    continue
-
-            if len(embedding) == 0:
-                logger.warning(f"No embedding for document {document.id}, skipping")
-                continue
-
-            embeddings_to_add.append(embedding)
-            docs_to_add.append(document)
-
+        The vector produced for a document is written back to the document
+        itself. Otherwise the stored copy has no embedding and a later rebuild
+        (delete, load repair) either has to call the embedding model again or,
+        when no model is configured, silently drops the document.
+        """
+        embeddings_to_add, docs_to_add = self._prepare_documents(documents, skip_existing)
         if not embeddings_to_add:
             return
 
-        # Initialize index if needed
-        if self.faiss_index is None:
-            dimension = len(embeddings_to_add[0])
-            self.faiss_index = self._create_faiss_index(dimension)
-
-            # Train index if needed (for IVF indexes)
-            if hasattr(self.faiss_index, "is_trained") and not self.faiss_index.is_trained:
-                nlist = self.index_config.get("nlist", 100)
-                if len(embeddings_to_add) < nlist:
-                    warning_msg = (
-                        f"Not enough vectors ({len(embeddings_to_add)}) to train IVF index "
-                        f"properly (need at least {nlist})"
-                    )
-                    logger.warning(warning_msg)
-                train_vectors = np.array(embeddings_to_add, dtype=np.float32)
-                self.faiss_index.train(train_vectors)
-
-        # Convert embeddings to numpy array
+        self._ensure_index(len(embeddings_to_add[0]), embeddings_to_add)
         embeddings_array = np.array(embeddings_to_add, dtype=np.float32)
-
-        # Add to FAISS index
         self.faiss_index.add(embeddings_array)
 
-        # Update metadata
-        for i, document in enumerate(docs_to_add):
-            index_pos = self._next_index + i
+        first_position = self._next_index
+        for offset, document in enumerate(docs_to_add):
+            index_pos = first_position + offset
             self.document_store[document.id] = document
             self.id_to_index[document.id] = index_pos
             self.index_to_id[index_pos] = document.id
 
         self._next_index += len(docs_to_add)
-
-        # Save to disk
         self._save_index_and_metadata()
 
-    def upsert_document(self, documents: List[Document], **kwargs):
+    def _prepare_documents(
+        self, documents: list[Document], skip_existing: bool
+    ) -> tuple[list[list[float]], list[Document]]:
+        """Collect vectors and the documents that own them, skipping unusable ones."""
+        embeddings_to_add: list[list[float]] = []
+        docs_to_add: list[Document] = []
+        for document in documents:
+            embedding = self._prepare_embedding(document, skip_existing)
+            if embedding is None:
+                continue
+            document.embedding = embedding
+            embeddings_to_add.append(embedding)
+            docs_to_add.append(document)
+        return embeddings_to_add, docs_to_add
+
+    def _prepare_embedding(self, document: Document, skip_existing: bool) -> list[float] | None:
+        """Return a vector for one document, or None when it cannot be indexed."""
+        if skip_existing and document.id in self.document_store:
+            return None
+
+        embedding = document.embedding
+        if not embedding:
+            if self.embedding_model is None:
+                logger.warning(
+                    f"No embedding for document {document.id} and no embedding model configured, skipping"
+                )
+                return None
+            embedding = self._get_embedding(document.text)
+
+        if not embedding:
+            logger.warning(f"No embedding for document {document.id}, skipping")
+            return None
+
+        index_dimension = getattr(self.faiss_index, "d", None) if self.faiss_index else None
+        if index_dimension and len(embedding) != index_dimension:
+            logger.warning(
+                f"Embedding dimension {len(embedding)} for document {document.id} "
+                f"does not match the index dimension {index_dimension}, skipping"
+            )
+            return None
+        return list(embedding)
+
+    def _ensure_index(self, dimension: int, vectors: list[list[float]]) -> None:
+        """Create and (for IVF indexes) train the index when it does not exist yet."""
+        if self.faiss_index is not None:
+            return
+
+        self.faiss_index = self._create_faiss_index(dimension)
+        if hasattr(self.faiss_index, "is_trained") and not self.faiss_index.is_trained:
+            nlist = self.index_config.get("nlist", 100)
+            if len(vectors) < nlist:
+                logger.warning(
+                    f"Not enough vectors ({len(vectors)}) to train IVF index "
+                    f"properly (need at least {nlist})"
+                )
+            self.faiss_index.train(np.array(vectors, dtype=np.float32))
+
+    def upsert_document(self, documents: list[Document], **kwargs):
         """Upsert documents into the FAISS index."""
         # For FAISS, we need to delete and re-insert for updates
         docs_to_insert = []
@@ -376,54 +410,66 @@ class FAISSStore(Store):
         all_docs = docs_to_update + docs_to_insert
         self.insert_document(all_docs, **kwargs)
 
-    def update_document(self, documents: List[Document], **kwargs):
+    def update_document(self, documents: list[Document], **kwargs):
         """Update documents in the FAISS index."""
         # For FAISS, update is the same as upsert
         self.upsert_document(documents, **kwargs)
 
-    def delete_document(self, document_id: str, **kwargs):
+    def delete_document(self, document_id: str, **kwargs) -> None:
         """Delete a document from the FAISS index.
 
-        Note: FAISS doesn't support direct deletion, so we rebuild the index
-        without the deleted document.
+        FAISS doesn't support direct deletion, so the index is rebuilt from the
+        remaining documents. The rebuild must bypass the "already stored" check
+        used by ``insert_document``: the remaining documents are still in the
+        catalog at that point, and skipping them all would leave the store with
+        a populated catalog and no index at all.
         """
         if document_id not in self.document_store:
             return
 
-        # Remove from metadata
         del self.document_store[document_id]
-        if document_id in self.id_to_index:
-            del self.id_to_index[document_id]
-
-        # Rebuild index_to_id mapping
-        self.index_to_id = {v: k for k, v in self.id_to_index.items()}
-
-        # For simplicity, we rebuild the entire index
-        # In production, you might want to use a more efficient approach
-        if self.document_store:
-            documents = list(self.document_store.values())
+        if not self.document_store:
             self._reset_faiss_index()
-            self.insert_document(documents)
-        else:
-            self._reset_faiss_index()
+            return
+        self._rebuild_index()
 
-    def _reset_faiss_index(self):
-        """Reset the FAISS index to empty state."""
+    def _clear_index_state(self) -> None:
+        """Forget the vectors while keeping the catalog untouched."""
         self.faiss_index = None
         self.id_to_index = {}
         self.index_to_id = {}
         self._next_index = 0
+
+    def _rebuild_index(self) -> None:
+        """Rebuild the vector index and id maps from the stored documents."""
+        documents = list(self.document_store.values())
+        self._clear_index_state()
+        # _add_documents repopulates the catalog, so a document that cannot be
+        # embedded again cannot leave a dangling metadata entry behind.
+        self.document_store = {}
+        self._add_documents(documents, skip_existing=False)
+        if self.faiss_index is None:
+            # Nothing could be embedded; make sure a stale index file cannot
+            # resurrect the old vectors on the next load.
+            self._remove_index_file()
+            self._save_index_and_metadata()
+
+    def _reset_faiss_index(self) -> None:
+        """Drop every vector, the catalog and the persisted index file."""
+        self._reset_metadata()
+        self.faiss_index = None
+        self._remove_index_file()
         self._save_index_and_metadata()
 
     def get_document_count(self) -> int:
         """Get the total number of documents in the store."""
         return len(self.document_store)
 
-    def get_document_by_id(self, document_id: str) -> Optional[Document]:
+    def get_document_by_id(self, document_id: str) -> Document | None:
         """Get a document by its ID."""
         return self.document_store.get(document_id)
 
-    def list_document_ids(self) -> List[str]:
+    def list_document_ids(self) -> list[str]:
         """List all document IDs in the store."""
         return list(self.document_store.keys())
 
