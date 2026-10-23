@@ -413,15 +413,19 @@ class RamContextStore(ContextStore):
         score += len(matching_terms) * 2.0
         score += len(matching_keywords) * 5.0
 
-        # Priority bonus
-        priority_bonus = {
-            ContextPriority.CRITICAL: 2.0,
-            ContextPriority.HIGH: 1.5,
-            ContextPriority.MEDIUM: 1.0,
-            ContextPriority.LOW: 0.5,
-            ContextPriority.EPHEMERAL: 0.2,
-        }
-        score += priority_bonus.get(segment.priority, 1.0)
+        # The priority bonus is only a tiebreaker between segments that
+        # actually matched the query. Applying it unconditionally gives every
+        # segment a positive score, which defeats the ``score > 0`` relevance
+        # filter in search() and returns segments unrelated to the query.
+        if score > 0:
+            priority_bonus = {
+                ContextPriority.CRITICAL: 2.0,
+                ContextPriority.HIGH: 1.5,
+                ContextPriority.MEDIUM: 1.0,
+                ContextPriority.LOW: 0.5,
+                ContextPriority.EPHEMERAL: 0.2,
+            }
+            score += priority_bonus.get(segment.priority, 1.0)
 
         # Apply decay factor
         score *= max(0.1, segment.calculate_decay())
