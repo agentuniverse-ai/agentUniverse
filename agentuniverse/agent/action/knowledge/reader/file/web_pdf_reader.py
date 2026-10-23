@@ -39,7 +39,7 @@ class WebPdfReader(Reader):
         except ImportError:
             raise ImportError(
                 "pdfminer.six is required to read PDF files: `pip install pdfminer.six`"
-            )
+            ) from None
         # parse the pdf file and get the text content.
         with BytesIO() as output_string:
             extract_text_to_fp(pdf_memory_file, output_string, output_type='text', codec='utf-8')

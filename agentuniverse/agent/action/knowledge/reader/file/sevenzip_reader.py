@@ -53,7 +53,7 @@ class SevenZipReader(Reader):
             raise ImportError(
                 "py7zr is required to read 7Z files: "
                 "`pip install py7zr`"
-            )
+            ) from None
 
         # 将字符串路径转换为Path对象
         if isinstance(file, str):
@@ -215,9 +215,9 @@ class SevenZipReader(Reader):
                         continue
 
         except (py7zr.Bad7zFile, py7zr.exceptions.Bad7zFile) as e:
-            raise ValueError(f"Failed to read 7Z file: {str(e)}")
+            raise ValueError(f"Failed to read 7Z file: {str(e)}") from e
         except Exception as e:
-            raise ValueError(f"Error processing 7Z file: {str(e)}")
+            raise ValueError(f"Error processing 7Z file: {str(e)}") from e
 
         return documents
 

@@ -26,7 +26,7 @@ class PptxReader(Reader):
         except ImportError:
             raise ImportError(
                 "python-pptx is required to read pptx files: `pip install python-pptx`"
-            )
+            ) from None
         if isinstance(file, str):
             file = Path(file)
         presentation = Presentation(file)

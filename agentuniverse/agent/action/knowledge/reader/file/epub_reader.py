@@ -41,7 +41,7 @@ class EpubReader(Reader):
             raise ImportError(
                 "EbookLib is required to read EPUB files: "
                 "`pip install EbookLib`"
-            )
+            ) from None
 
         if isinstance(file, str):
             file = Path(file)
