@@ -57,8 +57,9 @@ class KIMIOpenAIStyleLLM(OpenAIStyleLLM):
         return await super()._acall(messages, **kwargs)
 
     def max_context_length(self) -> int:
-        if super().max_context_length():
-            return super().max_context_length()
+        # The OpenAI transport fallback must not hide this provider's table.
+        if self._max_context_length:
+            return self._max_context_length
         return KIMI_Max_CONTEXT_LENGTH.get(self.model_name, 8000)
 
     def get_num_tokens(self, text: str) -> int:
