@@ -79,7 +79,8 @@ class SelectiveCompressor(ContextCompressor):
             segments: List of context segments to compress
             target_tokens: Target token count after compression
             **kwargs: Additional parameters:
-                - preserve_types: List[ContextType] to always preserve
+                - preserve_types: List[ContextType] to always preserve, even
+                  when CRITICAL segments already fill or exceed the budget
                 - min_segments: Desired minimum count, subject to the token budget
 
         Returns:
@@ -136,14 +137,6 @@ class SelectiveCompressor(ContextCompressor):
         # Step 2: Always keep CRITICAL priority
         selected = priority_groups.get(ContextPriority.CRITICAL, []).copy()
         remaining_tokens = target_tokens - self.calculate_total_tokens(selected)
-
-        if remaining_tokens <= 0:
-            # CRITICAL alone exceeds target
-            elapsed_ms = (time.time() - start_time) * 1000
-            metrics = self.create_metrics(
-                original_segments, selected, elapsed_ms, "selective"
-            )
-            return selected, metrics
 
         # Step 3: Always preserve specified types (e.g., SYSTEM, TASK)
         type_preserved = self._select_by_type(segments, preserve_types, selected)
