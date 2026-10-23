@@ -264,13 +264,19 @@ class YahooFinanceTool(Tool):
 
     @staticmethod
     def _fmt_int(value: Any) -> str:
-        """Format a volume-like number with thousands separators."""
+        """Format integral volumes exactly, truncating fractional inputs.
+
+        Decimal/scientific strings retain the existing float fallback.
+        """
         if value is None:
             return "-"
         try:
-            return f"{int(float(value)):,}"
+            return f"{int(value):,}"
         except (TypeError, ValueError):
-            return str(value)
+            try:
+                return f"{int(float(value)):,}"
+            except (TypeError, ValueError):
+                return str(value)
 
     def _humanize(self, key: str, value: Any) -> str:
         """Render large monetary values compactly for human readability."""
