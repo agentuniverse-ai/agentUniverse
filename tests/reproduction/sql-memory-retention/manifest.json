@@ -1,0 +1,15 @@
+{
+  "feature": "feat(memory): add explicit SQL retention plans and receipts",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4216",
+  "tested_code_commit": "cdcf483a65cc3b5010f0479146b901ed45349d72",
+  "tests": [
+    "tests/test_agentuniverse/integration/test_sql_memory_retention.py"
+  ],
+  "required_environment": [
+    "AU_RETENTION_TEST_POSTGRES"
+  ],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
