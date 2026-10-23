@@ -13,6 +13,7 @@ import pytest
 
 from agentuniverse.base.config.configer import Configer
 from agentuniverse.base.context.framework_context import FrameworkContext
+from agentuniverse.base.util.logging import logging_util
 from agentuniverse.base.util.logging.logging_config import LoggingConfig
 from agentuniverse.base.util.logging.logging_util import LOGGER, init_loggers, LOG_FILE_PREFIX
 
@@ -33,22 +34,26 @@ def test_logging_config_without_path_uses_defaults(monkeypatch):
     assert LoggingConfig.log_extend_module_switch == {"sls_log": False}
 
 
-def test_logging_util():
-    LoggingConfig.log_path = "./.test_log_dir"
+def test_logging_util(tmp_path, monkeypatch):
+    # Without a log config file ``init_loggers()`` resets every class level
+    # setting to its documented default, so ``log_path`` can no longer be
+    # seeded from the outside. Point the project root at a temporary directory
+    # and assert the documented default location instead.
+    monkeypatch.setattr(logging_util, "get_project_root_path", lambda: tmp_path)
 
     init_loggers()
-    test_log_path = LoggingConfig.log_path
+    test_log_path = tmp_path / logging_util.LOG_SUB_DIR
     with FrameworkContext(test_context):
         test_logger = LOGGER
         test_logger.info("test info log")
         test_logger.error("test error log")
         time.sleep(0.01)
-        with open(os.path.join(test_log_path, LOG_FILE_PREFIX+"_all.log"), 'r') as file:
+        with open(os.path.join(str(test_log_path), LOG_FILE_PREFIX+"_all.log"), 'r') as file:
             first_line = file.readline().strip()
             second_line = file.readline().strip()
             assert "test info log" in first_line
             assert "test error log" in second_line
-        with open(os.path.join(test_log_path, LOG_FILE_PREFIX+"_error.log"), 'r') as file:
+        with open(os.path.join(str(test_log_path), LOG_FILE_PREFIX+"_error.log"), 'r') as file:
             first_line = file.readline().strip()
             assert "test error log" in first_line
 
