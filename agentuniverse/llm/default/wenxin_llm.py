@@ -55,6 +55,21 @@ class WenXinLLM(LLM):
         """Create a new Qianfan client."""
         return self.client
 
+    def _request_params(self, kwargs: dict) -> dict:
+        """Translate framework controls without changing native SDK overrides."""
+        params = kwargs.copy()
+        max_tokens = params.pop("max_tokens", self.max_tokens)
+        if max_tokens is not None:
+            params.setdefault("max_output_tokens", max_tokens)
+        request_timeout = params.pop("request_timeout", self.request_timeout)
+        if request_timeout is not None:
+            params["request_timeout"] = request_timeout
+        max_retries = params.pop("max_retries", self.max_retries)
+        if max_retries is not None:
+            # Qianfan counts total attempts, not retries after the first attempt.
+            params.setdefault("retry_count", max_retries + 1)
+        return params
+
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
         """Run the OpenAI LLM.
 
@@ -62,6 +77,7 @@ class WenXinLLM(LLM):
             messages (list): The messages to send to the LLM.
             **kwargs: Arbitrary keyword arguments.
         """
+        kwargs = self._request_params(kwargs)
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
         self.client = self._new_client()
         client = self.client
@@ -70,7 +86,6 @@ class WenXinLLM(LLM):
             model=kwargs.pop('model', self.model_name),
             temperature=kwargs.pop('temperature', self.temperature),
             stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
             **kwargs,
         )
         if not streaming:
@@ -84,6 +99,7 @@ class WenXinLLM(LLM):
             messages (list): The messages to send to the LLM.
             **kwargs: Arbitrary keyword arguments.
         """
+        kwargs = self._request_params(kwargs)
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
         self.async_client = self._new_client()
         async_client = self.async_client
@@ -92,7 +108,6 @@ class WenXinLLM(LLM):
             model=kwargs.pop('model', self.model_name),
             temperature=kwargs.pop('temperature', self.temperature),
             stream=kwargs.pop('stream', streaming),
-            max_tokens=kwargs.pop('max_tokens', self.max_tokens),
             **kwargs,
         )
         if not streaming:
