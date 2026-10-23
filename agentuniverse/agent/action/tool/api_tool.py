@@ -7,7 +7,7 @@
 # @FileName: api_tool.py
 import json
 from typing import Any, Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 import httpx
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
@@ -135,7 +135,10 @@ class APITool(Tool):
             url (str): The URL to request.
             method (str): The HTTP method to use.
             headers (dict[str, Any]): The headers to include in the request.
-            parameters (dict[str, Any]): The parameters to include in the request.
+            parameters (dict[str, Any]): Unescaped parameter values. Scalar path
+                values are converted to strings and percent-encoded before URL
+                substitution, so reserved characters remain parameter data.
+                For example, an item value of "a/b" becomes "a%2Fb".
 
         Returns:
             httpx.Response: The response from the request.
@@ -188,7 +191,7 @@ class APITool(Tool):
 
         # replace path parameters
         for name, value in path_params.items():
-            url = url.replace(f'{{{name}}}', f'{value}')
+            url = url.replace(f'{{{name}}}', quote(str(value), safe=''))
 
         # parse http body data if needed, for GET/HEAD/OPTIONS/TRACE
         if 'Content-Type' in headers:
