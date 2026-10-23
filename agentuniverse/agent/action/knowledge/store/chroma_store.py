@@ -160,21 +160,25 @@ class ChromaStore(Store):
 
     @staticmethod
     def to_documents(query_result: QueryResult) -> List[Document]:
-        """Convert the query results of ChromaDB to the agentUniverse(aU) document format."""
+        """Convert all Chroma query rows to documents in query-major order.
+
+        Preserve each row's hit order and repeated hits across queries; callers
+        can deduplicate or fuse them according to their retrieval policy.
+        """
 
         if query_result is None:
             return []
         documents = []
-        for i in range(len(query_result['ids'][0])):
-            documents.append(Document(id=query_result['ids'][0][i],
-                                      text=query_result['documents'][0][i],
-                                      embedding=query_result['embeddings'][0][
-                                          i]
-                                      if query_result[
-                                             'embeddings'] is not None else [],
-                                      metadata=query_result['metadatas'][0][i]
-                                      if query_result[
-                                             'metadatas'] is not None else None))
+        for query_index, ids in enumerate(query_result['ids']):
+            for i, document_id in enumerate(ids):
+                documents.append(Document(
+                    id=document_id,
+                    text=query_result['documents'][query_index][i],
+                    embedding=query_result['embeddings'][query_index][i]
+                    if query_result['embeddings'] is not None else [],
+                    metadata=query_result['metadatas'][query_index][i]
+                    if query_result['metadatas'] is not None else None))
+
         return documents
 
     def _initialize_by_component_configer(self,
