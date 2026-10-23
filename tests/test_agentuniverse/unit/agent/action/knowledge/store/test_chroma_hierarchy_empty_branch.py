@@ -43,6 +43,10 @@ def test_empty_frontier_stops_without_another_global_search(empty_depth, embeddi
 @pytest.mark.parametrize('missing_roots', [True, False])
 def test_real_collection_never_returns_descendants_outside_selected_branch(
         missing_roots, tmp_path):
+    # A PersistentClient is identified by its path, so this only collides with
+    # a previous run over the same directory; keep the cache pristine anyway.
+    from chromadb.api.client import SharedSystemClient
+    SharedSystemClient.clear_system_cache()
     client = chromadb.PersistentClient(
         path=str(tmp_path / "chroma"),
         settings=chromadb.Settings(anonymized_telemetry=False),

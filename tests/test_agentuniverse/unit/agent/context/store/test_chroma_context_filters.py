@@ -4,6 +4,7 @@ import uuid
 import pytest
 
 chromadb = pytest.importorskip('chromadb')
+from chromadb.api.client import SharedSystemClient
 from chromadb.config import Settings
 
 from agentuniverse.agent.context.context_model import ContextPriority, ContextSegment, ContextType
@@ -17,6 +18,11 @@ class ConstantEmbedding:
 
 @pytest.fixture
 def store():
+    # chromadb caches one process-global system per identifier and refuses a
+    # second one whose Settings differ. Every non-persistent client shares the
+    # identifier "ephemeral", so another module's client makes this creation
+    # raise ValueError. Reset the cache so each test owns a clean system.
+    SharedSystemClient.clear_system_cache()
     client = chromadb.EphemeralClient(Settings(anonymized_telemetry=False))
     collection = client.create_collection('filters_' + uuid.uuid4().hex, embedding_function=ConstantEmbedding())
     instance = ChromaContextStore()
