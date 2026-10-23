@@ -64,32 +64,32 @@ class RequestTool(Tool):
         return await self.async_execute_by_method(input_params)
 
     async def async_execute_by_method(self, url: str, data: dict = None, **kwargs):
-        """Dispatch an asynchronous request through the configured wrapper."""
+        """Dispatch a request, forwarding options supported by aiohttp."""
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
-            return await self.requests_wrapper.aget(url)
+            return await self.requests_wrapper.aget(url, **kwargs)
         elif method == 'POST':
-            return await self.requests_wrapper.apost(url, data=data)
+            return await self.requests_wrapper.apost(url, data=data, **kwargs)
         elif method == 'PUT':
-            return await self.requests_wrapper.aput(url, data=data)
+            return await self.requests_wrapper.aput(url, data=data, **kwargs)
         elif method == 'DELETE':
-            return await self.requests_wrapper.adelete(url)
+            return await self.requests_wrapper.adelete(url, **kwargs)
         else:
             raise ValueError(f"Unsupported method: {method or self.method}")
 
     def execute_by_method(self, url: str, data: dict = None, **kwargs):
-        """Dispatch a synchronous request through the configured wrapper."""
+        """Dispatch a request, forwarding options supported by requests."""
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
-            return self.requests_wrapper.get(url)
+            return self.requests_wrapper.get(url, **kwargs)
         elif method == 'POST':
-            return self.requests_wrapper.post(url, data=data)
+            return self.requests_wrapper.post(url, data=data, **kwargs)
         elif method == 'PUT':
-            return self.requests_wrapper.put(url, data=data)
+            return self.requests_wrapper.put(url, data=data, **kwargs)
         elif method == 'DELETE':
-            return self.requests_wrapper.delete(url)
+            return self.requests_wrapper.delete(url, **kwargs)
         else:
             raise ValueError(f"Unsupported method: {method or self.method}")
 
