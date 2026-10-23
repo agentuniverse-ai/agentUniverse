@@ -1367,5 +1367,443 @@ class HostileReviewRegressionTest(unittest.TestCase):
         self.assertLess(elapsed, 2.0)
 
 
+class SecondPassReviewTest(unittest.TestCase):
+    """Second-pass hostile battery (fresh seed 20261023): wider difflib corpus,
+    new real-diff fixture shapes, fresh corruptions, git re-captures, stats
+    arithmetic, and file-level /dev/null application semantics.
+    """
+
+    SEED = 20261023
+
+    def setUp(self):
+        self.tool = DiffParseTool()
+
+    # -- file-level /dev/null semantics ---------------------------------
+
+    def test_dev_null_sections_apply_only_to_exact_sides(self):
+        """New-file diffs need an empty original; delete diffs must consume it.
+
+        patch(1) refuses a ``--- /dev/null`` patch when the target already
+        exists ("Patch creates file that already exists!"); reporting
+        applies=True for non-empty text produced a chimera that matched
+        neither the diff's new file nor any patch result. A ``+++ /dev/null``
+        diff asserts the result is empty, so trailing unconsumed lines are a
+        mismatch, not a success.
+        """
+        new_file = "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,2 @@\n+alpha\n+beta\n"
+        rejected = self.tool.execute(mode="apply_check", diff=new_file, original_text="existing\n")
+        self.assertFalse(rejected["applies"])
+        self.assertIn("old_side_empty_mismatch", rejected["reject_reason"])
+        self.assertTrue(self.tool.execute(mode="apply_check", diff=new_file, original_text="")["applies"])
+        delete = "--- a/old.txt\n+++ /dev/null\n@@ -1,3 +0,0 @@\n-one\n-two\n-three\n"
+        kept = self.tool.execute(mode="apply_check", diff=delete, original_text="one\ntwo\nthree\nEXTRA\n")
+        self.assertFalse(kept["applies"])
+        self.assertIn("new_side_empty_mismatch", kept["reject_reason"])
+        self.assertTrue(
+            self.tool.execute(mode="apply_check", diff=delete, original_text="one\ntwo\nthree\n")["applies"]
+        )
+        git_new = (
+            "diff --git a/n.txt b/n.txt\nnew file mode 100644\nindex 0000000..1111111\n"
+            "--- /dev/null\n+++ b/n.txt\n@@ -0,0 +1 @@\n+x\n"
+        )
+        wrong = self.tool.execute(mode="apply_check", diff=git_new, original_text="nope\n")
+        self.assertFalse(wrong["applies"])
+        self.assertIn("old_side_empty_mismatch", wrong["reject_reason"])
+        self.assertTrue(self.tool.execute(mode="apply_check", diff=git_new, original_text="")["applies"])
+        # Real-path empty originals (plain `diff -u empty full`) stay line-level.
+        plain = "--- empty.txt\t2026-01-01 00:00:00\n+++ full.txt\t2026-01-01 00:00:00\n@@ -0,0 +1 @@\n+x\n"
+        self.assertTrue(self.tool.execute(mode="apply_check", diff=plain, original_text="")["applies"])
+        # Reverse round trips are unaffected.
+        rv = self.tool.execute(mode="reverse", diff=new_file, new_text="alpha\nbeta\n")
+        self.assertTrue(rv["valid"])
+        self.assertTrue(rv["round_trip"])
+
+    # -- (a) fresh difflib battery: n=7 and spacey/unicode paths ---------
+
+    def test_fresh_difflib_battery_wider_paths_and_contexts(self):
+        """500 fresh pairs validate, apply, reverse, and double-reverse exactly."""
+        rng = random.Random(self.SEED)
+        words = ["alpha", "beta", "gamma", "", " x", "tab\there", "üñí", "中文行", "1", "--d", "+++p", "@@fake"]
+        paths = [("my file.txt", "my file.txt"), ("p täble ünï.txt", "p täble ünï.txt"),
+                 ("a/dir with space/f.py", "b/dir with space/f.py"), ("文件 名.txt", "文件 名.txt")]
+        checked = 0
+        for iteration in range(500):
+            a = [rng.choice(words) + "\n" for _ in range(rng.randint(0, 24))]
+            b = list(a)
+            if a and rng.random() < 0.75:
+                for _ in range(rng.randint(1, 6)):
+                    op = rng.choice(["edit", "ins", "del"])
+                    if op == "edit" and b:
+                        b[rng.randrange(len(b))] = rng.choice(words) + "\n"
+                    elif op == "ins":
+                        b.insert(rng.randint(0, len(b)), rng.choice(words) + "\n")
+                    elif b:
+                        b.pop(rng.randrange(len(b)))
+            else:
+                b = [rng.choice(words) + "\n" for _ in range(rng.randint(1, 10))]
+            if iteration % 2:
+                a, b = b, a
+            fromfile, tofile = rng.choice(paths)
+            n = rng.choice([0, 1, 3, 7])
+            if iteration % 3 == 0:
+                diff = "\n".join(
+                    difflib.unified_diff([x[:-1] for x in a], [x[:-1] for x in b],
+                                         fromfile=fromfile, tofile=tofile, n=n, lineterm="")
+                )
+            else:
+                diff = "".join(difflib.unified_diff(a, b, fromfile=fromfile, tofile=tofile, n=n))
+            if not diff.strip():
+                continue
+            checked += 1
+            original, updated = "".join(a), "".join(b)
+            validated = self.tool.execute(mode="validate", diff=diff)
+            self.assertTrue(validated["valid"], f"iter {iteration}: {validated['findings'][:2]}")
+            applied = self.tool.execute(mode="apply_check", diff=diff, original_text=original)
+            self.assertTrue(applied["applies"], f"iter {iteration}: {applied.get('reject_reason')}")
+            rv = self.tool.execute(mode="reverse", diff=diff, new_text=updated)
+            self.assertTrue(rv["valid"] and rv["round_trip"], f"iter {iteration}: {rv}")
+            twice = self.tool.execute(mode="reverse", diff=rv["diff"])["diff"]
+            self.assertEqual(twice, diff, f"iter {iteration}: double reverse not byte-identical")
+        self.assertGreater(checked, 400)
+
+    # -- (b) real diff -u with new fixture shapes -------------------------
+
+    def test_real_diff_battery_new_fixture_shapes(self):
+        """100 fresh real `diff -u` captures incl. empty/identical/CRLF shapes.
+
+        apply_check verdicts are hand-verified: the simulation must reproduce
+        the new text byte-for-byte, not merely report success.
+        """
+        diff_bin = shutil.which("diff")
+        if diff_bin is None:  # pragma: no cover
+            self.skipTest("system diff not available")
+        rng = random.Random(self.SEED + 11)
+        words = ["alpha", "beta", "gamma", "delta", "", "üñí", "中文", "tab\tline"]
+        shapes = {"empty_to_content": 0, "content_to_empty": 0, "no_trailing_newline": 0,
+                  "crlf_content": 0, "identical": 0, "plain": 0}
+        checked = 0
+        with tempfile.TemporaryDirectory() as tmp:
+            path_a, path_b = os.path.join(tmp, "a.txt"), os.path.join(tmp, "b.txt")
+            for iteration in range(100):
+                a = [rng.choice(words) for _ in range(rng.randint(0, 15))]
+                b = list(a)
+                for _ in range(rng.randint(1, 4)):
+                    op = rng.choice(["edit", "ins", "del"])
+                    if op == "edit" and b:
+                        b[rng.randrange(len(b))] = rng.choice(words)
+                    elif op == "ins":
+                        b.insert(rng.randint(0, len(b)), rng.choice(words))
+                    elif b:
+                        b.pop(rng.randrange(len(b)))
+                if iteration % 2:
+                    a, b = b, a
+                shape = rng.choice(["plain", "plain", "no_trailing_newline", "crlf_content",
+                                    "empty_to_content", "content_to_empty", "identical"])
+                if shape == "empty_to_content":
+                    a_text, b_text = "", "\n".join(b) + ("\n" if b else "")
+                elif shape == "content_to_empty":
+                    a_text, b_text = "\n".join(a) + ("\n" if a else ""), ""
+                elif shape == "identical":
+                    a_text = b_text = "\n".join(a) + ("\n" if a else "")
+                elif shape == "no_trailing_newline":
+                    a_text = "\n".join(a) + ("\n" if a and rng.random() < 0.5 else "")
+                    b_text = "\n".join(b) + ("\n" if b and rng.random() < 0.5 else "")
+                elif shape == "crlf_content":
+                    a_text = "\r\n".join(a) + ("\r\n" if a else "")
+                    b_text = "\r\n".join(b) + ("\r\n" if b else "")
+                else:
+                    a_text = "\n".join(a) + ("\n" if a else "")
+                    b_text = "\n".join(b) + ("\n" if b else "")
+                for path, text in ((path_a, a_text), (path_b, b_text)):
+                    with open(path, "w", newline="") as handle:
+                        handle.write(text)
+                proc = subprocess.run([diff_bin, "-u", path_a, path_b], capture_output=True)  # noqa: S603
+                shapes[shape] += 1
+                if proc.returncode == 0:
+                    self.assertEqual(a_text, b_text)
+                    continue  # identical files: real diff emits nothing at all
+                diff = proc.stdout.decode("utf-8")
+                checked += 1
+                validated = self.tool.execute(mode="validate", diff=diff)
+                self.assertTrue(validated["valid"], f"iter {iteration} ({shape}): {validated['findings'][:2]}")
+                applied = self.tool.execute(mode="apply_check", diff=diff, original_text=a_text)
+                self.assertTrue(applied["applies"], f"iter {iteration} ({shape}): {applied.get('reject_reason')}")
+                parsed = diff_module.DiffParseTool()._parse(diff)
+                ok, _entries, produced, why = diff_module.DiffParseTool()._simulate(
+                    parsed.files[0], a_text, crlf_transport=parsed.newline_style == "crlf"
+                )
+                self.assertTrue(ok and produced == b_text,
+                                f"iter {iteration} ({shape}): {why} {produced!r} != {b_text!r}")
+                rv = self.tool.execute(mode="reverse", diff=diff, new_text=b_text)
+                self.assertTrue(rv["valid"] and rv["round_trip"], f"iter {iteration} ({shape}): {rv}")
+        self.assertGreater(checked, 40)
+        for name, count in shapes.items():
+            self.assertGreater(count, 0, f"fixture shape {name} never occurred")
+
+    # -- (c) fresh corruptions --------------------------------------------
+
+    def test_fresh_corruption_battery_third_seed(self):
+        """300 fresh corruptions across 12 mutation classes, layer-adjudicated."""
+        rng = random.Random(self.SEED + 22)
+        pool = []
+        base = random.Random(self.SEED + 33)
+        words = ["alpha", "beta", "gamma", "delta", "eps", "zeta", "eta"]
+        for _ in range(12):
+            a = [base.choice(words) + "\n" for _ in range(base.randint(6, 26))]
+            b = list(a)
+            for _ in range(base.randint(1, 5)):
+                op = base.choice(["edit", "ins", "del"])
+                if op == "edit" and b:
+                    b[base.randrange(len(b))] = base.choice(words).upper() + "\n"
+                elif op == "ins":
+                    b.insert(base.randint(0, len(b)), base.choice(words) + "\n")
+                elif len(b) > 1:
+                    b.pop(base.randrange(len(b)))
+            diff = "".join(difflib.unified_diff(a, b, fromfile="a/p.txt", tofile="b/p.txt", n=3))
+            if diff.strip():
+                pool.append((diff, "".join(a)))
+        caught = {"validate": 0, "apply_check": 0}
+        for step in range(300):
+            diff, original = rng.choice(pool)
+            lines = diff.split("\n")
+            headers = [i for i, x in enumerate(lines) if x.startswith("@@ ")]
+            minus = [i for i, x in enumerate(lines) if x.startswith("-") and not x.startswith("--- ")]
+            plus = [i for i, x in enumerate(lines) if x.startswith("+") and not x.startswith("+++ ")]
+            ctx = [i for i, x in enumerate(lines) if x.startswith(" ") and x.strip()]
+            kind = rng.choice(["tamper_count", "drop_line", "swap_header", "bad_grammar",
+                               "marker_after_header", "garbage", "truncate", "zero_count",
+                               "context_drift", "removed_line_edit", "dup_marker", "section_merge"])
+            if kind == "tamper_count" and headers:
+                target = rng.choice(headers)
+                head = lines[target]
+                sign = "-" if rng.random() < 0.5 else "+"
+                pos = head.find(sign, head.find("@@"))
+                comma = head.find(",", pos)
+                existing = int(head[comma + 1]) if comma != -1 and head[comma + 1].isdigit() else 1
+                digit = str((existing + rng.randint(1, 8)) % 10)
+                lines[target] = (head[: pos + 1] + f",{digit}" + head[pos + 1 :]) if comma == -1 else (
+                    head[: comma + 1] + digit + head[comma + 2 :])
+            elif kind == "drop_line":
+                del lines[rng.choice(minus + plus + ctx)]
+            elif kind == "swap_header":
+                m = next(i for i, x in enumerate(lines) if x.startswith("--- "))
+                p = next(i for i, x in enumerate(lines) if x.startswith("+++ "))
+                lines[m], lines[p] = lines[p], lines[m]
+            elif kind == "bad_grammar" and headers:
+                target = rng.choice(headers)
+                lines[target] = lines[target].replace("@@ -", "@@~-", 1)
+            elif kind == "marker_after_header" and headers:
+                lines.insert(rng.choice(headers) + 1, "\\ No newline at end of file")
+            elif kind == "garbage" and headers:
+                lines.insert(rng.choice(headers) + 1, "GARBAGE LINE")
+            elif kind == "truncate":
+                lines = lines[: max(2, len(lines) - rng.randint(2, 5))]
+            elif kind == "zero_count" and headers:
+                target = rng.choice(headers)
+                head = lines[target]
+                comma = head.find(",", head.find("@@ -"))
+                if comma != -1 and head[comma + 1].isdigit():
+                    lines[target] = head[: comma + 1] + "0" + head[comma + 2 :]
+                else:
+                    lines[target] = head.replace(" +", " +1,0 ", 1)
+            elif kind == "context_drift" and ctx:
+                lines[rng.choice(ctx)] += "X"
+            elif kind == "removed_line_edit" and minus:
+                lines[rng.choice(minus)] += "Y"
+            elif kind == "dup_marker" and minus:
+                anchor = rng.choice(minus)
+                lines.insert(anchor + 1, "\\ No newline at end of file")
+                lines.insert(anchor + 2, "\\ No newline at end of file")
+            elif kind == "section_merge" and headers:
+                lines.insert(rng.choice(headers) + 1, "--- sneak/p.txt")
+            else:
+                continue
+            mutated = "\n".join(lines)
+            validated = self.tool.execute(mode="validate", diff=mutated)
+            applied = self.tool.execute(mode="apply_check", diff=mutated, original_text=original)
+            layer = None
+            if not validated.get("valid", False):
+                layer = "validate"
+            elif not applied.get("applies", False):
+                layer = "apply_check"
+            self.assertIsNotNone(layer, f"step {step} ({kind}) escaped: {mutated[:180]!r}")
+            if kind in ("context_drift", "removed_line_edit"):
+                self.assertEqual(layer, "apply_check", f"step {step} ({kind}): {validated}")
+            else:
+                self.assertEqual(layer, "validate", f"step {step} ({kind}): {mutated[:180]!r}")
+            caught[layer] += 1
+        self.assertGreater(caught["validate"], 150)
+        self.assertGreater(caught["apply_check"], 10)
+
+    # -- (d) git re-captures ----------------------------------------------
+
+    def test_git_re_capture_shapes(self):
+        """Fresh real git outputs: R100 rename, binary patch, --cc, --stat, chmod."""
+        if shutil.which("git") is None:  # pragma: no cover
+            self.skipTest("git not available")
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
+                       GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t", HOME=tmp)
+
+            def git(*args):
+                return subprocess.run(["git", "-C", tmp, *args], capture_output=True, text=True, env=env)
+
+            git("init", "-q")
+            git("config", "user.email", "t@t")
+            git("config", "user.name", "t")
+            trunk = git("symbolic-ref", "--short", "HEAD").stdout.strip()
+            with open(os.path.join(tmp, "orig name.txt"), "w") as handle:
+                handle.write("line one\nline two\nline three\n")
+            git("add", "-A")
+            git("commit", "-qm", "one")
+            git("mv", "orig name.txt", "renamed name.txt")
+            rename_diff = git("diff", "--cached", "-M").stdout
+            result = self.tool.execute(mode="validate", diff=rename_diff)
+            self.assertTrue(result["valid"], result["findings"][:2])
+            self.assertEqual(result["summary"]["renamed"], 1)
+            with open(os.path.join(tmp, "renamed name.txt"), "a") as handle:
+                handle.write("line four\n")
+            git("add", "-A")
+            rename_edit = git("diff", "--cached", "-M").stdout
+            result = self.tool.execute(mode="validate", diff=rename_edit)
+            self.assertTrue(result["valid"], result["findings"][:2])
+            self.assertEqual(result["summary"]["renamed"], 1)
+            self.assertEqual(result["hunks"], 1)
+            git("add", "-A")
+            git("commit", "-qm", "two")
+            with open(os.path.join(tmp, "blob.bin"), "wb") as handle:
+                handle.write(b"\x00\x01\x02binary\x00data\x7f\n")
+            git("add", "-A")
+            binary_diff = git("diff", "--cached", "--binary").stdout
+            self.assertIn("GIT binary patch", binary_diff)
+            result = self.tool.execute(mode="validate", diff=binary_diff)
+            self.assertTrue(result["valid"], result["findings"][:2])
+            self.assertEqual(result["summary"]["binary"], 1)
+            git("commit", "-qm", "three")
+            # Conflicted merge resolved by hand: `git show --cc` emits @@@ hunks,
+            # which the tool documents and rejects as malformed body lines.
+            git("checkout", "-q", "-b", "side")
+            with open(os.path.join(tmp, "merge.txt"), "w") as handle:
+                handle.write("base A\nbase B\n")
+            git("add", "-A")
+            git("commit", "-qm", "side-base")
+            git("checkout", "-q", trunk)
+            with open(os.path.join(tmp, "merge.txt"), "w") as handle:
+                handle.write("master A\nbase B\n")
+            git("add", "-A")
+            git("commit", "-qm", "master-edit")
+            git("merge", "--no-edit", "side")
+            with open(os.path.join(tmp, "merge.txt"), "w") as handle:
+                handle.write("master A\nRESOLVED B\n")  # differs from both parents
+            git("add", "-A")
+            git("commit", "-qm", "resolved")
+            combined = git("show", "--cc", "--format=", "HEAD").stdout
+            self.assertIn("@@@", combined)
+            result = self.tool.execute(mode="validate", diff=combined)
+            self.assertFalse(result["valid"])
+            self.assertTrue(any(f["code"].startswith("E_") for f in result["findings"]))
+            # --stat graphs are not unified diffs and must not validate.
+            with open(os.path.join(tmp, "wide.txt"), "w") as handle:
+                handle.write("".join(f"line {i}\n" for i in range(400)))
+            git("add", "-A")
+            git("commit", "-qm", "four")
+            with open(os.path.join(tmp, "wide.txt"), "w") as handle:
+                handle.write("".join(f"LINE {i}\n" for i in range(400)))
+            stat = git("diff", "--stat", "HEAD^").stdout
+            self.assertIn("|", stat)
+            self.assertFalse(self.tool.execute(mode="validate", diff=stat)["valid"])
+            result = self.tool.execute(mode="validate", diff=git("diff", "HEAD^").stdout)
+            self.assertTrue(result["valid"], result["findings"][:2])
+            self.assertGreaterEqual(result["hunks"], 1)
+            git("commit", "-qam", "five")
+            # Mode-only change (chmod) validates as a hunk-less section.
+            os.chmod(os.path.join(tmp, "wide.txt"), 0o755)
+            mode_diff = git("diff").stdout
+            self.assertIn("old mode", mode_diff)
+            result = self.tool.execute(mode="validate", diff=mode_diff)
+            self.assertTrue(result["valid"], result["findings"][:2])
+            self.assertEqual(result["files"], 1)
+            os.chmod(os.path.join(tmp, "wide.txt"), 0o644)
+
+    # -- (e) stats hotspot arithmetic -------------------------------------
+
+    def test_stats_hotspot_arithmetic_fresh(self):
+        """80 fresh hand cases: totals, ranges, ordering, and the top-3 cap."""
+        rng = random.Random(self.SEED + 44)
+        for case in range(80):
+            a = [f"l{i}" for i in range(rng.randint(0, 30))]
+            b = list(a)
+            for _ in range(rng.randint(1, 6)):
+                op = rng.choice(["edit", "ins", "del"])
+                if op == "edit" and b:
+                    b[rng.randrange(len(b))] = f"L{rng.randint(0, 99)}"
+                elif op == "ins":
+                    b.insert(rng.randint(0, len(b)), f"N{rng.randint(0, 99)}")
+                elif b:
+                    b.pop(rng.randrange(len(b)))
+            diff = "".join(
+                difflib.unified_diff([x + "\n" for x in a], [x + "\n" for x in b],
+                                     fromfile="a/h.txt", tofile="b/h.txt", n=rng.choice([0, 1, 3]))
+            )
+            if not diff.strip():
+                continue
+            result = self.tool.execute(mode="stats", diff=diff)
+            self.assertEqual(result["status"], "success")
+            parsed = diff_module.DiffParseTool()._parse(diff)
+            expected = []
+            adds = dels = 0
+            for hunk_index, hunk in enumerate(parsed.files[0].hunks):
+                changed = sum(1 for item in hunk.lines if item.origin in ("+", "-"))
+                adds += sum(1 for item in hunk.lines if item.origin == "+")
+                dels += sum(1 for item in hunk.lines if item.origin == "-")
+                expected.append({
+                    "file": "h.txt", "hunk_index": hunk_index + 1, "changed_lines": changed,
+                    "old_range": [hunk.old_start, hunk.old_start + hunk.old_count - 1] if hunk.old_count
+                    else [hunk.old_start + 1, hunk.old_start],
+                    "new_range": [hunk.new_start, hunk.new_start + hunk.new_count - 1] if hunk.new_count
+                    else [hunk.new_start + 1, hunk.new_start],
+                })
+            expected.sort(key=lambda item: (-item["changed_lines"], item["file"], item["hunk_index"]))
+            self.assertEqual(result["hotspots"], expected[:3], f"case {case}")
+            self.assertEqual(result["totals"]["add_lines"], adds, f"case {case}")
+            self.assertEqual(result["totals"]["del_lines"], dels, f"case {case}")
+            self.assertEqual(result["totals"]["net"], adds - dels, f"case {case}")
+
+    # -- (f) pathological second pass --------------------------------------
+
+    def test_pathological_byte_and_file_caps(self):
+        """Oversized hunks/lines/files fail fast with structured errors."""
+        hunks = "".join(f"@@ -{i} +{i} @@\n-x\n+y\n" for i in range(1, 100_001))
+        huge = "--- a/big.txt\n+++ b/big.txt\n" + hunks
+        start = time.perf_counter()
+        result = self.tool.execute(mode="validate", diff=huge)
+        self.assertLess(time.perf_counter() - start, 2.0)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("max_input_bytes", result["error"])
+        hunks2 = "".join(f"@@ -{i} +{i} @@\n-x\n+y\n" for i in range(1, 21_002))
+        over_hunks = "--- a/big.txt\n+++ b/big.txt\n" + hunks2
+        start = time.perf_counter()
+        result = self.tool.execute(mode="validate", diff=over_hunks)
+        self.assertLess(time.perf_counter() - start, 2.0)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("max_hunks", result["error"])
+        two_mb = "x" * (2 * 1024 * 1024)
+        start = time.perf_counter()
+        result = self.tool.execute(mode="validate", diff=f"--- a\n+++ b\n@@ -1 +1 @@\n-q\n+{two_mb}\n")
+        self.assertLess(time.perf_counter() - start, 2.0)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("max_input_bytes", result["error"])
+        at_cap = "y" * (1024 * 1024 - 50)
+        result = self.tool.execute(mode="validate", diff=f"--- a\n+++ b\n@@ -1 +1 @@\n-q\n+{at_cap}\n")
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(result["valid"])
+        files = "".join(f"--- a/f{i}.txt\n+++ b/f{i}.txt\n@@ -1 +1 @@\n-x\n+z\n" for i in range(2_100))
+        start = time.perf_counter()
+        result = self.tool.execute(mode="validate", diff=files)
+        self.assertLess(time.perf_counter() - start, 2.0)
+        self.assertEqual(result["status"], "error")
+        self.assertIn("max_files", result["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

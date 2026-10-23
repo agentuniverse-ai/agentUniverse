@@ -15,7 +15,12 @@ Policies (documented, deterministic):
   as malformed body lines.
 - ``apply_check`` requires exact context and removed-line matches at the
   positions implied by the hunk headers; there is no fuzz-factor search
-  (unlike ``patch(1)`` which retries at nearby offsets).
+  (unlike ``patch(1)`` which retries at nearby offsets). File-level sections
+  are additionally held to their ``/dev/null`` claims: a ``--- /dev/null``
+  (or ``new file mode``) diff cannot apply to non-empty text (patch(1)
+  refuses with "Patch creates file that already exists!"), and a
+  ``+++ /dev/null`` (or ``deleted file mode``) diff must consume the
+  original entirely.
 - A context line whose content is empty is the prefix character ``' '`` plus
   empty text, i.e. a single space on the line. A completely empty body line
   is a grammar violation (``E_EMPTY_BODY_LINE``).
@@ -928,10 +933,26 @@ class DiffParseTool(Tool):
 
         When the diff text itself used uniform CRLF line endings, a single
         trailing CR cannot be attributed to content or transport, so one CR is
-        tolerated and re-added at the comparison boundary (patch(1) behaves
-        the same way when stripping CRs).
+        tolerated and re-added at the comparison boundary (patch(1) behaves the
+        same way when stripping CRs).
+
+        File-level sections are stricter than patch(1)'s line editing: a
+        ``--- /dev/null`` (or ``new file mode``) section asserts the old file
+        is empty, so it cannot apply to non-empty text (patch(1) asks "Patch
+        creates file that already exists!"); a ``+++ /dev/null`` (or
+        ``deleted file mode``) section asserts the result is empty, so
+        applying it must consume the original entirely.
         """
         lines, final_newline = self._split_original(original)
+        status = section.status()
+        if status == "added" and original != "":
+            return (
+                False,
+                [],
+                None,
+                "old_side_empty_mismatch: the diff creates the file (old side is /dev/null) "
+                "but original_text is not empty",
+            )
         cr_original = any(item.endswith("\r") for item in lines)
 
         def normalize_cr(value: str) -> str:
@@ -1010,6 +1031,14 @@ class DiffParseTool(Tool):
                     "terminated but the original text lacks a final newline",
                 )
         output.extend(lines[cursor:])
+        if status == "deleted" and output:
+            return (
+                False,
+                per_hunk,
+                None,
+                f"new_side_empty_mismatch: the diff deletes the file (new side is /dev/null) "
+                f"but applying it leaves {len(output)} line(s) unconsumed",
+            )
         if new_no_newline:
             final_result = False
         elif last_line_consumed:
