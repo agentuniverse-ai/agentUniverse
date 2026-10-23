@@ -1,0 +1,12 @@
+name: source_balanced_selector
+description: Select ranked evidence with a configurable per-source quota.
+source_key: source
+max_per_source: 1
+top_n: 5
+# False enforces the cap even if fewer than top_n documents remain.
+# True relaxes the cap only to fill remaining slots, preserving input order.
+refill: false
+metadata:
+  type: DOC_PROCESSOR
+  module: agentuniverse.agent.action.knowledge.doc_processor.source_balanced_selector
+  class: SourceBalancedSelector
