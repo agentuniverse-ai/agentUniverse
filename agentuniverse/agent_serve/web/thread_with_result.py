@@ -38,7 +38,8 @@ class ThreadWithReturnValue(Thread):
             otel_token = ContextCoordinator.recover_context(self._context_pack)
             try:
                 self._return = self.target(*self.args, **self.kwargs)
-            except Exception as e:
+            except BaseException as e:
+                # Transport target failures to result(), including cancellation/exit.
                 self.error = e
             finally:
                 if otel_token:
@@ -46,7 +47,8 @@ class ThreadWithReturnValue(Thread):
 
     def result(self):
         """Wait for target func finished, then return the result or raise an
-        error."""
+        error, including BaseException subclasses raised by the target.
+        """
         self.join()
         if self.error is not None:
             raise self.error
@@ -66,7 +68,11 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
     """A ThreadPoolExecutor that preserves context across threads."""
 
     def submit(self, fn: Callable, *args, **kwargs) -> ContextAwareFuture:
-        """Submit a callable to be executed with context preservation."""
+        """Submit a callable with context preservation.
+
+        Target failures, including BaseException subclasses, are delivered
+        through the returned future's result/exception methods.
+        """
         context_pack = ContextCoordinator.save_context()
         future = ContextAwareFuture()
         future._context_pack = context_pack
@@ -77,11 +83,16 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
                 otel_token = ContextCoordinator.recover_context(context_pack)
 
                 result = fn(*args, **kwargs)
-                future.set_result(result)
 
-            except Exception as e:
+            except BaseException as e:
+                # Match executor failure transport so the outer future
+                # does not remain pending after a target exits.
                 future.error = e
                 future.set_exception(e)
+
+            else:
+                # Completion callbacks are not part of the target's failure.
+                future.set_result(result)
 
             finally:
                 if otel_token:
