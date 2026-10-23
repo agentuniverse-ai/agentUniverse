@@ -36,21 +36,27 @@ def parse_dynamic_str(param: str):
     of the function execution, otherwise return the original string.
     This is useful in scenarios where it's inconvenient to write the real
     value directly, such as with secret keys.
+
+    Only an *unresolvable* path falls back to the original string. Exceptions
+    raised by the resolved function are propagated: falling back there would
+    replace the value the caller asked for (a DSN, a key) with the dotted path
+    itself and report the failure far away from its cause.
     """
-    try:
-        parts = param.rsplit('.', 1)
-        if len(parts) == 2:
-            module_path, func_name = parts
-            module = importlib.import_module(module_path)
-            func = getattr(module, func_name)
-            if callable(func):
-                return func()
-            else:
-                return param
-        else:
-            return param
-    except (ImportError, AttributeError, Exception):
+    if not isinstance(param, str):
         return param
+    parts = param.rsplit('.', 1)
+    if len(parts) != 2:
+        return param
+    module_path, func_name = parts
+    try:
+        module = importlib.import_module(module_path)
+        func = getattr(module, func_name)
+    except Exception:
+        # The path does not name an importable attribute, so keep it verbatim.
+        return param
+    if not callable(func):
+        return param
+    return func()
 
 
 def get_module_path(yaml_path: str, root_name: str,
