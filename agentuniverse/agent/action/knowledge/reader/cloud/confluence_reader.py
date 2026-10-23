@@ -7,6 +7,7 @@ from typing import List, Optional, Dict
 import logging
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.cloud._html_text import extract_cloud_html_text
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 
@@ -15,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 class ConfluenceReader(Reader):
     """Reader for Atlassian Confluence pages.
+
+    HTML inline formatting preserves word continuity; block elements and
+    explicit breaks separate output lines.
 
     Requires:
         pip install atlassian-python-api
@@ -74,7 +78,4 @@ class ConfluenceReader(Reader):
         except Exception:
             raise ImportError("Install beautifulsoup4 and lxml for ConfluenceReader")
         soup = BeautifulSoup(html, "lxml")
-        for tag in soup(["script", "style", "noscript"]):
-            tag.extract()
-        text = soup.get_text("\n")
-        return "\n".join([line.strip() for line in text.splitlines() if line.strip()])
+        return extract_cloud_html_text(soup)
