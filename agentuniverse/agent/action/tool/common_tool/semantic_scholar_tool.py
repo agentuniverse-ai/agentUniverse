@@ -8,7 +8,7 @@ import json
 import re
 from datetime import date
 from typing import Any, ClassVar, Dict, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import requests
 from pydantic import Field
@@ -604,13 +604,12 @@ class SemanticScholarTool(Tool):
 
     @classmethod
     def _normalize_paper_id(cls, value: str) -> str:
+        """Normalize identifiers, ignoring page URL queries, fragments and trailing slashes."""
         paper_id = value.strip()
-        paper_id = re.sub(
-            r"^https?://(?:www\.)?semanticscholar\.org/paper/(?:[^/]+/)?",
-            "",
-            paper_id,
-            flags=re.I,
-        )
+        if re.match(
+            r"^https?://(?:www\.)?semanticscholar\.org/paper/", paper_id, flags=re.I
+        ):
+            paper_id = urlsplit(paper_id).path.rstrip("/").rsplit("/", 1)[-1]
         paper_id = re.sub(r"^https?://(?:dx\.)?doi\.org/", "DOI:", paper_id, flags=re.I)
         if re.match(r"^https?://arxiv\.org/pdf/", paper_id, flags=re.I):
             paper_id = re.sub(r"\.pdf$", "", paper_id, flags=re.I)
