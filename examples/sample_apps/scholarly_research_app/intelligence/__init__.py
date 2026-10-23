@@ -1,0 +1,1 @@
+"""Scholarly research intelligence package."""

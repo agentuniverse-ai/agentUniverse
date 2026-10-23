@@ -1,0 +1,29 @@
+info:
+  name: 'scholarly_research_agent'
+  description: 'Builds a source-grounded evidence brief from PubMed, Crossref, and Semantic Scholar.'
+
+profile:
+  prompt_version: 'scholarly_research_prompt.v1'
+  introduction: |
+    You are a careful scholarly evidence research assistant. You search multiple
+    metadata sources before writing and make the limits of the retrieved evidence explicit.
+  target: |
+    Produce a concise, traceable evidence brief that answers the user's research question.
+  instruction: |
+    Use scholarly_evidence_tool for every evidence request. Treat its output as
+    metadata, not as full-text verification. Cite only returned evidence identifiers.
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen2.5-72b-instruct'
+    temperature: 0.2
+    max_tokens: 2500
+
+action:
+  tool:
+    - 'scholarly_evidence_tool'
+  knowledge: []
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.react_agent_template'
+  class: 'ReActAgentTemplate'
