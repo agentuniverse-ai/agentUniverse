@@ -5,6 +5,8 @@
 # @Author  : fanen.lhy
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: base_file_log_sink.py
+from typing import Optional
+
 from loguru import logger
 
 from agentuniverse.base.config.component_configer.component_configer import \
@@ -17,8 +19,8 @@ from agentuniverse.base.util.logging.logging_util import _get_log_file_path
 class BaseFileLogSink(LogSink):
 
     file_prefix: str = None
-    log_rotation: str = LoggingConfig.log_rotation
-    log_retention: str = LoggingConfig.log_retention
+    log_rotation: Optional[str] = None
+    log_retention: Optional[str] = None
     compression: str = None
 
     def process_record(self, record):
@@ -37,8 +39,8 @@ class BaseFileLogSink(LogSink):
                 level=self.level,
                 format=self.format,
                 filter=self.filter,
-                rotation=self.log_rotation,
-                retention=self.log_retention,
+                rotation=self.log_rotation or LoggingConfig.log_rotation,
+                retention=self.log_retention or LoggingConfig.log_retention,
                 compression=self.compression,
                 encoding="utf-8",
                 enqueue=self.enqueue
