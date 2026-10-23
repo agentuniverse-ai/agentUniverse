@@ -6,10 +6,12 @@
 # @FileName: context_manager_manager.py
 """Context manager manager singleton."""
 
+from agentuniverse.base.annotation.singleton import singleton
 from agentuniverse.base.component.component_manager_base import ComponentManagerBase
 from agentuniverse.base.component.component_enum import ComponentEnum
 
 
+@singleton
 class ContextManagerManager(ComponentManagerBase):
     """Manager for ContextManager instances (Singleton pattern).
 
