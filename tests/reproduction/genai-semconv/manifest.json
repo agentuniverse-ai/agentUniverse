@@ -1,0 +1,16 @@
+{
+  "feature": "feat(tracing): add opt-in versioned GenAI attribute adapter",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4223",
+  "tested_code_commit": "947d16177fe8369c80cea78cef0849f11864b4dd",
+  "tests": [
+    "tests/test_agentuniverse/unit/base/tracing/test_gen_ai_attributes.py",
+    "tests/test_agentuniverse/unit/base/tracing/test_llm_token_usage.py"
+  ],
+  "required_environment": [
+    "AU_GENAI_COLLECTOR_CONTAINER"
+  ],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
