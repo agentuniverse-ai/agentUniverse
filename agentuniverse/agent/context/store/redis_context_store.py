@@ -59,7 +59,7 @@ class RedisContextStore(ContextStore):
         self._redis = None
 
     def initialize_by_component_configer(self, component_configer) -> 'RedisContextStore':
-        """Initialize from YAML configuration."""
+        """Load YAML settings before opening and checking the Redis connection."""
         super().initialize_by_component_configer(component_configer)
 
         # Initialize Redis connection
@@ -81,6 +81,18 @@ class RedisContextStore(ContextStore):
         except Exception as e:
             raise RuntimeError(f"Failed to connect to Redis: {e}")
 
+        return self
+
+    def _initialize_by_component_configer(self, component_configer) -> 'RedisContextStore':
+        """Apply explicitly configured store and Redis connection settings."""
+        super()._initialize_by_component_configer(component_configer)
+        for field in (
+            "name", "storage_tier", "max_segments", "ttl_hours",
+            "redis_host", "redis_port", "redis_db", "redis_password",
+            "key_prefix", "default_ttl_seconds",
+        ):
+            if hasattr(component_configer, field):
+                setattr(self, field, getattr(component_configer, field))
         return self
 
     def add(
