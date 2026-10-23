@@ -48,9 +48,9 @@ class CodeAstProcessor(DocProcessor):
                     module_name = f'tree_sitter_{language}'
                     lang_module = import_module(module_name)
                     self._languages[language] = Language(lang_module.language())
-                except ImportError:
+                except ImportError as e:
                     raise ImportError(
-                        f"Could not import {module_name}. Install with: pip install {module_name}")
+                        f"Could not import {module_name}. Install with: pip install {module_name}") from e
         _ensure_language()
 
         result_docs: List[Document] = []
@@ -295,9 +295,9 @@ class CodeAstProcessor(DocProcessor):
             from tree_sitter import Parser
             self._parser = Parser()
             self._languages = {}
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
-                "tree-sitter not available. Install with: pip install tree-sitter")
+                "tree-sitter not available. Install with: pip install tree-sitter") from e
 
         if hasattr(doc_processor_configer, "max_depth"):
             self.max_depth = doc_processor_configer.max_depth
