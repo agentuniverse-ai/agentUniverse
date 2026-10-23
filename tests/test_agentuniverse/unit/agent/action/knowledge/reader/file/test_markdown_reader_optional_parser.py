@@ -100,6 +100,36 @@ def test_sevenzip_does_not_drop_markdown_entries(tmp_path, without_unstructured)
     assert names == ["a.txt", "notes.md"]
 
 
+def test_an_empty_document_list_from_the_parser_falls_back_to_text(tmp_path, monkeypatch):
+    """A parser that loads no documents must not make the reader index an empty list.
+
+    `UnstructuredMarkdownLoader.load()` returns no documents for an empty or
+    whitespace-only file. Indexing `documents[0]` then raised IndexError and the
+    reader crashed instead of returning the (empty) file text.
+    """
+    empty = tmp_path / "empty.md"
+    empty.write_text("", encoding="utf-8")
+
+    import types
+
+    fake = types.ModuleType("langchain_community.document_loaders")
+
+    class _Loader:
+        def __init__(self, file):
+            pass
+
+        def load(self):
+            return []
+
+    fake.UnstructuredMarkdownLoader = _Loader
+    monkeypatch.setitem(sys.modules, "langchain_community.document_loaders", fake)
+
+    documents = MarkdownReader().load_data(empty)
+
+    assert len(documents) == 1
+    assert documents[0].text == ""
+
+
 def test_unstructured_output_is_used_when_available(markdown_file):
     """With the parser installed the reader keeps its previous behaviour."""
     pytest.importorskip("unstructured")

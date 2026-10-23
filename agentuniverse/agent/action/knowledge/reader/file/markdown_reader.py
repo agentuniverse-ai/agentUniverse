@@ -62,6 +62,10 @@ class MarkdownReader(Reader):
             documents = UnstructuredMarkdownLoader(file).load()
         except ImportError:
             return None
+        # `load()` returns no documents for an empty or whitespace-only file, so
+        # fall back to the plain-text path instead of indexing an empty list.
+        if not documents:
+            return None
         return documents[0].page_content
 
     def _read_text(self, file: Path) -> str:
