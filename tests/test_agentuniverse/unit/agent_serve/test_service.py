@@ -26,6 +26,7 @@ def test_service():
     service_configer._ServiceConfiger__agent = agent
     service = Service(name="test_service")
     service.initialize_by_component_configer(service_configer)
+    assert service.service_code == "test_app.service.test_service"
     run_result = service.run()
     assert service.run() == '{"test_result": "ok"}'
 

@@ -55,4 +55,7 @@ class Service(ComponentBase):
     @property
     def service_code(self):
         """The unique code of each service, generate from service name."""
-        return self.__service_code
+        # Derive the value on access. Pydantic does not call the legacy
+        # __post_init_post_parse__ hook, and the name may also be assigned by
+        # ServiceConfiger after construction.
+        return self.get_instance_code()
