@@ -1,0 +1,16 @@
+name: s3_version_reader
+description: Import explicitly pinned S3 objects using local file Readers
+bucket: your-authorized-bucket
+source_name: aws-s3
+readers:
+  txt: default_txt_reader
+client_args:
+  region_name: us-east-1
+allow_unversioned: false
+max_objects: 1000
+max_object_bytes: 10000000
+max_total_bytes: 100000000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.cloud.s3_version_reader
+  class: S3VersionReader
