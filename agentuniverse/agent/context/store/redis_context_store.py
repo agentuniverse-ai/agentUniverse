@@ -377,7 +377,7 @@ class RedisContextStore(ContextStore):
             return []
 
         # Scan for all session keys
-        pattern = f"{self.key_prefix}session:*"
+        pattern = f"{self._escape_scan_glob(self.key_prefix)}session:*"
         session_keys = []
 
         cursor = 0
@@ -407,7 +407,7 @@ class RedisContextStore(ContextStore):
             return
 
         # Delete all keys with our prefix
-        pattern = f"{self.key_prefix}*"
+        pattern = f"{self._escape_scan_glob(self.key_prefix)}*"
         cursor = 0
 
         while True:
@@ -422,6 +422,14 @@ class RedisContextStore(ContextStore):
     def _make_session_key(self, session_id: str) -> str:
         """Generate Redis key for session data."""
         return f"{self.key_prefix}session:{session_id}"
+
+    @staticmethod
+    def _escape_scan_glob(value: str) -> str:
+        """Escape Redis glob metacharacters in a literal key prefix."""
+        escaped = value.replace("\\", "\\\\")
+        for character in ("*", "?", "[", "]"):
+            escaped = escaped.replace(character, f"\\{character}")
+        return escaped
 
     def _make_index_key(self, session_id: str) -> str:
         """Generate Redis key for time-based index."""
