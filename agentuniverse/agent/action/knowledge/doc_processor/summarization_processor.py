@@ -186,6 +186,8 @@ class SummarizationProcessor(DocProcessor):
         """
         if not text.strip():
             return ""
+        if self.max_sentences <= 0:
+            return ""
         sentences = self._split_sentences(text)
         if len(sentences) <= self.max_sentences:
             return text.strip()
