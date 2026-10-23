@@ -8,7 +8,7 @@ from calendar import monthrange
 from datetime import date
 from html.parser import HTMLParser
 from typing import Any, ClassVar, Dict, List, Optional
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlsplit
 
 import requests
 from pydantic import Field
@@ -373,7 +373,11 @@ class CrossrefTool(Tool):
     def _normalize_doi(value: str) -> str:
         resolver = re.match(r"^https?://(?:dx\.)?doi\.org/", value, flags=re.IGNORECASE)
         if resolver:
-            doi = unquote(value[resolver.end():]).strip()
+            # Resolver query strings and fragments are URL components, not DOI
+            # characters. Decode the path only so encoded DOI punctuation is
+            # still preserved once.
+            parsed = urlsplit(value)
+            doi = unquote(parsed.path.lstrip("/")).strip()
         else:
             doi = re.sub(r"^doi:\s*", "", value, flags=re.IGNORECASE).strip()
         if not doi.startswith("10.") or "/" not in doi or any(character.isspace() for character in doi):
