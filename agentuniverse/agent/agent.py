@@ -5,6 +5,7 @@
 # @Author  : heji
 # @Email   : lc299034@antgroup.com
 # @FileName: agent.py
+import asyncio
 import json
 import uuid
 from abc import abstractmethod, ABC
@@ -446,6 +447,35 @@ class Agent(ComponentBase, ABC):
             )
             knowledge_results.append(knowledge.to_llm(knowledge_res))
         return "\n\n".join(knowledge_results)
+
+    async def async_invoke_knowledge(self, query_str: str, input_object: InputObject, **kwargs) -> str:
+        """Query every configured knowledge base without blocking the event loop.
+
+        ``Knowledge.query_knowledge`` is a synchronous API that may perform
+        network or vector-store I/O.  Running it directly from an async agent
+        stalls every other task on the event loop, so each query is dispatched
+        to a worker thread and the results are joined in configuration order.
+        Missing components are skipped, matching ``invoke_knowledge``.
+        """
+        knowledge_names = kwargs.get('knowledge_names') or self.agent_model.action.get('knowledge', [])
+        if not knowledge_names or not query_str:
+            return ''
+
+        async def query_one(knowledge_name: str) -> Optional[str]:
+            knowledge: Knowledge = KnowledgeManager().get_instance_obj(knowledge_name)
+            if knowledge is None:
+                return None
+            knowledge_res: List[Document] = await asyncio.to_thread(
+                knowledge.query_knowledge,
+                query_str=query_str,
+                **input_object.to_dict(),
+            )
+            return knowledge.to_llm(knowledge_res)
+
+        knowledge_results = await asyncio.gather(
+            *(query_one(knowledge_name) for knowledge_name in knowledge_names)
+        )
+        return "\n\n".join(result for result in knowledge_results if result)
 
     def process_prompt(self, agent_input: dict, **kwargs) -> ChatPrompt:
         expert_framework = agent_input.get('expert_framework', '') or ''
