@@ -188,7 +188,9 @@ class FinancialIndicatorExtractor(DocProcessor):
         Returns:
             List of extracted FinancialMetric objects. Monetary values include
             the matched million/billion scale, including amount-before-revenue
-            phrases such as "$3 billion in revenue".
+            phrases such as "$3 billion in revenue". Overlapping patterns for
+            one metric name count each numeric source span only once; separate
+            occurrences and different metric names remain distinct.
         """
         metrics = []
 
@@ -283,6 +285,7 @@ class FinancialIndicatorExtractor(DocProcessor):
         }
 
         # Extract metrics using patterns
+        seen_metrics = set()
         for metric_name in self.metrics:
             patterns = metric_patterns.get(metric_name, [])
 
@@ -291,6 +294,9 @@ class FinancialIndicatorExtractor(DocProcessor):
 
                 for match in matches:
                     try:
+                        occurrence = (metric_name, match.span(1))
+                        if occurrence in seen_metrics:
+                            continue
                         value_str = match.group(1).replace(',', '')
                         value = float(value_str)
 
@@ -323,6 +329,7 @@ class FinancialIndicatorExtractor(DocProcessor):
                         )
 
                         metrics.append(metric)
+                        seen_metrics.add(occurrence)
 
                     except (ValueError, IndexError) as e:
                         logger.debug(f"Failed to parse metric: {e}")
