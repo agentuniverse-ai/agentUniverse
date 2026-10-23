@@ -1,0 +1,15 @@
+{
+  "feature": "feat(prompt): add offline golden regression matrix",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4225",
+  "tested_code_commit": "687568e5cecf9ab5a045a9d75160b99c0f8ff10c",
+  "tests": [
+    "tests/test_agentuniverse/unit/prompt/test_regression_matrix.py",
+    "tests/test_agentuniverse/unit/prompt/test_prompt_instance_choice.py",
+    "tests/test_agentuniverse/unit/base/config/test_prompt_config_path.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
