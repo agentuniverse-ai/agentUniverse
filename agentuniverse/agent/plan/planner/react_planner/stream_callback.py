@@ -147,7 +147,7 @@ class StreamOutPutCallbackHandler(BaseCallbackHandler):
         self.queueStream.put_nowait({
             "type": "ReAct",
             "data": {
-                "output": '\nThought:' + finish.output,
+                "output": '\nThought:' + finish.return_values.get('output', finish.log),
                 "agent_info": self.agent_info
             }
         })
