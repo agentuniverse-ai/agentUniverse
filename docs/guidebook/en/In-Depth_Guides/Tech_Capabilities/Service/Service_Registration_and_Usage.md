@@ -28,3 +28,10 @@ metadata:
 
 ## Usage
 Please refer to [Web API](Web_Api.md).
+
+For programmatic registration after application configuration is loaded,
+`service.service_code` returns the same qualified identifier as
+`service.get_instance_code()`, for example `my_app.service.chat`. It derives
+the identifier from the current application and service name when accessed,
+including a name assigned by service YAML initialization. Constructing a
+`Service` object does not require application configuration to be loaded yet.
