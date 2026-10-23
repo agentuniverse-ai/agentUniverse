@@ -254,7 +254,9 @@ class Memory(ComponentBase):
         if component_configer.description:
             self.description = component_configer.description
         if component_configer.type:
-            self.type = next((member for member in MemoryTypeEnum if member.value == component_configer.type))
+            _type = next((member for member in MemoryTypeEnum if member.value == component_configer.type), None)
+            if _type is not None:
+                self.type = _type
         if component_configer.memory_key:
             self.memory_key = component_configer.memory_key
         if component_configer.max_tokens:
