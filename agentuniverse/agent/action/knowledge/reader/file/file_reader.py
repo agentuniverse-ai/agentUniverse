@@ -20,6 +20,7 @@ from agentuniverse.agent.action.knowledge.reader.file.rar_reader import RarReade
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
 from agentuniverse.agent.action.knowledge.reader.file.zip_reader import ZipReader
 from agentuniverse.agent.action.knowledge.reader.file.sevenzip_reader import SevenZipReader
+from agentuniverse.agent.action.knowledge.reader.file.audio_transcription_reader import AudioTranscriptionReader
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 
@@ -37,6 +38,12 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".rar": RarReader,
     ".zip": ZipReader,
     ".7z": SevenZipReader,
+    # audio (transcribed locally via faster-whisper)
+    ".wav": AudioTranscriptionReader,
+    ".mp3": AudioTranscriptionReader,
+    ".m4a": AudioTranscriptionReader,
+    ".flac": AudioTranscriptionReader,
+    ".ogg": AudioTranscriptionReader,
 }
 
 

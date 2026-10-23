@@ -55,4 +55,5 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml)：读取ZIP压缩包文件，支持嵌套ZIP结构和多种文件格式
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml)：读取本地Docx文件中的文本内容
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml)：读取本地Markdown文件中的文本内容
+- [default_audio_transcription_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/audio_transcription_reader.yaml)：使用**本地** Whisper 模型（可选 `faster-whisper` 后端，`pip install 'agentuniverse[audio_ext]'`）把本地音频文件（.wav/.mp3/.m4a/.flac/.ogg）转写为文本——无需云端语音 API、无需凭据、音频不出本机。模型按 (model_size, device, compute_type) 在类级缓存；检测到的语言、时长与分段数写入 metadata；`max_file_bytes` 与 `max_duration_seconds` 上限在转写开始前拒绝超大/超长输入。
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml)：读取 RAR 压缩文件（.rar）中的文本内容。
