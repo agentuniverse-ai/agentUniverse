@@ -84,9 +84,9 @@ redis = { version = "^5.0.0", optional = true }
 # qdrant-client = "^1.15.1" unsupportable version due to numpy version limit
 
 [tool.poetry.extras]
-colbert_ext = ["sentence-transformers", "torch"]
 log_ext = ["aliyun-log-python-sdk"]
 store_ext = ["pymilvus", "psycopg", "pgvector", "redis"]
+colbert_ext = ["sentence-transformers", "torch"]
 office_ext = ["python-docx", "python-pptx"]
 pdf_ext = ["pypdf"]
 
