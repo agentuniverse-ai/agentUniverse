@@ -269,7 +269,7 @@ class RedisVectorStore(Store):
         return list(values)
 
     def _top_k(self, query: Query) -> int:
-        value = query.similarity_top_k or self.similarity_top_k
+        value = query.similarity_top_k if query.similarity_top_k is not None else self.similarity_top_k
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise ValueError("similarity_top_k must be a positive integer")
         return value

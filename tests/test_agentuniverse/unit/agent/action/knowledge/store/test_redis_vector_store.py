@@ -141,9 +141,14 @@ class RedisVectorStoreTest(unittest.TestCase):
     def test_invalid_top_k_fails_before_redis(self):
         connection = FakeConnection()
         store = RedisVectorStore(client=connection, dimensions=2)
-        with self.assertRaisesRegex(ValueError, "similarity_top_k"):
-            store.query(Query(embeddings=[[1.0, 0.0]], similarity_top_k=-1))
+        for top_k in (0, -1):
+            with self.subTest(top_k=top_k), self.assertRaisesRegex(ValueError, "similarity_top_k"):
+                store.query(Query(embeddings=[[1.0, 0.0]], similarity_top_k=top_k))
         self.assertEqual(connection.calls, [])
+
+    def test_missing_top_k_uses_store_default(self):
+        store = RedisVectorStore(similarity_top_k=7)
+        self.assertEqual(store._top_k(Query()), 7)
 
     def test_upsert_uses_pipeline_and_filter_fields(self):
         connection = FakeConnection()
