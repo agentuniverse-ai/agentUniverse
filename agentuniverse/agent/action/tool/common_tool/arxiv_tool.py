@@ -151,7 +151,7 @@ class ArxivTool(Tool):
         papers: List[PaperSummary] = []
         for result in self.sch_engine.results(search):
             paper = PaperSummary(
-                paper_id=result.pdf_url.split("/")[-1],
+                paper_id=result.get_short_id(),
                 title=result.title,
                 authors=[str(author) for author in result.authors],
                 publish_date=str(result.published).split()[0],
