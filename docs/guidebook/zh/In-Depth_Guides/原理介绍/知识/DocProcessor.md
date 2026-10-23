@@ -116,6 +116,11 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.doc_processor.token_text_splitter'
   class: 'TokenTextSplitter'
 ```
+
+Token 切分会将文档中的 `<|endoftext|>` 等分词器标记字符串视为普通文本，
+使分词器文档和导出的示例能够正常入库；不会将这些字符串解释为特殊 token ID。
+配置的编码、模型和 token 重叠大小仍然生效。
+
 - chunk_size: 切分后文本的token数量。
 - chunk_overlap: 相邻切分文本重合部分的token数量。
 - tokenizer: 指定的tokenizer，用于将文本切分为tokens

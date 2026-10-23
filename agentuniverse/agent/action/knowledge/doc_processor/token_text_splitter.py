@@ -31,7 +31,9 @@ class TokenTextSplitter(DocProcessor):
             encoding_name=self.encoding_name,
             model_name=self.model_name,
             chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap
+            chunk_overlap=self.chunk_overlap,
+            # Knowledge documents contain literal text, not tokenizer controls.
+            disallowed_special=()
         )
         return self.__splitter
 
