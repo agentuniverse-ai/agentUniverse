@@ -259,7 +259,7 @@ class YahooFinanceTool(Tool):
             return "-"
         try:
             return f"{float(value):.2f}"
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return str(value)
 
     @staticmethod
@@ -268,7 +268,11 @@ class YahooFinanceTool(Tool):
         if value is None:
             return "-"
         try:
-            return f"{int(float(value)):,}"
+            try:
+                integer = int(value)
+            except (TypeError, ValueError, OverflowError):
+                integer = int(float(value))
+            return f"{integer:,}"
         except (TypeError, ValueError):
             return str(value)
 
