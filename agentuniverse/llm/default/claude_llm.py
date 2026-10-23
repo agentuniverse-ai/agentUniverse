@@ -106,9 +106,14 @@ class ClaudeLLM(LLM):
 
     @staticmethod
     def parse_result(data):
+        """Join response text blocks in order, preserving the complete raw response.
+
+        Block boundaries add no separators: whitespace belongs to the returned
+        text itself. Empty content still raises; all-empty text returns None.
+        """
         if not data.content:
             raise ValueError("Claude LLM returned a response with no content blocks")
-        text = data.content[0].text
+        text = ''.join(block.text for block in data.content)
         if not text:
             return
         return LLMOutput(text=text, raw=data)
