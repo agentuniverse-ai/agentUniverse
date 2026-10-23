@@ -57,7 +57,7 @@ class ChromaConversationMemoryStorage(MemoryStorage):
 
     def _init_collection(self) -> Any:
         """Initialize the ChromaDB collection."""
-        if self.persist_path.startswith('http') or self.persist_path.startswith('https'):
+        if self.persist_path and self.persist_path.startswith(('http', 'https')):
             parsed_url = urlparse(self.persist_path)
             settings = Settings(
                 chroma_api_impl="chromadb.api.fastapi.FastAPI",
