@@ -8,10 +8,13 @@
 import sqlite3
 import json
 import math
+from functools import wraps
+from threading import RLock
 from typing import List, Optional, Set
 from collections import Counter
 
 import jieba
+from pydantic import PrivateAttr
 
 from agentuniverse.agent.action.knowledge.store.store import Store
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -21,6 +24,15 @@ from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
 
 
+def _serialized_connection(method):
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        # SQLite transactions belong to the connection, even for read callers.
+        with self._connection_lock:
+            return method(self, *args, **kwargs)
+    return call
+
+
 class SQLiteStore(Store):
     db_path: str = 'sqlite_store.db'
     conn: Optional[sqlite3.Connection] = None
@@ -28,11 +40,14 @@ class SQLiteStore(Store):
     b: float = 0.75
     keyword_extractor: Optional[str] = None
     similarity_top_k: int = 10
+    _connection_lock = PrivateAttr(default_factory=RLock)
 
+    @_serialized_connection
     def _new_client(self):
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._create_tables()
 
+    @_serialized_connection
     def _create_tables(self):
         with self.conn:
             self.conn.execute('''
@@ -68,19 +83,17 @@ class SQLiteStore(Store):
 
 
     def _get_all_docs_count(self) -> int:
-        with self.conn:
-            cursor = self.conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM documents')
-            count = cursor.fetchone()[0]
-            cursor.close()
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM documents')
+        count = cursor.fetchone()[0]
+        cursor.close()
         return count
 
     def _get_all_docs_words_count(self) -> int:
-        with self.conn:
-            cursor = self.conn.cursor()
-            cursor.execute('SELECT SUM(word_count) FROM documents')
-            total_word_count = cursor.fetchone()[0]
-            cursor.close()
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT SUM(word_count) FROM documents')
+        total_word_count = cursor.fetchone()[0]
+        cursor.close()
         return total_word_count if total_word_count is not None else 0
 
     def compute_bm25(self, query_text, doc_text, inverted_index,
@@ -119,6 +132,7 @@ class SQLiteStore(Store):
                 .process_docs([document])
             return _doc[0].keywords
 
+    @_serialized_connection
     def insert_document(self, documents: List[Document], **kwargs):
         with self.conn:
             for document in documents:
@@ -139,6 +153,7 @@ class SQLiteStore(Store):
                         (term, document.id)
                     )
 
+    @_serialized_connection
     def delete_document(self, document_id: int):
         with self.conn:
             self.conn.execute(
@@ -150,6 +165,7 @@ class SQLiteStore(Store):
                 (document_id,)
             )
 
+    @_serialized_connection
     def upsert_document(self, documents: List[Document], **kwargs):
         with self.conn:
             for document in documents:
@@ -172,6 +188,7 @@ class SQLiteStore(Store):
                         (term, document.id)
                     )
 
+    @_serialized_connection
     def query(self, query: Query, **kwargs) -> List[Document]:
         if len(query.keywords) > 0:
             query_terms = query.keywords
@@ -182,16 +199,15 @@ class SQLiteStore(Store):
         # Get doc_id from inverted index.
         relevant_docs = set()
         inverted_index = {}
-        with self.conn:
-            for keyword in query_terms:
-                cursor = self.conn.cursor()
-                cursor.execute(
-                    'SELECT doc_id FROM inverted_index WHERE term = ?',
-                    (keyword,))
-                docs_with_keyword = [row[0] for row in cursor.fetchall()]
-                inverted_index[keyword] = docs_with_keyword
-                relevant_docs.update(docs_with_keyword)
-                cursor.close()
+        for keyword in query_terms:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                'SELECT doc_id FROM inverted_index WHERE term = ?',
+                (keyword,))
+            docs_with_keyword = [row[0] for row in cursor.fetchall()]
+            inverted_index[keyword] = docs_with_keyword
+            relevant_docs.update(docs_with_keyword)
+            cursor.close()
 
         # Count every document's bm25.
         doc_scores = []
