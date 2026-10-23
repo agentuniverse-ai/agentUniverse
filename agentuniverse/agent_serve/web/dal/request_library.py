@@ -134,6 +134,14 @@ class RequestLibrary:
             if db_request_do:
                 update_data = request_do.model_dump(exclude_unset=True)
                 for key, value in update_data.items():
+                    # Skip the timestamp columns so the database owns them:
+                    # `gmt_modified` is kept fresh by the ORM `onupdate` hook and
+                    # by `update_gmt_modified` heartbeats, while `gmt_create` must
+                    # stay immutable. Writing the in-memory DO's stale timestamps
+                    # back would pin the row clock to the creation time and make
+                    # `RequestTask.is_validate` false-positive on long-running tasks.
+                    if key in ("gmt_create", "gmt_modified"):
+                        continue
                     setattr(db_request_do, key, value)
                 session.commit()
                 session.refresh(db_request_do)
