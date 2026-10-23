@@ -12,6 +12,7 @@ import zipfile
 from typing import Any, ClassVar, cast
 
 from agentuniverse.agent.action.tool.common_tool.file_path_utils import (
+    atomic_publish_file,
     resolve_safe_path,
 )
 from agentuniverse.agent.action.tool.tool import Tool
@@ -22,7 +23,8 @@ class PowerPointTool(Tool):
 
     ``python-pptx`` is loaded only when an operation needs it. All file paths
     are confined to ``base_dir`` and writes use a temporary file followed by
-    ``os.replace`` so a failed save cannot corrupt an existing presentation.
+    atomic publication so a failed save cannot corrupt an existing presentation.
+    Create mode replaces a destination only when ``overwrite`` is enabled.
 
     Slide input is intentionally structured rather than accepting executable
     template code. Each slide may contain ``title``, ``subtitle``, ``bullets``,
@@ -237,7 +239,7 @@ class PowerPointTool(Tool):
         for spec in validated_slides:
             self._add_slide(presentation, spec, Inches)
 
-        self._atomic_save(presentation, file_path)
+        self._atomic_save(presentation, file_path, overwrite=overwrite)
         return {
             "status": "success",
             "mode": "create",
@@ -620,7 +622,7 @@ class PowerPointTool(Tool):
             paragraph.text = bullet["text"]
             paragraph.level = bullet["level"]
 
-    def _atomic_save(self, presentation: Any, file_path: str) -> None:
+    def _atomic_save(self, presentation: Any, file_path: str, overwrite: bool = True) -> None:
         directory = os.path.dirname(file_path)
         os.makedirs(directory, exist_ok=True)
         temporary_path = None
@@ -637,7 +639,7 @@ class PowerPointTool(Tool):
             if size > self.max_write_bytes:
                 raise ValueError(f"generated file size {size} bytes exceeds max_write_bytes ({self.max_write_bytes})")
             self._validate_archive_safety(temporary_path, "generated presentation")
-            os.replace(temporary_path, file_path)
+            atomic_publish_file(temporary_path, file_path, overwrite=overwrite)
             temporary_path = None
         finally:
             if temporary_path and os.path.exists(temporary_path):
