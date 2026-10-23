@@ -29,7 +29,22 @@ def service_run(saved: bool, params: str, service_id: str):
             result of the task.
     """
     if params and params.strip():
-        params = json.loads(params)
+        try:
+            params = json.loads(params)
+        except (json.JSONDecodeError, ValueError) as e:
+            return {
+                "success": False,
+                "result": None,
+                "message": f"invalid params: failed to parse json: {e}",
+                "request_id": None,
+            }
+        if not isinstance(params, dict):
+            return {
+                "success": False,
+                "result": None,
+                "message": "invalid params: json must be an object",
+                "request_id": None,
+            }
     else:
         params = {}
     request_task = RequestTask(ServiceInstance(service_id).run, saved,
@@ -60,7 +75,22 @@ def service_run_async(saved: bool, params: str, service_id: str):
             service_run_result api to get the result of async task.
     """
     if params and params.strip():
-        params = json.loads(params)
+        try:
+            params = json.loads(params)
+        except (json.JSONDecodeError, ValueError) as e:
+            return {
+                "success": False,
+                "result": None,
+                "message": f"invalid params: failed to parse json: {e}",
+                "request_id": None,
+            }
+        if not isinstance(params, dict):
+            return {
+                "success": False,
+                "result": None,
+                "message": "invalid params: json must be an object",
+                "request_id": None,
+            }
     else:
         params = {}
     params['service_id'] = service_id
