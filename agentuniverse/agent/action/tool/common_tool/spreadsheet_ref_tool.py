@@ -52,6 +52,19 @@ _QUOTED_SHEET_REF_RE = re.compile(
 # Any leftover quoted sheet prefix (one whose reference part did not parse)
 # is blanked too, so cell-like text inside the name can never leak.
 _QUOTED_SHEET_PREFIX_RE = re.compile(r"'(?:[^']|'')+'!")
+# A range whose second corner repeats a sheet prefix, e.g.
+# Sheet1!A1:Sheet1!B2 or 'Q 3'!B2:'Q 3'!C4. Excel accepts these; before
+# reference extraction the repeated prefix is collapsed onto the first
+# corner when (and only when) it names the same sheet.
+_REPEATED_SHEET_RANGE_RE = re.compile(
+    r"(?<![A-Za-z0-9_$])"
+    r"(?P<lead>[A-Za-z_][A-Za-z0-9_.]*!|'(?:[^']|'')+'!)"
+    r"(?P<first>\$?[A-Za-z]{1,3}\$?[0-9]+)"
+    r":"
+    r"(?P<mid>[A-Za-z_][A-Za-z0-9_.]*!|'(?:[^']|'')+'!)"
+    r"(?P<second>\$?[A-Za-z]{1,3}\$?[0-9]+)"
+    r"(?![A-Za-z0-9_(])"
+)
 _EXTRACT_REF_RE = re.compile(
     r"(?<![A-Za-z0-9_$])"
     r"(?:(?P<psheet>[A-Za-z_][A-Za-z0-9_.]*)!)?"
@@ -88,6 +101,31 @@ def _quote_sheet(sheet: str) -> str:
     if _needs_quoting(sheet):
         return "'" + sheet.replace("'", "''") + "'"
     return sheet
+
+
+def _sheet_of_prefix(prefix: str) -> str:
+    """Return the bare sheet name behind a 'Sheet!' / ''quoted!'' prefix."""
+    body = prefix[:-1]  # drop the bang
+    if body.startswith("'"):
+        body = body[1:-1].replace("''", "'")
+    return body
+
+
+def _normalize_repeated_sheet(text: str) -> str:
+    """Collapse identical repeated sheet prefixes inside one range token.
+
+    ``Sheet1!A1:Sheet1!B2`` becomes ``Sheet1!A1:B2``; a second corner that
+    names a *different* sheet is left untouched (3-D references are out of
+    scope and must not be silently re-qualified).
+    """
+
+    def rewrite(match: re.Match) -> str:
+        lead, mid = match.group("lead"), match.group("mid")
+        if _sheet_of_prefix(lead) != _sheet_of_prefix(mid):
+            return match.group(0)
+        return lead + match.group("first") + ":" + match.group("second")
+
+    return _REPEATED_SHEET_RANGE_RE.sub(rewrite, text)
 
 
 class _RefError(ValueError):
@@ -315,7 +353,9 @@ class _ParsedRef:
             right = ("$" if self.end.abs_col else "") + col_index_to_letters(self.end.col)
             return self.prefix() + f"{left}:{right}"
         if self.full_row:
-            return self.prefix() + f"{self.start.row}:{self.end.row}"
+            left = ("$" if self.start.abs_row else "") + str(self.start.row)
+            right = ("$" if self.end.abs_row else "") + str(self.end.row)
+            return self.prefix() + f"{left}:{right}"
         return self.prefix() + self.start.a1() + ":" + self.end.a1()
 
 
@@ -346,7 +386,12 @@ def _parse_cell_token(token: str, position: int, anchor: tuple[int, int]) -> _Ce
 
 
 def parse_ref(ref: str, anchor: tuple[int, int] = (1, 1)) -> _ParsedRef:
-    """Parse a sheet-qualified cell/range reference in A1 or R1C1 style."""
+    """Parse a sheet-qualified cell/range reference in A1 or R1C1 style.
+
+    The sheet prefix may also be repeated on the second range corner
+    (``Sheet1!A1:Sheet1!B2``) as long as it names the same sheet; the
+    normalized form writes the sheet once.
+    """
     if not isinstance(ref, str) or not ref.strip():
         raise _RefError("empty reference", 0)
     if len(ref) > 500:
@@ -364,6 +409,18 @@ def parse_ref(ref: str, anchor: tuple[int, int] = (1, 1)) -> _ParsedRef:
         offset + sum(len(part) + 1 for part in parts[:index])
         for index in range(len(parts))
     ]
+    if len(parts) == 2 and ("!" in parts[1] or parts[1].startswith("'")):
+        # Excel also accepts the sheet repeated on the second corner
+        # (Sheet1!A1:Sheet1!B2); accept it when it names the same sheet.
+        sheet2, second_start = _split_sheet_prefix(parts[1])
+        if sheet != sheet2:
+            raise _RefError(
+                "a range's corners must carry the same sheet prefix: write "
+                "the sheet once (Sheet1!A1:B2) or repeat the same sheet on "
+                "both corners",
+                positions[1],
+            )
+        parts[1] = parts[1][second_start:]
     kinds = [_classify_corner(token) for token in parts]
 
     if len(parts) == 1:
@@ -979,6 +1036,9 @@ class SpreadsheetRefTool(Tool):
                 f"formula exceeds max_input_length={self.max_input_length} characters"
             )
         masked, quoted_count = _mask_quoted(formula)
+        # collapse identical repeated sheet prefixes inside ranges
+        # (Sheet1!A1:Sheet1!B2 -> Sheet1!A1:B2) before any scanning pass
+        masked = _normalize_repeated_sheet(masked)
         matches: list[re.Match] = []
         # pass 1: quoted-sheet references, blanked so their interiors can
         # never leak cell-like tokens into pass 2
@@ -994,8 +1054,17 @@ class SpreadsheetRefTool(Tool):
         masked = _QUOTED_SHEET_PREFIX_RE.sub(
             lambda span: " " * len(span.group(0)), masked
         )
-        # pass 3: plain and plain-sheet-qualified references
-        matches.extend(_EXTRACT_REF_RE.finditer(masked))
+        # pass 3: plain and plain-sheet-qualified references; each match is
+        # blanked afterwards so identifier fragments of an extracted
+        # reference (the C in C$3) can never leak into the name scan below
+        plain_matches = list(_EXTRACT_REF_RE.finditer(masked))
+        for probe in plain_matches:
+            masked = (
+                masked[: probe.start()]
+                + " " * (probe.end() - probe.start())
+                + masked[probe.end():]
+            )
+        matches.extend(plain_matches)
         refs: list[dict[str, Any]] = []
         seen: set[str] = set()
         for probe in matches:
@@ -1057,8 +1126,10 @@ class SpreadsheetRefTool(Tool):
             name = token.group(0)
             after = masked[token.end(): token.end() + 1]
             before = masked[max(0, token.start() - 1): token.start()]
-            if after == "(" or before in ("!", "'", "$"):
-                continue  # function call, or part of a reference/sheet name
+            if after == "(" or after == "!" or before in ("!", "'", "$"):
+                # function call, sheet-name part of a reference, or an Excel
+                # error literal like #REF!: never a defined-name candidate
+                continue
             if _EXTRACT_REF_RE.fullmatch(name) or _R1C1_CELL_RE.match(name):
                 continue  # plain cell references are already reported
             if name.upper() in ("TRUE", "FALSE"):

@@ -483,6 +483,70 @@ class ParseSemanticsTest(unittest.TestCase):
         self.assertTrue(any("re-ordered" in note for note in result["notes"]))
         self.assertEqual(tool.execute(mode="parse", ref="A5:A1")["normalized"], "A1:A5")
 
+    def test_full_row_dollar_preserved(self):
+        """Full-row ranges keep their $ markers exactly like full-column ones."""
+        tool = SpreadsheetRefTool()
+        self.assertEqual(tool.execute(mode="parse", ref="$2:$4")["normalized"], "$2:$4")
+        mixed = tool.execute(mode="parse", ref="2:$4")
+        self.assertEqual(mixed["normalized"], "2:$4")
+        self.assertFalse(mixed["start"]["abs_row"])
+        self.assertTrue(mixed["end"]["abs_row"])
+        self.assertEqual(tool.execute(mode="parse", ref="$2:4")["normalized"], "$2:4")
+        self.assertEqual(tool.execute(mode="parse", ref="2:4")["normalized"], "2:4")
+        self.assertEqual(tool.execute(mode="parse", ref="$A:$B")["normalized"], "$A:$B")
+
+    def test_mixed_case_and_r1c1_case_insensitivity(self):
+        """Excel references are case-insensitive; output canonicalizes to upper."""
+        tool = SpreadsheetRefTool()
+        lower = tool.execute(mode="parse", ref="a1")
+        self.assertEqual(lower["status"], "ok")
+        self.assertEqual(lower["normalized"], "A1")
+        self.assertEqual(tool.execute(mode="parse", ref="Ab12")["normalized"], "AB12")
+        self.assertEqual(
+            tool.execute(mode="parse", ref="xfd1048576")["normalized"], "XFD1048576"
+        )
+        self.assertEqual(tool.execute(mode="parse", ref="xfe1")["status"], "error")
+        r1c1 = tool.execute(mode="convert", ref="r[1]c[2]", to="a1", anchor="B2")
+        self.assertEqual(r1c1["status"], "ok")
+        self.assertEqual(r1c1["converted"], "D3")
+
+    def test_quoted_sheet_torture_round_trip(self):
+        """Quoted names with apostrophes, bangs, colons and unicode round-trip."""
+        tool = SpreadsheetRefTool()
+        for sheet in ("It's Q3", "A!B", "A:B", "数据 シート", "2024", "'"):
+            shown = sheet.replace("'", "''")
+            ref = f"'{shown}'!A1:B2"
+            result = tool.execute(mode="parse", ref=ref)
+            self.assertEqual(result["status"], "ok", sheet)
+            self.assertEqual(result["sheet"], sheet)
+            self.assertEqual(result["normalized"], ref)
+            again = tool.execute(mode="parse", ref=result["normalized"])
+            self.assertEqual(again["status"], "ok", sheet)
+            self.assertEqual(again["sheet"], sheet)
+            self.assertEqual(again["normalized"], ref)
+        self.assertEqual(tool.execute(mode="parse", ref="数据!A1")["status"], "error")
+        plain_safe = tool.execute(mode="parse", ref="'Sheet1'!A1")
+        self.assertEqual(plain_safe["sheet"], "Sheet1")
+        self.assertEqual(plain_safe["normalized"], "Sheet1!A1")
+
+    def test_repeated_sheet_prefix_on_range_corners(self):
+        """Excel accepts Sheet1!A1:Sheet1!B2; normalize to a single prefix."""
+        tool = SpreadsheetRefTool()
+        result = tool.execute(mode="parse", ref="Sheet1!A1:Sheet1!B2")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["normalized"], "Sheet1!A1:B2")
+        self.assertEqual(result["size"], {"rows": 2, "cols": 2})
+        quoted = tool.execute(mode="parse", ref="'My Sheet'!A1:'My Sheet'!B2")
+        self.assertEqual(quoted["status"], "ok")
+        self.assertEqual(quoted["normalized"], "'My Sheet'!A1:B2")
+        mixed_style = tool.execute(mode="parse", ref="'Sheet1'!A1:Sheet1!B2")
+        self.assertEqual(mixed_style["normalized"], "Sheet1!A1:B2")
+        mismatch = tool.execute(mode="parse", ref="Sheet1!A1:Sheet2!B2")
+        self.assertEqual(mismatch["status"], "error")
+        self.assertIn("sheet", mismatch["error"])
+        trailing_only = tool.execute(mode="parse", ref="A1:Sheet1!B2")
+        self.assertEqual(trailing_only["status"], "error")
+
     def test_errors_carry_positions(self):
         tool = SpreadsheetRefTool()
         beyond_col = tool.execute(mode="parse", ref="B1:XFE5")
@@ -595,6 +659,37 @@ class ExtractRefsOracleTest(unittest.TestCase):
         self.assertEqual(entries["$B$2:$B$9"]["size"], {"rows": 8, "cols": 1})
         self.assertEqual(entries["C3"]["addressing"], "relative")
         self.assertEqual(entries["C3"]["kind"], "cell")
+
+    def test_repeated_sheet_prefix_in_formula(self):
+        """Sheet1!A1:Sheet1!B2 in a formula is one sheet-qualified range."""
+        tool = SpreadsheetRefTool()
+        result = tool.execute(mode="extract_refs", formula="=SUM(Sheet1!A1:Sheet1!B2)")
+        self.assertEqual({entry["ref"] for entry in result["refs"]}, {"Sheet1!A1:B2"})
+        quoted = tool.execute(mode="extract_refs", formula="=SUM('Q 3'!B2:'Q 3'!C4)")
+        self.assertEqual(
+            {entry["ref"] for entry in quoted["refs"]}, {"'Q 3'!B2:C4"}
+        )
+        # a sheet-like identifier glued after ':' with no matching leading
+        # prefix is read as a sheet-qualified ref, never mangled into a range
+        glued = tool.execute(mode="extract_refs", formula="=E5:F9Sheet2!C3")
+        self.assertEqual({entry["ref"] for entry in glued["refs"]}, {"F9Sheet2!C3"})
+
+    def test_sheet_names_and_ref_fragments_not_candidates(self):
+        """Sheet prefixes, #REF! literals and ref fragments are never names."""
+        tool = SpreadsheetRefTool()
+        result = tool.execute(mode="extract_refs", formula="=Sheet2!C3+TaxRate")
+        self.assertEqual(result["ref_count"], 1)
+        self.assertIn("TaxRate", result["defined_name_candidates"])
+        self.assertNotIn("Sheet2", result["defined_name_candidates"])
+        dropped = tool.execute(mode="extract_refs", formula="=Sheet2!XFE1+TaxRate")
+        self.assertEqual(dropped["refs"], [])
+        self.assertNotIn("Sheet2", dropped["defined_name_candidates"])
+        fragment = tool.execute(mode="extract_refs", formula="=C$3+TaxRate")
+        self.assertEqual({entry["ref"] for entry in fragment["refs"]}, {"C$3"})
+        self.assertNotIn("C", fragment["defined_name_candidates"])
+        error_literal = tool.execute(mode="extract_refs", formula="=A1+#REF!")
+        self.assertEqual({entry["ref"] for entry in error_literal["refs"]}, {"A1"})
+        self.assertNotIn("REF", error_literal["defined_name_candidates"])
 
 
 class PathologicalInputTest(unittest.TestCase):
