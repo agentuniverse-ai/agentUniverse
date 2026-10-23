@@ -63,7 +63,6 @@ class ExpressingPlanner(Planner):
         profile: dict = agent_model.profile
 
         profile_instruction = profile.get('instruction')
-        profile_instruction = expert_framework + profile_instruction if profile_instruction else profile_instruction
 
         profile_prompt_model: AgentPromptModel = AgentPromptModel(introduction=profile.get('introduction'),
                                                                   target=profile.get('target'),
@@ -80,7 +79,10 @@ class ExpressingPlanner(Planner):
             version_prompt_model: AgentPromptModel = AgentPromptModel(
                 introduction=getattr(version_prompt, 'introduction', ''),
                 target=getattr(version_prompt, 'target', ''),
-                instruction=expert_framework + getattr(version_prompt, 'instruction', ''))
+                instruction=getattr(version_prompt, 'instruction', ''))
             profile_prompt_model = profile_prompt_model + version_prompt_model
+
+        if expert_framework:
+            profile_prompt_model.instruction = expert_framework + (profile_prompt_model.instruction or '')
 
         return Prompt().build_prompt(profile_prompt_model, self.prompt_assemble_order)
