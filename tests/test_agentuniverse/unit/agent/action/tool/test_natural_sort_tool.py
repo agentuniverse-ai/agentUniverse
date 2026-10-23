@@ -1,11 +1,16 @@
 # !/usr/bin/env python3
-# -*- coding:utf-8 -*-
 """Tests for NaturalSortTool: ground truths, option behavior, and natsort parity."""
+
+# Seeded batteries use random.Random on purpose (determinism, not crypto);
+# Arabic-Indic digit characters are intentional test data.
+# ruff: noqa: S311, RUF001
 
 import json
 import os
 import random
+import re
 import sys
+import time
 import unittest
 
 from agentuniverse.agent.action.tool.common_tool import natural_sort_tool as natural_module
@@ -434,8 +439,8 @@ class NaturalSortNatsortParityTest(unittest.TestCase):
             return [
                 rng.choice([
                     ".".join(str(rng.randint(0, 50)) for _ in range(rng.randint(2, 4))),
-                    "v{}".format(rng.randint(0, 50)),
-                    "{}.{}".format(rng.randint(0, 9), rng.randint(0, 99)),
+                    f"v{rng.randint(0, 50)}",
+                    f"{rng.randint(0, 9)}.{rng.randint(0, 99)}",
                 ])
                 for _ in range(size)
             ]
@@ -564,6 +569,229 @@ class NaturalSortNatsortParityTest(unittest.TestCase):
         self.assertEqual(
             self.tool.execute(mode="compare", a="café", b="cafe\u0301")["result"], 0,
         )
+
+
+class NaturalSortSecondPassTest(unittest.TestCase):
+    """Second-pass hostile battery: wider corpora, fresh seeds, tokenizer pins.
+
+    The second seed base (20261022) and the twelve themed generators below are
+    independent of the first-pass battery: version suffix chunks (1.2.3b2 vs
+    1.2.3b10), negative-looking numbers, leading + signs, thousand separators,
+    Arabic-Indic digits adjacent to ASCII digits, separator-only strings,
+    accented/casefold mixes, and long digit runs.
+    """
+
+    SECOND_PASS_SEED = 20261022
+    _ARAB = "٠١٢٣٤٥٦٩"
+    _REF_RUN = re.compile(r"[0-9]+")
+
+    def setUp(self):
+        self.tool = NaturalSortTool()
+
+    def _reference_tokens(self, text):
+        """Reference tokenizer: the straightforward regex chunker."""
+        tokens = []
+        position = 0
+        for match in self._REF_RUN.finditer(text):
+            if match.start() > position:
+                tokens.append(("text", text[position:match.start()]))
+            tokens.append(("num", match.group(0)))
+            position = match.end()
+        if position < len(text):
+            tokens.append(("text", text[position:]))
+        return tokens
+
+    def _corpus_list(self, index):  # noqa: C901 - twelve themed generators
+        """Build fresh seeded list #index across twelve themed generators."""
+        rng = random.Random(self.SECOND_PASS_SEED + index)
+        theme = index % 12
+        size = rng.randint(5, 25)
+        if theme == 0:  # version strings with alpha/beta/rc suffix chunks
+            out = []
+            for _ in range(size):
+                core = f"{rng.randint(0, 9)}.{rng.randint(0, 20)}.{rng.randint(0, 20)}"
+                if rng.random() < 0.7:
+                    core += rng.choice([".", ""]) + rng.choice(["a", "b", "rc", "beta"]) + str(rng.randint(1, 12))
+                out.append(rng.choice(["", "v", "V", "rel-"]) + core)
+            return out
+        if theme == 1:  # negative-looking numbers: signs are punctuation
+            return [rng.choice(["a-5", "a-5.5", "a--5", "a-05", "a- 5", "a-10", "a-2", "a-100",
+                                f"x-{rng.randint(0, 300)}", f"x--{rng.randint(0, 300)}"])
+                    for _ in range(size)]
+        if theme == 2:  # leading + signs
+            return [rng.choice(["a+5", "+5", "a+05", "+", "a+", "a+50", f"+{rng.randint(0, 200)}",
+                                f"a+{rng.randint(0, 200)}", f"++{rng.randint(0, 99)}"])
+                    for _ in range(size)]
+        if theme == 3:  # thousand separators
+            return [rng.choice(["1,000x", "1,000,000x", "2,500y", "999z", "1,000", "10,000x", "999x",
+                                f"{rng.randint(0, 9)},{rng.randint(100, 999):03d}x"])
+                    for _ in range(size)]
+        if theme == 4:  # Arabic-Indic digits adjacent to ASCII digits
+            out = []
+            for _ in range(size):
+                pick = rng.randint(0, 3)
+                if pick == 0:
+                    out.append("a١b")
+                elif pick == 1:
+                    out.append("a" + self._ARAB[rng.randint(1, 4)] + "c")
+                elif pick == 2:
+                    out.append(f"a{rng.randint(0, 9)}{self._ARAB[rng.randint(0, 5)]}b")
+                else:
+                    out.append("file" + self._ARAB[1:rng.randint(2, 6)] + ".txt")
+            return out
+        if theme == 5:  # CJK + digits
+            return [rng.choice(["文件", "报告", "数据", "第"]) + str(rng.randint(0, 200)).zfill(rng.choice([1, 1, 3]))
+                    + rng.choice(["", "_副本", "号"]) for _ in range(size)]
+        if theme == 6:  # separator-only strings
+            return [rng.choice(["", ".", "-", "--", "+", "_", " ", "...", "-.-", "+-+", "._-", "/"])
+                    for _ in range(size)]
+        if theme == 7:  # whitespace mixes
+            return [rng.choice(["a\tb", "a b", " a", "a ", "a  1", "a\t1", " 1", "1 ", "a\nb", " a1 "])
+                    for _ in range(size)]
+        if theme == 8:  # long digit runs (50-300 digits)
+            return [rng.choice(["", "n", "z-"]) + str(rng.randint(0, 10 ** rng.randint(50, 300)))
+                    if rng.random() < 0.5 else rng.choice(["", "m"]) + "9" * rng.randint(50, 300)
+                    for _ in range(rng.randint(6, 12))]
+        if theme == 9:  # decimal-looking strings (chunk-wise, decimal off)
+            return [rng.choice(["1.5", "1.10", "1.05", "0.5", ".5", "5.", "10.2", "1.2.3", "00.50",
+                                f"{rng.randint(0, 20)}.{rng.randint(0, 99)}"]) for _ in range(size)]
+        if theme == 10:  # casefold / sharp-s / accent mixes
+            return [rng.choice(["Weiß", "weiss", "STRASSE", "straße", "café", "CAFE", "cafe",
+                                "cafe\u0301", "Résumé", "resume"]) + str(rng.randint(0, 50)) for _ in range(size)]
+        return [rng.choice(["a", "b", ""]) + str(rng.randint(0, 99)).zfill(rng.choice([1, 2, 3, 4]))
+                for _ in range(size)]  # leading zeros
+
+    def test_second_pass_parity_both_batteries(self):
+        """800 fresh lists must match natsort in both case batteries.
+
+        Theme-4 lists (Arabic-Indic digits) run the documented divergence:
+        the tool must match natsort only in unicode_digits='normalize' mode.
+        """
+        if not NATSORT_AVAILABLE:
+            self.skipTest("natsort oracle not installed")
+        for index in range(800):
+            items = self._corpus_list(index)
+            if index % 12 == 4:
+                result = self.tool.execute(mode="sort", items=items, unicode_digits="normalize")
+                self.assertEqual(result["status"], "success")
+                self.assertEqual(result["sorted"], natsort.natsorted(items, alg=ns.IGNORECASE), items)
+                sensitive = self.tool.execute(mode="sort", items=items, case_sensitive=True, unicode_digits="normalize")
+                self.assertEqual(sensitive["sorted"], natsort.natsorted(items), items)
+                continue
+            result = self.tool.execute(mode="sort", items=items)
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(result["sorted"], natsort.natsorted(items, alg=ns.IGNORECASE), items)
+            sensitive = self.tool.execute(mode="sort", items=items, case_sensitive=True)
+            self.assertEqual(sensitive["sorted"], natsort.natsorted(items), items)
+
+    def test_tokenizer_matches_reference_regex_chunker(self):
+        """The byte-scan tokenizer must equal the straightforward regex chunker.
+
+        The fast path masks ASCII digit bytes in the UTF-8 encoding; this pins
+        equivalence on multibyte characters, lone surrogates (surrogatepass),
+        digit-only strings, and the empty string.
+        """
+        rng = random.Random(self.SECOND_PASS_SEED + 5)
+        alphabet = "abz09._-+ éß文件٣١\ud800\udfff"
+        for _ in range(500):
+            text = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 14)))
+            expected = self._reference_tokens(text)
+            got = [(kind, raw) for kind, raw, _ in self.tool._tokens(text, "text")]
+            self.assertEqual(got, expected, repr(text))
+        for fixed in ("", "0", "000", "1" * 50, "x" * 50 + "12", "a\ud8001", "\udfff2\ud800", "٣٣"):
+            self.assertEqual([(k, r) for k, r, _ in self.tool._tokens(fixed, "text")],
+                             self._reference_tokens(fixed), repr(fixed))
+
+    def test_lone_surrogates_sort_without_error(self):
+        """Lone surrogates (invalid as strict UTF-8) must not crash any mode."""
+        items = ["a\ud8001", "a1", "\udfff2b", "a\ud8001"]
+        result = self.tool.execute(mode="sort", items=items)
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["sorted"], ["a1", "a\ud8001", "a\ud8001", "\udfff2b"])
+        compared = self.tool.execute(mode="compare", a="\udfff", b="\ud800")
+        self.assertEqual(compared["result"], 1)
+        json.dumps(result)  # surrogate pairs in JSON use the same escape form
+
+    def test_swap_count_bruteforce_fresh_lists(self):
+        """swap_count equals the O(n^2) inversion count on 150 fresh lists."""
+        for n in range(150):
+            rng = random.Random(self.SECOND_PASS_SEED + 31000 + n)
+            size = rng.randint(3, 120)
+            items = ["{}{}".format(rng.choice("abc"), rng.randint(0, 999)) for _ in range(size)]
+            result = self.tool.execute(mode="sort", items=items)
+            self.assertEqual(result["status"], "success")
+            keys = [self.tool._sort_key(item, result["options"]) for item in items]
+            self.assertEqual(result["swap_count"], _brute_inversions(keys), n)
+
+    def test_compare_rederives_first_difference_on_fresh_pairs(self):
+        """first_difference/prefix_relation/verdict must be self-consistent."""
+        if not NATSORT_AVAILABLE:
+            self.skipTest("natsort oracle not installed")
+        rng = random.Random(self.SECOND_PASS_SEED + 777)
+        keygen = natsort.natsort_keygen(alg=ns.IGNORECASE)  # tool default is case-insensitive
+        count = 0
+        while count < 300:
+            items = self._corpus_list(rng.randint(0, 799))
+            a, b = rng.choice(items), rng.choice(items)
+            if any(not c.isascii() for c in a + b):
+                continue
+            count += 1
+            result = self.tool.execute(mode="compare", a=a, b=b)
+            self.assertEqual(result["status"], "success")
+            key_a, key_b = keygen(a), keygen(b)
+            sign = -1 if key_a < key_b else (1 if key_a > key_b else 0)
+            self.assertEqual(result["result"], sign, (a, b))
+            if result["first_difference"] is not None and len(result["chunks"]) > result["first_difference"]:
+                relation = result["chunks"][result["first_difference"]]["relation"]
+                self.assertEqual(relation, {"-1": "<", "0": "=", "1": ">"}[str(result["result"])], (a, b))
+                self.assertTrue(all(pair["relation"] == "=" for pair in result["chunks"][: result["first_difference"]]))
+
+    def test_is_sorted_violations_on_fresh_lists(self):
+        """is_sorted violation pairs match an independent adjacent-pair scan."""
+        for n in range(150):
+            rng = random.Random(self.SECOND_PASS_SEED + 9000 + n)
+            if n % 3 == 0:
+                items = [i for i in self._corpus_list(rng.randint(0, 799)) if i.isascii()]
+            elif n % 3 == 1:
+                items = [f"a{rng.randint(0, 500):03d}" for _ in range(rng.randint(30, 120))]
+                rng.shuffle(items)
+            else:
+                items = [f"a{i:04d}" for i in range(150, 0, -1)]
+            keys = [self.tool._sort_key(i, {"case_sensitive": False, "number_mode": "chunked", "decimal": False,
+                                            "unicode_digits": "text", "leading_zeros": "stable"}) for i in items]
+            expected = [[items[i], items[i + 1]] for i in range(len(items) - 1) if keys[i] > keys[i + 1]]
+            result = self.tool.execute(mode="is_sorted", items=items)
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(result["sorted"], not expected)
+            self.assertEqual(result["violations"], expected[: self.tool.max_violations])
+            self.assertEqual(result["violations_truncated"], len(expected) > self.tool.max_violations)
+
+    def test_pathological_long_items_sort_fast(self):
+        """12k items x 12k chars must sort well under the 2s pathological budget.
+
+        Smoke bound (not a benchmark): the regex tokenizer this replaces
+        re-attempted its pattern at every byte position, costing ~2.4s for a
+        20k x 20k batch; the byte-mask scan is O(n) per item.
+        """
+        tool = NaturalSortTool(max_items=12000, max_item_length=12000, max_key_preview_items=5)
+        items = ["x" * 11995 + f"{i:05d}" for i in range(12000)]
+        start = time.perf_counter()
+        result = tool.execute(mode="sort", items=items)
+        elapsed = time.perf_counter() - start
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(result["sorted"][0].endswith("00000"))
+        self.assertTrue(result["sorted"][-1].endswith("11999"))
+        self.assertLess(elapsed, 2.0, f"pathological long-item sort took {elapsed:.2f}s")
+
+    def test_five_thousand_digit_runs_sort_fast(self):
+        """1000 items with 5k-digit runs sort in well under 2s."""
+        tool = NaturalSortTool(max_items=2000, max_item_length=6000, max_key_preview_items=5)
+        items = [str(i % 7) * 4990 + f"{i:04d}" for i in range(1000)]
+        start = time.perf_counter()
+        result = tool.execute(mode="sort", items=items)
+        elapsed = time.perf_counter() - start
+        self.assertEqual(result["status"], "success")
+        self.assertLess(elapsed, 2.0, f"5k-digit run sort took {elapsed:.2f}s")
 
 
 class NaturalSortRegistrationTest(unittest.TestCase):

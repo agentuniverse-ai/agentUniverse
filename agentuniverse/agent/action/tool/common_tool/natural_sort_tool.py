@@ -4,15 +4,19 @@
 # Public execute() converts validation exceptions into structured tool errors.
 # ruff: noqa: TRY003
 
-import re
 import sys
 import unicodedata
 from typing import Any, ClassVar
 
 from agentuniverse.agent.action.tool.tool import Tool
 
-_ASCII_NUM_RUN = re.compile(r"[0-9]+")
 _ASCII_DIGITS = frozenset("0123456789")
+
+# Byte flag table for locating ASCII digit runs in O(n) with C-speed scans:
+# digit bytes map to 0, every other byte (all UTF-8 lead/continuation bytes are
+# >= 0x80, so multibyte characters can never be split) maps to 1. A digit run
+# then spans from one ``find(0, ...)`` to the following ``find(1, ...)``.
+_DIGIT_FLAG = bytes(0 if 0x30 <= byte <= 0x39 else 1 for byte in range(256))
 
 
 def _int_str_limit() -> float:
@@ -284,17 +288,8 @@ class NaturalSortTool(Tool):
         """Tokenize into (kind, raw, ascii_digits) where kind is text/num."""
         if unicode_mode != "normalize" or text.isascii():
             # ASCII text (and any text in non-normalize modes) has no
-            # non-ASCII decimal digits: the regex path is exact and fast.
-            tokens: list[tuple[str, str, str]] = []
-            position = 0
-            for match in _ASCII_NUM_RUN.finditer(text):
-                if match.start() > position:
-                    tokens.append((_TEXT, text[position:match.start()], ""))
-                tokens.append((_NUM, match.group(0), match.group(0)))
-                position = match.end()
-            if position < len(text):
-                tokens.append((_TEXT, text[position:], ""))
-            return tokens
+            # non-ASCII decimal digits: no unicode-aware scan is needed.
+            return self._ascii_tokens(text)
 
         # Unicode-aware scan: Nd characters (including ASCII digits) join the
         # current number run, everything else joins the current text run.
@@ -319,6 +314,39 @@ class NaturalSortTool(Tool):
                 tokens.append((_NUM, raw, ascii_digits))
             else:
                 tokens.append((_TEXT, raw, ""))
+        return tokens
+
+    @staticmethod
+    def _ascii_tokens(text: str) -> list[tuple[str, str, str]]:
+        """Tokenize with ASCII digit runs only, via O(n) C byte scans.
+
+        ASCII digit runs are located by flagging the ten digit bytes in the
+        UTF-8 encoding (multibyte characters can never be flagged: every UTF-8
+        lead/continuation byte is >= 0x80) and using two ``bytes.find`` calls
+        per run. A regex instead re-attempts its pattern at every position of
+        the string, which is pathological on very long items (a 20k-char item
+        is scanned up to 20k times). Lone surrogates round-trip through
+        ``surrogatepass`` so every input string is encodable.
+        """
+        encoded = text.encode("utf-8", "surrogatepass")
+        flagged = encoded.translate(_DIGIT_FLAG)
+        tokens: list[tuple[str, str, str]] = []
+        position = 0
+        size = len(encoded)
+        while True:
+            start = flagged.find(0, position)
+            if start < 0:
+                break
+            end = flagged.find(1, start)
+            if end < 0:
+                end = size
+            if start > position:
+                tokens.append((_TEXT, encoded[position:start].decode("utf-8", "surrogatepass"), ""))
+            digit_run = encoded[start:end].decode("ascii")
+            tokens.append((_NUM, digit_run, digit_run))
+            position = end
+        if position < size:
+            tokens.append((_TEXT, encoded[position:].decode("utf-8", "surrogatepass"), ""))
         return tokens
 
     @staticmethod
