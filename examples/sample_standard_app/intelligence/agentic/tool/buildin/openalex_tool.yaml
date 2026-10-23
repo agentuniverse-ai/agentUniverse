@@ -1,0 +1,79 @@
+name: 'openalex_tool'
+description: |
+  Search OpenAlex for scholarly works or retrieve one work by DOI or OpenAlex work ID.
+
+  Input parameters:
+    - query (required): Search keywords in search mode, or a DOI, DOI URL, or
+      OpenAlex work ID (such as W2741809807) in work mode.
+    - mode (optional): Operation mode. Use search for keyword search or work for
+      an exact lookup. Defaults to search.
+    - max_results (optional): Number of works to return in search mode, from 1 to
+      200. Defaults to 5. Work mode always returns at most one work.
+    - page (optional): One-based search result page. Defaults to 1. Page-based
+      paging can address only the first 10000 results; use cursor for deeper pages.
+    - cursor (optional): OpenAlex cursor for deep pagination. Use * for the first
+      cursor request, then pass the returned next_cursor value to the next call.
+      Cursor requests require page to remain 1.
+    - sort (optional): Sort field. Supports relevance, cited_by_count,
+      publication_date, updated_date, and created_date. Underscores may replace
+      hyphens; citation_count, citations, published, and relevance are accepted
+      aliases. Results are sorted in descending order. Defaults to relevance.
+    - from_publication_date (optional): Inclusive publication date lower bound in
+      YYYY-MM-DD format.
+    - to_publication_date (optional): Inclusive publication date upper bound in
+      YYYY-MM-DD format. When both bounds are set, the lower bound must not be
+      later than the upper bound.
+    - publication_year (optional): Exact publication year filter.
+    - work_type (optional): A single OpenAlex work type such as article, book,
+      book-chapter, dataset, dissertation, preprint, or review.
+    - open_access_only (optional): Set true to require works whose OpenAlex
+      open-access flag is true.
+    - min_cited_by_count (optional): Non-negative citation threshold. A value of
+      10 requests works with more than 10 citations.
+
+  Search example:
+    {
+      "query": "large language models in medicine",
+      "mode": "search",
+      "max_results": 5,
+      "page": 1,
+      "sort": "cited_by_count",
+      "from_publication_date": "2020-01-01",
+      "to_publication_date": "2025-12-31",
+      "publication_year": 2025,
+      "work_type": "article",
+      "open_access_only": true,
+      "min_cited_by_count": 10
+    }
+
+  DOI lookup example:
+    {
+      "query": "https://doi.org/10.1128/mbio.01735-25",
+      "mode": "work"
+    }
+
+  OpenAlex work lookup example:
+    {
+      "query": "https://openalex.org/W2741809807",
+      "mode": "work"
+    }
+
+  Each work may contain its OpenAlex ID, DOI, title, reconstructed abstract,
+  publication year and date, work type, authorships with author IDs, ORCID,
+  institutions and positions, primary location and source, open-access fields,
+  citation count, referenced-works count, topics, and keywords. Missing metadata
+  is returned as an empty string, empty list, empty object, or zero count. Search
+  context including paging, sorting, and filters is included in successful and
+  structured error responses. Cursor searches also return next_cursor. Set the
+  optional OPENALEX_EMAIL environment variable to identify requests and use the
+  OpenAlex polite pool. This tool returns metadata only and does not download or
+  summarize full text.
+
+  Timeouts, HTTP errors, connection failures, invalid JSON, invalid response
+  shapes, and OpenAlex API errors are returned in a structured error field.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.openalex_tool'
+  class: 'OpenAlexTool'
