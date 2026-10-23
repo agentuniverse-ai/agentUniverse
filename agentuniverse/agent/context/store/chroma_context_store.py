@@ -71,12 +71,16 @@ class ChromaContextStore(ContextStore):
                 anonymized_telemetry=False
             ))
 
-            # Get or create collection with embedding function
+            # Get or create collection with embedding function. The distance
+            # metric is pinned to cosine because `search()` converts the
+            # returned distance into a similarity that is only meaningful for
+            # cosine; Chroma otherwise defaults to L2 squared, whose range is
+            # unbounded.
             self._setup_embedding_function()
             self._collection = self._chroma_client.get_or_create_collection(
                 name=self.collection_name,
                 embedding_function=self._embedding_function,
-                metadata={"description": "agentUniverse context storage"}
+                metadata=self._collection_metadata()
             )
 
         except ImportError:
@@ -301,8 +305,7 @@ class ChromaContextStore(ContextStore):
 
             for i in range(len(results["ids"][0])):
                 distance = results["distances"][0][i]
-                # Convert distance to similarity (1 - normalized_distance)
-                similarity = 1.0 - distance
+                similarity = self._distance_to_similarity(distance)
 
                 if similarity < min_similarity:
                     continue  # Skip low similarity results
@@ -322,6 +325,49 @@ class ChromaContextStore(ContextStore):
 
         except Exception:
             return []
+
+    @staticmethod
+    def _collection_metadata() -> dict[str, Any]:
+        """Metadata every collection of this store is created with.
+
+        Kept in one place because both the initial ``get_or_create_collection``
+        and the recreate inside :meth:`clear_all` must agree: if the metric is
+        dropped on recreate, the collection silently falls back to L2 while
+        :meth:`_distance_to_similarity` keeps rescaling as if it were cosine,
+        and searches start returning nothing.
+        """
+        return {
+            "description": "agentUniverse context storage",
+            "hnsw:space": "cosine",
+        }
+
+    def _distance_to_similarity(self, distance: float) -> float:
+        """Convert a Chroma distance into a similarity inside ``[0.0, 1.0]``.
+
+        Chroma returns a distance whose range depends on the collection's
+        space, so the raw value cannot be compared against
+        ``similarity_threshold`` directly:
+
+        * ``cosine`` distance is in ``[0, 2]``; ``1 - distance / 2`` is the
+          standard ``(1 + cosine_similarity) / 2`` rescale;
+        * ``l2`` (squared euclidean) and ``ip`` are unbounded above;
+          ``1 / (1 + distance)`` is bounded and monotonically decreasing.
+
+        The result is clamped, because ``ContextMetadata.relevance_score``
+        declares ``ge=0.0, le=1.0``.
+        """
+        space = "l2"
+        if self._collection is not None and isinstance(self._collection.metadata, dict):
+            space = self._collection.metadata.get("hnsw:space") or "l2"
+
+        if space == "cosine":
+            similarity = 1.0 - distance / 2.0
+        elif distance >= 0:
+            similarity = 1.0 / (1.0 + distance)
+        else:
+            similarity = 0.0
+
+        return max(0.0, min(1.0, similarity))
 
     @staticmethod
     def _combine_filters(filters: Dict[str, Any]) -> Dict[str, Any]:
@@ -516,7 +562,7 @@ class ChromaContextStore(ContextStore):
             self._collection = self._chroma_client.create_collection(
                 name=self.collection_name,
                 embedding_function=self._embedding_function,
-                metadata={"description": "agentUniverse context storage"}
+                metadata=self._collection_metadata()
             )
         except Exception:
             pass  # Silently fail if collection doesn't exist
