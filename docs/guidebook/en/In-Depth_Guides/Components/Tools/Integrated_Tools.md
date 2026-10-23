@@ -649,3 +649,42 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## SpreadsheetRefTool
+
+`SpreadsheetRefTool` performs spreadsheet cell and range reference algebra
+without touching a workbook. It converts between A1 and R1C1 styles, parses
+and expands ranges under the Excel hard limits (XFD = 16,384 columns,
+1,048,576 rows), honors `$` absolute/relative semantics and sheet-qualified
+references (both `Sheet1!A1` and quoted `'My Sheet'!A1` forms), and computes
+range set operations.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.spreadsheet_ref_tool import SpreadsheetRefTool
+
+tool = SpreadsheetRefTool()
+tool.execute(mode="parse", ref="'Q3 Data'!$B$2:D10")
+tool.execute(mode="convert", ref="R[1]C[-2]", to="a1", anchor="C5")  # -> A6
+tool.execute(mode="algebra", range_a="A1:B3", range_b="B2:C4", op="intersection")
+tool.execute(mode="extract_refs", formula='=SUM(A1:A10)+TaxRate')
+```
+
+Five modes are available. `parse` returns the kind, sheet, both corners with
+row/column numbers, column letters and absolute flags, the size in rows x
+columns, and a canonical normalized form with re-ordered corners. `convert`
+renders a reference in the other style; relative R1C1 parts such as
+`R[1]C[-2]` are resolved against an anchor cell (default `A1`, passed via
+`anchor`). `expand` lists cells row-major up to `max_expand_cells` (default
+10,000) and refuses larger ranges in size-only mode, so a full column `A:A`
+reports 1,048,576 cells instead of enumerating them. `algebra` computes
+intersection, union (bounding box when rectangular-contiguous, otherwise a
+disjoint multi-area decomposition), subtract, shift, and resize with pure
+arithmetic even for full-sheet ranges. `extract_refs` finds the referenced
+cells and ranges in formula text, skipping double-quoted strings and
+classifying absolute/relative addressing, cross-sheet references, and
+bare-identifier defined-name candidates.
+
+Inputs are length-capped and deterministic: rejected references report the
+character position of the problem (columns beyond XFD, rows beyond 1,048,576,
+misplaced `$`, reversed corners are auto-normalized with a note, and R1C1
+mixed forms `R1C1` / `R[1]C[-2]` are validated per part).

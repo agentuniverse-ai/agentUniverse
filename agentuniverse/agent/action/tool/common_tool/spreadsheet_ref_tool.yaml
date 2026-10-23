@@ -1,0 +1,61 @@
+name: spreadsheet_ref_tool
+description: Parse, convert, expand, and combine spreadsheet cell/range references (A1/R1C1, sheet-qualified, $ absolute/relative, range algebra).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.spreadsheet_ref_tool
+  class: SpreadsheetRefTool
+input_keys:
+  - mode
+  - ref
+max_input_length: 10000
+max_expand_cells: 10000
+max_formula_refs: 10000
+max_algebra_cells: 1000000
+max_notes: 20
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [parse, convert, expand, algebra, extract_refs]
+      description: Operation to run on the reference input.
+    ref:
+      type: string
+      description: Cell or range reference, e.g. "$B$2", "A1:B2", "'My Sheet'!C3", "R[1]C[-2]".
+    to:
+      type: string
+      enum: [r1c1, a1]
+      description: Target style for convert mode.
+    anchor:
+      type: string
+      description: A1-style anchor cell for relative R1C1 forms (convert mode); defaults to A1.
+    range_a:
+      type: string
+      description: Left operand range for algebra mode (also the target of shift/resize).
+    range_b:
+      type: string
+      description: Right operand range for algebra mode.
+    op:
+      type: string
+      enum: [intersection, union, subtract, shift, resize]
+      description: Set operation or transform for algebra mode.
+    shift_rows:
+      type: integer
+      description: Row delta for op=shift.
+    shift_cols:
+      type: integer
+      description: Column delta for op=shift.
+    resize_rows:
+      type: integer
+      minimum: 1
+      description: New row count for op=resize.
+    resize_cols:
+      type: integer
+      minimum: 1
+      description: New column count for op=resize.
+    formula:
+      type: string
+      description: Formula text for extract_refs mode.
+  required: [mode]
+  additionalProperties: false
