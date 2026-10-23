@@ -99,3 +99,20 @@ def test_under_budget_segment_remains_unchanged(segment):
     assert segment.model_dump() == before
     assert metrics.segments_removed == 0
     assert metrics.information_loss_estimate == 0
+
+
+def test_truncation_token_estimate_includes_marker(segment):
+    result = TruncateCompressor()._truncate_content(segment, target_tokens=20)
+
+    assert result.tokens == 20
+    assert result.content.endswith("... [truncated]")
+    assert len(result.content) <= 80
+
+
+def test_oversized_marker_is_clipped_without_negative_tokens(segment):
+    compressor = TruncateCompressor(truncate_marker="[marker that is longer than the budget]")
+
+    result = compressor._truncate_content(segment, target_tokens=1)
+
+    assert result.tokens == 1
+    assert result.content == compressor.truncate_marker[:4]
