@@ -28,6 +28,7 @@ class OllamaLLM(LLM):
         from ollama import Client
         return Client(
             host=self.base_url,
+            timeout=self.request_timeout,
         )
 
     def _new_async_client(self):
@@ -36,6 +37,7 @@ class OllamaLLM(LLM):
         from ollama import AsyncClient
         return AsyncClient(
             host=self.base_url,
+            timeout=self.request_timeout,
         )
 
     def _options(self):
@@ -43,7 +45,6 @@ class OllamaLLM(LLM):
             "num_ctx": self.max_context_length(),
             "num_predict": self.max_tokens,
             "temperature": self.temperature,
-            "timeout": self.request_timeout,
             **(self.ext_info if self.ext_info else {}),
         })
 

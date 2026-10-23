@@ -35,6 +35,7 @@ class OllamaLLMChannel(LLMChannel):
         from ollama import Client
         return Client(
             host=self.channel_api_base,
+            timeout=self.request_timeout,
         )
 
     def _new_async_client(self):
@@ -43,6 +44,7 @@ class OllamaLLMChannel(LLMChannel):
         from ollama import AsyncClient
         return AsyncClient(
             host=self.channel_api_base,
+            timeout=self.request_timeout,
         )
 
     def _options(self):
@@ -50,7 +52,6 @@ class OllamaLLMChannel(LLMChannel):
             "num_ctx": self.max_context_length(),
             "num_predict": self.max_tokens,
             "temperature": self.temperature,
-            "timeout": self.request_timeout,
             **(self.ext_info if self.ext_info else {}),
         })
 
