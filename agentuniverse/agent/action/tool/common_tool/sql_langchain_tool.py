@@ -14,16 +14,21 @@ from langchain_core.tools import BaseTool, Tool as LangchainTool
 
 
 class SqlLangchainTool(LangChainTool):
+    """A lazy SQL tool whose callbacks are optional runtime instrumentation.
+
+    Ordinary framework and LangChain calls need only the SQL input. Explicit
+    callbacks are forwarded to the wrapped tool in both execution modes.
+    """
     db_wrapper_name: Optional[str] = ""
     clz: Type[BaseTool] = BaseTool
 
-    def execute(self, input: str, callbacks):
+    def execute(self, input: str, callbacks=None):
         """Initialize the SQL tool lazily and execute the supplied input."""
         if self.tool is None:
             self.get_sql_database()
         return super().execute(input, callbacks)
 
-    async def async_execute(self, input: str, callbacks):
+    async def async_execute(self, input: str, callbacks=None):
         if self.tool is None:
             self.get_sql_database()
         return await super().async_execute(input, callbacks)
