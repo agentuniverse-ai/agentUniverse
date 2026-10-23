@@ -35,3 +35,29 @@ In the custom_key.toml file under the config directory of the project, add the c
 DEEPSEEK_API_KEY="DEEPSEEK_API_KEY"
 DEEPSEEK_API_BASE="https://xxxxxx"
 ```
+
+## 3. Stopping a stream early
+
+OpenAI, OpenAI-style, and LLM channel streams release their response when
+exhausted or when iteration fails. If you stop early, call `close()` or
+`aclose()` explicitly, including when no chunk has been read yet. This closes
+the response and leaves the shared API client available for later calls.
+
+Given an initialized `llm` and a `messages` list, these examples deliberately
+read only the first chunk:
+
+```python
+stream = llm.call(messages=messages, stream=True)
+try:
+    first_chunk = next(stream, None)
+finally:
+    stream.close()
+```
+
+```python
+stream = await llm.acall(messages=messages, stream=True)
+try:
+    first_chunk = await anext(stream, None)
+finally:
+    await stream.aclose()
+```

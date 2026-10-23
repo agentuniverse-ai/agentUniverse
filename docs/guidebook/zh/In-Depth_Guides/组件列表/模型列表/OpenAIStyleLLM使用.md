@@ -37,3 +37,27 @@ DEEPSEEK_API_KEY="DEEPSEEK_API_KEY"
 DEEPSEEK_API_BASE="https://xxxxxx"
 ```
 注意，这里必须与配置文件中锁配置的api_key_env、api_base_env一致
+
+## 3. 提前结束流式读取
+
+OpenAI、OpenAI 风格模型及 LLM 通道在读取完成或迭代出错时会释放响应。
+如果提前结束读取，请显式调用 `close()` 或 `aclose()`；尚未读取任何片段时
+也可以关闭。这会释放本次响应，共享 API 客户端仍可供后续调用使用。
+
+假设已有初始化后的 `llm` 和消息列表 `messages`，以下示例有意只读取第一个片段：
+
+```python
+stream = llm.call(messages=messages, stream=True)
+try:
+    first_chunk = next(stream, None)
+finally:
+    stream.close()
+```
+
+```python
+stream = await llm.acall(messages=messages, stream=True)
+try:
+    first_chunk = await anext(stream, None)
+finally:
+    await stream.aclose()
+```
