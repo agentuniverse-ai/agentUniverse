@@ -61,7 +61,7 @@ class Neo4jStore(Store):
         if param is None:
             result = session.run(query_str)
         else:
-            result = session.run(query_str, **param)
+            result = session.run(query_str, parameters=param)
 
         if return_data:
             result_list = []
