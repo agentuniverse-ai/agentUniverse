@@ -1,0 +1,27 @@
+{
+  "tested_code_commit": "947d16177fe8369c80cea78cef0849f11864b4dd",
+  "scope": "Historical local targeted runs captured on 2026-10-23; not hosted CI and not a new rerun",
+  "environments_fully_locked": false,
+  "runs": [
+    {
+      "python": "3.12",
+      "tests": 36,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "file": "junit-py3.12.xml",
+      "original_junit_sha256": "869D87FF0A1A3A8387A7FA41C92E42F837C541080779A6CBD8DC6626DE43D340",
+      "normalization": "host-name attribute removed; XML line endings normalized; case results unchanged"
+    },
+    {
+      "python": "3.10",
+      "tests": 36,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "file": "junit-py3.10.xml",
+      "original_junit_sha256": "CBE7227456FE2FD520391516AAE4C814EA0DA8A450C8D3D75E49A90F6F777DA1",
+      "normalization": "host-name attribute removed; XML line endings normalized; case results unchanged"
+    }
+  ]
+}

@@ -204,6 +204,7 @@ class ToolInstrumentor(BaseInstrumentor):
         self._meter: Optional[metrics.Meter] = None
         self._metrics: Dict[str, Any] = {}
         self._metrics_recorder: Optional[ToolMetricsRecorder] = None
+        self._gen_ai_adapter = None
         self._original_tool_wrapper_sync = None
         self._original_tool_wrapper_async = None
 
@@ -212,6 +213,7 @@ class ToolInstrumentor(BaseInstrumentor):
 
     def _instrument(self, **kwargs):
         """Instrument Tool tracing."""
+        self._gen_ai_adapter = kwargs.get("gen_ai_adapter")
         tracer_provider = kwargs.get("tracer_provider")
         meter_provider = kwargs.get("meter_provider")
 
@@ -312,6 +314,8 @@ class ToolInstrumentor(BaseInstrumentor):
         span_manager = ToolSpanManager(self._tracer, f"au.tool.{source}")
         start_time = time.time()
         span = span_manager.start_span()
+        if self._gen_ai_adapter is not None:
+            self._gen_ai_adapter.begin_tool(span, source)
 
         with InvocationChainContext(source=source, node_type='tool'):
             try:
@@ -339,12 +343,14 @@ class ToolInstrumentor(BaseInstrumentor):
 
                 return result
 
-            except Exception as e:
+            except BaseException as e:
                 duration = time.time() - start_time
                 self._metrics_recorder.record_error(e, duration, labels)
                 self._metrics_recorder.record_total_token_usage(labels)
                 ToolSpanAttributesSetter.set_error_attributes(
                     span_manager.span, e, duration)
+                if self._gen_ai_adapter is not None:
+                    self._gen_ai_adapter.error(span_manager.span, e)
                 raise
 
             finally:
@@ -365,6 +371,8 @@ class ToolInstrumentor(BaseInstrumentor):
         span_manager = ToolSpanManager(self._tracer, f"au.tool.{source}")
         start_time = time.time()
         span = span_manager.start_span()
+        if self._gen_ai_adapter is not None:
+            self._gen_ai_adapter.begin_tool(span, source)
 
         with InvocationChainContext(source=source, node_type='tool'):
             try:
@@ -392,12 +400,14 @@ class ToolInstrumentor(BaseInstrumentor):
 
                 return result
 
-            except Exception as e:
+            except BaseException as e:
                 duration = time.time() - start_time
                 self._metrics_recorder.record_error(e, duration, labels)
                 self._metrics_recorder.record_total_token_usage(labels)
                 ToolSpanAttributesSetter.set_error_attributes(
                     span_manager.span, e, duration)
+                if self._gen_ai_adapter is not None:
+                    self._gen_ai_adapter.error(span_manager.span, e)
                 raise
 
             finally:
