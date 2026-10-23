@@ -13,6 +13,7 @@ from openai import AzureOpenAI, AsyncAzureOpenAI
 
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.agent.action.knowledge.embedding.embedding import Embedding
+from agentuniverse.agent.action.knowledge.embedding._openai_response import ordered_embeddings
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 
@@ -59,7 +60,7 @@ class AzureOpenAIEmbedding(Embedding):
                     input=texts,
                     model=self.embedding_model_name
                 )
-            return [item.embedding for item in response.data]
+            return ordered_embeddings(response.data, len(texts))
 
         except Exception as e:
             raise Exception(f"Failed to get embeddings: {e}")
@@ -89,7 +90,7 @@ class AzureOpenAIEmbedding(Embedding):
                     input=texts,
                     model=self.embedding_model_name
                 )
-            return [item.embedding for item in response.data]
+            return ordered_embeddings(response.data, len(texts))
 
         except Exception as e:
             raise Exception(f"Failed to get embeddings: {e}")
