@@ -1,0 +1,9 @@
+name: corpus_bundle_reader
+description: Verified offline Document bundle reader
+max_bytes: 67108864
+max_documents: 10000
+max_sources: 1000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.corpus_bundle_reader
+  class: CorpusBundleReader
