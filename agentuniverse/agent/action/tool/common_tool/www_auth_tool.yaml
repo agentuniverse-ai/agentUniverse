@@ -1,0 +1,46 @@
+name: www_auth_tool
+description: Parse, explain, build, and compare WWW-Authenticate/Proxy-Authenticate challenge headers per RFC 7235 and the Basic/Bearer/Digest/Negotiate grammars.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.www_auth_tool
+  class: WwwAuthenticateTool
+input_keys:
+  - mode
+max_header_chars: 262144
+max_challenges: 256
+max_params_per_challenge: 64
+max_param_name_chars: 256
+max_param_value_chars: 8192
+max_token68_chars: 16384
+max_error_entries: 100
+max_note_entries: 64
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [parse, explain, build, compare]
+    header: {type: string}
+    scheme: {type: string}
+    challenge: {type: string}
+    token68: {type: string}
+    params:
+      type: object
+      additionalProperties: {type: string}
+    challenges:
+      type: array
+      items:
+        type: object
+        properties:
+          scheme: {type: string}
+          params:
+            type: object
+            additionalProperties: {type: string}
+          token68: {type: string}
+        required: [scheme]
+        additionalProperties: false
+    header_a: {type: string}
+    header_b: {type: string}
+  required: [mode]
+  additionalProperties: false

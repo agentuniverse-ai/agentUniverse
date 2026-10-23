@@ -649,3 +649,47 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## WwwAuthenticateTool
+
+`WwwAuthenticateTool` parses, explains, builds, and compares
+`WWW-Authenticate` / `Proxy-Authenticate` challenge headers: the RFC 7235
+challenge grammar plus the parameter models of RFC 7617 (Basic), RFC 6750
+(Bearer), RFC 7616 (Digest), and RFC 4559 (Negotiate).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.www_auth_tool import WwwAuthenticateTool
+
+tool = WwwAuthenticateTool()
+result = tool.execute(
+    mode="parse",
+    header='Newauth realm="apps", title="Login to \\"apps\\"", Basic realm="simple"',
+)
+explained = tool.execute(mode="explain", challenge='Bearer error="invalid_token"')
+built = tool.execute(mode="build", scheme="Digest", params={"realm": "example", "algorithm": "SHA-256"})
+diff = tool.execute(mode="compare", header_a='Basic realm="a"', header_b='Basic realm="b"')
+```
+
+`parse` returns the challenge list (`scheme`, `params`, `token68`, `raw`)
+with errors and notes: multiple challenges in one header are split on commas
+outside quoted strings, and `name=value` segments are re-associated with the
+preceding scheme token. The known RFC 7235 section 4.1 ambiguity — an
+auth-param list versus a following scheme — is resolved by the standard
+practical rule (a bare-token segment starts a new challenge) and documented
+honestly in the notes rather than guessed silently. Scheme tokens and param
+names are case-insensitive; duplicate params keep the last value and are
+reported. `explain` returns each parameter's meaning plus embedded registries
+(the RFC 6750 Bearer error table, the OAuth error-code registry, the RFC 7616
+algorithm inventory with security notes such as MD5 being weak and `-sess`
+variants requiring a client nonce) and security notes like the Basic-without-
+TLS warning and Digest `stale=true` retry semantics. `build` renders a
+canonical value with RFC 7235 quoting (values that are not bare tokens are
+quoted and escaped) in the deterministic as-given parameter order, and
+`parse(build(x))` is semantically equal to `x`. `compare` diffs two headers'
+challenges and parameters for debugging authentication flows.
+
+All limits are fixed and deterministic: header size, challenge count,
+parameters per challenge, parameter name/value length, token68 length, and the
+error/note lists are capped. The tool is stdlib-only, offline, uses no
+credential material, and treats header contents as untrusted data rather than
+agent instructions.
