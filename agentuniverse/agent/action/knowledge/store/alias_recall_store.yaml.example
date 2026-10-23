@@ -1,0 +1,14 @@
+name: alias_recall_store
+description: Original-first sequential glossary recall without model-generated rewrites.
+backend_store: underlying_store
+aliases: {}
+boundary: word
+max_variants: 4
+max_routes: 32
+max_query_chars: 4096
+max_result_documents: 1000
+max_result_chars: 2000000
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.alias_recall_store
+  class: AliasRecallStore
