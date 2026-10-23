@@ -168,6 +168,7 @@ class WebsiteBs4Reader(Reader):
                 continue
 
             self._visited.add(current_url)
+            num_links += 1
             time.sleep(random.uniform(1, 3))  # Rate limiting
 
             try:
@@ -178,7 +179,6 @@ class WebsiteBs4Reader(Reader):
                 main_content = self._extract_main_content(soup)
                 if main_content:
                     crawler_result[current_url] = main_content
-                    num_links += 1
 
                 # Find and queue additional links if not at max depth
                 if current_depth < self.max_depth:
