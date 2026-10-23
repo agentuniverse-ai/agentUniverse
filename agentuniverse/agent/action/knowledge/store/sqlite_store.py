@@ -90,6 +90,10 @@ class SQLiteStore(Store):
         query_words = jieba.lcut(query_text)
         doc_words = jieba.lcut(doc_text)
         doc_length = len(doc_words)
+        # Keyword-only documents are valid recall candidates, but they have no
+        # text length to normalize. They contribute no BM25 text score.
+        if doc_length == 0 or total_doc_count <= 0 or total_word_count <= 0:
+            return 0
         avg_doc_length = total_word_count / total_doc_count
         bm25_score = 0
 
