@@ -84,7 +84,7 @@ def split_texts(texts: list[str], llm: LLM, chunk_size=800, chunk_overlap=100, r
         if retry:
             return split_texts(texts=texts, llm=llm, chunk_size=chunk_size,
                                chunk_overlap=chunk_overlap, retry=False)
-        raise ValueError("split text failed, exception=" + str(e))
+        raise ValueError("split text failed, exception=" + str(e)) from e
 
 
 def truncate_content(content: str, token_length: int, llm: LLM) -> str:

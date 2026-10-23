@@ -74,7 +74,7 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T], timeout: Optional[float] =
     try:
         succeeded, result = result_queue.get(timeout=timeout)
     except queue.Empty:
-        raise TimeoutError(f"Operation timed out after {timeout} seconds")
+        raise TimeoutError(f"Operation timed out after {timeout} seconds") from None
     finally:
         worker_thread.join(timeout=1.0)
 

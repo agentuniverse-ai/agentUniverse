@@ -97,7 +97,7 @@ class Monitor(BaseModel):
             except ImportError:
                 raise ImportError(
                     "jsonlines is required to trace llm invocation: `pip install jsonlines`"
-                )
+                ) from None
             # get the current time
             date = datetime.datetime.now()
             agent_invocation = {
@@ -345,7 +345,7 @@ class Monitor(BaseModel):
             try:
                 return obj.dict()
             except TypeError:
-                raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+                raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable") from None
         else:
             raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
