@@ -1,0 +1,15 @@
+info:
+  name: 'demo_rag_executor'
+  description: 'demo RAG executor (retrieve + generate) for secure RAG work pattern'
+profile:
+  prompt_version: demo_rag_executor.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.3
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.executing_agent_template'
+  class: 'ExecutingAgentTemplate'
