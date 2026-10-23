@@ -13,11 +13,11 @@ from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
-SUPPORTED_FORMATS = {'jpg', 'jpeg', 'png', 'bmp', 'webp', 'tiff'}
+SUPPORTED_FORMATS = {'jpg', 'jpeg', 'png', 'bmp', 'webp', 'tif', 'tiff'}
 
 
 class ImageReader(Reader):
-    """Image reader."""
+    """Image reader, accepting both .tif and .tiff extensions for TIFF files."""
 
     languages: List[str] = ['en', 'ch_sim']
     use_gpu: bool = False
@@ -69,8 +69,15 @@ class ImageReader(Reader):
 
     def extract_text(self, image: Any) -> str:
         """Extract text from image using OCR."""
+        from PIL import Image
+
         reader = self._get_ocr_reader()
-        results = reader.readtext(np.array(image))
+        if isinstance(image, Image.Image):
+            # EasyOCR treats three-channel ndarrays as BGR, not Pillow RGB.
+            pixels = np.array(image.convert("RGB"))[:, :, ::-1].copy()
+        else:
+            pixels = np.array(image)
+        results = reader.readtext(pixels)
         return "\n".join([text[1] for text in results])
 
     def generate_description(self, image: Any) -> str:
