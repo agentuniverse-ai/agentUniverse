@@ -42,8 +42,8 @@ class RarReader(Reader):
         Args:
             file: RAR file path
             max_file_size: Maximum size per extracted file (bytes)
-            max_total_size: Maximum total extracted size (bytes)
-            max_files: Maximum number of files to process
+            max_total_size: Maximum extracted bytes across all nesting levels, including archive files
+            max_files: Maximum extracted files across all nesting levels, including archive files
             max_depth: Maximum nesting depth for RAR archives
             max_compression_ratio: Maximum compression ratio for bomb detection
             ext_info: Additional metadata
@@ -105,20 +105,21 @@ class RarReader(Reader):
         base_metadata: Dict,
         archive_root: str,
         parent_path: str = "",
+        _budget: Optional[Dict[str, int]] = None,
     ) -> List[Document]:
         """Process a RAR archive recursively."""
         import rarfile
 
         documents = []
-        total_extracted = 0
-        file_count = 0
+        if _budget is None:
+            _budget = {"bytes": 0, "files": 0}
 
         try:
             with rarfile.RarFile(str(rar_path), 'r') as rar:
                 entries = rar.infolist()
 
                 for entry in entries:
-                    if file_count >= max_files:
+                    if _budget["files"] >= max_files:
                         break
 
                     if entry.is_dir():
@@ -140,17 +141,17 @@ class RarReader(Reader):
                     if uncompressed_size > max_file_size:
                         continue
 
-                    if total_extracted + uncompressed_size > max_total_size:
+                    if _budget["bytes"] + uncompressed_size > max_total_size:
                         break
 
-                    extract_dir = os.path.join(temp_dir, f"extract_{file_count}")
+                    extract_dir = os.path.join(temp_dir, f"extract_{_budget['files']}")
                     os.makedirs(extract_dir, exist_ok=True)
 
                     try:
                         rar.extract(entry, extract_dir)
                         extracted_path = Path(extract_dir) / entry.filename
-                        total_extracted += uncompressed_size
-                        file_count += 1
+                        _budget["bytes"] += uncompressed_size
+                        _budget["files"] += 1
 
                         full_path = os.path.join(parent_path, entry.filename) if parent_path else entry.filename
 
@@ -161,12 +162,13 @@ class RarReader(Reader):
                                 current_depth=current_depth + 1,
                                 max_depth=max_depth,
                                 max_file_size=max_file_size,
-                                max_total_size=max_total_size - total_extracted,
-                                max_files=max_files - file_count,
+                                max_total_size=max_total_size,
+                                max_files=max_files,
                                 max_compression_ratio=max_compression_ratio,
                                 base_metadata=base_metadata,
                                 archive_root=archive_root,
                                 parent_path=full_path,
+                                _budget=_budget,
                             )
                             documents.extend(nested_docs)
                         else:
