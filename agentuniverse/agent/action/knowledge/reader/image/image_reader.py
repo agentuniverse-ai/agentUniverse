@@ -101,7 +101,7 @@ class ImageReader(Reader):
             quality for image-related queries.
         """
         try:
-            from PIL import Image, ImageFile
+            from PIL import Image, ImageFile, ImageOps
         except ImportError as e:
             raise ImportError(
                 "PIL is required. Install with: pip install Pillow") from e
@@ -136,18 +136,20 @@ class ImageReader(Reader):
                     f"Unsupported image format: {image_format}. "
                     f"Supported formats are: {', '.join(SUPPORTED_FORMATS)}")
 
-            image: ImageFile = Image.open(file)
-            ocr_text: str = self.extract_text(image)
-            image_description: str = self.generate_description(image)
-            image_text = f"{ocr_text}\n{image_description}" if (
-                ocr_text.strip() and image_description.strip()
-            ) else f"{ocr_text}{image_description}"
+            with Image.open(file) as image:
+                # Give both backends the display orientation, including mirrors.
+                ImageOps.exif_transpose(image, in_place=True)
+                ocr_text: str = self.extract_text(image)
+                image_description: str = self.generate_description(image)
+                image_text = f"{ocr_text}\n{image_description}" if (
+                    ocr_text.strip() and image_description.strip()
+                ) else f"{ocr_text}{image_description}"
 
-            metadata = parse_metadata(image)
-            metadata.update({
-                'has_text': bool(ocr_text.strip()),
-                'has_description': bool(image_description.strip())
-            })
-            return [Document(text=image_text, metadata=metadata)]
+                metadata = parse_metadata(image)
+                metadata.update({
+                    'has_text': bool(ocr_text.strip()),
+                    'has_description': bool(image_description.strip())
+                })
+                return [Document(text=image_text, metadata=metadata)]
         except Exception as e:
             raise Exception(f"Error processing image {file}: {str(e)}")
