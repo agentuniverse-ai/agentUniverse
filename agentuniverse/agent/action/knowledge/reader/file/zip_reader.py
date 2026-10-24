@@ -23,6 +23,7 @@ from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxRea
 from agentuniverse.agent.action.knowledge.reader.file.txt_reader import TxtReader
 from agentuniverse.agent.action.knowledge.reader.file.xlsx_reader import XlsxReader
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
+from agentuniverse.agent.action.knowledge.reader.utils import read_text_stream
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 TEXT_FALLBACK_EXTENSIONS = {
@@ -250,14 +251,7 @@ class ZipReader(Reader):
         return metadata
 
     def _read_text(self, stream: io.BufferedReader) -> str:
-        text_chunks: List[str] = []
-        reader = io.TextIOWrapper(stream, encoding="utf-8", errors="ignore")
-        while True:
-            chunk = reader.read(self.stream_chunk_size)
-            if not chunk:
-                break
-            text_chunks.append(chunk)
-        return "".join(text_chunks)
+        return read_text_stream(stream, self.stream_chunk_size)
 
     def _enforce_limits(self, info: zipfile.ZipInfo) -> None:
         size = info.file_size

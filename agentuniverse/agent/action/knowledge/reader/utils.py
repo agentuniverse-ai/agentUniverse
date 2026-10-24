@@ -1,6 +1,7 @@
 """Utility helpers for reader implementations."""
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from typing import BinaryIO, Iterable, Sequence, Union
 
@@ -68,4 +69,36 @@ def detect_file_encoding(source: Union[str, Path, BinaryIO, bytes, bytearray],
     return "utf-8"
 
 
-__all__ = ["detect_file_encoding"]
+def read_text_stream(stream: BinaryIO, chunk_size: int = 1024 * 1024) -> str:
+    """Decode a seekable stream in chunks without discarding undecodable bytes.
+
+    Validate each candidate against the complete stream so that a long ASCII
+    prefix or a partial multibyte character at a sample boundary cannot select
+    the wrong encoding. The caller retains ownership of the binary stream.
+    """
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    start = stream.tell()
+    encodings = dict.fromkeys(
+        "utf-8-sig" if encoding == "utf-8" else encoding
+        for encoding in _FALLBACK_ENCODINGS
+    )
+    for encoding in encodings:
+        stream.seek(start)
+        reader = io.TextIOWrapper(stream, encoding=encoding, errors="strict")
+        try:
+            chunks = []
+            while True:
+                chunk = reader.read(chunk_size)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            return "".join(chunks)
+        except UnicodeDecodeError:
+            continue
+        finally:
+            reader.detach()
+    raise UnicodeError("No fallback encoding could decode the text stream")
+
+
+__all__ = ["detect_file_encoding", "read_text_stream"]
