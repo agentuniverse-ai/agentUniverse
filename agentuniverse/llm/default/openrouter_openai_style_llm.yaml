@@ -1,0 +1,10 @@
+name: 'default_openrouter_llm'
+description: 'default openrouter llm with spi'
+model_name: 'openai/gpt-4o'
+api_base: '${OPENROUTER_API_BASE}'
+api_key: '${OPENROUTER_API_KEY}'
+max_tokens: 1000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.openrouter_openai_style_llm'
+  class: 'DefaultOpenRouterLLM'

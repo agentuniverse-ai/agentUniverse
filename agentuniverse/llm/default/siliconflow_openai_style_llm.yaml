@@ -1,0 +1,10 @@
+name: 'default_siliconflow_llm'
+description: 'default siliconflow llm with spi'
+model_name: 'Qwen/Qwen2.5-72B-Instruct'
+api_base: '${SILICONFLOW_API_BASE}'
+api_key: '${SILICONFLOW_API_KEY}'
+max_tokens: 1000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.siliconflow_openai_style_llm'
+  class: 'DefaultSiliconFlowLLM'
