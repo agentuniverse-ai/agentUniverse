@@ -194,12 +194,23 @@ def parse_and_check_json_markdown(text: str, expected_keys: List[str] | None) ->
     try:
         json_obj = parse_json_markdown(text)
     except json.JSONDecodeError as e:
-        raise Exception(f"Got invalid JSON object. Error: {e}")
+        snippet = text.strip()
+        if len(snippet) > 200:
+            snippet = snippet[:200] + "..."
+        raise Exception(
+            f"Got invalid JSON object. Error: {e}. "
+            f"Offending text (truncated): {snippet!r}"
+        ) from e
     for key in expected_keys or []:
         if key not in json_obj:
+            received_keys = sorted(str(item) for item in json_obj)
+            obj_repr = repr(json_obj)
+            if len(obj_repr) > 300:
+                obj_repr = obj_repr[:300] + "..."
             raise Exception(
                 f"Got invalid return object. Expected key `{key}` "
-                f"to be present, but got {json_obj}"
+                f"to be present, but got keys {received_keys} instead. "
+                f"Parsed object (truncated): {obj_repr}"
             )
     return json_obj
 
