@@ -218,6 +218,10 @@ class AsciiTableTool(Tool):
                 for row in grid
             ]
         widths = [max(display_width(c) for c in col) for col in zip(*grid)]
+        if style == "markdown":
+            # GFM alignment markers need three columns minimum; raising the
+            # width keeps every line (separator included) one display width.
+            widths = [max(w, 3) for w in widths]
         lines = []
         if style == "markdown":
             for row in grid:
@@ -262,12 +266,14 @@ class AsciiTableTool(Tool):
 
     @staticmethod
     def _md_sep(widths, aligns):
-        marks = {"left": [":", "-"], "right": ["-", ":"], "center": [":", ":"]}
         cells = []
         for w, a in zip(widths, aligns):
-            l, r = marks[a]
-            dashes = max(w - len(l) - len(r), 1)
-            cells.append(l + "-" * dashes + r)
+            if a == "left":
+                cells.append(":" + "-" * (w - 1))
+            elif a == "right":
+                cells.append("-" * (w - 1) + ":")
+            else:
+                cells.append(":" + "-" * (w - 2) + ":")
         return "| " + " | ".join(cells) + " |"
 
     @staticmethod

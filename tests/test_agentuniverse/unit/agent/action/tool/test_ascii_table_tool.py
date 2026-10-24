@@ -165,6 +165,14 @@ class FitRenderTest(unittest.TestCase):
         out = self.tool.execute(mode="render", rows=[["a", "b"]], style="markdown")
         self.assertTrue(any("first row as the header" in n for n in out["notes"]))
 
+    def test_markdown_separator_fits_narrow_columns(self):
+        # Regression: zero/two-wide columns used to make the separator line
+        # wider than the content lines (marker minimum vs column width).
+        out = self.tool.execute(mode="render", rows=[["", "ab"], ["x", ""]], style="markdown")
+        widths = {display_width(ln) for ln in out["table"].split("\n")}
+        self.assertEqual(len(widths), 1)
+        self.assertIn("| :-- | :-- |", out["table"])
+
     def test_determinism(self):
         a = self.tool.execute(mode="render", rows=[["中", "x"]], headers=["h", "k"], style="rounded")
         b = self.tool.execute(mode="render", rows=[["中", "x"]], headers=["h", "k"], style="rounded")
