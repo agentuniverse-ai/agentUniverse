@@ -20,6 +20,9 @@ from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_output import LLMOutput
 
 ClaudeMAXCONTETNLENGTH = {
+    "claude-sonnet-4-6": 1000000,
+    "claude-opus-4-6": 1000000,
+    "claude-haiku-4-5": 200000,
     "claude-3-opus-20240229": 200000,
     "claude-3-sonnet-20240229": 200000,
     "claude-3-haiku-20240307": 200000,
