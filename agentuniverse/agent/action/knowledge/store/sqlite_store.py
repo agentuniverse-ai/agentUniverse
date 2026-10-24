@@ -173,7 +173,7 @@ class SQLiteStore(Store):
                     )
 
     def query(self, query: Query, **kwargs) -> List[Document]:
-        if len(query.keywords) > 0:
+        if query.keywords:
             query_terms = query.keywords
         else:
             query_terms = self._get_document_keyword(Document(text=query.query_str))
