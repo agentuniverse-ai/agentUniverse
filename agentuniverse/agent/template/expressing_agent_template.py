@@ -8,6 +8,7 @@
 from queue import Queue
 
 from agentuniverse.agent.input_object import InputObject
+from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
 from agentuniverse.base.util.common_util import stream_output
@@ -44,7 +45,7 @@ class ExpressingAgentTemplate(AgentTemplate):
 
     def build_execution_context(self, input_object: InputObject) -> str:
         """Format prior question-answer results for the prompt."""
-        executing_result = input_object.get_data('executing_result').get_data('executing_result', [])
+        executing_result = (input_object.get_data('executing_result') or OutputObject({})).get_data('executing_result', [])
         execution_context_list = [
             f"question:{execution.get('input')}\nanswer:{execution.get('output')}"
             for execution in executing_result

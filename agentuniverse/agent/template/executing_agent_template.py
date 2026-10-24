@@ -43,7 +43,7 @@ class ExecutingAgentTemplate(AgentTemplate):
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         agent_input['input'] = input_object.get_data('input')
-        agent_input['framework'] = input_object.get_data('planning_result').get_data('framework')
+        agent_input['framework'] = (input_object.get_data('planning_result') or OutputObject({})).get_data('framework')
         agent_input['expert_framework'] = input_object.get_data('expert_framework', {}).get('executing')
         return agent_input
 
@@ -61,7 +61,7 @@ class ExecutingAgentTemplate(AgentTemplate):
                        prompt: Prompt, **kwargs) -> dict:
         self._context_values: dict = FrameworkContextManager().get_all_contexts()
         _context_values: dict = FrameworkContextManager().get_all_contexts()
-        framework = agent_input.get('framework', [])
+        framework = agent_input.get('framework') or []
 
         if len(framework) == 0:
             return {'executing_result': [],

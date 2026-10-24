@@ -10,6 +10,7 @@ from queue import Queue
 from langchain_core.utils.json import parse_json_markdown
 
 from agentuniverse.agent.input_object import InputObject
+from agentuniverse.agent.output_object import OutputObject
 from agentuniverse.agent.template.agent_template import AgentTemplate
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
 from agentuniverse.base.util.common_util import stream_output
@@ -26,7 +27,7 @@ class ReviewingAgentTemplate(AgentTemplate):
 
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         agent_input['input'] = input_object.get_data('input')
-        agent_input['expressing_result'] = input_object.get_data('expressing_result').get_data('output')
+        agent_input['expressing_result'] = (input_object.get_data('expressing_result') or OutputObject({})).get_data('output')
         agent_input['expert_framework'] = input_object.get_data('expert_framework', {}).get('reviewing')
         return agent_input
 
