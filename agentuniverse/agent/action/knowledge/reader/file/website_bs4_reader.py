@@ -22,6 +22,8 @@ class WebsiteBs4Reader(Reader):
     """Website content reader based on BeautifulSoup
     
     Crawls website content and extracts main text, with support for limiting crawl depth and max links.
+    Crawl state and ext_info limit overrides are isolated to each load_data call;
+    the configured max_depth and max_links remain the defaults for later calls.
     
     Note:
         Required packages:
@@ -66,16 +68,21 @@ class WebsiteBs4Reader(Reader):
         self._visited = set()
         self._urls_to_crawl = []
 
-        # Update config from ext_info if provided
+        # A registered reader may be reused by overlapping knowledge loads.
+        crawler = self.model_copy()
+        crawler._visited = set()
+        crawler._urls_to_crawl = []
+
+        # Apply overrides to this crawl without mutating the component defaults.
         if ext_info:
             if 'max_depth' in ext_info:
-                self.max_depth = ext_info['max_depth']
+                crawler.max_depth = ext_info['max_depth']
             if 'max_links' in ext_info:
-                self.max_links = ext_info['max_links']
+                crawler.max_links = ext_info['max_links']
                 
         try:
             # Crawl website and create documents
-            crawler_result = self._crawl_website(url)
+            crawler_result = crawler._crawl_website(url)
             documents = []
             
             for crawled_url, content in crawler_result.items():
