@@ -1,0 +1,39 @@
+name: ascii_table_tool
+description: Render monospace tables with wcwidth-verified alignment across East Asian wide characters, combining marks and zero-width joiners.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.ascii_table_tool
+  class: AsciiTableTool
+input_keys:
+  - mode
+max_text_chars: 100000
+max_cells: 20000
+max_rows: 2000
+max_cols: 200
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [measure, fit, render]
+    text:
+      type: string
+      description: Text for measure mode.
+    rows:
+      type: array
+      items: {type: array, items: {type: string}}
+    headers:
+      type: array
+      items: {type: string}
+    style:
+      type: string
+      enum: [ascii, rounded, unicode, markdown]
+      default: ascii
+    align:
+      description: "One of left/center/right, or a list of them (per column)."
+    max_col_width:
+      type: integer
+      default: 0
+  required: [mode]
+  additionalProperties: false
