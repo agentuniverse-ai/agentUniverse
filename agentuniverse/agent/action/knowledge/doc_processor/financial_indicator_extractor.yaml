@@ -3,6 +3,9 @@ description: 'Extract financial indicators from reports including metrics, tempo
 extract_temporal: true
 extract_comparisons: true
 currency_normalization: true
+# Million/billion and M/B suffixes must end before another ASCII word character.
+# Ordinary prose such as "before" or "monthly" is not a monetary scale.
+# Scale metadata comes from each matched amount, not neighboring metrics.
 use_llm: false
 skip_on_error: true
 metrics:
