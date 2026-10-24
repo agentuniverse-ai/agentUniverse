@@ -6,7 +6,7 @@
 # @Email   : hiromesh@qq.com
 # @FileName: code_ast_processor.py
 import json
-from typing import List, Dict, Any, Optional, cast
+from typing import List, Dict, Any, Iterator, Optional, cast
 
 from agentuniverse.agent.action.knowledge.doc_processor.types.ast_types import AstNode, AstNodePoint, CodeBoundary
 from agentuniverse.agent.action.knowledge.doc_processor.types.code_types import CodeFeatures, CodeRepresentation, ChunkRepresentation
@@ -16,6 +16,12 @@ from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import Doc
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+
+
+_FUNCTION_NODE_TYPES = (
+    "function_definition", "method_definition", "function_declaration", "method_declaration"
+)
+_CLASS_NODE_TYPES = ("class_definition", "class_declaration")
 
 
 class CodeAstProcessor(DocProcessor):
@@ -124,42 +130,40 @@ class CodeAstProcessor(DocProcessor):
             "statement_count": 0
         }
 
-        cursor = node.walk()
-
-        def _visit():
-            nonlocal features
-            current_node = cursor.node
-
+        for current_node in self._iter_tree_nodes(node):
             if current_node.type == "identifier":
                 features["identifier_count"] += 1
-            elif current_node.type in ("function_definition", "method_definition", "function_declaration"):
+            elif current_node.type in _FUNCTION_NODE_TYPES:
                 features["function_count"] += 1
-            elif current_node.type in ("class_definition", "class_declaration"):
+            elif current_node.type in _CLASS_NODE_TYPES:
                 features["class_count"] += 1
             elif "statement" in current_node.type:
                 features["statement_count"] += 1
 
-            if cursor.goto_first_child():
-                _visit()
-                cursor.goto_parent()
-            if cursor.goto_next_sibling():
-                _visit()
-
-        _visit()
         return features
+
+    @staticmethod
+    def _iter_tree_nodes(root_node: Any) -> Iterator[Any]:
+        """Visit a subtree in preorder without Python recursion.
+
+        The native cursor stays rooted at the supplied node, so backtracking
+        cannot visit its siblings outside the requested subtree.
+        """
+        cursor = root_node.walk()
+        while True:
+            yield cursor.node
+            if cursor.goto_first_child():
+                continue
+            while not cursor.goto_next_sibling():
+                if not cursor.goto_parent():
+                    return
 
     def _count_node_types(self, root_node) -> Dict[str, int]:
         counts = {}
-
-        def _traverse(node):
+        for node in self._iter_tree_nodes(root_node):
             if node.type not in counts:
                 counts[node.type] = 0
             counts[node.type] += 1
-
-            for child in node.children:
-                _traverse(child)
-
-        _traverse(root_node)
         return counts
 
     def _calculate_code_metrics(self, code: str, language: str) -> CodeMetrics:
@@ -177,6 +181,50 @@ class CodeAstProcessor(DocProcessor):
         }
         return metrics
 
+    @staticmethod
+    def _nested_declarator(node: Any) -> Optional[Any]:
+        if not node.type.endswith("_declarator"):
+            return None
+        child = node.child_by_field_name("declarator")
+        if child is None and node.type in (
+                "reference_declarator", "parenthesized_declarator", "attributed_declarator",
+                "abstract_reference_declarator", "abstract_parenthesized_declarator"):
+            # These C++ wrappers leave their declarator child unlabelled.
+            child = next((part for part in node.named_children
+                          if part.type not in ("attribute_declaration", "ms_call_modifier")), None)
+        return child
+
+    def _declaration_name(self, node: Any, code_bytes: bytes) -> Optional[str]:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            name_node = node.child_by_field_name("declarator")
+            while name_node is not None:
+                child = self._nested_declarator(name_node)
+                if child is None:
+                    break
+                name_node = child
+        if name_node is None:
+            name_node = next((child for child in node.children if child.type == "identifier"), None)
+        if name_node is None:
+            return None
+
+        end_byte = name_node.end_byte
+        conversion = name_node
+        while conversion is not None and conversion.type == "qualified_identifier":
+            conversion = conversion.child_by_field_name("name")
+        if conversion is not None and conversion.type == "operator_cast":
+            # A conversion operator's grammar node includes parameters and
+            # qualifiers. Retain the conversion type, including pointer/reference
+            # declarators, but stop before the function's parameter list.
+            declarator = conversion.child_by_field_name("declarator")
+            while declarator is not None:
+                parameters = declarator.child_by_field_name("parameters")
+                if parameters is not None:
+                    end_byte = parameters.start_byte
+                    break
+                declarator = self._nested_declarator(declarator)
+        return code_bytes[name_node.start_byte:end_byte].decode("utf8").rstrip()
+
     def _generate_code_chunks(
             self,
             code: str,
@@ -190,19 +238,13 @@ class CodeAstProcessor(DocProcessor):
 
         def _collect_declarations(node, path=""):
 
-            if node.type in ("function_definition", "method_definition", "class_definition",
-                             "function_declaration", "method_declaration", "class_declaration"):
+            if node.type in _FUNCTION_NODE_TYPES + _CLASS_NODE_TYPES:
                 start_line = node.start_point[0]
                 end_line = node.end_point[0]
 
                 if end_line - start_line >= 3:
-                    node_type = "function" if "function" in node.type else "class"
-                    name = None
-
-                    for child in node.children:
-                        if child.type == "identifier":
-                            name = code_bytes[child.start_byte:child.end_byte].decode("utf8")
-                            break
+                    node_type = "class" if node.type in _CLASS_NODE_TYPES else "function"
+                    name = self._declaration_name(node, code_bytes)
 
                     boundary: CodeBoundary = {
                         "start": start_line,
@@ -213,21 +255,8 @@ class CodeAstProcessor(DocProcessor):
                     }
                     boundaries.append(boundary)
 
-        traverse_cursor = root_node.walk()
-
-        def _traverse_nodes():
-            current_node = traverse_cursor.node
-
-            _collect_declarations(current_node)
-
-            if traverse_cursor.goto_first_child():
-                _traverse_nodes()
-                traverse_cursor.goto_parent()
-
-            if traverse_cursor.goto_next_sibling():
-                _traverse_nodes()
-
-        _traverse_nodes()
+        for node in self._iter_tree_nodes(root_node):
+            _collect_declarations(node)
 
         if boundaries:
             for boundary in boundaries:
