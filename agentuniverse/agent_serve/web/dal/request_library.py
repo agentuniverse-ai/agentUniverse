@@ -133,6 +133,15 @@ class RequestLibrary:
                 self.request_orm.request_id == request_do.request_id).first()
             if db_request_do:
                 update_data = request_do.model_dump(exclude_unset=True)
+                # gmt_create/gmt_modified belong to the database. The
+                # in-memory DO still carries the values it was created with,
+                # so writing them back resets gmt_modified to the creation
+                # time on every flush. That freezes the row clock, defeats
+                # the ORM onupdate timestamp and starves the 10-minute
+                # staleness watchdog (RequestTask.is_validate), which then
+                # marks healthy long-running tasks as failed.
+                update_data.pop('gmt_create', None)
+                update_data.pop('gmt_modified', None)
                 for key, value in update_data.items():
                     setattr(db_request_do, key, value)
                 session.commit()
