@@ -4,6 +4,7 @@
 # @Time    : 2025/12/01
 # @Author  : kaichuan
 # @FileName: supervision_agent_template.py
+import re
 from queue import Queue
 
 from agentuniverse.agent.input_object import InputObject
@@ -19,6 +20,32 @@ class SupervisionAgentTemplate(AgentTemplate):
     This agent monitors implementation progress and provides feedback
     to ensure alignment with user goals.
     """
+
+    # The supervision prompt mandates a "Needs Correction: true/false" answer
+    # line; accept the underscore form and surrounding markdown emphasis too.
+    _EXPLICIT_VERDICT_PATTERN = re.compile(
+        r'needs[\s_]*correction\s*[:：]\s*(?:[*_`]+\s*)*(true|false)(?![A-Za-z_])',
+        re.IGNORECASE,
+    )
+
+    # Free-form fallback for model replies that omit the verdict line. Within
+    # each alternative the longer, negated phrasings come first so that
+    # "not acceptable" is not read as "acceptable" and "no correction
+    # required" is not read as "correction required". The label form
+    # "Needs Correction:" is excluded here because it is the answer field,
+    # not prose, and is handled by the pattern above.
+    _VERDICT_MARKER_PATTERN = re.compile(
+        r'(?P<no_correction>'
+        r'no correction needed|no correction required|无需修正|不需要修正'
+        r'|meets requirements|satisfactory|acceptable|符合要求'
+        r')'
+        r'|(?P<correction>'
+        r'needs[\s_]*correction(?!\s*[:：])|correction required(?!\s*[:：])'
+        r'|needs improvement|需要修正|需要改进'
+        r'|not acceptable|not satisfactory|does not meet|不符合要求'
+        r')',
+        re.IGNORECASE,
+    )
 
     def input_keys(self) -> list[str]:
         """Define input keys required by this agent.
@@ -109,44 +136,31 @@ class SupervisionAgentTemplate(AgentTemplate):
     def _extract_needs_correction(self, output: str) -> bool:
         """Extract needs_correction flag from output.
 
+        The supervision prompt asks the model to answer with an explicit
+        ``Needs Correction: true/false`` line, so that line is the verdict and
+        is honoured before any keyword heuristics run. Only when the model
+        omits the line do we fall back to scanning the free-form text, where
+        negated markers ("not acceptable", "不符合要求") must be recognised
+        before their positive substrings ("acceptable", "符合要求").
+
         Args:
             output (str): Agent output text.
 
         Returns:
             bool: Whether correction is needed.
         """
-        # Look for explicit correction markers in the output
-        output_lower = output.lower()
+        if not isinstance(output, str) or not output:
+            return False
 
-        # Positive indicators (needs correction)
-        correction_needed_markers = [
-            'needs correction',
-            '需要修正',
-            '需要改进',
-            'correction required',
-            'needs improvement',
-            '不符合要求',
-            'does not meet'
-        ]
+        explicit_verdict = self._EXPLICIT_VERDICT_PATTERN.search(output)
+        if explicit_verdict:
+            return explicit_verdict.group(1).lower() == 'true'
 
-        # Negative indicators (no correction needed)
-        no_correction_markers = [
-            'no correction needed',
-            '无需修正',
-            '符合要求',
-            'meets requirements',
-            'satisfactory',
-            'acceptable'
-        ]
-
-        # Check for explicit markers
-        for marker in no_correction_markers:
-            if marker in output_lower:
-                return False
-
-        for marker in correction_needed_markers:
-            if marker in output_lower:
-                return True
+        # No explicit verdict: fall back to the first marker that appears in
+        # the text. Matching left to right keeps "not acceptable" ahead of the
+        # bare "acceptable" that sits inside it.
+        for match in self._VERDICT_MARKER_PATTERN.finditer(output):
+            return match.lastgroup == 'correction'
 
         # Default to no correction if not explicitly stated
         return False
