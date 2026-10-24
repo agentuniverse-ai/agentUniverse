@@ -9,7 +9,6 @@ from typing import Optional, List, Union, Dict
 
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate
-from langchain_core.prompts.chat import BaseStringMessagePromptTemplate
 from pydantic import BaseModel
 
 from agentuniverse.agent.memory.enum import ChatMessageEnum
@@ -35,15 +34,22 @@ class Message(BaseModel):
         """Convert the agentUniverse(aU) message class to the langchain message class."""
         if self.type == ChatMessageEnum.SYSTEM.value:
             return SystemMessagePromptTemplate.from_template(self.content)
-        elif self.type == ChatMessageEnum.HUMAN.value:
+        elif self.type in {
+            ChatMessageEnum.HUMAN.value,
+            ChatMessageEnum.USER.value,
+            ChatMessageEnum.INPUT.value,
+        }:
             if isinstance(self.content, str):
                 return HumanMessagePromptTemplate.from_template(self.content)
             elif isinstance(self.content, list):
                 return HumanMessage(content=self.content)
-        elif self.type == ChatMessageEnum.AI.value:
+        elif self.type in {
+            ChatMessageEnum.AI.value,
+            ChatMessageEnum.ASSISTANT.value,
+            ChatMessageEnum.OUTPUT.value,
+        }:
             return AIMessagePromptTemplate.from_template(self.content)
-        else:
-            return BaseStringMessagePromptTemplate.from_template(self.content)
+        raise ValueError(f"Unsupported message type: {self.type}")
 
     @staticmethod
     def as_langchain_list(message_list: List['Message']):
