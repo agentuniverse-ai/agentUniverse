@@ -20,6 +20,7 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "pdf": "default_pdf_reader",
         "pptx": "default_pptx_reader",
         "docx": "default_docx_reader",
+        "epub": "default_epub_reader",
         "txt": "default_txt_reader",
         "md": "default_markdown_reader",
         "markdown": "default_markdown_reader",
@@ -28,6 +29,8 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "rar": "default_rar_reader",
         "zip": "default_zip_reader",
         "sevenzip": "default_sevenzip_reader",
+        "7z": "default_sevenzip_reader",
+        "xlsx": "xlsx_reader",
         # extended defaults for web & images
         "url": "default_web_page_reader",
         "png": "default_image_ocr_reader",
