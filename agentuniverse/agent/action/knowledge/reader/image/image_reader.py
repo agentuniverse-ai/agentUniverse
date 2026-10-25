@@ -48,9 +48,9 @@ class ImageReader(Reader):
         if self._ocr_reader is None:
             try:
                 import easyocr
-            except ImportError:
+            except ImportError as e:
                 raise ImportError(
-                    "easyocr is required. Install with: pip install easyocr")
+                    "easyocr is required. Install with: pip install easyocr") from e
             self._ocr_reader = easyocr.Reader(self.languages, gpu=self.use_gpu)
         return self._ocr_reader
 
@@ -59,10 +59,10 @@ class ImageReader(Reader):
         if self._description_pipeline is None:
             try:
                 from transformers import pipeline
-            except ImportError:
+            except ImportError as e:
                 raise ImportError(
                     "transformers is required. Install with: pip install transformers"
-                )
+                ) from e
             self._description_pipeline = pipeline("image-to-text",
                                                   model=self.image_model)
         return self._description_pipeline
@@ -150,4 +150,4 @@ class ImageReader(Reader):
             })
             return [Document(text=image_text, metadata=metadata)]
         except Exception as e:
-            raise Exception(f"Error processing image {file}: {str(e)}")
+            raise RuntimeError(f"Error processing image {file}: {str(e)}") from e

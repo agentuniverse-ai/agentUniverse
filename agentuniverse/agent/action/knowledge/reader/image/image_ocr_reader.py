@@ -80,4 +80,4 @@ class ImageOCRReader(Reader):
                 "`pip install paddleocr paddlepaddle` or "
                 "`pip install pytesseract pillow` or "
                 "`pip install easyocr`"
-            )
+            ) from e_easy
