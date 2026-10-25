@@ -196,6 +196,8 @@ class ContextCompressor(ComponentBase):
         }
 
         def importance_score(seg: ContextSegment) -> float:
+            """Return the importance score computed for the given input.
+            """
             priority_weight = priority_weights.get(seg.priority.value.lower(), 2.0)
             decay = seg.calculate_decay()
             access_bonus = 1.0 + (seg.metadata.access_count * 0.1)
