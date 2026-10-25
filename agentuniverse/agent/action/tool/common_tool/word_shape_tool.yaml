@@ -1,0 +1,60 @@
+name: word_shape_tool
+description: Word shape tool — classic NER-style token shape patterns, pure Python stdlib, no network required. Map a word or word list to per-word shape strings (uppercase->X, lowercase->x, digit->d, punctuation->p, CJK ideograph->C, other letter->L, symbol->s, other->o) with a collapsed variant (mode='shape'), replace every digit run with a single '0' (mode='normalize_digits'), compute per-word features — shape, collapsed shape, capitalization, ratios, hyphen, length, script guess (mode='analyze'), and profile shape frequencies over whitespace-separated tokens with an optional top-N (mode='batch_shapes').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.word_shape_tool
+  class: WordShapeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — shape, normalize_digits, analyze or batch_shapes.
+    required: true
+  word:
+    type: string
+    description: The word to map. Required by the shape mode (unless words is given) and the analyze mode; not used by the other modes.
+    required: false
+  words:
+    type: array
+    description: A list of words to map. Required by the shape mode (unless word is given); mutually exclusive with word.
+    required: false
+  text:
+    type: string
+    description: The input text. Required by the normalize_digits and batch_shapes modes; not used by the other modes.
+    required: false
+  collapsed:
+    type: boolean
+    description: Shape mode only — return the collapsed variant (consecutive identical symbols merged into one) instead of the full per-character shape.
+    required: false
+  top_n:
+    type: integer
+    description: Batch_shapes mode only — return only the first N entries of the frequency-sorted shape list.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["shape", "normalize_digits", "analyze", "batch_shapes"]
+      description: Operation mode.
+    word:
+      type: string
+      description: Single word input (shape / analyze modes).
+    words:
+      type: array
+      items:
+        type: string
+      description: Word list input (shape mode); mutually exclusive with word.
+    text:
+      type: string
+      description: Text input (normalize_digits / batch_shapes modes).
+    collapsed:
+      type: boolean
+      description: Return the collapsed shape variant (shape mode).
+    top_n:
+      type: integer
+      minimum: 1
+      description: Truncate the shape frequency list to the first N entries (batch_shapes mode).
+  required: ["mode"]
