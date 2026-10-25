@@ -649,3 +649,56 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## HtmlTableTool
+
+`HtmlTableTool` extracts HTML tables into structured data with correct
+rowspan/colspan expansion, analyzes table shape and consistency, renders one
+table as CSV, and compares two tables cell by cell. It runs fully offline on
+the Python standard library.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.html_table_tool import HtmlTableTool
+
+tool = HtmlTableTool()
+result = tool.execute(mode="extract", html=html_text)
+```
+
+The `extract` mode returns every top-level table (when `table_index` is
+omitted; an explicit 0-based index, `0` included, returns exactly that table,
+consistent with `to_csv` and `compare`) with detected `headers`
+(method noted: `th-elements`, `first-row-strong` or `none`), `rows` where
+spans are expanded per the WHATWG table-processing semantics (rowspan fills
+downward copies, colspan fills rightward copies; copies, not merged markers),
+`row_count`, `col_count`, `irregular_rows` for rows with missing or extra
+td/th per DOM, and `child_tables` references instead of inlined nested tables.
+The `raw_spans` option returns the declared `{text, rowspan, colspan}` values
+per cell. `analyze` reports per-table findings: missing `tbody`, `th` cells
+outside the first row, `colspan=0` expanded per the historical HTML4
+span-to-end rule and flagged, `rowspan` past the last row clamped and flagged,
+empty or duplicate header cells, row width drift, zero-row tables,
+caption/summary text, nesting depth and `role=presentation` layout tables.
+`to_csv` renders one table (by `table_index`) as CSV text, and `compare`
+produces a cell-level diff (added/removed rows and columns, changed cells
+with coordinates, header drift) of two tables given as extracted structures
+or as two HTML documents with indexes.
+
+Span parsing follows the WHATWG rules for non-negative integers: only ASCII
+digits count, invalid values (superscripts, full-width digits, junk) fall
+back to a span of 1, and duplicate attributes keep the first occurrence.
+`rowspan=0` spans its row group per the HTML Standard: the `thead`/`tbody`/
+`tfoot` section, or the maximal run of consecutive section-less `tr` rows
+(the implicit tbody the HTML parser would create). `colgroup`/`col` span
+pre-allocation is ignored; cells alone determine the grid. Lenient parsing
+generates implied end tags, so an unclosed inline element cannot swallow the
+next cell or row.
+
+Cell text follows documented rules: character references are decoded (invalid
+numeric references such as `&#0;` become U+FFFD, and C0 control references
+like `&#3;` are dropped, following the Python stdlib decoder),
+script/style content is dropped, nested tables are reported as references,
+runs of Unicode whitespace (non-breaking spaces included) collapse to one
+space and `<br>` contributes one space. Input size, table count, rows per
+table, cell length, nesting depth and diff size are bounded, and all failures
+return structured errors. Table content is untrusted data, not agent
+instructions.
