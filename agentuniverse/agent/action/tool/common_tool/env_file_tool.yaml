@@ -1,0 +1,60 @@
+name: env_file_tool
+description: Env file tool — parse, inspect, edit, serialize and validate dotenv (.env) text purely on the Python stdlib, no network required. parse mode returns an ordered dict plus per-key raw value, parsed value, line numbers, export flag, duplicate and malformed-line metadata (mode='parse'); get reads one key (mode='get'); set returns patched text that updates the first occurrence in place, removes later duplicates and appends missing keys before trailing comments (mode='set'); serialize renders a dict as canonical .env text with dotenv quoting (mode='serialize'); validate lists ${VAR}/$VAR references to variables the file never defines (mode='validate').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.env_file_tool
+  class: EnvFileTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Env file mode — parse, get, set, serialize or validate.
+    required: true
+  text:
+    type: string
+    description: The .env text — required for the parse, get, set and validate modes; not used by serialize mode.
+    required: false
+  key:
+    type: string
+    description: Variable name ([A-Za-z_][A-Za-z0-9_]*) — required for the get and set modes.
+    required: false
+  value:
+    type: string
+    description: New value for the key — required for the set mode (may be empty); written with canonical dotenv quoting.
+    required: false
+  data:
+    type: object
+    description: Mapping of variable name -> value string — required for the serialize mode; order is kept.
+    required: false
+  export:
+    description: set mode — True/False forces the export prefix on/off (default keeps the first occurrence's prefix). serialize mode — None/False for no prefixes, True for all keys, or a list of key names to prefix.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "get", "set", "serialize", "validate"]
+      description: Env file mode.
+    text:
+      type: string
+      description: The whole .env text (parse, get, set, validate modes).
+    key:
+      type: string
+      description: Variable name (get, set modes).
+    value:
+      type: string
+      description: New value for the key (set mode).
+    data:
+      type: object
+      description: Dict of variable name -> value string (serialize mode).
+    export:
+      anyOf:
+        - type: boolean
+        - type: array
+          items:
+            type: string
+      description: Export prefix control (set / serialize modes).
+  required: ["mode"]
