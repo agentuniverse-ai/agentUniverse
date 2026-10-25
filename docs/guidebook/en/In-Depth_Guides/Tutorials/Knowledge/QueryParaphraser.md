@@ -82,3 +82,34 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.query_paraphraser.query_keyword_extractor'
   class: 'QueryKeywordExtractor'
 ```
+
+### [multi_query_paraphraser](../../../../../../agentuniverse/agent/action/knowledge/query_paraphraser/multi_query_paraphraser.yaml)
+This component implements multi-query expansion: a single LLM call generates several *reformulations* of the original question (same intent, varied wording), and the Query is rewritten with them, so dense retrieval also covers corpus passages that phrase the intent differently. It is the question-side counterpart of HyDE-style expansion (which generates answer-shaped passages); the two compose naturally in a `query_paraphrasers` chain.
+
+The rewrite follows the framework Query contract: variants are appended to `query_text_bundles`; `query_str` is rewritten (`append` mode = original query followed by the variants, the default; `replace` mode = variants only); and the untouched original plus the final variant list are recorded under the `ext_info` keys `multi_query_origin_query_str` / `multi_query_variants` for later stages (fusion, rerankers, logging).
+
+The output parser tolerates the usual LLM decoration (`1.` / `1)` / `1、` numbering, `-`/`*`/`•` bullets, wrapping quotes), drops empty lines, variants equal to the original query (whitespace-folded, case-insensitive) and duplicates, caps the list at `num_queries`, and truncates each variant to `max_query_chars`.
+
+Expansion is best-effort by design: an empty query, an unset `llm_model`, a failing LLM call, or output without any usable variant degrades to pass-through with a logged warning — retrieval never breaks because the enhancement failed. Configuration errors instead fail loudly at component-load time (unknown `mode`, `num_queries` outside [1, 10], non-positive `max_query_chars`, or a custom `prompt_template` without the literal `{query}` placeholder).
+
+The component definition file is as follows:
+```yaml
+name: 'multi_query_paraphraser'
+description: 'expand the query with LLM-generated reformulations'
+llm_model: ''            # registered LLM component, e.g. 'default_openai_llm'
+num_queries: 3           # variants to keep, in [1, 10]; one LLM call
+mode: 'append'           # append (original + variants) | replace
+max_query_chars: 512     # hard truncation per variant
+origin_query_key: 'multi_query_origin_query_str'
+variants_key: 'multi_query_variants'
+metadata:
+  type: 'QUERY_PARAPHRASER'
+  module: 'agentuniverse.agent.action.knowledge.query_paraphraser.multi_query_paraphraser'
+  class: 'MultiQueryParaphraser'
+```
+- llm_model: name of the registered LLM component used to generate the variants. When empty, queries pass through unchanged (with a warning), so the shipped definition loads without any model credentials.
+- num_queries: maximum number of variants to keep, in [1, 10]; the LLM is asked for exactly this many in one call.
+- mode: `append` (default) rewrites `query_str` to the original query followed by the variants; `replace` keeps the variants only.
+- max_query_chars: hard truncation bound applied to every variant.
+- prompt_template: custom user-prompt template; must contain the literal `{query}` placeholder and may contain `{num}` (replaced first, so other braces are safe). Defaults to a built-in instruction that answers in the language of the query.
+- origin_query_key / variants_key: the `ext_info` keys recording the untouched original query string and the final variant list.

@@ -80,3 +80,34 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.query_paraphraser.query_keyword_extractor'
   class: 'QueryKeywordExtractor'
 ```
+
+### [multi_query_paraphraser](../../../../../../agentuniverse/agent/action/knowledge/query_paraphraser/multi_query_paraphraser.yaml)
+该组件实现多查询扩展（multi-query expansion）：单次 LLM 调用为原始问题生成多个*同义改写*（意图不变、措辞多样），并用它们改写 Query，使稠密检索也能覆盖语料中用不同措辞表达同一意图的段落。它是 HyDE 类扩展（生成"答案形态"段落）在提问侧的对应物，两者可以在 `query_paraphrasers` 链中自然叠加。
+
+改写遵循框架的 Query 契约：所有改写变体追加进 `query_text_bundles`；`query_str` 被改写（`append` 模式 = 原始查询 + 变体，默认；`replace` 模式 = 仅保留变体）；未改动的原始查询与最终变体列表分别记录在 `ext_info` 的 `multi_query_origin_query_str` / `multi_query_variants` 键下，供后续环节（融合、重排、日志）使用。
+
+输出解析容忍常见的 LLM 装饰（`1.` / `1)` / `1、` 编号、`-`/`*`/`•` 项目符号、成对包裹引号），会跳过空行、与原始查询相同的变体（空白折叠后大小写不敏感比较）以及重复项，并把结果截断到 `num_queries` 个、每个变体截断到 `max_query_chars` 字符。
+
+扩展按设计是"尽力而为"：查询为空、未配置 `llm_model`、LLM 调用失败或输出中没有任何可用变体时，一律退化为原样透传并记录告警——检索绝不会因为增强失败而中断。配置错误则相反，会在组件加载时快速失败（未知 `mode`、`num_queries` 超出 [1, 10]、非正的 `max_query_chars`、自定义 `prompt_template` 缺少字面量 `{query}` 占位符）。
+
+组件定义文件如下：
+```yaml
+name: 'multi_query_paraphraser'
+description: '使用 LLM 生成的同义改写扩展查询'
+llm_model: ''            # 已注册的 LLM 组件名，如 'default_openai_llm'
+num_queries: 3           # 保留的变体数，取值 [1, 10]；单次 LLM 调用
+mode: 'append'           # append（原始查询+变体）| replace（仅变体）
+max_query_chars: 512     # 每个变体的硬截断上限
+origin_query_key: 'multi_query_origin_query_str'
+variants_key: 'multi_query_variants'
+metadata:
+  type: 'QUERY_PARAPHRASER'
+  module: 'agentuniverse.agent.action.knowledge.query_paraphraser.multi_query_paraphraser'
+  class: 'MultiQueryParaphraser'
+```
+- llm_model: 用于生成改写变体的已注册 LLM 组件名。为空时查询原样透传（并告警），因此内置定义无需任何模型凭据即可加载。
+- num_queries: 保留的变体数量上限，取值 [1, 10]；单次调用即向 LLM 请求该数量。
+- mode: `append`（默认）把 `query_str` 改写为"原始查询 + 变体"；`replace` 只保留变体。
+- max_query_chars: 每个变体的硬截断上限。
+- prompt_template: 自定义用户提示模板；必须包含字面量 `{query}` 占位符，可包含 `{num}`（先替换 `{num}`，其它花括号不受影响）。默认使用"以查询语言作答"的内置指令。
+- origin_query_key / variants_key: 记录未改动原始查询与最终变体列表的 `ext_info` 键名。
