@@ -56,3 +56,8 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml): Reads text content from PDF files found on the web.
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml): Reads text content from local Markdown files.
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml): Reads text content from RAR archive files (.rar).
+- [default_sevenzip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/sevenzip_reader.yaml): Reads text content from 7Z archive files with preflight safety checks and nested archive support.
+
+### Archive reader safety
+
+`SevenZipReader` validates every archive member before extraction. Members with absolute or drive-qualified paths, backslashes, NUL bytes, `..` path segments, symlinks, or special file types are rejected, as are encrypted archives. File count, per-file size, total uncompressed size, and compression ratio limits are applied from archive metadata before any member is written to disk. Nested archives are charged against the same aggregate budgets before later outer entries are read, and the maximum nesting depth is enforced without reopening deep archives through a reader that would reset those limits. Extracted targets are also checked to ensure they remain inside the temporary directory and match the declared uncompressed size.

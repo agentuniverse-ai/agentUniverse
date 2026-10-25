@@ -1,8 +1,10 @@
 import os
-import tempfile
+import re
 import shutil
-from pathlib import Path
-from typing import List, Union, Optional, Dict, Type
+import stat
+import tempfile
+from pathlib import Path, PurePosixPath
+from typing import Dict, List, Optional, Tuple, Type, Union
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
@@ -45,6 +47,14 @@ class SevenZipReader(Reader):
         Note:
             需要py7zr库来读取7Z文件：`pip install py7zr`
         """
+        # 将字符串路径转换为Path对象
+        if isinstance(file, str):
+            file = Path(file)
+
+        # 检查文件是否存在
+        if not file.exists():
+            raise FileNotFoundError(f"7Z file not found: {file}")
+
         # 尝试导入py7zr库
         try:
             import py7zr
@@ -54,14 +64,6 @@ class SevenZipReader(Reader):
                 "py7zr is required to read 7Z files: "
                 "`pip install py7zr`"
             )
-
-        # 将字符串路径转换为Path对象
-        if isinstance(file, str):
-            file = Path(file)
-
-        # 检查文件是否存在
-        if not file.exists():
-            raise FileNotFoundError(f"7Z file not found: {file}")
 
         # 创建临时目录用于解压文件
         temp_dir = tempfile.mkdtemp(prefix="7z_reader_")
@@ -100,126 +102,406 @@ class SevenZipReader(Reader):
         parent_path: str = "",  # 父路径，用于构建完整路径
     ) -> List[Document]:
         """递归处理7Z归档文件"""
+        documents, _, _ = self._process_7z_with_usage(
+            sevenzip_path=sevenzip_path,
+            temp_dir=temp_dir,
+            current_depth=current_depth,
+            max_depth=max_depth,
+            max_file_size=max_file_size,
+            max_total_size=max_total_size,
+            max_files=max_files,
+            max_compression_ratio=max_compression_ratio,
+            base_metadata=base_metadata,
+            archive_root=archive_root,
+            parent_path=parent_path,
+        )
+        return documents
+
+    def _process_7z_with_usage(
+        self,
+        sevenzip_path: Path,
+        temp_dir: str,
+        current_depth: int,
+        max_depth: int,
+        max_file_size: int,
+        max_total_size: int,
+        max_files: int,
+        max_compression_ratio: float,
+        base_metadata: Dict,
+        archive_root: str,
+        parent_path: str = "",
+    ) -> Tuple[List[Document], int, int]:
+        """Process one archive and report the bytes and files consumed.
+
+        Reporting usage lets a parent archive charge nested extraction against
+        its own remaining ``max_total_size`` and ``max_files`` budgets before
+        extracting any later member.
+        """
         import py7zr
 
-        documents = []  # 存储提取的文档
-        total_extracted = 0  # 已提取文件总大小
-        file_count = 0  # 已处理文件计数
-        with py7zr.SevenZipFile(str(sevenzip_path), 'r') as archive:
-            archive.extractall(path=temp_dir)
-
+        documents = []
+        total_extracted = 0
+        file_count = 0
         try:
-            # 以只读模式打开7Z文件
             with py7zr.SevenZipFile(str(sevenzip_path), 'r') as archive:
-                # 获取7Z文件中的所有条目
-                entries = archive.getnames()
-                
-                # 获取每个文件的详细信息
-                file_info_map = {}
-                files_info = archive.list()
-                
-                for file_info in files_info:
-                    file_info_map[file_info.filename] = file_info
+                # Validate every entry before extracting even the first member.
+                safe_targets, expected_sizes = self._preflight_7z_entries(
+                    archive=archive,
+                    max_file_size=max_file_size,
+                    max_total_size=max_total_size,
+                    max_files=max_files,
+                    max_compression_ratio=max_compression_ratio,
+                )
+                extract_dir = temp_dir
+                os.makedirs(extract_dir, exist_ok=True)
 
-                # 遍历每个条目
-                for entry_name in entries:
-                    # 检查是否达到最大文件数限制
+                # Extract one validated target at a time. Nested archives can
+                # consume arbitrary additional bytes, so extracting all outer
+                # targets up front would bypass the aggregate limits.
+                for entry_name in safe_targets:
+                    uncompressed_size = expected_sizes[entry_name]
                     if file_count >= max_files:
                         break
-
-                    # 跳过目录条目（7z中目录以/结尾）
-                    if entry_name.endswith('/'):
-                        continue
-                    if '.' not in entry_name:
-                        continue
-                    if entry_name=='.':
-                        continue
-
-                    # 安全检查：跳过包含".."或绝对路径的文件名
-                    if '..' in entry_name or entry_name.startswith('/'):
-                        continue
-
-                    # 获取文件信息
-                    file_info = file_info_map.get(entry_name)
-                    if not file_info:
-                        continue
-
-                    # 获取压缩后大小和未压缩大小
-                    compressed_size = file_info.compressed or 0
-                    uncompressed_size = file_info.uncompressed or 0
-
-                    # 检查压缩比，防止压缩炸弹攻击
-                    if compressed_size > 0:
-                        ratio = uncompressed_size / compressed_size
-                        if ratio > max_compression_ratio:
-                            raise ValueError(
-                                f"7Z entry has suspicious compression ratio: {entry_name}"
-                            )
-
-                    # 跳过超过单文件大小限制的文件
-                    if uncompressed_size > max_file_size:
-                        continue
-
-                    # 检查是否超过总大小限制
                     if total_extracted + uncompressed_size > max_total_size:
                         break
 
-                    # 为每个文件创建独立的解压目录
-                    #extract_dir = os.path.join(temp_dir, f"extract_{file_count}")
-                    extract_dir = temp_dir
-                    os.makedirs(extract_dir, exist_ok=True)
-
                     try:
-                        # 解压当前条目
-                        #archive.extract(path=extract_dir, targets=[entry_name])
-                        #archive.extract(entry_name,extract_dir)
-                        
-                        # 构建提取后的完整路径
-                        extracted_path = Path(extract_dir) / entry_name
-                        total_extracted += uncompressed_size
-                        file_count += 1
+                        archive.extract(path=temp_dir, targets=[entry_name])
+                    except Exception:
+                        continue
 
-                        # 构建完整路径（包含父路径信息）
-                        full_path = os.path.join(parent_path, entry_name) if parent_path else entry_name
+                    # Path containment and size mismatches are security errors,
+                    # so they must not be swallowed by the per-file fallback.
+                    self._verify_extracted_files(
+                        temp_dir, {entry_name: uncompressed_size}
+                    )
+                    total_extracted += uncompressed_size
+                    file_count += 1
 
-                        # 如果是嵌套的7Z文件且未达到最大深度，递归处理
-                        if extracted_path.suffix.lower() == '.7z' and current_depth < max_depth:
-                            nested_docs = self._process_7z(
+                    extracted_path = Path(extract_dir) / entry_name
+                    full_path = (
+                        os.path.join(parent_path, entry_name)
+                        if parent_path
+                        else entry_name
+                    )
+
+                    # The nested archive itself has already been charged above.
+                    # Give the recursive call only what is left and then charge
+                    # the bytes and files it actually consumed, so a later
+                    # sibling starts from the updated parent totals instead of
+                    # the original limits.
+                    remaining_total = max_total_size - total_extracted
+                    remaining_files = max_files - file_count
+
+                    if extracted_path.suffix.lower() == '.7z':
+                        if current_depth >= max_depth:
+                            # Never fall back to _process_file() here: its
+                            # SevenZipReader would reopen the archive with the
+                            # default limits and bypass this parent's budget.
+                            continue
+                        nested_docs, nested_size, nested_files = (
+                            self._process_7z_with_usage(
                                 sevenzip_path=extracted_path,
                                 temp_dir=temp_dir,
                                 current_depth=current_depth + 1,
                                 max_depth=max_depth,
                                 max_file_size=max_file_size,
-                                max_total_size=max_total_size - total_extracted,
-                                max_files=max_files - file_count,
+                                max_total_size=remaining_total,
+                                max_files=remaining_files,
                                 max_compression_ratio=max_compression_ratio,
                                 base_metadata=base_metadata,
                                 archive_root=archive_root,
                                 parent_path=full_path,
                             )
-                            documents.extend(nested_docs)
-                        else:
-                            # 处理普通文件
-                            doc = self._process_file(
-                                file_path=extracted_path,
-                                archive_path=full_path,
-                                archive_root=archive_root,
-                                archive_depth=current_depth,
-                                base_metadata=base_metadata,
-                            )
-                            if doc:
-                                documents.extend(doc)
+                        )
+                        documents.extend(nested_docs)
+                        total_extracted += nested_size
+                        file_count += nested_files
+                        continue
 
-                    except Exception as e:
-                        # 跳过处理失败的文件，继续处理其他文件
+                    try:
+                        doc = self._process_file(
+                            file_path=extracted_path,
+                            archive_path=full_path,
+                            archive_root=archive_root,
+                            archive_depth=current_depth,
+                            base_metadata=base_metadata,
+                        )
+                        if doc:
+                            documents.extend(doc)
+                    except Exception:
+                        # Skip members that this reader cannot parse, but keep
+                        # their extraction usage charged to the parent budget.
                         continue
 
         except (py7zr.Bad7zFile, py7zr.exceptions.Bad7zFile) as e:
             raise ValueError(f"Failed to read 7Z file: {str(e)}")
+        except ValueError:
+            raise
         except Exception as e:
             raise ValueError(f"Error processing 7Z file: {str(e)}")
 
-        return documents
+        return documents, total_extracted, file_count
+
+    @staticmethod
+    def _validate_entry_name(entry_name: str) -> Optional[str]:
+        """Validate one archive member name before it can reach extraction.
+
+        The returned value is a normalized relative POSIX path. ``None`` means
+        the entry only refers to the archive root and carries no file content.
+        """
+        if not entry_name:
+            raise ValueError("7Z archive contains an empty entry name")
+        if "\x00" in entry_name:
+            raise ValueError(f"Unsafe 7Z entry name (NUL byte): {entry_name!r}")
+        if "\\" in entry_name:
+            raise ValueError(f"Unsafe 7Z entry name (backslash): {entry_name!r}")
+        if entry_name.startswith("/"):
+            raise ValueError(f"Unsafe 7Z entry name (absolute path): {entry_name!r}")
+        if re.match(r"^[A-Za-z]:", entry_name):
+            raise ValueError(
+                f"Unsafe 7Z entry name (drive-qualified path): {entry_name!r}"
+            )
+
+        member_path = PurePosixPath(entry_name)
+        if member_path.is_absolute():
+            raise ValueError(f"Unsafe 7Z entry name (absolute path): {entry_name!r}")
+        if ".." in member_path.parts:
+            raise ValueError(f"Unsafe 7Z entry name (path traversal): {entry_name!r}")
+
+        normalized_parts = [
+            part for part in member_path.parts if part not in {"", "."}
+        ]
+        if not normalized_parts:
+            return None
+        return "/".join(normalized_parts)
+
+    @staticmethod
+    def _is_special_entry(file_info) -> bool:
+        """Return whether metadata describes a symlink or non-regular entry."""
+        if bool(getattr(file_info, "is_symlink", False)):
+            return True
+        for attribute in (
+            "is_fifo",
+            "is_socket",
+            "is_block_device",
+            "is_char_device",
+            "is_device",
+        ):
+            if bool(getattr(file_info, attribute, False)):
+                return True
+
+        attributes = getattr(file_info, "attributes", None)
+        if attributes is None:
+            return False
+
+        try:
+            attributes = int(attributes)
+        except (TypeError, ValueError):
+            return True
+
+        # FILE_ATTRIBUTE_REPARSE_POINT is used for Windows links and junctions.
+        if attributes & 0x400:
+            return True
+
+        # py7zr stores Unix mode bits in the upper 16 bits on Unix. A zero
+        # file-type mask means that the entry carries only portable attributes.
+        mode = attributes >> 16
+        if not mode:
+            return False
+        file_type = stat.S_IFMT(mode)
+        return bool(file_type and file_type not in (stat.S_IFREG, stat.S_IFDIR))
+
+    @staticmethod
+    def _archive_requires_password(archive) -> bool:
+        """Detect encrypted archives across supported py7zr versions."""
+        needs_password = getattr(archive, "needs_password", None)
+        if callable(needs_password):
+            needs_password = needs_password()
+        if needs_password:
+            return True
+        for attribute in ("password_protected", "is_encrypted"):
+            value = getattr(archive, attribute, None)
+            if callable(value):
+                value = value()
+            if value:
+                return True
+        return False
+
+    def _preflight_7z_entries(
+        self,
+        archive,
+        max_file_size: int,
+        max_total_size: int,
+        max_files: int,
+        max_compression_ratio: float,
+    ) -> Tuple[List[str], Dict[str, int]]:
+        """Build an allowlist of safe members using metadata only.
+
+        Unsafe names and entry types fail closed. Resource limits retain the
+        reader's historical behavior: oversized members are skipped, while the
+        first ``max_files`` members within ``max_total_size`` are selected.
+        """
+        if self._archive_requires_password(archive):
+            raise ValueError("Encrypted 7Z archives are not supported")
+
+        entries = archive.getnames()
+        file_info_map = {info.filename: info for info in archive.list()}
+        safe_targets: List[str] = []
+        expected_sizes: Dict[str, int] = {}
+        total_size = 0
+        file_count = 0
+        accepting_members = True
+        aggregate_ratio = None
+        aggregate_ratio_checked = False
+
+        for entry_name in entries:
+            normalized_name = self._validate_entry_name(entry_name)
+            file_info = file_info_map.get(entry_name)
+            if file_info is None:
+                raise ValueError(
+                    f"7Z archive metadata is missing for entry: {entry_name!r}"
+                )
+
+            if self._is_special_entry(file_info):
+                raise ValueError(
+                    "Unsafe 7Z entry type (symlink or special file): "
+                    f"{entry_name!r}"
+                )
+
+            is_directory = bool(getattr(file_info, "is_directory", False))
+            if is_directory or entry_name.endswith("/") or normalized_name is None:
+                continue
+
+            uncompressed_value = getattr(file_info, "uncompressed", None)
+            if uncompressed_value is None:
+                raise ValueError(
+                    f"7Z entry is missing uncompressed size metadata: {entry_name!r}"
+                )
+            try:
+                uncompressed_size = int(uncompressed_value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"7Z entry has invalid uncompressed size metadata: {entry_name!r}"
+                ) from exc
+            if uncompressed_size < 0:
+                raise ValueError(
+                    f"7Z entry has invalid size metadata: {entry_name!r}"
+                )
+
+            compressed_value = getattr(file_info, "compressed", None)
+            if compressed_value is None:
+                compressed_size = 0
+            else:
+                try:
+                    compressed_size = int(compressed_value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"7Z entry has invalid compressed size metadata: {entry_name!r}"
+                    ) from exc
+                if compressed_size < 0:
+                    raise ValueError(
+                        f"7Z entry has invalid size metadata: {entry_name!r}"
+                    )
+
+            if uncompressed_size > 0 and compressed_size > 0:
+                ratio = uncompressed_size / compressed_size
+                if ratio > max_compression_ratio:
+                    raise ValueError(
+                        f"7Z entry has suspicious compression ratio: {entry_name}"
+                    )
+            elif uncompressed_size > 0:
+                # Solid 7z blocks may not expose a per-file compressed size.
+                # Fall back to the aggregate ratio, but never skip the check
+                # merely because the metadata is absent.
+                if not aggregate_ratio_checked:
+                    aggregate_ratio = self._archive_compression_ratio(archive)
+                    aggregate_ratio_checked = True
+                if aggregate_ratio is None:
+                    raise ValueError(
+                        f"7Z entry is missing compressed size metadata: {entry_name!r}"
+                    )
+                if aggregate_ratio > max_compression_ratio:
+                    raise ValueError(
+                        "7Z archive has suspicious compression ratio: "
+                        f"{aggregate_ratio:.2f}"
+                    )
+
+            if not accepting_members:
+                continue
+            if uncompressed_size > max_file_size:
+                continue
+            if file_count >= max_files:
+                accepting_members = False
+                continue
+            if total_size + uncompressed_size > max_total_size:
+                accepting_members = False
+                continue
+
+            safe_targets.append(entry_name)
+            expected_sizes[entry_name] = uncompressed_size
+            total_size += uncompressed_size
+            file_count += 1
+
+        return safe_targets, expected_sizes
+
+    @staticmethod
+    def _archive_compression_ratio(archive) -> Optional[float]:
+        """Return the aggregate ratio when per-file compressed sizes are absent."""
+        archiveinfo = getattr(archive, "archiveinfo", None)
+        if not callable(archiveinfo):
+            return None
+        try:
+            archive_info = archiveinfo()
+            compressed_size = int(getattr(archive_info, "compressed", 0) or 0)
+            uncompressed_size = int(
+                getattr(archive_info, "uncompressed", 0) or 0
+            )
+        except (TypeError, ValueError, AttributeError):
+            return None
+        if compressed_size <= 0 or uncompressed_size < 0:
+            return None
+        return uncompressed_size / compressed_size
+
+    @staticmethod
+    def _verify_extracted_files(
+        temp_dir: str, expected_sizes: Dict[str, int]
+    ) -> None:
+        """Confirm extracted members stayed inside ``temp_dir`` and match metadata."""
+        base_dir = Path(temp_dir).resolve()
+        for entry_name, expected_size in expected_sizes.items():
+            destination = Path(temp_dir) / entry_name
+            if destination.is_symlink():
+                raise ValueError(
+                    f"Extracted 7Z entry became a symlink: {entry_name!r}"
+                )
+
+            try:
+                resolved_destination = destination.resolve(strict=True)
+            except FileNotFoundError as exc:
+                raise ValueError(
+                    f"7Z entry was not extracted: {entry_name!r}"
+                ) from exc
+
+            try:
+                resolved_destination.relative_to(base_dir)
+            except ValueError as exc:
+                raise ValueError(
+                    "Extracted 7Z entry escaped the temporary directory: "
+                    f"{entry_name!r}"
+                ) from exc
+
+            if not resolved_destination.is_file():
+                raise ValueError(
+                    f"Extracted 7Z entry is not a regular file: {entry_name!r}"
+                )
+
+            actual_size = resolved_destination.stat().st_size
+            if actual_size != expected_size:
+                raise ValueError(
+                    "Extracted 7Z entry size does not match archive metadata: "
+                    f"{entry_name!r} (expected {expected_size}, got {actual_size})"
+                )
 
     def _process_file(
         self,
