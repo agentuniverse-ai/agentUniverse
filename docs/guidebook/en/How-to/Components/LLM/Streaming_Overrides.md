@@ -28,3 +28,22 @@ there is no dependency lockfile. No running server or API credentials are needed
 ```shell
 python -m pytest -q tests/test_agentuniverse/unit/llm/test_stream_option_consistency.py
 ```
+
+## Ollama LangChain adapters
+
+Both Ollama adapters accept complete and streamed provider responses. With
+`streaming=False`, `invoke()` and `ainvoke()` return the complete message;
+`stream()` and `astream()` yield that response as a single chunk. With provider
+streaming enabled, chunks pass through as before. Terminal response metadata
+is retained, and the adapter does not change the configured streaming default.
+
+LangChain itself consumes the `stream` argument for `invoke()` and `ainvoke()`;
+use the AU `streaming` argument to override the provider mode through those
+entry points. This does not change LangChain's argument handling.
+
+For Ollama, `request_timeout` configures the SDK's HTTP timeout in both direct
+and channel-backed calls, including sync/async and streaming requests. It is
+not sent as a model generation option. `None` retains the SDK's unlimited
+HTTP timeout. An explicitly injected client keeps its own timeout settings.
+The HTTP timeout bounds individual transport operations, not total model
+execution time or the duration of an entire stream.
