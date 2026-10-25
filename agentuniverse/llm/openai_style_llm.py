@@ -10,14 +10,13 @@ from typing import Any, Optional, AsyncIterator, Iterator, Union
 
 import httpx
 import openai
-import tiktoken
 from langchain_core.language_models.base import BaseLanguageModel
 from openai import OpenAI, AsyncOpenAI
 
 from agentuniverse.base.config.component_configer.configers.llm_configer import LLMConfiger
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.base.util.system_util import process_yaml_func
-from agentuniverse.llm.llm import LLM, LLMOutput
+from agentuniverse.llm.llm import LLM, LLMOutput, get_encoding_for_model
 from agentuniverse.llm.openai_style_langchain_instance import LangchainOpenAIStyleInstance
 
 OPENAI_MAX_CONTEXT_LENGTH = {
@@ -281,11 +280,8 @@ class OpenAIStyleLLM(LLM):
         Returns:
             The integer number of tokens in the text.
         """
-        try:
-            encoding = tiktoken.encoding_for_model(self.model_name)
-        except KeyError:
-            encoding = tiktoken.get_encoding("cl100k_base")
-        return len(encoding.encode(text))
+        encoding = get_encoding_for_model(self.model_name)
+        return len(encoding.encode(text, disallowed_special=()))
 
     def max_context_length(self) -> int:
         """Return the maximum length of the context."""
