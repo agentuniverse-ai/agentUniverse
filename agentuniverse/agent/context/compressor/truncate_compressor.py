@@ -211,16 +211,15 @@ class TruncateCompressor(ContextCompressor):
         chars_per_token = len(segment.content) / segment.tokens if segment.tokens > 0 else 4
         target_chars = int(target_tokens * chars_per_token)
 
-        # Reserve space for truncate marker
-        marker_tokens = len(self.truncate_marker) // 4
-        target_chars -= len(self.truncate_marker)
-        target_tokens -= marker_tokens
-
-        if target_chars <= 0:
-            target_chars = 10  # Minimum
-
-        # Truncate content
-        truncated_content = segment.content[:target_chars] + self.truncate_marker
+        # Share the character budget between retained content and the marker.
+        # The token estimate describes the complete emitted content, including
+        # the marker, so it must not be reduced a second time.
+        target_chars = max(0, target_chars)
+        if len(self.truncate_marker) >= target_chars:
+            truncated_content = self.truncate_marker[:target_chars]
+        else:
+            retained_chars = target_chars - len(self.truncate_marker)
+            truncated_content = segment.content[:retained_chars] + self.truncate_marker
 
         # Copy the complete segment so identity, scope, relationships, and
         # nested metadata remain attached to the compressed context item.
