@@ -675,3 +675,122 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## User-Agent Tool
+
+`UserAgentTool` parses User-Agent strings offline — pure Python
+standard library, no network, no Client Hints — into structured
+components an agent can reason about: browser, rendering engine,
+operating system and device type, plus an `is_bot` flag and a short
+one-liner. It complements `LogParserTool`: that tool parses *log
+lines* in which the User-Agent is one opaque quoted field, while this
+tool parses the User-Agent *string itself*.
+
+Two modes:
+
+- `parse` — User-Agent string → `{browser: {name, version}, engine:
+  {name, version}, os: {name, version}, device: {type, vendor?,
+  model?}, raw, is_bot, short}`.
+- `short` — User-Agent string → the one-liner only, e.g.
+  `"Chrome 120 / Windows 10 / desktop"` (major versions, unknown
+  parts read `unknown`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.user_agent_tool import UserAgentTool
+
+tool = UserAgentTool()
+tool.execute(mode="parse", user_agent=(
+    "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"))
+# browser Chrome 120.0.0.0, engine Blink, os Android 13,
+# device {type: mobile, vendor: Samsung, model: SM-G991B}, is_bot False
+tool.execute(mode="short", user_agent="curl/8.4.0")
+# {'short': 'curl 8 / unknown / bot', 'is_bot': True, ...}
+```
+
+Detection order (the order IS the disambiguation): bots first — a
+substring hint scan for `bot|crawl|spider|slurp|bingpreview|
+headlesschrome` plus non-browser clients and headless/scraping tools
+(curl, Wget, python-requests/-urllib/-httpx, aiohttp, Go, Java/,
+libwww-perl, node-fetch, undici, http.rb, HTTPie, Scrapy, GuzzleHttp,
+PhantomJS, zgrab, masscan, Postman, axios, okhttp, Dalvik) and
+social fetchers (facebookexternalhit, meta-externalagent,
+Claude-Web, ChatGPT-User) sets `is_bot` and `device.type=bot` before
+any browser matching, so the `Chrome/` and `Safari/` compatibility
+tokens inside Googlebot or bingbot strings are never misread; the
+bot's own token (`Googlebot/2.1`, `MJ12bot/v1.4.8`) becomes the
+reported browser, or its keyword word when no version is present
+(`PetalBot`, `Sogou web spider`). Then browsers by priority, all
+token scans case-insensitive — `SamsungBrowser/` → Samsung Internet,
+`Edg`/`EdgA`/`EdgiOS` → the Chromium-based Edge, `Edge/` → legacy
+EdgeHTML Edge, `OPR/` / `OPiOS/` / `OPT/` → Opera, `Opera Mini/` →
+Opera Mini (legacy Opera froze at 9.80 with the real version in
+`Version/`, which is unfrozen), then the vendor Chromium browsers
+whose own token beats the embedded `Chrome/` — YaBrowser → Yandex
+Browser, UCBrowser/UBrowser → UC Browser, QQBrowser → QQ Browser,
+MiuiBrowser, MicroMessenger → WeChat, OculusBrowser, Whale, Vivaldi,
+Electron, Facebook (FBAN/FBAV/FB_IAB, version from `FBAV/`),
+Instagram, and `Silk/` → Amazon Silk on Android only (PlayStation
+Vita strings also carry a `Silk/` token) — then `MSIE`/`IEMobile` →
+Internet Explorer, `Firefox/`/`FxiOS` → Firefox, a `Chromium` token
+→ Chromium, and only then `Chrome/` — reached solely when no
+Chromium-family sibling claimed the string, which is exactly the
+documented rule "`Chrome/` without `Edg/`|`OPR/`|`Chromium` means
+Chrome"; `Safari/` without any Chrome-family token → Safari with the
+version from `Version/`, except on Android where a Safari token is
+the pre-Chromium AOSP Android Browser. Engines follow: `Trident/`
+(before `rv:` — in IE 11 `rv:` is the browser version, not the
+engine's), EdgeHTML for legacy Edge, `Presto/`, `rv:` → Gecko, and
+the documented Blink heuristic — `AppleWebKit/x … Chrome/y Safari/z`
+means Blink with version None (Chromium browsers render with Blink,
+a WebKit fork that has no version token; the `537.36` build number
+is frozen compatibility noise), while on iOS the same browsers
+report WebKit because Apple requires it. Operating systems: Windows
+Phone is checked before Android (Lumia strings carry both) and
+before Windows NT, and a bare `Windows Phone` without a version is
+still named; `Windows NT` maps through a fixed table (`6.1`→7,
+`6.2`→8, `6.3`→8.1, `10.0`→10 — Windows 11 is honestly reported as
+Windows 10 because its User-Agent is byte-identical); `Android 13;
+SM-G991B` yields the model from the token that follows (glued
+` Build/…` suffixes, glued dual-SIM/regional suffixes such as
+`SM-A536B/DS` → `SM-A536B`, placeholders like `K`, `Mobile`, `wv`,
+`rv:…` and locale tokens like `en-us` are skipped, vendor via a
+documented prefix table matched case-insensitively — SM-/GT-/SC-/
+SCH-/SCG/SCV → Samsung, Pixel → Google, LG-/LM- → LG, Redmi/POCO/
+MIX/Mi → Xiaomi, moto → Motorola, CPH/OPPO → OPPO, vivo/iQOO →
+vivo, ONEPLUS → OnePlus, HUAWEI/HONOR → Huawei, Nokia → Nokia,
+RMX → Realme, SO-/SOV/XQ- → Sony, KF → Amazon); `CPU iPhone OS
+17_1` → iOS 17.1; `iPad; CPU OS 16_6` → iPadOS 16.6; `Mac OS X
+10_15_7` → 10.15.7; `CrOS` → ChromeOS; `KAI/` → KaiOS; Ubuntu,
+Fedora, FreeBSD, NetBSD and OpenBSD are named; bare Linux/X11 →
+Linux. Devices: iPad, a `Tablet` token, or Android without the
+`Mobile` token → tablet (Android tablet User-Agents simply omit
+`Mobile`; Amazon Fire tablets honestly read mobile because their
+strings do carry `Mobile`); iPhone, any `Mobile` token, Windows
+Phone or Opera Mini → mobile; a desktop OS token → desktop;
+vendors: Apple, the Android prefix table, and Nokia/Microsoft for
+Lumias.
+
+Honest limitations, documented rather than hidden: User-Agent
+strings are freely spoofable client-supplied text — the tool reports
+what the string claims, never a verified identity; no Client Hints
+(`Sec-CH-UA`) are consulted because there is no header access
+offline; the version maps are best-effort snapshots of how real
+User-Agents freeze today; vendor/model extraction only knows the
+documented prefix table (numeric Xiaomi/OPPO/vivo and Huawei-style
+model codes report the model with no vendor); legacy or niche forks
+carrying a standard token next to their own (SeaMonkey, Pale Moon,
+Maxthon, Sogou Explorer, 360, Brave, the QQ and Line in-app
+webviews) are reported under the standard token; console browsers
+(Nintendo Switch, PlayStation) mostly report `unknown`; the bot hint
+scan is substring-based, so any token merely containing
+`bot`/`spider`/… is conservatively treated as a bot, and bot names
+are the literal tokens (`facebookexternalhit`, not `FacebookBot`);
+anything unrecognised is reported as `unknown` instead of guessed.
+
+Inputs are validated strictly before any computation: an unknown
+mode, a non-string, empty or whitespace-only `user_agent`, input
+over the 8,192-character cap, or control characters (a User-Agent is
+a single header line — NUL, CR, LF, TAB and other C0 controls are
+rejected) raise a `ValueError`. Everything is deterministic: no
+randomness, no clock, no network.

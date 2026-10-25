@@ -1,0 +1,29 @@
+name: user_agent_tool
+description: User-Agent string parser — offline browser/engine/OS/device detection from User-Agent strings, pure Python stdlib, no network, no Client Hints. mode='parse' returns structured components (browser name+version, engine name+version, os name+version, device type+vendor+model, is_bot, short one-liner, raw input); mode='short' returns just the one-liner (e.g. 'Chrome 120 / Windows 10 / desktop'). Bots are detected first so compatibility tokens inside bot strings are never misread; Chromium-family AppleWebKit strings are reported as Blink (WebKit on iOS); Windows 11 is honestly reported as Windows 10 because its User-Agent is indistinguishable. User-Agent strings are freely spoofable — this tool reports claims, not verified identity.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.user_agent_tool
+  class: UserAgentTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Analysis mode — parse (full structured result) or short (one-liner only).
+    required: true
+  user_agent:
+    type: string
+    description: The User-Agent string to analyze. Must be a non-empty single line without control characters, at most 8192 characters.
+    required: true
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "short"]
+      description: Analysis mode.
+    user_agent:
+      type: string
+      description: The User-Agent string to analyze.
+  required: ["mode", "user_agent"]
