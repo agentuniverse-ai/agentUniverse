@@ -649,3 +649,17 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## PyprojectLintTool
+
+`PyprojectLintTool` lints `pyproject.toml` project metadata (the PEP 621 `[project]` table) fully offline with the standard library. `mode="lint"` returns structured findings `{code, severity, field, message}` — 38 rules covering missing/invalid name, missing or non-PEP 440 version, `requires-python` clause grammar aligned with `packaging` 23.x, the PEP 639 deprecated license table form, dangling readme/license file references against a caller-supplied `available_files` listing, authors/maintainers shapes with email syntax, keywords/classifiers/urls shapes, dependencies and optional-dependencies checked as PEP 508 strings (parenthesized clause lists accepted; wildcards only with `==`/`!=`; local versions only with `==`/`===`/`!=`) with duplicate and overlap rules after PEP 503 normalization, dynamic fields also set statically, scripts/entry-points names and dotted targets, and a missing build-system. `mode="project_summary"` returns the quick look: layout, name, version, requires-python min/max bounds, dependency count, optional groups, entry-points count, dynamic fields.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.pyproject_lint_tool import PyprojectLintTool
+
+tool = PyprojectLintTool()
+result = tool.execute(mode="lint", pyproject=text, available_files=["README.md"])
+summary = tool.execute(mode="project_summary", pyproject=text)
+```
+
+Poetry-style `[tool.poetry]` projects get documented best-effort mapping notes (info severity), never errors. Content-level problems — including recursion-limit-deep TOML nesting — are findings, never exceptions; parameter-level mistakes raise `ValueError` before any parsing. The five input caps (lines, line characters, text characters, file entries, entry length) are live per-instance configuration fields.
