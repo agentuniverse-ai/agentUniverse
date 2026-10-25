@@ -317,3 +317,29 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [QAPairExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/qa_pair_extractor.yaml)
+
+This component extracts question-answer pairs from FAQ-style documents into paired documents, addressing the *knowledge extraction* direction of issue #258. FAQ-style source material — support pages, product manuals, community threads — embeds knowledge in a question/answer shape that a plain text splitter shreds: a chunker cuts between a question and its answer, and neither half retrieves well alone. Each detected pair is re-emitted as a self-contained new document whose text reads `Q: {question}\nA: {answer}`, so both halves land in the same chunk, embed together and surface together at recall time.
+
+Three FAQ conventions are recognized, each bilingual (EN/ZH): `prefix` — explicit markers `Q:`/`A:`, `Question:`/`Answer:` (case-insensitive, optional item number as in `Q1:`) and `问：`/`答：`, `问题：`/`回答：`, `提问：` with either colon width, with multi-line answers kept intact; `numbered` — numbered items phrased as questions, either with an inline separator (`1. What is X? — An agent framework.`, `2、如何安装？——执行 pip install`) or with the answer on the following lines; `heading` — markdown structure, an ATX heading (`## What is it?`) or a standalone bold line (`**What is it?**`) followed by its answer paragraph. Detection is line-based, pure regex and deterministic: answer collection always stops at any other format's marker line, so the three detectors nest cleanly, and the collected spans are scheduled in document order. Every kept pair becomes a NEW document (fresh id; the source is never mutated) with metadata `pair_index` (0-based within the source, after filtering), `question`, `answer` and `source_doc_id`. Answers shorter than `min_answer_chars` or longer than `max_answer_chars` (0 = unlimited) are discarded, at most `max_pairs` pairs are emitted per source document, and with `keep_source: false` (default) the pairs replace the source while a document without any pair always passes through unchanged.
+
+The component definition file is as follows:
+```yaml
+name: 'qa_pair_extractor'
+description: 'extract question-answer pairs from FAQ-style documents into paired documents'
+formats: ['prefix', 'numbered', 'heading']  # FAQ conventions to detect
+min_answer_chars: 1                         # minimum answer length to keep
+max_answer_chars: 0                         # maximum answer length; 0 = unlimited
+max_pairs: 100                              # max pairs per source document
+keep_source: false                          # true keeps the source before its pairs
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.qa_pair_extractor'
+  class: 'QAPairExtractor'
+```
+- formats: FAQ conventions to detect — a non-empty subset of `['prefix', 'numbered', 'heading']` (default: all three).
+- min_answer_chars: Minimum answer length in characters for a pair to be kept; must be >= 0.
+- max_answer_chars: Maximum answer length in characters; 0 (default) means unlimited. When > 0 it must be >= `min_answer_chars`.
+- max_pairs: Maximum number of pairs emitted per source document; must be >= 1.
+- keep_source: When false (default) a document with extracted pairs is replaced by those pair documents; when true the source document is kept in place and the pairs are appended after it. Documents without any pair always pass through unchanged.

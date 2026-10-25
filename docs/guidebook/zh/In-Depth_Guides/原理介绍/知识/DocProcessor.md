@@ -315,3 +315,29 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [QAPairExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/qa_pair_extractor.yaml)
+
+该组件从 FAQ 风格的文档中抽取问答对并重组为成对文档，对应 issue #258 的*知识抽取*方向。FAQ 类源材料——支持页面、产品手册、社区问答帖——以一问一答的形态承载知识，而普通文本切分器会把它撕碎：切块边界落在问题和答案之间后，任何一半都无法独立良好召回。组件把检测到的每个问答对重新输出为一个自包含的新文档，文本为 `Q: {question}\nA: {answer}`，两半因此落入同一切块、一起向量化、在召回时一起出现。
+
+组件识别三种 FAQ 书写习惯，均同时支持中英文：`prefix`——显式标记 `Q:`/`A:`、`Question:`/`Answer:`（大小写不敏感，允许 `Q1:` 这类编号）以及 `问：`/`答：`、`问题：`/`回答：`、`提问：`（全半角冒号皆可），多行答案完整保留；`numbered`——以问句形式出现的编号条目，答案或以行内分隔符给出（`1. What is X? — An agent framework.`、`2、如何安装？——执行 pip install`），或位于条目下方各行；`heading`——markdown 结构，即 ATX 标题（`## What is it?`）或独立的加粗行（`**What is it?**`）加上其后的答案段落。检测基于行、纯正则且确定性：任一格式的答案收集都会在其他格式的标记行处停止，三个检测器因此天然嵌套不重叠，收集到的区段再按文档顺序统一调度。每个保留的问答对生成一个全新文档（全新 id，绝不改动源文档），metadata 携带 `pair_index`（过滤后按源文档内 0 起编号）、`question`、`answer` 与 `source_doc_id`。答案长度低于 `min_answer_chars` 或超过 `max_answer_chars`（0 表示不限制）的问答对被丢弃，每个源文档最多输出 `max_pairs` 个问答对；`keep_source: false`（默认）时成对文档替换源文档，未抽到问答对的文档始终原样通过。
+
+组件定义文件如下：
+```yaml
+name: 'qa_pair_extractor'
+description: 'extract question-answer pairs from FAQ-style documents into paired documents'
+formats: ['prefix', 'numbered', 'heading']  # 启用的 FAQ 书写习惯
+min_answer_chars: 1                         # 保留问答对所需的最小答案长度
+max_answer_chars: 0                         # 最大答案长度；0 表示不限制
+max_pairs: 100                              # 每个源文档最多输出的问答对数
+keep_source: false                          # 为真时源文档保留在其问答对之前
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.qa_pair_extractor'
+  class: 'QAPairExtractor'
+```
+- formats：启用的 FAQ 书写习惯——`['prefix', 'numbered', 'heading']` 的非空子集（默认全部启用）。
+- min_answer_chars：问答对被保留所需的最小答案长度（字符数），必须 >= 0。
+- max_answer_chars：最大答案长度（字符数）；0（默认）表示不限制。大于 0 时必须 >= `min_answer_chars`。
+- max_pairs：每个源文档最多输出的问答对数，必须 >= 1。
+- keep_source：为假（默认）时抽到问答对的文档被这些成对文档替换；为真时源文档保留在原位、问答对紧随其后。未抽到问答对的文档始终原样通过。
