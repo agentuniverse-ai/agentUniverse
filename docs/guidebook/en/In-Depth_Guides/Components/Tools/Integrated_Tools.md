@@ -649,3 +649,51 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Email Validator Tool
+
+`EmailValidatorTool` validates, parses and normalizes email addresses
+using pure standard-library logic — no DNS, MX, SMTP or any other
+network call, so a `valid` verdict means *syntactically valid*, not
+*deliverable* (deliverability checks are out of scope). `validate` mode
+checks one address or a batch against an RFC 5322-lite profile: a
+dot-atom or quoted local part (spaces, `@` and escaped characters are
+legal inside quotes, so `"a@b"@example.com` splits correctly), length
+limits (64 characters local, 254 total), no leading / trailing /
+consecutive dots in either part, and LDH domain labels (letters, digits,
+hyphens; 1-63 characters per label; no leading or trailing hyphen) or
+`[127.0.0.1]` / `[IPv6:2001:db8::1]` IP literals. Single-label domains
+(`root@localhost`) and IP-literal domains are accepted but flagged in
+`warnings`. `parse` mode decomposes the address — local / domain split,
+display-name extraction from `Name <addr>` forms, `+tag` detection for
+plus-addressed dot-atom locals, and `local_kind` / `domain_kind`
+classification. `normalize` mode returns a canonical, idempotent form:
+domain lowercased, redundant quoting stripped from quoted locals whose
+content is itself a valid dot-atom (quotes are kept when they carry
+meaning, e.g. `"john smith"@example.com`), and the display name
+whitespace-folded and unquoted.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.email_validator_tool import EmailValidatorTool
+
+tool = EmailValidatorTool()
+verdict = tool.execute(mode="validate", address="jane.doe+news@gmail.com")
+#   {"valid": True, "reason": "ok", "warnings": [], "parts": {"tag": "news", ...}}
+batch = tool.execute(mode="validate", addresses=["root@localhost", "a@b@c"])
+#   batch["summary"] == {"total": 2, "valid": 1, "invalid": 1}
+name, addr = tool.execute(mode="parse", address="Jane Doe <JANE@Example.COM>")["parts"]["display_name"], None
+folded = tool.execute(mode="normalize", address="  Jane   Doe  <JANE@Example.COM> ")["normalized"]
+#   "Jane Doe <JANE@example.com>" (only the domain is lowercased) —
+#   and normalizing again returns the same string
+```
+
+Parameters are validated strictly before any computation: an unknown
+mode, wrong types, passing both or neither of `address` / `addresses`,
+empty strings, a batch over 100 items, or a single input over 320
+characters raises a `ValueError`. Every content-level outcome is
+returned as a structured payload instead of raising — `{"address",
+"valid", "reason", "message", "warnings", "parts"}` per item (batches
+add `summary` counts), with stable machine-readable reason codes such
+as `missing_at`, `multiple_at`, `consecutive_dots_in_local`,
+`invalid_quoted_local`, `label_too_long` or `invalid_ip_literal`.
+Internationalized domains must be passed in ASCII `xn--` A-label form.
