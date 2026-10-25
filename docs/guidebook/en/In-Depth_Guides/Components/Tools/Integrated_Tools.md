@@ -649,3 +649,28 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## GitLogTool
+
+`GitLogTool` parses `git log` text output into structured commits — headers
+(default/short/medium and oneline styles, decorations like `(HEAD -> ...)`,
+`Merge:` parent lines, authors, dates), `--stat` file tables with binary
+entries and change summaries, `--numstat` rows, and `--name-status` entries
+including `R100 old new` renames. It also detects which styles the text
+carries and aggregates per-author counts, date ranges, and most-touched
+files.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.git_log_tool import GitLogTool
+
+tool = GitLogTool()
+result = tool.execute(mode="summarize", log_text=log_output)
+```
+
+The parser is pure text analysis: it never runs git and never touches a
+repository. Its behavior is pinned in tests against the real `git log`
+binary on fixture repositories (hashes, subjects, authors, ISO dates,
+numstat rows, rename detection, stat summaries), plus hand-embedded format
+fixtures for merge headers, truncated stat paths, and binary entries. Input
+size, commit count, per-commit file count, and message length are all
+capped with structured errors.
