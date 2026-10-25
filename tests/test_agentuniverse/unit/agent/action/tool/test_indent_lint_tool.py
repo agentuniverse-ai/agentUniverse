@@ -42,7 +42,29 @@ from agentuniverse.base.config.configer import Configer
 
 YAML_PATH = os.path.join(os.path.dirname(indent_module.__file__), "indent_lint_tool.yaml")
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(indent_module.__file__), *[os.pardir] * 6))
+def _find_repo_root(start):
+    """Walk up until a directory containing both ``agentuniverse`` and ``tests``.
+
+    Counting ``os.pardir`` levels is brittle: it depends on where the package
+    happens to live (editable checkout vs site-packages), and an incorrect count
+    silently yields a root with no ``agentuniverse/`` or ``tests/`` below it, so
+    the corpus helpers collect nothing and the assertions fail for the wrong
+    reason.
+    """
+    current = os.path.abspath(start)
+    for _ in range(12):
+        if os.path.isdir(os.path.join(current, "agentuniverse")) and os.path.isdir(
+            os.path.join(current, "tests")
+        ):
+            return current
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+    raise RuntimeError(f"repository root not found above {start!r}")
+
+
+ROOT = _find_repo_root(os.path.dirname(os.path.abspath(indent_module.__file__)))
 
 _STRING_TYPES = (tokenize.STRING,) + tuple(
     getattr(tokenize, name)
