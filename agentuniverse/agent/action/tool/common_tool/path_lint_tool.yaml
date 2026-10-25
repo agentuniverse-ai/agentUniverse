@@ -1,0 +1,53 @@
+name: path_lint_tool
+description: "Filesystem path portability and safety linting — pure Python stdlib, no filesystem access (existence is NOT checked), no network, no subprocess. Lint one path (mode='lint': ordered findings [{line (always 1; single-text contract), code, message, severity}] covering null bytes and control characters, separator homoglyphs (fullwidth ／ ＼ etc.) and non-NFC Unicode, mixed / and \\ separators, UNC and \\?\ prefix validation, the drive-relative C:x quirk, Windows reserved characters <>:\"|?* and reserved device names CON PRN AUX NUL COM1-9 LPT1-9 (case-insensitive, with or without extension), trailing dots/spaces, '.'/'..' semantics with parent-escape detection, empty segments with UNC tolerance, tilde prefixes, the 260-character MAX_PATH and 255-character component limits), analyze whether two paths can alias (mode='compare': posixpath/ntpath normalization of both, Windows case-insensitivity documented via ntpath.normcase, case-only rename collision hint, alias_possible with reasons) and give per-platform verdicts (mode='validate': platform option posix/windows/auto/both with the lint failure codes attributed per platform). FreezeDiffTool (#4026) and RequirementsTool (#4021) handle dependency text; no other tool lints the path string itself — this is the path-string layer."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.path_lint_tool
+  class: PathLintTool
+input_keys:
+  - mode
+max_path_chars: 4096
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lint, compare or validate.
+    required: true
+  path:
+    type: string
+    description: The path string for the lint and validate modes (capped at max_path_chars, default 4096).
+    required: false
+  path_a:
+    type: string
+    description: The first path for the compare mode (capped at max_path_chars).
+    required: false
+  path_b:
+    type: string
+    description: The second path for the compare mode (capped at max_path_chars).
+    required: false
+  platform:
+    type: string
+    description: The platform option for the validate mode — posix, windows, auto (infer from the path shape) or both (default auto).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "compare", "validate"]
+      description: Operation mode.
+    path:
+      type: string
+      description: The path string (lint and validate modes).
+    path_a:
+      type: string
+      description: The first path (compare mode).
+    path_b:
+      type: string
+      description: The second path (compare mode).
+    platform:
+      type: string
+      enum: ["posix", "windows", "auto", "both"]
+      description: Platform option (validate mode).
+  required: ["mode"]
+  additionalProperties: false
