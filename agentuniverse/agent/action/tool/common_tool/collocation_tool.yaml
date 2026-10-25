@@ -1,0 +1,61 @@
+name: collocation_tool
+description: "Collocation tool — pure Python stdlib, no network required. Discover word pairs that co-occur: count sentence-internal adjacent word pairs with optional casefolding (mode='bigrams', EN words + CJK chars as tokens, {pair, count} rows sorted by count desc then pair asc, top_n default 50), score the top bigrams with PMI, Dice and t-score association measures (mode='scored', sorted by PMI desc, min_count default 3 to defuse the low-frequency PMI explosion), or look up the top collocates of one specific word in both orders (mode='pair_lookup')."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.collocation_tool
+  class: CollocationTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — bigrams, scored or pair_lookup.
+    required: true
+  text:
+    type: string
+    description: The corpus text; required by every mode. Pairs are formed within a sentence only (split on . ! ? and their CJK equivalents).
+    required: false
+  word:
+    type: string
+    description: pair_lookup mode only — the target word, a single word without whitespace; matched as either element of a pair.
+    required: false
+  top_n:
+    type: integer
+    description: Rows kept in the result table; 1 to 1000, default 50.
+    required: false
+  casefold:
+    type: boolean
+    description: Fold every token (and the pair_lookup word) with str.casefold() before counting/matching (default false).
+    required: false
+  min_count:
+    type: integer
+    description: scored mode only — minimum joint frequency for a pair to be scored; 1 to 1000000, default 3 (mitigates the low-frequency PMI explosion).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["bigrams", "scored", "pair_lookup"]
+      description: Operation mode.
+    text:
+      type: string
+      description: The corpus text (all modes).
+    word:
+      type: string
+      description: Target word, matched in both orders (pair_lookup mode).
+    top_n:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      description: Rows kept in the result table (all modes).
+    casefold:
+      type: boolean
+      description: Casefold tokens before counting/matching (all modes).
+    min_count:
+      type: integer
+      minimum: 1
+      maximum: 1000000
+      description: Minimum joint frequency for a scored pair (scored mode).
+  required: ["mode"]
