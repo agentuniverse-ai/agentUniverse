@@ -21,6 +21,11 @@ class AgentProduct(Product):
 
     @property
     def instance(self) -> Agent:
+        """Get the agent instance corresponding to the agent product.
+
+        Returns:
+            Agent: The underlying agent instance.
+        """
         return self._instance
 
     def get_instance_code(self) -> str:
