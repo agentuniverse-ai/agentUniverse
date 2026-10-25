@@ -649,3 +649,57 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Matrix Operations Tool
+
+`MatrixOpsTool` performs 2-D numeric matrix operations built purely on
+the Python standard library — `json`, `math`, `re` and `fractions` —
+with no numpy dependency and no network access. Seven modes are
+supported: `info` reports rows, columns, shape, entry count,
+squareness, symmetry within a tolerance, the main diagonal (the first
+`min(rows, cols)` entries, numpy-style) and its trace; `transpose`
+reflects across the main diagonal, or the anti-diagonal with
+`anti=True` (equivalent to rotating 180 degrees then transposing);
+`rotate` turns the matrix clockwise by 90 / 180 / 270 degrees (270
+clockwise equals 90 counter-clockwise); `scale` multiplies every entry
+by a `scalar` (default) or adds it with `scale_type='add'`;
+`multiply` computes the matrix product with dimension validation, or
+an element-wise product when `other` is a single number (scalar
+shortcut); `determinant` works on square matrices via Laplace cofactor
+expansion — exact `Fraction` arithmetic whenever every entry is an
+integer, so results like the determinant of a matrix of 10-digit
+integers are exact rather than cancelled away by floating point —
+while any float entry or a size beyond 12x12 falls back to
+floating-point arithmetic (cofactor expansion up to 12x12, Gaussian
+elimination with partial pivoting beyond), which is approximate and
+marked `exact: false`; and `flatten` reduces the matrix to 1-D in
+row-major, column-major or zigzag order (JPEG-style anti-diagonal
+scan).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.matrix_ops_tool import MatrixOpsTool
+
+tool = MatrixOpsTool()
+info = tool.execute(mode="info", matrix=[[1, 2, 3], [2, 5, 6], [3, 6, 9]])
+rotated = tool.execute(mode="rotate", matrix="1 2 3\n4 5 6", degrees=90)["result"]
+product = tool.execute(mode="multiply", matrix=[[1, 2], [3, 4]], other=5)["result"]
+det = tool.execute(mode="determinant", matrix=[[1, 2], [3, 4]])
+zigzag = tool.execute(mode="flatten", matrix=[[1, 2, 3], [4, 5, 6]], order="zigzag")["result"]
+```
+
+The `matrix` argument accepts a JSON 2-D array (list of lists of
+numbers or a string holding JSON) or row-per-line whitespace-separated
+text such as `"1 2 3\n4 5 6"`. Inputs are validated strictly before
+any computation: malformed parameters (unknown mode / degrees /
+flatten order / scale type, a non-finite `scalar`, a negative
+`tolerance`, a missing or non-matrix `matrix`, more than 100 rows)
+raise a `ValueError`. Errors that depend on the content being
+processed — ragged rows, empty rows, rows that are not lists, more
+than 100 columns, entries that are non-numeric, booleans, NaN or
+infinity, invalid JSON, non-numeric text tokens, non-square
+determinants and mismatched multiplication dimensions — are returned
+as a structured `error` payload (`{"type": ..., "message": ...}`) with
+1-based row and column indices instead of raising. Integer entries
+stay integers through `scale` and `multiply`, so results are
+deterministic; the only approximate outputs are floating-point
+determinants, which carry a `note` explaining the fallback.

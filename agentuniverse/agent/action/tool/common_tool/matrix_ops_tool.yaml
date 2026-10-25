@@ -1,0 +1,79 @@
+name: matrix_ops_tool
+description: Matrix operations tool — pure Python stdlib, no numpy required. 2-D numeric matrix info (shape, squareness, symmetry within a tolerance, diagonal, trace; mode='info'), transpose with an anti-diagonal option (mode='transpose'), 90/180/270-degree clockwise rotation (mode='rotate'), element-wise scale by xk or +k (mode='scale'), matrix x matrix multiplication with dimension validation plus a scalar shortcut (mode='multiply'), determinants via exact Fraction cofactor expansion for integer matrices with a documented floating-point fallback (mode='determinant'), and row-major / column-major / zigzag flattening (mode='flatten'). Input is a JSON 2-D array or row-per-line whitespace-separated text.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.matrix_ops_tool
+  class: MatrixOpsTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — info, transpose, rotate, scale, multiply, determinant or flatten.
+    required: true
+  matrix:
+    type: array
+    description: The matrix to operate on — a JSON 2-D array (list of lists of numbers), a string holding a JSON array, or row-per-line whitespace-separated text such as '1 2 3\n4 5 6'. Required for every mode. Capped at 100 rows x 100 columns; entries must be finite numbers (booleans, NaN and infinity are rejected).
+    required: true
+  other:
+    type: array
+    description: Multiply mode only — the right operand: a matrix in any accepted format, or a single finite number for the element-wise scalar shortcut.
+    required: false
+  scalar:
+    type: number
+    description: Scale mode only — a finite number multiplied into every entry (default) or added to every entry when scale_type='add'.
+    required: false
+  scale_type:
+    type: string
+    description: Scale mode only — multiply (default) or add.
+    required: false
+  degrees:
+    type: integer
+    description: Rotate mode only — 90, 180 or 270; rotation is clockwise (270 clockwise equals 90 counter-clockwise).
+    required: false
+  order:
+    type: string
+    description: Flatten mode only — row-major (default), column-major or zigzag (JPEG-style anti-diagonal scan).
+    required: false
+  anti:
+    type: boolean
+    description: Transpose mode only — when true, reflect across the anti-diagonal instead of the main diagonal (equivalent to rotating 180 degrees then transposing).
+    required: false
+  tolerance:
+    type: number
+    description: Info mode only — maximum absolute difference allowed between mirrored entries when checking symmetry; a non-negative finite number, default 1e-9.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["info", "transpose", "rotate", "scale", "multiply", "determinant", "flatten"]
+      description: Matrix operation mode.
+    matrix:
+      description: Matrix as a 2-D numeric array, a JSON array string, or row-per-line whitespace-separated text.
+    other:
+      description: Right operand for multiply mode — a matrix in any accepted format or a single number (scalar shortcut).
+    scalar:
+      type: number
+      description: Element-wise scale factor (scale mode).
+    scale_type:
+      type: string
+      enum: ["multiply", "add"]
+      description: How the scalar is applied (scale mode).
+    degrees:
+      type: integer
+      enum: [90, 180, 270]
+      description: Clockwise rotation angle (rotate mode).
+    order:
+      type: string
+      enum: ["row-major", "column-major", "zigzag"]
+      description: Flatten traversal order (flatten mode).
+    anti:
+      type: boolean
+      description: Reflect across the anti-diagonal (transpose mode).
+    tolerance:
+      type: number
+      description: Symmetry tolerance (info mode); default 1e-9.
+  required: ["mode"]
