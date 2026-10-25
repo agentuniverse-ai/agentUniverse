@@ -18,7 +18,7 @@ args_model:
     required: true
   other:
     type: array
-    description: Multiply mode only — the right operand: a matrix in any accepted format, or a single finite number for the element-wise scalar shortcut.
+    description: "Multiply mode only — the right operand: a matrix in any accepted format, or a single finite number for the element-wise scalar shortcut."
     required: false
   scalar:
     type: number
