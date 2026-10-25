@@ -1,0 +1,70 @@
+name: rouge_tool
+description: "ROUGE summary-overlap evaluation tool — pure Python stdlib, no network required. Implements the standard ROUGE family (Lin 2004) for evaluating a candidate summary against reference summary(s): rouge1 / rouge2 (n-gram overlap counts, min-per-type clamping) and rougeL (Longest Common Subsequence, unit-weighted whole-sequence LCS per pair), each reported as {precision, recall, f1} at 4 decimal places with a beta option for the F formula (default 1 = F1). mode='score' scores a candidate against one reference or a reference list (multi-reference averaging); mode='lcs_detail' returns the LCS itself with its length and span positions; mode='summary' reports per-reference scores plus the average and the best (oracle) reference per metric. Tokenization follows the established family rule (alphanumeric runs with internal apostrophes, CJK ideographs as single-character tokens); case-sensitive by default, optional stemming=True lowercases and applies the light Porter-style stemmer of LightStemmerTool."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.rouge_tool
+  class: RougeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — score, lcs_detail or summary.
+    required: true
+  candidate:
+    type: string
+    description: The candidate summary to evaluate (may be empty; any zero denominator scores 0.0).
+    required: false
+  reference:
+    type: string
+    description: A single reference summary (score mode) or the one required reference (lcs_detail mode); provide this or references, never both.
+    required: false
+  references:
+    type: array
+    description: The reference set — 1 to 10 strings (score / summary modes; summary requires it, lcs_detail rejects it). Multi-reference averaging applies in score mode.
+    required: false
+  metrics:
+    type: array
+    description: Non-empty duplicate-free subset of rouge1, rouge2, rougeL (default all three).
+    required: false
+  beta:
+    type: number
+    description: F-beta weight for the F formula ((1+beta^2)*P*R)/(R+beta^2*P), greater than 0, default 1 (F1); beta > 1 favors recall, beta < 1 favors precision.
+    required: false
+  stemming:
+    type: boolean
+    description: Lowercase every token and apply the light Porter-style stemmer (LightStemmerTool rules) to ASCII-alphabetic tokens; default false (case-sensitive raw tokens).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["score", "lcs_detail", "summary"]
+      description: Operation mode.
+    candidate:
+      type: string
+      description: The candidate summary to evaluate.
+    reference:
+      type: string
+      description: Single reference (score, lcs_detail modes).
+    references:
+      type: array
+      items:
+        type: string
+      description: Reference set, 1 to 10 strings (score, summary modes).
+    metrics:
+      type: array
+      items:
+        type: string
+        enum: ["rouge1", "rouge2", "rougeL"]
+      description: Metrics to report (default all three).
+    beta:
+      type: number
+      exclusiveMinimum: 0
+      description: F-beta weight (default 1 = F1).
+    stemming:
+      type: boolean
+      description: Lowercase + light stemming before matching (default false).
+  required: ["mode"]

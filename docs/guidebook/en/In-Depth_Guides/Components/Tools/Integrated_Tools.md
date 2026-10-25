@@ -649,3 +649,74 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## ROUGE Tool
+
+`RougeTool` evaluates a candidate summary against reference summary(s)
+with the standard ROUGE family (Lin 2004) — the standard automatic
+summarization evaluation metrics — built purely on the Python standard
+library (no network, no third-party package). It reports `rouge1` /
+`rouge2` (n-gram overlap: each n-gram type overlaps
+`min(candidate count, reference count)` times) and `rougeL` (the Longest
+Common Subsequence; unit-weighted whole-sequence LCS per
+candidate/reference pair, the sentence-level ROUGE-L of the original
+paper — not the summary-level union-LCS variant, a documented choice),
+each as `{precision, recall, f1}` at 4 decimal places. F is the ROUGE
+F-beta `((1 + beta^2) * P * R) / (R + beta^2 * P)` with a `beta` option
+(default `1` = F1; `beta > 1` favors recall, `beta < 1` favors
+precision). Any zero denominator scores `0.0` — a text without bigrams
+scores `rouge2 = 0.0`, and an empty candidate or reference scores `0.0`
+on every metric.
+
+Three modes:
+
+- `score` — candidate plus one reference (or a `references` list of up
+  to 10) to per-metric `{precision, recall, f1}` for the selected
+  `metrics` (default all three). With several references the reported
+  scores are the per-component averages over the per-reference scores
+  (the standard multi-reference averaging).
+- `lcs_detail` — one candidate / reference pair to the LCS itself: the
+  LCS token sequence, its length and the span positions (for every LCS
+  token, its index in the candidate token list and in the reference
+  token list). The backtrack prefers the candidate side on ties, so the
+  returned subsequence is deterministic even when several equal-length
+  LCS exist.
+- `summary` — candidate versus a reference set: per-reference scores,
+  the average across references and the best (oracle) reference per
+  metric (highest f1, ties broken by the lowest reference index).
+
+Tokenization follows the established family rule: maximal alphanumeric
+runs (Unicode `str.isalnum`) with internal apostrophes (contractions
+stay together, leading/trailing apostrophes trimmed), and every CJK
+ideograph as its own single-character token. Matching is case-sensitive
+by default; `stemming=True` lowercases every token and applies the
+light Porter-style stemmer (the `LightStemmerTool` rule set) to
+ASCII-alphabetic tokens — mirroring the ROUGE `-m` flag so `cats` /
+`cat` count as an overlap.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import RougeTool
+
+tool = RougeTool()
+tool.execute(mode="score", candidate="the cat was found under the bed",
+             reference="the cat was under the bed")["scores"]
+# rouge1 P 0.8571 / R 1.0 / F 0.9231, rouge2 F 0.7273, rougeL F 0.9231
+tool.execute(mode="score", candidate="a b c d",
+             references=["a b", "a b c"], beta=2)["scores"]["rouge1"]
+# multi-reference averaging of the per-reference scores
+tool.execute(mode="lcs_detail", candidate="x a y b z c", reference="a b c")
+# lcs_tokens ['a', 'b', 'c'], spans at candidate 1/3/5 vs reference 0/1/2
+tool.execute(mode="summary", candidate="the cat sat on the mat",
+             references=["the cat is on the mat", "the cat sat",
+                         "the cat sat on the floor"])["best"]["rouge2"]
+# {'reference_index': 2, 'precision': 0.8, 'recall': 0.8, 'f1': 0.8}
+```
+
+Inputs are validated strictly before any computation: malformed
+parameters (unknown mode, non-string texts, both or neither of
+`reference` / `references`, an empty or oversized reference list (over
+10), an invalid `metrics` selection (unknown names, duplicates, empty),
+non-positive or non-numeric `beta`, non-boolean `stemming`, strings
+over 20,000 characters) raise a `ValueError`. The tool is fully
+deterministic; ROUGE measures surface overlap, not semantic quality —
+a paraphrase scores low even when it preserves the meaning.
