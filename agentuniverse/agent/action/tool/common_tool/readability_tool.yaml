@@ -1,0 +1,33 @@
+name: readability_tool
+description: Text readability scoring with seven classical formulas and transparent sub-metrics.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.readability_tool
+  class: ReadabilityTool
+input_keys:
+  - mode
+max_text_length: 200000
+max_sentences_detail: 30
+max_polysyllabic_listed: 50
+max_word_syllables: 100
+sentence_preview_length: 120
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [analyze, compare, grade_band]
+    text: {type: string}
+    a: {type: string}
+    b: {type: string}
+    score: {type: number}
+    formula:
+      type: string
+      enum: [flesch, flesch_kincaid_grade, gunning_fog, ari, smog, coleman_liau, dale_chall]
+    cjk:
+      type: string
+      enum: [reject, naive]
+      default: reject
+  required: [mode]
+  additionalProperties: false

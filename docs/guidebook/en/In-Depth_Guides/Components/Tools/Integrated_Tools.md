@@ -675,3 +675,52 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Readability Tool
+
+`ReadabilityTool` scores English text with seven classical readability
+formulas — Flesch Reading Ease, Flesch-Kincaid Grade, Gunning Fog, ARI,
+SMOG, Coleman-Liau, and a simplified Dale-Chall — with every sub-metric
+exposed so each score can be verified by hand.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.readability_tool import ReadabilityTool
+
+tool = ReadabilityTool()
+result = tool.execute(
+    mode="analyze",
+    text="The cat sat on the mat. It was a nice day for everyone involved.",
+)
+# scores.flesch -> {score: 97.0, band: "5th grade (very easy)"}
+# metrics      -> word/sentence/syllable/complex-word counts, chars, letters
+```
+
+Modes: `analyze` (one text: `metrics`, all seven `scores` with band
+descriptions, per-word `word_syllables`, per-sentence detail capped at 30
+with words/syllables/Flesch per sentence, and honest `caveats` such as
+`smog_unreliable` below 3 sentences or `smog_short_sample` below 30),
+`compare` (two texts side by side: which is easier under each formula, a
+majority verdict with a unanimity flag, and `undecidable` when a side has
+no scoreable text), and `grade_band` (one score plus a formula name to its
+band description, e.g. the full Flesch table from `college graduate
+(0-30)` to `5th grade (90-100)` with clamping outside the range).
+
+Transparency is the design goal: `flesch = 206.835 - 1.015*(W/S) -
+84.6*(Y/W)` and every input integer (words, sentences, syllables, complex
+words, characters, letters) is reported; the syllable heuristic (vowel
+groups with silent-e, syllabic `-le`, silent `-ed`, and silent `-es`
+adjustments — `makes`/`files` drop the `e`, `boxes`/`handles` keep it)
+lists per-word counts so users can audit every number, and its divergence
+classes versus CMU-dictionary counters (`simile`, `poem`, `-ful`
+derivatives, adjective `-ed` forms, pronounced-e verbs like `creates` and
+`requires`) are documented in the module. Sentence
+segmentation handles a 91-entry abbreviation list (Mr., Dr., e.g., p.m.,
+U.S., Jan. ...), decimals (`3.14` never splits), ellipses (`...` never
+splits), and dotted initials, while semicolons terminate; the counting
+conventions (hyphens join, contractions stay whole, digits are words)
+match textstat so scores compare cleanly. Coleman-Liau uses the original
+0.0588 coefficient and Dale-Chall embeds a compact 76-word easy list (the
+full list has ~3,000 words), both flagged with caveats. CJK text is
+refused by default (`cjk='naive'` scores it with a caveat), inputs are
+strictly validated and length-capped, output is deterministic with
+truncation flags, and the runtime is stdlib-only.
