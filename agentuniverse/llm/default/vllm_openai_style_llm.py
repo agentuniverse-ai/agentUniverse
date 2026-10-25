@@ -174,8 +174,14 @@ class VLLMOpenAIStyleLLM(OpenAIStyleLLM):
         if self.early_stopping is not None:
             extra_params['early_stopping'] = self.early_stopping
 
-        # Merge with user-provided kwargs (user kwargs take precedence)
-        kwargs = {**extra_params, **kwargs}
+        # vLLM-specific parameters must go through extra_body, not top-level
+        # kwargs: the OpenAI SDK's Completions.create has no **kwargs and
+        # rejects use_beam_search/best_of/length_penalty/early_stopping as
+        # unexpected keyword arguments (TypeError). vLLM's OpenAI-compatible
+        # server expects them in the request body — the extra_body channel.
+        if extra_params:
+            kwargs.setdefault("extra_body", {})
+            kwargs["extra_body"].update(extra_params)
 
         # Call parent implementation with merged parameters
         return super()._call(messages, **kwargs)
@@ -203,7 +209,9 @@ class VLLMOpenAIStyleLLM(OpenAIStyleLLM):
             extra_params['early_stopping'] = self.early_stopping
 
         # Merge with user-provided kwargs (user kwargs take precedence)
-        kwargs = {**extra_params, **kwargs}
+        if extra_params:
+            kwargs.setdefault("extra_body", {})
+            kwargs["extra_body"].update(extra_params)
 
         # Call parent implementation with merged parameters
         return await super()._acall(messages, **kwargs)
