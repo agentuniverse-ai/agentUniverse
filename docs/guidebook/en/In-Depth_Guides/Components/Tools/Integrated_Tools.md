@@ -649,3 +649,60 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+
+## CfgLintTool
+
+[Tool Path](../../../../../../agentuniverse/agent/action/tool/common_tool/cfg_lint_tool.yaml)
+The tool lints INI-style configuration text (`.ini` / `.cfg`) with the Python standard library `configparser` semantics as ground truth — purely offline, no network required. Its configuration information is:
+```yaml
+name: 'cfg_lint_tool'
+description: 'Cfg lint tool — lint INI configuration text with the Python stdlib
+    configparser semantics as ground truth, purely offline, no network required.
+    lint mode reports findings [{code, severity, line, message}] from 13 deterministic
+    rules (missing section header with configparser-faithful line citation, duplicate
+    sections, duplicate options including lowercased case collisions, keys without
+    values, unparseable lines, repeated DEFAULT blocks, BOM, inline-comment and
+    interpolation portability risks, missing final newline, trailing whitespace,
+    tab indentation) plus an explicit configparser_would_reject verdict
+    (mode=lint); parse returns a structured section/key/comment report built by
+    the same line-mode scan even when configparser would reject the text
+    (mode=parse); check evaluates named policy options into a pass/fail summary
+    (mode=check). Values of secret-ish keys (KEY/SECRET/PASSWORD/TOKEN) are never
+    echoed in full.'
+tool_type: 'api'
+input_keys: ['mode']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.cfg_lint_tool'
+  class: 'CfgLintTool'
+```
+Parameter Description:
+    mode: one of `lint` (report findings `[{line, code, message, severity}]` sorted
+        by `(line, code)` from 13 deterministic rules, plus an explicit
+        `configparser_would_reject` verdict mirroring a strict
+        `configparser.ConfigParser().read_string()` call), `parse` (a structured
+        report `sections {name: {keys, values, duplicate_keys, raw_lines}}`,
+        `comments [{line, text}]`, `section_order` — built by the same line-mode
+        scan even when configparser would reject the text) or `check` (evaluate
+        named policy options — `require_section_header`, `require_parseable`,
+        `require_unique_sections`, `require_unique_options`,
+        `require_final_newline`, `forbid_inline_comments`, `forbid_tabs`,
+        `forbid_bom` — into a pass/fail summary).
+    text: the INI text (required for every mode; may be empty — an empty file
+        lints clean).
+    options: check mode only — a map of policy option name to boolean; omitted
+        options take their documented defaults.
+The syntax-error codes (`missing_section_header`, `duplicate_section`,
+`duplicate_option`, `key_without_value`, `unparseable_line`) mirror the
+exceptions the default strict `configparser` raises, with faithful line
+citations; the tool reports them, it never crashes on them. Risk codes cover
+lowercased case collisions, repeated `[DEFAULT]` blocks, a UTF-8 BOM (which
+makes `configparser` raise `MissingSectionHeaderError` at line 1), `;` / `#`
+inside values (the default `inline_comment_prefixes=None` keeps them as data)
+and `%`-interpolation patterns that fail at `get()` time — including reference
+chains that are cyclic, nested deeper than `MAX_INTERPOLATION_DEPTH` (10), or
+that reach another option whose own value fails. Values of secret-ish
+keys (names containing KEY/SECRET/PASSWORD/TOKEN) are never echoed in full.
+This tool can be used directly without any keys, fully offline and
+deterministic.
