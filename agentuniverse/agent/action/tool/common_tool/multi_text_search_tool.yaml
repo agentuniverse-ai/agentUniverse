@@ -1,5 +1,5 @@
 name: multi_text_search_tool
-description: Multi-text search tool — grep for agents, pure Python stdlib, no network required. Searches a LIST of texts (log lines, document chunks, snippets) with one pattern (mode='search': matching indices plus per-match span and a context window; mode='filter': the matching entries themselves, or the non-matching ones with invert=True; mode='count': exact per-entry match counts; mode='index_of': first matching index for each pattern in a batch). Regex by default with optional flags (IGNORECASE, MULTILINE, DOTALL, ASCII), or literal substring matching with regex=False and a case option.
+description: "Multi-text search tool — grep for agents, pure Python stdlib, no network required. Searches a LIST of texts (log lines, document chunks, snippets) with one pattern (mode='search': matching indices plus per-match span and a context window; mode='filter': the matching entries themselves, or the non-matching ones with invert=True; mode='count': exact per-entry match counts; mode='index_of': first matching index for each pattern in a batch). Regex by default with optional flags (IGNORECASE, MULTILINE, DOTALL, ASCII), or literal substring matching with regex=False and a case option."
 tool_type: api
 metadata:
   type: TOOL
@@ -60,14 +60,14 @@ args_model_schema:
       description: Search mode.
     texts:
       type: array
-      items: {type: string}
+      items: "{type: string}"
       description: The list of texts to search.
     pattern:
       type: string
       description: The pattern to search with (search, filter, count modes).
     patterns:
       type: array
-      items: {type: string}
+      items: "{type: string}"
       description: Batch of patterns (index_of mode).
     regex:
       type: boolean
@@ -82,7 +82,7 @@ args_model_schema:
       oneOf:
         - type: string
         - type: array
-          items: {type: string}
+          items: "{type: string}"
     context_chars:
       type: integer
       default: 40
