@@ -1,0 +1,29 @@
+name: morse_code_tool
+description: Morse code tool — International Morse (ITU-R M.1677-1), pure Python stdlib, no network required. Encode text to Morse with letters separated by single spaces and words by ' / ' (mode='encode', case-insensitive, unknown characters flagged and skipped), decode Morse back to uppercase text rejecting invalid tokens with the token listed (mode='decode', '/' is the word separator, prosigns handled as normal letters), or return the full character-to-code table (mode='table').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.morse_code_tool
+  class: MorseCodeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Morse code mode — encode (text to Morse), decode (Morse to text) or table (full character-to-code mapping).
+    required: true
+  text:
+    type: string
+    description: The text to encode (case-insensitive; letters, digits and the punctuation set .,?'!/()&:;=+-_"$@ are supported, any whitespace run separates words) or the Morse string to decode (space-separated tokens, '/' as the word separator). Required for the encode and decode modes; not used by table mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["encode", "decode", "table"]
+      description: Morse code mode.
+    text:
+      type: string
+      description: Text to encode or Morse string to decode (encode, decode modes).
+  required: ["mode"]

@@ -675,3 +675,42 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Morse Code Tool
+
+`MorseCodeTool` converts between plain text and International Morse code
+(ITU-R M.1677-1) using only the Python standard library, with zero
+network access. `encode` mode maps letters, digits and the standard
+punctuation set (`.,?'!/()&:;=+-_"$@`) to their Morse equivalents —
+letters are separated by a single space and words by `" / "`; unknown
+characters (including CJK and emoji) are flagged per character in
+`unknown_chars` / `skipped_count` and skipped, so the encodable
+characters are still converted. `decode` mode splits the input into
+space-separated tokens, treats `/` as the word separator, and rejects
+any token outside the International Morse table with a structured
+error that lists the offending token; prosigns are handled as normal
+letters, so SOS must be sent as `... --- ...` rather than the
+concatenated `...---...`. `table` mode returns the full 54-entry
+character-to-code mapping. Input is case-insensitive and decode
+results are uppercase.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import MorseCodeTool
+
+tool = MorseCodeTool()
+sos = tool.execute(mode="encode", text="sos")["result"]  # "... --- ..."
+text = tool.execute(
+    mode="decode",
+    text=".... . .-.. .-.. --- / .-- --- .-. .-.. -..",
+)["result"]  # "HELLO WORLD"
+mapping = tool.execute(mode="table")["result"]  # {"A": ".-", ..., "@": ".--.-."}
+```
+
+Malformed parameters (unknown mode, missing, empty or whitespace-only
+text, non-string input, text over 100,000 characters) raise a
+`ValueError` before any computation. Content-level failures — a decode
+token that is not valid International Morse — are returned as a
+structured `error` payload (`{"type": "invalid_morse_token",
+"message": ...}`) instead of raising. Whitespace runs in encode input
+collapse to a single `" / "` word separator, so round trips normalize
+spacing and letter case.
