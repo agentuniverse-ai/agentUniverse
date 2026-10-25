@@ -1,0 +1,13 @@
+name: 'default_internlm_llm'
+description: 'default internlm llm powered by the Shanghai AI Laboratory InternLM models'
+model_name: 'internlm3-latest'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${INTERNLM_API_KEY}'
+api_base: 'https://internlm-chat.intern-ai.org.cn/paas/v4'
+proxy: '${INTERNLM_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.internlm_llm'
+  class: 'InternLMChatLLM'
