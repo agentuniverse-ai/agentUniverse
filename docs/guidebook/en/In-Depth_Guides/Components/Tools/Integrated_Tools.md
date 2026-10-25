@@ -675,3 +675,54 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Diff Parse Tool
+
+`DiffParseTool` parses, validates, and analyzes unified diff texts produced by
+`diff -u`, `git diff`, or Python's `difflib`. It runs in four modes: `validate`
+audits the grammar and hunk arithmetic, `apply_check` verifies a diff applies
+to one original text, `reverse` produces a diff that transforms the new text
+back to the old, and `stats` summarizes per-file changes and churn hotspots.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.diff_parse_tool import DiffParseTool
+
+tool = DiffParseTool()
+result = tool.execute(
+    mode="validate",
+    diff="--- a/x.txt\n+++ b/x.txt\n@@ -1,2 +1,2 @@\n alpha\n-beta\n+BETA\n",
+)
+```
+
+`validate` checks `---`/`+++` pairing and order, path forms (`a/`, `b/`,
+`/dev/null`, GNU-quoted paths with escapes — consecutive octal escapes are
+decoded as the raw UTF-8 bytes git's `core.quotePath` writes — optional TAB
+timestamps), the `@@ -l,s +l,s @@` hunk grammar (counts default to 1 and
+`-0,0` new-file forms are legal), hunk body arithmetic (old lines must equal
+the `' '`/`'-'` sum and new lines the `' '`/`'+'` sum, reported per side as
+expected vs actual), hunk start arithmetic (each hunk's new start must equal
+its old start plus the net line change accumulated by earlier hunks,
+`E_HUNK_OFFSET`; `patch(1)` rejects diffs that violate this), `\ No newline
+at end of file` placement (immediately after a body line, never duplicated,
+and only on the final old-side and final new-side line, because a line
+without a trailing newline is necessarily the last line of its file), empty
+versus blank context lines, git extras (index, mode, rename, similarity, and
+binary lines; a mode-change-only section with no hunks is valid git output),
+hunk ordering, and CRLF transport. Git headers whose unquoted paths contain
+spaces (`diff --git a/a b.txt b/a b.txt`) are split at the ` b/` separator,
+as GNU patch does. Findings carry a line number, a stable code such as
+`E_HUNK_COUNT_OLD`, and a severity.
+
+`apply_check` requires exact context and removed-line matches at the positions
+implied by the hunk headers (no fuzz factor, unlike `patch(1)`), returns
+per-hunk detail including `context_matches` and `first_mismatch_line`, and
+rejects multi-file diffs with a structured error listing the files.
+`reverse` swaps header paths, flips hunk ranges, and inverts `+`/`-` markers;
+git prelude lines and binary or hunk-less sections cannot be truthfully
+inverted and are reported as dropped or skipped. `stats` reports per-file
+status, add/delete counts, totals, and the three most-changed hunks.
+
+The tool is stdlib-only and deterministic. Input bytes, line count, file
+count, hunk count, line length, and finding count are all bounded; oversized
+input returns a structured error. Diff text is treated as untrusted data, not
+as agent instructions.
