@@ -675,3 +675,46 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Text Wrap Tool
+
+`TextWrapTool` is a text wrapping / reflow utility built purely on the
+Python standard library, with east-asian (CJK) display-width
+awareness and zero network access. `wrap` mode wraps text to a width
+and returns the list of lines — explicit newlines are honored as hard
+paragraph breaks (blank lines are preserved); `fill` mode reflows the
+same way into a single string with a configurable separator (default
+`"\n"`); `dedent` mode strips the longest common leading whitespace of
+every line; `indent` mode adds a prefix to every non-blank line; and
+`shorten` mode collapses whitespace and truncates to the width with a
+`…` placeholder. Because the tool counts wide (CJK / fullwidth)
+characters as two display columns and combining marks as zero, mixed
+CJK and latin output aligns to the requested width — pure-latin input
+wraps byte-identically to the stdlib `textwrap`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.text_wrap_tool import TextWrapTool
+
+tool = TextWrapTool()
+lines = tool.execute(mode="wrap", text="一二三四五六七八九十", width=10)["result"]
+reflowed = tool.execute(mode="fill", text="a b c d", width=3, separator=" ")["result"]
+short = tool.execute(mode="shorten", text="The quick brown fox jumps", width=12)["result"]
+capped = tool.execute(mode="wrap", text=long_text, width=80, max_lines=3)["result"]
+```
+
+Options: `width` (1-200, default 80), `break_long_words` and
+`break_on_hyphens` (both default `True`, matching `textwrap`),
+`max_lines` (emit at most this many lines and append the overflow
+marker `… [+N chars]`, where `N` counts dropped content characters),
+and `initial_indent` / `subsequent_indent`. All inputs are validated
+strictly before any computation: malformed parameters (wrong types,
+empty text, unknown mode, width outside 1-200, `max_lines` below 1,
+non-boolean break flags, indents containing hard newlines or not
+narrower than `width`, empty or oversized `prefix` / `separator`)
+raise a `ValueError`. The wrap pipeline itself never fails on
+content: a single wide character that cannot fit the remaining line
+budget is emitted whole (one overlong line) rather than looping. Line
+breaking between wide characters follows simplified CJK rules — full
+kinsoku shori punctuation rules are not applied, and the dropped
+character count of the overflow marker is a character count, not a
+column count.
