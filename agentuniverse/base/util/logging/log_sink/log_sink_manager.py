@@ -16,4 +16,6 @@ class LogSinkManager(ComponentManagerBase[LogSink]):
     """A singleton manager class of the DocProcessor."""
 
     def __init__(self):
+        """Initialize this instance.
+        """
         super().__init__(ComponentEnum.LOG_SINK)
