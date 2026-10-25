@@ -33,13 +33,17 @@ class PlanningAgentTemplate(AgentTemplate):
         final_result = dict()
 
         output = agent_result.get('output')
-        output = parse_json_markdown(output)
+        try:
+            output = parse_json_markdown(output)
+        except Exception:
+            output = {}
         final_result['framework'] = output.get('framework')
         final_result['thought'] = output.get('thought', '')
 
         # add planning agent log info.
         logger_info = "\nPlanning agent execution result is :\n"
-        for index, one_framework in enumerate(final_result.get('framework')):
+        framework = final_result.get('framework') or []
+        for index, one_framework in enumerate(framework):
             logger_info += f"[{index + 1}] {one_framework} \n"
         LOGGER.info(logger_info)
         return final_result
