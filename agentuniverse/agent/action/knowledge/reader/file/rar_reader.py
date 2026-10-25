@@ -24,6 +24,8 @@ class RarReader(Reader):
     """
 
     def __init__(self):
+        """Initialize the rar reader.
+        """
         super().__init__()
         self._reader_cache: Dict[str, Type[Reader]] = {}
 
