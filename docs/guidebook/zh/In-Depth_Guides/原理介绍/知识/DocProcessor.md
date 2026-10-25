@@ -315,3 +315,58 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ContradictionSignalDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/contradiction_signal_detector.yaml)
+
+该组件在文档文本中标记*潜在的*矛盾，让审核流水线可以在知识污染检索之前，把可疑文档转给人工处理。它对应 issue #258 的*论断一致性审核*方向：从合并或爬取来源抽取的知识里，经常出现悄悄互相矛盾的句子（"导出服务支持批量"与两段之后的"导出服务拒绝批量"），而检索会把矛盾的两边都端给用户。
+
+**需要明确：这是一个词汇层启发式，不是语义 NLI。** 它不解析语义、不做共指消解、不掌握任何世界知识；只是把邻近窗口内的句子两两配对，寻找表层模式。因此会有误报（反义词、限定范围的否定、转述）和漏报（同义改写）。它的产出是给人或给后续语义判断用的分诊队列，不是结论。在现有 doc processor 家族中，`DiscourseConnectiveAnalyzer` 统计连接词、`CausalPhraseDetector` 抽取因果短语，都不标记"分歧"，本组件补的正是这个空缺。
+
+对每个句对（前句 A、后句 B，距离不超过 `window_size`；且要求两句至少共享一个*内容词*——非停用词、小写化、经简单的 s / es / ed / ing 后缀剥离词干化，或是函数字表之外的汉字）检测三类信号：
+
+| 类型 | 模式 | 置信度 |
+| --- | --- | --- |
+| `contrast_flip` | B 以转折标记开头（but / however / conversely / on the contrary / in contrast；但是 / 然而 / 相反），且与 A 共享内容词 | 共享 >= 2 个词为 high，否则 medium |
+| `negation_repeat` | A / B 恰好一句含否定标记（not / no / never / n't / none / without / cannot；无 / 不 / 没有 / 未），且共享内容词 | 共享 >= 2 个词为 medium，否则 low |
+| `mutual_negation` | A 与 B 的开头前至多 3 个词相同（"主语式"开头），两句都含否定，且两句不完全相同 | low（少见、噪声大） |
+
+每条信号记录 `{kind, sentence_a_span, sentence_b_span, shared_terms（至多 max_shared_terms 个，已排序）, confidence}`，其中 span 是相对文档文本的 `[start, end)` 字符偏移。每篇文档写入 `contradiction_signals`（列表，最多 `max_signals` 条）、`signal_count`（实际记录条数）与 `contradiction_risk`。风险等级依据公开的权重表——每条信号计 high=3 / medium=2 / low=1，权重之和映射为 none（无信号）/ low（< 3）/ medium（[3, 6)）/ high（>= 6）；边界只是调节到"单个强翻转不会直接喊 high、多条独立信号会升级"，并非校准过的概率。文档不会被过滤、文本不会被改动，因此可以安全地插入任何入库或后处理链路。
+
+组件定义文件如下：
+```yaml
+name: 'contradiction_signal_detector'
+description: 'Flag potential contradiction signals (contrast flips, negation repeats, mutual negations) in document text into metadata for review pipelines'
+window_size: 2
+max_signals: 30
+max_shared_terms: 5
+signals_key: 'contradiction_signals'
+count_key: 'signal_count'
+risk_key: 'contradiction_risk'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.contradiction_signal_detector'
+  class: 'ContradictionSignalDetector'
+```
+- window_size：参与比较的（前句、后句）对的最大句距，取值 [1, 5]；默认 2 即每句与后两句比较。
+- max_signals：每篇文档最多记录的信号条数，取值 [1, 1000]；超出部分丢弃，`signal_count` 反映实际记录条数。
+- max_shared_terms：每条信号保留的共享内容词上限，取值 [1, 20]；列表排序以保证确定性。
+- signals_key：信号列表的 metadata 键；空字符串表示不写入。
+- count_key：信号条数的 metadata 键；空字符串表示不写入。
+- risk_key：none / low / medium / high 等级的 metadata 键；空字符串表示不写入。
+
+扫描过程确定、离线、零依赖（纯标准库正则）。示例：
+
+```python
+from agentuniverse.agent.action.knowledge.doc_processor.contradiction_signal_detector \
+    import ContradictionSignalDetector
+from agentuniverse.agent.action.knowledge.store.document import Document
+
+docs = [Document(text="The export service supports batching. "
+                      "However, the export service rejects batching.")]
+out = ContradictionSignalDetector().process_docs(docs)
+print(out[0].metadata["contradiction_signals"])
+# [{'kind': 'contrast_flip', 'sentence_a_span': [0, 37],
+#   'sentence_b_span': [38, 83], 'shared_terms': ['batch', 'export', 'service'],
+#   'confidence': 'high'}]
+print(out[0].metadata["contradiction_risk"])   # 'medium'
+```
