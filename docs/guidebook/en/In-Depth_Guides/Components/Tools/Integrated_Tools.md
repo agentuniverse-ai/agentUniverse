@@ -649,3 +649,57 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Cron Humanizer Tool
+
+`CronHumanizerTool` renders cron expressions as natural-language
+descriptions using only the Python standard library — no network access
+and no third-party cron dependency. It is the readability layer of the
+cron tool family: where `CronExpressionTool` validates, parses and
+projects schedules, this tool explains them for config review UIs, audit
+logs and agent-facing output, in English or natural Chinese
+(`locale='en'|'zh'`) and at three detail levels
+(`style='short'|'full'|'verbose'`).
+
+The grammar is the same standalone five-field Vixie-style cron
+(minute hour day-of-month month day-of-week): `*`, lists (`a,b,c`),
+ranges (`a-b`), steps (`*/n`, `a-b/n`, `a/n`), month and day names
+(`jan-dec`, `sun-sat`, case-insensitive, also inside ranges such as
+`mon-fri`), day-of-week `0` and `7` both meaning Sunday, the
+`@daily`/`@midnight`/`@hourly`/`@weekly`/`@monthly`/`@yearly`/`@annually`
+macros, and the standard day semantics: when both day-of-month and
+day-of-week are restricted (neither is the literal `*`), a day matches
+when either field matches.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.cron_humanizer_tool import CronHumanizerTool
+
+tool = CronHumanizerTool()
+
+# One sentence, three detail levels, two locales.
+tool.execute(mode="describe", expression="30 * * * *")
+# -> "At minute 30 of every hour"
+tool.execute(mode="describe", expression="30 * * * *", style="short")
+# -> "Hourly at :30"
+tool.execute(mode="describe", expression="30 * * * *", locale="zh")
+# -> "每小时的第30分钟"
+
+# Per-field {field, raw, description} breakdown.
+tool.execute(mode="describe_fields", expression="*/15 9-17/2 * * mon-fri")
+```
+
+Every `describe` / `describe_fields` result also carries `warnings` for
+schedules that are valid cron but probably not what the author meant: a
+day-of-month that never occurs in the restricted months (or silently
+skips short months, or fires only in leap years on February 29th), the
+day-of-month/day-of-week OR quirk (commonly mistaken for AND), redundant
+`/1` steps, and steps wider than the field span so only one value can
+ever match. Warning messages follow the requested locale; the `type`
+codes are stable (`day_month_mismatch`, `dom_dow_or_semantics`,
+`redundant_step_one`, `step_exceeds_range`).
+
+Malformed parameters (unknown mode/locale/style, non-string or oversized
+expression) raise a `ValueError` before any computation. An invalid
+expression is never described — `describe` and `describe_fields` return
+a structured `error` payload with precise per-field `field_errors`, and
+rendering is fully deterministic.
