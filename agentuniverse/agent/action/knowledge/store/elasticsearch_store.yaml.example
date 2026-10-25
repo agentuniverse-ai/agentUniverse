@@ -1,0 +1,19 @@
+name: elasticsearch_store
+description: Elasticsearch vector store for knowledge retrieval
+# hosts and credentials may be omitted to use the ES_HOSTS, ES_API_KEY,
+# ES_USERNAME, and ES_PASSWORD environment variables instead.
+hosts: 'http://localhost:9200'
+api_key: ''
+username: ''
+password: ''
+index_name: agentuniverse_documents
+embedding_model: openai_embedding
+dimensions: 1536
+similarity: cosine
+similarity_top_k: 10
+verify_certs: true
+vector_field: embedding
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.elasticsearch_store
+  class: ElasticsearchStore
