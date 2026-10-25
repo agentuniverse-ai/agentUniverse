@@ -1,0 +1,12 @@
+pytest==7.4.4
+pydantic==2.11.9
+langchain==0.1.20
+openai==1.55.3
+httpx==0.27.2
+tomli
+pyyaml
+loguru
+tiktoken
+flask
+opentelemetry-sdk==1.25.0
+opentracing
