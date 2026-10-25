@@ -52,6 +52,7 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml)：读取本地Pdf文件中的文本内容
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml)：读取本地Pptx文件中的文本内容
 - [default_txt_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/txt_reader.yaml)：读取txt文件中的文本内容
+- [default_xml_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/xml_reader.yaml)：使用标准库解析器读取本地 XML 文件（无额外依赖），把元素树序列化为 `元素路径: 文本` 行，使召回的文本块保留结构上下文；命名空间 URI 被剥离为本地名，`include_attributes` 可选输出属性行。任何 `<!DOCTYPE`/`<!ENTITY` 声明都会在解析前被拒绝（XXE / 实体膨胀炸弹防护）；`max_file_bytes` / `max_depth` 上限拒绝超大或病态嵌套的文档。
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml)：读取ZIP压缩包文件，支持嵌套ZIP结构和多种文件格式
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml)：读取本地Docx文件中的文本内容
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml)：读取本地Markdown文件中的文本内容
