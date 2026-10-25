@@ -315,3 +315,29 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [DateExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/date_extractor.yaml)
+
+该组件从文档文本中抽取日期表达式并写入 metadata，对应 issue #258 的*知识抽取*方向。知识库很少记录文档"讲的是什么时候"：报告、合同、新闻都会引用自己讨论的日期——季度区间、生效日、发布日——但这些时间信号埋在正文中，检索完全看不到。抽取器用纯 `re` + `datetime` 扫描每篇文档（离线、确定性、零外部依赖），把每个命中归一化为 ISO-8601 `YYYY-MM-DD` 后写入 metadata，下游阶段即可按时间过滤、排序或加权——与 `TemporalDecayFilter` 等后处理器天然互补。
+
+识别的表达式族包括：分隔符一致的国际格式（`2026-10-19`、`2026/10/19`、`2026.10.19`）；紧凑格式 `20261019`；数字日月加四位年份（美式 `10/19/2026`、欧式 `19/10/2026`）；月份名格式（`Oct 19, 2026`、`October 19 2026`、`October 19th, 2026`、`SEP 5 2026`）；CJK 日期（`2026年10月19日`，以及省略年份的 `10月19日`——默认取参考日期的年份）；相对关键词（today/tomorrow/yesterday 与 今天/明天/昨天）按相对参考日期的天数偏移求解；以及简单区间——由 `~`、`-`、`–`、`—`、`至`、`到` 或 `to` 连接的两个相邻具体日期，如 `2026-10-01~2026-10-19` 或 `从2026年10月1日到2026年10月19日`——以 ISO-8601 区间记法 `start/end` 单条上报。每个命中都会做真实日历校验（`2026-02-30` 之类直接跳过，不会被归一化成三月）。当数字日期两种读法都成立（`05/06/2026`——两个数都可作月或日）时，该条目被标记 `ambiguous: true` 并按 `day_first` 解释（默认 `false` = 月在前）；`19/10/2026` 这类无歧义形式永不标记且不受该开关影响。
+
+结果写入 `metadata['dates']`，每条形如 `{text, iso, span, kind: date|range|relative, ambiguous}`，按出现顺序排列——`span` 是满足 `text[span[0]:span[1]] == text` 的 `[start, end)` 偏移对；当找到至少两个不同日期（区间端点计入）时，边界对 `[min, max]` 写入 `metadata['date_range']`。写入前会复制 metadata 映射，text、id 及其他字段绝不改动，不含任何日期的文档原样通过。相对词求解由 `reference_date` 决定：默认 `''` 以处理当天的当前日为锚——方便但跨天不确定；注入显式 `YYYY-MM-DD` 则输出完全可复现。
+
+组件定义文件如下：
+```yaml
+name: 'date_extractor'
+description: 'extract date expressions from document text and stamp them into metadata as ISO-8601'
+reference_date: ''            # 相对词/省略年份日期的锚点；'' = 当天
+day_first: false              # 歧义数字日期：false = 月在前
+dates_key: 'dates'            # 日期记录列表写入的 metadata 键；'' 表示不写入
+range_key: 'date_range'       # [min, max] 边界对写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.date_extractor'
+  class: 'DateExtractor'
+```
+- reference_date：相对关键词与省略年份 CJK 日期的锚点 `YYYY-MM-DD` 字符串；`''`（默认）以处理当天的当前日求解，注入显式日期则输出确定。
+- day_first：前两个数字都可作月或日的歧义数字日期（`05/06/2026`）如何解读——`false`（默认）按月在前（美式，-> `2026-05-06`）；`true` 按日在前（欧式，-> `2026-06-05`）。`19/10/2026`、`10/19/2026` 等强制读法不受该开关影响；歧义匹配总会被标记。
+- dates_key：日期记录列表写入的 metadata 键；空值表示不写入。
+- range_key：找到至少两个不同日期时 `[min, max]` 边界对写入的 metadata 键；空值表示不写入。

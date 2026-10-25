@@ -1,0 +1,31 @@
+name: 'date_extractor'
+description: 'extract date expressions from document text and stamp them into metadata as ISO-8601'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.date_extractor'
+  class: 'DateExtractor'
+
+# Anchor date for relative keywords (today/tomorrow/yesterday and CJK
+# equivalents) and for yearless CJK dates (10月19日). '' (the default)
+# resolves against the current day at processing time — convenient but
+# non-deterministic across days; inject an explicit YYYY-MM-DD string
+# for reproducible output.
+reference_date: ''
+
+# How ambiguous numeric dates whose first two numbers both fit month
+# and day (05/06/2026) are read: false (default) reads month first
+# (US convention, -> 2026-05-06); true reads day first (EU convention,
+# -> 2026-06-05). Unambiguous dates (19/10/2026, 10/19/2026) ignore
+# this switch, and ambiguous matches are always flagged in metadata.
+day_first: false
+
+# Metadata key the list of date records ({text, iso, span, kind,
+# ambiguous}) is written to, in order of appearance; '' disables
+# stamping.
+dates_key: 'dates'
+
+# Metadata key the [min, max] bounding pair is written to when at
+# least two distinct dates were found (range endpoints included);
+# '' disables stamping.
+range_key: 'date_range'
