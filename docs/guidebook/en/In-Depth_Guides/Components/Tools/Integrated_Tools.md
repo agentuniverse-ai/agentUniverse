@@ -649,3 +649,58 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Natural Sort Tool
+
+`NaturalSortTool` orders lists of strings the way humans expect: embedded
+numbers compare numerically (`file2` before `file10`), with precise,
+locale-free rules and fully deterministic output.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.natural_sort_tool import NaturalSortTool
+
+tool = NaturalSortTool()
+result = tool.execute(
+    mode="sort",
+    items=["file10.txt", "file2.txt", "File1.txt", "file02.txt"],
+)
+# sorted: ["File1.txt", "file2.txt", "file02.txt", "file10.txt"]
+```
+
+Modes: `sort` (returns the ordered list plus `key_preview`, the chunk
+decomposition of each original string, and `swap_count`, the minimal number
+of adjacent swaps needed to sort the input), `rank` (insertion position and
+neighboring entries of one value against a reference list), `compare`
+(-1/0/1 for two strings with a chunk-by-chunk explanation and
+`first_difference`), and `is_sorted` (bool plus adjacent violation pairs).
+
+Documented chunking rules: maximal ASCII digit runs are number chunks
+compared by integer value with arbitrary precision via exact digit-string
+keys, so even runs longer than Python's 4,300-digit int-string conversion
+limit work (1,000+ digit runs never use floats or `int()`); number chunks
+sort before text chunks at the same position; text chunks are compared by
+Unicode code point after NFD normalization, so precomposed and decomposed
+accents are equal keys (`café` == `cafe` + U+0301) and `café` sorts beside
+`cafe` instead of after every ASCII letter; whitespace and embedded signs
+are plain text (`a-1` chunks as `a` / `-` / `1`); equal chunk prefixes order
+the shorter string first, and the empty string sorts before everything.
+`case_sensitive=False` (default) compares text via `str.casefold()` applied
+after the NFD normalization, so `Weiss` and `Weiß` are equal keys.
+`leading_zeros` defaults to `stable`: `002` and `2` are equal keys and keep
+input order; `fewer_first` breaks such ties toward fewer leading zeros.
+`decimal=True` merges `digits.digits` groups into exact decimal values
+compared with string arithmetic (integer part by length then digits,
+fraction digit-wise), so `["1.5", "1.10"]` sorts as `["1.10", "1.5"]`
+because 1.10 == 1.1 numerically. `number_mode="whole"` recognizes only
+whole-string numbers. Non-ASCII decimal digits (Unicode Nd) are text by
+default; pass `unicode_digits="normalize"` to fold them to their values via
+`unicodedata.digit`, or `"reject"` to refuse them. In `compare`,
+`first_difference` is computed over the whole chunk lists — never from the
+capped explanation slice — and `prefix_relation` covers the empty string
+against any non-empty string.
+
+The tool never mutates its input, Python's stable sort preserves input order
+for equal keys, and no locale, time, or randomness is consulted: the same
+input always produces a byte-identical result. Inputs are strictly validated
+(strings only) and bounded by `max_items` and `max_item_length`; preview,
+violation, and comparison counts are capped with explicit truncation flags.
