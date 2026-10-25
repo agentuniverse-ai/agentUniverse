@@ -675,3 +675,83 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Identifier Split Tool
+
+`IdentifierSplitTool` extracts the *words* inside code identifiers —
+the unclaimed inverse of case conversion. Search and matching over
+code symbols needs `getHTTPResponseCode` to surface a query for
+"response"; a case converter only maps one identifier to another.
+This tool is built purely on the Python standard library, needs no
+network access, and complements `CaseConverterTool`: that tool
+CONVERTS between case styles, this tool splits an identifier INTO
+words (acronyms intact) and re-joins a word list back into a chosen
+style.
+
+Four modes:
+
+- `split` — identifier → word list plus the detected style
+  (`camel`/`pascal`/`snake`/`kebab`/`screaming_snake`/`mixed`). Runs
+  of `_` and `-` are separators, except a leading run which stays
+  attached to the first word (`_private_value` →
+  `["_private", "value"]`) and a trailing run to the last
+  (`value_` → `["value_"]`). Inside a token, lowercase→UPPERCASE
+  splits (`getHTTP` → `get|HTTP`); an uppercase run of two or more
+  letters followed by lowercase keeps itself whole as an acronym and
+  donates its last letter to the next word (`HTTPServer` →
+  `HTTP|Server`, `XMLHttpRequest` → `XML|Http|Request`); digit runs
+  attach to the preceding letter run (`base64` → `["base64"]`,
+  `SHA256` → `["SHA256"]`, `utf8Decode` → `["utf8", "Decode"]`) but
+  always start a new word before a following uppercase letter
+  (`HTTP2Server` → `["HTTP2", "Server"]`); lowercase continues
+  through digits (`md5sum` → `["md5sum"]`).
+- `rejoin` — words + style → identifier, with the `CaseConverterTool`
+  identifier style names `snake`, `kebab`, `camel`, `pascal`,
+  `constant` (synonym `screaming`). Words are lowercased into the
+  join exactly as `CaseConverterTool` does, so the round-trip
+  identity is case-insensitive:
+  `lower(split(rejoin(words, style))) == lower(words)` on canonical
+  identifiers (pure-digit words and uncased digit tokens such as
+  `md5sum` re-merge or gain humps under separator-less / uppercasing
+  styles — boundaries those styles cannot represent). For full text
+  case conversions (upper, lower, title, sentence, slug) use
+  `CaseConverterTool` directly.
+- `is_identifier` — text → validity against the ASCII
+  code-identifier grammar `^[A-Za-z_][A-Za-z0-9_]*$`, a keyword flag
+  against the embedded 35-word hard Python keyword list
+  (case-sensitive; soft keywords are excluded), the first offending
+  character as `invalid_reason` and the best-effort style.
+- `batch_split` — symbol list → per-identifier splits plus a search
+  vocabulary: unique lowercased words with occurrence counts across
+  the batch (`HTTPServer` and `http_server` both feed the same
+  "server" entry), in deterministic first-appearance order. Items
+  failing identifier validation yield structured per-item errors
+  instead of aborting the batch.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.identifier_split_tool import IdentifierSplitTool
+
+tool = IdentifierSplitTool()
+tool.execute(mode="split", identifier="getHTTPResponseCode")
+# {'mode': 'split', 'identifier': 'getHTTPResponseCode',
+#  'words': ['get', 'HTTP', 'Response', 'Code'], 'word_count': 4,
+#  'style_detected': 'camel'}
+tool.execute(mode="rejoin", words=["HTTP", "Server"], style="snake")
+# {'mode': 'rejoin', 'style': 'snake', 'result': 'http_server'}
+tool.execute(mode="is_identifier", text="class")
+# {'mode': 'is_identifier', 'text': 'class', 'valid': True,
+#  'is_keyword': True, 'invalid_reason': None, 'style_detected': 'camel'}
+tool.execute(mode="batch_split", identifiers=["HTTPServer", "http_server_status"])
+# {'mode': 'batch_split', 'count': 2, ...,
+#  'vocabulary': {'http': 2, 'server': 2, 'status': 1},
+#  'vocabulary_size': 3}
+```
+
+Inputs are validated strictly before any computation: malformed
+parameters (unknown mode, wrong types, empty identifier, characters
+outside `[A-Za-z0-9_-]` for split identifiers and rejoin words,
+unknown rejoin style, inputs over the size caps — 10,000 characters
+per identifier, 10,000 items / 200,000 total characters for the
+lists) raise a `ValueError`. Everything is deterministic: no
+randomness, no clock, no network, and the keyword list is embedded so
+verdicts are pinned across interpreter versions.
