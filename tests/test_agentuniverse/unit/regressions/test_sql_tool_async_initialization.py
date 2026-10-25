@@ -61,6 +61,15 @@ def test_sync_first_then_async_reuses_tool(monkeypatch):
     lookup.assert_called_once_with("local")
 
 
+def test_sync_and_async_execution_accept_ordinary_input_only(monkeypatch):
+    tool, database, lookup = make_tool(monkeypatch)
+
+    assert tool.execute("select 1") == "sync:select 1"
+    assert asyncio.run(tool.async_execute("select 2")) == "async:select 2"
+    assert tool.tool.db is database
+    lookup.assert_called_once_with("local")
+
+
 def test_preconfigured_tool_does_not_resolve_database(monkeypatch):
     tool, database, lookup = make_tool(monkeypatch)
     wrapped = QueryTool(db=database)
