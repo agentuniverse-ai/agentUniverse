@@ -82,6 +82,35 @@ doc_processor = ['sample_standard_app.intelligence.agentic.knowledge.doc_process
 
 
 ## The following DocProcessors are built into agentUniverse:
+
+### [MetadataFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/metadata_filter.yaml)
+
+`MetadataFilter` applies deterministic metadata predicates to recalled Documents.
+It is useful for enforcing tenant, product, locale, or access-scope rules after a
+Store query and before the result is sent to the agent.
+
+```yaml
+name: 'metadata_filter'
+conditions:
+  - field: 'tenant_id'
+    operator: 'eq'
+    value: 'tenant-a'
+  - field: 'language'
+    operator: 'in'
+    value: ['en', 'zh']
+match_mode: 'all'
+missing: 'exclude'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.metadata_filter'
+  class: 'MetadataFilter'
+```
+
+Supported operators are `eq`, `ne`, `in`, `not_in`, `contains`, `exists`, `gt`,
+`gte`, `lt`, and `lte`. `match_mode` can be `all` or `any`. By default, a
+condition whose field is absent does not match; set `missing: 'include'` only
+when that behavior is intentional. The processor preserves the input order.
+
 ### [CharacterTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/character_text_splitter.yaml)
 This component splits the original text based on the number of characters.
 The component definition file is as follows:
