@@ -35,6 +35,11 @@ class DocProcessor(ComponentBase):
     description: Optional[str] = None
 
     class Config:
+        """Pydantic model configuration for the DocProcessor.
+
+        Allows arbitrary types so that component classes can be used as
+        field types in subclasses.
+        """
         arbitrary_types_allowed = True
 
     def process_docs(self, origin_docs: List[Document], query: Query = None) -> \
