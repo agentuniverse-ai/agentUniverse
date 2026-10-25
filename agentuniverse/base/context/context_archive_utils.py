@@ -15,6 +15,8 @@ def get_current_context_archive():
         The archive is stored in FrameworkContextManager under the key
         ``'context_archive'``. If it does not exist, this function will create
         an empty dict and set it into the framework context.
+        An existing empty dictionary is retained so held references continue
+        to observe updates, including after the archive is cleared in place.
 
         Returns:
             dict: The current context archive dictionary. Keys are arbitrary names,
