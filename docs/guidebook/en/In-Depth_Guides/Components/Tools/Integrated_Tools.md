@@ -649,3 +649,50 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Permissions Tool
+
+`PermissionsTool` performs Unix file-permission mode arithmetic without touching
+the filesystem. It operates on the 12 mode bits (0o0000-0o7777) across five
+modes: `parse`, `chmod`, `umask_apply`, `review`, and `invert`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.permissions_tool import PermissionsTool
+
+tool = PermissionsTool()
+breakdown = tool.execute(mode="parse", mode_value="rwsr-x--t")
+shifted = tool.execute(
+    mode="chmod",
+    current_mode="0644",
+    operation="u+x,go-w",
+)
+created = tool.execute(mode="umask_apply", mode_value="0666", umask="022")
+audit = tool.execute(mode="review", mode_value="777", is_dir=False)
+fix = tool.execute(mode="invert", mode_value="0666", target_mode="0640")
+```
+
+`parse` accepts an octal int/str (754, '0754') or a 9-character symbolic
+string ('rwxr-x---', 'rwsr-x--t') and returns the octal 3/4-digit forms, both
+symbolic renderings, per-class read/write/execute flags, the setuid/setgid/
+sticky flags, per-class digit values, and findings for invalid characters per
+position or wrong-length input. `chmod` evaluates a full
+`[ugoa]*[+-=][rwxXstugo]*` operand with comma-separated clauses against a
+current mode, returning the new-mode breakdown and a per-clause change list.
+`umask_apply` computes `mode & ~umask` for an octal or symbolic mask with a
+per-bit explanation table. `review` reports bit-level security findings
+(world-writable files and directories, the sticky-directory exception,
+group-writable executables, setuid/setgid with the expected system binaries as
+context, world-readable content with an explicit no-content-assumption note,
+execute-without-read, and mode 000) plus read-only find-style command hints it
+never executes. `invert` derives the deterministic simplest-form chmod command
+between a current and target mode.
+
+Semantics follow POSIX chmod: clauses apply left to right, an omitted who
+means all classes resolved like who='a' with no umask adjustment (the GNU
+chmod rule; POSIX specifies that omitted-who clauses are masked by the
+process umask and BSD-derived chmod implements that, but a tool caller
+cannot expose its umask), X means execute only for a directory or when some
+execute bit is already set before the operation, and ugo copy sources work
+only with '=' and copy the class bits as accumulated so far. The tool uses
+only the standard library, runs no subprocesses, applies strict validation
+with input length caps, and returns deterministic results.
