@@ -148,6 +148,11 @@ class SemanticDeduplicator(DocProcessor):
             # Compute embeddings for all documents
             texts = [doc.text for doc in docs]
             embeddings = embedding_model.get_embeddings(texts)
+            if len(embeddings) != len(docs):
+                raise ValueError(
+                    "Semantic deduplication requires one embedding per document "
+                    f"(expected {len(docs)}, got {len(embeddings)})"
+                )
 
             # Update document embeddings
             for doc, embedding in zip(docs, embeddings):
