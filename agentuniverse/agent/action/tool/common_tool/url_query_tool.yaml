@@ -1,0 +1,73 @@
+name: url_query_tool
+description: URL query tool — pure Python stdlib, no network required. Edit the query string of a URL while everything else stays byte-identical — add or update parameters from a dict with bool/int/float/str coercion, first-occurrence updates and appended new keys (mode='set'); delete every occurrence of keys with missing-key reporting (mode='delete'); rename keys in place (mode='rename'); drop the whole query including a dangling '?' (mode='clear'); stable-sort parameters by key, the OAuth signature-prep convention (mode='sort'); and flip &k=true/&k=false flags (mode='toggle_bool'). Repeated keys are never collapsed, empty values and bare keys are preserved, and encoding round-trips through quote_plus(safe='') — or is passed through raw with encode=False.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.url_query_tool
+  class: UrlQueryTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Edit mode — set, delete, rename, clear, sort or toggle_bool.
+    required: true
+  url:
+    type: string
+    description: The URL whose query string is edited; scheme, authority, path and fragment are preserved byte-for-byte.
+    required: false
+  params:
+    type: object
+    description: Set mode — a non-empty dict mapping keys to values; values are coerced (bool -> 'true'/'false', int/float via str(), str verbatim). Updating a key rewrites its first occurrence in place, new keys are appended.
+    required: false
+  keys:
+    type: array
+    description: Delete mode — a non-empty list of parameter names; every occurrence of each is removed and missing keys are reported.
+    required: false
+  mapping:
+    type: object
+    description: Rename mode — a non-empty dict mapping old keys to new keys, applied against the original key set simultaneously; old must differ from new.
+    required: false
+  key:
+    type: string
+    description: Toggle_bool mode — the flag to flip between true and false; an absent key is added as true.
+    required: false
+  encode:
+    type: boolean
+    description: Re-encode parameters with quote_plus(safe='') on rebuild (default). With false, untouched parameters keep their original bytes and new keys/values are inserted raw.
+    required: false
+  strict:
+    type: boolean
+    description: Require the URL to carry a scheme (default false — scheme-relative and non-http url-shaped strings are accepted).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["set", "delete", "rename", "clear", "sort", "toggle_bool"]
+      description: Edit mode.
+    url:
+      type: string
+      description: URL whose query string is edited.
+    params:
+      type: object
+      description: Set mode — dict mapping keys to values with bool/int/float/str values.
+    keys:
+      type: array
+      items:
+        type: string
+      description: Delete mode — parameter names to remove.
+    mapping:
+      type: object
+      description: Rename mode — dict mapping old keys to new keys.
+    key:
+      type: string
+      description: Toggle_bool mode — flag name.
+    encode:
+      type: boolean
+      description: Re-encode on rebuild (default true).
+    strict:
+      type: boolean
+      description: Require a scheme (default false).
+  required: ["mode"]
