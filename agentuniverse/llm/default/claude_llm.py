@@ -67,15 +67,9 @@ class ClaudeLLM(LLM):
         return client
 
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        """Run the Claude LLM.
-
-        Args:
-            messages (list): The messages to send to the LLM.
-            **kwargs: Arbitrary keyword arguments.
-        """
+        """Run a request with a client owned by this invocation."""
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
-        self.client = self._new_client()
-        chat_completion = self.client.messages.create(
+        request = dict(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
             temperature=kwargs.pop('temperature', self.temperature),
@@ -83,15 +77,18 @@ class ClaudeLLM(LLM):
             max_tokens=kwargs.pop('max_tokens', self.max_tokens),
             **kwargs,
         )
-        if not streaming:
-            self.close()
-            return self.parse_result(chat_completion)
-        return self.generate_stream_result(chat_completion)
+        if streaming:
+            return self._stream_request(request)
+        client = self._new_client()
+        self.client = client
+        try:
+            return self.parse_result(client.messages.create(**request))
+        finally:
+            client.close()
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
-        self.async_client = self._new_async_client()
-        chat_completion = await self.async_client.messages.create(
+        request = dict(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
             temperature=kwargs.pop('temperature', self.temperature),
@@ -99,10 +96,41 @@ class ClaudeLLM(LLM):
             max_tokens=kwargs.pop('max_tokens', self.max_tokens),
             **kwargs,
         )
-        if not streaming:
-            await self.aclose()
-            return self.parse_result(chat_completion)
-        return self.agenerate_stream_result(chat_completion)
+        if streaming:
+            return self._astream_request(request)
+        client = self._new_async_client()
+        self.async_client = client
+        try:
+            return self.parse_result(await client.messages.create(**request))
+        finally:
+            await client.close()
+
+    def _stream_request(self, request: dict) -> Iterator[LLMOutput]:
+        # Acquire lazily: closing an unstarted generator must not strand a client.
+        client = self._new_client()
+        self.client = client
+        try:
+            completion = client.messages.create(**request)
+            try:
+                yield from self.generate_stream_result(completion)
+            finally:
+                completion.close()
+        finally:
+            # Never close self.client here: another invocation may have replaced it.
+            client.close()
+
+    async def _astream_request(self, request: dict) -> AsyncIterator[LLMOutput]:
+        client = self._new_async_client()
+        self.async_client = client
+        try:
+            completion = await client.messages.create(**request)
+            try:
+                async for chunk in self.agenerate_stream_result(completion):
+                    yield chunk
+            finally:
+                await completion.close()
+        finally:
+            await client.close()
 
     @staticmethod
     def parse_result(data):
@@ -120,7 +148,6 @@ class ClaudeLLM(LLM):
             if getattr(chunk.delta, 'type', None) != 'text_delta':
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
-        self.close()
 
     async def agenerate_stream_result(self, chat_completion: AsyncIterator):
         async for chunk in chat_completion:
@@ -129,7 +156,6 @@ class ClaudeLLM(LLM):
             if getattr(chunk.delta, 'type', None) != 'text_delta':
                 continue
             yield LLMOutput(text=chunk.delta.text, raw=chunk.model_dump())
-        await self.aclose()
 
     def as_langchain(self) -> BaseLanguageModel:
         """
