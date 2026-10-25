@@ -675,3 +675,42 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## ReadingTimeTool
+
+`ReadingTimeTool` estimates how long content takes to consume and, inversely, how much text fits a time slot — the planning complement to `ReadingLevelScorer` (which measures text *difficulty*, not time). Four modes, pure Python standard library, exact rational arithmetic, zero dependencies, zero network access:
+
+- `estimate`: `text` -> reading time at three speeds — slow 150 / average 238 / fast 350 wpm. The 238 wpm average is the silent-prose reading rate from Brysbaert's 2019 meta-analysis ("How many words do we read per minute? A meta-analysis of reading rate", Journal of Memory and Language 109). A `reading_wpm` override (50-1000) replaces the trio with one custom speed.
+- `speaking`: `text` -> speaking time at 140/160/180 wpm tiers, or the deck rule via `deck_count` — one slide (or one bullet talking point with `deck_unit='bullets'`) presents in about 30-60 seconds, returned as a min-max range plus midpoint.
+- `custom`: `text` + `wpm` (50-1000, default 238) for word-based media, or `seconds_per_char` for char-based media. Subtitle standard: ~17 characters per second, i.e. `seconds_per_char = 1/17 ≈ 0.0588`; the char basis counts every character of the trimmed text, whitespace included.
+- `plan`: the inverse direction — `target_minutes` (> 0) + `wpm` -> the word budget filling the slot, as `min_words`/`max_words` at ±10% (floor/ceil) around the exact budget.
+
+Word counting is CJK-aware and follows the family tokenizer rule shared with `ReadingLevelScorer`: a word is a Latin alphabetic run (inner hyphens and apostrophes kept — `state-of-the-art` and `don't` are one word each), a digit run, or ONE CJK character (Han, kana, Hangul); `你好` counts as two words and mixed documents work naturally.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.reading_time_tool import ReadingTimeTool
+
+tool = ReadingTimeTool()
+tool.execute(mode="estimate", text="The quick brown fox jumps over the lazy dog.")
+# words=9; speeds slow 4 s / average 3 s / fast 2 s
+tool.execute(mode="estimate", text=article, reading_wpm=200)   # one custom speed
+tool.execute(mode="speaking", text=script)                     # 140/160/180 wpm tiers
+tool.execute(mode="speaking", deck_count=10)                   # 5-10 min, mid 7 min 30 s
+tool.execute(mode="speaking", deck_count=25, deck_unit="bullets")
+tool.execute(mode="custom", text=subtitles, seconds_per_char=1/17)  # ~20 s per 340 chars
+tool.execute(mode="plan", target_minutes=10, wpm=238)          # budget 2380, range 2142-2618
+```
+
+```yaml
+name: reading_time_tool
+description: Reading/speaking time estimation and word budgets, zero dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.reading_time_tool
+  class: ReadingTimeTool
+input_keys: [mode]
+```
+- Rounding rules are documented and deterministic: raw durations are exact rationals, `seconds` fields are ceiled up to whole seconds, and `humanized` renders sub-second durations as `< 1 s`, zero as `0 s`, minute-plus durations as `3 min 12 s` (trailing `0 s` dropped) and hour-plus durations as `1 h 5 min 3 s` (zero components skipped).
+- `estimate` results carry `words`, `latin_words`, `cjk_chars` and the `counting_rule`; `speaking` deck results carry `seconds_per_unit: [30, 60]` with min/mid/max seconds and humanized forms; `custom` reports its `basis` (`words` or `chars`) plus the counted units; `plan` reports the slot in seconds and the ±10% budget window.
+- Validation is strict: unknown modes, empty or non-string text, wpm outside 50-1000, non-positive `target_minutes`, `seconds_per_char` outside (0, 10], deck counts outside 1-10000, unknown `deck_unit` values and the mutually exclusive `wpm`/`seconds_per_char` pair all return structured errors, never raise.
