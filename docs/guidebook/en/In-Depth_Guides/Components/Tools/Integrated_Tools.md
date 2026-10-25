@@ -675,3 +675,55 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Collection Stats Tool
+
+`CollectionStatsTool` computes descriptive statistics over a list of
+numbers, built purely on the Python standard library — `statistics`,
+`math` and `json` — with zero network access. The `stats` mode returns
+a full summary (`count`, `min`, `max`, `range`, `sum`, `mean`,
+`median`, `mode` as the sorted list of most-frequent values,
+population and sample variance and standard deviation, quartiles
+`q1`/`q2`/`q3`, the interquartile range, the 1.5*IQR outlier fences
+and the list of outlier values they select); the `frequencies` mode
+returns a value-to-count table sorted by count descending then value
+ascending, with the distinct-value count and an optional `top_n`
+truncation; the `zscore` mode returns one z-score per value, computed
+against the sample's own mean and *sample* standard deviation.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import CollectionStatsTool
+
+tool = CollectionStatsTool()
+summary = tool.execute(mode="stats", numbers=[2, 4, 4, 5, 6, 7, 8, 9, 10, 12, 100])
+top = tool.execute(mode="frequencies", numbers="4\n1\n4\n3\n2\n4\n2", top_n=2)
+zscores = tool.execute(mode="zscore", numbers="[1, 2, 3, 4]")
+```
+
+Numbers are accepted as a JSON array string (for example
+`"[1, 2.5, -3e2]"`), as plain text with one number per line (leniently:
+blank lines are skipped and commas or spaces may also separate
+tokens), or as a Python sequence for programmatic callers. Every form
+accepts the same number grammar — an optional sign, digits with an
+optional fractional part, and an optional exponent — so scientific
+notation such as `-3e2` or `1.5E-3` and forms like `+.5` parse in
+JSON, in text tokens and in sequence string elements alike. Quartiles
+use the *inclusive* method — the same estimator as
+`statistics.quantiles(..., method="inclusive")`, interpolating linearly
+at fractional position `p*(N-1)` — so `q2` always equals the median.
+Outliers are the values outside the fences `q1 - 1.5*IQR` and
+`q3 + 1.5*IQR`. When every value is identical the sample stdev is 0,
+z-scores are undefined, and the `zscore` result reports `null`
+z-scores with an explanatory `note` instead of raising.
+
+Inputs are validated strictly before any computation: malformed
+parameters (unknown mode, missing `numbers`, a non-string
+non-sequence `numbers` value, a count outside 2..10,000, input text
+over 200,000 characters, an invalid `top_n`) raise a `ValueError`.
+Errors that depend on the content being processed — a non-numeric or
+non-finite token (including `NaN`, infinities, booleans and
+out-of-range integers), or a malformed JSON array — are returned as a
+structured `error` payload (`{"type": ..., "message": ...}`) that
+pinpoints the offending element index or line/token position instead
+of raising. All values are normalised to finite floats and every
+result is deterministic for the same input.

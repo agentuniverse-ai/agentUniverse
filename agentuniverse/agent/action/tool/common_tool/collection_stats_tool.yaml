@@ -1,0 +1,37 @@
+name: collection_stats_tool
+description: "Collection statistics tool — pure Python stdlib, no network required. Descriptive statistics over a list of numbers: mode='stats' (count, min, max, range, sum, mean, median, mode, population and sample variance/stdev, inclusive-method quartiles Q1/Q2/Q3, IQR, 1.5*IQR outlier fences and outlier list), mode='frequencies' (value-to-count table sorted by count desc then value, optional top_n) and mode='zscore' (per-value z-scores against the sample's own mean and sample stdev, with a structured note when the stdev is 0). Numbers are accepted as a JSON list string, one-per-line text or a sequence; non-numeric tokens are rejected with their position."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.collection_stats_tool
+  class: CollectionStatsTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Statistics mode — stats, frequencies or zscore.
+    required: true
+  numbers:
+    type: string
+    description: The numbers to analyse — a JSON array string (e.g. "[1, 2.5, -3e2]"), plain text with one number per line (blank lines skipped; commas or spaces also separate tokens) or, for programmatic callers, a list/tuple of ints or floats. Scientific notation (-3e2, 1.5E-3) and signed decimal forms (+.5) are accepted in every form. Between 2 and 10000 finite values are required; NaN, infinity, booleans and non-numeric tokens are rejected with their position.
+    required: false
+  top_n:
+    type: integer
+    description: Frequencies mode only — keep just the first top_n entries of the sorted frequency table. A positive integer; a top_n larger than the number of distinct values returns every entry.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["stats", "frequencies", "zscore"]
+      description: Statistics mode.
+    numbers:
+      type: string
+      description: Numbers to analyse (JSON array string, one-per-line text, or a sequence for programmatic callers).
+    top_n:
+      type: integer
+      minimum: 1
+      description: Truncation size for the frequencies table (frequencies mode only).
+  required: ["mode"]
