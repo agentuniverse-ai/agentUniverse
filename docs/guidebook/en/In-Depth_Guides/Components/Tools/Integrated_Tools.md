@@ -649,3 +649,55 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Ngram Suggester Tool
+
+`NgramSuggesterTool` builds small n-gram language models and suggests
+next candidates from a sample text, purely on the Python standard
+library with zero network access. `model` mode (n 1-5) splits the text
+into sentences on `.` `!` `?` and their CJK equivalents (`。` `！` `？`),
+pads every sentence with `n - 1` leading `<START>` symbols and one
+trailing `<END>` symbol, and returns a table mapping each context
+(space-joined token tuple; the empty string for unigrams) to
+`[word, count, probability]` rows sorted by count descending then word
+ascending, truncated to `top_k` rows per context (default 10).
+Probabilities are relative to all continuations of the context, so a
+truncated context's retained rows may sum to less than 1 (the count of
+truncated contexts is reported). Optional flags lowercase the text and
+drop tokens shorter than a minimum length before modeling. `next` mode
+takes that model (dict or JSON string) plus a context phrase of exactly
+`n - 1` words and returns the candidates, the retained candidate count
+sum, and a structured note for unobserved contexts. `char_ngrams` mode
+(n 2-5) lists character n-gram frequencies, either within words only
+(default, no spaces) or across word boundaries over
+whitespace-normalized text (`cross_word=True`, n-grams may contain
+spaces). `perplexity-lite` mode scores a text under a model as the
+average negative natural-log probability of its observed continuations;
+unseen continuations get add-one Laplace smoothing with the model
+vocabulary size (seen context with unseen word: `1/(context_count + V +
+1)`; fully unseen context: `1/(V + 1)`). This is a simple
+Laplace-smoothed NLL, not true perplexity — the name and the returned
+note say so explicitly.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.ngram_suggester_tool import NgramSuggesterTool
+
+tool = NgramSuggesterTool()
+model = tool.execute(mode="model", text="The cat sat. The cat ran. The dog sat.", n=2, lowercase=True)
+tool.execute(mode="next", model=model, context="the")
+# {'mode': 'next', 'n': 2, 'context': 'the', 'context_seen': True,
+#  'candidates': [['cat', 2, 0.666...], ['dog', 1, 0.333...]], 'total_count': 3}
+tool.execute(mode="char_ngrams", text="aba ab", n=2)
+tool.execute(mode="perplexity-lite", text="the cat sat", model=model)
+```
+
+Malformed parameters (unknown mode, missing or empty text, `n` out of
+range, non-integer or out-of-range `top_k` / `min_token_length`,
+non-boolean `lowercase` / `cross_word`, a `next` context with the wrong
+number of words, missing `model`) raise a `ValueError` before any
+computation. A `model` JSON string that does not parse, or a dict that
+does not match the model-mode output shape, is returned as a structured
+`error` payload (`{"type": "invalid_model_json" | "invalid_model",
+"message": ...}`) with the precise offending key and row. All outputs
+are deterministic: ties sort alphabetically and repeated calls on the
+same input return identical results.
