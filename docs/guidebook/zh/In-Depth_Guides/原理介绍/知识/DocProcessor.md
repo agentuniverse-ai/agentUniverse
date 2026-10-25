@@ -1,5 +1,7 @@
 # DocProcessor
 
+可选的离线逐 token 重排见 [ColBERT late interaction](ColBERT_Reranker.md)。
+
 DocProcessor负责对Document进行各种处理，如文本拆分、关键词提取等等。DocProcessor的输入输出均为List[Document]，这保证了多个DocProcessor可以叠加形成对Document的一个加工流。
 
 Document定义如下：
