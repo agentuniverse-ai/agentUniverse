@@ -317,3 +317,19 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [LostInTheMiddleReorderer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/lost_in_the_middle_reorderer.yaml)
+
+This component re-orders the recalled documents so that the most relevant ones occupy the beginning and the end of the final list, while the least relevant ones end up in the middle. Long-context LLMs attend best to content at the two ends of their input window ("Lost in the Middle", Liu et al., 2023), so this placement improves answer quality without dropping or modifying any document. It reads each document's relevance score from the metadata field `score_field` (the same convention written by DashscopeReranker / JinaReranker / ReciprocalRankFusionProcessor), keeps documents without a score after the scored ones in their original order, and returns the list unchanged when no document carries a score. It is typically placed last in the `post_processors` chain of a knowledge config, right before the recalled texts are assembled into the LLM prompt.
+
+The component definition file is as follows:
+```yaml
+name: 'lost_in_the_middle_reorderer'
+description: 'position-aware re-orderer that places the most relevant recalled documents at the beginning and end of the context and the least relevant in the middle, dodging LLM positional bias (issue #248)'
+score_field: 'relevance_score'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.lost_in_the_middle_reorderer'
+  class: 'LostInTheMiddleReorderer'
+```
+- score_field: The metadata key holding each document's relevance score.

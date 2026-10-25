@@ -315,3 +315,19 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [LostInTheMiddleReorderer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/lost_in_the_middle_reorderer.yaml)
+
+该组件对召回的文档进行重排序：将最相关的文档放在最终列表的开头和结尾，将最不相关的文档放在中间。长上下文大模型对输入窗口首尾位置的内容关注度最高（《Lost in the Middle》，Liu 等，2023），因此这种排布方式可以在不丢弃、不修改任何文档的前提下提升回答质量。组件从元数据的 `score_field` 字段读取每篇文档的相关性得分（与 DashscopeReranker / JinaReranker / ReciprocalRankFusionProcessor 写入的约定一致），无得分的文档按原始顺序排在有得分文档之后；当所有文档都没有得分时，列表原样返回。该组件通常配置在知识配置的 `post_processors` 链的最后，紧邻召回文本拼装进大模型提示词之前。
+
+该组件定义文件如下：
+```yaml
+name: 'lost_in_the_middle_reorderer'
+description: 'position-aware re-orderer that places the most relevant recalled documents at the beginning and end of the context and the least relevant in the middle, dodging LLM positional bias (issue #248)'
+score_field: 'relevance_score'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.lost_in_the_middle_reorderer'
+  class: 'LostInTheMiddleReorderer'
+```
+- score_field: 存放每篇文档相关性得分的元数据键名。
