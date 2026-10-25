@@ -63,7 +63,6 @@ class SlaveRagAgentTemplate(AgentTemplate):
         profile: dict = self.agent_model.profile
 
         profile_instruction = profile.get('instruction')
-        profile_instruction = expert_framework + profile_instruction if profile_instruction else profile_instruction
 
         profile_prompt_model: AgentPromptModel = AgentPromptModel(introduction=profile.get('introduction'),
                                                                   target=profile.get('target'),
@@ -78,8 +77,11 @@ class SlaveRagAgentTemplate(AgentTemplate):
             version_prompt_model: AgentPromptModel = AgentPromptModel(
                 introduction=getattr(version_prompt, 'introduction', ''),
                 target=getattr(version_prompt, 'target', ''),
-                instruction=expert_framework + getattr(version_prompt, 'instruction', ''))
+                instruction=getattr(version_prompt, 'instruction', ''))
             profile_prompt_model = profile_prompt_model + version_prompt_model
+
+        if expert_framework:
+            profile_prompt_model.instruction = expert_framework + (profile_prompt_model.instruction or '')
 
         chat_prompt = ChatPrompt().build_prompt(profile_prompt_model, ['introduction', 'target', 'instruction'])
         image_urls: list = agent_input.pop('image_urls', []) or []
