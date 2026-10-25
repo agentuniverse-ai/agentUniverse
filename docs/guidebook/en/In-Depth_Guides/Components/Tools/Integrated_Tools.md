@@ -4,6 +4,46 @@ In the current agentUniverse's sample project, the following tools are integrate
 
 HTTP-based API tools use the SSRF proxy helper for outbound requests. See [SSRF proxy environment variables](./SSRF_Proxy.md) for `SSRF_PROXY_*` configuration.
 
+## 1. Prompt Quality Tool
+
+The built-in `PromptQualityTool` performs deterministic, offline prompt checks.
+It normalizes whitespace and reports a score, structural issues, suggestions, and
+the normalized prompt. It does not call an LLM and does not claim to judge the
+semantic correctness of a prompt, so it can be used in examples or CI checks.
+
+[Tool configuration](../../../../../../agentuniverse/agent/action/tool/common_tool/prompt_quality_tool.yaml)
+
+```yaml
+name: prompt_quality_tool
+description: Analyze prompt structure and return deterministic optimization suggestions without an external model.
+tool_type: api
+input_keys: [prompt]
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.prompt_quality_tool
+  class: PromptQualityTool
+```
+
+```python
+result = tool.run(
+    prompt="""
+    # Task
+    Summarize the incident report.
+
+    # Constraints
+    Use only the supplied report and do not invent facts.
+
+    # Output
+    Return JSON with summary and severity fields.
+    """,
+    required_sections=["Task", "Constraints", "Output"],
+)
+```
+
+The result includes `passed`, a 0-100 structural score, machine-readable issue
+codes, human-readable suggestions, and character/line metrics. Length limits and
+whether output or constraint signals are required are configurable.
+
 ## 1. Search Tools
 
 ### 1.1 Google Search
