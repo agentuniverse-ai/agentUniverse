@@ -1,0 +1,36 @@
+name: xml_path_tool
+description: XML path query tool — pure Python stdlib ElementTree, no XPath engine dependency. Query XML elements with a compact path subset (absolute /root/child paths, // descendants, ** alias, * wildcard, [n]/[last()] positions, [@attr='value']/[@attr] attribute tests) with mode='query' returning matches with tag/attributes/text snippet, mode='attrs' returning each match's attribute dict, mode='text' returning stripped own-text values, and mode='validate' checking well-formedness with expat error line/column. DOCTYPE/ENTITY markup is rejected before any parsing (XXE protection).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.xml_path_tool
+  class: XmlPathTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — query, attrs, text or validate.
+    required: true
+  xml_text:
+    type: string
+    description: The XML document as text. Required for every mode; bytes are rejected (pass text).
+    required: false
+  path:
+    type: string
+    description: The compact path selecting elements (e.g. /catalog/book[1], //title, /catalog/**/price, //book[@category='fiction']). Required for the query, attrs and text modes; not used by validate.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["query", "attrs", "text", "validate"]
+      description: Operation mode.
+    xml_text:
+      type: string
+      description: The XML document as text.
+    path:
+      type: string
+      description: Compact selection path (query, attrs, text modes).
+  required: ["mode"]
