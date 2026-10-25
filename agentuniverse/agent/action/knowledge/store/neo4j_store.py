@@ -52,6 +52,9 @@ class Neo4jStore(Store):
                                                auth=(self.user, self.password))
 
     def execute_cypher(self, query_str, param=None, return_data=True):
+        """Execute Cypher with a parameter map, including names such as query
+        and parameters that also appear in the driver's Python signature.
+        """
         df_result = self._execute_cypher(self.driver.session(), query_str, param, return_data)
         return df_result
 
