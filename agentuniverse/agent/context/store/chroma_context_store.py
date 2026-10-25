@@ -484,6 +484,14 @@ class ChromaContextStore(ContextStore):
     def get_all_sessions(self) -> List[str]:
         """Get all session IDs stored in Chroma.
 
+        Rows that carry no usable ``session_id`` are skipped instead of failing
+        the whole call, matching how :meth:`get` treats a row it cannot rebuild.
+        A collection can hold rows written by something else -- an older
+        version of this store, or another component pointed at the same
+        collection -- and one such row used to make every session invisible.
+        A non-string ``session_id`` counts as unusable because :meth:`get`
+        rebuilds a segment whose ``session_id`` is ``Optional[str]``.
+
         Returns:
             List of unique session IDs
         """
@@ -497,10 +505,18 @@ class ChromaContextStore(ContextStore):
             if not results or not results["metadatas"]:
                 return []
 
-            # Extract unique session IDs
+            # Extract unique session IDs, skipping rows that do not name one.
             session_ids = set()
             for metadata in results["metadatas"]:
-                session_ids.add(metadata["session_id"])
+                if not isinstance(metadata, dict):
+                    continue
+                session_id = metadata.get("session_id")
+                # Only strings are usable: `get()` rebuilds a ContextSegment whose
+                # `session_id` field is `Optional[str]`, so a numeric metadata
+                # value makes that call raise and the row unreadable. Listing such
+                # an id would advertise a session nothing can be read from.
+                if isinstance(session_id, str):
+                    session_ids.add(session_id)
 
             return list(session_ids)
 
