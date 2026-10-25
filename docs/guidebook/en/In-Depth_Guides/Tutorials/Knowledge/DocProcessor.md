@@ -317,3 +317,31 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [MojibakeDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/mojibake_detector.yaml)
+
+This component flags encoding-corrupted text (mojibake) into document metadata, addressing the *pre-processing/analysis* direction of issue #258. Documents gathered by crawlers and file readers are routinely decoded with the wrong codec: UTF-8 bytes read as Latin-1 or CP1252 turn 中文 into "ä¸­æ" and the curly apostrophe of "don’t" into "donâ€™t", failed byte sequences collapse into U+FFFD replacement characters, and sometimes text is never decoded at all and arrives full of %E4%B8%AD percent escapes or &#x4E2D; HTML entities. Feeding such documents into a knowledge base pollutes embeddings and retrieval with garbage tokens. The detector runs five independent, purely-structural signals over every document: `replacement_char` (U+FFFD count), `utf8_as_latin1` (the exact Latin-1 rendering of UTF-8 multi-byte sequences: a lead character from Â/Ã, à-ï or ð-ô followed by continuation-range characters), `utf8_as_cp1252` (the same structure where a continuation character carries a CP1252-only identity, e.g. â€™ â€œ â€¦), `percent_encoding` (percent-escape runs of at least four characters outside URLs — runs inside URL tokens never count, since correctly escaped URLs are healthy text) and `html_entity` (numeric character references and double-escaping runs such as &amp;amp;). It is deliberately conservative about legitimate European text: "São", "läuft" and "året" contain ã/ä/å lawfully, but the byte-structure patterns demand that the *following* character sit in the continuation range (Ã© matches, Ãa does not) and the `utf8_as_latin1` signal additionally requires at least two hits before it is recorded, so isolated ambiguous bigrams never flag a document; likewise a lone CP1252 hit qualifies only when at least two of its continuation characters carry C1-mapped identities (â€™, ðŸ˜€) — the weaker single-C1 shape (â€¦) can also arise from French «café»… typography and therefore needs a second occurrence.
+
+Each recorded signal contributes a finding `{kind, count, samples}` with the first three matches as evidence snippets (ten characters of context each) and their spans. Findings are aggregated into `metadata[score_key]` = mojibake_score (the weighted hit count normalized per 1000 characters — a rate estimate, so one corrupted apostrophe in a seven-character string is as alarming as a hundred in a long article) and `metadata[verdict_key]` = mojibake_verdict: `clean` below `clean_below` (default 0.5), `corrupted` above `corrupted_above` (default 5), `suspect` in between. The processor never modifies text, ids or other metadata fields — it is an analysis pass, complementary to `TextNormalizer`, which repairs unicode form problems but cannot tell corrupted text from healthy text. By default every document passes through stamped so ingestion pipelines can quarantine or route on the verdict; with `drop_corrupted: true` documents whose verdict is `corrupted` are removed from the returned batch (the dropped document objects keep their stamps so callers holding the original list can see why). Pure stdlib, deterministic and offline.
+
+The component definition file is as follows:
+```yaml
+name: 'mojibake_detector'
+description: 'flag encoding-corrupted text (mojibake) into document metadata for quarantine decisions'
+clean_below: 0.5              # scores below yield verdict 'clean'
+corrupted_above: 5.0          # scores above yield 'corrupted'
+drop_corrupted: false         # true: remove corrupted docs from the batch
+score_key: 'mojibake_score'   # metadata key for the score; '' disables
+verdict_key: 'mojibake_verdict'    # metadata key for the verdict; '' disables
+findings_key: 'mojibake_findings'  # metadata key for the findings; '' disables
+disabled_signals: []          # e.g. ['percent_encoding'] for URL-heavy corpora
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.mojibake_detector'
+  class: 'MojibakeDetector'
+```
+- clean_below: Weighted-hit score below which the verdict is `clean`.
+- corrupted_above: Weighted-hit score above which the verdict is `corrupted`; scores in between yield `suspect` (boundaries inclusive). The score is normalized per 1000 characters.
+- drop_corrupted: When true, documents whose verdict is `corrupted` are dropped from the output batch; when false (default) every document is stamped and kept.
+- score_key / verdict_key / findings_key: Metadata keys the analysis results are written to; an empty value disables that single stamp.
+- disabled_signals: Signal kinds excluded from analysis — one or more of `replacement_char`, `utf8_as_latin1`, `utf8_as_cp1252`, `percent_encoding`, `html_entity`; useful for URL-heavy corpora where percent escapes are expected.
