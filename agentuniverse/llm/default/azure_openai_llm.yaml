@@ -1,0 +1,8 @@
+name: 'azure_openai_llm'
+description: 'azure openai llm with spi'
+model_name: 'gpt-35-turbo'
+max_tokens: 1000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.azure_openai_llm'
+  class: 'AzureOpenAILLM'

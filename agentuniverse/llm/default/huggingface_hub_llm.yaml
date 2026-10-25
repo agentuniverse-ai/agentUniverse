@@ -1,0 +1,8 @@
+name: 'huggingface_hub_llm'
+description: 'huggingface hub llm with spi'
+model_name: 'gpt2'
+max_tokens: 512
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.huggingface_hub_llm'
+  class: 'HuggingFaceHubLLM'

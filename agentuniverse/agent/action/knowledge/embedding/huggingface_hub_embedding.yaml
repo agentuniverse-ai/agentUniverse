@@ -1,0 +1,7 @@
+name: 'huggingface_hub_embedding'
+description: 'embedding use huggingface hub api'
+embedding_model_name: 'sentence-transformers/all-MiniLM-L6-v2'
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.huggingface_hub_embedding'
+  class: 'HuggingFaceHubEmbedding'
