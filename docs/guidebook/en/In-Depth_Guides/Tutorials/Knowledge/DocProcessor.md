@@ -116,6 +116,12 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.doc_processor.token_text_splitter'
   class: 'TokenTextSplitter'
 ```
+
+Token splitting treats tokenizer marker spellings such as `<|endoftext|>`
+inside a document as ordinary text. This allows tokenizer documentation and
+exported examples to be ingested without interpreting those spellings as
+special token IDs. The selected encoding/model and token overlap still apply.
+
 - chunk_size: The number of tokens in the text after splitting.
 - chunk_overlap: The number of overlapping tokens between adjacent chunks.
 - tokenizer: The specified tokenizer used to split the text into tokens.
