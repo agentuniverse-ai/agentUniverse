@@ -19,7 +19,8 @@ pip install agentUniverse
 cd examples/sample_apps/privacy_guard_app
 
 # 3. 离线验证脱敏检索管道（无需任何密钥）
-export PYTHONPATH=$(pwd)/../../..:$(cd ../.. && pwd)
+export PYTHONPATH=$(pwd)/../../..:$(pwd)/../..
+mkdir -p intelligence/db
 python intelligence/test/privacy_pipeline_test.py
 # 预期输出: OK: N documents retrieved, all PII redacted.
 

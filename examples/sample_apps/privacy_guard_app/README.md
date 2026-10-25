@@ -13,7 +13,8 @@ Quick start (offline, no keys):
 
 ```bash
 cd examples/sample_apps/privacy_guard_app
-export PYTHONPATH=$(pwd)/../../..:$(cd ../.. && pwd)
+export PYTHONPATH=$(pwd)/../../..:$(pwd)/../..
+mkdir -p intelligence/db
 python intelligence/test/privacy_pipeline_test.py
 ```
 

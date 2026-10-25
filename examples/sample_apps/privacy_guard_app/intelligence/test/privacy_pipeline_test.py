@@ -33,6 +33,10 @@ def main():
     for pattern in PII_PATTERNS:
         assert re.search(pattern, raw_text), f'sample should contain {pattern} before redaction'
 
+    # Ensure database directory exists for clean checkouts
+    db_dir = os.path.join(APP_ROOT, 'intelligence', 'db')
+    os.makedirs(db_dir, exist_ok=True)
+
     AgentUniverse().start(
         config_path=os.path.join(APP_ROOT, 'config', 'config.toml'),
         core_mode=True)
