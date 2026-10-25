@@ -90,6 +90,10 @@ class SQLiteStore(Store):
         query_words = jieba.lcut(query_text)
         doc_words = jieba.lcut(doc_text)
         doc_length = len(doc_words)
+        # Keyword-only documents are valid recall candidates, but they have no
+        # text length to normalize. They contribute no BM25 text score.
+        if doc_length == 0 or total_doc_count <= 0 or total_word_count <= 0:
+            return 0
         avg_doc_length = total_word_count / total_doc_count
         bm25_score = 0
 
@@ -124,6 +128,10 @@ class SQLiteStore(Store):
             for document in documents:
                 metadata = json.dumps(
                     document.metadata) if document.metadata else None
+                self.conn.execute(
+                    'DELETE FROM inverted_index WHERE doc_id = ?',
+                    (document.id,)
+                )
                 self.conn.execute(
                     'INSERT OR REPLACE INTO documents (id, text, word_count, metadata) VALUES (?, ?, ?, ?)',
                     (document.id, document.text, len(jieba.lcut(document.text)), metadata)
@@ -169,7 +177,7 @@ class SQLiteStore(Store):
                     )
 
     def query(self, query: Query, **kwargs) -> List[Document]:
-        if len(query.keywords) > 0:
+        if query.keywords:
             query_terms = query.keywords
         else:
             query_terms = self._get_document_keyword(Document(text=query.query_str))
@@ -190,6 +198,11 @@ class SQLiteStore(Store):
                 cursor.close()
 
         # Count every document's bm25.
+        # Query supports explicit keywords without a query string. Use them
+        # for scoring too, rather than passing None/blank text to Jieba.
+        scoring_text = query.query_str
+        if not scoring_text or not scoring_text.strip():
+            scoring_text = " ".join(sorted(query_terms))
         doc_scores = []
         total_doc_count = self._get_all_docs_count()
         total_word_count = self._get_all_docs_words_count()
@@ -200,7 +213,7 @@ class SQLiteStore(Store):
             doc_text = cursor.fetchone()[0]
             cursor.close()
 
-            bm25_score = self.compute_bm25(query.query_str, doc_text,
+            bm25_score = self.compute_bm25(scoring_text, doc_text,
                                            inverted_index, total_doc_count, total_word_count)
             doc_scores.append((doc_id, bm25_score))
 
@@ -229,10 +242,19 @@ class SQLiteStore(Store):
 
         if query_result is None:
             return []
+        ids = query_result.get('ids') or []
+        texts = query_result.get('documents') or []
+        metadatas = query_result.get('metadatas') or []
+        if not ids or not texts:
+            return []
+
+        ids = ids[0]
+        texts = texts[0]
+        metadata_row = metadatas[0] if metadatas else []
         documents = []
-        for i in range(len(query_result['ids'][0])):
-            documents.append(Document(id=query_result['ids'][0][i],
-                                      text=query_result['documents'][0][i],
-                                      embedding=[],
-                                      metadata=json.loads(query_result[2]) if query_result[2] else None))
+        for i, (document_id, text) in enumerate(zip(ids, texts)):
+            metadata = metadata_row[i] if i < len(metadata_row) else None
+            if isinstance(metadata, str):
+                metadata = json.loads(metadata) if metadata else None
+            documents.append(Document(id=document_id, text=text, embedding=[], metadata=metadata))
         return documents

@@ -6,9 +6,13 @@
 from contextlib import ExitStack
 from typing import List, Optional, Dict, Union
 from pathlib import Path
+import logging
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
+
+
+logger = logging.getLogger(__name__)
 
 
 class ScannedPdfOCRReader(Reader):
@@ -23,7 +27,7 @@ class ScannedPdfOCRReader(Reader):
     """
 
     def _load_data(self, file: Union[str, Path], ext_info: Optional[Dict] = None) -> List[Document]:
-        print(f"debugging: ScannedPdfOCRReader start load file={file}")
+        logger.debug("ScannedPdfOCRReader starting PDF load")
         if isinstance(file, str):
             file = Path(file)
         if not isinstance(file, Path) or not file.exists():
@@ -34,12 +38,12 @@ class ScannedPdfOCRReader(Reader):
         with ExitStack() as stack:
             try:
                 import pypdf  # type: ignore
-                print("debugging: ScannedPdfOCRReader using pypdf first")
+                logger.debug("ScannedPdfOCRReader trying pypdf text extraction")
                 fp = stack.enter_context(open(file, "rb"))
                 pdf = pypdf.PdfReader(fp)
                 num_pages = len(pdf.pages)
             except Exception as e:
-                print(f"debugging: ScannedPdfOCRReader pypdf failed: {e}")
+                logger.debug("ScannedPdfOCRReader pypdf extraction failed; falling back to OCR", exc_info=True)
                 pdf = None
                 num_pages = self._count_pdf_pages(file)
 
@@ -49,7 +53,7 @@ class ScannedPdfOCRReader(Reader):
                     try:
                         txt = pdf.pages[i].extract_text() or ""
                     except Exception as e:
-                        print(f"debugging: ScannedPdfOCRReader page {i} extraction failed: {e}")
+                        logger.debug("ScannedPdfOCRReader page %s extraction failed; falling back to OCR", i, exc_info=True)
                 if txt.strip():
                     texts.append(txt)
                     engines.append("pypdf")
@@ -81,7 +85,7 @@ class ScannedPdfOCRReader(Reader):
         except Exception:
             raise ImportError("pdf2image is required: `pip install pdf2image`. Also install poppler.")
 
-        print(f"debugging: ScannedPdfOCRReader converting page {page_index} to image")
+        logger.debug("ScannedPdfOCRReader converting PDF page to image")
         images = convert_from_path(str(file), first_page=page_index + 1, last_page=page_index + 1)
         if not images:
             return "", "none"
@@ -89,7 +93,7 @@ class ScannedPdfOCRReader(Reader):
         # Try PaddleOCR
         try:
             from paddleocr import PaddleOCR  # type: ignore
-            print("debugging: ScannedPdfOCRReader using PaddleOCR")
+            logger.debug("ScannedPdfOCRReader trying PaddleOCR")
             ocr = PaddleOCR(use_angle_cls=True, lang='ch')
             result = ocr.ocr(images[0], cls=True)
             lines = []
@@ -100,21 +104,21 @@ class ScannedPdfOCRReader(Reader):
                         lines.append(txt)
             return "\n".join(lines), "paddleocr"
         except Exception as e_paddle:
-            print(f"debugging: ScannedPdfOCRReader PaddleOCR failed: {e_paddle}")
+            logger.debug("ScannedPdfOCRReader PaddleOCR failed; trying pytesseract", exc_info=True)
 
         # Fallback to pytesseract
         try:
             import pytesseract  # type: ignore
-            print("debugging: ScannedPdfOCRReader using pytesseract")
+            logger.debug("ScannedPdfOCRReader trying pytesseract")
             text = pytesseract.image_to_string(images[0], lang='chi_sim+eng')
             return text, "pytesseract"
         except Exception as e_tess:
-            print(f"debugging: ScannedPdfOCRReader pytesseract failed: {e_tess}")
+            logger.debug("ScannedPdfOCRReader pytesseract failed; trying easyocr", exc_info=True)
 
         # Fallback to easyocr
         try:
             import easyocr  # type: ignore
-            print("debugging: ScannedPdfOCRReader using easyocr")
+            logger.debug("ScannedPdfOCRReader trying easyocr")
             reader = easyocr.Reader(['ch_sim', 'en'])
             result = reader.readtext(images[0], detail=0)
             return "\n".join(result), "easyocr"

@@ -7,7 +7,7 @@
 # @FileName: api_tool.py
 import json
 from typing import Any, Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 import httpx
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
@@ -17,6 +17,10 @@ from agentuniverse.base.config.component_configer.configers.tool_configer import
 
 class APITool(Tool):
     """The basic class for api tool model.
+
+    Untyped request-body properties, including empty schemas and schemas
+    generated for Pydantic Any fields, keep their original JSON values.
+    Properties with supported scalar types still use type conversion.
 
     Attributes:
         openapi_spec(str): The openapi schema of the api tool.
@@ -59,13 +63,14 @@ class APITool(Tool):
                 elif 'anyOf' in option and isinstance(option['anyOf'], list):
                     # Recursive call to handle nested anyOf
                     return self.convert_body_property_any_of(property, value, option['anyOf'], max_recursive - 1)
-            except ValueError:
+            except (ValueError, TypeError):
+                # A branch may reject a value valid for another branch (e.g. null).
                 # Conversion failed, try next option
                 continue
         return value
 
     def convert_body_property_type(self, property: dict[str, Any], value: Any) -> Any:
-        """Convert a property value based on its type."""
+        """Convert typed values and preserve values without a conversion rule."""
         try:
             if 'type' in property:
                 if property['type'] == 'integer' or property['type'] == 'int':
@@ -94,8 +99,9 @@ class APITool(Tool):
                         f"Invalid type {property['type']} for property {property}")
             elif 'anyOf' in property and isinstance(property['anyOf'], list):
                 return self.convert_body_property_any_of(property, value, property['anyOf'])
-        except ValueError as e:
-            return value
+        except ValueError:
+            pass
+        return value
 
     @staticmethod
     def _convert_integer(value: Any) -> int:
@@ -135,7 +141,10 @@ class APITool(Tool):
             url (str): The URL to request.
             method (str): The HTTP method to use.
             headers (dict[str, Any]): The headers to include in the request.
-            parameters (dict[str, Any]): The parameters to include in the request.
+            parameters (dict[str, Any]): Unescaped parameter values. Scalar path
+                values are converted to strings and percent-encoded before URL
+                substitution, so reserved characters remain parameter data.
+                For example, an item value of "a/b" becomes "a%2Fb".
 
         Returns:
             httpx.Response: The response from the request.
@@ -188,7 +197,7 @@ class APITool(Tool):
 
         # replace path parameters
         for name, value in path_params.items():
-            url = url.replace(f'{{{name}}}', f'{value}')
+            url = url.replace(f'{{{name}}}', quote(str(value), safe=''))
 
         # parse http body data if needed, for GET/HEAD/OPTIONS/TRACE
         if 'Content-Type' in headers:

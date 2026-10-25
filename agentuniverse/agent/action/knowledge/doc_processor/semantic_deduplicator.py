@@ -8,6 +8,7 @@
 
 import hashlib
 import logging
+from copy import deepcopy
 from typing import List, Optional, Dict, Tuple
 from datetime import datetime
 
@@ -147,6 +148,11 @@ class SemanticDeduplicator(DocProcessor):
             # Compute embeddings for all documents
             texts = [doc.text for doc in docs]
             embeddings = embedding_model.get_embeddings(texts)
+            if len(embeddings) != len(docs):
+                raise ValueError(
+                    "Semantic deduplication requires one embedding per document "
+                    f"(expected {len(docs)}, got {len(embeddings)})"
+                )
 
             # Update document embeddings
             for doc, embedding in zip(docs, embeddings):
@@ -175,7 +181,7 @@ class SemanticDeduplicator(DocProcessor):
 
                         # Handle duplicate based on merge strategy
                         if self.merge_strategy == 'keep_best':
-                            if self._is_better_doc(docs[j], doc):
+                            if self._is_better_doc(docs[j], unique_docs[-1]):
                                 # Replace with better document
                                 unique_docs[-1] = docs[j]
                         elif self.merge_strategy == 'merge':
@@ -258,14 +264,20 @@ class SemanticDeduplicator(DocProcessor):
             return doc1
 
         # Merge metadata
-        merged_metadata = doc1.metadata.copy() if doc1.metadata else {}
+        merged_metadata = deepcopy(doc1.metadata) if doc1.metadata else {}
         if doc2.metadata:
             for key, value in doc2.metadata.items():
                 if key not in merged_metadata:
-                    merged_metadata[key] = value
+                    merged_metadata[key] = deepcopy(value)
                 elif isinstance(value, list) and isinstance(merged_metadata[key], list):
                     # Merge lists
-                    merged_metadata[key] = list(set(merged_metadata[key] + value))
+                    # JSON lists may contain unhashable dictionaries or lists.
+                    # Equality also preserves the first-seen order of values.
+                    combined = []
+                    for item in merged_metadata[key] + value:
+                        if item not in combined:
+                            combined.append(deepcopy(item))
+                    merged_metadata[key] = combined
 
         # Merge keywords
         merged_keywords = doc1.keywords.union(doc2.keywords)

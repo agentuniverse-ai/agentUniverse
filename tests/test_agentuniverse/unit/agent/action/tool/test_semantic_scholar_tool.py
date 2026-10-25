@@ -178,9 +178,25 @@ class SemanticScholarToolTest(unittest.TestCase):
             "https://api.semanticscholar.org/graph/v1/paper/DOI%3A10.18653%2Fv1%2F2020.acl-main.447",
         )
 
+    @patch("agentuniverse.agent.action.tool.common_tool.semantic_scholar_tool.requests.get")
+    def test_paper_lookup_preserves_pdf_suffix_in_doi(self, mock_get: Mock) -> None:
+        mock_get.return_value = response_mock(json_data=SAMPLE_PAPER)
+
+        result = self.tool.execute(query="https://doi.org/10.1000/report.pdf", mode="paper")
+
+        self.assertEqual(result["query"], "DOI:10.1000/report.pdf")
+        self.assertEqual(
+            mock_get.call_args.args[0],
+            "https://api.semanticscholar.org/graph/v1/paper/DOI%3A10.1000%2Freport.pdf",
+        )
+
     def test_paper_identifier_normalization(self) -> None:
         self.assertEqual(
             self.tool._normalize_paper_id("https://arxiv.org/abs/2106.15928"),
+            "ARXIV:2106.15928",
+        )
+        self.assertEqual(
+            self.tool._normalize_paper_id("https://arxiv.org/pdf/2106.15928.pdf"),
             "ARXIV:2106.15928",
         )
         self.assertEqual(self.tool._normalize_paper_id("pmid:19872477"), "PMID:19872477")

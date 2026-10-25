@@ -25,10 +25,12 @@ Two operating modes are supported:
 
 The processor always returns a single :class:`Document` whose ``text`` is the
 summary; its ``metadata`` records the operating mode and how many source
-documents were summarized.
+documents were summarized. Inherited source metadata is deep-copied so edits
+to a summary or its source do not affect the other document.
 """
 
 import re
+from copy import deepcopy
 from typing import List, Optional, Dict, Any
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -53,7 +55,9 @@ _STOP_WORDS = frozenset({
 _WORD_RE = re.compile(r"[A-Za-z0-9]+|[一-鿿]")
 # Sentence boundaries: latin terminal punctuation, CJK terminal punctuation,
 # and newlines. Trailing empty fragments are dropped by the caller.
-_SENTENCE_SPLIT_RE = re.compile(r"[。！？!?\.…]|\n+")
+# Dots between digits belong to numeric facts (including version strings),
+# not sentence boundaries. Keep them intact when selecting summary sentences.
+_SENTENCE_SPLIT_RE = re.compile(r"[。！？!?…]|\n+|(?<!\d)\.|\.(?!\d)")
 
 # Default system instruction for the LLM summarizer.
 _DEFAULT_SUMMARY_INSTRUCTION = (
@@ -129,7 +133,8 @@ class SummarizationProcessor(DocProcessor):
         # first document without clobbering our own keys.
         if source_docs[0].metadata:
             for k, v in source_docs[0].metadata.items():
-                metadata.setdefault(k, v)
+                if k not in metadata:
+                    metadata[k] = deepcopy(v)
 
         return [Document(text=summary_text, metadata=metadata)]
 
@@ -184,6 +189,8 @@ class SummarizationProcessor(DocProcessor):
         """
         if not text.strip():
             return ""
+        if self.max_sentences <= 0:
+            return ""
         sentences = self._split_sentences(text)
         if len(sentences) <= self.max_sentences:
             return text.strip()
@@ -221,7 +228,9 @@ class SummarizationProcessor(DocProcessor):
         """Split text into sentences on latin/CJK terminal punctuation.
 
         Delimiters are consumed; tiny fragments (< 2 chars after stripping) are
-        dropped to avoid noise.
+        dropped to avoid noise. Dots between digits are retained so values
+        such as 98.75 and version strings such as 1.2.3 remain intact. This is
+        not a general abbreviation or URL-aware sentence tokenizer.
         """
         raw = _SENTENCE_SPLIT_RE.split(text)
         return [s.strip() for s in raw if s and len(s.strip()) >= 2]

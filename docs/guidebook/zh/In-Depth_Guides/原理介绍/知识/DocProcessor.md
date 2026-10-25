@@ -116,6 +116,11 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.doc_processor.token_text_splitter'
   class: 'TokenTextSplitter'
 ```
+
+Token 切分会将文档中的 `<|endoftext|>` 等分词器标记字符串视为普通文本，
+使分词器文档和导出的示例能够正常入库；不会将这些字符串解释为特殊 token ID。
+配置的编码、模型和 token 重叠大小仍然生效。
+
 - chunk_size: 切分后文本的token数量。
 - chunk_overlap: 相邻切分文本重合部分的token数量。
 - tokenizer: 指定的tokenizer，用于将文本切分为tokens
@@ -197,6 +202,11 @@ metadata:
 - hierarchical_index: 表示不同层级的拆分规则，`reg_exp`为正则表达式，`need_summary`为True的话则表示该层级会使用总结文本取代原始文本
 - summary_agent: `hierarchical_index`中设置`need_summary`为True的时候生成总结文本的Agent， 默认为`simple_summary_agent`
 - llm: 如指定的话，则会用指定的llm取代原本`summary_agent`中的llm。
+
+标题层级由 `hierarchical_index` 的顺序决定。新标题会结束之前同级或更深层级的分支。
+中间层级缺失时，标题挂到当前最近的较浅层标题下；不存在较浅层标题时，父节点为 `root`。
+例如“第一章 → 第一节 → 第二章 → 子条款”中的子条款属于第二章，不会关联到第一章的第一节。
+正文只累加到当前祖先节点及其摘要输入中，不会为缺失层级创建虚拟节点。
 
 ### [SummarizationProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/summarization_processor.yaml)
 
@@ -308,5 +318,5 @@ metadata:
 ```
 - budget: 保留文档的最大累计大小，单位同 `counter`。
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
-- truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
+- truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。

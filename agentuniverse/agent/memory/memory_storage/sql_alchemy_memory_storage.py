@@ -208,6 +208,8 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
         Returns:
             List[Message]: The list of messages retrieved from the memory.
         """
+        if top_k <= 0:
+            return []
         if self._sqldb_wrapper is None:
             self._init_db()
         with self._sqldb_wrapper.get_session()() as session:

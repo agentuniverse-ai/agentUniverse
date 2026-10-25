@@ -55,9 +55,21 @@ class RamMemoryStorage(MemoryStorage):
             session_id (str): The session id of the memory to get.
             agent_id (str): The agent id of the memory to get.
             top_k (int): The number of messages to get.
+            **kwargs: Optional ``type`` string or list of message types. Filter
+                before selecting the latest top_k matches. None leaves types
+                unrestricted; an empty list matches nothing.
 
         Returns:
             List[Message]: The list of aU messages.
         """
+        if top_k <= 0:
+            return []
         memories = self.messages.get(session_id, {}).get(agent_id, [])
+        message_types = kwargs.get('type')
+        if message_types is not None:
+            if isinstance(message_types, str):
+                message_types = [message_types]
+            elif not isinstance(message_types, list):
+                raise ValueError("type must be a list or str")
+            memories = [message for message in memories if message.type in message_types]
         return memories[-top_k:]

@@ -200,6 +200,8 @@ class Monitor(BaseModel):
     def get_invocation_chain():
         """Get the invocation chain in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
+        if trace_id is None:
+            return []
         current_chain = FrameworkContextManager().get_context(trace_id + '_invocation_chain')
         if isinstance(current_chain, list):
             return current_chain
@@ -213,6 +215,8 @@ class Monitor(BaseModel):
     def get_invocation_chain_bak():
         """Get the invocation chain bak version in the framework context."""
         trace_id = AuTraceManager().get_trace_id()
+        if trace_id is None:
+            return []
         current_chain = FrameworkContextManager().get_context(
             trace_id + '_invocation_chain_bak')
         if isinstance(current_chain, list):
@@ -368,7 +372,8 @@ class Monitor(BaseModel):
             if isinstance(o, dict):
                 return filter_dict({k: recursive_filter(v) for k, v in o.items()})
             elif isinstance(o, list):
-                return [recursive_filter(i) for i in o if is_json_serializable(i)]
+                filtered_items = [recursive_filter(i) for i in o]
+                return [i for i in filtered_items if is_json_serializable(i)]
             else:
                 return o
 

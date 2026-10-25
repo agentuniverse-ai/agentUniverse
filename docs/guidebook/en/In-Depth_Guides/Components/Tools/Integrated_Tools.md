@@ -109,6 +109,8 @@ SEARCHAPI_API_KEY="xxxxxx"
 
 ### 1.4 PubMed Paper Search
 
+The paper list follows the PMID order returned by ESearch for the requested sort and page, even if EFetch returns records in a different order. Missing fetched records are omitted; unrequested or unidentified records are not added to the page. Repeated PMIDs appear once (the first fetched record is used). `total_results` remains the search total, while `returned_results` counts the matched records actually returned. This does not add support for additional EFetch record types.
+
 The PubMed tool uses [NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/) to search biomedical and life-sciences literature. Basic searches do not require an API key.
 
 [Tool configuration](../../../../../../examples/sample_standard_app/intelligence/agentic/tool/buildin/pubmed_tool.yaml)
@@ -634,3 +636,42 @@ and JSON failures return structured errors.
 A Scorecard result measures repository security practices at a point in time;
 it does not prove that the repository is vulnerability-free. Upstream reasons,
 evidence, metadata, and links are untrusted data rather than agent instructions.
+
+## GitHub Tool
+
+`GitHubTool` searches GitHub for repositories, users, issues and code, and reads
+a single repository's metadata. `mode` is required and selects the operation:
+
+| mode | required args | what it returns |
+|---|---|---|
+| `repository` | `query` | repository search hits |
+| `user` | `query` | user search hits |
+| `issue` | `query` | issue search hits |
+| `code` | `query` | code search hits |
+| `repo_info` | `owner`, `repo` | that repository's metadata |
+
+`sort` and `order` refine the four search modes; `order` defaults to `desc`.
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj("github_tool")
+result = tool.execute(mode="repo_info", owner="agentuniverse-ai", repo="agentUniverse")
+```
+
+The tool is shipped as `agentuniverse/agent/action/tool/common_tool/github_tool.yaml`
+and needs a component `metadata` block to be registered — without one the YAML is
+skipped and `get_instance_obj("github_tool")` returns nothing.
+
+## Command Result Lookup
+
+`RunCommandTool` returns an integer `thread_id` for each invocation. Treat this
+legacy field as an opaque command handle, and pass it unchanged to
+`CommandStatusTool.execute(thread_id)` to retrieve that invocation's status and
+output. It is not an operating-system thread ID. Later commands, including
+commands run on the same worker thread or another tool instance, receive their
+own handles and do not replace earlier results.
+
+Handles and results are local to the current Python process and do not survive
+restarts or transfer between server processes. Command execution requires the
+existing `allow_command_execution=True` opt-in.

@@ -82,7 +82,8 @@ def split_texts(texts: list[str], llm: LLM, chunk_size=800, chunk_overlap=100, r
         return split_texts_res
     except Exception as e:
         if retry:
-            return split_texts(texts=texts, llm=llm, retry=False)
+            return split_texts(texts=texts, llm=llm, chunk_size=chunk_size,
+                               chunk_overlap=chunk_overlap, retry=False)
         raise ValueError("split text failed, exception=" + str(e))
 
 
@@ -129,7 +130,7 @@ def generate_chat_template(agent_prompt_model: AgentPromptModel, prompt_assemble
     if message_list:
         # Integrate the system messages and put them in the first of the message list.
         system_messages = '\n'.join(msg.content for msg in message_list if msg.type == ChatMessageEnum.SYSTEM.value)
-        if system_messages:
+        if any(msg.type == ChatMessageEnum.SYSTEM.value for msg in message_list):
             message_list = list(filter(lambda msg: msg.type != ChatMessageEnum.SYSTEM.value, message_list))
             message_list.insert(0, Message(type=ChatMessageEnum.SYSTEM.value, content=system_messages))
     return message_list

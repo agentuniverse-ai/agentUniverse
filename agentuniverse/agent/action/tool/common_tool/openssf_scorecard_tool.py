@@ -48,6 +48,8 @@ class OpenSsfScorecardTool(Tool):
         Returns:
             Query context and a bounded normalized Scorecard result.
             Network and response failures are returned in ``error``.
+            Out-of-range scores, including arbitrarily large JSON integers,
+            are reported as ``invalid_response``.
 
         Raises:
             ValueError: If an input parameter is invalid.
@@ -303,7 +305,9 @@ class OpenSsfScorecardTool(Tool):
     ) -> int | float:
         if isinstance(value, bool) or not isinstance(value, int | float):
             cls._invalid(f"{field_name} must be a number")
-        if not math.isfinite(value) or not minimum <= value <= maximum:
+        # Compare integers directly before isfinite's conversion to float:
+        # a valid JSON integer can exceed the floating-point range.
+        if not minimum <= value <= maximum or not math.isfinite(value):
             cls._invalid(f"{field_name} must be between {minimum} and {maximum}")
         return value
 
