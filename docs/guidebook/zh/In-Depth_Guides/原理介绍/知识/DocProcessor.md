@@ -315,3 +315,31 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [RegexFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/regex_filter.yaml)
+
+该组件按一组用户提供的正则表达式保留或丢弃文档，对应 issue #258 的*知识过滤*方向。真实语料中有大量文档最适合凭词面特征识别——错误码、发票或合同编号、样板免责声明、法律提示、日志行。该组件用 `re.search` 将每篇文档的文本逐一与所有已配置模式比对：只要任一模式在文本任意位置命中，该文档即视为匹配（`require_all: true` 收紧为全部命中）。随后按 `mode` 收减批次：`keep_matching`（默认）保留匹配文档，`drop_matching` 移除匹配文档。
+
+组件的能力范围刻意限定在词面：它只回答一个问题——“这段文本是否包含我认识的模式？”——因此是 `ThresholdFilter`（score/length/top-k/percentile 数值谓词，无法表达词面结构）与 `SensitiveDataRedactor`（原地改写命中片段、从不移除文档）的零依赖互补组件。整个流程只依赖 Python 的 `re` 模块：确定性、离线、无第三方依赖。`^`、`$` 等锚点照常可用；`case_sensitive: false` 时以 `re.IGNORECASE` 编译模式；`None` 文本按空字符串处理（仍可命中 `^$`）；`patterns` 为空列表时为空操作，原样保留所有文档。
+
+每篇被处理的文档——无论保留还是移除——都会在 `metadata[matched_key]` 中携带它命中的模式列表（按配置顺序），持有原始列表的调用方因此能准确看到每篇文档去留的原因。写入前会复制 metadata 映射；text、id 及其他 metadata 字段绝不改动。配置在加载时即刻校验：`patterns` 不是列表、元素非字符串或为空串、正则无法编译、`mode` 不合法或 `matched_key` 非字符串，都会在组件初始化时报错，而不是让所有文档被静默放行。
+
+组件定义文件如下：
+```yaml
+name: 'regex_filter'
+description: 'keep or drop documents whose text matches a set of regular expressions'
+patterns: []                    # 正则列表；空串或非法正则会在初始化时报错
+mode: 'keep_matching'           # keep_matching | drop_matching
+require_all: false              # 为真时所有模式必须全部命中
+case_sensitive: true            # 为假时以 re.IGNORECASE 编译
+matched_key: 'regex_matched'    # 命中模式列表写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.regex_filter'
+  class: 'RegexFilter'
+```
+- patterns：用 `re.search` 逐一测试每篇文档的正则表达式。任一模式在文本任意位置命中即视为匹配，`require_all` 为真时须全部命中。空列表为空操作：所有文档原样保留。
+- mode：`keep_matching`（默认）保留匹配文档；`drop_matching` 移除匹配文档。
+- require_all：为假（默认）时单个模式命中即可；为真时所有模式都必须命中。
+- case_sensitive：为真（默认）时保持 Python 正则的标准语义；为假时以 `re.IGNORECASE` 编译（与 `re` 本身的行为一致，字符区间如 `[A-Z]` 也能匹配小写字母）。
+- matched_key：每篇被处理文档的命中模式列表（按配置顺序）写入的 metadata 键；为空则不写入。

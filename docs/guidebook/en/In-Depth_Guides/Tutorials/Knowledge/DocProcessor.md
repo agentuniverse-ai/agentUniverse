@@ -317,3 +317,31 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [RegexFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/regex_filter.yaml)
+
+This component keeps or drops documents whose text matches a set of user-supplied regular expressions, addressing the *filtering* direction of issue #258. Real corpora contain many documents that are best identified by their lexical surface — error codes, invoice or contract numbers, boilerplate disclaimers, legal notices, log lines. Each document's text is tested with `re.search` against every configured pattern, and the document counts as matching when at least one pattern is found anywhere in the text (`require_all: true` tightens this to every pattern). The batch is then reduced by `mode`: matching documents are kept under `keep_matching` (default) or removed under `drop_matching`.
+
+The scope is deliberately lexical: the component answers exactly one question — "does this text contain a pattern I recognize?" — which makes it the dependency-free complement to `ThresholdFilter` (numeric predicates on score, length, top-k or percentile, none of which can express lexical structure) and to `SensitiveDataRedactor` (which rewrites matched spans in place but never removes a document). The whole pipeline is Python's `re` module: deterministic, offline, no third-party dependencies. Anchors such as `^` and `$` work as usual; `case_sensitive: false` compiles the patterns with `re.IGNORECASE`; a `None` text is treated as the empty string (which can still match `^$`); and an empty `patterns` list is a no-op that keeps every document untouched.
+
+Every processed document — kept and removed alike — carries the list of patterns it matched (in configuration order) in `metadata[matched_key]`, so callers holding the original list can see exactly why each document survived or vanished. Metadata mappings are copied before mutation; text, id and other metadata fields are never modified. Configuration is validated eagerly at load time: a non-list `patterns` value, non-string or empty-string entries, an uncompilable regular expression, an unknown `mode` or a non-string `matched_key` all fail component initialization instead of silently passing every document through.
+
+The component definition file is as follows:
+```yaml
+name: 'regex_filter'
+description: 'keep or drop documents whose text matches a set of regular expressions'
+patterns: []                    # regex list; '' entries or invalid regex fail init
+mode: 'keep_matching'           # keep_matching | drop_matching
+require_all: false              # true: every pattern must match
+case_sensitive: true            # false compiles with re.IGNORECASE
+matched_key: 'regex_matched'    # metadata key for the matched-pattern list; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.regex_filter'
+  class: 'RegexFilter'
+```
+- patterns: Regular expressions tested against each document with `re.search`. A document matches when ANY pattern is found anywhere in its text, or ALL of them under `require_all`. An empty list is a no-op: every document is kept.
+- mode: `keep_matching` (default) keeps documents that match the patterns; `drop_matching` removes them.
+- require_all: When false (default) a single matching pattern is enough; when true every pattern must match.
+- case_sensitive: When true (default) patterns keep standard Python regex semantics; when false they are compiled with `re.IGNORECASE` (which, as in `re` itself, also lets character ranges like `[A-Z]` match lowercase letters).
+- matched_key: Metadata key the list of matched patterns (in configuration order) is written to on every processed document; an empty value disables stamping.
