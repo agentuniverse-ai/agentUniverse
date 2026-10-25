@@ -16,6 +16,7 @@ Use cases:
 - Fallback when other strategies fail
 """
 
+import math
 import time
 from typing import List, Optional
 
@@ -23,7 +24,11 @@ from agentuniverse.agent.context.compressor.context_compressor import (
     ContextCompressor,
     CompressionMetrics,
 )
-from agentuniverse.agent.context.context_model import ContextSegment, ContextPriority
+from agentuniverse.agent.context.context_model import (
+    ContextSegment,
+    ContextPriority,
+    ContextType,
+)
 
 
 class TruncateCompressor(ContextCompressor):
@@ -77,6 +82,12 @@ class TruncateCompressor(ContextCompressor):
 
         original_segments = segments.copy()
 
+        # Types the caller requires to survive. `ContextManager._make_room()`
+        # passes `preserve_types=[SYSTEM, TASK]` for every strategy, so ignoring
+        # it here silently dropped the system prompt and the task instruction
+        # once the budget got tight.
+        preserve_types = kwargs.get("preserve_types", []) or []
+
         # Step 1: Separate CRITICAL from other segments
         critical_segments = [
             seg for seg in segments if seg.priority == ContextPriority.CRITICAL
@@ -91,7 +102,8 @@ class TruncateCompressor(ContextCompressor):
         if critical_tokens >= target_tokens:
             # Even CRITICAL needs truncation (rare case)
             compressed = self._truncate_segments(
-                critical_segments, target_tokens, preserve_all=True
+                critical_segments, target_tokens, preserve_all=True,
+                preserve_types=preserve_types
             )
             elapsed_ms = (time.time() - start_time) * 1000
             metrics = self.create_metrics(
@@ -112,7 +124,8 @@ class TruncateCompressor(ContextCompressor):
 
         # Step 4: Truncate other segments proportionally
         compressed_other = self._truncate_segments(
-            other_segments, available_tokens, preserve_all=False
+            other_segments, available_tokens, preserve_all=False,
+            preserve_types=preserve_types
         )
 
         # Step 5: Combine results
@@ -130,14 +143,21 @@ class TruncateCompressor(ContextCompressor):
         self,
         segments: List[ContextSegment],
         target_tokens: int,
-        preserve_all: bool
+        preserve_all: bool,
+        preserve_types: Optional[List[ContextType]] = None
     ) -> List[ContextSegment]:
         """Truncate segments to fit within token budget.
+
+        A segment whose type is in `preserve_types` is never dropped by the
+        minimum-size check below, the same way `preserve_all` protects the
+        CRITICAL group. Its content may still be shortened, which matches what
+        `preserve_all` already does.
 
         Args:
             segments: Segments to truncate
             target_tokens: Target token count
             preserve_all: If True, preserve all segments (even if tiny)
+            preserve_types: Types that must not be dropped
 
         Returns:
             List of truncated segments
@@ -166,14 +186,29 @@ class TruncateCompressor(ContextCompressor):
             if remaining_tokens <= 0 and not preserve_all:
                 break
 
-            # Allocate tokens proportionally to importance
+            # Allocate tokens proportionally to importance, rounding *up*.
+            #
+            # Importances are nominally equal for equal-priority segments, but
+            # `_calculate_importance()` multiplies by `segment.calculate_decay()`,
+            # a time-based factor, so six such segments differ in the tenth
+            # decimal and their sum lands just below the nominal total. A slot
+            # entitled to exactly `min_segment_tokens` then computes 9.999...,
+            # and `int()` floors it to 9, which the minimum check below rejects
+            # -- the segment is dropped. With `target_tokens=60` over six
+            # 20-token segments that kept one segment instead of six.
+            #
+            # Rounding up cannot overshoot the budget: a slot's quota is capped
+            # by the segment's own `tokens`, and `remaining_tokens` stops the
+            # loop.
             importance = self._calculate_importance(seg)
-            allocated_tokens = int(
-                (importance / total_importance) * target_tokens
-            ) if total_importance > 0 else 0
+            # `math.ceil()` already returns an int, so no outer `int()` cast.
+            allocated_tokens = math.ceil((importance / total_importance) * target_tokens) if total_importance > 0 else 0
 
             # Ensure minimum tokens
-            if preserve_all:
+            must_keep = preserve_all or (
+                preserve_types and seg.type in preserve_types
+            )
+            if must_keep:
                 allocated_tokens = max(allocated_tokens, self.min_segment_tokens)
             elif allocated_tokens < self.min_segment_tokens:
                 continue  # Skip segments that would be too small

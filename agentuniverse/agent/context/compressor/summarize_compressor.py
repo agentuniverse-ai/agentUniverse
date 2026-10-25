@@ -112,16 +112,22 @@ class SummarizeCompressor(ContextCompressor):
 
         original_segments = segments.copy()
         preserve_ids = set(kwargs.get("preserve_segments", []))
+        # Types the caller requires to survive. `ContextManager._make_room()`
+        # passes `preserve_types=[SYSTEM, TASK]` for every strategy; ignoring it
+        # here meant the system prompt and the task instruction were handed to
+        # the summarizer and replaced with a summary of themselves.
+        preserve_types = kwargs.get("preserve_types", []) or []
 
-        # Step 1: Separate CRITICAL and preserve_ids
-        critical_segments = [
-            seg for seg in segments
-            if seg.priority == ContextPriority.CRITICAL or seg.id in preserve_ids
-        ]
-        summarizable = [
-            seg for seg in segments
-            if seg.priority != ContextPriority.CRITICAL and seg.id not in preserve_ids
-        ]
+        def _must_preserve(seg: ContextSegment) -> bool:
+            return (
+                seg.priority == ContextPriority.CRITICAL
+                or seg.id in preserve_ids
+                or (preserve_types and seg.type in preserve_types)
+            )
+
+        # Step 1: Separate CRITICAL, preserve_ids and preserve_types
+        critical_segments = [seg for seg in segments if _must_preserve(seg)]
+        summarizable = [seg for seg in segments if not _must_preserve(seg)]
 
         critical_tokens = self.calculate_total_tokens(critical_segments)
 
