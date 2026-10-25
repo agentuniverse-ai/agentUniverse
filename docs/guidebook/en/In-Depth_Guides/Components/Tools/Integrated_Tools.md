@@ -649,3 +649,18 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## RequirementsTool
+
+`RequirementsTool` inspects `requirements.txt` files fully offline with the standard library. `mode="parse"` turns a file into structured entries — per-line raw text, PEP 503 normalized name, verbatim specifier and environment markers, extras, editable / VCS / direct-URL / path lines, and `--hash` options; unparsable lines become errors carrying line numbers, while comments, blank lines, and pip file options such as `-r` / `-i` / `-f` are reported distinctly. `mode="lint"` checks dependency hygiene: floating bare names, mixed `==` versus `>=` pin styles, patch-level exact pins, editables without a path, duplicate names after PEP 503 normalization, URLs without hashes, distribute-era legacy lines, case-inconsistent spellings, and mixed relative/absolute editables — each reported with an info / warning / error severity. `mode="diff"` compares two snapshots freeze-drift style: added / removed / changed entries with specifier, marker, and extras change flags. Constraint-set resolution is not performed here — specifiers are validated for shape only.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.requirements_tool import RequirementsTool
+
+tool = RequirementsTool()
+entries = tool.execute(mode="parse", requirements=text)
+findings = tool.execute(mode="lint", requirements=text)
+drift = tool.execute(mode="diff", requirements_old=old_text, requirements_new=new_text)
+```
+
+Inputs are bounded by the `max_lines`, `max_line_chars`, and `max_text_chars` configuration fields (10,000 lines, 10,000 characters per line, and 4,000,000 characters by default). Parameter-level mistakes (unknown mode, non-string input, over-cap text) raise `ValueError` before any parsing; content-level problems are carried inside the structured result.
