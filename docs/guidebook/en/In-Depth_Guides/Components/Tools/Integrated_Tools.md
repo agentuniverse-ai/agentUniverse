@@ -675,3 +675,62 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## List Operations Tool
+
+`ListOpsTool` is a set-algebra utility for JSON lists built purely on
+the Python standard library — no network, no extra dependencies — for
+the merging, comparing and cleaning agents perform on structured data.
+It supports seven modes. The four two-list modes are `union`
+(first occurrences in list-a order, then previously-unseen elements in
+list-b order), `intersection` and `difference` (both keep list-a
+order) and `symmetric_difference` (a-only part in a order, then b-only
+part in b order); unlike Python's `set`, whose iteration order is
+arbitrary, every ordering here is documented and stable. `dedupe`
+keeps the first occurrence per value with a `removed_count`, a
+`removed_items` preview capped at 20 entries and a truncation flag;
+`unique_count` returns the distinct count plus per-value counts sorted
+by count descending (ties in first-occurrence order), optionally
+capped via `top_n`; `flatten` splices nested lists up to `depth`
+levels (default: completely), treats objects as leaves, and raises a
+structured cycle error if a list contains itself.
+
+Two comparison modes are available. Scalar mode (default) compares
+values — strings, numbers, booleans and `null`; equality follows
+Python semantics, so `1`, `1.0` and `true` collapse to the first
+occurrence's original form while the string `"1"` stays distinct, and
+a `list`/`dict` element is rejected with a structured error naming the
+list and the offending element index. Object mode (`key="id"`, with
+dotted paths like `meta.id` for nested keys) compares objects by the
+key's value and preserves the first element per key whole; missing
+keys, non-object elements and unhashable key values raise structured
+errors listing the element index.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.list_ops_tool import ListOpsTool
+
+tool = ListOpsTool()
+merged = tool.execute(mode="union", a=["b", "a", "b"], b=["c", "a"])["result"]
+# ["b", "a", "c"] — stable order, first occurrences only
+common = tool.execute(mode="intersection", a=["c", "a", "b"], b=["b", "c", "d"])
+# {"result": ["c", "b"], "counts": {"a": 3, "b": 3, "result": 2, "removed": 4, "kept": 2}}
+merged_users = tool.execute(
+    mode="union",
+    a=[{"id": 1, "name": "one"}], b=[{"id": 1, "name": "uno"}, {"id": 2}],
+    key="id",
+)["result"]  # first element per key wins: [{"id": 1, "name": "one"}, {"id": 2}]
+flat = tool.execute(mode="flatten", a=[1, [2, [3]]], depth=1)["result"]  # [1, 2, [3]]
+```
+
+`a` and `b` accept a Python list or a JSON array string (`'[1, 2, 3]'`);
+each list is capped at 10,000 elements, as is the flattened result.
+Empty lists are valid everywhere — set algebra over them is
+well-defined. Every two-list result carries `counts`
+`{a, b, result, removed, kept}` where each result element is carried
+exactly once, so `removed = len(a) + len(b) - len(result)` counts the
+input occurrences not carried into the result and `kept` the distinct
+elements kept. All operations are deterministic; malformed parameters
+(unknown mode, missing `b` for two-list modes, mode-specific options
+used with the wrong mode, invalid JSON input, non-scalar elements in
+scalar mode, unresolvable key paths, empty path segments,
+out-of-bounds `top_n`/`depth`) raise a `ValueError` before any work.
