@@ -109,11 +109,12 @@ class ClaudeLLM(LLM):
         """Join response text blocks in order, preserving the complete raw response.
 
         Block boundaries add no separators: whitespace belongs to the returned
-        text itself. Empty content still raises; all-empty text returns None.
+        text itself. Blocks without text are skipped. Empty content still
+        raises; a response with no nonempty text returns None.
         """
         if not data.content:
             raise ValueError("Claude LLM returned a response with no content blocks")
-        text = ''.join(block.text for block in data.content)
+        text = ''.join(getattr(block, 'text', '') for block in data.content)
         if not text:
             return
         return LLMOutput(text=text, raw=data)

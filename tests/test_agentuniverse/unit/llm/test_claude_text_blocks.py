@@ -1,4 +1,6 @@
 """Native Anthropic response objects must retain every returned text block."""
+from types import SimpleNamespace
+
 import pytest
 import anthropic
 import httpx
@@ -41,6 +43,37 @@ def test_parse_native_message_preserves_all_text(texts):
 def test_empty_content_still_raises():
     with pytest.raises(ValueError, match='no content blocks'):
         ClaudeLLM.parse_result(Message(**response_payload([])))
+
+
+@pytest.mark.parametrize('texts', [
+    ['Before. ', 'After.'],
+    ['', 'Visible answer'],
+    ['', ''],
+    [],
+])
+def test_parse_message_skips_tool_use_blocks(texts):
+    payload = response_payload(texts)
+    payload['content'].insert(1 if texts else 0, {
+        'type': 'tool_use', 'id': 'toolu_offline',
+        'name': 'lookup', 'input': {'query': 'example'},
+    })
+    payload['stop_reason'] = 'tool_use'
+    # The minimum supported SDK's Message schema only accepts text blocks.
+    # Model the provider's mixed-content response without SDK validation.
+    message = SimpleNamespace(**{
+        **payload,
+        'content': [SimpleNamespace(**block) for block in payload['content']],
+    })
+
+    result = ClaudeLLM.parse_result(message)
+
+    if ''.join(texts):
+        assert result.text == ''.join(texts)
+        assert result.raw is message
+        assert result.raw.content[1].type == 'tool_use'
+        assert result.raw.content[1].input == {'query': 'example'}
+    else:
+        assert result is None
 
 
 def test_nonstream_call_with_native_sdk_response(monkeypatch):
