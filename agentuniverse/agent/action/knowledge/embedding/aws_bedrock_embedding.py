@@ -117,7 +117,7 @@ class AWSBedrockEmbedding(Embedding):
                 embeddings.append(embedding)
 
             except Exception as e:
-                raise Exception(f"Failed to get embedding for text: {str(e)}")
+                raise Exception(f"Failed to get embedding for text: {str(e)}") from e
 
         return embeddings
 

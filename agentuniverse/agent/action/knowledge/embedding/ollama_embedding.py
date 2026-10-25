@@ -62,7 +62,7 @@ class OllamaEmbedding(Embedding):
             return embeddings
 
         except Exception as e:
-            raise Exception(f"Failed to get embeddings: {e}")
+            raise Exception(f"Failed to get embeddings: {e}") from e
 
     async def async_get_embeddings(self, texts: List[str], **kwargs) -> List[List[float]]:
         """
@@ -95,7 +95,7 @@ class OllamaEmbedding(Embedding):
             return embeddings
 
         except Exception as e:
-            raise Exception(f"Failed to get embeddings: {e}")
+            raise Exception(f"Failed to get embeddings: {e}") from e
 
     def as_langchain(self) -> Any:
         """
@@ -110,7 +110,7 @@ class OllamaEmbedding(Embedding):
                 model=self.embedding_model_name
             )
         except ImportError:
-            raise Exception("langchain_community is required for LangChain integration")
+            raise Exception("langchain_community is required for LangChain integration") from None
 
     def _initialize_by_component_configer(self, embedding_configer: ComponentConfiger) -> 'Embedding':
         """
