@@ -376,7 +376,8 @@ class FinancialEventAggregator(DocProcessor):
         """
         # Create hash from sorted document IDs
         doc_ids = sorted([doc.id for doc in docs])
-        hash_input = '|'.join(doc_ids)
+        escaped_doc_ids = [doc_id.replace('\\', '\\\\').replace('|', '\\|') for doc_id in doc_ids]
+        hash_input = '|'.join(escaped_doc_ids)
         event_hash = hashlib.md5(hash_input.encode()).hexdigest()[:12]
         return f"event_{event_hash}"
 
