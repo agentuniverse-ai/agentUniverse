@@ -675,3 +675,64 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Tokenizer Tool
+
+`TokenizerTool` is the user-facing tokenization primitive of the text
+tool family, purely on the Python standard library with zero network
+access. `tokenize` mode splits `text` with one of seven strategies and
+returns `[{token, start, end}]` rows whose spans always slice the
+original text (`text[start:end]` reconstructs the token; with
+`lowercase=True` the `token` field holds the lowercased form and the
+spans never move). `whitespace` keeps maximal non-space runs;
+`word` applies the family word rule (alphanumeric runs with internal
+apostrophes so contractions stay together, leading/trailing
+apostrophes excluded from the span; Han runs stay whole because no
+dictionary segmentation is attempted); `word_punct` keeps NLTK
+`wordpunct`-style runs of word characters or punctuation;
+`char` / `char_no_space` yield every Unicode code point (astral-plane
+characters such as emoji are single code points and thus single
+tokens; combining marks are separate tokens — grapheme clusters are
+not fused); `sentence` applies the family's conservative segmentation
+with the abbreviation guard (`Dr.`, `e.g.`, `U.S.`, initials,
+decimals `3.14`, domains `example.com` and `...` runs do not split a
+sentence; newlines end a segment; bare punctuation is dropped);
+`cjk` emits every Han ideograph as its own token while Latin runs stay
+whole (`abc中def` → `abc`, `中`, `def`). Options: `lowercase`
+(default off) and `drop_stopwords` with the family built-in English +
+Chinese stopword lists (stopword matching uses the lowercased form
+when `lowercase` is on, the original otherwise). `span_check` mode is
+the invariant helper: it tokenizes `text` with the raw strategies
+(omitted `strategy` = all seven) and verifies `0 <= start < end <=
+len(text)`, `text[start:end] == token`, non-empty tokens and
+ascending non-overlapping spans, returning the tokens checked and the
+violation list. `count` mode reports token and type counts for one
+strategy (default `word`) under the same options, and
+`compare_strategies=True` adds a side-by-side table of token/type
+totals for all seven strategies.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.tokenizer_tool import TokenizerTool
+
+tool = TokenizerTool()
+tool.execute(mode="tokenize", text="Don't panic, it's 42!", strategy="word")
+# {'mode': 'tokenize', 'strategy': 'word', ..., 'tokens': [
+#   {'token': "Don't", 'start': 0, 'end': 5}, {'token': 'panic', 'start': 6, 'end': 11},
+#   {'token': "it's", 'start': 13, 'end': 17}, {'token': '42', 'start': 18, 'end': 20}]}
+tool.execute(mode="tokenize", text="abc中def", strategy="cjk")
+# tokens: abc(0,3), 中(3,4), def(4,7)
+tool.execute(mode="span_check", text="Dr. Smith arrived. 3.14 😀 中")
+# {'ok': True, 'violation_count': 0, 'strategies_checked': [all seven], ...}
+tool.execute(mode="count", text="The cat and the dog", strategy="word",
+             lowercase=True, drop_stopwords=True, compare_strategies=True)
+```
+
+Malformed parameters (unknown mode or strategy, missing/empty
+non-string or oversized `text` — over 100,000 characters — non-boolean
+`lowercase` / `drop_stopwords` / `compare_strategies`, missing
+`strategy` in `tokenize` mode) raise a `ValueError` before any
+computation. Tokenization cannot fail on content: a text with no
+tokens under the chosen strategy (whitespace-only input, bare
+punctuation) returns an empty token list, not an error. All outputs
+are deterministic: repeated calls on the same input return identical
+results.
