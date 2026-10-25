@@ -65,7 +65,7 @@ class LoggingConfig(object):
 
         try:
             self.__config = Configer().load_by_path(config_path).value['LOG_CONFIG']
-        except (FileNotFoundError, TypeError):
+        except (FileNotFoundError, TypeError, AttributeError):
             print("can't find log config file, use default config")
             self._use_default_config()
             return
