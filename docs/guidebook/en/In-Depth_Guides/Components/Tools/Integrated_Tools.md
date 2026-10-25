@@ -675,3 +675,44 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## ColumnStatsTool
+
+`ColumnStatsTool` profiles CSV text with per-column type inference and
+deterministic statistics, without pandas or any third-party dependency
+(runtime is stdlib `csv`, `statistics`, and `math` only).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.column_stats_tool import ColumnStatsTool
+
+tool = ColumnStatsTool()
+result = tool.execute(mode="profile", csv_text="id,score,when\n1,1.5,2024-01-02\n2,.5,2024-01-03\n")
+```
+
+Four modes are available. `profile` returns row/column counts and one entry
+per column: the inferred type, the type ratio (fraction of non-empty cells
+matching the winning type), null and distinct counts (capped), and stats —
+numeric columns get min/max/sum/mean/median/p50/p90/sample-and-population
+stdev plus a 10-bin histogram; datetime columns get min/max and ordered
+format guesses; text columns get length extremes and capped top values.
+`column_detail` breaks down a single column by name or index with value
+frequency, parsed previews, and the cells that failed type inference with
+line numbers. `compare` takes two CSV texts and reports schema drift
+(added/removed columns and position-based rename guesses), type changes,
+row-count delta, and per-numeric-column stat deltas flagged when the mean
+shift exceeds 10%. `sample` returns n rows selected deterministically by
+`first`, `last`, or seeded `random`.
+
+The type grammar is fixed and documented in the module docstring: integers
+are ASCII-digit-only (unicode digits are text; `007` stays an integer but is
+flagged `leading_zero_suspicious`; arbitrary precision, never coerced to
+float), floats follow the JSON grammar plus leading-dot forms while
+`inf`/`nan` spellings and non-finite overflows such as `1e999` are text,
+booleans are the word forms only (`0`/`1` are integers), uuids are canonical
+lowercase 8-4-4-4-12, and datetimes match a bounded, ordered format list
+(`2024-13-45` fails and becomes text). Empty cells are nulls: CSV has no
+true-null, and unquoted and quoted empty fields both count. Statistics use
+the stdlib `statistics` module semantics (`p50 == median` via inclusive
+quantiles; integer sums stay exact integers). All caps, warnings (ragged
+rows, type-conflict sample lines), and echoed values are bounded, and every
+result is deterministic for the same input.
