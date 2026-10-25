@@ -317,3 +317,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [DuplicateSentenceFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/duplicate_sentence_filter.yaml)
+
+This component removes repeated sentences **within** each document, addressing the *pre-processing* direction of issue #258. Scraped pages staple the same disclaimer or navigation blurb onto every section, legal documents restate the same clause in every exhibit, and LLM-generated text loops on a sentence when it runs out of things to say; a splitter downstream then emits several identical chunks that waste embedding budget and crowd out distinct hits at recall time. The filter segments each document's text with a deliberately conservative rule — a sentence ends only at a run of terminal punctuation (`. ! ? … 。 ！ ？`) followed by whitespace, end-of-text or any non-ASCII-alphanumeric character, so CJK text splits at `。` without spaces while `3.14` and `e.g.` stay intact — then keeps one occurrence per repeated sentence and rebuilds the text without the others.
+
+Each sentence is identified by a normalized key: casefolded, internal whitespace collapsed to single spaces, trailing punctuation (including closing quotes/brackets) stripped, so `"Hello world."`, `hello   world!` and `HELLO WORLD...` share one key. In `mode: exact` (default) a later sentence with an already-seen key is a duplicate (similarity 1.0). In `mode: near` sentences additionally count as duplicates when their token sets (casefolded words with edge punctuation stripped) reach Jaccard similarity `|A ∩ B| / |A ∪ B| >= jaccard_threshold` (default 0.9, inclusive) — catching one-word rewrites of longer sentences. Near-mode comparison is bucketed to stay linear in practice: kept sentences are indexed by their number of *distinct* tokens and a candidate is compared only against kept sentences whose count differs by at most 2. Because Jaccard is bounded by `min/max` token-set sizes, this sliding length-class bucket never misses a true duplicate whose counts differ by 2 or less; pairs whose counts differ by 3 or more are deliberately not compared — at the default 0.9 threshold such a pair can only reach the threshold when the smaller sentence already has >= 27 distinct tokens (a gap of 3 forces `min >= 3t/(1-t) = 27`), a corner traded away for short comparison lists.
+
+By default the FIRST occurrence survives (`keep_last: false`); `keep_last: true` keeps the LAST occurrence instead — useful when later repeats reflect the most recent wording. Every removal is stamped into metadata: `duplicate_sentences` (capped at 50 entries, each `{index, length, span, similarity}` — sentence ordinal, character length, `[start, end]` offsets in the original text, and 1.0 for exact / the Jaccard value for near), plus the uncapped `duplicate_count` and the active `duplicate_mode`. Metadata mappings are copied before mutation. The rebuilt text joins the kept sentences with their original inter-sentence whitespace: each dropped sentence takes its preceding separator with it, the rebuilt text never starts with the separator of a removed leading sentence, and a trailing gap survives only when the final sentence does — with no removals the text is returned byte-identical. Punctuation-only sentences (normalizing to an empty key) are never merged with each other. The component is pure Python, deterministic and fully offline; since it deduplicates *within* one document it complements `SimHashDedupFilter` / `SemanticDeduplicator`, which drop near-identical whole *documents* across a batch, and line-level boilerplate removal across a corpus.
+
+The component definition file is as follows:
+```yaml
+name: 'duplicate_sentence_filter'
+description: 'remove repeated sentences within each document (exact or near-duplicate mode)'
+mode: 'exact'              # exact | near
+jaccard_threshold: 0.9     # near-mode token-set Jaccard, >=, in (0, 1]
+keep_last: false           # keep the last occurrence instead of the first
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.duplicate_sentence_filter'
+  class: 'DuplicateSentenceFilter'
+```
+- mode: `'exact'` drops later sentences whose normalized key equals an earlier kept one; `'near'` additionally treats token-set Jaccard similarity >= `jaccard_threshold` as a duplicate.
+- jaccard_threshold: Minimum token-set Jaccard similarity for near-duplicates, compared with `>=`, in (0, 1]; only used in `mode: 'near'`.
+- keep_last: When false (default) the first occurrence is kept and later ones dropped; when true the last occurrence is kept (recency) and earlier ones dropped.
