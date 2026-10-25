@@ -317,3 +317,38 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [PIIReporter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/pii_reporter.yaml)
+
+This component detects personally identifiable information in documents at knowledge *pre-processing* time and records what it found in document metadata — without touching a single character of the text. It is the reporting counterpart to `SensitiveDataRedactor` and deliberately the opposite trade-off: the redactor is a *post-processing* component that masks matches in recalled text (a destructive, point-in-time edit), while `PIIReporter` is an audit pass. Knowing *that* a corpus contains card numbers, resident IDs or IBANs — where, how many, and with what confidence — lets a pipeline owner decide before anything is embedded or stored: drop the document, redact it, route it to a restricted store, or escalate for review. Report first, decide, then (if warranted) destroy.
+
+Detection is regex-shaped plus checksum-validated, so precision stays high without any model call. Credit-card-shaped 13-19 digit runs (spaces/dashes tolerated) are reported as `card` only when they pass the Luhn checksum — the same run failing Luhn is reported as the weaker `numeric_id`. China resident IDs must satisfy the GB 11643 modulo-11 checksum, and IBANs are checked against a length-per-country table (top 10 issuing countries) plus the ISO 13616 mod-97 check digit via exact integer arithmetic. Emails are shape-matched; phone numbers (international with `+` country code, China mobile, North-American 3-3-4) are guarded against date- and arithmetic-looking context, so `2023-01-15` or `3 +86 137 0013 8000` are not phones. Passport numbers are only ever reported as the explicitly low-confidence `passport_candidate`, since the 2-letters-plus-6-digits shape is shared with too many invoice and case numbers. When two detectors claim overlapping spans, the stronger (checksum-validated) kind wins.
+
+Privacy of the report itself matters as much as the detection: metadata is for logs, indexes and audits, so a finding NEVER carries the matched value — every entry stores only a masked form (`first two + *** + last two` characters), the character span, the kind and a confidence level. Each document is stamped with `metadata['pii']` (findings list, capped by `max_findings`, default 100), `metadata['pii_counts']` (total counts per kind, not subject to the cap) and `metadata['pii_risk']` (`none` / `low` / `medium` / `high` — cards, resident IDs and IBANs rate high). Metadata mappings are copied before mutation; text, id and pre-existing metadata are never modified. The whole component is pure `re` plus integer arithmetic — deterministic, offline and dependency-free — and pairs naturally with `SensitiveDataRedactor`: run the reporter at insertion to audit, run the redactor at recall (or on flagged documents) to actually mask.
+
+The component definition file is as follows:
+```yaml
+name: 'pii_reporter'
+description: 'detect personally identifiable information in documents and report it via metadata without modifying text'
+kinds:                        # detector kinds to run
+  - 'email'
+  - 'phone'
+  - 'card'
+  - 'numeric_id'
+  - 'cn_id'
+  - 'iban'
+  - 'passport_candidate'
+max_findings: 100             # cap for metadata['pii']; counts/risk see all
+pii_key: 'pii'                # metadata key for the findings list; '' disables
+counts_key: 'pii_counts'      # metadata key for per-kind totals; '' disables
+risk_key: 'pii_risk'          # metadata key for none|low|medium|high; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.pii_reporter'
+  class: 'PIIReporter'
+```
+- kinds: Detector kinds to run. `card` and `numeric_id` share one digit-run scan: a 13-19 digit run passing Luhn becomes `card`, a failing run becomes `numeric_id`. `cn_id`, `iban` and `card` findings are checksum-validated (GB 11643 / ISO 13616 mod-97 / Luhn).
+- max_findings: Maximum number of findings kept in `metadata[pii_key]`; must be >= 1. Counts and the risk level always reflect every finding, even beyond the cap.
+- pii_key: Metadata key for the capped findings list. Entries carry only a masked value (first two + last two characters), the span, the kind and a confidence level (`high` for checksum-validated kinds and email, `medium` for phone and numeric_id, `low` for passport_candidate).
+- counts_key: Metadata key for the per-kind totals.
+- risk_key: Metadata key for the overall risk level: `card`, `cn_id` and `iban` findings rate `high`, `phone` and `numeric_id` rate `medium`, `email` and `passport_candidate` rate `low`; the document gets the maximum.
