@@ -649,3 +649,51 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## JwkTool
+
+`JwkTool` performs structural analysis of JSON Web Keys (RFC 7517), JSON Web
+Key Sets, OKP keys (RFC 8037), and RFC 7638 thumbprints. It is the structure
+layer for the key objects that tokens reference: keys embedded in `jku`/`x5u`
+URLs, `jwk` headers, or JWKS documents. It performs no cryptographic
+operations and no signature verification.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.jwk_tool import JwkTool
+
+tool = JwkTool()
+result = tool.execute(
+    mode="analyze",
+    jwk={"kty": "EC", "crv": "P-256", "x": "...", "y": "..."},
+)
+```
+
+The `analyze` mode returns the key type, whether it is recognized (RSA, EC,
+oct, OKP), a parameter inventory with the RFC 7517 section 4 table meanings
+and private-parameter flags, and structured errors: unknown or missing kty,
+missing kty-required parameters (RSA n+e, EC crv+x+y, oct k, OKP crv+x),
+strict base64url validation with the exact position of the first padding,
+charset, or length defect (the offending character itself is withheld for
+private parameters), and parameter-model consistency. RSA keys get
+modulus and exponent size reporting with NIST-aligned strength tiers
+(2048/3072/4096), an even-modulus check, an exponent range check, and an
+e=3 weakness note; EC coordinate and private-key (`d`) byte lengths are
+matched exactly to the curve table (P-256 32, P-384 48, P-521 66 — the
+curve is 521 bits — and P-256K/secp256k1 32); oct key lengths map to the
+128/192/256-bit symmetric tiers; OKP keys map Ed25519/X25519 to 32 bytes
+and Ed448/X448 to 57. Strength is reported, not enforced.
+
+The `analyze_set` mode analyzes every key in a JWKS and reports set-level
+findings: duplicate `kid` values (ambiguous key lookup), RFC 7638 thumbprint
+conflicts (the same `kid` mapping to different key material), key counts,
+and kty/algorithm censuses. The `thumbprint` mode returns the RFC 7638
+SHA-256 thumbprint of a single key, and `public_extract` drops private
+parameters (`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`, `k`) and returns the
+public JWK plus the list of dropped parameter names.
+
+Safety and scope: private parameters are detected and reported by name only;
+key material values never appear in `analyze` or `analyze_set` output. EC
+point-on-curve membership and private-key arithmetic are out of scope
+because they require field mathematics. Set sizes, input sizes, and
+parameter lengths are bounded; oversized parameters switch to a
+length-report-only mode instead of being decoded.
