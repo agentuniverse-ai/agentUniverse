@@ -16,4 +16,6 @@ class MemoryStorageManager(ComponentManagerBase[MemoryStorage]):
     """A singleton manager class of the MemoryStorage."""
 
     def __init__(self):
+        """Initialize the memory storage manager.
+        """
         super().__init__(ComponentEnum.MEMORY_STORAGE)
