@@ -68,3 +68,19 @@ Reference Claude Official Documentation: https://docs.anthropic.com/zh-CN/docs/g
 
 ## 4. Note
 In agentuniverse, we have already created an llm with the name default_claude_llm. After configuring the ANTHROPIC_API_KEY, users can directly use it.
+### Native client connection and retry settings
+
+For `ClaudeLLM.call()` and `acall()`, `connection_pool_limits` is an optional
+integer passed to HTTPX as the maximum total connections in each client pool.
+It can be used together with `proxy`. Omit it to retain the existing transport
+defaults; this is not a shared pool or a global concurrency limit across calls.
+`max_retries: 0` disables SDK retries, a positive value sets retries after the
+initial attempt, and `null` retains the SDK default of two retries.
+
+```yaml
+connection_pool_limits: 20
+max_retries: 0
+```
+
+These settings do not change request/stream resource ownership or LangChain
+adapter behavior.
