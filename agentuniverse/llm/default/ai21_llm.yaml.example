@@ -1,0 +1,13 @@
+name: 'default_ai21_llm'
+description: 'default ai21 llm powered by the AI21 Labs Jamba models'
+model_name: 'jamba-1.5-mini'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${AI21_API_KEY}'
+api_base: 'https://api.ai21.com/studio/v1'
+proxy: '${AI21_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.ai21_llm'
+  class: 'AI21LLM'
