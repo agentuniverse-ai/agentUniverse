@@ -41,16 +41,29 @@ class CodeAstProcessor(DocProcessor):
     def _process_with_tree_sitter(self, code: str, language: str,
                                   metadata: Dict[str, Any]) -> List[Document]:
         def _ensure_language() -> None:
-            if language not in self._languages:
-                try:
-                    from tree_sitter import Language
-                    from importlib import import_module
-                    module_name = f'tree_sitter_{language}'
-                    lang_module = import_module(module_name)
-                    self._languages[language] = Language(lang_module.language())
-                except ImportError:
-                    raise ImportError(
-                        f"Could not import {module_name}. Install with: pip install {module_name}")
+            if language in self._languages:
+                return
+            # Imported before the try so the handler below can always name the
+            # module it failed on: `from tree_sitter import Language` fails when
+            # tree-sitter itself is missing, and referencing a name bound inside
+            # the try there raised UnboundLocalError instead.
+            from importlib import import_module
+            module_name = f'tree_sitter_{language}'
+            try:
+                from tree_sitter import Language
+            except ImportError as error:
+                raise ImportError(
+                    "tree-sitter is required to parse code. "
+                    "Install it with: pip install tree-sitter"
+                ) from error
+            try:
+                lang_module = import_module(module_name)
+            except ImportError as error:
+                raise ImportError(
+                    f"Could not import {module_name}. "
+                    f"Install it with: pip install {module_name}"
+                ) from error
+            self._languages[language] = Language(lang_module.language())
         _ensure_language()
 
         result_docs: List[Document] = []
