@@ -317,3 +317,29 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [CausalPhraseDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/causal_phrase_detector.yaml)
+
+This component extracts explicitly stated causal relations into document metadata, addressing the *knowledge extraction* direction of issue #258. Risk reports and analysis notes argue in causes and effects — "the storm caused the outage", "因为预算不足所以项目延期" — and a knowledge base can answer "what leads to what" far better when those statements are structured at ingestion time instead of requiring an LLM pass at query time. Within each sentence (conservative splitter of the SentenceLengthFilter family, with abbreviation / initial / decimal / ellipsis guards) the detector matches a fixed table of explicit English and Chinese causal markers, splits the adjacent comma-delimited clauses into cause and effect spans, and stamps the collected relations into metadata. It complements `DiscourseConnectiveAnalyzer`: that component counts connective occurrences per rhetorical category, while this one extracts the actual relation spans (cause text, effect text, marker, matched region). Detection is regex- and rule-based — pure Python, deterministic, offline, no model calls.
+
+Supported patterns (X = cause): EN "X because Y" (reverse), clause-initial "Because X, Y", "because of X, Y", "due to X, Y", "as a result of X, Y", "X, so Y", "Y since X" (guarded), "X leads to / led to / leading to Y", "X results in / resulted in / resulting in Y", "X causes / cause / caused Y", "X (was) caused by Y" (reverse), "A, therefore B" and "A, (and) as a result, B"; ZH "因为X所以Y" (split at 所以), "由于X，Y", "X导致(了)Y", "X造成Y", "X引起Y", "X使得Y", "A，因此B". Each hit records `{cause, effect, marker, span, direction, cause_truncated, effect_truncated}`: spans are trimmed clause text capped at `span_char_limit` characters (default 200, flagged when longer), `span` is the whole matched region, and `direction` is "forward" when the cause clause precedes the effect clause in the region ("X leads to Y") and "reverse" when the marker's left clause is the effect ("X because Y") — the `cause`/`effect` fields themselves are always normalized. Precision guards, all documented heuristics: temporal "since" only matches when the clause after it carries a verb-ish token (auxiliary/modal, or a word of length >= 4 ending in "ed"/"ing"), so "offline since 2019" is skipped while "since demand had collapsed" matches; noun phrases are suppressed — "the cause of" / "the result of" never match, and "results in" / "causes" directly preceded by a determiner ("the results in the appendix") is skipped; purpose ", so that ..." is skipped; and markers inside quoted regions (straight/curly quotes, CJK corner quotes) never fire, so reported speech is not mined — apostrophes in contractions ("didn't") do not open quotes. Overlapping candidates in one sentence resolve deterministically (earlier start wins, longer region breaks ties), so "A because B, so C" yields exactly one relation. Per document the metadata gains `causal_relations` (the hit list, capped at `max_relations`, default 50), `causal_count` and `causal_density` (stamped relations per 100 sentences, 2-decimal rounding); an empty key string disables an individual stamp. Text, id and other metadata fields are never modified — metadata mappings are copied before mutation.
+
+The component definition file is as follows:
+```yaml
+name: 'causal_phrase_detector'
+description: 'extract explicit causal relation spans (cause -> effect) from document text into metadata'
+max_relations: 50             # relations stamped per document at most
+span_char_limit: 200          # max cause/effect span chars; longer -> truncated flag
+relations_key: 'causal_relations'  # metadata key for the hit list; '' disables
+count_key: 'causal_count'     # metadata key for the count; '' disables
+density_key: 'causal_density' # metadata key for relations per 100 sentences
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.causal_phrase_detector'
+  class: 'CausalPhraseDetector'
+```
+- max_relations: Maximum number of relations stamped per document in `causal_relations`; extra detections are dropped. Integer in [1, 10000].
+- span_char_limit: Maximum length of a cause or effect span in characters; longer spans are cut and the hit is flagged `cause_truncated` / `effect_truncated`. Integer in [1, 10000].
+- relations_key: Metadata key for the relation list (`{cause, effect, marker, span, direction, cause_truncated, effect_truncated}` dicts); an empty value disables stamping.
+- count_key: Metadata key for the number of stamped relations; an empty value disables stamping.
+- density_key: Metadata key for stamped relations per 100 sentences (2-decimal rounding; 0.0 for a document without sentences); an empty value disables stamping.
