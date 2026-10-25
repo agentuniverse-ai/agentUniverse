@@ -14,6 +14,7 @@ from agentuniverse.agent.action.knowledge.reader.file.json_reader import JsonRea
 from agentuniverse.agent.action.knowledge.reader.file.markdown_reader import MarkdownReader
 from agentuniverse.agent.action.knowledge.reader.file.pdf_reader import PdfReader
 from agentuniverse.agent.action.knowledge.reader.file.pptx_reader import PptxReader
+from agentuniverse.agent.action.knowledge.reader.file.html_file_reader import HtmlFileReader
 from agentuniverse.agent.action.knowledge.reader.file.txt_reader import TxtReader
 from agentuniverse.agent.action.knowledge.reader.file.csv_reader import CSVReader
 from agentuniverse.agent.action.knowledge.reader.file.rar_reader import RarReader
@@ -29,6 +30,8 @@ DEFAULT_FILE_READERS: Dict[str, Type[Reader]] = {
     ".pptx": PptxReader,
     ".xlsx": XlsxReader,
     ".epub": EpubReader,
+    ".html": HtmlFileReader,
+    ".htm": HtmlFileReader,
     ".txt": TxtReader,
     ".md": MarkdownReader,
     ".markdown": MarkdownReader,

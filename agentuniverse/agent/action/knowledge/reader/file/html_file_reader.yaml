@@ -1,0 +1,19 @@
+name: 'default_html_file_reader'
+description: 'default local HTML file reader (.html/.htm): visible-text extraction via BeautifulSoup with script/style/comment stripping, no network access, size and text bounds'
+
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.html_file_reader'
+  class: 'HtmlFileReader'
+
+# --- Safety bounds (validated at init) ---
+# Enforced via stat() before reading a path / bounded read for streams.
+max_file_bytes: 10485760
+# Hard cap on the extracted text so one pathological page cannot flood
+# downstream chunking/embedding.
+max_text_chars: 200000
+
+# --- Extraction ---
+# Prepend a 'Title: ...' line to the text when a <title> exists (metadata
+# carries html_title either way).
+include_title_in_text: true
