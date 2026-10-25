@@ -649,3 +649,86 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Log Lint Tool
+
+`LogLintTool` audits a whole log file for consistency anomalies with
+pure Python standard library — no network access, no third-party
+dependencies. Where `LogParserTool` structures individual lines,
+this is the QA layer over what that parser extracts: it looks
+across lines and reports findings. Format detection reuses the
+shared per-line voting convention co-designed with `LogParserTool`
+(the same five format patterns — `combined`, `common`, `syslog`,
+`leveled`, `keyvalue` — with first-match-wins voting in a fixed
+priority order); the two tools deliberately duplicate the detection
+language so each stays standalone.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.log_lint_tool import LogLintTool
+
+tool = LogLintTool()
+audit = tool.execute(mode="audit", text=log_text)            # findings list
+timeline = tool.execute(mode="timeline", text=log_text)      # timestamp summary
+levels = tool.execute(mode="level_summary", text=log_text, per_hour=True)
+```
+
+`audit` returns `findings` as `{code, severity, line, message}`
+records plus a per-severity `finding_counts` tally. The rules:
+`format_drift` (lines failing the dominant format — count, ratio
+and up to five offenders, warning), `timestamp_gaps` (consecutive
+parsed timestamps jumping more than `threshold_hours` apart,
+default 24 — info), `timestamp_regression` (out-of-order
+timestamps — error, naming the offending pair and both lines),
+`level_sequence_anomaly` (an ERROR/FATAL line whose next leveled
+line is INFO with no WARN and no stack-trace context in between —
+info heuristic), `mixed_line_endings` (warning),
+`encoding_replacement_chars` (U+FFFD present — info),
+`very_long_line` (over 10,000 characters — warning; more than 5
+consecutive over-long lines collapse into a single "likely stack
+trace" info finding), `duplicate_line_burst` (identical line
+repeated more than 5 times consecutively — warning), `empty_lines`
+(info) and `missing_timestamp_mode` (under 80% of lines parse with
+timestamps — info; the gap and regression rules are skipped with
+the note). Lines starting `Traceback` / `Exception` / `Caused by`
+that do not match the dominant format are expected stack-trace
+context: they are tallied under `stacktrace_context` (count plus
+first line numbers) and never reported as findings.
+
+`timeline` summarizes the parsed timestamps — `min` / `max` /
+`span_seconds`, the gaps over `threshold_hours` (largest first,
+with both endpoints' lines), the maximal monotonic
+(non-decreasing) runs with their line ranges and lengths, and the
+regression count — and skips cleanly (a `skipped` payload with a
+`reason`, never an exception) when no line carries a parseable
+timestamp. `level_summary` returns the level histogram
+(`WARNING`/`CRITICAL` fold into `WARN`/`FATAL`, the same aliasing
+as `LogParserTool`) plus, with `per_hour=True`, per-hour buckets
+keyed `YYYY-MM-DDTHH` (the ISO hour convention used across the
+family's datetime tools) for the lines carrying both a level and a
+timestamp; non-aliasable level strings (only `keyvalue` lines can
+carry them) are counted under `UNKNOWN` with detail.
+
+Timestamp semantics: Apache times carry an offset and are
+converted to UTC (month names are parsed locale-independently);
+ISO `leveled` timestamps are converted to UTC when an offset is
+present and otherwise used as-is; `syslog` timestamps carry no
+year — the current year is assumed (the RFC 3164 convention) —
+and `keyvalue` lines contribute no timestamp, so gap/regression
+fall to the coverage rule. All arithmetic runs on naive datetimes
+after normalization, so a span between two tz-less timestamps is
+pure wall-clock subtraction (naive timestamps recorded under
+different UTC offsets are compared as-is — a documented
+limitation). Log content is treated as sensitive: previews in
+finding messages are capped at 60 characters with
+secret-looking values (password / secret / token / api key /
+authorization / credential assignments, Bearer tokens) masked.
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, empty text or text with no non-blank
+lines, unknown mode, `threshold_hours` outside audit/timeline or
+out of range, `per_hour` outside level_summary or not a boolean,
+text over 10,000,000 characters, more than 100,000 non-blank
+lines, a single line over 1,000,000 characters) raise a
+`ValueError`. The one content-level failure — audit finding no
+line that matches any known format — returns a structured `error`
+payload instead of raising.
