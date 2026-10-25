@@ -1,0 +1,38 @@
+name: 'hyde_query_paraphraser'
+description: 'HyDE (Hypothetical Document Embeddings) query expansion: rewrite the retrieval query with LLM-generated hypothetical passages so dense retrieval matches answer-shaped text. Best-effort by contract — degrades to pass-through when no llm_model is configured or generation fails.'
+
+metadata:
+  type: 'QUERY_PARAPHRASER'
+  module: 'agentuniverse.agent.action.knowledge.query_paraphraser.hyde_query_paraphraser'
+  class: 'HyDEQueryParaphraser'
+
+# --- LLM component ---
+# Name of a registered LLM component used to generate the hypothetical
+# passages, e.g. 'default_openai_llm'. Empty (default) keeps the shipped
+# definition loadable without credentials: queries pass through unchanged
+# with a warning until an llm_model is configured.
+llm_model: ''
+
+# --- Generation bounds ---
+# Number of passages to generate (1-5); one LLM call per passage.
+num_docs: 1
+# Hard truncation applied to every generated passage before it can reach
+# the query or an embedding model.
+max_doc_chars: 2000
+
+# --- Query rewriting ---
+# append: original query followed by the passages (default, hybrid form).
+# replace: passages only (classical HyDE).
+mode: 'append'
+
+# --- Prompt ---
+# Custom user-prompt template; must contain the literal {query} placeholder
+# (substituted via str.replace, so other braces are safe). Defaults to a
+# built-in instruction that answers in the language of the query.
+# prompt_template: 'Write a passage that answers: {query}'
+
+# --- Provenance (ext_info keys) ---
+# The untouched original query string is recorded under origin_query_key
+# (first expansion wins) and the generated passages under documents_key.
+origin_query_key: 'hyde_origin_query_str'
+documents_key: 'hyde_documents'

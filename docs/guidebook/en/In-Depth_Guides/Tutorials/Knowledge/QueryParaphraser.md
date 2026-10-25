@@ -82,3 +82,34 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.query_paraphraser.query_keyword_extractor'
   class: 'QueryKeywordExtractor'
 ```
+
+### [hyde_query_paraphraser](../../../../../../agentuniverse/agent/action/knowledge/query_paraphraser/hyde_query_paraphraser.yaml)
+This component implements HyDE (Hypothetical Document Embeddings) query expansion: it asks a registered LLM component to write one or more short *hypothetical passages* that would answer the user query, and rewrites the Query with them, so dense retrieval matches "answer-shaped" text instead of a bare question (closing the query-vs-document asymmetry).
+
+The rewrite follows the framework Query contract: `query_str` is rewritten (`append` mode = original query followed by the passages, the default hybrid form; `replace` mode = passages only, the classical HyDE form); every passage is also appended to `query_text_bundles`, and the untouched original query plus the generated passages are recorded under the `ext_info` keys `hyde_origin_query_str` / `hyde_documents` for later stages (fusion, rerankers, logging).
+
+Expansion is best-effort by design: an empty query, an unset `llm_model`, a failing LLM call, or an empty generation degrades to pass-through with a logged warning — retrieval never breaks because the enhancement failed. Configuration errors instead fail loudly at component-load time (unknown `mode`, `num_docs` outside [1, 5], non-positive `max_doc_chars`, or a custom `prompt_template` without the literal `{query}` placeholder).
+
+Generation is bounded: `num_docs` passages (1-5) with one LLM call each, every passage truncated to `max_doc_chars`, and duplicates removed. The LLM output is treated strictly as retrieval text — it is never executed or parsed as structured data.
+
+The component definition file is as follows:
+```yaml
+name: 'hyde_query_paraphraser'
+description: 'HyDE query expansion with LLM-generated hypothetical passages'
+llm_model: ''            # registered LLM component, e.g. 'default_openai_llm'
+num_docs: 1              # passages to generate, in [1, 5]
+mode: 'append'           # append (original + passages) | replace (classical HyDE)
+max_doc_chars: 2000      # hard truncation bound per passage
+origin_query_key: 'hyde_origin_query_str'
+documents_key: 'hyde_documents'
+metadata:
+  type: 'QUERY_PARAPHRASER'
+  module: 'agentuniverse.agent.action.knowledge.query_paraphraser.hyde_query_paraphraser'
+  class: 'HyDEQueryParaphraser'
+```
+- llm_model: name of the registered LLM component used to generate the passages. When empty, queries pass through unchanged (with a warning), so the shipped definition loads without any model credentials.
+- num_docs: number of hypothetical passages to generate, in [1, 5]; one LLM call per passage, duplicates removed.
+- mode: `append` (default) rewrites `query_str` to the original query followed by the passages; `replace` keeps the passages only (classical HyDE).
+- max_doc_chars: hard truncation bound applied to every passage before it can reach the query or an embedding model.
+- prompt_template: custom user-prompt template; must contain the literal `{query}` placeholder (substituted via `str.replace`, so other braces are safe). Defaults to a built-in instruction that answers in the language of the query.
+- origin_query_key / documents_key: the `ext_info` keys recording the untouched original query string and the generated passage list.
