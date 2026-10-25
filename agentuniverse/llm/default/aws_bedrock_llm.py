@@ -50,6 +50,7 @@ class AWSBedrockLLM(LLM):
             aws_secret_access_key: AWS secret access key (optional, can use AWS credentials chain)
             aws_session_token: AWS session token for temporary credentials (optional)
             aws_region: AWS region where Bedrock is available (e.g., us-east-1, us-west-2)
+            temperature: Sampling temperature, including zero. A None value uses 0.7.
     """
 
     aws_access_key_id: Optional[str] = Field(default_factory=lambda: get_from_env("AWS_ACCESS_KEY_ID"))
@@ -124,7 +125,8 @@ class AWSBedrockLLM(LLM):
         # Prepare inference config
         inference_config = {
             "maxTokens": kwargs.pop("max_tokens", self.max_tokens or 512),
-            "temperature": kwargs.pop("temperature", self.temperature or 0.7),
+            "temperature": kwargs.pop(
+                "temperature", self.temperature if self.temperature is not None else 0.7),
         }
         
         if "top_p" in kwargs:
