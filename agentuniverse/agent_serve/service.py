@@ -18,10 +18,6 @@ class Service(ComponentBase):
     description: Optional[str] = None
     agent: Optional[Agent] = None
 
-    def __post_init_post_parse__(self):
-        """Init service code with service name."""
-        self.__service_code: Optional[str] = self.get_instance_code()
-
     def get_instance_code(self) -> str:
         """Generate the full service code from service name. """
         app_cfg_manager: ApplicationConfigManager = ApplicationConfigManager()
@@ -53,6 +49,6 @@ class Service(ComponentBase):
         return self.agent.run(**kwargs).to_json_str()
 
     @property
-    def service_code(self):
-        """The unique code of each service, generate from service name."""
-        return self.__service_code
+    def service_code(self) -> str:
+        """Return the current application-qualified service registration code."""
+        return self.get_instance_code()
