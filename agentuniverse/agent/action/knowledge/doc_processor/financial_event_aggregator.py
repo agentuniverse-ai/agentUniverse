@@ -17,7 +17,6 @@ from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import Doc
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import EmbeddingManager
-from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 
 logger = logging.getLogger(__name__)
@@ -57,7 +56,9 @@ class FinancialEventAggregator(DocProcessor):
         use_embeddings: Whether to use embeddings for similarity.
         embedding_name: Name of embedding model to use.
         clustering_method: Clustering algorithm ('dbscan', 'hierarchical').
-        summarization_mode: Summarization mode ('extractive', 'map_reduce').
+        summarization_mode: 'extractive' uses the first sentences without an
+            LLM; 'map_reduce' summarizes each source and reduces batches of up
+            to eight summaries. The latter makes multiple LLM calls.
         use_llm: Whether to use LLM for summarization.
         llm_name: Name of LLM to use.
         max_sources_per_event: Maximum number of sources to include per event.
@@ -88,6 +89,10 @@ class FinancialEventAggregator(DocProcessor):
         """
         if not origin_docs:
             return []
+        if self.summarization_mode not in ('extractive', 'map_reduce'):
+            raise ValueError(f"Unknown summarization mode: {self.summarization_mode}")
+        if self.max_sources_per_event <= 0:
+            raise ValueError("max_sources_per_event must be positive")
 
         logger.info(f"Starting financial event aggregation for {len(origin_docs)} documents")
 
@@ -456,10 +461,12 @@ class FinancialEventAggregator(DocProcessor):
             cluster_docs = cluster_docs[:self.max_sources_per_event]
 
         # Generate summary
-        if self.use_llm and self.llm_name:
+        if self.summarization_mode == 'extractive' or not (self.use_llm and self.llm_name):
+            summary = self._generate_extractive_summary(cluster_docs)
+        elif self.summarization_mode == 'map_reduce':
             summary = self._generate_llm_summary(cluster_docs, cluster)
         else:
-            summary = self._generate_extractive_summary(cluster_docs)
+            raise ValueError(f"Unknown summarization mode: {self.summarization_mode}")
 
         # Detect conflicts
         conflicts = self._detect_conflicts(cluster_docs)
@@ -475,7 +482,7 @@ class FinancialEventAggregator(DocProcessor):
         return aggregated_doc
 
     def _generate_llm_summary(self, docs: List[Document], cluster: EventCluster) -> str:
-        """Generate summary using LLM.
+        """Map each article, then reduce bounded batches of source summaries.
 
         Args:
             docs: Documents to summarize.
@@ -485,34 +492,60 @@ class FinancialEventAggregator(DocProcessor):
             Summary text.
         """
         try:
-            llm_manager = LLMManager()
-            llm = llm_manager.get_instance_obj(self.llm_name)
+            llm = self._get_llm()
+            summaries = []
+            for index, doc in enumerate(docs, start=1):
+                prompt = (
+                    f"Summarize source {index} about a {cluster.event_type} event. "
+                    "Preserve key entities, dates, figures, and uncertainty in "
+                    "at most 500 characters.\n\n"
+                    f"Article:\n{(doc.text or '')[:1000]}"
+                )
+                summaries.append((index, index, self._call_llm_summary(llm, prompt)))
 
-            # Combine document texts
-            combined_text = '\n\n---\n\n'.join([doc.text[:1000] for doc in docs])
-
-            # Build prompt
-            prompt = f"""Summarize the following news articles about a {cluster.event_type} event.
-
-Create a comprehensive summary that:
-1. Describes the main event
-2. Includes key facts and figures
-3. Mentions main entities involved
-4. Notes any conflicting information
-
-Articles:
-{combined_text[:5000]}
-
-Summary:"""
-
-            messages = [{"role": "user", "content": prompt}]
-            summary = llm.call(messages=messages)
-
-            return summary
+            # Each prompt carries at most eight capped summaries, including
+            # every source even when max_sources_per_event exceeds the default.
+            while len(summaries) > 1:
+                reduced = []
+                for start in range(0, len(summaries), 8):
+                    batch = summaries[start:start + 8]
+                    if len(batch) == 1:
+                        reduced.append(batch[0])
+                        continue
+                    sources = '\n'.join(
+                        f"Sources {first}-{last}: {text[:500]}"
+                        for first, last, text in batch
+                    )
+                    prompt = (
+                        f"Combine these reports about a {cluster.event_type} "
+                        "event. Preserve key facts and source disagreements; "
+                        "do not invent a consensus.\n\n"
+                        f"{sources}\n\nSummary:"
+                    )
+                    reduced.append((
+                        batch[0][0], batch[-1][1],
+                        self._call_llm_summary(llm, prompt)
+                    ))
+                summaries = reduced
+            return summaries[0][2]
 
         except Exception as e:
             logger.error(f"LLM summarization failed: {e}")
             return self._generate_extractive_summary(docs)
+
+    def _get_llm(self):
+        """Resolve the optional LLM only when summarization needs it."""
+        from agentuniverse.llm.llm_manager import LLMManager
+        return LLMManager().get_instance_obj(self.llm_name)
+
+    @staticmethod
+    def _call_llm_summary(llm, prompt: str) -> str:
+        """Return text from an LLMOutput or string, rejecting empty responses."""
+        output = llm.call(messages=[{"role": "user", "content": prompt}], streaming=False)
+        summary = output if isinstance(output, str) else getattr(output, 'text', None)
+        if not isinstance(summary, str) or not summary.strip():
+            raise ValueError("LLM returned no summary text")
+        return summary.strip()
 
     def _generate_extractive_summary(self, docs: List[Document]) -> str:
         """Generate extractive summary (fallback method).

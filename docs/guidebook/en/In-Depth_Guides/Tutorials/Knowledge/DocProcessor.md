@@ -238,6 +238,12 @@ metadata:
 
 The processor always returns a single Document whose `text` is the summary. Its `metadata` records the operating mode (`summarization_mode`: `llm` or `extractive`), the number of source documents (`source_doc_count`), and the `llm_name` used.
 
+### [FinancialEventAggregator](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/financial_event_aggregator.yaml)
+
+This knowledge pre-processor clusters related financial news articles and creates one event document per cluster. With `summarization_mode: map_reduce` and an available `llm_name`, it summarizes each source article, then combines summaries in batches of up to eight. This requires multiple LLM calls but avoids dropping later sources from a single oversized prompt. LLM responses are read from their `text` field; an empty response or model failure falls back to extractive summarization.
+
+Set `summarization_mode: extractive` for an offline, lower-cost summary even when an LLM is configured. `max_sources_per_event` bounds the number of articles in each event report; source references remain in the output metadata when `preserve_sources` is enabled.
+
 ### [MMRProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/mmr_processor.yaml)
 
 This component re-ranks the recalled documents with Maximal Marginal Relevance (MMR), balancing query relevance against inter-document redundancy so a result set is both on-topic and non-repetitive. It addresses the *re-ranking / diversity* direction of issue #248.

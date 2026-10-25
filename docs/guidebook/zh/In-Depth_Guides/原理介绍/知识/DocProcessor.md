@@ -236,6 +236,12 @@ metadata:
 
 该组件始终返回单个 Document，其 `text` 为摘要内容。其 `metadata` 记录工作模式（`summarization_mode`：`llm` 或 `extractive`）、参与摘要的源文档数（`source_doc_count`）以及使用的 `llm_name`。
 
+### [FinancialEventAggregator](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/financial_event_aggregator.yaml)
+
+该知识预处理组件把相关财经新闻聚为事件，并为每个事件生成一份文档。配置 `summarization_mode: map_reduce` 且 `llm_name` 可用时，会先逐篇生成摘要，再按每批最多八份摘要归并。此模式会产生多次模型调用，但不会因单次提示过长而直接遗漏后面的来源。组件从模型响应的 `text` 字段读取结果；响应为空或调用失败时回退到抽取式摘要。
+
+设置 `summarization_mode: extractive` 可使用离线、低成本摘要，即使已配置模型也不会调用。`max_sources_per_event` 限制每份事件报告纳入的文章数；开启 `preserve_sources` 时，输出元数据保留来源引用。
+
 ### [MMRProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/mmr_processor.yaml)
 
 该组件使用最大边际相关性（Maximal Marginal Relevance，MMR）对召回文档重排，在"与查询相关"和"彼此不重复"之间取得平衡，使结果既切题又无冗余。对应 issue #248 的*重排 / 多样性*方向。
