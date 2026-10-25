@@ -1,0 +1,105 @@
+{
+  "tested_source_commit": "8bd991a9936ee9462fb0a1c7feedb92d343b4e9a",
+  "source_note": "Production/test source snapshot committed after the executions without source changes; reports are local executions on 2026-10-23, not hosted CI.",
+  "environments_fully_locked": false,
+  "normalization": "Machine hostname attributes removed from XML; line endings normalized; outcomes unchanged. Hashes refer to original local files.",
+  "runs": [
+    {
+      "label": "Linux 3.10 full",
+      "slug": "linux-py310",
+      "tests": 61,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-23T03:20:19.854785",
+      "seconds": 8.308,
+      "original_junit_sha256": "7EFE0EEC7B212BF77C530423AE6C1A08E06A4780928753821057A259073F2DFE",
+      "file": "junit-linux-py310.xml",
+      "environment_file": "environment-linux-py310.json"
+    },
+    {
+      "label": "Linux 3.12 full",
+      "slug": "linux-py312",
+      "tests": 61,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-23T03:19:57.122890",
+      "seconds": 8.926,
+      "original_junit_sha256": "5308C0364F6968CDE6AFE3E5A237C8AC70EFD2AC2D75A7042F9AF7406BF99787",
+      "file": "junit-linux-py312.xml",
+      "environment_file": "environment-linux-py312.json"
+    },
+    {
+      "label": "Windows 3.10 protocol/LLM subset",
+      "slug": "windows-subset-py310",
+      "tests": 49,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-23T11:11:39.180525",
+      "seconds": 6.873,
+      "original_junit_sha256": "89C3983004F93FCDCE9F5B75F723C1224C00688F6D16C276B09DD7F29EAE2DD9",
+      "file": "junit-windows-subset-py310.xml",
+      "environment_file": "environment-windows-subset-py310.json"
+    },
+    {
+      "label": "Windows 3.12 protocol/LLM subset",
+      "slug": "windows-subset-py312",
+      "tests": 49,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-23T11:13:51.710531",
+      "seconds": 6.356,
+      "original_junit_sha256": "B99532DEB63827B92121F1F734632BD7ABA0748906B073E8CE36608EC8665092",
+      "file": "junit-windows-subset-py312.xml",
+      "environment_file": "environment-windows-subset-py312.json"
+    },
+    {
+      "label": "Windows 3.10 expanded",
+      "slug": "windows-expanded-py310",
+      "tests": 61,
+      "failures": 6,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-23T11:17:29.094340",
+      "seconds": 4.358,
+      "original_junit_sha256": "5E121CD85B9F1643CD7DF1828652DE45778DC13DC24940C4C063053939B3E24B",
+      "file": "junit-windows-expanded-py310.xml",
+      "environment_file": "environment-windows-expanded-py310.json"
+    },
+    {
+      "label": "Windows 3.12 expanded",
+      "slug": "windows-expanded-py312",
+      "tests": 61,
+      "failures": 6,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-23T11:17:36.695746",
+      "seconds": 4.664,
+      "original_junit_sha256": "11D1A37580D10EA4A782475E8BC7F593A4F0FF673D558C1A67CF61016A0F1929",
+      "file": "junit-windows-expanded-py312.xml",
+      "environment_file": "environment-windows-expanded-py312.json"
+    },
+    {
+      "label": "Windows 3.12 upstream image baseline",
+      "slug": "windows-baseline-images-py312",
+      "baseline": true,
+      "tests": 12,
+      "failures": 6,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-23T11:18:20.226336",
+      "seconds": 2.604,
+      "original_junit_sha256": "1111495FC9AA525D32CF08770113CB6FB405824A27D55D93838334C425228B2C",
+      "file": "junit-windows-baseline-images-py312.xml",
+      "environment_file": null
+    }
+  ],
+  "baseline": {
+    "upstream_commit": "dafa498a3a171a24035ea4dff786718f2903e3a5",
+    "chat_prompt_blob": "7d9d1dfa1efd98f7cbc98cd9f8ddf4d8d66c2037",
+    "note": "Unmodified upstream ChatPrompt in the notebook worktree produces the same six Windows drive-letter image failures. Expanded Windows reports are intentionally retained."
+  }
+}

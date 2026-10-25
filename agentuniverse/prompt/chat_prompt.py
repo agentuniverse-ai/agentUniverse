@@ -36,6 +36,22 @@ class ChatPrompt(Prompt):
     def as_langchain(self) -> ChatPromptTemplate:
         return ChatPromptTemplate.from_messages(Message.as_langchain_list(self.messages))
 
+    def as_langchain_with_history(self, history: List[Message], *, history_index: int = 0,
+                                 max_messages: int = 256, max_bytes: int = 2_000_000) -> ChatPromptTemplate:
+        """Insert validated literal history among this prompt's template messages.
+
+        For [system_template, user_template], use history_index=1. Existing
+        template variables keep their meaning; stored braces never become inputs.
+        This explicit path does not change as_langchain() or legacy memory logic.
+        """
+        from agentuniverse.agent.memory.protocol_history import ProtocolHistory
+
+        if type(history_index) is not int or not 0 <= history_index <= len(self.messages):
+            raise ValueError("history_index must be a valid template insertion position")
+        templates = Message.as_langchain_list(self.messages)
+        literal = ProtocolHistory.as_langchain(history, max_messages=max_messages, max_bytes=max_bytes)
+        return ChatPromptTemplate.from_messages([*templates[:history_index], *literal, *templates[history_index:]])
+
     def build_prompt(self, agent_prompt_model: AgentPromptModel, prompt_assemble_order: list[str]) -> 'ChatPrompt':
         """Build the prompt class.
 
