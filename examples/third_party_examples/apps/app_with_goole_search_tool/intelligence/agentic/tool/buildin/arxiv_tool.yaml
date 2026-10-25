@@ -8,6 +8,9 @@ description: |
     模式1 - 搜索论文：
       input: "large language model applications"
       mode: "search"
+      max_results: 5  # 可选，返回数量为 1-100，默认 10
+      sort_by: "submitted_date"  # 可选：relevance、submitted_date、last_updated_date；默认 relevance
+      sort_order: "descending"  # 可选：descending、ascending；默认 descending
     
     模式2 - 查看论文详情：
       input: "2402.17550"  # arxiv论文ID
