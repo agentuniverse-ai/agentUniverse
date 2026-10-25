@@ -11,6 +11,12 @@ from functools import lru_cache
 
 
 class LLMModelEnum(Enum):
+    """Enumeration of the supported LLM model names.
+
+    Each member's value is the model identifier used to look up the
+    corresponding API key in environment variables.
+    """
+
     QWEN = "qwen"
     DEEPSEEK = "deepseek"
     OPENAI = "openai"
