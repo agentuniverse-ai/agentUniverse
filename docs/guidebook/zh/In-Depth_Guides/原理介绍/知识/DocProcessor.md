@@ -315,3 +315,32 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [SensitiveWordFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sensitive_word_filter.yaml)
+
+该组件基于可配置词库对敏感词进行拦截与过滤。组件用词库构建 Aho-Corasick 自动机扫描全部文档，然后按两种模式之一处理：`mask` 模式把命中的敏感词替换为掩码字符（重叠命中会合并区间，不会漏出残片），文档本身保留；`block` 模式把唯一命中数达到 `block_threshold` 的文档整体丢弃。词库可以内联配置，也可以从词库文件加载（每行一个词，`#` 开头为注释），默认大小写不敏感。
+
+组件定义文件如下：
+```yaml
+name: 'sensitive_word_filter'
+description: 'word list based sensitive content interception and masking'
+words:
+  - '敏感词'
+  - 'banned word'
+mode: 'mask'
+mask_char: '*'
+case_sensitive: false
+block_threshold: 1
+record_hits: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_word_filter'
+  class: 'SensitiveWordFilter'
+```
+- words: 内联敏感词列表；可与 `word_file` 组合使用。
+- word_file: 词库文件路径，每行一个词，`#` 开头为注释。
+- mode: `mask` 替换文本中的命中词，`block` 丢弃整个文档。
+- mask_char: `mask` 模式下用于替换命中词的字符。
+- case_sensitive: 是否大小写敏感，默认 false。
+- block_threshold: `block` 模式下丢弃文档所需的最小唯一命中数。
+- record_hits: 为 true 时把命中的词写入文档 metadata 的 `sensitive_word_hits` 键。
