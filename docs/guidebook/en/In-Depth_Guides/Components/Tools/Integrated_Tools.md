@@ -649,3 +649,86 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Light Stemmer Tool
+
+`LightStemmerTool` is a deterministic English word stemmer built purely on
+the Python standard library — no NLTK, no network access. It gives agents a
+vocabulary-normalization primitive that the existing generic helpers do not
+cover: `RegexTool` substitutes patterns and a stopword remover deletes words,
+but neither collapses inflections like `ponies`/`poni`. The rule set is a
+**Porter-inspired light stemmer, NOT a full Porter implementation** — the
+divergences are listed below and in the module docstring.
+
+Three modes:
+
+- `stem` — stem a single `word` or a list of `words` (max 10,000 items).
+- `stem_text` — tokenize a `text` (or a list of `texts`) into maximal runs of
+  ASCII letters — punctuation, digits and other characters act as separators —
+  and return `[{original, stem}]` pairs aligned with the input.
+- `group` — group a list of `words` by their stem, returning
+  `{stem: [originals]}` in first-seen order with duplicates collapsed, for
+  vocabulary collapsing.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.light_stemmer_tool import LightStemmerTool
+
+tool = LightStemmerTool()
+tool.execute(mode="stem", word="caresses")["result"]            # 'caress'
+tool.execute(mode="stem", words=["ponies", "ties", "cats"])["result"]
+# ['poni', 'ti', 'cat']
+tool.execute(mode="stem_text", text="The ponies are running", lowercase=True)["result"]
+# [{'original': 'The', 'stem': 'the'}, {'original': 'ponies', 'stem': 'poni'},
+#  {'original': 'are', 'stem': 'ar'}, {'original': 'running', 'stem': 'runn'}]
+tool.execute(mode="group", words=["caresses", "caress", "cats", "cat"])["result"]
+# {'caress': ['caresses', 'caress'], 'cat': ['cats', 'cat']}
+```
+
+The optional `lowercase` flag (default `False`) lowercases every input word
+before stemming; suffix rules are defined over lowercase text, so callers
+normalizing mixed-case vocabulary should enable it (`CATS` with
+`lowercase=True` stems to `cat`; without it the word is returned unchanged
+because no lowercase suffix matches).
+
+Rule set (exact, applied in order; `m` is the Porter measure — the number of
+vowel–consonant transitions in the `[C](VC)^m[V]` form, with `y` a vowel
+exactly when preceded by a consonant; within a pass the first suffix whose
+pattern matches selects the rule, and a failed condition ends the pass):
+
+| Pass | Rules |
+|------|-------|
+| 1a plural suffixes | `sses→ss`, `ies→i`, `ss`→keep, trailing `s→''` (single-letter `s` kept) |
+| 1b participle / trailing-e | `e→''` when m(stem)>0; `eed→ee` when m(stem)>0; `ed→''` when stem has a vowel; `ing→''` likewise |
+| 1c | `y→i` when m(stem)>0 and the letter before the `y` is a consonant |
+| 2 lite | `ational→ate`, `tional→tion`, `izer→ize`, `ness→''` — each when m(stem)>0 |
+
+Classic examples that fall inside this subset: `caresses→caress`,
+`ponies→poni`, `ties→ti`, `caress→caress`, `cats→cat`, `feed→feed`,
+`agreed→agree`, `plastered→plaster`, `bled→bled`, `motoring→motor`,
+`sing→sing`, `happy→happi`, `sky→sky`, `relational→relate`,
+`conditional→condition`, `digitizer→digitize`, `goodness→good`.
+
+Divergences from full Porter (deliberate, this is the "light" part):
+
+1. Only the subset above is implemented — full Porter steps 2 (the remaining
+   ~20 suffixes), 3, 4 and 5 are absent, so `rational` stays `rational`
+   (full Porter reaches `ration` via its step-4 `al` rule) and `formalize`
+   keeps its suffix.
+2. The trailing-`e` rule uses the laxer condition `m>0` and runs inside
+   step 1b instead of full Porter's step 5a (`m>1`, or `m==1` and not `*o`)
+   at the very end: `rate→rat` and `love→lov` here; `rate`/`love` under
+   full Porter.
+3. No step-1b cleanup: no `AT→ATE`/`BL→BLE`/`IZ→IZE` mapping, no
+   doubled-consonant undo, and no `e` restoration for short results —
+   `running→runn` (full Porter: `run`), `hoping→hop` (full Porter: `hope`).
+4. Step 1c is stricter than full Porter's `(*v*) Y→I`: it also requires a
+   consonant before the `y`, so `enjoy` stays `enjoy` (full Porter: `enjoi`).
+5. The `s→''` rule keeps the single-letter word `s` intact as a guard.
+
+Inputs are validated strictly before any computation: unknown mode, wrong
+types, both or neither of the single- and list-shaped inputs, empty or
+non-alphabetic words, hyphenated compounds (rejected with a note suggesting
+to split on `-` and stem the parts — e.g. `state-of-the-art`), words over
+1,000 characters, more than 10,000 words or tokens, and text over 100,000
+characters all raise a `ValueError`. Output is fully deterministic: the same
+input always yields the same stems, groups, and pair lists.
