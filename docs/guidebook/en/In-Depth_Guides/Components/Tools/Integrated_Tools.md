@@ -675,3 +675,45 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Text Distance Tool
+
+`TextDistanceTool` is a string edit-distance / similarity utility built
+purely on the Python standard library — no network access, no extra
+dependencies. It covers the fuzzy-matching plumbing agents often need:
+`levenshtein` mode returns the classic edit distance (single-character
+insertions, deletions and substitutions); `damerau_levenshtein` mode
+returns the restricted Damerau-Levenshtein distance (optimal string
+alignment), which additionally counts a transposition of two adjacent
+characters as one edit (`"teh"` vs `"the"` scores 1); and `similarity`
+mode returns a normalized `0.0`–`1.0` score computed as
+`1 - distance / max(len(a), len(b))` using either metric via the
+`metric` option (`levenshtein` by default). Identical texts score
+`1.0`, texts with nothing in common score `0.0`, and two empty texts
+are identical (`1.0`). Comparison is exact and Unicode-aware; setting
+`case_sensitive=False` applies `str.casefold()` to both texts first.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.text_distance_tool import TextDistanceTool
+
+tool = TextDistanceTool()
+lev = tool.execute(mode="levenshtein", text_a="kitten", text_b="sitting")["result"]          # 3
+osa = tool.execute(mode="damerau_levenshtein", text_a="teh", text_b="the")["result"]        # 1
+sim = tool.execute(mode="similarity", text_a="kitten", text_b="sitting")["result"]          # 0.571428...
+sim = tool.execute(mode="similarity", text_a="Kitten", text_b="SITTING",
+                   case_sensitive=False, metric="damerau_levenshtein")["result"]
+```
+
+Inputs are validated strictly before any computation: an unknown mode
+or metric, non-string texts, texts over 10,000 characters each, or a
+`len(text_a) * len(text_b)` product over 4,000,000 cells (the bound of
+the pure-Python dynamic program, measured on the case-folded texts
+when `case_sensitive=False`, so casefold's character expansion —
+`ß`→`ss`, `ﬃ`→`ffi` — cannot push the real matrix past the limit)
+raise a `ValueError`. Empty strings
+are valid — their distance to a text is that text's length. Every
+result carries the mode, the input lengths, the resolved
+`case_sensitive` flag, and the underlying `distance` in
+`similarity` mode; there are no content-level failure modes, so a
+result is always returned, never raised. Both distances are symmetric,
+zero only for identical texts, and satisfy the triangle inequality.
