@@ -1,0 +1,15 @@
+info:
+  name: 'demo_security_reviewer'
+  description: 'demo security reviewer instance for secure RAG workflow'
+profile:
+  prompt_version: demo_security_reviewer.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.1
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'secure_rag_agent_app.intelligence.agentic.agent.agent_template.demo_security_reviewer'
+  class: 'ReviewingAgentTemplate'

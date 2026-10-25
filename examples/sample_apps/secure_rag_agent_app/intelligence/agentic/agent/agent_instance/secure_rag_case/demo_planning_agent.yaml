@@ -1,0 +1,15 @@
+info:
+  name: 'demo_retrieval_planner'
+  description: 'demo retrieval planner instance for secure RAG workflow'
+profile:
+  prompt_version: demo_retrieval_planner.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.1
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'secure_rag_agent_app.intelligence.agentic.agent.agent_template.demo_retrieval_planner'
+  class: 'PlanningAgentTemplate'
