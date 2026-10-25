@@ -649,3 +649,57 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+
+## Currency Format Tool
+
+`CurrencyFormatTool` is an ISO-4217 currency formatting / reference tool built
+purely on the Python standard library (`decimal`) with no network access and no
+exchange-rate lookups — every output is computed offline from an embedded
+indicative table of 39 ISO-4217 currencies (USD, EUR, GBP, JPY, CNY, KRW, HKD,
+TWD, SGD, AUD, NZD, CAD, CHF, SEK, NOK, DKK, INR, RUB, BRL, MXN, ZAR, TRY,
+AED, SAR, THB, IDR, MYR, PHP, VND, PLN, CZK, HUF, ILS, EGP, NGN, BHD, KWD,
+OMR, QAR).
+
+Three modes behind a single `execute(mode=..., ...)` call:
+
+- `format` — render an amount for a 3-letter currency code with locale-style
+  digit grouping: `en` (1,234.56), `de` (1.234,56), `fr` (1 234,56) and `zh`
+  (1,234.56; when a symbol is shown it is always prefixed, e.g. ¥1,234.56).
+  Decimals default to the currency's ISO-4217 minor units (JPY / KRW / VND 0,
+  BHD / KWD / OMR 3, most 2) and can be overridden (0–6). With `symbol=True`
+  the table symbol is used where known ($ € ¥ £ ₩ ₹ …, prefixed without a
+  space in `en`/`zh`, a space-separated suffix in `de`/`fr`); currencies with no
+  well-known symbol such as CHF fall back to their code (`CHF 1,234.56`).
+  Rounding is exact half-up (`ROUND_HALF_UP`, not bankers' rounding: 2.5 JPY
+  renders as `3`).
+- `info` — look up a code's name, symbol, minor units and the table source.
+  The table is an indicative snapshot of ISO 4217, not a live standard
+  publication.
+- `convert_presentation` — an intentionally honest no-conversion helper: it
+  performs **no** exchange-rate lookup (the tool is offline); the numeric
+  amount is returned unchanged and only re-presented under each currency's
+  minor-unit conventions (123.4 JPY → `123` JPY / `123.40` USD), with
+  `rate_lookup: False` stated explicitly so the value is never mistaken for
+  a converted one.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import CurrencyFormatTool
+
+tool = CurrencyFormatTool()
+fmt = tool.execute(mode="format", amount=1234.56, currency="USD", locale="en", symbol=True)
+info = tool.execute(mode="info", currency="BHD")
+pres = tool.execute(mode="convert_presentation", amount=123.4,
+                    from_currency="JPY", to_currency="USD")
+```
+
+Inputs are validated strictly before any computation: malformed parameters
+(unknown mode, missing or mistyped amount / code, a code that is not exactly
+3 ASCII letters or is absent from the table, a locale outside the whitelist,
+a `decimals` outside 0–6, a non-boolean `symbol`, non-finite amounts, or a
+magnitude above 1,000,000,000,000,000) raise a `ValueError` that names the
+offending value. Amounts may be ints, finite floats or plain numeric strings
+(no thousands separators); floats are parsed through their shortest decimal
+representation so binary artifacts never reach the formatter, and negative
+zero is normalized to `0`. The tool converts nothing and quotes no rates —
+use a market-data tool when actual conversion is needed.
