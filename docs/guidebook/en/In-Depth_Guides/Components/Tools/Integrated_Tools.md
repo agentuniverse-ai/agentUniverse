@@ -675,3 +675,47 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Join Tool
+
+`JoinTool` is a list-joining utility built purely on the Python standard
+library — no network, no extra dependencies — for the routine job of turning
+a list into prose. It supports four modes. `join` joins a list of items with
+a `delimiter` (default `", "`) under a `style`: `plain` gives `a, b, c`;
+`oxford` gives `a, b, and c` (two items give `a and b` without a comma — the
+standard short form; a single item is returned unchanged); `and` gives
+`a and b` / `a, b and c`, documented without the final comma; and `or` gives
+`a or b` / `a, b, or c`. Empty-string items are kept by default;
+`drop_empty=True` drops them and the result reports how many were dropped.
+`join_pairs` joins a list of two-item `[key, value]` lists or single-key
+`{key: value}` dicts, formatting each pair as `key + kv_sep + value`
+(`kv_sep` defaults to `=`) and joining the pairs with `item_delim` (default
+`", "`): `a=1, b=2`. `numbered` prefixes running numbers as `1. a`
+(`number_format="dot"`) or `1) a` (`number_format="paren"`), starting at
+`start` (default 1), one item per line; `bullet` prefixes every item with a
+`bullet` character (default `-`), one item per line.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.join_tool import JoinTool
+
+tool = JoinTool()
+prose = tool.execute(mode="join", items=["apples", "bananas", "cherries"], style="oxford")["result"]
+query = tool.execute(mode="join_pairs", items=[["lang", "py"], {"stage": "dev"}])["result"]
+outline = tool.execute(mode="numbered", items=["first", "second"], number_format="paren")["result"]
+listing = tool.execute(mode="bullet", items=["alpha", "beta"], bullet="*")["result"]
+```
+
+Items must be strings, ints, floats or bools, coerced with one documented
+rule: `str(value)` for numbers (non-finite floats rejected) and
+`"true"` / `"false"` for booleans (JSON style). An empty item list yields
+the structured note `(no items to join)` by default, or an empty string with
+`empty_as="empty"`; the option applies to every mode. All operations are
+deterministic — no randomness, no time dependence. Inputs are validated
+strictly before any work: unknown `mode` / `style` / `number_format` /
+`empty_as` values, a non-list `items`, non-scalar items, malformed pairs,
+wrong-typed or over-long separators, an empty `delimiter` when two or more
+items remain, an empty `kv_sep` / `item_delim` / `bullet`, out-of-bounds
+`start`, mode-specific options used with the wrong mode, and more than
+10,000 items raise a `ValueError`. Every result carries the joined text,
+the input and output item counts, and the mode-specific options
+(`items_dropped` after `drop_empty`) so agents can report what happened.
