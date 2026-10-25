@@ -675,3 +675,55 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Random Pick Tool
+
+`RandomPickTool` is a seeded selection / sampling tool built purely on
+the Python standard library `random` module, with zero network access.
+It never generates data — it *selects from the list the caller passes
+in*, which makes it the counterpart of `RandomDataGeneratorTool`
+(that tool fabricates synthetic values such as names or tokens; this
+one draws from real caller-provided options). `pick` mode chooses `k`
+items with or without replacement (`with_replacement`, default
+`false`; without replacement `1 <= k <= len(items)`, with replacement
+`k` may exceed the list length up to 10,000); `weighted` mode draws
+`k` items *without replacement* according to `weights` (ints/floats
+`>= 0` matching `items` in length) — zero-weight items are excluded
+from the draw and after every draw the remaining weights are
+renormalized over the surviving pool; `shuffle` mode returns a
+deterministic shuffle together with the original index of every
+shuffled position; and `sample_indices` mode picks `k` distinct
+indices from `range(n)` without any list.
+
+Seeding is the core contract: pass a `seed` (integer or non-empty
+string) and the tool builds a fresh `random.Random(seed)` per call,
+so the same inputs plus the same seed always reproduce the same
+result, call after call. Omit the `seed` and an OS-entropy
+`random.SystemRandom` source is used, with `seed_used` reported as
+`null`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.random_pick_tool import RandomPickTool
+
+tool = RandomPickTool()
+tool.execute(mode="pick", items=["alice", "bob", "carol", "dave"], k=2, seed=42)
+# {'mode': 'pick', 'k': 2, 'with_replacement': False, 'seed_used': 42,
+#  'picked': [...], 'indices': [...]}
+tool.execute(mode="weighted", items=["a", "b", "c"], weights=[2, 0, 1], k=2, seed=7)
+# 'b' (weight 0) can never be drawn
+tool.execute(mode="shuffle", items=["x", "y", "z"], seed="run-1")
+# shuffled items plus their original indices
+tool.execute(mode="sample_indices", n=100, k=5, seed=9)
+# 5 distinct indices from range(100)
+```
+
+Every result carries the same fields: `picked` (the selected values),
+`indices` (their positions in the input — for `shuffle` the original
+index of each shuffled position), `with_replacement`, and `seed_used`
+(the seed echoed back, or `null`). Inputs are validated strictly
+before any draw: unknown mode, missing or non-list or empty or
+oversized `items` (10,000-entry cap), length-mismatched / negative /
+non-finite / all-zero weights, out-of-bounds `k` / `n`, a non-bool
+`with_replacement`, and a `seed` that is neither an integer nor a
+non-empty string raise a `ValueError`; booleans are rejected wherever
+an integer is expected (`True` is not a valid `k`, weight or seed).
