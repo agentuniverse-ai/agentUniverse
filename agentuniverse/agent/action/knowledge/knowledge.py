@@ -266,7 +266,9 @@ class Knowledge(ComponentBase):
                         # while a duplicate within the same store is dropped.
                         metadata = dict(_doc.metadata or {})
                         metadata[RECALL_CHANNEL_KEY] = store_code
-                        _doc.metadata = metadata
+                        # Stores may return the same cached Document instance.
+                        # Keep each channel's metadata separate from that source.
+                        _doc = _doc.model_copy(update={"metadata": metadata})
                         dedup_identity = (_doc.id, store_code)
                     else:
                         # Default contract: collapse cross-store duplicates to
