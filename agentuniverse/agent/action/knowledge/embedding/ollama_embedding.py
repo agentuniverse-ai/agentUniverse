@@ -107,7 +107,9 @@ class OllamaEmbedding(Embedding):
             from langchain_community.embeddings import OllamaEmbeddings
             return OllamaEmbeddings(
                 base_url=self.ollama_base_url,
-                model=self.embedding_model_name
+                model=self.embedding_model_name,
+                headers={"Authorization": f"Bearer {self.ollama_api_key}"}
+                if self.ollama_api_key else None,
             )
         except ImportError:
             raise Exception("langchain_community is required for LangChain integration")
