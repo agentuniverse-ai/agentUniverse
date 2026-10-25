@@ -43,7 +43,7 @@ order rather than crashing retrieval.
 
 import logging
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import \
     DocProcessor
@@ -213,16 +213,6 @@ class MMRProcessor(DocProcessor):
         """Greedy MMR selection; returns chosen indices in selection order."""
         n = len(doc_embeddings)
         relevance = [self._cosine(e, query_embedding) for e in doc_embeddings]
-        sim_cache: Dict[Tuple[int, int], float] = {}
-
-        def pair_sim(i: int, j: int) -> float:
-            key = (i, j) if i < j else (j, i)
-            cached = sim_cache.get(key)
-            if cached is None:
-                cached = self._cosine(doc_embeddings[i], doc_embeddings[j])
-                sim_cache[key] = cached
-            return cached
-
         remaining = list(range(n))
         # First pick: the most query-relevant document.
         first = max(remaining, key=lambda i: relevance[i])
@@ -230,13 +220,19 @@ class MMRProcessor(DocProcessor):
         remaining.remove(first)
 
         limit = self.top_n if self.top_n is not None else n
+        # Keep each candidate's maximum similarity to the selected set. Starting
+        # at negative infinity preserves negative cosine similarities.
+        redundancy = [float("-inf")] * n
         while remaining and len(selected) < limit:
             best_i = remaining[0]
             best_score = None
+            latest = selected[-1]
             for i in remaining:
-                redundancy = max(pair_sim(i, s) for s in selected)
+                redundancy[i] = max(
+                    redundancy[i], self._cosine(doc_embeddings[i], doc_embeddings[latest])
+                )
                 score = self.lambda_coef * relevance[i] \
-                    - (1.0 - self.lambda_coef) * redundancy
+                    - (1.0 - self.lambda_coef) * redundancy[i]
                 if best_score is None or score > best_score:
                     best_score = score
                     best_i = i
