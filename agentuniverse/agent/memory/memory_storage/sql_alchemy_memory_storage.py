@@ -69,10 +69,12 @@ def create_memory_model(table_name: str, DynamicBase: Any) -> Any:
         message = Column(Text)
         gmt_created = Column(DateTime, default=func.now())
 
+        # Let SQLAlchemy include the table name and truncate long identifiers.
+        # Explicit global names collide across configured memory tables.
         __table_args__ = (
-            Index('idx_session_id_source', 'session_id', 'agent_id', 'source'),
-            Index('idx_agent_id_source', 'agent_id', 'source'),
-            Index('idx_gmt_created', 'gmt_created'),
+            Index(None, 'session_id', 'agent_id', 'source'),
+            Index(None, 'agent_id', 'source'),
+            Index(None, 'gmt_created'),
         )
 
     return MemoryModel
