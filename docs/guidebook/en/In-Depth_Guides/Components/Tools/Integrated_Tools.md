@@ -649,3 +649,95 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Chunk Overlap Tool
+
+`ChunkOverlapTool` inspects and validates chunking RESULTS, built purely
+on the Python standard library (no network, no third-party package).
+Where `TextChunkerTool` (#3503) and the upstream splitter components
+(issue #258) CREATE chunks from text, this tool goes the other way: it
+takes an EXISTING chunk list — the output of any splitter, ours or a
+foreign pipeline — and reports whether that chunking is any good. It is
+the QA layer for RAG pipelines debugging their chunking: retrieval
+misses are often caused not by the retriever but by chunks that leave
+source regions uncovered, overlap too little (split facts) or too much
+(duplicated embedding cost), or drift out of source order.
+
+Four modes:
+
+- `analyze` — a chunk list plus an optional `source_text` to a one-shot
+  report: `count`; `sizes` `{min, mean, median, max, total}`;
+  `overlap_stats` between consecutive chunks via exact suffix/prefix
+  matching (`pairs_with_overlap`, `max_overlap_chars`,
+  `mean_overlap_chars`); positional `adjacency` of consecutive chunks
+  (contiguous vs overlapping vs gapped, from located char offsets);
+  and `coverage` when the source is given: `covered_ratio` (union of
+  located chunk spans over the source), `missing_spans` (source
+  regions no chunk covers, capped at 20 with the exact total count)
+  and `duplicated_regions` (regions covered by two or more chunks).
+- `coverage` — chunks plus `source_text` (required) to the detail
+  view: per-chunk `{found, positions, span, chars}` (all exact
+  occurrence starts, capped at 100) and a source heatmap per 100-char
+  bucket (per-bucket covered ratio plus fully / partially / uncovered
+  counts; the bucket list is capped at 1,000 buckets, the aggregate
+  counts always cover the whole source).
+- `overlap_matrix` — pairwise consecutive-window overlap: for every
+  chunk pair `(i, j)` with `i < j <= i + window` (default 1 =
+  consecutive only, capped at 100 and 200,000 checked pairs) the exact
+  suffix/prefix overlap length, reported for the non-zero pairs
+  (capped at 2,000 entries) with the shared text preview.
+- `validate` — chunks plus a `policy`: `min_chars` / `max_chars`
+  (per-chunk size bounds, offending chunk indices), `max_overlap`
+  (consecutive textual overlap, offending pairs) and `min_coverage`
+  (located-span coverage of the source, requires `source_text`);
+  every rule reports an independent pass/fail and the result carries
+  an `all_pass` flag. Every bound is inclusive: a chunk of exactly
+  `min_chars` / `max_chars` characters passes, a consecutive overlap
+  of exactly `max_overlap` characters passes and coverage exactly
+  equal to `min_coverage` passes (only strictly worse values fail),
+  with `min_coverage` compared at full precision before any display
+  rounding.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import ChunkOverlapTool
+
+tool = ChunkOverlapTool()
+report = tool.execute(mode="analyze", chunks=chunks, source_text=doc)
+report["coverage"]["covered_ratio"], report["coverage"]["missing_spans"]
+tool.execute(mode="coverage", chunks=chunks, source_text=doc)["heatmap"]
+tool.execute(mode="overlap_matrix", chunks=chunks, window=1)["overlaps"]
+tool.execute(mode="validate", chunks=chunks, source_text=doc,
+             policy={"min_chars": 50, "max_chars": 2000,
+                     "max_overlap": 200, "min_coverage": 0.99})["all_pass"]
+```
+
+Conventions, pinned for determinism: offsets are Python `str` code-point
+indices — one CJK ideograph (or astral character) is exactly one
+character, never a byte or UTF-16 offset. Chunk location is
+exact-substring and greedy-sequential: chunk *i* is located at the
+first occurrence at or after *previous start + 1*, so chunks are assumed
+to appear in source order; a chunk occurring more often than it is
+listed (or not at all) stays `unlocated` — reported, never guessed.
+Empty chunk strings are trivially found but contribute no span and no
+coverage. Two different overlaps are reported and never conflated: the
+TEXTUAL overlap (a suffix of chunk *i* equals a prefix of chunk *i+1*)
+and the POSITIONAL overlap (located spans intersect) — for located
+chunks an overlapping span region is the same substring on both sides,
+so positional overlap always implies an equal textual overlap, while
+textual overlap with contiguous spans (or beyond the positional one)
+is the signal of repeated content. Exact overlap
+search scans matches up to 10,000 characters (longer pairs are flagged
+`scan_cap_reached`). Zero-denominator ratios are `0.0` (an empty source
+is covered 0.0); ratios are reported at 4 decimal places; an empty
+chunk list is valid input and reports `count 0` with null size
+statistics and (with a source) a single missing span covering
+everything.
+
+Inputs are validated strictly before any computation: malformed
+parameters (unknown mode, a non-list chunk list, a non-string member,
+over 10,000 chunks, over 10 MB of chunk text, a non-string or over
+10 MB source, a bad `window`, an empty / unknown-key / bad-value
+policy, the `min_coverage` rule without a source, or a parameter that
+does not belong to the selected mode) raise a `ValueError`. The tool is
+fully deterministic; it measures structural chunking properties, not
+semantic chunk quality.
