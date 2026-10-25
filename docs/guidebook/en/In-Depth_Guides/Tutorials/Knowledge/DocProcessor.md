@@ -317,3 +317,31 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [OrgNameExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/org_name_extractor.yaml)
+
+This component extracts organization names into document metadata, addressing the *knowledge extraction* direction of issue #258. Supply-chain and business knowledge graphs are built out of organization entities — which suppliers a contract binds, which banks financed a deal, which universities co-authored a paper — yet those entities usually live inside prose as proper names terminated by a legal-form or institutional suffix ("Siemens AG", "华为技术有限公司") and stay invisible to retrieval until they are lifted out. This processor scans each document with suffix-anchored regular expressions and stamps the mentions it finds into metadata, leaving the text untouched.
+
+Extraction is context-free, suffix-driven, deterministic and offline: URLs and emails are first blanked out of a working copy (same-length placeholder, so spans remain valid against the original text — "Bayer AG" inside a pasted link is an address, not a mention), then candidate names are located by suffix anchor and extended left over a name pattern. English names are capitalized word sequences possibly joined by `&`, `of`, `the` and hyphens ("Bank of America Corp", "Johnson & Johnson Inc.", "AT&T Inc", "3M Company"); leading articles are trimmed ("The ACME Widget & Tool Corporation" is stamped as "ACME Widget & Tool Corporation") and the suffix stays inside the name. Chinese names are contiguous CJK runs joined by the interpuncts used in transliteration and interleaved with parenthesized region segments ("甲骨文（中国）软件系统有限公司", "路威·酩轩集团").
+
+Supported suffix anchors: EN — Inc, Inc., Corp, Corporation, Company, Co., Ltd, LLC, LLP, PLC, GmbH, AG, SA, NV, Group, Holdings, Partners, Labs, Technologies, Industries (capitalization-sensitive, plus all-caps variants); ZH — 股份有限公司, 有限公司, 集团, 公司, 银行, 证券, 基金, 研究院, 研究所, 大学, 学院 (longest first).
+
+Precision guards, all without a context model: a suffix needs at least one leading name character (a bare "Inc." or "公司" never matches); a name consisting of nothing but the article is rejected ("The Corporation announced..." yields nothing); English suffixes must be capitalized as written (a lowercase mid-sentence "inc" never fires); suffixes must end at a word boundary ("Incorporated" / "Companies" contain no triggers); and a Chinese suffix followed by a word-continuation character is rejected (一名大学生, 资产证券化, 银行卡 are not organizations).
+
+Each result is `{"name": str, "span": (start, end)}` with `text[span[0]:span[1]] == name` guaranteed; entries are deduplicated case-insensitively (first spelling wins), ordered by first occurrence, and capped at `max_orgs`, while `metadata['org_count']` records the distinct count found before capping. Empty lists are stamped on purpose. Known trade-offs of the context-free design: suffix-less organizations ("Apple", "摩根大通") are not extracted; in scripts without word separators the Chinese run extends to the previous non-CJK boundary, so a mention directly abutting other prose absorbs it (run the extractor after a splitter for best results); and a sentence-initial capitalized common noun before a generic suffix ("Study Group") can match. This distinguishes it from `ContactEntityExtractor` (#3441), which lifts emails/URLs/phone numbers — contact points, never organization names — and from `SupplyChainEntityExtractor`, which needs role context around each mention (a "supplier: X" line) and misses organizations stated in plain prose.
+
+The component definition file is as follows:
+```yaml
+name: 'org_name_extractor'
+description: 'extract organization names into document metadata via suffix anchors'
+max_orgs: 50                 # cap on stamped organizations; >= 1
+organizations_key: 'organizations'  # metadata key for the [{name, span}] list; '' disables
+count_key: 'org_count'      # metadata key for the distinct count; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.org_name_extractor'
+  class: 'OrgNameExtractor'
+```
+- max_orgs: Maximum number of organizations stamped into metadata; must be >= 1. The pre-cap distinct count is still reported in the count key, so a count above max_orgs signals truncation.
+- organizations_key: Metadata key the `[{name, span}]` list is written to; an empty value disables stamping the list.
+- count_key: Metadata key the distinct-organization count is written to; an empty value disables stamping the count.
