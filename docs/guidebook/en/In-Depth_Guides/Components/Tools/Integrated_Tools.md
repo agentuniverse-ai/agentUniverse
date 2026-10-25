@@ -675,3 +675,62 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Jaro-Winkler Tool
+
+`JaroWinklerTool` is a string similarity tool built purely on the Python
+standard library — no network, no third-party similarity package. It
+implements the Jaro similarity (Jaro 1989) and the Winkler modification
+(Winkler 1990), the standard measures for short-string and name matching
+(record linkage, entity resolution, typo-tolerant lookup), and complements
+the edit-distance axis of the Levenshtein-based tools and the phonetic axis
+of `PhoneticCodeTool`. Four modes are supported: `similarity` scores two
+strings with both measures (0-1, 4 decimal places); `compare` adds a
+`matches` boolean against a `threshold` (default 0.85, inclusive `>=`);
+`best_match` ranks a `candidates` list by Jaro-Winkler score descending,
+truncated to `top_n` (default 10) with ties broken alphabetically; and
+`cluster` groups a list of strings whose pairwise Jaro-Winkler score is
+`>= threshold` (default 0.85) using union-find, so each group is a connected
+component of the similarity graph — an item joins a group through any chain
+of at-threshold pairs even when it scores below the threshold against some
+other member.
+
+The standard parameters are used: the prefix boost `l * prefix_scale *
+(1 - jaro)` where `l` is the common prefix length capped at 4 characters,
+`prefix_scale` p = 0.1 (configurable, `0 < p <= 0.25` per Winkler's note
+that p must stay below 1/4), and `boost_threshold` = 0.7 (configurable,
+`0 <= bt <= 1`) — the boost applies only when the Jaro score is strictly
+greater than the gate. Characters match only within the standard window
+`floor(max(len_a, len_b) / 2) - 1` (clamped to 0). Empty-string
+conventions: both strings empty score 1.0, exactly one empty scores 0.0.
+Comparison is case-sensitive by default; `casefold=True` folds every input
+with `str.casefold()` before scoring while keeping the original strings in
+the output.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import JaroWinklerTool
+
+tool = JaroWinklerTool()
+tool.execute(mode="similarity", text_a="MARTHA", text_b="MARHTA")
+# {'mode': 'similarity', ..., 'jaro': 0.9444, 'jaro_winkler': 0.9611}
+tool.execute(mode="compare", text_a="DWAYNE", text_b="DUANE", threshold=0.8)
+# {'mode': 'compare', ..., 'matches': True, 'jaro': 0.8222, 'jaro_winkler': 0.84}
+tool.execute(mode="best_match", text="MARTHA",
+             candidates=["MARHTA", "MARTIN", "ZZZZZZ"])["matches"]
+# ranked: MARHTA 0.9611, MARTIN 0.8667, ZZZZZZ 0.0
+tool.execute(mode="cluster",
+             items=["MARTIN", "ZZZZZZ", "MARHTA", "MARTHA"], threshold=0.85)
+# groups: [['MARHTA', 'MARTHA', 'MARTIN'], ['ZZZZZZ']]
+```
+
+Inputs are validated strictly before any computation: malformed parameters
+(unknown mode, non-string inputs, empty `candidates` / `items` lists or
+non-string members, non-numeric or out-of-range `threshold` /
+`prefix_scale` / `boost_threshold`, non-positive `top_n`, non-boolean
+`casefold`, strings over 2,000 characters, more than 1,000 `best_match`
+candidates or 500 `cluster` items) raise a `ValueError`. Scores are
+reported, compared against thresholds and ranked at the reported 4-decimal
+precision, so every decision is consistent with the displayed values. The
+tool is fully deterministic and never raises on valid input; Jaro-Winkler
+is a heuristic tuned for short names — it is not a semantic similarity
+measure and should not be used as one.

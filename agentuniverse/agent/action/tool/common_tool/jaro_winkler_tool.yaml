@@ -1,0 +1,103 @@
+name: jaro_winkler_tool
+description: "Jaro-Winkler string similarity tool — pure Python stdlib, no network required. similarity mode scores two strings with the Jaro (0-1, 4dp) and Jaro-Winkler (0-1, 4dp) measures (standard params: prefix_scale 0.1 capped at 4 prefix chars, boost_threshold 0.7, match window floor(max(len)/2)-1; both empty -> 1.0, one empty -> 0.0), compare mode adds a thresholded matches boolean (default 0.85), best_match ranks a candidate list by score with alphabetical tie-breaking, and cluster mode groups a list of strings by pairwise Jaro-Winkler >= threshold using union-find (transitive connected components). Case-sensitive by default, casefold=True for case-insensitive scoring."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.jaro_winkler_tool
+  class: JaroWinklerTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — similarity, compare, best_match or cluster.
+    required: true
+  text_a:
+    type: string
+    description: First string of the similarity and compare modes (may be empty; both empty scores 1.0, one empty scores 0.0).
+    required: false
+  text_b:
+    type: string
+    description: Second string of the similarity and compare modes.
+    required: false
+  text:
+    type: string
+    description: The reference string ranked against the candidates (best_match mode).
+    required: false
+  candidates:
+    type: array
+    description: Non-empty list of strings to rank against text by Jaro-Winkler score (best_match mode; at most 1000 items).
+    required: false
+  items:
+    type: array
+    description: Non-empty list of strings to group into clusters (cluster mode; at most 500 items).
+    required: false
+  threshold:
+    type: number
+    description: compare / cluster modes — a pair matches / is merged when its Jaro-Winkler score is >= threshold, 0 to 1 inclusive, default 0.85.
+    required: false
+  top_n:
+    type: integer
+    description: best_match mode — maximum number of ranked candidates returned, positive integer, default 10.
+    required: false
+  prefix_scale:
+    type: number
+    description: Jaro-Winkler prefix weight, greater than 0 and at most 0.25 (Winkler's note), default 0.1.
+    required: false
+  boost_threshold:
+    type: number
+    description: Jaro score (strictly) above which the prefix boost is applied, 0 to 1 inclusive, default 0.7.
+    required: false
+  casefold:
+    type: boolean
+    description: Fold every input with str.casefold() before scoring (original strings are kept in the output); default false (case-sensitive).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["similarity", "compare", "best_match", "cluster"]
+      description: Operation mode.
+    text_a:
+      type: string
+      description: First string (similarity, compare modes).
+    text_b:
+      type: string
+      description: Second string (similarity, compare modes).
+    text:
+      type: string
+      description: Reference string (best_match mode).
+    candidates:
+      type: array
+      items:
+        type: string
+      description: Strings ranked against text (best_match mode).
+    items:
+      type: array
+      items:
+        type: string
+      description: Strings grouped into clusters (cluster mode).
+    threshold:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: Match / merge threshold (compare, cluster modes).
+    top_n:
+      type: integer
+      minimum: 1
+      description: Maximum ranked candidates returned (best_match mode).
+    prefix_scale:
+      type: number
+      exclusiveMinimum: 0
+      maximum: 0.25
+      description: Winkler prefix weight (default 0.1).
+    boost_threshold:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: Jaro score gate for the prefix boost (default 0.7).
+    casefold:
+      type: boolean
+      description: Case-insensitive scoring via str.casefold() (default false).
+  required: ["mode"]
