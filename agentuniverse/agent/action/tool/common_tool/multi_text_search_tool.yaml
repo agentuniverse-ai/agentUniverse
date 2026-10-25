@@ -1,0 +1,95 @@
+name: multi_text_search_tool
+description: "Multi-text search tool — grep for agents, pure Python stdlib, no network required. Searches a LIST of texts (log lines, document chunks, snippets) with one pattern (mode='search': matching indices plus per-match span and a context window; mode='filter': the matching entries themselves, or the non-matching ones with invert=True; mode='count': exact per-entry match counts; mode='index_of': first matching index for each pattern in a batch). Regex by default with optional flags (IGNORECASE, MULTILINE, DOTALL, ASCII), or literal substring matching with regex=False and a case option."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.multi_text_search_tool
+  class: MultiTextSearchTool
+input_keys:
+  - mode
+  - texts
+max_texts: 5000
+max_text_chars: 100000
+max_patterns: 100
+max_entries: 100
+max_matches: 1000
+max_context_chars: 1000
+args_model:
+  mode:
+    type: string
+    description: Search mode — search, filter, count or index_of.
+    required: true
+  texts:
+    type: array
+    description: The list of texts to search — a non-empty list of strings (log lines, document chunks, snippets).
+    required: true
+  pattern:
+    type: string
+    description: The pattern to search with. Required for the search, filter and count modes; not combined with patterns.
+    required: false
+  patterns:
+    type: array
+    description: A batch of patterns — required for the index_of mode; returns the first matching index per pattern.
+    required: false
+  regex:
+    type: boolean
+    description: True (default) treats the pattern as a regular expression; False matches it as a literal substring (metacharacters are escaped).
+    required: false
+  case_sensitive:
+    type: boolean
+    description: True (default) matches case sensitively; False matches case insensitively in both regex and literal modes.
+    required: false
+  flags:
+    type: array
+    description: Regex mode only — optional re flags, one name or a list from IGNORECASE/I, MULTILINE/M, DOTALL/S, ASCII/A.
+    required: false
+  context_chars:
+    type: integer
+    description: Characters of context on each side of a match span in search mode (default 40, edge-clamped to the entry).
+    required: false
+  invert:
+    type: boolean
+    description: Return non-matching entries (filter) or the first non-matching index (index_of); only valid in those two modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["search", "filter", "count", "index_of"]
+      description: Search mode.
+    texts:
+      type: array
+      items: "{type: string}"
+      description: The list of texts to search.
+    pattern:
+      type: string
+      description: The pattern to search with (search, filter, count modes).
+    patterns:
+      type: array
+      items: "{type: string}"
+      description: Batch of patterns (index_of mode).
+    regex:
+      type: boolean
+      default: true
+      description: Regex (true) or literal substring (false) matching.
+    case_sensitive:
+      type: boolean
+      default: true
+      description: Case-sensitive (true) or case-insensitive (false) matching.
+    flags:
+      description: Optional regex flags (regex mode only).
+      oneOf:
+        - type: string
+        - type: array
+          items: "{type: string}"
+    context_chars:
+      type: integer
+      default: 40
+      description: Context window on each side of a match span (search mode).
+    invert:
+      type: boolean
+      default: false
+      description: Keep non-matching entries / first non-matching index (filter, index_of modes).
+  required: ["mode", "texts"]
+  additionalProperties: false
