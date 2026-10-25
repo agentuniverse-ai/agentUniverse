@@ -22,6 +22,8 @@ class WebsiteBs4Reader(Reader):
     """Website content reader based on BeautifulSoup
     
     Crawls website content and extracts main text, with support for limiting crawl depth and max links.
+    Relative links use the first HTML base element with an href attribute,
+    resolved against the page URL. Resolved links still pass domain filtering.
     
     Note:
         Required packages:
@@ -215,8 +217,17 @@ class WebsiteBs4Reader(Reader):
 
                 # Find and queue additional links if not at max depth
                 if current_depth < self.max_depth:
+                    base_element = soup.find("base", href=True)
+                    link_base = current_url
+                    if base_element is not None:
+                        try:
+                            candidate = urljoin(current_url, base_element["href"].strip())
+                            if urlparse(candidate).scheme not in {"data", "javascript"}:
+                                link_base = candidate
+                        except ValueError:
+                            pass  # An invalid base falls back to the page URL.
                     for link in soup.find_all("a", href=True):
-                        full_url = urldefrag(urljoin(current_url, link["href"])).url
+                        full_url = urldefrag(urljoin(link_base, link["href"])).url
                         parsed_url = urlparse(full_url)
                         if (self._is_in_domain(full_url, primary_domain)
                             and not any(parsed_url.path.endswith(ext) 
