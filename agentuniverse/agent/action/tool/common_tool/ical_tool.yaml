@@ -1,0 +1,35 @@
+name: ical_tool
+description: Offline iCalendar (.ics) parsing, RFC 5545 linting, event normalization, and line folding.
+tool_type: api
+metadata: {type: TOOL, module: agentuniverse.agent.action.tool.common_tool.ical_tool, class: IcalTool}
+input_keys: [mode]
+max_text_chars: 1048576
+max_logical_lines: 10000
+max_components: 2000
+max_findings: 200
+max_events: 100
+max_occurrences: 3
+max_scan_periods: 5000
+max_fold_sites: 500
+args_model:
+  mode:
+    type: string
+    description: 模式，可选值：parse(解析组件树/展开折叠), lint(RFC 5545 校验), events(规范化事件列表), fold(按 75 八字节折叠)
+    required: true
+  text:
+    type: string
+    description: iCalendar (.ics) 文本内容
+    required: false
+  max_occurrences:
+    type: integer
+    description: events 模式返回的后续发生次数（0-10，默认 3）
+    required: false
+    default: 3
+args_model_schema:
+  type: object
+  properties:
+    mode: {type: string, enum: [parse, lint, events, fold]}
+    text: {type: string}
+    max_occurrences: {type: integer, minimum: 0, maximum: 10, default: 3}
+  required: [mode]
+  additionalProperties: false
