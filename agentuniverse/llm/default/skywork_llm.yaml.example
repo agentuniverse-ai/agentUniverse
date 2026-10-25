@@ -1,0 +1,13 @@
+name: 'default_skywork_llm'
+description: 'default skywork llm powered by the Skywork models'
+model_name: 'skywork-text'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${SKYWORK_API_KEY}'
+api_base: 'https://api.skywork.ai/v1'
+proxy: '${SKYWORK_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.skywork_llm'
+  class: 'SkyworkLLM'
