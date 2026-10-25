@@ -649,3 +649,54 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## CSV JSON Tool
+
+`CsvJsonTool` converts between raw CSV text and JSON record arrays,
+built purely on the Python standard library `csv` and `json` modules
+with zero network access. It is the plain tabular-to-records bridge
+between the SQL-like CSV queries of `CSVQueryTool` and the
+config-format conversions of `JsonYamlTool`. `to_json` mode parses CSV
+text into a JSON array of row objects: the first row supplies the
+object keys by default (`has_header=false` generates `column_1` ..
+`column_n` keys), type inference (default on) coerces cells to
+int / float / bool / null — `true`/`false` become booleans, an empty
+cell becomes `null`, and canonical numeric literals become numbers —
+while locale-ambiguous values deliberately stay strings: leading-zero
+values such as `007` or `007.5` are never coerced to numbers, and
+`NaN`/`Infinity` spellings are left alone. Cells are matched as-is
+without trimming, and a single leading UTF-8 BOM is stripped before
+parsing so it never leaks into the first header key. The delimiter is
+auto-sniffed among `,` `;` tab `|`
+by counting candidates outside double-quoted sections (ties prefer
+`,`), or set explicitly via the `delimiter` option. `to_csv` mode
+serializes a JSON array of objects back to CSV text: the header is the
+union of all object keys in first-seen order (an explicit `key_order`
+list pins the leading columns and the rest are appended), ragged rows
+fill missing cells with empty strings, `None` becomes empty,
+booleans become `true`/`false`, numbers use their canonical string
+form, nested dicts/lists are JSON-stringified, and quoting follows
+RFC 4180.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.csv_json_tool import CsvJsonTool
+
+tool = CsvJsonTool()
+records = tool.execute(mode="to_json", csv_text="name,age\nAlice,30\n")["result"]
+csv_text = tool.execute(mode="to_csv", json_text=records)["result"]
+```
+
+Round trip: for rectangular, uniform CSV data (same fields in every
+row, `has_header=true`), `to_csv(to_json(csv))` reproduces the original
+values with canonical minimal RFC 4180 quoting — cells the input
+quoted unnecessarily (`"abc"`) come back unquoted (`abc`) and cells
+with non-canonical numeric spellings (e.g. `1e5`) normalize (to
+`100000.0`); the logical values always round-trip. Inputs are
+validated strictly before any conversion: malformed parameters (wrong
+types, empty input text, unknown mode or delimiter, non-boolean
+`has_header`/`type_inference`, invalid or unknown-key `key_order`,
+text over 100,000 characters, over 10,000 rows or 1,000 columns)
+raise a `ValueError`, while content-level failures — CSV the stdlib
+reader rejects, JSON text that does not parse, and JSON that parses
+but is not an array of objects — return a structured `error` payload
+(`{"type": ..., "message": ...}`) instead of raising.
