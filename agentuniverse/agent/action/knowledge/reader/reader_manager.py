@@ -31,6 +31,11 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "sevenzip": "default_sevenzip_reader",
         "7z": "default_sevenzip_reader",
         "xlsx": "xlsx_reader",
+        "tar": "default_tar_reader",
+        "tgz": "default_tar_reader",
+        "tar.gz": "default_tar_reader",
+        "tar.bz2": "default_tar_reader",
+        "tar.xz": "default_tar_reader",
         # extended defaults for web & images
         "url": "default_web_page_reader",
         "png": "default_image_ocr_reader",
