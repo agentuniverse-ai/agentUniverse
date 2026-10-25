@@ -176,14 +176,14 @@ class Memory(ComponentBase):
 
                     # Select messages within budget (most recent first)
                     selected_messages = []
-                    current_tokens = 0
                     agent_llm_name = self.agent_llm_name if hasattr(self, 'agent_llm_name') else None
 
                     for message in messages:
-                        message_tokens = get_memory_tokens([message], agent_llm_name)
-                        if current_tokens + message_tokens <= allocated_tokens:
+                        # Separators and tokenizer boundaries are part of the
+                        # complete prompt; per-message counts are not additive.
+                        candidate = [*selected_messages, message]
+                        if get_memory_tokens(candidate, agent_llm_name) <= allocated_tokens:
                             selected_messages.append(message)
-                            current_tokens += message_tokens
                         else:
                             break  # Budget exceeded
 
@@ -200,15 +200,13 @@ class Memory(ComponentBase):
             return []
 
         selected_memories = []
-        current_tokens = 0
         agent_llm_name = self.agent_llm_name if hasattr(self, 'agent_llm_name') else None
 
         # Select most recent messages within budget
         for memory in reversed(memories):
-            memory_tokens = get_memory_tokens([memory], agent_llm_name)
-            if current_tokens + memory_tokens <= allocated_tokens:
+            candidate = [memory, *selected_memories]
+            if get_memory_tokens(candidate, agent_llm_name) <= allocated_tokens:
                 selected_memories.insert(0, memory)
-                current_tokens += memory_tokens
             else:
                 break
 
