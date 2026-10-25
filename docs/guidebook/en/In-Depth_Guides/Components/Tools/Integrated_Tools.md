@@ -675,3 +675,79 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## MIME Type Tool
+
+`MimeTypeTool` maps between file extensions and MIME types using only
+the Python standard library, with no network access. Lookups are
+answered in two layers: an embedded, curated table of roughly 200
+extensions (deterministic across machines and Python versions) answers
+first, and the stdlib `mimetypes` module acts as a fallback for
+extensions beyond the table — the result reports which layer answered
+via `source` (`"table"` or `"stdlib"`), and stdlib answers derive their
+category from the media type's maintype (`application/*` types are
+reported as `binary`).
+
+Four modes are available. `lookup` resolves a filename (directories
+stripped, POSIX and Windows separators both honored) or a bare
+extension (dot optional, case-insensitive) to the MIME type, a coarse
+category (`image` / `audio` / `video` / `text` / `binary` / `archive`
+/ `code` / `font` / `model`) and a `known` flag; unknown extensions
+return `mime: null` with `known: false` instead of raising, and
+filenames without an extension do the same — following
+`os.path.splitext` semantics, a leading dot does not start an
+extension, so `.gitignore` and `.png` have none while a file literally
+named `.tar.gz` resolves to `.gz`. `reverse` maps a MIME type back to
+its common extensions ordered by popularity (`image/jpeg` → `.jpg`
+then `.jpeg`); parameters after `;` are ignored, and this mode
+consults the embedded table only. `category` lists every extension of
+one category with its MIME type, sorted by extension. `sniff` makes a
+best-effort *text* format guess from a short sample (the first ~1 KB
+given as a string): JSON (a full parse first, newline-delimited JSON
+reported as `application/x-ndjson`, an object/array shape when the
+sample is truncated), XML declaration, HTML markup tags (matched with
+a tag-name boundary, so prose such as `<header>` does not fire the
+`<head>` signal), Markdown ATX headings and fenced code blocks, CSV
+with consistent comma-separated columns (RFC 4180 quoted fields
+included), and the Base64 alphabet are the recognized signatures, and
+a UTF-8 BOM is reported as additional evidence. The sniffer is honest
+about its limits: it only distinguishes textual formats — binary
+formats cannot be identified from text heuristics, and Base64 content
+can only be flagged (padding-consistent samples only, so unpadded
+Base64 conservatively stays `text/plain`), not decoded to its
+underlying type here.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.mime_type_tool import MimeTypeTool
+
+tool = MimeTypeTool()
+png = tool.execute(mode="lookup", filename="photos/logo.PNG")
+archive = tool.execute(mode="lookup", extension="tar.gz")   # dual suffix
+extensions = tool.execute(mode="reverse", mime="application/gzip")["extensions"]
+fonts = tool.execute(mode="category", category="font")["entries"]
+guess = tool.execute(mode="sniff", sample='{"name": "au"}')
+```
+
+Debated mappings are fixed and documented: `.yaml` / `.yml` map to
+`text/yaml` (the long-standing practice; RFC 9512 later registered
+`application/yaml` in 2024); `.py` maps to `text/x-python`; dual-suffix
+archives describe their outer compression container (`.tar.gz` and
+`.tgz` both map to `application/gzip`, while a plain `.tar` maps to
+`application/x-tar`; the short spellings `.tbz` / `.tbz2` / `.txz` /
+`.tzst` map to their compressed types the same way); and the ambiguous
+`.ts` follows its IANA-registered `video/mp2t` (also what the stdlib
+reports) rather than TypeScript, which keeps `.tsx`. Where the table
+deliberately overrides the stdlib it follows IANA/common practice
+instead of stdlib quirks: `.obj` → `model/obj` (not
+`application/x-tgif`), `.rs` → `text/rust` (not
+`application/rls-services+xml`), `.stl` → `model/stl` (not
+Microsoft's certificate trust list), and `.3g2` → `video/3gpp2`
+(the IANA-registered type, consistent with `.3gp` → `video/3gpp`).
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, unknown mode or category, both or neither of
+`filename` / `extension`, whitespace or path separators in an
+extension, a MIME type without exactly one `type/subtype` pair, an
+empty or oversized sample) raise a `ValueError`. Unknown but
+well-formed extensions and MIME types are not errors — they return
+`known: false` so an agent can branch without catching exceptions.
