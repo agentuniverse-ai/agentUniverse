@@ -198,6 +198,11 @@ class SQLiteStore(Store):
                 cursor.close()
 
         # Count every document's bm25.
+        # Query supports explicit keywords without a query string. Use them
+        # for scoring too, rather than passing None/blank text to Jieba.
+        scoring_text = query.query_str
+        if not scoring_text or not scoring_text.strip():
+            scoring_text = " ".join(sorted(query_terms))
         doc_scores = []
         total_doc_count = self._get_all_docs_count()
         total_word_count = self._get_all_docs_words_count()
@@ -208,7 +213,7 @@ class SQLiteStore(Store):
             doc_text = cursor.fetchone()[0]
             cursor.close()
 
-            bm25_score = self.compute_bm25(query.query_str, doc_text,
+            bm25_score = self.compute_bm25(scoring_text, doc_text,
                                            inverted_index, total_doc_count, total_word_count)
             doc_scores.append((doc_id, bm25_score))
 
