@@ -12,11 +12,28 @@ from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.store.document import Document
 
 
+_HTML_BLOCK_TAGS = (
+    "address", "article", "aside", "blockquote", "br", "caption", "dd",
+    "details", "div", "dl", "dt", "fieldset", "figcaption", "figure",
+    "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header",
+    "hr", "li", "main", "nav", "ol", "p", "pre", "section", "summary",
+    "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul",
+)
+_HTML_BLOCK_PATTERN = re.compile(
+    r"</?(?:" + "|".join(_HTML_BLOCK_TAGS) + r")"
+    r'''(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>''',
+    re.IGNORECASE,
+)
+
+
 class EpubReader(Reader):
     """
     EPUB (.epub) file reader.
 
     Used to read and parse EPUB format e-books, supports chapter extraction and metadata parsing.
+    Block elements and explicit line breaks separate extracted text with spaces;
+    inline formatting preserves adjacent text within a word.
+    Read raw chapter content so direct body text is retained; omit HTML head metadata.
     Chapters follow the spine reading order. Documents outside the spine are
     retained afterwards in manifest order; an empty spine uses manifest order.
     """
@@ -78,8 +95,8 @@ class EpubReader(Reader):
             if item.get_type() == ebooklib.ITEM_DOCUMENT:
                 chapter_count += 1
                 
-                # Extract text content from HTML
-                content = item.get_content().decode('utf-8', errors='ignore')
+                # Regenerating EpubHtml drops text before the body's first child.
+                content = item.content.decode('utf-8', errors='ignore')
                 text_content = self._extract_text_from_html(content)
                 
                 if text_content.strip():  # Only add non-empty chapters
@@ -114,10 +131,18 @@ class EpubReader(Reader):
             return self._extract_text_with_regex(html_content)
         
         soup = BeautifulSoup(html_content, 'html.parser')
+
+        for head in soup.find_all("head"):
+            head.decompose()
         
         # Remove script and style elements
         for script in soup(["script", "style"]):
             script.decompose()
+
+        # Separate blocks and explicit breaks, preserving inline word fragments.
+        for block in soup.find_all(_HTML_BLOCK_TAGS):
+            block.insert_before(" ")
+            block.insert_after(" ")
         
         # Get text and clean up whitespace
         text = soup.get_text()
@@ -136,7 +161,13 @@ class EpubReader(Reader):
         Returns:
             str: Extracted plain text
         """
-        text = re.sub(r'<[^>]+>', '', html_content)
+        # Raw chapters retain metadata and comments that EpubHtml regenerated away.
+        text = re.sub(r'<!--.*?-->', '', html_content, flags=re.DOTALL)
+        text = re.sub(r'<head\b[^>]*>.*?</head\s*>', '', text,
+                      flags=re.IGNORECASE | re.DOTALL)
+        # Add boundaries before stripping tags or decoding escaped literal markup.
+        text = _HTML_BLOCK_PATTERN.sub(' ', text)
+        text = re.sub(r'<[^>]+>', '', text)
     
         text = text.replace('&amp;', '&')
         text = text.replace('&lt;', '<')
