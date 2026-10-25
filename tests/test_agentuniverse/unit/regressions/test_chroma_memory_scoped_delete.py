@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 chromadb = pytest.importorskip("chromadb")
+from chromadb.api.client import SharedSystemClient  # noqa: E402
 from chromadb.config import Settings  # noqa: E402
 
 from agentuniverse.agent.memory.memory_storage import chroma_memory_storage as module  # noqa: E402
@@ -19,6 +20,11 @@ def storage(monkeypatch):
 
     monkeypatch.setattr(socket.socket, "connect", no_network)
     monkeypatch.setattr(socket, "getaddrinfo", no_network)
+    # chromadb caches one process-global system per identifier and refuses a
+    # second one whose Settings differ. Every non-persistent client shares the
+    # identifier "ephemeral", so another module's client makes this creation
+    # raise ValueError. Reset the cache so each test owns a clean system.
+    SharedSystemClient.clear_system_cache()
     client = chromadb.EphemeralClient(Settings(anonymized_telemetry=False))
     collection = client.create_collection("scoped_delete_" + uuid.uuid4().hex, embedding_function=None)
     manager = Mock()
