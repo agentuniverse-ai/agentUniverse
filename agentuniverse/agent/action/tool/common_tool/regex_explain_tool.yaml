@@ -1,0 +1,30 @@
+name: regex_explain_tool
+description: Regex explainer tool — pure Python stdlib, no network required. Explains what a regular expression means in plain language. mode='explain' returns a token-by-token breakdown [{token, kind, meaning, position}] of the supported subset (literals, dot, character classes with ranges/negation, escapes \d \w \s \D \W \S \b \B \n \t and escaped literals, anchors ^ $, capturing / non-capturing / named / lookahead groups, alternation, quantifiers * + ? {n} {n,} {n,m} with lazy suffixes, inline flags (?i) (?m) (?s)) plus a one-line summary for simple patterns; constructs outside the subset are flagged with their position. mode='validate' compiles the pattern and returns the re.error message and position on failure. mode='examples' generates 2-3 verified matching strings for simple patterns (literals, classes and quantifiers).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.regex_explain_tool
+  class: RegexExplainerTool
+input_keys:
+  - mode
+  - pattern
+args_model:
+  mode:
+    type: string
+    description: What to do with the pattern — explain (token-by-token plain-language breakdown), validate (compile check whose error payload carries the re.error message and position) or examples (2-3 generated matching strings for simple patterns).
+    required: true
+  pattern:
+    type: string
+    description: The regular expression pattern to explain, validate or exemplify. Must be a string of at most 10000 characters.
+    required: true
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["explain", "validate", "examples"]
+      description: Processing mode.
+    pattern:
+      type: string
+      description: The regular expression pattern.
+  required: ["mode", "pattern"]
