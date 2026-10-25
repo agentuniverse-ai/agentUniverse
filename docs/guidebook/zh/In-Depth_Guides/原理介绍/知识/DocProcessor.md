@@ -315,3 +315,35 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [KeywordInContextConcentrator](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/keyword_in_context_concentrator.yaml)
+
+该组件把关键词上下文（KWIC）片段汇聚进文档 metadata，对应 issue #258 的*知识提取 / 索引*方向。检索回答的是"哪些文档提到了这些词"，却很少保留提到的*位置*与*措辞*；需要证据的下游消费方——搜索界面的摘要面板、引用展示、必须精确引用原文的 agent——否则只能在展示时重新扫描全文。该组件为每个关键词的每次出现提取周围 `window_size` 个字符的窗口，写入 `metadata[kwic_key]`，可直接用于摘要展示，且绝不改动文档原文。它与 `JiebaKeywordExtractor` 互为逆向：那个组件发现文档包含哪些关键词，本组件聚焦你关心的关键词出现在哪里。
+
+关键词来自按固定顺序合并的两个来源：静态 `keywords` 列表（按配置顺序、去重）——适合写入前用固定领域术语做预加工；当 `use_query_keywords` 为真时，再并入查询自身的关键词集合（按字母序排序，输出不依赖集合迭代顺序）——适合召回时使用。匹配基于子串搜索，并在合适的边缘加上词边界：ASCII 关键词边缘要求相邻字符不是另一个 ASCII 词字符，`rate` 能匹配 `rate` 而不会匹配 `rates` 或 `generate`，直接与中文相邻（如 `使用rate表示`）时也能命中；CJK 边缘不加边界要求，因为中日文不以空格分词，`利率` 仍能匹配 `利率风险` 中的片段。默认大小写不敏感（`case_sensitive` 可改），且大小写不敏感时仅大小写不同的关键词视为同一个（保留首个拼写）；同一关键词的重叠出现遵循正则非重叠语义，不同关键词可以命中同一段文本并各自记录。
+
+每个片段记录关键词、其在原文中的 `start` / `end` 偏移，以及可直接展示的 `context`：周围窗口内的连续空白（含换行）折叠为单个空格，窗口被文档边缘截断的一侧附上 `…` 标记（无标记即表示窗口已到达真实边界）。每篇文档最多保留 `max_snippets` 个片段（按文本顺序），而 `total_occurrences` 与按关键词的 `counts`（含零命中关键词）始终覆盖全部匹配。总命中数不足 `min_occurrences` 的文档可被丢弃（默认 0 保留全部，仅标注）。整个流程纯 Python、离线且确定性。
+
+组件定义文件如下：
+```yaml
+name: 'keyword_in_context_concentrator'
+description: 'extract keyword-in-context windows around keyword occurrences into metadata for snippet display'
+keywords: ['rate', 'inflation']   # 静态关键词，按此顺序
+use_query_keywords: true          # 并入查询的关键词集合
+window_size: 60                   # 每侧保留的上下文字符数
+max_snippets: 10                  # 每篇文档保留的片段数
+min_occurrences: 0                # 0 = 仅标注，不过滤
+case_sensitive: false             # 匹配是否区分大小写
+kwic_key: 'kwic'                  # 记录写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.keyword_in_context_concentrator'
+  class: 'KeywordInContextConcentrator'
+```
+- keywords：作用于每个批次的静态关键词列表，按配置顺序；重复与空白项会被丢弃。
+- use_query_keywords：为真（默认）时，查询的关键词集合并入有效关键词，按字母序排在静态列表之后。
+- window_size：每次出现每侧保留的上下文字符数；0 将片段收窄为关键词本身。
+- max_snippets：每篇文档最多保留的片段数（按文本顺序）；计数始终覆盖全部出现。
+- min_occurrences：文档被保留所需的最低关键词出现总数；0（默认）保留全部文档。
+- case_sensitive：为假（默认）时关键词匹配不区分大小写。
+- kwic_key：汇聚记录（`{keywords, total_occurrences, counts, snippets}`）写入保留文档的 metadata 键；为空则不写入。
