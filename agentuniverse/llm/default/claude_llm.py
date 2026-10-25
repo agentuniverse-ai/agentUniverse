@@ -6,6 +6,7 @@
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: claude_llm.py
 from typing import Optional, Any, Union, Iterator, AsyncIterator
+from copy import deepcopy
 
 import anthropic
 import httpx
@@ -70,10 +71,14 @@ class ClaudeLLM(LLM):
         """Run the Claude LLM.
 
         Args:
-            messages (list): The messages to send to the LLM.
+            messages (list): Conversation messages. Leading system messages
+                are moved to Anthropic's top-level system field. An explicit
+                system argument precedes these instructions; strings become
+                text blocks and existing block lists retain their structure.
             **kwargs: Arbitrary keyword arguments.
         """
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
+        messages, kwargs = self._prepare_system_messages(messages, kwargs)
         self.client = self._new_client()
         chat_completion = self.client.messages.create(
             messages=messages,
@@ -90,6 +95,7 @@ class ClaudeLLM(LLM):
 
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
+        messages, kwargs = self._prepare_system_messages(messages, kwargs)
         self.async_client = self._new_async_client()
         chat_completion = await self.async_client.messages.create(
             messages=messages,
@@ -103,6 +109,31 @@ class ClaudeLLM(LLM):
             await self.aclose()
             return self.parse_result(chat_completion)
         return self.agenerate_stream_result(chat_completion)
+
+    @staticmethod
+    def _prepare_system_messages(messages: list, kwargs: dict) -> tuple:
+        """Lift initial system instructions without mutating caller-owned data.
+
+        Already-native calls with no initial system messages pass through.
+        System messages after conversation turns are left for API validation.
+        """
+        index = 0
+        while index < len(messages) and messages[index].get('role') == 'system':
+            index += 1
+        if not index:
+            return messages, kwargs
+
+        blocks = []
+        contents = ([kwargs['system']] if 'system' in kwargs else [])
+        contents.extend(message['content'] for message in messages[:index])
+        for content in contents:
+            if isinstance(content, str):
+                blocks.append({'type': 'text', 'text': content})
+            elif isinstance(content, list):
+                blocks.extend(deepcopy(content))
+            else:
+                raise ValueError('system content must be a string or a list of text blocks')
+        return messages[index:], {**kwargs, 'system': blocks}
 
     @staticmethod
     def parse_result(data):
