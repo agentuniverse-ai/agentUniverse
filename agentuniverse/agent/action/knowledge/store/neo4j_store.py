@@ -58,19 +58,21 @@ class Neo4jStore(Store):
     @staticmethod
     def _execute_cypher(session, query_str, param=None, return_data=True):
         df_result = pd.DataFrame()
-        if param is None:
-            result = session.run(query_str)
-        else:
-            result = session.run(query_str, **param)
+        try:
+            if param is None:
+                result = session.run(query_str)
+            else:
+                result = session.run(query_str, **param)
 
-        if return_data:
-            result_list = []
-            for resulti in result:
-                result_list.append(dict(resulti))
+            if return_data:
+                result_list = []
+                for resulti in result:
+                    result_list.append(dict(resulti))
 
-            df_result = pd.DataFrame(result_list)
-        session.close()
-        return df_result
+                df_result = pd.DataFrame(result_list)
+            return df_result
+        finally:
+            session.close()
 
 
     def query(self, query: Query, **kwargs) -> List[Document]:
