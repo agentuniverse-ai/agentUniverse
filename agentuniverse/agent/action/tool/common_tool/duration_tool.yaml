@@ -1,0 +1,80 @@
+name: duration_tool
+description: "Duration tool — pure Python stdlib, no network required. Parse ISO-8601 durations (PT1H30M, P1DT2H) and shorthand expressions ('1d 2h 3m', '90m', '1.5h', CJK 天/时/分/秒) into total seconds, microseconds and canonical parts (mode='parse'); humanize a number of seconds as compact ('26h 30m'), long ('1 day, 2:30:00') or clock ('26:30:00') text (mode='humanize'); measure the duration between two ISO datetimes or dates (mode='between'); and add or subtract two duration strings (mode='add'). Fixed conversions: 1y=365d, 1mo=30d, 1w=7d; microsecond precision."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.duration_tool
+  class: DurationTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Duration mode — parse, humanize, between or add.
+    required: true
+  duration:
+    type: string
+    description: The duration string to parse (parse mode) or the left operand (add mode). ISO-8601 (PT1H30M, P1DT2H) or shorthand ('1d 2h 3m', '90m', '1.5h', CJK 天/时/分/秒).
+    required: false
+  seconds:
+    type: number
+    description: The number of seconds to humanize (humanize mode). Integers, finite floats and numeric strings are accepted.
+    required: false
+  start:
+    type: string
+    description: ISO datetime ('2026-01-01T10:30:00', optional fraction and '+HH:MM' offset, 'Z' accepted) or date ('2026-01-01') — start of the span (between mode).
+    required: false
+  end:
+    type: string
+    description: ISO datetime or date — end of the span (between mode).
+    required: false
+  other:
+    type: string
+    description: The right operand duration string (add mode); added to or subtracted from 'duration'.
+    required: false
+  operation:
+    type: string
+    description: add (default) or subtract — the arithmetic applied to 'duration' and 'other' (add mode only).
+    required: false
+  format:
+    type: string
+    description: Humanized output style — compact (default, '26h 30m'), long ('1 day, 2:30:00') or clock ('26:30:00'); used by humanize, between and add modes.
+    required: false
+  allow_negative:
+    type: boolean
+    description: Explicitly permit negative durations and results (defaults to false, in which case they are structured negative_duration errors).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "humanize", "between", "add"]
+      description: Duration mode.
+    duration:
+      type: string
+      description: Duration string to parse, or left operand of the arithmetic (parse / add modes).
+    seconds:
+      type: number
+      description: Seconds to humanize (humanize mode).
+    start:
+      type: string
+      description: ISO datetime or date — start of the span (between mode).
+    end:
+      type: string
+      description: ISO datetime or date — end of the span (between mode).
+    other:
+      type: string
+      description: Right operand duration string (add mode).
+    operation:
+      type: string
+      enum: ["add", "subtract"]
+      description: Arithmetic operation (add mode).
+    format:
+      type: string
+      enum: ["compact", "long", "clock"]
+      description: Humanized output style (humanize / between / add modes).
+    allow_negative:
+      type: boolean
+      description: Permit negative durations and results instead of returning a negative_duration error.
+  required: ["mode"]
