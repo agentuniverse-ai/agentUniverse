@@ -315,3 +315,25 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [CitationExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/citation_extractor.yaml)
+
+该组件在文档中查找引文与引用标记并写入 metadata，对应 issue #258 的*知识抽取*方向。真实文档的证据藏在排版符号里而不是结构化字段里：记者把受访人的话放进引号，论文依赖编号或作者-年份引用，数据集用 DOI 和 arXiv 编号定位，脚注拖着上标数字。这些信号对向量化和关键词索引都不可见；本组件用纯 `re` 逐篇扫描，把所有标记收集进 `metadata[citations]`，让检索和 Agent 可以据此过滤、加权或展示。识别五种类型：`quote`（弯双引号、行内左右配对的直双引号或 CJK 直角引号中的引语——弯单引号、『…』等内层样式只有出现在所有外层引号之外才单独上报，嵌套引语因此不会被重复计数）、`bracket`（数字标记 [1] / [1,2] / [3-5]、字母数字引用键如 [SMITH2026]、作者-年份引用如 (Author, 2026) 或 (Author et al., 2026a)；不含数字的方括号词组与普通括号短语不会被误报）、`doi`（`doi:10.xxxx/...` 与 `https://doi.org/10.xxxx/...`）、`arxiv`（`arXiv:2507.12345` 及 abs/pdf 链接）和 `footnote`（Unicode 上标数字串 ¹²³ 以及 ^1、^42 这类脱字符标记）。
+
+对引语，组件在闭引号之后的窗口内探测归属线索——英文的 `said`、`according to` 等动词，或中文的 表示 / 称 / 说 / 指出——并把线索连同说话人短语捕获进该条引用的 `attribution`（如 `said Jane Doe`、`张三表示`）；探测在首个句末标点处截止，后续句子里的线索不会误入，附近没有线索的引语保持 `attribution: null`。每条引用形如 `{kind, text, attribution, span}`，`text` 是引语文本（含引号）或精确匹配到的标记，`span` 是能在原文中精确切出该文本的 `[start, end]` 区间。引用按出现位置排序并截断到 `max_citations` 条，`metadata[citation_count]` 写入按类型统计的计数（五个键恒齐全，无命中补零）。组件为直通式：不过滤文档、绝不修改 text 与 id、写入前复制 metadata 映射。整个流程确定性、离线且零依赖，是分块前低成本的预处理步骤。与 `AcademicPaperFragmenter` 不同——后者按学术论文内部的论证结构重新分片——本组件不改变任何文档格式，只做标记注解。
+
+组件定义文件如下：
+```yaml
+name: 'citation_extractor'
+description: 'find quotations and citation markers in documents and stamp them into metadata'
+max_citations: 100            # 保留的最大引用条数，超出部分丢弃
+citations_key: 'citations'    # 引用列表写入的 metadata 键；'' 表示不写入
+count_key: 'citation_count'   # 按类型计数写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.citation_extractor'
+  class: 'CitationExtractor'
+```
+- max_citations：metadata 中保留的最大引用条数；超出该上限的检测结果被丢弃，按类型计数按保留列表统计。必须 >= 1。
+- citations_key：引用列表写入的 metadata 键；为空则不写入。
+- count_key：按类型计数映射写入的 metadata 键；为空则不写入。

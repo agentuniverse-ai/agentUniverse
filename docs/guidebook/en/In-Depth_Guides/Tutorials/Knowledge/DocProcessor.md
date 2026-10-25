@@ -317,3 +317,25 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [CitationExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/citation_extractor.yaml)
+
+This component finds quotations and citation markers in documents and stamps them into metadata, addressing the *knowledge extraction* direction of issue #258. Real-world documents carry their evidence in typography rather than in structured fields: reporters quote people inside quotation marks, papers lean on numbered or author-year references, datasets are pinned by DOIs and arXiv ids, and footnotes trail superscript digits. That signal is invisible to embeddings and keyword indexes alike; this processor walks each document with pure `re` and collects every such marker into `metadata[citations]`, giving retrieval and agents something to filter, boost or display on. Five kinds are detected: `quote` (quoted speech between curly doubles, straight doubles paired left to right within a line, or CJK corner brackets — inner styles such as curly singles and 『…』 are only reported when they sit outside every outer quotation, so a quotation nested inside another is never double-counted), `bracket` (numeric markers [1] / [1,2] / [3-5], alphanumeric citation keys like [SMITH2026], and author-year references like (Author, 2026) or (Author et al., 2026a); bracketed words without digits and parenthesised prose stay out), `doi` (`doi:10.xxxx/...` and `https://doi.org/10.xxxx/...`), `arxiv` (`arXiv:2507.12345` and abs/pdf URLs) and `footnote` (runs of Unicode superscript digits ¹²³ plus caret-style markers ^1, ^42).
+
+For quotations, the window right after the closing mark is probed for an attribution cue — English `said`, `according to` and similar verbs, or Chinese 表示 / 称 / 说 / 指出 — and the cue with its speaker phrase is captured into the citation's `attribution` (e.g. `said Jane Doe`, `张三表示`); the search stops at the first sentence terminator so a cue in a later sentence never leaks in, and quotes without a nearby cue simply keep `attribution: null`. Every citation is a mapping `{kind, text, attribution, span}` where `text` is the quotation (delimiters included) or the marker exactly as matched and `span` is a `[start, end]` pair that reproduces that text exactly. Citations are sorted by document position and capped at `max_citations`, and `metadata[citation_count]` receives a per-kind tally over the kept list (all five keys always present, zeros included). The component is a pass-through: documents are returned unfiltered, text and id are never modified, and metadata mappings are copied before mutation. The whole pipeline is deterministic, offline and dependency-free — a cheap pre-insertion step before chunking. Unlike `AcademicPaperFragmenter`, which re-fragments an academic paper by its internal argument structure, this component leaves any document format intact and only annotates markers.
+
+The component definition file is as follows:
+```yaml
+name: 'citation_extractor'
+description: 'find quotations and citation markers in documents and stamp them into metadata'
+max_citations: 100            # max citations kept; excess discarded
+citations_key: 'citations'    # metadata key for the citation list; '' disables
+count_key: 'citation_count'   # metadata key for the per-kind counts; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.citation_extractor'
+  class: 'CitationExtractor'
+```
+- max_citations: Maximum number of citations kept in the metadata list; detections beyond this cap are discarded and the per-kind counts reflect the kept list. Must be >= 1.
+- citations_key: Metadata key the citation list is written to; an empty value disables that stamp.
+- count_key: Metadata key the per-kind count mapping is written to; an empty value disables that stamp.
