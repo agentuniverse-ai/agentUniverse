@@ -197,22 +197,31 @@ class ChromaContextStore(ContextStore):
         session_id: str,
         context_type: Optional[ContextType] = None,
         priority: Optional[ContextPriority] = None,
-        limit: int = 100,
+        limit: Optional[int] = 100,
         **kwargs
     ) -> List[ContextSegment]:
-        """Retrieve segments from Chroma.
+        """Retrieve the newest matching segments from Chroma.
+
+        Chroma cannot order get() results by creation time, so all matching
+        records are read before applying the limit to the sorted segments.
+        For N matches, this reads/decodes N documents and metadata records,
+        uses O(N) segment storage plus their payloads, and sorts in O(N log N)
+        time even when limit=1. Use session/type/priority filters to reduce N.
+        See tests/benchmarks/benchmark_chroma_context_get.py for an offline
+        latency and peak Python-allocation comparison with backend limiting.
 
         Args:
             session_id: Session identifier
             context_type: Optional type filter
             priority: Optional priority filter
-            limit: Maximum number of segments to return
+            limit: Maximum number of segments to return; None returns all
+                matches, while zero and negative values return an empty list.
             **kwargs: Additional parameters (e.g., min_created_at)
 
         Returns:
             List of matching segments
         """
-        if not self._collection:
+        if (limit is not None and limit <= 0) or not self._collection:
             return []
 
         # Build where clause for filtering
@@ -232,7 +241,6 @@ class ChromaContextStore(ContextStore):
         try:
             results = self._collection.get(
                 where=self._combine_filters(where),
-                limit=limit,
             )
 
             if not results or not results["ids"]:
