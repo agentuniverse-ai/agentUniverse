@@ -33,7 +33,7 @@ class MarkdownReader(Reader):
             raise ImportError(
                 "markdown and unstructured is required to read markdown files: "
                 "please run `pip install unstructured` and `pip install markdown`"
-            )
+            ) from None
 
         if isinstance(file, str):
             file = Path(file)

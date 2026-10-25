@@ -48,7 +48,7 @@ class JsonReader(Reader):
                     f"Invalid JSON in file {file.name}: {str(e)}",
                     e.doc,
                     e.pos
-                )
+                ) from e
 
         # Convert JSON data to formatted string
         text = json.dumps(data, indent=2, ensure_ascii=False)
