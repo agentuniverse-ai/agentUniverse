@@ -1,0 +1,58 @@
+name: command_arg_lexer_tool
+description: Command argument lexer tool — POSIX-shell-style argv tokenization WITHOUT execution, pure Python stdlib, no network. mode='lex' splits a command line into an argv list (whitespace splitting, single/double quotes, backslash escapes, adjacent-segment joining, optional dict-based $VAR/${VAR} expansion via expand_vars; variable text is literal by default), mode='join' quotes an argv list back into one safe line with minimal quoting (lex(join(argv)) == argv round-trip), and mode='count' classifies argv into program, flags (leading dash, with flag=value split, -- separator respected) and operands. No globs, no command substitution, no execution.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.command_arg_lexer_tool
+  class: CommandArgLexerTool
+input_keys:
+  - mode
+max_command_line_chars: 100000
+max_argv_items: 10000
+max_argv_total_chars: 100000
+max_variables: 200
+args_model:
+  mode:
+    type: string
+    description: Lexer mode — lex, join or count.
+    required: true
+  command_line:
+    type: string
+    description: The command line to tokenize. Required for the lex and count modes; may be empty or all-whitespace (which lexes to an empty argv).
+    required: false
+  argv:
+    type: array
+    description: The argument words to quote back into one line. Required for the join mode; may be an empty list (which joins to the empty string).
+    required: false
+  expand_vars:
+    type: boolean
+    description: lex/count only — opt-in $NAME / ${NAME} substitution from the provided variables dict. Defaults to false, keeping all $ text literal. Requires variables when set.
+    required: false
+  variables:
+    type: object
+    description: lex/count only with expand_vars=true — the substitution table (name to plain string). Keys must match [A-Za-z_][A-Za-z0-9_]*; the process environment is never consulted.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lex", "join", "count"]
+      description: Lexer mode.
+    command_line:
+      type: string
+      description: Command line to tokenize (lex and count modes).
+    argv:
+      type: array
+      items:
+        type: string
+      description: Argument words to quote (join mode).
+    expand_vars:
+      type: boolean
+      description: Opt-in variable substitution from variables (lex and count modes).
+    variables:
+      type: object
+      additionalProperties:
+        type: string
+      description: Substitution table for expand_vars (lex and count modes).
+  required: ["mode"]
