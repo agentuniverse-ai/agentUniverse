@@ -675,3 +675,79 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## StringFormatTool
+
+`StringFormatTool` analyzes the *grammar of Python format strings* —
+the template itself, never the content being formatted. The template
+and prompt family of tools (`TemplateRenderTool` #3559,
+`PromptTemplateLinterTool` #3756, `PromptTool` #3369) operates on
+placeholder content; this tool answers whether a
+`{customer.name!r:>20}`-style field is a syntactically correct
+str.format template, what each field references, whether
+`str.format_map` will render it, and what its printf-% equivalent
+is. It is pure Python standard library with no network access.
+
+Five modes:
+
+* `lint` checks a template for unmatched `{` or `}` (`{{`/`}}`
+  escapes are honored), mixed automatic (`{}`) and manual (`{0}`)
+  numbering — real `str.format` raises `ValueError: cannot switch` —
+  unknown or malformed conversions (only `!r`/`!s`/`!a` exist),
+  empty attributes/indices in field names, and nested replacement
+  fields inside format specs beyond CPython's one-level recursion
+  limit ("Max string recursion exceeded"). Every error claim is
+  *provable*: the tool calls the real `str.format` with inert
+  sandboxed dummy arguments (plain `'x'`/`7`/`2.5` semantics for
+  value slots, digit-string, single-char or plain-int candidates for
+  spec-token slots, permissive attribute/index traversal, all
+  exceptions caught) and vetoes every error finding whenever the
+  real machinery renders the template. Specs that render only for
+  some value types (`{:d}`) come back as info findings with the
+  working kinds listed — exactly the real verdict — alongside
+  locale-`n`, nested-spec and whitespace field-name notes. Field
+  names are classified exactly like the real machinery: only
+  Unicode decimal digits are positional indices (`{٠}` is index 0,
+  `{²}` is a keyword), and the verdict always reflects the full
+  scan even when the findings list is capped.
+* `fields` extracts every field in order with
+  `{field_name, index_or_key, auto_numbered, attribute_chain,
+  index_parts, conversion, format_spec, position_span}`, including
+  fields nested inside format specs.
+* `render` applies `str.format_map` semantics to a mapping; missing
+  keys are structured findings naming the key and the exact field
+  span instead of a raised `KeyError`, and successful renders come
+  from the real `format_map` (byte-equality is enforced by the test
+  suite). Positional fields are rejected with the message the real
+  `format_map` raises.
+* `translate_percent` converts printf-% templates (`%(name)s` forms
+  plus `%s %r %a %d %i %o %x %X %e %E %f %F %g %G %c %%` with
+  `- + <space> 0 #` flags, widths, precisions and the ignored
+  `h l L` length modifiers) to `.format` equivalents and back,
+  following the flag algebra the real machinery obeys (`-`
+  suppresses zero-fill, `+` beats `<space>`, `#` is dropped where
+  C ignores it, `%s` right-aligns on width). `*` widths,
+  precision on `%s`/`%r`/`%a`/`%c` and precision on integer
+  conversions are reported as `not_translatable` findings rather
+  than miscompiled; the round-trip equivalence to the original %
+  rendering is test-enforced on 300 seeded template/value pairs.
+* `check_fstring` parses and compiles a full f-string literal or
+  bare inner source with the runtime's own `ast` parser and
+  compiler — compiling also catches symtable-level errors such as
+  `yield` outside a function — and extracts every
+  expression with its conversion, format spec (including nested
+  `{width}` parts) and position span; unbalanced braces/quotes,
+  backslashes in expressions (pre-3.12) and invalid conversions
+  come back as findings carrying the parser's own message.
+  Pathologically deep expression nesting is reported as an
+  `analysis_depth_exceeded` info finding instead of crashing.
+  Results honestly follow the runtime Python version (PEP 701).
+
+Inputs are validated strictly before any computation: unknown mode,
+non-string template, templates over 4,000 characters or 200
+replacement fields, a non-dict mapping (or non-string keys, over
+200 keys), a `mapping` outside render mode, a bad `direction`, or a
+rendered result over 100,000 characters raise `ValueError`. All
+output is deterministic for a given runtime version and input; the
+test suite re-verifies the verdicts against real
+`str.format`/`format_map`/`%` behavior on 500 seeded templates.

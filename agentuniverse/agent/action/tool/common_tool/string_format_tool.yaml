@@ -1,0 +1,51 @@
+name: string_format_tool
+description: "String format tool — Python str.format template linting, field extraction, format_map rendering with precise missing-key reports, printf-% <-> format translation and f-string source checking with pure Python stdlib, no network required. Template and prompt family tools (TemplateRenderTool #3559, PromptTemplateLinterTool #3756, PromptTool #3369) operate on placeholder content; this tool operates on format-string grammar itself. mode='lint' checks a template for unmatched { or } ({{ }} escapes honored, error), mixed auto/manual numbering ({0} with {} — real format raises cannot switch, error), unknown or malformed conversions (!r/!s/!a only, error), empty attribute/index in field names (error), nested replacement fields in specs exceeding CPython's recursion limit (error) and value-independent spec grammar failures like {:!} or {:+s} (error); specs that only work for some value types (like {:d}) and nested-but-legal spec fields are info findings; every error claim is confirmed by calling the real str.format with inert sandboxed dummy args (plain 'x'/7/2.5 semantics for value fields, digit-string, single-char or plain-int candidates for fields nested inside specs, permissive attribute/index traversal, all exceptions caught, stdlib only) and error findings are vetoed whenever the real machinery renders the template. mode='fields' returns each field's {field_name, index_or_key, auto_numbered, attribute_chain, index_parts, conversion, format_spec, position_span}, nested spec fields included. mode='render' applies str.format_map semantics to a mapping; missing keys are structured findings naming key and exact field span instead of a KeyError crash, and successful renders come from the real format_map. mode='translate_percent' converts %-style templates (%(name)s plus %s %r %a %d %i %o %x %X %e %E %f %F %g %G %c %% with - + space 0 # flags, widths, precisions, ignored h/l/L length modifiers) to .format equivalents and back (direction); * widths and precision-on-%s are reported as not_translatable findings; round-trip equivalence to the original % rendering is test-enforced on 300 seeded cases. mode='check_fstring' parses and compiles a full f-string literal or bare inner source with the runtime ast parser and compiler, extracting expressions, conversions, format specs and spans, reporting unbalanced braces/quotes and syntax issues as findings. Strict validation, size caps, deterministic output."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.string_format_tool
+  class: StringFormatTool
+input_keys:
+  - mode
+  - template
+max_template_chars: 4000
+max_fields: 200
+max_findings: 50
+max_mapping_keys: 200
+max_render_chars: 100000
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lint, fields, render, translate_percent or check_fstring.
+    required: true
+  template:
+    type: string
+    description: The format template to analyze (up to 4,000 characters, at most 200 replacement fields). For check_fstring a full f-string literal (f"...") or bare inner source.
+    required: true
+  mapping:
+    type: object
+    description: Render mode only — the str mapping rendered via format_map semantics; missing keys are reported as structured findings instead of a KeyError.
+    required: false
+  direction:
+    type: string
+    description: translate_percent only — "to_format" (default, %-template to .format) or "to_percent" (reverse).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "fields", "render", "translate_percent", "check_fstring"]
+      description: Operation mode.
+    template:
+      type: string
+      description: The format template (or f-string source for check_fstring).
+    mapping:
+      type: object
+      description: Render mode value mapping.
+    direction:
+      type: string
+      enum: ["to_format", "to_percent"]
+      description: Translation direction for translate_percent mode.
+  required: ["mode", "template"]
+  additionalProperties: false
