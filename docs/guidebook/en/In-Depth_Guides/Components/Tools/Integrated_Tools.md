@@ -304,6 +304,83 @@ Search and relationship modes return `page`, `offset`, and `next_offset`. Citati
 
 Semantic Scholar relevance search does not expose server-side sorting, so the tool does not misleadingly reorder a single local page. For large offline workloads, use the bulk search or dataset APIs instead of increasing an agent tool's response size. Network and API failures use a structured `error` field and preserve operation context. Anonymous users share a rate limit and may receive HTTP 429; retry later when limited.
 
+### 1.7 OpenAlex Scholarly Metadata
+
+The OpenAlex tool uses the [OpenAlex API](https://docs.openalex.org/) to search scholarly works across disciplines or retrieve publication metadata by DOI or OpenAlex work ID. The public API works without a key. Set the optional `OPENALEX_EMAIL` environment variable to identify requests and use the OpenAlex polite pool.
+
+[Tool configuration](../../../../../../examples/sample_standard_app/intelligence/agentic/tool/buildin/openalex_tool.yaml)
+
+Tool configuration:
+
+```yaml
+name: 'openalex_tool'
+description: |
+  Search OpenAlex for scholarly works or retrieve one work by DOI or OpenAlex work ID.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.openalex_tool'
+  class: 'OpenAlexTool'
+```
+
+Search example:
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj('openalex_tool')
+result = tool.run(
+    query='large language models in medicine',
+    mode='search',
+    max_results=5,
+    page=1,
+    sort='cited_by_count',
+    from_publication_date='2020-01-01',
+    to_publication_date='2025-12-31',
+    publication_year=2025,
+    work_type='article',
+    open_access_only=True,
+    min_cited_by_count=10,
+)
+```
+
+DOI lookup example:
+
+```python
+result = tool.run(
+    query='https://doi.org/10.1128/mbio.01735-25',
+    mode='work',
+)
+```
+
+OpenAlex work lookup example:
+
+```python
+result = tool.run(
+    query='https://openalex.org/W2741809807',
+    mode='work',
+)
+```
+
+Parameters:
+
+- `query`: Required search text in `search` mode, or a DOI, DOI URL, or OpenAlex work ID in `work` mode. DOI URLs such as `https://doi.org/10.1128/mbio.01735-25`, OpenAlex URLs such as `https://openalex.org/W2741809807`, and bare work IDs are accepted.
+- `mode`: Optional operation mode, either `search` or `work`. The default is `search`.
+- `max_results`: Optional search result count from 1 to 200. The default is 5. Work mode returns at most one record.
+- `page`: Optional one-based search page. Page-based paging can address only the first 10,000 results; use cursor paging for larger result sets.
+- `cursor`: Optional deep-paging cursor. Use `*` for the first cursor request, then pass the returned `next_cursor`. Cursor requests require `page` to remain 1.
+- `sort`: Optional sort field: `relevance`, `cited_by_count`, `publication_date`, `updated_date`, or `created_date`. Results use descending order. Underscores may replace hyphens, and `citation_count`, `citations`, and `published` are accepted aliases. The default is `relevance`, which maps to OpenAlex relevance ranking.
+- `from_publication_date`, `to_publication_date`: Optional inclusive publication-date bounds in `YYYY-MM-DD` format. Either bound can be used independently; when both are present, the lower bound cannot be later than the upper bound.
+- `publication_year`: Optional exact publication year.
+- `work_type`: Optional single OpenAlex work type, such as `article`, `book`, `book-chapter`, `dataset`, `dissertation`, `preprint`, or `review`.
+- `open_access_only`: Optional flag. Set it to `true` to require works marked open access by OpenAlex.
+- `min_cited_by_count`: Optional non-negative citation threshold. OpenAlex applies this as a strict lower bound, so `10` requests works with more than 10 citations.
+
+The response preserves operation, query, paging, sorting, filter, and result-count context and returns a normalized `works` list. Cursor searches also return `next_cursor`. A work can include its OpenAlex ID, DOI, title, reconstructed abstract, publication year and date, work type, authorships with author IDs, ORCID, institutions and author positions, primary location and source, open-access status and URL, citation and referenced-works counts, topics, and keywords. OpenAlex abstracts are stored as an inverted word index; the tool reconstructs readable text without assuming a dense or well-formed index. Metadata completeness varies by record, and missing values use empty strings, empty lists, empty objects, or zero counts. The tool returns metadata only and does not download or summarize full text.
+
+Timeouts, HTTP errors, connection failures, invalid JSON, invalid response shapes, and OpenAlex API failures use a structured `error` field and preserve request context. The `api_error`, `request_timeout`, `http_error`, `request_error`, and `invalid_response` error types let callers distinguish an empty search from a failed request.
+
 ## 2. Code Tool
 
 ### 2.1 PythonRepl
