@@ -1,0 +1,21 @@
+name: 'vocabulary_coverage_profiler'
+description: 'profile lexical diversity (TTR, root TTR, hapax, stopword coverage) into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.vocabulary_coverage_profiler'
+  class: 'VocabularyCoverageProfiler'
+
+# Root TTR (type_count / sqrt(token_count)) strictly below this value
+# stamps 'low_diversity' into metadata[flag_key]. The default 5.0 is
+# roughly the floor for healthy prose; repeated-boilerplate pages score
+# far below it. Must be > 0.
+low_diversity_threshold: 5.0
+
+# Metadata key the statistics dict is written to; '' disables stamping
+# the statistics.
+vocabulary_key: 'vocabulary'
+
+# Metadata key the 'low_diversity' marker is written to on flagged
+# documents; '' disables flagging.
+flag_key: 'vocabulary_flag'

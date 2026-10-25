@@ -315,3 +315,25 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [VocabularyCoverageProfiler](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/vocabulary_coverage_profiler.yaml)
+
+该组件将每篇文档的词汇多样性画像写入 metadata，对应 issue #258 的*预处理/分析*方向。切分器和嵌入模型面对一篇词汇丰富的文章与一页重复两百遍同一句话的页面时表现截然不同，但在测量之前两者都只是"一篇文档"。本组件在任何切分器或嵌入模型运行之前为每篇文档计算一组紧凑的词汇统计，让流水线可以据此选择分块大小、嵌入策略，或将低信息量文档分流。它与 `TextQualityScorer`（复合质量门控）和 `ReadingLevelScorer`（可读性公式）刻意区分：二者都不输出这些词汇形态指标，本组件也不计算指标之外的任何内容。
+
+分词沿用 `StopwordRemover` 一族的做法，纯标准库且确定性：拉丁词元串（字母加至多一个内部撇号，统一小写化，因此 *Apple* 与 *apple* 记为同一词形）加上逐个汉字的字符单元；数字、标点与其他文字系统不计入。在大小写折叠后的词元流上报告：`token_count` 与 `type_count`（不同词形数）；`type_token_ratio`（经典 TTR，即便语料丰富也会随篇幅下降）与 `root_ttr`（Guiraud 指数，`type_count / sqrt(token_count)`，对长度远不敏感——两者同时给出，使用者各取所需）；只出现一次的词元统计 `hapax_count` / `hapax_ratio`（词形少而 hapax 占比大，往往意味着编号、错别字之类的噪声而非词汇丰富）；`avg_word_length` 与 `longest_word`（长度并列取最先出现者）；`stopword_coverage`，即命中内置紧凑中英文虚词表的词元百分比（模板套话占比高，密集中文技术文本占比低）；以及 `top_5_tokens` 及其计数，并列时按字母序打破，保证结果可复现。全部结果写入 `metadata[vocabulary_key]`；文档不会被丢弃、重排或改写，写入前复制 metadata 映射，text/id 绝不改动。没有任何词元的文档（空串、纯空白、纯数字或标点）得到 `token_count` 0、`type_count` 0，全部比值与均值置 `None`——绝不会除零。当文档的 `root_ttr` 严格小于 `low_diversity_threshold`（默认 5.0，大致是健康散文的下限）时，额外在 `metadata[flag_key]` 写入字符串 `low_diversity`；无词元文档永不被打标。整个流程离线、确定性且零依赖。
+
+组件定义文件如下：
+```yaml
+name: 'vocabulary_coverage_profiler'
+description: 'profile lexical diversity (TTR, root TTR, hapax, stopword coverage) into document metadata'
+low_diversity_threshold: 5.0  # root TTR 严格小于该值时打 'low_diversity' 标
+vocabulary_key: 'vocabulary'   # 统计字典写入的 metadata 键；'' 表示不写入
+flag_key: 'vocabulary_flag'    # 低多样性标记写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.vocabulary_coverage_profiler'
+  class: 'VocabularyCoverageProfiler'
+```
+- low_diversity_threshold：root TTR（`type_count / sqrt(token_count)`）严格小于该值时文档被打上 `low_diversity` 标记；必须 > 0。无词元文档永不被打标。
+- vocabulary_key：统计字典（token_count、type_count、type_token_ratio、root_ttr、hapax_count、hapax_ratio、avg_word_length、longest_word、stopword_coverage、top_5_tokens）写入的 metadata 键；为空则不写入。
+- flag_key：被打标文档上写入 `low_diversity` 标记的 metadata 键；为空则不打标。
