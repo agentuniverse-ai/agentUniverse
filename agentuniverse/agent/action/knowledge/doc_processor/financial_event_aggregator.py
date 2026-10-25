@@ -11,6 +11,7 @@ import logging
 from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime
+import jieba
 import numpy as np
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -178,7 +179,7 @@ class FinancialEventAggregator(DocProcessor):
         return dot_product / (magnitude1 * magnitude2)
 
     def _compute_text_similarity_matrix(self, docs: List[Document]) -> np.ndarray:
-        """Compute similarity matrix using text overlap (fallback method).
+        """Compute weighted token overlap when embeddings are unavailable.
 
         Args:
             docs: List of documents.
@@ -188,17 +189,26 @@ class FinancialEventAggregator(DocProcessor):
         """
         n = len(docs)
         similarity_matrix = np.zeros((n, n))
+        token_sets = []
+        for doc in docs:
+            if any('\u4e00' <= char <= '\u9fff' for char in doc.text):
+                tokens = {token.casefold() for token in jieba.lcut(doc.text)
+                          if any(char.isalnum() for char in token)}
+            else:
+                tokens = set(doc.text.lower().split())
+            token_sets.append(tokens)
+
+        def token_weight(token: str) -> int:
+            return min(len(token), 4) if any('\u4e00' <= char <= '\u9fff' for char in token) else 1
 
         for i in range(n):
             for j in range(i, n):
                 if i == j:
                     similarity_matrix[i][j] = 1.0
                 else:
-                    # Simple word overlap similarity
-                    words_i = set(docs[i].text.lower().split())
-                    words_j = set(docs[j].text.lower().split())
-                    overlap = len(words_i & words_j)
-                    union = len(words_i | words_j)
+                    # Longer Chinese terms carry more event-specific information (e.g. quarters).
+                    overlap = sum(token_weight(token) for token in token_sets[i] & token_sets[j])
+                    union = sum(token_weight(token) for token in token_sets[i] | token_sets[j])
                     sim = overlap / union if union > 0 else 0.0
                     similarity_matrix[i][j] = sim
                     similarity_matrix[j][i] = sim
