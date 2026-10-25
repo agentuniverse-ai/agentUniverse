@@ -85,7 +85,7 @@ class TestRamContextStore:
         store.add(sample_segments, session_id="session_1")
 
         # Get all segments
-        segments = store.get("session_id"="session_1")
+        segments = store.get(session_id="session_1")
         assert len(segments) == 4
 
     def test_get_with_type_filter(self, store, sample_segments):
@@ -353,6 +353,53 @@ class TestRamContextStore:
         # Retrieve again to check updated count
         segments = store.get_by_ids("session_1", [segment_id])
         assert segments[0].metadata.access_count > initial_count
+
+
+    def test_search_excludes_non_matching_segments(self, store):
+        """A segment that matches nothing must not be returned even with CRITICAL priority."""
+        segments = [
+            ContextSegment(
+                type=ContextType.BACKGROUND,
+                priority=ContextPriority.CRITICAL,
+                content="Cooking recipes for dinner",
+                tokens=8,
+            ),
+            ContextSegment(
+                type=ContextType.BACKGROUND,
+                priority=ContextPriority.LOW,
+                content="Python is a programming language",
+                tokens=10,
+            ),
+        ]
+        store.add(segments, session_id="session_1")
+
+        results = store.search("programming", "session_1", top_k=10)
+
+        assert len(results) == 1
+        assert "programming" in results[0].content.lower()
+
+    def test_search_priority_bonus_breaks_ties_between_matches(self, store):
+        """Among matching segments the higher-priority one ranks first."""
+        segments = [
+            ContextSegment(
+                type=ContextType.BACKGROUND,
+                priority=ContextPriority.LOW,
+                content="python basics",
+                tokens=5,
+            ),
+            ContextSegment(
+                type=ContextType.BACKGROUND,
+                priority=ContextPriority.HIGH,
+                content="python advanced",
+                tokens=7,
+            ),
+        ]
+        store.add(segments, session_id="session_1")
+
+        results = store.search("python", "session_1", top_k=10)
+
+        assert len(results) == 2
+        assert results[0].priority == ContextPriority.HIGH
 
 
 if __name__ == "__main__":
