@@ -42,7 +42,7 @@ def store(tmp_path):
         systems.pop(client._identifier, None)
 
 
-@pytest.mark.parametrize('limit', [1, 2, 3, 10])
+@pytest.mark.parametrize('limit', [None, 1, 2, 3, 10])
 @pytest.mark.parametrize('filters', [{}, {'context_type': ContextType.CONVERSATION,
                                         'priority': ContextPriority.HIGH}])
 def test_get_returns_newest_matching_context(store, limit, filters):
@@ -53,6 +53,20 @@ def test_get_returns_newest_matching_context(store, limit, filters):
 
 def test_missing_session_stays_empty(store):
     assert store.get('missing', limit=1) == []
+
+
+def test_unbounded_limit_on_empty_collection(store):
+    store._collection.delete(where={'session_id': 'wanted'})
+    store._collection.delete(where={'session_id': 'other'})
+    assert store.get('wanted', limit=None) == []
+
+
+def test_unbounded_limit_on_uninitialized_store():
+    assert ChromaContextStore().get('wanted', limit=None) == []
+
+
+def test_unbounded_limit_preserves_selective_filters(store):
+    assert store.get('wanted', limit=None, context_type=ContextType.TOOL_RESULT) == []
 
 
 @pytest.mark.parametrize('limit', [0, -1, -10])
