@@ -317,3 +317,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [SentenceLengthFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/sentence_length_filter.yaml)
+
+This component tags or drops statistical sentence-length outliers inside prose, addressing the *pre-processing* direction of issue #258. Real knowledge documents are prose with parasites: a boilerplate run repeated under every product description, a legal disclaimer pasted at the end of each page, a table dumped mid-paragraph as one comma-separated line. Those outlier sentences carry no topical signal, yet they ride along into every chunk, dilute the embedding of the surrounding prose and skew retrieval toward boilerplate. Each document is segmented with conservative rules in the same family as `QuestionDetector` (`. ! ?` plus `。！？` boundaries; abbreviation, single-letter-initial, decimal and ellipsis guards on the Latin dot), every sentence is measured in characters, and a sentence is an outlier when its length is **strictly greater** than `mean + k * stdev` (population stdev over the document's own sentences, so the norm adapts to each document's register) or **strictly greater** than `max_chars` — a sentence exactly at either threshold is kept. The statistical rule needs at least `min_sentences` (default 3) sentences; below that only the absolute cap applies, because a mean over two sentences is noise rather than a norm. The cap always applies in either regime, as a backstop for short documents and uniformly inflated ones.
+
+Three modes consume the outliers. `tag` (default) leaves the text untouched and stamps every outlier into `metadata['sentence_outliers']` as `{"index", "length", "span"}`, with `span` a character offset pair into the text satisfying `text[start:end] == sentence`. `drop` removes the outlier sentences and rejoins the survivors with single spaces, recording the uncapped removal count in `metadata['sentence_removed_count']` and up to 10 removed texts in `metadata['sentence_removed']`; when nothing is removed the text is returned byte-identical, so the filter is safe to leave in a pipeline. `keep_only` is the inverse — only the outliers survive — and exists for boilerplate inspection: run it over a corpus and read the output to see exactly which disclaimers, boilerplate runs and table dumps pollute it before deciding thresholds for a `drop` pass. Existing metadata entries are preserved, metadata mappings are copied before mutation, and id/other fields are never touched. The whole pipeline is pure Python, deterministic and offline, and complementary to its neighbours: `ThresholdFilter` bounds whole-document sizes while this one works inside a document at sentence granularity, `ParagraphStatsProfiler` measures paragraph structure, and `QuestionDetector` / `SentencePositionTagger` classify sentences rather than measure them.
+
+The component definition file is as follows:
+```yaml
+name: 'sentence_length_filter'
+description: 'tag or drop statistical sentence-length outliers (boilerplate runs, legal disclaimers, table dumps) inside prose'
+k: 2.0                      # outlier when length > mean + k * stdev (strictly)
+max_chars: 500              # absolute cap, always active (strictly greater)
+min_sentences: 3            # sentences required for the statistical rule
+mode: 'tag'                 # tag | drop | keep_only
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.sentence_length_filter'
+  class: 'SentenceLengthFilter'
+```
+- k: Multiplier of the population standard deviation in the statistical outlier rule; must be > 0. Default 2.0 — roughly the classic 95% band for near-normal sentence-length distributions.
+- max_chars: Absolute cap on sentence character length; must be >= 1. A sentence strictly longer is an outlier regardless of statistics. Default 500.
+- min_sentences: Minimum number of sentences for the statistical rule to apply; must be >= 1. Below it only `max_chars` applies. Default 3.
+- mode: What to do with outliers — `tag` stamps metadata and keeps the text, `drop` removes outliers and rejoins survivors with single spaces, `keep_only` keeps only the outliers (boilerplate inspection).
