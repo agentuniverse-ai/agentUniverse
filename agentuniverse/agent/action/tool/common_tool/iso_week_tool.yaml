@@ -1,0 +1,70 @@
+name: iso_week_tool
+description: "ISO week arithmetic tool — pure Python stdlib datetime, no network required. Resolve a date to its ISO week coordinates (mode='info': iso_year, iso_week, weekday 1=Mon..7=Sun with name, full ISO week date '2026-W42-1'), get a week's Monday..Sunday bounds from a week spec or a date (mode='week_bounds'), build bounds from iso_year + week 1-53 with long-year week 53 validity (mode='from_week'), shift a date or week by N weeks across year boundaries (mode='add_weeks'), count weeks inclusively between two dates/weeks (mode='weeks_between'), and list week ids between two weeks capped at 500 (mode='range_weeks')."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.iso_week_tool
+  class: IsoWeekTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — info, week_bounds, from_week, add_weeks, weeks_between or range_weeks.
+    required: true
+  date:
+    type: string
+    description: Canonical ISO calendar date (YYYY-MM-DD) or ISO week spec (YYYY-Www). Required for the info (date only), week_bounds and add_weeks modes.
+    required: false
+  iso_year:
+    type: integer
+    description: ISO year 1..9999. Required (with week) for the from_week mode.
+    required: false
+  week:
+    type: integer
+    description: ISO week 1..53. Required (with iso_year) for the from_week mode; week 53 exists only in long ISO years and is reported with a valid flag.
+    required: false
+  weeks:
+    type: integer
+    description: Signed week count (-520000..520000) to shift by. Required for the add_weeks mode.
+    required: false
+  start:
+    type: string
+    description: Inclusive start ISO date (YYYY-MM-DD) or week spec (YYYY-Www). Required for the weeks_between and range_weeks modes.
+    required: false
+  end:
+    type: string
+    description: Inclusive end ISO date (YYYY-MM-DD) or week spec (YYYY-Www), not before start. Required for the weeks_between and range_weeks modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["info", "week_bounds", "from_week", "add_weeks", "weeks_between", "range_weeks"]
+      description: ISO week operation mode.
+    date:
+      type: string
+      description: ISO date (YYYY-MM-DD) or week spec (YYYY-Www) to resolve / shift (info, week_bounds, add_weeks modes).
+    iso_year:
+      type: integer
+      minimum: 1
+      maximum: 9999
+      description: ISO year (from_week mode).
+    week:
+      type: integer
+      minimum: 1
+      maximum: 53
+      description: ISO week number (from_week mode).
+    weeks:
+      type: integer
+      minimum: -520000
+      maximum: 520000
+      description: Signed week count to shift by (add_weeks mode).
+    start:
+      type: string
+      description: Inclusive start date or week spec (weeks_between, range_weeks modes).
+    end:
+      type: string
+      description: Inclusive end date or week spec (weeks_between, range_weeks modes).
+  required: ["mode"]

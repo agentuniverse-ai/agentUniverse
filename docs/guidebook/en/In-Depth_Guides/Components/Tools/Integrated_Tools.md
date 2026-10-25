@@ -675,3 +675,48 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## ISO Week Tool
+
+`IsoWeekTool` is an ISO-8601 week-date arithmetic tool built purely on
+the Python standard library `datetime` — no network access. It covers
+the reporting-cadence gap left by the calendar-range and workday
+tools: weeks identified as `"2026-W42"`. `info` mode resolves an ISO
+date to its week coordinates (`iso_year`, `iso_week`, `weekday`
+1=Monday..7=Sunday with its name, and the full ISO week date
+`"2026-W43-2"`); `week_bounds` mode maps a week spec or a date to the
+Monday..Sunday ISO dates of its week; `from_week` mode builds bounds
+from an `iso_year` + `week` (1-53) pair and reports a `valid` flag —
+week 53 exists only in long ISO years, decided by checking the
+resulting Monday's own ISO year rather than a year table;
+`add_weeks` mode shifts a date or week spec by a signed week count,
+correct across ISO year boundaries (`2020-W53` + 1 = `2021-W01`);
+`weeks_between` mode counts weeks between two dates or week specs
+inclusively (the same week counts as 1); and `range_weeks` mode lists
+the ISO week ids from a start to an end week inclusive, capped at 500
+entries.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.iso_week_tool import IsoWeekTool
+
+tool = IsoWeekTool()
+info = tool.execute(mode="info", date="2021-01-01")          # 2020-W53-5, Friday
+bounds = tool.execute(mode="week_bounds", date="2026-W42")   # monday 2026-10-12
+shifted = tool.execute(mode="add_weeks", date="2026-W42", weeks=-4)
+count = tool.execute(mode="weeks_between", start="2026-W40", end="2026-W43")["weeks"]
+ids = tool.execute(mode="range_weeks", start="2020-W51", end="2021-W02")["weeks"]
+```
+
+Inputs are validated strictly before any computation and every result
+is deterministic (no clock is read): an unknown mode, a non-string or
+non-canonical date, a week spec not matching zero-padded `YYYY-Www`,
+an ISO year outside 1..9999, a week outside 1..53, a week 53 anchor
+of a short ISO year (for example `2025-W53`), a non-integer or
+over-large week shift, a reversed `start`/`end`, a range over the
+500-week cap, and arithmetic leaving the supported date range all
+raise a `ValueError`. The ISO boundary rules are pinned by the
+calendar itself: weeks run Monday..Sunday, and Dec 29 - Jan 4 always
+belongs to exactly one ISO year (`2021-01-01` is `2020-W53-5`,
+`2016-01-03` is `2015-W53-7`). `from_week` is the deliberate
+exception to raising: it answers "does this week exist" and reports a
+nonexistent week 53 as `{"valid": false, "reason": ...}`.
