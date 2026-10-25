@@ -1,0 +1,36 @@
+name: xml_canon_tool
+description: Canonicalize XML text per the W3C C14N core rules and compare documents canonically.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.xml_canon_tool
+  class: XmlCanonTool
+input_keys:
+  - mode
+  - xml_text
+max_xml_chars: 1000000
+max_nodes: 50000
+max_depth: 64
+max_example_chars: 80
+max_difference_context: 48
+max_reported_namespaces: 32
+max_reported_entity_refs: 16
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [canonicalize, compare, explain]
+    xml_text:
+      type: string
+    xml_text_b:
+      type: string
+    variant:
+      type: string
+      enum: [c14n10, exclusive]
+      default: c14n10
+    inclusive_prefixes:
+      type: array
+      items: {type: string}
+  required: [mode, xml_text]
+  additionalProperties: false

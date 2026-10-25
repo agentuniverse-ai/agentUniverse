@@ -649,3 +649,43 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## XmlCanonTool
+
+`XmlCanonTool` canonicalizes XML text according to the W3C XML
+Canonicalization 1.0 core rules (with an Exclusive C14N variant), compares
+two documents for canonical equality, and explains which cosmetic
+transformations a document undergoes. Canonicalization erases attribute
+order, namespace declaration order and redundancy, quote styles, CDATA
+versus escaping, comments, self-closing tags, entity reference spellings,
+and whitespace differences, so documents that differ only cosmetically
+become byte-identical.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.xml_canon_tool import XmlCanonTool
+
+tool = XmlCanonTool()
+result = tool.execute(
+    mode="canonicalize",
+    xml_text='<catalog p:id="c-1" version="2.0" xmlns:p="http://example.com/pub"/>',
+    variant="c14n10",
+)
+```
+
+The `canonicalize` mode returns the canonical form plus a bounded
+transformation log (attribute reordering, namespace materialization, CDATA
+unescaping, comment removal, empty-element expansion, entity normalization,
+quote and whitespace normalization) and document statistics. The `exclusive`
+variant renders only visibly utilized prefixes plus the optional
+`inclusive_prefixes` list (`#default` names the default namespace). The
+`compare` mode canonicalizes both inputs and reports `canonically_equal`,
+the `first_difference` offset with bounded context when unequal, and the
+`erased_differences` removed from each side. The `explain` mode lists every
+applicable transformation with examples taken from the document's own nodes.
+
+Inputs that fall outside the documented subset are rejected cleanly with
+`not_supported`: DTD/DOCTYPE declarations, entity declarations, relative
+namespace URIs, `xmlns:xml` rebindings, and undeclared prefixed namespaces.
+Runtime is standard-library only and deterministic. Input size, node count,
+depth, example snippets, and every reported list are bounded; violations
+return structured `limit_exceeded` errors rather than failing unbounded.
