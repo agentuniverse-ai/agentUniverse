@@ -315,3 +315,35 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [EmphasisMarkerDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/emphasis_marker_detector.yaml)
+
+该组件检测强调结构并写入文档 metadata，对应 issue #258 的*强调/显著词抽取*方向。作者会有意强调某些词——**加粗**、*斜体*、==高亮==、全大写缩写——但到了 embedding 阶段这些信号通常被丢掉：切块器把标记压平成纯文本，显著词失去了作者给出的唯一排序提示。本组件在此之前逐篇扫描文档，把每个强调结构记录为 `{kind, text, span}` metadata：`text` 是去掉标记后的强调内容（现成的词项提示），`span` 是含标记的完整结构的半开区间 `[start, end)` 字符位置（便于后续阶段精确剔除 markdown 噪声）。
+
+按行扫描并跳过围栏代码块（反引号或波浪线围栏，含未闭合围栏），检测四类：`bold`（`**双星**` 与 `__双下划线__`，后者也是部分富文本方言的"下划线"写法，两者按 CommonMark 渲染语义均报为 bold）、`italic`（单个 `*星号*` / `_下划线_` 定界符）、`caps`（至少三个英文字母的全大写 ASCII 词，数字不计入三个字母——`MP4` 不算，`COVID19` 算）、`highlight`（`==双等号==` 扩展 markdown）。配对规则是 CommonMark 侧翼规则的简化并已文档化：开标记后必须非空白、闭标记前必须非空白（`** padded **` 不匹配）；同标记字符、同运行长度内按行内 LIFO 配对（`**` 与 `*` 靠运行长度区分；粗体内部误开的单个 `*` 会被粗体闭标记取代，因此 `**a*b**` 仍是一个 bold，`*a**b*` 归为一个 italic）；三个及以上的标记运行（`***复合***`）整体跳过、不做猜测。按 CommonMark 的词内规则（仅作用于下划线），`snake_case_标识符` 不会产生斜体；处于词边界的 `__dunder__` 名按 CommonMark 渲染语义解析为 bold。
+
+caps 是噪声最大的类别，置信度低于显式标记类：喊话词、首字母缩写、产品代号也会命中。可配置的缩写 allowlist（默认为空——报告所有全大写运行）可屏蔽已知缩写。不同类别的命中可能合理重叠（`**IMPORTANT**` 同时产出 bold 与 caps 两条）。
+
+每篇文档写入三个 metadata：`emphasis`（按文档顺序的命中列表，上限 `max_hits`，默认 100）、`emphasis_counts`（按类别计数，基于截断后的列表，三个戳始终一致）、`emphasis_terms`（去重后的强调文本，按首次出现顺序，上限 `max_terms`，默认 20——可直接作为关键词抽取或检索加权的显著词提示）。没有任何强调结构的文档完全不改动地通过；有命中时 metadata 映射先复制再写入，text / id / 其他 metadata 字段一概不动。整个检测器纯 Python、离线、确定性，无模型调用、无外部依赖。它与 `KeywordHighlighter`（新增标记）、`OutlineExtractor`（标题结构）、KWIC（关键词上下文窗口）不同：本组件读取文本中已存在的标记。
+
+组件定义文件如下：
+```yaml
+name: 'emphasis_marker_detector'
+description: 'detect bold/italic/highlight markers and CAPS runs into document metadata'
+caps_allowlist: []        # 已知缩写白名单，如 [NASA, GDPR]，不区分大小写
+max_hits: 100             # metadata['emphasis'] 上限；计数/词表均由截断后列表得出
+max_terms: 20             # metadata['emphasis_terms'] 上限（首次出现顺序）
+emphasis_key: 'emphasis'  # 命中列表的 metadata 键；'' 禁用
+counts_key: 'emphasis_counts'  # 分类计数的 metadata 键；'' 禁用
+terms_key: 'emphasis_terms'    # 去重词表的 metadata 键；'' 禁用
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.emphasis_marker_detector'
+  class: 'EmphasisMarkerDetector'
+```
+- caps_allowlist：caps 检测的已知缩写白名单；条目不区分大小写（加载时统一转为大写）。默认空列表报告所有全大写运行。
+- max_hits：写入命中列表的最大条数；必须 >= 1。计数与词表均由截断后的列表得出，三个戳始终一致。
+- max_terms：写入去重词表的最大条数；必须 >= 1。
+- emphasis_key：命中列表写入的 metadata 键；空字符串禁用该写入。
+- counts_key：分类计数写入的 metadata 键；空字符串禁用该写入。
+- terms_key：去重词表写入的 metadata 键；空字符串禁用该写入。

@@ -317,3 +317,35 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [EmphasisMarkerDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/emphasis_marker_detector.yaml)
+
+This component detects emphasis constructs and stamps them into document metadata, addressing the *emphasis / salient-term extraction* direction of issue #258. Authors emphasize terms on purpose — **bold**, *italic*, ==highlight==, SHOUTED acronyms — yet by embedding time those signals are usually thrown away: the chunker flattens the markers into plain text and the salient terms lose the only ranking hint the author gave. Scanning every document before that happens, the detector records each construct as `{kind, text, span}` metadata: `text` is the emphasized content with markers stripped (a ready-made term hint) and `span` is the half-open `[start, end)` character range of the full construct including its markers, so a later stage can cut the markdown noise out exactly.
+
+Four kinds are detected in line-based scans that skip fenced code blocks (backtick or tilde fences, including unclosed ones): `bold` for `**double asterisk**` and `__double underscore__` runs (the underscore spelling is also the "underline" of several rich-text dialects; both report `bold` exactly as CommonMark renders them), `italic` for single `*asterisk*` / `_underscore_` delimiters, `caps` for fully-uppercase ASCII tokens of at least three letters (digits do not count toward the three, so `MP4` stays out while `COVID19` matches), and `highlight` for the `==double equals==` extended markdown. The pairing rules are a documented simplification of CommonMark flanking: an opening run must be followed by non-whitespace and a closing run preceded by one (`** padded **` never matches), delimiters pair per line LIFO within the same marker character and run length (`**` versus `*` is resolved by run length, and a lone `*` opened inside what turns out to be a bold run is discarded in favor of the bold closer, so `**a*b**` stays one bold hit while `*a**b*` resolves to one italic), and runs of three or more markers (`***compound***`) are skipped rather than guessed at. Per CommonMark's intraword rule — which applies to underscores only, with Unicode alphanumerics counting as word characters — `snake_case_identifiers` never produce italic, and neither do the underscores inside CJK or Cyrillic word chains such as `参数_说明_结束`, while `__dunder__` names at word boundaries do parse as bold, as CommonMark itself renders them.
+
+Caps detection is the noisiest kind and should be treated as lower confidence than the explicit marker kinds: it also fires on shouted words, initials and product codes. A configurable acronym allowlist (default empty — every caps run is reported) silences known acronyms. Hits of different kinds may legitimately overlap (`**IMPORTANT**` yields both a bold and a caps hit).
+
+Three metadata stamps land per document: `emphasis` (the hit list in document order, capped at `max_hits`, default 100), `emphasis_counts` (per-kind counts derived from the capped list, so the stamps always agree) and `emphasis_terms` (the deduplicated emphasized texts in first-occurrence order, capped at `max_terms`, default 20 — a drop-in salient-term hint for keyword extraction or retrieval boosting). A document with no emphasis at all passes through completely untouched; otherwise the metadata mapping is copied before stamping and text / id / other metadata fields are never modified. The whole detector is pure Python, offline and deterministic, with no model calls and no external dependencies. It is distinct from `KeywordHighlighter` (which ADDS markers), `OutlineExtractor` (heading structure) and KWIC (keyword-in-context windows): this component READS markers that already exist in the text.
+
+The component definition file is as follows:
+```yaml
+name: 'emphasis_marker_detector'
+description: 'detect bold/italic/highlight markers and CAPS runs into document metadata'
+caps_allowlist: []        # known acronyms exempt from caps detection, e.g. [NASA, GDPR]
+max_hits: 100             # cap on metadata['emphasis']; counts/terms derive from it
+max_terms: 20             # cap on metadata['emphasis_terms'] (first-occurrence order)
+emphasis_key: 'emphasis'  # metadata key for the hit list; '' disables
+counts_key: 'emphasis_counts'  # metadata key for per-kind counts; '' disables
+terms_key: 'emphasis_terms'    # metadata key for deduped terms; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.emphasis_marker_detector'
+  class: 'EmphasisMarkerDetector'
+```
+- caps_allowlist: Known acronyms exempt from caps-run detection; entries are case-insensitive (normalized to uppercase at load time). The default empty list reports every caps run.
+- max_hits: Maximum number of hits stamped into the emphasis list; must be >= 1. Counts and terms are derived from the capped list so the three stamps always agree.
+- max_terms: Maximum number of deduplicated emphasized texts stamped into the terms list; must be >= 1.
+- emphasis_key: Metadata key the hit list is written to; an empty value disables that stamp.
+- counts_key: Metadata key the per-kind counts are written to; an empty value disables that stamp.
+- terms_key: Metadata key the deduplicated terms are written to; an empty value disables that stamp.
