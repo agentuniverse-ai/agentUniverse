@@ -315,3 +315,44 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [QuoteAttributionAnalyzer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/quote_attribution_analyzer.yaml)
+
+该组件将直接引语与被归属的发言人配对，对应 issue #258 的*知识抽取*方向。新闻稿、访谈记录、电话会议与委员会报告中最可引用的知识都承载在引号里——但对知识库而言，原始引语只是事实的一半：`"We will not rest until every customer is refunded," said Alice Chen` 的价值恰恰在于承诺者是 *Alice Chen*。基于向量检索会抹平这层结构，本组件在入库前将其还原，把每对“引语/发言人”写入元数据，将 `CitationExtractor` 的扁平 `quote` 类型扩展为结构化的“谁说了什么”记录。组件为直通型：文档原样返回，不做过滤，text/id 不变，元数据先复制再写入。
+
+引语识别支持四种样式——ASCII 双引号 `"..."`、弯双引号 `“...”`、CJK 直角引号 `「...」`、德语低高引号 `„...“`——均在单行内配对，引语不会跨段落泄漏；撇号与单引号刻意不作为界定符。文本被切分为句子（中文句末标点无需后随空格；`Dr.`/`Mr.`/首字母缩写点不切分），每条引语内部先被抹除以免引语自身触发模式，然后在包含该引语的句子中检索归属模式。多个模式命中时取距引语最近者；当引语位于句末且句内无命中时，检索延伸到下一句（模式须起始于下一句前 48 个字符内），从而恢复 `"We are disappointed." Alice Weber said in a note.` 这类写法。
+
+归属模式：
+
+| 语言 | 模式 | 示例 |
+|---|---|---|
+| 英文 | 动词（said/says/told/added/noted/claimed/stated）前的姓名串，保留 Dr./Mr./President 等头衔，小写虚词（`of`、`van`）粘合多词姓名，姓名与动词之间的逗号同位语被跳过 | `Alice Weber, the finance director, said "..."` → `Alice Weber` |
+| 英文 | 动词后置 | `"..." said Alice Chen.` → `Alice Chen` |
+| 英文 | `according to NAME` | `According to Bob Martinez, "..."` → `Bob Martinez` |
+| 中/英 | 动词前代词（he/she/they；他/她/它/他们/她们） | `"..." she added` → 代词回溯 |
+| 中文 | 表示/称/说/指出/认为 之前的汉字串（≤4 字，剥离前导虚字）；单字动词后须紧跟标点，故 称为/说明 不会误触 | `李娜表示：“……”` → `李娜` |
+| 中文 | `据X报道` | `据新华社报道，“……”` → `新华社` |
+
+代词回溯是文档化的启发式：he/she/they 本身不含姓名，组件在同一文档最近的 `speaker_lookback` 次归属事件（默认 2）中回溯并复用最近的具名发言人——即新闻写作中先行词通常满足的“发言人追踪”近似。回溯范围内没有具名先行词，或引语完全无模式命中，则 `speaker_resolved: unknown`。已知局限（如实说明）：归属是词法层面的而非句法层面的，重度改写的句子可能绕过全部模式；中文姓名串无分词，动词前的长修饰可能残留在姓名中；代词回溯不做性别与单复数校验。
+
+每条记录形如 `{quote, speaker, speaker_resolved, attribution_text, span}`——`quote` 含引号标记，`speaker_resolved` 取 `'name'`、`'pronoun'`（经回溯解析）或 `'unknown'`，`attribution_text` 为命中的模式原文，`span` 为精确复现引语的 `(start, end)` 字符区间。记录按文档位置排序并截断至 `max_quotes` 条；`metadata['quote_count']` 始终记录真实总数以便察觉截断，`metadata['speakers']` 为按首次出现顺序排列的 `{speaker: 引语数}` 统计。整体流程纯标准库 `re` 实现，确定性、离线、无依赖。
+
+组件定义文件如下：
+```yaml
+name: 'quote_attribution_analyzer'
+description: 'pair direct quotes with their attributed speakers and stamp them into document metadata'
+max_quotes: 50              # 保留的引语记录数；总数仍记录于 quote_count
+speaker_lookback: 2         # 代词回溯检索的归属事件数
+quotes_key: 'quotes'        # 记录列表的元数据键；'' 表示不写入
+count_key: 'quote_count'    # 未截断总数的元数据键；'' 表示不写入
+speakers_key: 'speakers'    # {发言人: 数量} 统计的元数据键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.quote_attribution_analyzer'
+  class: 'QuoteAttributionAnalyzer'
+```
+- max_quotes: 写入 `metadata[quotes_key]` 的引语记录数上限；必须 >= 1。默认 50，限制引语密集文本的元数据膨胀。
+- speaker_lookback: 解析 he/she/they 时向前检索（由近及远）的归属事件数；必须 >= 1。
+- quotes_key: 引语记录列表的元数据键；空字符串表示不写入。
+- count_key: 引语真实总数（未截断）的元数据键；空字符串表示不写入。
+- speakers_key: 去重后 `{发言人: 引语数}` 统计的元数据键；空字符串表示不写入。
