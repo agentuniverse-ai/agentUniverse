@@ -315,3 +315,35 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [SocialTagExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/social_tag_extractor.yaml)
+
+该组件扫描文档文本中的社交媒体标记——`#话题标签`、`@提及`、`$股票代码`——并把每个命中写入文档 metadata，把自由格式的社媒帖子变成可过滤、可统计的结构化知识，适合社交聆听类知识库。它对应 issue #258 的*知识提取*方向，与 `JiebaKeywordExtractor` 互补：后者对文本热词做统计排序，本组件识别带前缀标记的标签，给出精确字符区间、分类型计数和频次排名，全部由一次确定性的离线正则扫描完成，零额外依赖。
+
+每类标记都有明确的误报防护：
+
+- `#话题标签`：`#` 后第一个字符必须是字母/下划线/CJK 字符，其后为词字符（数字只允许出现在首字符之后）。接受 camelCase（`#MachineLearning`）、内嵌数字（`#WorldCup2026`）和中文标签（`#人工智能`，且可直接紧跟中文正文，因为中文没有空格）；拒绝纯数字标记（`#123`）、紧贴前文 ASCII 单词的 `#`（`C#`、`foo#bar`）和双重标记（`##tag`）。
+- `@提及`：作为前导的 `@`（不是电子邮件分隔符，`user@example.com` 不会命中）开启 2–30 个 `[A-Za-z0-9_]` 字符的句柄；超长句柄整体忽略，不做中途截断。
+- `$股票代码`：`$` 后跟 1–10 个大写 ASCII 字母，符合股票代码惯例。价格（`$5.50`）因 `$` 后不能是数字而被拒绝；小写写法（`$aapl`）不命中；超过 10 个字符的全大写串和带下划线的标识符（`$PRICE_HIGH`）整体忽略，不会被切成假代码。
+
+尾部标点天然落在词区间之外（`#AI,` 记录 `#AI`；`#人工智能。` 记录 `#人工智能`）。每个命中按文档顺序记录为 `{"kind", "text", "span"}`——`text` 保留标记符，`span` 是精确的 `(start, end)` 区间；metadata 写入前会复制映射，text/id 及其他字段绝不改动。不含任何标记的文档原样通过。
+
+组件定义文件如下：
+```yaml
+name: 'social_tag_extractor'
+description: 'extract social-media markers (#hashtags, @mentions, $cashtags) with spans into document metadata'
+max_tags: 200               # social_tags 条目的上限；>= 1
+top_n: 10                   # top_hashtags 排名长度；0 表示不写入
+tags_key: 'social_tags'     # 命中列表写入的 metadata 键；'' 表示不写入
+counts_key: 'tag_counts'    # 分类计数写入的 metadata 键；'' 表示不写入
+top_hashtags_key: 'top_hashtags'  # 排名写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.social_tag_extractor'
+  class: 'SocialTagExtractor'
+```
+- max_tags：`social_tags` 条目保留的最大命中数，必须 >= 1。`tag_counts` 与 `top_hashtags` 始终覆盖全部命中（超出上限的部分也计入）。
+- top_n：写入 `top_hashtags` 的最高频话题标签数，以 `{"text", "count"}` 条目表示，并列按字母序；0 表示不写入。计数按标签原文（`#AI` 与 `#ai` 视为不同），大小写归一化由调用方决定。
+- tags_key：截断后命中列表写入的 metadata 键；为空则不写入。
+- counts_key：`{"hashtag": n, "mention": n, "cashtag": n}` 总计数写入的 metadata 键；为空则不写入。
+- top_hashtags_key：话题标签排名写入的 metadata 键；为空则不写入。

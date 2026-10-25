@@ -317,3 +317,35 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [SocialTagExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/social_tag_extractor.yaml)
+
+This component scans document text for social-media markers — `#hashtags`, `@mentions` and `$cashtags` — and records every hit in document metadata, turning free-form social posts into structured, filterable knowledge for social-listening knowledge bases. It addresses the *knowledge extraction* direction of issue #258 and is distinct from `JiebaKeywordExtractor`: that component ranks a text's top terms statistically, while this one recognizes marker-prefixed tags with exact character spans, per-kind counts and a frequency ranking, in a single deterministic offline regex pass with no extra dependency.
+
+Each kind has explicit guards against false positives:
+
+- `#hashtags`: `#` followed first by a letter / underscore / CJK character, then by word characters — digits are allowed only after the first character. Accepts camelCase (`#MachineLearning`), embedded digits (`#WorldCup2026`) and CJK tags (`#人工智能`, which may sit directly after Chinese prose since it has no spaces); rejects pure-digit markers (`#123`), markers glued to a preceding ASCII word (`C#`, `foo#bar`) and doubled markers (`##tag`).
+- `@mentions`: a leading `@` (not an e-mail separator, so `user@example.com` yields nothing) starting a handle of 2–30 `[A-Za-z0-9_]` characters; longer runs are ignored rather than truncated mid-word.
+- `$cashtags`: `$` followed by 1–10 uppercase ASCII letters, per ticker convention. Prices (`$5.50`) are rejected because a digit can never follow `$`; lowercase spellings (`$aapl`) do not match; all-caps runs longer than 10 characters and underscored identifiers (`$PRICE_HIGH`) are ignored rather than cut into a fake ticker.
+
+Trailing punctuation sits outside the word span by construction (`#AI,` records `#AI`; `#人工智能。` records `#人工智能`). Every hit is recorded as `{"kind", "text", "span"}` — `text` keeps its marker, `span` is the exact `(start, end)` range — in document order, and metadata is written through a copied mapping so text / id / other fields are never modified. Documents without any marker pass through untouched.
+
+The component definition file is as follows:
+```yaml
+name: 'social_tag_extractor'
+description: 'extract social-media markers (#hashtags, @mentions, $cashtags) with spans into document metadata'
+max_tags: 200               # cap on the social_tags entry; >= 1
+top_n: 10                   # size of the top_hashtags ranking; 0 disables
+tags_key: 'social_tags'     # metadata key for the hit list; '' disables
+counts_key: 'tag_counts'    # metadata key for per-kind totals; '' disables
+top_hashtags_key: 'top_hashtags'  # metadata key for the ranking; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.social_tag_extractor'
+  class: 'SocialTagExtractor'
+```
+- max_tags: Maximum number of hits kept in the `social_tags` metadata entry; must be >= 1. `tag_counts` and `top_hashtags` always cover every hit found, even past the cap.
+- top_n: Number of most frequent hashtags written to `top_hashtags` as `{"text", "count"}` entries, ties broken alphabetically; 0 disables the entry. Counting is over exact tag text (`#AI` and `#ai` are distinct), keeping case normalization under the caller's control.
+- tags_key: Metadata key the capped hit list is written to; empty disables stamping.
+- counts_key: Metadata key the `{"hashtag": n, "mention": n, "cashtag": n}` totals are written to; empty disables stamping.
+- top_hashtags_key: Metadata key the hashtag ranking is written to; empty disables stamping.
