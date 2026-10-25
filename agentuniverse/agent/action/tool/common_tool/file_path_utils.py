@@ -4,6 +4,19 @@
 import os
 
 
+def atomic_publish_file(source: str, destination: str, overwrite: bool = False) -> None:
+    """Publish a complete file, refusing an existing destination by default."""
+    if overwrite:
+        os.replace(source, destination)
+    elif os.name == "nt":
+        # Windows rename refuses an existing destination atomically.
+        os.rename(source, destination)
+    else:
+        # A link publishes the complete file only if the destination is absent.
+        os.link(source, destination)
+        os.unlink(source)
+
+
 def resolve_safe_path(file_path: str, base_dir: str = ".") -> str:
     """Resolve file_path and ensure it stays under base_dir."""
     if not isinstance(file_path, str) or not file_path:
