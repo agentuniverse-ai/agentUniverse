@@ -1,0 +1,55 @@
+name: gitignore_tool
+description: "Gitignore rule semantics — pure Python stdlib, no subprocess, no filesystem access, no network; a faithful translation of git's wildmatch/dir.c ignore pipeline (pinned against the real git binary in tests; case-sensitive, core.ignoreCase=false documented). Match a path against rules (mode='match': {matched, rule_index, rule_line, rule_text, negated, effective, matched_on, matched_directory, matching_rules, explanation} — leading-directory walk: an ignored directory kills its whole subtree so later negations are dead, the classic doc/ + !doc/readme.md trap; otherwise LAST matching rule wins), audit a rule set (mode='analyze': rule_count, dead_rules with blocked_by proofs computed honestly per last-match-wins, contradictions, duplicates, trailing-space traps, missing-final-newline, any-depth patterns, escaping errors), lint rules (mode='lint': ordered findings for invalid globs (unterminated/malformed classes), never-matching patterns (dangling backslash, empty segments, empty pattern), reversed character ranges, redundant ** outside the three special positions, duplicate rules/negations, the /**/ zero-or-more-directories note, Windows \\-separator mistakes) and dissect one rule (mode='explain': segments with literal/wildcard/doublestar/class/negation kinds, anchored, dir_only, up to 3 matcher-verified example matches (only examples the matcher accepts; a rule that can match no path yields none plus a note) and 2 verified misses). PathLintTool (#4036) lints path strings; this tool implements ignore-rule semantics."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.gitignore_tool
+  class: GitignoreTool
+input_keys:
+  - mode
+max_rules_chars: 65536
+max_rule_lines: 4096
+max_path_chars: 4096
+max_path_segments: 64
+args_model:
+  mode:
+    type: string
+    description: Operation mode — match, analyze, lint or explain.
+    required: true
+  rules:
+    type: string
+    description: The gitignore rules text for the match, analyze and lint modes (capped at max_rules_chars characters and max_rule_lines lines, default 65536 / 4096).
+    required: false
+  path:
+    type: string
+    description: The relative path for the match mode (capped at max_path_chars, at most max_path_segments components; one trailing / asserts a directory, like the check-ignore CLI).
+    required: false
+  is_dir:
+    type: boolean
+    description: Optional explicit directory assertion for the match mode (overrides the trailing-slash convention; mirrors git's dtype resolution for dir-only rules).
+    required: false
+  rule:
+    type: string
+    description: The single rule line for the explain mode (no newlines, not a comment or blank line; capped at 1024 characters).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["match", "analyze", "lint", "explain"]
+      description: Operation mode.
+    rules:
+      type: string
+      description: The rules text (match, analyze and lint modes).
+    path:
+      type: string
+      description: The relative path (match mode).
+    is_dir:
+      type: boolean
+      description: Explicit directory assertion (match mode).
+    rule:
+      type: string
+      description: The single rule line (explain mode).
+  required: ["mode"]
+  additionalProperties: false
