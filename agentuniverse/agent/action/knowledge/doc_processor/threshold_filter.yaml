@@ -33,7 +33,9 @@ logic_operator: 'AND'
 
 # Score extraction configuration
 score_field: 'relevance_score'  # metadata field containing scores
-default_score: 0.0               # default score for documents without scores
+# Finite fallback for missing, non-numeric, overflowing, or NaN/Infinity scores.
+# Score-based filters reject a non-finite default_score with ValueError.
+default_score: 0.0
 
 # Output configuration
 preserve_order: true  # maintain original document order in results
