@@ -6,6 +6,9 @@
 # @Email   : fanen.lhy@antgroup.com
 # @FileName: milvus_store.py
 from typing import List, Optional, Any
+from uuid import uuid4
+
+from pydantic import PrivateAttr
 
 try:
     from pymilvus import connections, Collection, CollectionSchema, \
@@ -39,6 +42,13 @@ DEFAULT_INDEX_PARAMS = {
 
 
 class MilvusStore(Store):
+    """Milvus storage with a separate connection alias for each store instance.
+
+    Stores targeting the same endpoint/database may use different credentials
+    or transport options. A private random suffix prevents them from reusing
+    each other's registered connection without including secrets in the alias.
+    Repeated initialization of the same instance reuses its own alias.
+    """
     connection_args: Optional[dict] = None
     search_args: Optional[dict] = None
     index_params: Optional[dict] = None
@@ -48,6 +58,7 @@ class MilvusStore(Store):
     embedding_model: Optional[str] = None
     similarity_top_k: Optional[int] = 10
     query_embedding: bool = False
+    _connection_alias_suffix: str = PrivateAttr(default_factory=lambda: uuid4().hex)
 
 
     def _connect_to_milvus(self, connection_args: dict):
@@ -61,7 +72,7 @@ class MilvusStore(Store):
         host = self.connection_args["host"]
         port = self.connection_args["port"]
         db_name = self.connection_args.get("db_name", "default")
-        self.connection_name = f"{host}_{port}_{db_name}"
+        self.connection_name = f"{host}_{port}_{db_name}_{self._connection_alias_suffix}"
         self._connect_to_milvus(self.connection_args)
         if utility.has_collection(self.collection_name,
                                   using=self.connection_name):
