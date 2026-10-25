@@ -90,8 +90,17 @@ class OllamaEmbedding(Embedding):
                 result = response.json()
                 return result["embedding"]
 
-            tasks = [get_single_embedding(text) for text in texts]
-            embeddings = await asyncio.gather(*tasks)
+            tasks = [asyncio.create_task(get_single_embedding(text)) for text in texts]
+            try:
+                embeddings = await asyncio.gather(*tasks)
+            except BaseException:
+                # gather propagates one failure without cancelling siblings.
+                # Drain this batch before the caller retries or closes clients.
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                raise
             return embeddings
 
         except Exception as e:
