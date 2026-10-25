@@ -1,0 +1,51 @@
+name: 'text_normalizer'
+description: 'normalize document text (unicode form, fullwidth forms, smart quotes, control chars, whitespace, case, URLs) before splitting and embedding'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.text_normalizer'
+  class: 'TextNormalizer'
+
+# Unicode normalization form applied first: 'NFC' (default), 'NFKC',
+# 'NFD', 'NFKD' — or '' to disable. NFC folds combining accents into
+# precomposed characters so visually identical text compares equal.
+unicode_normalization: 'NFC'
+
+# Fold fullwidth ASCII forms (ＡＢＣ１２３， ：，！？) onto halfwidth and the
+# ideographic space onto a plain space. CJK ideographs and CJK-only
+# punctuation (。、《》) are untouched.
+fullwidth_to_ascii: true
+
+# Replace typographic quotes and dashes (curly quotes, en/em dashes) with
+# ASCII equivalents; the minus sign U+2212 is preserved.
+smart_quotes: true
+
+# Remove C0/C1 control characters (Unicode category Cc) except newline
+# and tab.
+strip_control_chars: true
+
+# Canonicalize newlines, turn other whitespace into plain spaces, collapse
+# space runs, strip line edges, cap blank-line runs and drop leading /
+# trailing blank lines.
+whitespace: true
+
+# Maximum number of consecutive blank lines kept when whitespace is on;
+# 1 keeps one blank line between paragraphs, 0 removes blank lines
+# entirely. Must be >= 0.
+max_blank_lines: 1
+
+# Fold the text to lowercase (for case-insensitive retrieval pipelines).
+lowercase: false
+
+# Replace URLs (http(s):// or www. hosts) with url_mask_token so volatile
+# link noise does not dominate embeddings.
+url_masking: false
+
+# Replacement token written for each URL; must be non-empty. When
+# lowercase is enabled the token is inserted in lowercase so repeated
+# normalization stays idempotent.
+url_mask_token: '[URL]'
+
+# Metadata key the list of applied operations is written to; '' disables
+# stamping.
+applied_key: 'normalization_applied'

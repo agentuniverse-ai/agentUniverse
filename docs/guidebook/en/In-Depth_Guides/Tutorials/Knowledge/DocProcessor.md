@@ -317,3 +317,39 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [TextNormalizer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/text_normalizer.yaml)
+
+This component normalizes document text before splitting and embedding, addressing the *pre-processing* direction of issue #258. Documents collected from heterogeneous sources — office exporters, PDF extractors, chat logs, pasted web pages — carry the same words in visually identical but byte-wise different spellings: decomposed accents, fullwidth Latin letters and digits, curly quotes and em dashes, non-breaking spaces, stray control bytes, CRLF line endings and quadruple blank lines. Splitters then cut chunks at inconsistent boundaries, near-duplicate detectors miss matches that differ only in width or quotes, and embedding models spend capacity distinguishing typographic variants of the same token. The processor rewrites every document's text through a fixed pipeline of small, individually toggleable canonicalization steps: Unicode normalization (default NFC; NFKC/NFD/NFKD selectable), fullwidth-to-ASCII folding (ＡＢＣ→ABC, ：，！？→ halfwidth punctuation; CJK ideographs and CJK-only punctuation like 。、《》 are untouched), smart-quote/dash replacement (the minus sign U+2212 is preserved so formulas survive), control-character stripping (Unicode category Cc except newline and tab), whitespace canonicalization (CRLF/CR→LF, tabs/non-breaking spaces/ideographic spaces→plain spaces, collapsed space runs, stripped line edges, blank-line runs capped at `max_blank_lines`), optional lowercasing, and optional URL masking with a fixed token so volatile link noise stops dominating embeddings.
+
+Every operation is pure `str`/`unicodedata`/`re` work: the component is deterministic, offline and dependency-free, and processing is idempotent — normalizing already-normalized text returns it unchanged. CJK text written without spaces passes through the whitespace step byte-identical. The list of operations actually executed is stamped into `metadata[normalization_applied]` via a copied mapping, so pipeline observability comes for free; `id`, pre-existing metadata and (when all operations are disabled) the text itself are never modified. Place it in the knowledge *insertion* pipeline ahead of splitters and embedders, or as the first recall-side processor when retrieved documents come from messy origins.
+
+The component definition file is as follows:
+```yaml
+name: 'text_normalizer'
+description: 'normalize document text (unicode form, fullwidth forms, smart quotes, control chars, whitespace, case, URLs) before splitting and embedding'
+unicode_normalization: 'NFC'    # NFC | NFKC | NFD | NFKD | '' (disabled)
+fullwidth_to_ascii: true       # fold ＡＢＣ１２３， ：，！？ onto ASCII
+smart_quotes: true             # curly quotes / en-em dashes -> ASCII
+strip_control_chars: true      # drop C0/C1 except \n and \t
+whitespace: true               # canonical newlines, collapse runs
+max_blank_lines: 1             # max consecutive blank lines kept
+lowercase: false               # fold text to lowercase
+url_masking: false             # replace URLs with url_mask_token
+url_mask_token: '[URL]'        # replacement token for URLs
+applied_key: 'normalization_applied'  # metadata key for applied ops
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.text_normalizer'
+  class: 'TextNormalizer'
+```
+- unicode_normalization: Unicode normalization form — `NFC` (default), `NFKC`, `NFD`, `NFKD` — or `''` to disable. NFC folds combining accents into precomposed characters (`e` + U+0301 becomes `é`) so visually identical text compares equal.
+- fullwidth_to_ascii: When true (default), fold fullwidth ASCII forms and the ideographic space onto halfwidth equivalents. CJK ideographs and CJK-only punctuation pass through untouched.
+- smart_quotes: When true (default), replace typographic quotes and dashes with ASCII equivalents; the minus sign U+2212 is deliberately preserved.
+- strip_control_chars: When true (default), remove C0/C1 control characters (Unicode category Cc) except newline and tab.
+- whitespace: When true (default), canonicalize newlines, turn other whitespace into plain spaces, collapse space runs, strip line edges, cap blank-line runs and drop leading/trailing blank lines.
+- max_blank_lines: Maximum number of consecutive blank lines kept by the whitespace step; must be >= 0. 1 keeps one blank line between paragraphs; 0 removes blank lines entirely.
+- lowercase: When true (default false), fold the text to lowercase — enable for case-insensitive retrieval pipelines.
+- url_masking: When true (default false), replace URLs (`http(s)://` or `www.` hosts) with `url_mask_token`; trailing sentence punctuation is preserved after the token.
+- url_mask_token: Replacement token written for each URL; must be a non-empty string. When `lowercase` is enabled the token is inserted in lowercase so repeated normalization stays idempotent.
+- applied_key: Metadata key the list of applied operations (in execution order) is written to; an empty value disables stamping.

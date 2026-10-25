@@ -315,3 +315,39 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [TextNormalizer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/text_normalizer.yaml)
+
+该组件在拆条与向量化之前对文档文本做规范化，对应 issue #258 的*预处理*方向。来自不同来源的文档——办公软件导出、PDF 抽取、聊天记录、粘贴的网页——常把同样的词以视觉相同但字节不同的写法携带：分解式重音符号、全角字母与数字、弯引号与长破折号、不间断空格、混入的控制字节、CRLF 换行和连续多个空行。随后拆条器在不一致的边界上切块，近重复检测漏掉仅宽度或引号不同的匹配，嵌入模型则把容量浪费在同词的排版变体上。本组件把每篇文档的文本经固定的、每步可单独开关的规范化流水线改写：Unicode 规范化（默认 NFC，可选 NFKC/NFD/NFKD）、全角转半角（ＡＢＣ→ABC、：，！？→半角标点；汉字与中文特有标点 。、《》 不受影响）、弯引号/破折号替换（特意保留减号 U+2212，公式不受破坏）、控制字符清除（Unicode Cc 类，换行与制表符除外）、空白规范化（CRLF/CR→LF、制表符/不间断空格/全角空格→普通空格、折叠连续空格、去除行首行尾空白、连续空行压缩到 `max_blank_lines` 行）、可选小写化，以及可选的 URL 遮蔽——用固定 token 替换链接，避免多变的链接噪声主导向量。
+
+所有操作都是纯 `str`/`unicodedata`/`re` 工作：组件确定性、离线且零依赖，并具有幂等性——对已规范化的文本再跑一遍结果不变。不含空格的中文文本经空白规范化后逐字节保持不变。实际执行的操作列表通过复制的映射写入 `metadata[normalization_applied]`，流水线可观测性免费获得；`id`、既有 metadata 以及（所有操作都关闭时的）文本本身绝不被修改。可将本组件放在知识*写入*流水线中拆条器与向量化器之前，或在召回文档来源混杂时作为召回侧第一个处理器。
+
+组件定义文件如下：
+```yaml
+name: 'text_normalizer'
+description: 'normalize document text (unicode form, fullwidth forms, smart quotes, control chars, whitespace, case, URLs) before splitting and embedding'
+unicode_normalization: 'NFC'    # NFC | NFKC | NFD | NFKD | ''（关闭）
+fullwidth_to_ascii: true       # ＡＢＣ１２３、：，！？ 折叠为半角
+smart_quotes: true             # 弯引号 / 长破折号 -> ASCII
+strip_control_chars: true      # 清除 C0/C1（\n 和 \t 除外）
+whitespace: true               # 规范换行、折叠空白
+max_blank_lines: 1             # 保留的最大连续空行数
+lowercase: false               # 文本小写化
+url_masking: false             # 用 url_mask_token 替换 URL
+url_mask_token: '[URL]'        # URL 的替换 token
+applied_key: 'normalization_applied'  # 写入已执行操作列表的 metadata 键
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.text_normalizer'
+  class: 'TextNormalizer'
+```
+- unicode_normalization：Unicode 规范化形式——`NFC`（默认）、`NFKC`、`NFD`、`NFKD`，`''` 表示关闭。NFC 把组合重音折叠为预组合字符（`e` + U+0301 变为 `é`），使视觉相同的文本可比较相等。
+- fullwidth_to_ascii：为真（默认）时把全角 ASCII 形式与全角空格折叠为半角等价物；汉字与中文特有标点不受影响。
+- smart_quotes：为真（默认）时把弯引号与破折号替换为 ASCII 等价物；特意保留减号 U+2212。
+- strip_control_chars：为真（默认）时清除 C0/C1 控制字符（Unicode Cc 类），换行与制表符除外。
+- whitespace：为真（默认）时规范换行符、把其余空白转为普通空格、折叠连续空格、去除行首行尾空白、压缩连续空行并去掉首尾空行。
+- max_blank_lines：空白步骤保留的最大连续空行数，必须 >= 0。1 表示段落间保留一个空行；0 表示完全去除空行。
+- lowercase：为真（默认假）时文本小写化——用于大小写不敏感的检索流水线。
+- url_masking：为真（默认假）时用 `url_mask_token` 替换 URL（`http(s)://` 或 `www.` 主机）；句尾标点保留在 token 之后。
+- url_mask_token：每个 URL 的替换 token，必须为非空字符串。开启 `lowercase` 时 token 以小写插入，保证重复规范化幂等。
+- applied_key：写入已执行操作列表（按执行顺序）的 metadata 键；为空则不写入。
