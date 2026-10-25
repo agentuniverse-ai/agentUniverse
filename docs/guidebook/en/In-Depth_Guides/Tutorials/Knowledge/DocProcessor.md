@@ -82,6 +82,24 @@ doc_processor = ['sample_standard_app.intelligence.agentic.knowledge.doc_process
 
 
 ## The following DocProcessors are built into agentUniverse:
+
+### [TextStatisticsProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/text_statistics_processor.yaml)
+
+`TextStatisticsProcessor` annotates each Document with deterministic
+`character_count`, `non_whitespace_count`, `line_count`, and `word_count`
+values. It preserves the original text and Document identity, so the metadata
+can be used by later filters, context-budget logic, or observability code.
+
+```yaml
+name: 'text_statistics_processor'
+metadata_key: 'text_statistics'
+overwrite: true
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.text_statistics_processor'
+  class: 'TextStatisticsProcessor'
+```
+
 ### [CharacterTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/character_text_splitter.yaml)
 This component splits the original text based on the number of characters.
 The component definition file is as follows:
