@@ -196,6 +196,14 @@ class TestFormatters(unittest.TestCase):
         self.assertEqual(self.tool._compact_number(7.8e3), "7.80K")
         self.assertEqual(self.tool._compact_number(123.4), "123.40")
 
+    def test_format_integer_keeps_large_native_integer_exact(self) -> None:
+        value = 9_007_199_254_740_993
+
+        self.assertEqual(self.tool._fmt_int(value), "9,007,199,254,740,993")
+
+    def test_format_integer_keeps_decimal_string_compatibility(self) -> None:
+        self.assertEqual(self.tool._fmt_int("1234.9"), "1,234")
+
     def test_normalize_symbol(self) -> None:
         self.assertEqual(self.tool._normalize_symbol("aapl"), "AAPL")
         self.assertEqual(self.tool._normalize_symbol("  aapl  "), "AAPL")
