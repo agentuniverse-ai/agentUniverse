@@ -649,3 +649,39 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## TimezoneAbbrevTool
+
+`TimezoneAbbrevTool` covers the timezone *abbreviation* layer — the EST / PST / CST / IST style short codes that appear in scraped text, logs, flight tables and chat: `lookup` (abbreviation, case-insensitive, to entries with name, UTC offset, `dst` and `ambiguous` flags), `convert` (an `HH:MM` time between two abbreviations, returning the result time, both offsets and the delta), `now_offset` (an abbreviation's UTC offset) and `search_by_offset` (every abbreviation at a `+08:00`-style or integer-minute offset). It complements `DateTimeTool` (IANA zone names, DST-aware conversions) with an embedded curated table of ~55 codes; pure Python standard library, zero dependencies, zero network access.
+
+Register a component pointing at `agentuniverse.agent.action.tool.common_tool.timezone_abbrev_tool.TimezoneAbbrevTool`, then call `execute(mode=..., abbr=..., ...)`:
+
+```python
+from agentuniverse.agent.action.tool.common_tool.timezone_abbrev_tool import TimezoneAbbrevTool
+
+tool = TimezoneAbbrevTool()
+tool.execute(mode="lookup", abbr="est")            # Eastern Standard Time, -05:00, dst=False
+tool.execute(mode="lookup", abbr="CST")            # 3 entries: US Central -06:00, China +08:00, Cuba -05:00
+tool.execute(mode="convert", time="09:00", from_abbr="EST", to_abbr="JST")  # 23:00 (+14:00 delta)
+tool.execute(mode="convert", time="16:00", from_abbr="PST", to_abbr="AEST") # 10:00 next day (day_shift +1)
+tool.execute(mode="now_offset", abbr="IST")        # +05:30 (India, first entry) + ambiguity warning
+tool.execute(mode="search_by_offset", offset="+08:00")   # AWST, CST (China Standard Time)
+tool.execute(mode="search_by_offset", offset=480)        # same result, integer minutes
+```
+
+```yaml
+name: timezone_abbrev_tool
+description: Timezone abbreviation lookup, conversion and offset search, zero dependencies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.timezone_abbrev_tool
+  class: TimezoneAbbrevTool
+input_keys: [mode]
+```
+- Every lookup entry carries `abbr`, `name`, `offset_minutes`, `sign` (the `+08:00`-style UTC offset string), `dst` (whether the code is the daylight-saving variant of its zone family) and `ambiguous`.
+- Table honesty: many abbreviations are shared by unrelated regions — `CST` (China / US Central / Cuba), `IST` (India +5:30 / Israel +2:00), `BST` (British +1:00 / Bangladesh +6:00), `AST` (Canada Atlantic / Arabia), `SST` (Samoa -11:00 / Solomon Islands +11:00). Ambiguous codes return every entry and set `ambiguous: true`; the table records the offset each code commonly denotes today and is not tied to any country's DST calendar.
+- `convert` validates `time` strictly as `HH:MM` (hours 00-23, minutes 00-59) and computes `delta = to_offset - from_offset`; when the shifted time crosses midnight, `day_shift` reports `+1` / `-1`. Ambiguous source or destination codes resolve to the first table entry (most common English usage: `CST` -> US Central, `IST` -> India, `BST` -> British, `AST` -> Canada Atlantic, `SST` -> Samoa) and add a `warning` listing the other candidates.
+- `now_offset` returns the abbreviation's fixed table offset — abbreviations are constant-offset labels, so the result does not depend on the wall clock.
+- `search_by_offset` accepts both `+08:00`-style strings and integer minutes (480, -330) and returns entries in table order.
+- Every result is a structured dict with a `status` field; errors are returned, never raised. Unknown abbreviations come back with the closest known codes; invalid times, abbreviations outside 1-5 ASCII letters and malformed offsets are rejected with informative messages.
