@@ -183,10 +183,46 @@ def process_llm_token(agent_llm: LLM, lc_prompt_template, profile: dict, planner
     # process the specific variable in the prompt
     content = planner_input.get(var_to_process)
 
+    if process_prompt_type_enum == PromptProcessEnum.TRUNCATE:
+        if var_to_process not in prompt_input_dict or not isinstance(content, str):
+            raise ValueError(
+                f"Cannot truncate prompt variable '{var_to_process}': "
+                "it must be a string used by the prompt template.")
+
+        retry_available = True
+
+        def prefix_fits(length: int) -> bool:
+            nonlocal retry_available
+            candidate = dict(prompt_input_dict)
+            candidate[var_to_process] = content[:length]
+            formatted = lc_prompt_template.format(**candidate)
+            while True:
+                try:
+                    return agent_llm.get_num_tokens(formatted) <= input_tokens
+                except Exception as error:
+                    if not retry_available:
+                        raise ValueError('Count prompt tokens failed') from error
+                    retry_available = False
+
+        if not prefix_fits(0):
+            raise ValueError(
+                "The fixed prompt exceeds the input token budget even without "
+                f"'{var_to_process}'; shorten the template or other inputs.")
+
+        # Keep a verified fitting prefix. Count the complete prompt so repeated
+        # variables, chat roles and tokenizer boundaries share the same budget.
+        low, high = 0, len(content)
+        while low + 1 < high:
+            middle = (low + high) // 2
+            if prefix_fits(middle):
+                low = middle
+            else:
+                high = middle
+        planner_input[var_to_process] = content[:low]
+        return
+
     if content:
-        if process_prompt_type_enum == PromptProcessEnum.TRUNCATE:
-            planner_input[var_to_process] = truncate_content(content, input_tokens, agent_llm)
-        elif process_prompt_type_enum == PromptProcessEnum.STUFF:
+        if process_prompt_type_enum == PromptProcessEnum.STUFF:
             planner_input[var_to_process] = summarize_by_stuff(texts=[content], llm=prompt_llm,
                                                                summary_prompt=PromptManager().get_instance_obj(
                                                                    summary_prompt_version))
