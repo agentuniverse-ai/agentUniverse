@@ -1,0 +1,72 @@
+name: log_parser_tool
+description: "Log parser tool — pure Python stdlib regex, no network required. Detect the dominant format of sample lines (mode='detect': apache/nginx combined, apache common, syslog, ISO-timestamp leveled, key=value; per-line votes, majority wins, mixed lines reported), parse lines into structured records per detected or explicit format (mode='parse'; unparseable lines returned as {raw, error} entries), and filter parsed records by predicates (mode='filter': level_min with DEBUG<INFO<WARN<ERROR<FATAL ordering, status_min, method, ip) getting back the matching raw lines and their parsed records."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.log_parser_tool
+  class: LogParserTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — detect, parse or filter.
+    required: true
+  text:
+    type: string
+    description: The log text; lines are split on universal newlines, blank lines are skipped and counted.
+    required: true
+  format:
+    type: string
+    description: Optional explicit format — combined, common, syslog, leveled or keyvalue. When omitted, parse and filter auto-detect the dominant format; detect mode always votes and ignores this option.
+    required: false
+  sample_size:
+    type: integer
+    description: Detect mode only — maximum number of non-blank lines sampled (evenly spaced, deterministic); 1..10000, default 200.
+    required: false
+  level_min:
+    type: string
+    description: Filter predicate — keep records whose level ranks at or above this threshold (case-insensitive TRACE/DEBUG/INFO/WARN/WARNING/ERROR/FATAL/CRITICAL).
+    required: false
+  status_min:
+    type: integer
+    description: Filter predicate — keep records with an HTTP status field >= this code (100..599).
+    required: false
+  method:
+    type: string
+    description: Filter predicate — keep records whose request method equals this string exactly (e.g. GET, POST).
+    required: false
+  ip:
+    type: string
+    description: Filter predicate — keep records whose ip field equals this string exactly.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["detect", "parse", "filter"]
+      description: Operation mode.
+    text:
+      type: string
+      description: The log text to process.
+    format:
+      type: string
+      enum: ["combined", "common", "syslog", "leveled", "keyvalue"]
+      description: Explicit format (parse/filter modes); omit for auto-detection.
+    sample_size:
+      type: integer
+      description: Maximum lines sampled in detect mode (default 200).
+    level_min:
+      type: string
+      description: Inclusive severity threshold for filter mode.
+    status_min:
+      type: integer
+      description: Inclusive HTTP status threshold for filter mode.
+    method:
+      type: string
+      description: Exact request-method match for filter mode.
+    ip:
+      type: string
+      description: Exact ip match for filter mode.
+  required: ["mode", "text"]
