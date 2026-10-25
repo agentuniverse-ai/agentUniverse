@@ -317,3 +317,25 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [StatisticsExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/statistics_extractor.yaml)
+
+This component pulls numeric claims out of documents into metadata, addressing the *knowledge extraction* direction of issue #258. Documents are full of numbers that retrieval filters, ranking boosts and dashboards would rather see as structured data than prose — "45.3% of seats", "1,200 users", "3 million items", "5万次", a "3:2" ratio. Each document is scanned with pure regular expressions (no model calls, no network, no dependencies) and every numeric claim is recorded as one hit `{kind, value, unit, text, span}` in `metadata[statistics_key]`. Four kinds are recognized: `percentage` (`45%`, `45.3 percent`, full-width `45％`, and basic CJK forms — `百分之四十五` parses to 45, `百分之三点五` to 3.5, `百分之百` to 100); `count` (a number plus unit word, optionally through a magnitude word — `1,200 users`, `3 million items`, `5万次`, `7 billion` with an empty unit when only the magnitude word follows; magnitude words are resolved into the value with exact Decimal arithmetic: `5万` → 50000, `3 million` → 3000000, `1.5亿` → 150000000, `3万亿` → 3000000000000, and two-decimal inputs like `1.13万` → 11300 never drift by a float ulp); `ratio` (`3:2` and `3/4`, value is the quotient — 1.5 and 0.75); and `raw_number` (comma-grouped bare numbers like `1,234,567`, capped at values ≥ 1000 by construction so small quantities stay out).
+
+Classic false positives are guarded out: dates (`2026-10-19`, `10/19/2026`, CJK `2026年10月19日` and bare `2026年`/`10月`/`5日` fragments), version numbers (`v1.2.3`, `1.2.3`, IP addresses), ordinals (`21st`, `1,000th`), clock times (`10:05` via the leading-zero minute, `10:30 am`, `at 10:30`, h:m:s readings such as `10:30:45`, and ISO 8601 `T`-glued date-times like `2026-10-19T10:30`) and slash pairs that read as calendars — `a/b` with a ≤ 12 and 13 ≤ b ≤ 31 is skipped as month/day (so `10/19` drops while `3/4` survives), and `2026/10` (a four-digit 19xx/20xx year over 1..12) is skipped as year/month; slash chains and anything inside a URL are skipped too. Overlapping candidates resolve by kind priority (percentage > count > ratio > raw_number, longest match first), so "1,200 users" yields exactly one count hit instead of a count plus a stray raw number. Alongside the hit list, `metadata[summary_key]` receives a digest computed over *all* hits — total, hits per kind, and min/max value per kind — while the hit list itself is truncated to `max_statistics` entries (default 100). Documents pass through untouched otherwise: text and id are never modified, order is preserved, metadata mappings are copied before mutation, and documents without any numeric claim come back with no statistics keys stamped. The component is domain-agnostic and fully deterministic: it knows the *shape* of a numeric claim, not the vocabulary of any industry — unlike `FinancialIndicatorExtractor`, whose patterns are hardcoded to revenue/profit/metric scenarios.
+
+The component definition file is as follows:
+```yaml
+name: 'statistics_extractor'
+description: 'pull numeric claims (percentages, counts with units, ratios, large numbers) from documents into metadata'
+max_statistics: 100            # max hits stored in the statistics list
+statistics_key: 'statistics'   # metadata key for the hit list; '' disables
+summary_key: 'statistics_summary'  # metadata key for the digest; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.statistics_extractor'
+  class: 'StatisticsExtractor'
+```
+- max_statistics: Maximum number of hits stored in the statistics list; the summary still reflects every hit found. Must be an integer ≥ 1.
+- statistics_key: Metadata key the hit list is written to; an empty value disables list stamping.
+- summary_key: Metadata key the per-kind digest (total, counts, min/max) is written to; an empty value disables digest stamping.
