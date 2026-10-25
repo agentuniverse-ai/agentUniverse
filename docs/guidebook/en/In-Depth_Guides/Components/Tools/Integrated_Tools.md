@@ -675,3 +675,57 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## JwtTool
+
+`JwtTool` decodes JSON Web Token structure and analyzes claims and algorithm
+safety offline. It never verifies signatures and never accepts keys or
+secrets. `decode` splits the compact serialization — both the three-segment
+JWS form and the two-segment unsecured `alg none` form, which is accepted but
+flagged — parses header and payload, and reports structure errors: wrong
+segment counts, non-canonical base64url padding or characters, invalid JSON,
+empty segments, and zero-width character tricks. String claim values longer
+than 24 characters are masked by default (`mask_strings=false` restores
+bounded previews) because decoded claims can carry personal data or secrets.
+
+```python
+import base64
+import json
+
+from agentuniverse.agent.action.tool.common_tool.jwt_tool import JwtTool
+
+def segment(value):
+    raw = json.dumps(value, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+token = ".".join([
+    segment({"alg": "HS256", "typ": "JWT"}),
+    segment({"sub": "demo-user", "exp": 4102444800}),
+    "opaque-signature-not-verified-by-this-tool",
+])
+
+tool = JwtTool()
+structure = tool.execute(mode="decode", token=token)
+analysis = tool.execute(
+    mode="analyze_claims",
+    token=token,
+    now="2026-10-21T12:00:00+00:00",
+    skew_seconds=30,
+    expected_aud="api",
+    expected_iss="https://issuer.example",
+)
+```
+
+`analyze_claims` performs registered-claim time math against the supplied
+`now`: `exp`/`nbf`/`iat` verdicts with delta seconds and skew tolerance,
+missing registered claims noted, strict RFC 7519 NumericDate typing that
+rejects string and boolean dates, and optional `aud`/`iss` comparisons; custom
+claims are inventoried by type only. `audit_alg` inspects the header: `alg
+none` is critical, symmetric HS* guidance is informational, and unrecognized
+algorithms, conflicting `crit` parameters, suspicious `kid` values, and
+`jku`/`x5u` untrusted-key-fetch headers are flagged. `cty=JWT` nested tokens
+decode one bounded level. `explain` renders a human-readable summary with
+masked claim values. A `Bearer ` prefix is stripped when present. Token text,
+payload bytes, claim counts, array items, nesting depth, and previews are all
+bounded; the tool uses only the standard library, makes no network calls, and
+embeds no key material.
