@@ -317,3 +317,37 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [NumberConflictDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/number_conflict_detector.yaml)
+
+This component flags the same measured claim repeated with different numbers, addressing the *knowledge extraction / data-quality* direction of issue #258. Copies of a claim drift as documents are retyped, translated and restated: one paragraph says "revenue was 5 million", the next "revenue reached 6 million", a translated section restates "5万" as "60000". A chunk that disagrees with itself is a quality signal worth surfacing *before* the numbers are embedded and retrieved. Each document is scanned with pure regular expressions (no model calls, no network, no dependencies) and every disagreement is recorded in `metadata[number_conflicts]` as `{"anchor", "dimension", "values": [{value, text, span, sentence_index}...] (at most 5 shown), "relative_gap"}`.
+
+Finding a conflict takes four steps. **Value extraction**: the numeric forms are located within each sentence — percentages (`45%`, `45.3 percent`, full-width `45％`, CJK `百分之四十五` → 45), scaled amounts whose magnitude words resolve into the value with exact Decimal arithmetic (`5万` → 50000, `3 million` → 3000000, `1.5亿` → 150000000, `1.13万` → 11300), unit counts (`1,200 users`, `5万次`) and bare numbers (comma-grouped `1,234,567` always; separator-free numbers only from 1000 up). Each value belongs to one *dimension* — `percent` or `amount` — and values only compare inside their own dimension, so "growth was 45%" and "growth hit 45 million" are different claims, never a conflict. **Anchoring**: each number is attached to the claim's subject — a unit word glued to the number wins (`1,200 users` anchors on `user`), otherwise the nearest noun-ish word within a 4-token window before it ("revenue was 5 million" and "revenue reached 6 million" both anchor on `revenue`; link and measure verbs are skipped), otherwise the nearest noun-ish word within 4 tokens after it. English words are lowercased and lightly stemmed (trailing s/es/ed/ing); CJK runs are reduced from the tail first (`营收达到` → `营收`) and then from the head (`2024年营收` → `营收`), keeping short words like 日活 intact. Numbers with no noun in any window are dropped. **Grouping**: mentions sharing an anchor and dimension are chained while consecutive mentions sit within `window_size` sentences (default 3 — a sliding 3-sentence window; mentions in sentences 1 and 4 fall into separate chains and never conflict). **Conflict test**: inside a chain, any pair whose difference exceeds `tolerance + near_conflict_ratio ×` the larger magnitude makes a conflict — with the defaults (`tolerance` 0, `near_conflict_ratio` 0.001) identical normalized values and rounding drift within 0.1% count as consistent, while 5 million against 6 million and `5万` against `60000` disagree; `relative_gap` records the worst offending pair.
+
+False positives are guarded out before extraction: dates and ISO calendars (`2026-10-19`, `10/19/2026`, CJK `2026年10月19日` and bare `2026年`/`10月`/`5日` fragments), four-digit years with explicit year context (`in 2024`, `fiscal 2024`, `FY2024`, `2024 years`), version tokens (`v1.2.3`, `1.2.3`, IPs), ordinals (`21st`, `1,000th`, `第3`), URLs and the numbers inside them, and multiplier suffixes (`5000x`, `5000倍`). Identical values repeated are *not* conflicts — they are counted in `metadata[consistent_repeats]`. Alongside the conflict list (truncated to `max_conflicts`, default 20), `metadata[numeric_consistency]` receives `consistent` or `conflicts_found` and `metadata[conflict_count]` the full conflict count. Documents pass through untouched otherwise: text and id are never modified, order is preserved, metadata mappings are copied before mutation. The component is fully deterministic and complements the family of offline quality probes: `StatisticsExtractor` stamps numeric claims without comparing them, and lexical contradiction detectors flip on words like "however" without seeing numbers at all — this one compares the numbers themselves.
+
+The component definition file is as follows:
+```yaml
+name: 'number_conflict_detector'
+description: 'flag the same measured claim repeated with different numbers (5万 vs 60000) as a data-quality signal for RAG ingestion'
+window_size: 3                # max sentence distance for compared mentions, [1, 5]
+max_conflicts: 20             # max conflicts stored; conflict_count keeps the full count
+tolerance: 0                  # absolute difference tolerated (exact comparison)
+near_conflict_ratio: 0.001    # relative difference tolerated (rounding drift)
+conflicts_key: 'number_conflicts'      # metadata key for the conflict list; '' disables
+count_key: 'conflict_count'            # metadata key for the full count; '' disables
+consistency_key: 'numeric_consistency' # metadata key for the verdict; '' disables
+repeats_key: 'consistent_repeats'      # metadata key for the repeat count; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.number_conflict_detector'
+  class: 'NumberConflictDetector'
+```
+- window_size: Maximum sentence distance for two mentions of the same anchor to be compared, in [1, 5]. The default 3 groups mentions inside a sliding 3-sentence window; mentions further apart fall into separate groups and never conflict.
+- max_conflicts: Maximum number of conflicts stored in the conflict list; must be an integer >= 1. `conflict_count` still reflects every conflict found.
+- tolerance: Absolute value difference tolerated before two values disagree; a number >= 0, default 0 (exact comparison after normalization).
+- near_conflict_ratio: Relative difference tolerated before two values disagree (fraction of the larger magnitude); a number >= 0, default 0.001 so rounding drift stays consistent.
+- conflicts_key: Metadata key the conflict list is written to; an empty value disables list stamping.
+- count_key: Metadata key the full conflict count is written to; an empty value disables count stamping.
+- consistency_key: Metadata key the overall verdict (`consistent` / `conflicts_found`) is written to; an empty value disables verdict stamping.
+- repeats_key: Metadata key the count of anchor groups repeating a value identically is written to; an empty value disables repeat stamping.
