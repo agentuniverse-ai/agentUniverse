@@ -317,3 +317,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [CohereRerank](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/cohere_rerank.yaml)
+
+This component uses the Cohere Rerank API (v2) to rerank texts, sorting the content recalled by the Store based on the relevance to the Query content. It addresses the *re-ranking* direction of issue #248, adding a Cohere option alongside `DashscopeReranker` and `JinaReranker`.
+
+The component definition file is as follows:
+```yaml
+name: 'cohere_rerank'
+description: 'reranker use cohere api'
+model_name: 'rerank-v3.5'    # optional
+top_n: 10                    # optional
+max_chunks_per_doc: null     # optional
+request_timeout: 30          # optional
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cohere_rerank'
+  class: 'CohereRerank'
+```
+- model_name: Cohere rerank model id, `rerank-v3.5` by default.
+- top_n: Maximum number of documents returned after reranking.
+- max_chunks_per_doc: Optional Cohere option limiting how many chunks each long document is split into before scoring; when null the parameter is omitted from the request and the API default applies.
+- request_timeout: Timeout in seconds for the rerank HTTP call, so a stalled endpoint cannot hang the rerank step.
+
+This component requires configuring COHERE_API_KEY in the environment variables (or setting `api_key` in the component configuration). An empty value fails loudly at call time instead of being silently sent to the API. When the query or the recalled document list is empty, no API call is made and the documents are returned unchanged. On success each returned document carries its score in the `relevance_score` metadata key; transport errors, non-200 responses and non-JSON bodies are raised as structured errors.

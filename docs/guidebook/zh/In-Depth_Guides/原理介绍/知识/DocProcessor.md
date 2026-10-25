@@ -315,3 +315,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [CohereRerank](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/cohere_rerank.yaml)
+
+该组件使用 Cohere Rerank API（v2）对文本进行重新排序（rerank），对 Store 召回的内容按照与 Query 的相关性排序。它对应 issue #248 的*重排序*方向，与 `DashscopeReranker`、`JinaReranker` 共同提供更多服务商选择。
+
+组件定义文件如下：
+```yaml
+name: 'cohere_rerank'
+description: 'reranker use cohere api'
+model_name: 'rerank-v3.5'    # 可选
+top_n: 10                    # 可选
+max_chunks_per_doc: null     # 可选
+request_timeout: 30          # 可选
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cohere_rerank'
+  class: 'CohereRerank'
+```
+- model_name: Cohere rerank 模型 id，默认 `rerank-v3.5`。
+- top_n: 重排后返回的最大文档数。
+- max_chunks_per_doc: 可选的 Cohere 参数，限制每篇长文档在打分前最多切成的分片数；为 null 时不随请求发送，使用 API 默认值。
+- request_timeout: rerank HTTP 调用的超时时间（秒），避免接口卡死拖住整个 rerank 步骤。
+
+该组件需要在环境变量中配置 COHERE_API_KEY（或在组件配置中设置 `api_key`）。空值会在调用时明确报错，而不会被静默发送给 API。当 query 或召回文档列表为空时，不发起 API 调用，文档按原顺序原样返回。成功时每个返回文档的分值写入 metadata 的 `relevance_score` 键；网络错误、非 200 响应与非 JSON 响应体均以结构化错误抛出。
