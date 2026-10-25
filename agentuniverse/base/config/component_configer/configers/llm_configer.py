@@ -104,5 +104,5 @@ class LLMConfiger(ComponentConfiger):
             self.__max_context_length = configer.value.get('max_context_length')
             self.__tracing = configer.value.get('tracing')
         except Exception as e:
-            raise Exception(f"Failed to parse the LLM configuration: {e}")
+            raise Exception(f"Failed to parse the LLM configuration: {e}") from e
         return self
