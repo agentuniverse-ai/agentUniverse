@@ -1,0 +1,51 @@
+name: bcp47_tool
+description: RFC 5646 (BCP 47) language tag validation and analysis tool — validate structure with span-level errors, canonicalize with preferred-value substitutions, match against RFC 4647 ranges (Basic Filtering / Lookup), and explain each subtag using embedded curated IANA/ISO tables. Fully offline, standard library only.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.bcp47_tool
+  class: Bcp47Tool
+input_keys:
+  - mode
+  - tag
+max_tag_length: 512
+max_subtags: 64
+max_findings: 32
+args_model:
+  mode:
+    type: string
+    description: Analysis mode — validate (structure decomposition, errors with spans, warnings), canonicalize (RFC case forms, preferred values, extlang folding, extension ordering), match (RFC 4647 Basic Filtering / Lookup), or explain (human breakdown of every subtag).
+    required: true
+  tag:
+    type: string
+    description: The BCP 47 language tag to analyze, e.g. 'hy-Latn-IT-arevela'.
+    required: true
+  range:
+    type: string
+    description: RFC 4647 language range for match mode — a single basic range ('*', 'de-DE') or a comma-separated lookup priority list ('fr-FR, zh-Hant').
+    required: false
+  mechanism:
+    type: string
+    description: Match strategy — auto (single range filters, lists do lookup), filtering, or lookup.
+    required: false
+    default: auto
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["validate", "canonicalize", "match", "explain"]
+      description: Analysis mode.
+    tag:
+      type: string
+      description: BCP 47 language tag.
+    range:
+      type: string
+      description: RFC 4647 language range or comma-separated priority list (match mode).
+    mechanism:
+      type: string
+      enum: ["auto", "filtering", "lookup"]
+      default: "auto"
+      description: Match mechanism (match mode only).
+  required: ["mode", "tag"]
+  additionalProperties: false
