@@ -649,3 +649,73 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## MIME Codec Tool
+
+`MimeCodecTool` analyzes and repairs MIME transfer encodings offline
+(RFC 2045/4648 quoted-printable and base64, RFC 2047 encoded words, RFC 2231
+continuation parameters) using only the standard library. It offers four
+modes: `validate_qp`, `validate_base64`, `decode_words`, `encode_preview`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.mime_codec_tool import MimeCodecTool
+
+tool = MimeCodecTool()
+qp = tool.execute(mode="validate_qp", text="caf=C3=A9=\r\nmenu")
+b64 = tool.execute(mode="validate_base64", text="YQ==")
+header = tool.execute(
+    mode="decode_words",
+    header="Content-Disposition: attachment; filename*=UTF-8''%e2%82%ac.txt",
+)
+preview = tool.execute(mode="encode_preview", text="héllo", target="word")
+```
+
+`validate_qp` checks quoted-printable text line by line: `=XX` escapes
+(uppercase canonical, lowercase accepted by robust decoders per RFC 2045
+section 6.7 rule 1), stray `=` before non-hex pairs and escapes cut short by
+line breaks (errors), soft-break discipline (`=` only as the final character
+of a line, its line break consumed silently, `=` at end of input reported),
+trailing space/tab before a hard break modeled precisely - the RFC 2045
+section 6.7 rule 3 note orders decoders to delete it, so it is transparent
+and cannot carry data, which the tool reports while the decoded preview
+still shows what a lenient stdlib decoder yields - the 76-character line
+guideline (warning), and raw 8-bit/control octets that must be encoded
+(U+FFFD replacement characters reveal lossily decoded 8-bit input). It
+returns findings with line/column spans, truncated decoded previews (text
+plus an exact hex prefix), and statistics (lines, soft breaks, escapes).
+
+`validate_base64` enforces full RFC 4648: alphabet purity with URL-safe
+dialect detection (`-_` vs `+/`, mixing both is an error), padding only as a
+final run with the correct count (2 data characters need `==`, 3 need `=`,
+mod-4 == 1 is unrecoverable), whitespace tolerance per RFC 2045 section 6.8
+(MIME decoders must ignore it) with a `strict` flag that rejects any
+whitespace like RFC 4648 does, and 76-column folding acceptance. It returns
+findings with positions, `decoded_size`, and a deterministic
+`sha256_first64` digest of the decoded bytes.
+
+`decode_words` decodes RFC 2047 encoded words (`=?charset?B/Q?...?=`) with
+per-word charset, encoding, language tag, decoded text, and errors
+(unterminated frames, bad B/Q tokens, nested words, non-padded base64 bodies
+repaired with a warning), joining words with the RFC 2047 section 8
+whitespace rules (a single separator - including CRLF+WSP folds - is
+ignored; surplus whitespace is kept as spaces) and rejecting words inside
+quoted-strings per section 5. Unknown charsets fall back gracefully
+(UTF-8 then latin-1) after trying the curated common registry
+(us-ascii, iso-8859-1..15, utf-7/8, windows-1252, koi8-r, gb2312, gbk,
+big5, shift_jis, euc-jp) plus anything resolvable in the Python codec
+registry. RFC 2231 continuation parameters (`filename*=utf-8''...`,
+`filename*0*=...` multi-chunk) are merged in section order with
+percent-decoding, charset/language declarations on the initial section,
+plain-section mixing per the RFC's own example, and parameter-character
+validity findings.
+
+`encode_preview` renders a bounded preview of what correct generation looks
+like: base64 folded at 76 columns with CRLF, quoted-printable via the stdlib
+encoder, or RFC 2047 encoded words (`word-b`, `word-q`, or `word`, which
+picks B or Q by shorter total length and documents the choice), each word
+capped at 75 characters and joined by folds that `decode_words` merges back
+round-trip.
+
+All inputs are validated strictly and bounded (text/header lengths, word,
+finding, and output caps); repeated runs are deterministic and everything
+runs offline.
