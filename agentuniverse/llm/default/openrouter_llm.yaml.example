@@ -1,0 +1,20 @@
+name: 'default_openrouter_llm'
+description: 'default openrouter llm routing to hundreds of models via one OpenAI-compatible endpoint'
+model_name: 'openai/gpt-4o-mini'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${OPENROUTER_API_KEY}'
+api_base: 'https://openrouter.ai/api/v1'
+proxy: '${OPENROUTER_PROXY}'
+# Optional OpenRouter attribution headers, shown on the openrouter.ai
+# rankings page. Remove or leave unset to send no attribution headers.
+http_referer: 'https://your-app.example.com'
+app_title: 'Your App Name'
+# OpenRouter routes to hundreds of models whose context windows differ
+# wildly; set this to the documented window of the routed model.
+max_context_length: 128000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.openrouter_llm'
+  class: 'OpenRouterLLM'
