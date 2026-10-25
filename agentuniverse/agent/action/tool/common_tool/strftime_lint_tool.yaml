@@ -1,0 +1,42 @@
+name: strftime_lint_tool
+description: "Strftime lint tool — strftime/strptime format-string linting, explanation, platform probing and round-trip checking with pure Python stdlib, no network required. The datetime family's tools (DurationTool, IsoWeekTool, DateTimeTool) operate on temporal values; this tool inspects the format string itself. mode='lint' statically checks a format string for unknown % directives (error, listing the valid set), a dangling trailing %, locale-dependent %c/%x/%X (info), glibc/BSD-only directives and flag/width/modifier forms like %-d %_m %0H %^a %#Z %3Y %Ec (info — CPython strptime rejects flag forms), C99/POSIX.1-2001 directives beyond the C89 core such as %F %T %e %G %V (info), %Z/%z caveats (strptime %Z accepts only UTC/GMT/time.tzname values and yields a naive datetime; %z renders '' for naive datetimes), non-ASCII literals (info), directive-free formats and empty formats (warning); findings carry {line, code, message, severity}. mode='explain' returns each directive in order of appearance with its meaning, a deterministic example rendered at the fixed reference datetime 2024-02-29T13:45:06.123456+00:00, whether CPython strptime parses it (context-aware for the %G/%V/weekday trio), gnu_only and windows_note flags. mode='probe' renders each directive and the whole format through the runtime's real datetime.strftime (optionally at a caller-supplied ISO datetime) — the live platform oracle. mode='roundtrip_check' computes for real whether strptime(strftime(reference, fmt), fmt) recovers a datetime, reporting loss_fields and honestly observed pitfalls (%Z offset loss, %j without a year defaulting to 1900, %U/%W ignored for date computation, flag forms rejected by strptime, %s environment dependence). Strict validation, size caps, deterministic output."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.strftime_lint_tool
+  class: StrftimeLintTool
+input_keys:
+  - mode
+  - fmt
+max_format_chars: 4000
+max_dt_chars: 64
+max_pitfalls: 6
+max_codepoints_listed: 5
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lint, explain, probe or roundtrip_check.
+    required: true
+  fmt:
+    type: string
+    description: The strftime/strptime format string to inspect (up to 4,000 characters; may be empty, which each mode reports honestly).
+    required: true
+  dt:
+    type: string
+    description: "Probe mode only — an ISO 8601 datetime string the directives are rendered against (default: the fixed reference datetime 2024-02-29T13:45:06.123456+00:00). Rejected in the other modes."
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "explain", "probe", "roundtrip_check"]
+      description: Operation mode.
+    fmt:
+      type: string
+      description: The strftime/strptime format string to lint, explain, probe or round-trip check.
+    dt:
+      type: string
+      description: Optional ISO 8601 datetime for probe mode.
+  required: ["mode", "fmt"]
+  additionalProperties: false

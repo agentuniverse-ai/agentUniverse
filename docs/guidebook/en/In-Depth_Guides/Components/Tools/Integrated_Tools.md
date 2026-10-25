@@ -675,3 +675,99 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Strftime Lint Tool
+
+`StrftimeLintTool` lints, explains and round-trip checks
+strftime/strptime *format strings* with pure Python standard library —
+no network access, no third-party dependencies. The datetime family's
+tools operate on temporal values — `DurationTool` (#3513) parses ISO
+8601 durations, `IsoWeekTool` (#3894) does ISO week calendar
+arithmetic, `DateTimeTool` (#3420) parses and formats datetimes — but
+none of them inspects the format string itself. This tool is that
+missing layer: it answers "is this `%Y-%m-%d`-style format string
+correct, portable and round-trippable?" before an agent ever renders
+a datetime with it.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.strftime_lint_tool import StrftimeLintTool
+
+tool = StrftimeLintTool()
+lint = tool.execute(mode="lint", fmt="%Y-%m-%d %H:%M:%S.%f%z")   # findings list
+explained = tool.execute(mode="explain", fmt="%G-%V-%u")          # per-directive entries
+probe = tool.execute(mode="probe", fmt="%Z", dt="2026-01-05T09:30:00+08:00")
+roundtrip = tool.execute(mode="roundtrip_check", fmt="%Y-%m-%d")  # recoverability
+```
+
+`lint` is static analysis with no `strftime` calls, so its verdicts
+are identical on every platform. Findings carry
+`{line, code, message, severity}` (the line is the 1-based line
+inside the format string). The rules: `unknown_directive` (error —
+the message lists the full valid set, which spans the C89 core
+`%a %A %b %B %c %d %H %I %j %m %M %p %S %U %w %W %x %X %y %Y %Z`,
+the C99/POSIX.1-2001 additions `%C %D %e %F %g %G %h %n %r %R %t %T
+%u %V %z`, the glibc/BSD extensions `%k %l %s %P %v` and the
+`%:z` colon-offset forms, plus CPython's `%f`),
+`dangling_percent` (error — a trailing bare `%` raises `ValueError`
+at render time on every platform), `locale_dependent` (info — `%c`
+`%x` `%X` render and re-parse differently outside the C locale),
+`gnu_extension` (info — `%k %l %s %P %v`, `%:z` forms, and every
+flag/width/modifier prefix such as `%-d`, `%_m`, `%0H`, `%^a`,
+`%#Z`, `%3Y`, `%Ec`; the message notes that CPython `strptime`
+rejects flag forms, so such formats can never round-trip, and that
+`%s` additionally renders local-timezone-dependent on BSD/macOS),
+`non_c89_directive` (info — C99/POSIX.1-2001 directives missing
+from strict C89 and from MSVC runtimes before VS2015),
+`tz_directive_caveat` (info — `strptime %Z` accepts only UTC, GMT
+and the runtime's `time.tzname` values and yields a naive datetime;
+`%z` renders `''` for naive datetimes), `non_ascii_literal` (info),
+`no_directives` (warning — e.g. a `YYYY-MM-DD`-style template
+mistake) and `empty_format` (warning). `%%` and the whitespace
+directives `%n`/`%t` are never flagged (documented policy).
+
+`explain` returns one entry per directive in order of appearance:
+`{directive, meaning, example_output, parsed_by_strptime, gnu_only,
+windows_note}`. `example_output` is rendered with the fixed
+reference datetime `2024-02-29T13:45:06.123456+00:00` (a leap-year
+Thursday, chosen so `%d`, `%j`, ISO-week and AM/PM directives all
+produce distinctive values) through the runtime's real `strftime` —
+a directive the runtime cannot render yields `None`.
+`parsed_by_strptime` describes CPython's `datetime.strptime` (pure
+Python, hence platform-independent) and is context-aware: `%G` and
+`%V` count as parseable only when the ISO trio (`%G` + `%V` + a
+weekday directive) is present, because `strptime` raises a pairing
+error otherwise. When `%s` is present the result carries a
+`determinism_notes` entry about its local-timezone dependence on
+BSD/macOS.
+
+`probe` is the live-platform oracle: it renders each directive and
+the whole format through the runtime's real `datetime.strftime`,
+against the fixed reference datetime or a caller-supplied ISO
+datetime. Results are by construction platform-dependent — that is
+their purpose (macOS, for example, renders `%^a` literally and
+`%:z` as `':z'`, while glibc supports both).
+
+`roundtrip_check` computes for real whether
+`datetime.strptime(datetime.strftime(REFERENCE, fmt), fmt)` recovers
+a datetime, returning `possible`, `recovered_iso`, `loss_fields`
+(the year/month/day/hour/minute/second/microsecond/utcoffset fields
+the format fails to carry back — a `%S`-only format loses every
+field except the second, including microseconds) and `pitfalls`
+observed honestly: `%Z` parses but yields a naive datetime (the
+offset is lost), `%j` without a year defaults to 1900 — a non-leap
+year, so the recovered date is wrong rather than merely partial —
+`%U`/`%W` are ignored for date computation unless a year and a
+weekday are also specified, flag/width forms render on glibc but
+are rejected by `strptime`, `%s` rendering is local-timezone
+dependent on BSD/macOS, a directive appearing twice (except `%%`)
+breaks CPython `strptime`'s regex with `re.error` ("redefinition
+of group name"), and an empty format "round-trips" only to the
+1900-01-01 defaults.
+
+Inputs are validated strictly before any computation: unknown mode,
+non-string format, a format over 4,000 characters, a `dt` argument
+outside probe mode, or a malformed (non-ISO, over 64 characters,
+wrong type) datetime string raise a `ValueError`. All computations
+are deterministic for a given platform and input; the test suite
+re-verifies the directive knowledge base against real
+`strftime`/`strptime` behavior on 200 seeded format strings.
