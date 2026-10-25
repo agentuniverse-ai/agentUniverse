@@ -317,3 +317,25 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [OutlineExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/outline_extractor.yaml)
+
+This component captures a document's heading hierarchy into metadata, addressing the *knowledge extraction* direction of issue #258. Long documents are navigated through their headings — a table of contents, a chapter/section tree, filter facets — yet that structure is exactly the information a plain-text chunk loses first. Downstream components (splitters that cut at headings, retrievers that boost section titles, UIs that render an outline) all need it. Before splitting, this processor scans each document and stamps `metadata['outline']` with one entry per heading in document order, each carrying `level` (normalized 1-based depth), `text` (title with markers stripped), `span` (`[start, end)` character offsets into the document text, so `doc.text[start:end]` is always the title itself) and `number` (the marker such as `1.1`, `一、` or `第二章`; null for unnumbered Markdown headings), plus the fixed companions `metadata['section_count']` and `metadata['max_depth']` for quick filtering.
+
+Recognized formats: Markdown ATX (`#`..`######`, level = hash count, closing hash runs stripped), Markdown setext (`===` → level 1, `---` → level 2; a blank line or document start above the underline prevents the match, so thematic breaks and front-matter delimiters never become headings), Arabic numbered sections (`1.`, `1.1`, `1.1.1`, trailing dot optional, level = dot depth) and CJK numbered sections (`一、`, `（一）` with halfwidth parens accepted, `第一章`/`第12章` — a bare chapter marker is still a heading whose text is the marker itself). CJK markers carry no inherent depth, so the k-th distinct marker form in document order receives level k. Mixed documents keep each heading's own rule. To keep prose out of the outline, unmarked numbered/CJK candidates must be at most 120 characters and must not end with terminal punctuation (`。．.，,；;：:`) — guards ATX/setext lines do not need. Heading detection never fires inside fenced code blocks (``` or ~~~, closing fences honored by character and length), so headings quoted in examples survive untouched. The scan is a single deterministic offline pass; text, id and all pre-existing metadata are preserved and the metadata mapping is copied before mutation.
+
+Stamping rules: a document with at least one heading gets the outline once it reaches `min_headings`; a document with some headings but fewer than `min_headings` is left untouched; a document with no headings at all always gets an empty outline (`section_count` 0, `max_depth` 0) plus a note under `metadata['outline_note']`, so "processed, no structure" is distinguishable from "not yet processed".
+
+The component definition file is as follows:
+```yaml
+name: 'outline_extractor'
+description: 'capture the heading hierarchy (ATX, setext, numbered, CJK numbered) of each document into metadata for navigation and filtering'
+min_headings: 1               # minimum headings to stamp the outline
+outline_key: 'outline'        # metadata key for the outline; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.outline_extractor'
+  class: 'OutlineExtractor'
+```
+- min_headings: Minimum number of headings a document must contain for the outline to be stamped; must be >= 1. Documents with 1..min-1 headings are skipped entirely, while 0-heading documents always receive the empty outline and note.
+- outline_key: Metadata key the outline list is written to; the companion keys `section_count` and `max_depth` are fixed, and the note lands under `<outline_key>_note`. An empty value disables all stamping.

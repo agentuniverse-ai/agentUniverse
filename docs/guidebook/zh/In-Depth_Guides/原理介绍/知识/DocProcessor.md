@@ -315,3 +315,25 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [OutlineExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/outline_extractor.yaml)
+
+该组件把文档的标题层级捕获进 metadata，对应 issue #258 的*知识抽取*方向。长文档靠标题导航——目录、章节树、过滤切面——而这恰恰是纯文本切块时最先丢失的结构信息；按标题切分的切分器、对章节标题加权的检索器、渲染大纲的界面，下游都需要它。该组件在切分前逐篇扫描文档，把标题骨架写入 `metadata['outline']`：每个标题一条、按文档顺序排列，字段包括 `level`（归一化的 1 起始深度）、`text`（去掉标记的标题文字）、`span`（相对文档文本的 `[start, end)` 字符偏移，因此 `doc.text[start:end]` 恒等于标题本身）和 `number`（如 `1.1`、`一、`、`第二章` 的节标记，无编号的 Markdown 标题为 null），另加固定的伴生键 `metadata['section_count']` 与 `metadata['max_depth']` 便于快速过滤。
+
+识别的格式：Markdown ATX（`#`..`######`，级别 = 井号数，行尾井号串会被剥离）；Markdown setext（`===` → 级别 1，`---` → 级别 2；下划线上方是空行或文档开头则不匹配，因此分隔线与 front matter 定界符不会变成标题）；阿拉伯数字编号节（`1.`、`1.1`、`1.1.1`，尾点可有可无，级别 = 点深度）；中文编号节（`一、`；`（一）`，兼容半角括号；`第一章`/`第12章`——光秃秃的章标记也是标题，其文字即标记本身）。中文标记本身不带深度，第 k 个首次出现的标记形态获得级别 k。混合文档中每类标题各用各的规则，互不干扰。为避免把正文误认成标题，无显式标记的编号/中文候选行长度不得超过 120 个字符、不得以终止标点（`。．.，,；;：:`）结尾——ATX/setext 行因标记明确而豁免这些守卫。围栏代码块（``` 或 ~~~，按字符与长度匹配闭合围栏）内部的标题检测一律不触发，示例中引用的标题安然无恙。整个扫描是单趟、确定性的离线过程；text、id 与既有 metadata 全部保留，metadata 映射写入前先复制。
+
+写入规则：文档至少有一个标题且数量达到 `min_headings` 才写入大纲；标题数量不足 `min_headings`（但非零）的文档完全不动；完全没有标题的文档总是写入空大纲（`section_count` 为 0、`max_depth` 为 0）并在 `metadata['outline_note']` 下附带说明，使"已处理、无结构"区别于"尚未处理"。
+
+组件定义文件如下：
+```yaml
+name: 'outline_extractor'
+description: 'capture the heading hierarchy (ATX, setext, numbered, CJK numbered) of each document into metadata for navigation and filtering'
+min_headings: 1               # 写入大纲所需的最少标题数
+outline_key: 'outline'        # 大纲写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.outline_extractor'
+  class: 'OutlineExtractor'
+```
+- min_headings：文档至少包含多少个标题才写入大纲，必须 >= 1。只有 1..min-1 个标题的文档被完全跳过，而 0 标题的文档总是获得空大纲与说明。
+- outline_key：大纲列表写入的 metadata 键；伴生键 `section_count` 与 `max_depth` 固定不变，说明写入 `<outline_key>_note`。为空则完全不写入。
