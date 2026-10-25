@@ -1,0 +1,29 @@
+name: character_set_analyzer_tool
+description: "Character set analyzer tool — pure Python stdlib, no network required. Profiles which characters a string is made of: mode='blocks' counts characters per Unicode block via a compact 34-block range table (unknown and astral characters fall into an 'Other' bucket), mode='categories' counts unicodedata general categories (Ll, Lu, Lo, Nd, punctuation, symbols, Zs, Cc, ...) with human labels and one-letter group subtotals, and mode='summary' returns ascii_only / latin1_only flags, distinct character count, top-5 most frequent characters, a category-So has_emoji heuristic flag and the control-character count."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.character_set_analyzer_tool
+  class: CharacterSetAnalyzerTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Analysis mode — blocks (per-Unicode-block census), categories (per-general-category census) or summary (quick fingerprint flags).
+    required: true
+  text:
+    type: string
+    description: The text to profile. Required for every mode — a non-empty string of at most 100,000 characters.
+    required: true
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["blocks", "categories", "summary"]
+      description: Analysis mode (lowercase only).
+    text:
+      type: string
+      description: Text to profile (non-empty, at most 100,000 characters).
+  required: ["mode", "text"]
