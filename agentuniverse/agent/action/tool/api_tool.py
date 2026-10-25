@@ -196,8 +196,6 @@ class APITool(Tool):
                 body = json.dumps(body)
             elif headers['Content-Type'] == 'application/x-www-form-urlencoded':
                 body = urlencode(body)
-            else:
-                body = body
         if method in ('get', 'head', 'post', 'put', 'delete', 'patch'):
             response = getattr(ssrf_proxy, method)(url, params=params, headers=headers, data=body,
                                                    follow_redirects=True)
