@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 
 class WorkflowDTO(BaseModel):
+    """DTO model describing a workflow.
+    """
     id: Optional[str] = Field(description="ID", default=None)
     name: Optional[str] = Field(description="workflow name", default="")
     description: Optional[str] = Field(description="workflow description", default="")
