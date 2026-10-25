@@ -1,6 +1,6 @@
 name: 'default_claude_llm'
 description: 'default claude llm with spi'
-model_name: 'claude-3-opus-20240229'
+model_name: 'claude-sonnet-4-6'
 max_tokens: 4096
 api_key: '${ANTHROPIC_API_KEY}'
 api_base: 'https://api.anthropic.com/v1'
