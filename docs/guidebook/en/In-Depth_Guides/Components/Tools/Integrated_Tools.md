@@ -649,3 +649,76 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## MAC Address Tool
+
+`MacAddressTool` analyzes link-layer identifiers — MAC / EUI-48 /
+EUI-64 addresses — purely with the Python standard library and zero
+network access. This is the Ethernet/Wi-Fi/Bluetooth address
+namespace, complementary to IP network math (`CidrCalculatorTool`)
+and logical UUID identifiers (`UuidTool`).
+
+`parse` mode strictly validates one address in any of six notations,
+case-insensitive — colon `aa:bb:cc:dd:ee:ff`, hyphen
+`aa-bb-cc-dd-ee-ff`, Cisco dotted `aabb.ccdd.eeff`, bare
+`aabbccddeeff`, `0x`-prefixed, and the rare dotted-pairs
+`aa.bb.cc.dd.ee.ff` — returning the canonical separator-free bytes,
+the detected notation with groups, the canonical forms of every
+notation, an informational EUI-64 encapsulation (IEEE `FF-FF` marker
+or the IPv6 `FF-FE` convention, selected by `eui64_marker`), and bit
+semantics: the I/G (multicast) and U/L (locally administered) bits of
+the first octet, broadcast/zero detection, and the OUI/NIC split.
+Invalid inputs get precise findings — non-hex characters with their
+1-based position (fullwidth/Unicode digits are rejected), wrong group
+count per notation, wrong group lengths, wrong total length (e.g. 11
+or 13 bare hex digits), and mixed separators with the deviating
+position. `lookup` mode maps the first three octets to an
+organization using an embedded curated table of 145 MA-L assignments
+copied verbatim from the public IEEE registry at authoring time
+(Xerox, Cisco, Apple, Intel, Huawei, Samsung, DEC, 3Com, IBM,
+Realtek, Broadcom, ...), plus the IANA multicast mapping blocks
+01-00-5E-00-00-00/24 and 33-33-00-00-00-00/16; misses report
+`unknown_oui` (never a negative vendor claim), registry `Private`
+blocks and the ex-IAB base 00-50-C2 are flagged, and a set U/L bit
+yields an informational finding that the prefix may be randomized.
+`derive` mode computes EUI-64 encapsulations (`eui64_fffe` /
+`eui64_ffff`) and the full RFC 4291 IPv6 link-local address
+(`ipv6_link_local`: insert FF-FE, invert the U/L bit, prepend
+`fe80::/10`, compress via `ipaddress`), each with step-by-step
+explanations and an inverse check; `mac_from_ipv6` reverses a
+link-local address back to its EUI-48 after validating the FF-FE
+marker — privacy/random interface identifiers (RFC 7217 semantics)
+are rejected with a structured error. `compare` mode relates two
+addresses: identical (possibly different notations), differs in the
+NIC part only (same vendor line), differs exactly by the
+local-administration bit (possibly the same hardware re-notated),
+same vendor family via different OUI blocks, or unrelated.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.mac_address_tool import MacAddressTool
+
+tool = MacAddressTool()
+report = tool.execute(mode="parse", address="AABB.CCDD.EEFF")
+# {'mode': 'parse', 'valid': True, 'bytes_hex': 'aabbccddeeff',
+#  'notation_detected': 'cisco_dotted', 'bit_semantics': {...},
+#  'eui64_hex': 'aabbccffffddeeff', ...}
+vendor = tool.execute(mode="lookup", address="00:00:0c:11:22:33")
+# {'organization': 'Cisco Systems, Inc', 'oui_prefix': '00-00-0c', ...}
+ll = tool.execute(mode="derive", address="00:11:22:33:44:55",
+                  derivation="ipv6_link_local")
+# {'link_local': 'fe80::211:22ff:fe33:4455', 'steps': [...],
+#  'inverse_check': {'performed': True, 'matches': True}, ...}
+mac = tool.execute(mode="derive", address="fe80::211:22ff:fe33:4455",
+                   derivation="mac_from_ipv6")
+# {'eui48_canonical': '00:11:22:33:44:55', ...}
+```
+
+All parameters are validated before any computation — unknown mode,
+wrong types, missing or oversized inputs (address strings are capped
+at 64 characters) raise `ValueError`. Content-level failures
+(unparseable address, non-link-local IPv6, missing FF-FE marker)
+return structured `error` payloads instead of raising. The OUI table
+is an embedded static snapshot of the IEEE MA-L registry (retrieved
+2026-10-21); 28-bit MA-S (ex-IAB) and 36-bit MA-M assignments are
+out of its 24-bit scope and resolve to `unknown_oui`. All results are
+deterministic; the tool never accesses the network.
