@@ -1,0 +1,14 @@
+name: 'default_llamacpp_llm'
+description: 'default llama.cpp llama-server llm powered by locally served GGUF models'
+model_name: 'qwen2.5-7b-instruct'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+max_context_length: 32768
+api_key: '${LLAMACPP_API_KEY}'
+api_base: '${LLAMACPP_API_BASE}'
+proxy: '${LLAMACPP_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.llamacpp_llm'
+  class: 'LlamaCppLLM'
