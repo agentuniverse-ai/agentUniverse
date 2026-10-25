@@ -13,6 +13,8 @@ from agentuniverse_product.service.model.tool_dto import ToolDTO
 
 
 class PluginDTO(BaseModel):
+    """DTO model describing a plugin.
+    """
     id: str = Field(description="ID")
     nickname: Optional[str] = Field(description="plugin nickname", default="")
     avatar: Optional[str] = Field(description="plugin avatar path", default="")
