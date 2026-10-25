@@ -127,6 +127,70 @@ class DepsDevPackageToolTest(unittest.TestCase):
         self.assertIn("agentUniverse", request.kwargs["headers"]["User-Agent"])
 
     @patch("agentuniverse.agent.action.tool.common_tool.deps_dev_package_tool.requests.get")
+    def test_malformed_link_preserves_other_version_metadata(self, mock_get: Mock) -> None:
+        data = copy.deepcopy(VERSION_RESPONSE)
+        data["links"].insert(0, {"label": "BROKEN", "url": "https://[broken"})
+        mock_get.return_value = response_mock(json_data=data)
+
+        result = self.tool.execute(name="@colors/colors", system="NPM", version="1.5.0")
+
+        self.assertNotIn("error", result)
+        info = result["version_info"]
+        self.assertEqual(info["package"]["name"], "@colors/colors")
+        self.assertEqual(info["licenses"], ["MIT"])
+        self.assertEqual(
+            info["links"],
+            [{"label": "SOURCE_REPO", "label_truncated": False, "url": "https://github.com/Marak/colors.js"}],
+        )
+        self.assertEqual(info["link_count"], 3)
+        self.assertTrue(info["links_truncated"])
+
+    @patch("agentuniverse.agent.action.tool.common_tool.deps_dev_package_tool.requests.get")
+    def test_malformed_optional_urls_preserve_provenance_and_registry_metadata(self, mock_get: Mock) -> None:
+        for url in ("https://[broken", "https://[not-an-ip]/", "https://example.com\uff0fpath"):
+            with self.subTest(url=url):
+                data = copy.deepcopy(VERSION_RESPONSE)
+                data["slsaProvenances"][0]["url"] = url
+                data["attestations"][0]["type"] = url
+                data["attestations"][0]["url"] = url
+                data["registries"].insert(0, url)
+                mock_get.return_value = response_mock(json_data=data)
+
+                result = self.tool.execute(name="@colors/colors", system="NPM", version="1.5.0")
+
+                self.assertNotIn("error", result)
+                info = result["version_info"]
+                self.assertEqual(info["licenses"], ["MIT"])
+                for field in ("slsa_provenances", "attestations"):
+                    self.assertEqual(info[field][0]["url"], "")
+                    self.assertEqual(info[field][0]["commit"], "abc123")
+                    self.assertTrue(info[field][0]["verified"])
+                self.assertEqual(info["attestations"][0]["type"], "")
+                self.assertEqual(info["registries"], ["https://registry.npmjs.org"])
+                self.assertEqual(info["registry_count"], 3)
+                self.assertTrue(info["registries_truncated"])
+
+    @patch("agentuniverse.agent.action.tool.common_tool.deps_dev_package_tool.requests.get")
+    def test_valid_metadata_urls_are_preserved_verbatim(self, mock_get: Mock) -> None:
+        urls = [
+            "http://example.org/docs",
+            "https://[2001:db8::1]/package",
+            "HTTPS://example.org/docs",
+            "https://example.org:443/p?q=a%2Fb#fragment",
+        ]
+        data = copy.deepcopy(VERSION_RESPONSE)
+        data["links"] = [{"label": "WEB", "url": url} for url in urls]
+        mock_get.return_value = response_mock(json_data=data)
+
+        result = self.tool.execute(name="@colors/colors", system="NPM", version="1.5.0")
+
+        self.assertNotIn("error", result)
+        info = result["version_info"]
+        self.assertEqual([link["url"] for link in info["links"]], urls)
+        self.assertEqual(info["link_count"], len(urls))
+        self.assertFalse(info["links_truncated"])
+
+    @patch("agentuniverse.agent.action.tool.common_tool.deps_dev_package_tool.requests.get")
     def test_dependency_mode_preserves_indices_and_omits_dangling_edges(self, mock_get: Mock) -> None:
         mock_get.return_value = response_mock(json_data=DEPENDENCY_RESPONSE)
 
