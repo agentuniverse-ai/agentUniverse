@@ -1,0 +1,56 @@
+name: cli_schema_tool
+description: "CLI schema tool — validate an argv list against a declared command schema and generate usage text, pure Python stdlib, no network, no execution. mode='check' matches argv[1:] against the schema's flags (--flag value and --flag=value forms, short aliases without bundle expansion, -- terminator into _args, repeated/multiple flags, negative-number edge) and returns parsed values, missing/unknown/type-mismatch reports and a passed verdict; mode='usage' renders the one-line usage string plus per-argument help and epilog; mode='suggested_schema' infers a merged schema from sample invocations (the bootstrap mode, round-trip safe). Complements CommandArgLexerTool (tokenize) and ContextEscapeTool (quote) — this is the contract layer: what arguments does the command ACCEPT."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.cli_schema_tool
+  class: CliSchemaTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — check, usage or suggested_schema.
+    required: true
+  argv:
+    type: array
+    items:
+      type: string
+    description: The full argument vector including the program as argv[0]. Required for the check mode; argv[0] must match the schema program exactly or by basename.
+    required: false
+  schema:
+    type: object
+    description: "The declared command schema (program, arguments as a list of {name, kind flag|positional, type string|int|float|bool|path, required, default, choices, has_value, alias, multiple, help}, epilog). Required for the check and usage modes."
+    required: false
+  samples:
+    type: array
+    items:
+      type: array
+      items:
+        type: string
+    description: Sample argv invocations (program included) to infer a merged schema from. Required for the suggested_schema mode.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["check", "usage", "suggested_schema"]
+      description: Operation mode.
+    argv:
+      type: array
+      items:
+        type: string
+      description: Argument vector including the program (check mode).
+    schema:
+      type: object
+      description: Declared command schema (check and usage modes).
+    samples:
+      type: array
+      items:
+        type: array
+        items:
+          type: string
+        description: One sample invocation.
+      description: Sample invocations (suggested_schema mode).
+  required: ["mode"]
