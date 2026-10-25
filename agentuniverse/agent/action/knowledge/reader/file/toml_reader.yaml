@@ -1,0 +1,6 @@
+name: 'default_toml_reader'
+description: 'default TOML reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.toml_reader'
+  class: 'TomlReader'
