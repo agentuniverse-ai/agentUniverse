@@ -1,0 +1,32 @@
+name: citation_verifier_tool
+description: Verify exact quoted spans against supplied source snapshots, not factual truth.
+tool_type: api
+input_keys: [sources, citations]
+max_source_chars: 2000000
+max_sources: 100
+max_citations: 200
+max_quote_chars: 10000
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.citation_verifier_tool
+  class: CitationVerifierTool
+args_model_schema:
+  type: object
+  properties:
+    sources:
+      type: object
+      additionalProperties: {type: string}
+    citations:
+      type: array
+      items:
+        type: object
+        properties:
+          source_id: {type: string}
+          start: {type: integer, minimum: 0}
+          end: {type: integer, minimum: 1}
+          quote: {type: string}
+          source_sha256: {type: string}
+        required: [source_id, start, end, quote]
+        additionalProperties: false
+  required: [sources, citations]
+  additionalProperties: false
