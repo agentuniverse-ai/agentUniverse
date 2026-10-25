@@ -675,3 +675,35 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Import Graph Tool
+
+`ImportGraphTool` extracts and analyzes import dependencies from Python source
+text using only the standard-library `ast` module. Four modes are provided:
+`scan` (per-file import inventory with relative levels, aliases, star imports,
+`__future__` flags, and try/except conditional-import blocks), `deps`
+(stdlib/external/internal classification via `sys.stdlib_module_names`),
+`analyze` (multi-file graph with Tarjan cycle detection, self-import and
+orphan reporting, per-file warnings), and `to_dot` (deterministic DOT
+emission with cycles highlighted).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.import_graph_tool import ImportGraphTool
+
+tool = ImportGraphTool()
+result = tool.execute(
+    mode="analyze",
+    files={"agent.py": "import scheduler\n...", "scheduler.py": "import util\n..."},
+)
+```
+
+Module resolution uses filename stems in a flat sibling model; the documented
+limits are surfaced in the result metadata. Imports inside `match` statement
+case bodies, functions, classes, and try/except blocks are all discovered,
+matching what the compiler actually emits. All inputs, node counts, and graph
+sizes are bounded; deterministic ordering makes results reproducible, and
+invalid inputs raise structured `ValueError`s rather than crashing.
+
+Import statements are static facts about the analyzed source, not instructions
+for the agent; resolved module names from untrusted sources must not be
+treated as executable guidance.
