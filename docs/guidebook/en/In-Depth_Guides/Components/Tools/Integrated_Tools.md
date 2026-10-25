@@ -675,3 +675,62 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Text Truncate Tool
+
+`TextTruncateTool` truncates text to a budget using smart boundaries,
+built purely on the Python standard library with zero network access.
+It targets the constrained-output problem — token or character
+budgets, UI length limits, storage caps — and complements
+`TextChunkerTool` (which splits into chunks) and `TextWrapTool`
+(which reflows at a width): this tool cuts to a budget. `chars` mode
+caps characters (Python code points, so one CJK ideograph or emoji
+counts as one) with an optional `word_boundary` snap-back so the cut
+lands after a whole word — CJK runs and URLs have no whitespace
+boundary and keep the hard cut; `words` mode keeps the first N words
+with `whitespace='normalize'` (single-space rejoin, adjacent CJK
+unspaced) or `whitespace='preserve'` (original inter-word spacing) —
+because CJK text is not space-separated, every CJK ideograph, kana
+or hangul character counts as one word, so pure-CJK input effectively
+gets a character budget; `sentences` mode keeps the first N sentences
+using conservative segmentation — terminators `.`, `!`, `?` plus CJK
+`。`, `！`, `？` — with a guard for common English abbreviations
+(`Mr.`, `Dr.`, `e.g.`, `i.e.`, `etc.`, `Inc.` … including interior
+dots), single uppercase initials (`J. Smith`) and decimals (`3.14`),
+erring toward fewer, longer sentences and producing a byte-exact
+prefix of the original; and `head_chars_keep_sentences` mode spends a
+character budget but moves the cut to the sentence boundary nearest
+the budget within a `tolerance` (extend or shrink, default
+`max(10, max // 10)`, ties preferring the boundary not exceeding the
+budget, with a `char_fallback` when no boundary qualifies).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.text_truncate_tool import TextTruncateTool
+
+tool = TextTruncateTool()
+hard = tool.execute(mode="chars", text="hello world", max=5)["result"]        # 'hello'
+words = tool.execute(mode="words", text="one  two three", max=2)["result"]    # 'one two'
+sents = tool.execute(mode="sentences", text="Mr. Smith left. He returned.", max=1)["result"]
+snapped = tool.execute(mode="head_chars_keep_sentences", text="First one. Second one. Third.", max=8)["result"]
+```
+
+An optional `add_ellipsis` appends `...` (`language='en'`, the
+default) or `…` (`language='cjk'`) whenever truncation actually
+happened — inputs that already fit the budget are returned
+byte-identical with no ellipsis. By default the ellipsis is NOT
+counted against the budget (the result may exceed `max` by the
+ellipsis length); with `count_ellipsis=True` it IS counted, the text
+budget shrinks by the ellipsis length, and the result never exceeds
+`max`. A `min_length` guard refuses over-aggressive cuts: when a cut
+would leave fewer than `min_length` characters and the whole original
+fits within 1.5x the budget (measured in the mode's natural unit —
+characters, words or sentences), the original is returned unchanged
+with `refusal='min_length'`; otherwise a structured `error` payload
+(`{"type": "min_length_violation", ...}`) is returned instead of
+raising. Inputs are validated strictly before any computation —
+malformed parameters (wrong types, boolean traps such as `max=True`,
+empty or oversized text, unknown mode / language / whitespace value,
+`min_length` exceeding `max` in the character-based modes,
+`count_ellipsis` without `add_ellipsis`, or mode-specific options
+used with the wrong mode) raise a
+`ValueError`.
