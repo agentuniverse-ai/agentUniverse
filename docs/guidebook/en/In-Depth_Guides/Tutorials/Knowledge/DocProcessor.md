@@ -317,3 +317,35 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [TopicSentenceExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/topic_sentence_extractor.yaml)
+
+This component extracts each paragraph's topic sentence into document metadata, addressing the *knowledge extraction* direction of issue #258. Retrieval front-ends rarely have room to show a whole chunk: result lists, hover previews and prompt-budget pipelines all want one representative sentence per paragraph — the extractive skeleton of the document. The component walks every document, splits it into paragraphs (the exact same rule as the paragraph stats profiler: maximal runs of non-blank lines, trimmed) and sentences (`.!?` plus `。！？` terminals with conservative guards — abbreviations like "Dr.", single-letter initials like "J. K." and decimals like "3.14" do not split; an ellipsis splits only at its final dot), and picks every paragraph's best sentence with a classic weighted-cue heuristic. It is deterministic, offline and dependency-free — the cheap structural counterpart to a summarizer, which produces a global abstract with a model instead of per-paragraph anchors without one.
+
+Each sentence's score is the weighted sum of five cues: first sentence +2.0 and last sentence +0.5 (the classic extractive position bias; a lone sentence is both and earns both), length band +1.0 for sentences of 40–120 characters and −1.0 above 250 (rambling), signpost opener +1.5 (This / These / Here we / In this, case-insensitive, or 本文 / 本节), and definitional copula +0.5 ("is a" / "are" anywhere, case-insensitive, or 是指). The highest score wins and ties go to the earliest sentence, so the result is a pure function of the text. Findings land in `metadata['topic_sentences']` — at most 50 entries of `{"paragraph_index", "sentence_index", "text", "span", "score"}`, where `paragraph_index` indexes the document's full paragraph list (paragraphs under `min_paragraph_chars`, default 20, are skipped and leave a gap) and `span` is a `{"start", "end"}` pair of character offsets into the document text with `text[start:end]` reproducing the sentence — while `metadata['topic_count']` always carries the uncapped total. With `doc_skeleton: true` the component additionally stamps `metadata['skeleton']`: the capped topic sentences joined with `" … "`, a ready-to-render preview string. Documents are never dropped, reordered or edited, and metadata mappings are copied before mutation. The component complements its siblings: the paragraph stats profiler measures paragraph structure, the sentence position tagger labels every sentence's role, and the summarizer tool compresses a whole text with a model — this one picks one anchor sentence per paragraph, per-paragraph by construction and model-free by design.
+
+The component definition file is as follows:
+```yaml
+name: 'topic_sentence_extractor'
+description: "extract each paragraph's topic sentence into document metadata for extractive skeleton previews"
+min_paragraph_chars: 20        # minimum trimmed paragraph length to analyse
+first_bonus: 2.0               # first-sentence position bonus
+last_bonus: 0.5                # last-sentence position bonus
+length_band_bonus: 1.0         # bonus for 40-120 char sentences
+rambling_penalty: 1.0          # penalty (subtracted) above 250 chars
+signpost_bonus: 1.5            # This/These/Here we/In this/本文/本节 opener bonus
+copula_bonus: 0.5              # "is a"/"are"/是指 copula bonus
+doc_skeleton: false            # also stamp metadata['skeleton'] joined by " … "
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.topic_sentence_extractor'
+  class: 'TopicSentenceExtractor'
+```
+- min_paragraph_chars: Minimum trimmed character length for a paragraph to be analysed; integer >= 0, default 20. Shorter paragraphs are skipped entirely.
+- first_bonus: Score bonus for a paragraph's first sentence; numeric >= 0, default 2.0.
+- last_bonus: Score bonus for a paragraph's last sentence; numeric >= 0, default 0.5.
+- length_band_bonus: Score bonus for sentences of 40–120 characters (length counts the trimmed sentence, terminal punctuation included); numeric >= 0, default 1.0.
+- rambling_penalty: Score penalty, subtracted, for sentences longer than 250 characters; numeric >= 0, default 1.0.
+- signpost_bonus: Score bonus for signpost openers — This / These / Here we / In this (case-insensitive) and 本文 / 本节; numeric >= 0, default 1.5.
+- copula_bonus: Score bonus for a definitional copula pattern anywhere in the sentence — "is a" / "are" (case-insensitive) and 是指; numeric >= 0, default 0.5.
+- doc_skeleton: When true, also stamp `metadata['skeleton']` — the (capped) topic sentences joined with `" … "` — as a preview string; default false.

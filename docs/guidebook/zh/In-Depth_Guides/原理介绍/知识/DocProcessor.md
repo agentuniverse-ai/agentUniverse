@@ -315,3 +315,35 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [TopicSentenceExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/topic_sentence_extractor.yaml)
+
+该组件把每个段落的主题句抽取进文档 metadata，对应 issue #258 的*知识抽取*方向。检索前端很少有空位展示整段文本：结果列表、悬浮预览与受预算约束的提示词拼装都需要"每段一句"的代表句——文档的抽取式骨架。组件逐篇文档处理：先按与段落统计剖析器完全相同的规则切分段落（连续非空行的极大区间，首尾去空白），再切分句子（`.!?` 与 `。！？` 终止符加保守守卫——"Dr." 这类缩写、"J. K." 这类单字母首字母缩写、"3.14" 这类小数都不切分；省略号只在最后一个句点切分），然后用经典加权线索启发式为每段挑出最佳句子。全程确定性、离线、零依赖——是摘要器的廉价结构化对照：摘要器用模型产出全局摘要，本组件不依赖任何模型、按段落给出锚点句。
+
+每个句子的得分是五类线索的加权和：首句 +2.0、末句 +0.5（经典抽取式位置偏置；单句段落既为首句亦为末句，两项都加），长度带 +1.0（40–120 字符）与 −1.0（超过 250 字符的冗长句），信号词开头 +1.5（This / These / Here we / In this，大小写不敏感，或 本文 / 本节），定义系词 +0.5（句中出现 "is a" / "are"，大小写不敏感，或 是指）。得分最高者胜出，并列取最早的句子，因此结果是文本的纯函数。结果写入 `metadata['topic_sentences']`——最多 50 条 `{"paragraph_index", "sentence_index", "text", "span", "score"}`，其中 `paragraph_index` 按文档完整段落列表编号（低于 `min_paragraph_chars`，默认 20，的段落被跳过并留下编号空缺），`span` 为指向文档文本的 `{"start", "end"}` 字符区间且 `text[start:end]` 与句子精确一致；`metadata['topic_count']` 始终记录未截断的总数。开启 `doc_skeleton: true` 时还会写入 `metadata['skeleton']`：截断后的主题句以 `" … "` 连接，即开即用的预览字符串。文档绝不会被丢弃、重排或改写，metadata 写入前先复制映射。该组件与同族组件互补：段落统计剖析器度量段落结构，句子位置标注器为每个句子标注角色，摘要器工具用模型压缩全文——本组件按段落选锚点句，天然按段、刻意免模型。
+
+组件定义文件如下：
+```yaml
+name: 'topic_sentence_extractor'
+description: "extract each paragraph's topic sentence into document metadata for extractive skeleton previews"
+min_paragraph_chars: 20        # 参与分析的最小段长（去空白后字符数）
+first_bonus: 2.0               # 首句位置加分
+last_bonus: 0.5                # 末句位置加分
+length_band_bonus: 1.0         # 40-120 字符句加分
+rambling_penalty: 1.0          # 超过 250 字符的冗长句扣分
+signpost_bonus: 1.5            # This/These/Here we/In this/本文/本节 开头加分
+copula_bonus: 0.5              # "is a"/"are"/是指 系词加分
+doc_skeleton: false            # 同时写入以 " … " 连接的 metadata['skeleton']
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.topic_sentence_extractor'
+  class: 'TopicSentenceExtractor'
+```
+- min_paragraph_chars：参与分析的段落最小长度（去空白后字符数），整数 >= 0，默认 20。更短的段落整体跳过。
+- first_bonus：段落首句的加分，数值 >= 0，默认 2.0。
+- last_bonus：段落末句的加分，数值 >= 0，默认 0.5。
+- length_band_bonus：40–120 字符句子的加分（长度按去空白后的句子计，含句末标点），数值 >= 0，默认 1.0。
+- rambling_penalty：超过 250 字符句子的扣分（做减法），数值 >= 0，默认 1.0。
+- signpost_bonus：信号词开头的加分——This / These / Here we / In this（大小写不敏感）与 本文 / 本节，数值 >= 0，默认 1.5。
+- copula_bonus：句中出现定义系词模式的加分——"is a" / "are"（大小写不敏感）与 是指，数值 >= 0，默认 0.5。
+- doc_skeleton：为真时额外写入 `metadata['skeleton']`——（截断后的）主题句以 `" … "` 连接的预览字符串；默认 false。
