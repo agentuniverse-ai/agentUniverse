@@ -29,6 +29,11 @@ class HierarchicalRegexTextSplitter(DocProcessor):
     Each heading chunk receives an independent deep copy of its source
     document's metadata. Generated hierarchy fields override source fields
     with the same names.
+
+    Nonblank text before the first matching heading is retained as an
+    unsummarized level-0 chunk with parent ``root`` and empty heading info.
+    This also preserves documents containing no matching headings. Whitespace
+    follows the same line-stripping rules as heading chunks.
     """
     merge_first: bool = False
     hierarchical_index: List[dict] = [
@@ -107,8 +112,19 @@ class HierarchicalRegexTextSplitter(DocProcessor):
             while _inserted_id != 'root':
                 hierarchy[_inserted_id].text += "\n" + line
                 _inserted_id = hierarchy[_inserted_id].metadata['hierarchical_parent']
-        hierarchy.pop("root")
+        preamble = hierarchy.pop("root")
         hierarchical_docs = []
+        if preamble.text.strip():
+            hierarchical_docs.append(Document(
+                id=str(uuid.uuid4()),
+                text=preamble.text.strip(),
+                metadata={
+                    **deepcopy(doc.metadata or {}),
+                    'hierarchical_parent': 'root',
+                    'hierarchical_info': '',
+                    'hierarchical_level': 0,
+                }
+            ))
 
         # summary the text if docs hierarchical_level need summary
         for k, v in hierarchy.items():
