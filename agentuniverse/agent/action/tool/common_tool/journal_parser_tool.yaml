@@ -1,0 +1,64 @@
+name: journal_parser_tool
+description: Journal parser tool — pure Python stdlib, no network required. Splits dated journal/log/diary/meeting-notes text into structured entries at date-headed lines (ISO 2026-10-19, slash 2026/10/19, US 10/19/2026, CJK 2026年10月19日, weekday names, or Markdown '## 2026-10-19' headings). mode='parse' returns entries with parsed ISO date, raw date as written, title, line counts, text and next-entry gap days plus the preamble and tolerated look-alike lines; mode='summary' returns entry count, date range, mean/max gap days, per-entry line counts and out-of-order entries flagged; mode='filter' returns entries matching an inclusive start_date/end_date range and/or a substring (optional case_sensitive). Weekday headings resolve against the week of the most recent explicit-date entry, or forward from January 1 of an injectable reference_year.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.journal_parser_tool
+  class: JournalParserTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operating mode — parse, summary or filter. Required for every mode.
+    required: true
+  text:
+    type: string
+    description: The journal text to process (non-empty, at most 100,000 characters). Required for every mode.
+    required: false
+  reference_year:
+    type: integer
+    description: Optional anchor year for weekday headings that appear before any explicit-date entry; they resolve forward from January 1 of that year. Once an explicit date has been seen, weekday headings attach to that entry's Monday-based week instead.
+    required: false
+  start_date:
+    type: string
+    description: Filter mode only — inclusive lower ISO 'YYYY-MM-DD' bound on entry dates.
+    required: false
+  end_date:
+    type: string
+    description: Filter mode only — inclusive upper ISO 'YYYY-MM-DD' bound on entry dates.
+    required: false
+  substring:
+    type: string
+    description: Filter mode only — substring that must appear in the entry text; combined with the date range using AND when both are given.
+    required: false
+  case_sensitive:
+    type: boolean
+    description: Filter mode only — whether the substring match is case sensitive; defaults to false.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "summary", "filter"]
+      description: Operating mode.
+    text:
+      type: string
+      description: Journal text to parse / summarize / filter.
+    reference_year:
+      type: integer
+      description: Anchor year for weekday headings before the first explicit date.
+    start_date:
+      type: string
+      description: Inclusive lower ISO date bound (filter mode).
+    end_date:
+      type: string
+      description: Inclusive upper ISO date bound (filter mode).
+    substring:
+      type: string
+      description: Substring to search in entry text (filter mode).
+    case_sensitive:
+      type: boolean
+      description: Case-sensitive substring matching (filter mode).
+  required: ["mode"]
