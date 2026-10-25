@@ -1,0 +1,37 @@
+name: barcode_validator_tool
+description: "Barcode / product identifier validator — pure Python stdlib, no network required. Validates checksums for ISBN-10, ISBN-13, EAN-13, EAN-8 and UPC-A codes: validate mode auto-detects the type from the code shape (explicit code_type overrides) and returns a per-type verdict with the full checksum arithmetic (13-digit 978/979 codes are reported as both ISBN-13 and EAN-13); check_digit mode computes the correct check digit for a partial code; convert mode switches ISBN-10 to ISBN-13 (978 prefix + recomputed check digit) and back; info mode decodes an ISBN's 978/979 GS1 prefix and registration group (0/1 English, 2 French, 3 German, 4 Japan, 5 Russia, 7 China) from a small built-in indicative table. Hyphens and spaces in the code are tolerated and stripped."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.barcode_validator_tool
+  class: BarcodeValidatorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — validate, check_digit, convert or info.
+    required: true
+  code:
+    type: string
+    description: The identifier to work on. Hyphens and spaces are tolerated (stripped); a lowercase final 'x' is accepted for ISBN-10 and normalised to 'X'. Required for every mode.
+    required: false
+  code_type:
+    type: string
+    description: Optional explicit identifier type — isbn-10, isbn-13, ean-13, ean-8 or upc-a (case-insensitive, optional hyphens). Used by validate (skip auto-detection) and check_digit (pin the scheme); not accepted by convert or info.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["validate", "check_digit", "convert", "info"]
+      description: Operation mode.
+    code:
+      type: string
+      description: The identifier to validate / complete / convert / decode (hyphens and spaces are stripped).
+    code_type:
+      type: string
+      enum: ["isbn-10", "isbn-13", "ean-13", "ean-8", "upc-a"]
+      description: Explicit identifier type override (validate / check_digit modes).
+  required: ["mode"]

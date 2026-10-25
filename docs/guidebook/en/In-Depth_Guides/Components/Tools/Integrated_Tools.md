@@ -675,3 +675,54 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Barcode Validator Tool
+
+`BarcodeValidatorTool` is a barcode / product-identifier checksum tool
+built purely on the Python standard library with zero network access.
+It covers the five common one-dimensional retail and book identifier
+schemes — ISBN-10, ISBN-13, EAN-13, EAN-8 and UPC-A — through four
+modes: `validate` checks an identifier's checksum and auto-detects the
+type from the code's shape (10 characters → ISBN-10, 13 digits →
+ISBN-13/EAN-13, 12 digits → UPC-A, 8 digits → EAN-8; an explicit
+`code_type` overrides the detection), returning a verdict per
+interpretation with the full checksum arithmetic (digit * weight
+terms, weighted total and remainder); `check_digit` computes the
+correct check digit for a partial code (7/9/11/12 data digits, or a
+full code that is then compared against the provided digit);
+`convert` switches ISBN-10 to ISBN-13 (prefix 978 plus a recomputed
+mod-10 check digit) and back (recomputed mod-11 digit, possibly `X`);
+and `info` decodes an ISBN's GS1 prefix (978/979) and registration
+group (0/1 English, 2 French, 3 German, 4 Japan, 5 Russia, 7 China;
+979-0 music) from a small built-in indicative table.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.barcode_validator_tool import BarcodeValidatorTool
+
+tool = BarcodeValidatorTool()
+verdict = tool.execute(mode="validate", code="978-0-306-40615-7")["valid"]
+digit = tool.execute(mode="check_digit", code="978030640615")["check_digit"]
+isbn13 = tool.execute(mode="convert", code="0306406152")["result"]
+group = tool.execute(mode="info", code="9787111111111")["registration_group_meaning"]
+```
+
+Checksum rules are the standards: ISBN-10 uses mod 11 with weights 10
+down to 1 and a possible `X` (= 10) check digit; ISBN-13 / EAN-13 /
+EAN-8 / UPC-A use mod 10 with alternating 1,3 weights such that the
+whole code sums to a multiple of 10 (weights start at 1 from the left
+for 13-digit codes and at 3 for even-length UPC-A/EAN-8). Hyphens and
+spaces are tolerated everywhere and stripped first (a lowercase final
+`x` is accepted for ISBN-10). A 13-digit code starting with 978/979
+is ambiguous between ISBN-13 and EAN-13 — the tool reports *both*
+interpretations and the verdict is valid when either holds.
+Malformed parameters (unknown mode, non-string or oversized `code`,
+unknown `code_type`, `code_type` passed to `convert`/`info`) raise a
+`ValueError` before any computation. Content problems are never
+raised: `validate` reports them as `valid: false` verdicts with a
+reason (unknown length, non-digit characters — Unicode digits are
+rejected — or a failing checksum with the expected digit shown),
+while `check_digit` / `convert` / `info` return a structured `error`
+payload (`invalid_length`, `invalid_charset`, `invalid_checksum`,
+`not_convertible`, `not_isbn`). The `info` prefix/group table is a
+small indicative subset, not the authoritative ISBN register — groups
+outside it are reported as "not in the built-in indicative table".
