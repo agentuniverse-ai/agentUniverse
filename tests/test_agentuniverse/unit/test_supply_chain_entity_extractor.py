@@ -196,12 +196,18 @@ Revenue: $100M annually.
         result = self.extractor.process_docs([doc])
 
         entities = result[0].metadata.get('entities', [])
-        # Should extract entities with attributes
-        has_attributes = any(
-            e.get('attributes') and len(e['attributes']) > 0
-            for e in entities
+        abc_corp = next(
+            entity for entity in entities if entity.get('name') == 'ABC Corp'
         )
-        self.assertTrue(has_attributes)
+        self.assertEqual(
+            {
+                'location': 'Shanghai, China',
+                'founded': '2010',
+                'revenue': '$100M',
+            },
+            abc_corp['attributes'],
+        )
+        self.assertTrue(all('\n' not in entity['name'] for entity in entities))
 
     def test_confidence_scoring(self):
         """Test confidence scores for extractions."""
@@ -235,6 +241,65 @@ ABC公司向XYZ制造商供应零部件。
         # Should extract entities from Chinese text
         entities = result[0].metadata.get('entities', [])
         self.assertGreater(len(entities), 0)
+
+        entity_names = {entity['name'] for entity in entities}
+        self.assertIn('ABC公司', entity_names)
+        self.assertIn('XYZ制造商', entity_names)
+        self.assertIn('上海仓库', entity_names)
+
+        relationships = result[0].metadata.get('relationships', [])
+        self.assertIn(
+            ('ABC公司', 'XYZ制造商', 'supplies'),
+            {
+                (relationship['source'], relationship['target'], relationship['type'])
+                for relationship in relationships
+            },
+        )
+
+    def test_pattern_extraction_honors_entity_types(self):
+        """Configured entity types also constrain the non-LLM fallback."""
+        extractor = SupplyChainEntityExtractor(
+            name='warehouse_only',
+            use_llm=False,
+            entity_types=['warehouse'],
+        )
+
+        result = extractor.process_docs([
+            Document(text='ABC Supplier uses Main Warehouse for storage.')
+        ])
+
+        entities = result[0].metadata.get('entities', [])
+        self.assertEqual(['warehouse'], [entity['type'] for entity in entities])
+
+    def test_pattern_extraction_honors_confidence_threshold(self):
+        """Pattern results below the configured confidence are excluded."""
+        extractor = SupplyChainEntityExtractor(
+            name='strict_confidence',
+            use_llm=False,
+            confidence_threshold=0.9,
+        )
+
+        result = extractor.process_docs([Document(text='ABC Supplier ships parts.')])
+
+        self.assertEqual([], result[0].metadata.get('entities', []))
+
+    def test_pattern_extraction_honors_relationship_types(self):
+        """Pattern relationships are limited to configured relationship types."""
+        extractor = SupplyChainEntityExtractor(
+            name='supplies_only',
+            use_llm=False,
+            relationship_types=['supplies'],
+        )
+        text = (
+            'ABC Supplier supplies parts to XYZ Manufacturing. '
+            'XYZ Manufacturing ships products to Global Distributor.'
+        )
+
+        result = extractor.process_docs([Document(text=text)])
+
+        relationships = result[0].metadata.get('relationships', [])
+        self.assertGreater(len(relationships), 0)
+        self.assertEqual({'supplies'}, {item['type'] for item in relationships})
 
     def test_complex_supply_chain(self):
         """Test extraction from complex supply chain description."""
@@ -328,20 +393,19 @@ Production is dependent on timely delivery from suppliers.
         text = """
 Global Operations
 
-Suppliers in Taiwan and China
-Manufacturing facilities in Vietnam
-Distribution centers in USA and Europe
+ABC Supplier is based in Taiwan.
+XYZ Manufacturing is located in Vietnam.
 """
         doc = Document(text=text)
         result = self.extractor.process_docs([doc])
 
         entities = result[0].metadata.get('entities', [])
-        # Should extract location attributes
-        has_locations = any(
-            e.get('attributes', {}).get('location')
-            for e in entities
-        )
-        self.assertTrue(has_locations or len(entities) > 0)
+        locations = {
+            entity['name']: entity.get('attributes', {}).get('location')
+            for entity in entities
+        }
+        self.assertEqual('Taiwan', locations['ABC Supplier'])
+        self.assertEqual('Vietnam', locations['XYZ Manufacturing'])
 
 
 if __name__ == '__main__':

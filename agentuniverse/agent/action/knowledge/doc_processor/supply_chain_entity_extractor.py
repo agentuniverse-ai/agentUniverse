@@ -8,7 +8,7 @@
 
 import json
 import logging
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -154,6 +154,12 @@ class SupplyChainEntityExtractor(DocProcessor):
             entities = self._extract_entities_with_llm(text)
         else:
             entities = self._extract_entities_with_patterns(text)
+        allowed_entity_types = set(self.entity_types or [])
+        entities = [
+            entity for entity in entities
+            if entity.entity_type in allowed_entity_types
+            and entity.confidence >= self.confidence_threshold
+        ]
 
         logger.debug(f"Extracted {len(entities)} entities")
 
@@ -164,6 +170,11 @@ class SupplyChainEntityExtractor(DocProcessor):
                 relationships = self._extract_relationships_with_llm(text, entities)
             else:
                 relationships = self._extract_relationships_with_patterns(text, entities)
+        allowed_relationship_types = set(self.relationship_types or [])
+        relationships = [
+            relationship for relationship in relationships
+            if relationship.relationship_type in allowed_relationship_types
+        ]
 
         logger.debug(f"Extracted {len(relationships)} relationships")
 
@@ -300,6 +311,11 @@ Return results in JSON format:
     def _extract_entities_with_patterns(self, text: str) -> List[Entity]:
         """Extract entities using pattern matching (fallback method).
 
+        Match entity names within individual lines. Configured entity types are
+        applied before name deduplication so a disabled role cannot hide an
+        allowed role for the same company. Attribute extraction may use nearby
+        lines in the original text.
+
         Args:
             text: Document text.
 
@@ -314,29 +330,39 @@ Return results in JSON format:
         case_sensitive_patterns = {
             'supplier': [
                 # Company name patterns - capture full name INCLUDING suffix
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+Supplier)\b',  # "ABC Supplier"
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Components|Materials))\b',  # "ABC Components", "DEF Materials"
-                r'\b([A-Z][A-Za-z]+公司)\b',  # "ABC公司"
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+Supplier)\b',  # "ABC Supplier"
+                # "ABC Components", "DEF Materials"
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Components|Materials))\b',
+                r'(?<![A-Za-z0-9])([A-Z][A-Za-z]+公司)',  # "ABC公司"
             ],
             'manufacturer': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Manufacturing|Factory))\b',  # "XYZ Manufacturing"
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+Manufacturer)\b',
+                # "XYZ Manufacturing"
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Manufacturing|Factory))\b',
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+Manufacturer)\b',
+                r'(?<![A-Za-z0-9])([A-Z][A-Za-z]+制造商)',
             ],
             'distributor': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Distributor|Distribution))\b',
+                (
+                    r'\b([A-Z][A-Za-z]{2,20}(?:[ \t]+[A-Z][A-Za-z]{2,20}){0,2}'
+                    r'[ \t]+(?:Distributors?|Distribution)(?:[ \t]+(?:Inc|Ltd|Corp|Co)\.?)?)'
+                ),
             ],
             'warehouse': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Warehouse|Storage))\b',
-                r'\b([A-Z][A-Za-z\u4e00-\u9fa5]{2,15}\s*仓库)\b',
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Warehouse|Storage))\b',
+                r'([A-Za-z\u4e00-\u9fff]{2,15}\s*仓库)',
             ],
             'retailer': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Store|Retail|Shop|Market))\b',
+                r'\b([A-Z][A-Za-z]{2,15}(?:[ \t]+[A-Z][A-Za-z]{2,15}){0,2}[ \t]+(?:Store|Retail|Shop|Market))\b',
             ],
             'logistics_provider': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Logistics|Shipping|Transport|Freight))\b',
+                (
+                    r'\b([A-Z][A-Za-z]{2,20}(?:[ \t]+[A-Z][A-Za-z]{2,20}){0,2}'
+                    r'[ \t]+(?:Logistics|Shipping|Transport|Freight)'
+                    r'(?:[ \t]+(?:Inc|Ltd|Corp|Co)\.?)?)'
+                ),
             ],
             'customer': [
-                r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Z][A-Za-z]{2,15}){0,2}\s+(?:Inc\.|Ltd\.|Corp\.|Co\.))\b',
+                r'\b([A-Z][A-Za-z]{1,20}(?:[ \t]+[A-Z][A-Za-z]{1,20}){0,3}[ \t]+(?:Inc|Ltd|Corp|Co))\.?(?=\s|[,;:]|$)',
             ],
         }
 
@@ -344,14 +370,27 @@ Return results in JSON format:
             'supplier': [
                 r'supplier[s]?:\s*\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Za-z]{2,15}){0,3})\b',
                 r'supplied\s+by\s+\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Za-z]{2,15}){0,2})\b',
+                (
+                    r'\b([A-Z][A-Za-z]{1,20}(?:[ \t]+[A-Z][A-Za-z]{1,20}){0,3}'
+                    r'[ \t]+(?:Inc|Ltd|Corp|Co)\.?)[ \t]+(?:supplies|provides)\b'
+                ),
             ],
             'manufacturer': [
                 r'manufactured\s+(?:by|at)\s+\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Za-z]{2,15}){0,2})\b',
                 r'produced\s+by\s+\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Za-z]{2,15}){0,2})\b',
+                (
+                    r'\b([A-Z][A-Za-z]{1,20}(?:[ \t]+[A-Z][A-Za-z]{1,20}){0,3}'
+                    r'[ \t]+(?:Inc|Ltd|Corp|Co)\.?)[ \t]+(?:manufactures|produces|assembles)\b'
+                ),
             ],
             'distributor': [
                 r'distributed\s+by\s+\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Za-z]{2,15}){0,2})\b',
                 r'regional\s+(distributors?)\b',
+                (
+                    r'\b([A-Z][A-Za-z]{1,20}(?:[ \t]+[A-Z][A-Za-z]{1,20}){0,3}'
+                    r'[ \t]+(?:Inc|Ltd|Corp|Co)\.?)[ \t]+'
+                    r'(?:distributes|handles[ \t]+(?:our[ \t]+)?distribution)\b'
+                ),
             ],
             'warehouse': [
                 r'\b([A-Z][A-Za-z]{2,15}(?:\s+[A-Za-z]{2,15}){0,3})\s+distribution\s+center\b',
@@ -387,12 +426,16 @@ Return results in JSON format:
         import re
 
         # Process case-sensitive patterns (no re.IGNORECASE)
+        # Company names stay on one line; attribute extraction below may still
+        # inspect adjacent lines in the original document.
+        lines = text.splitlines()
+        excluded_names = {'the', 'and', 'for', 'from', 'with', 'are', 'was', 'not'}
         for entity_type, pattern_list in case_sensitive_patterns.items():
             for pattern in pattern_list:
-                matches = re.finditer(pattern, text)
+                matches = (match for line in lines for match in re.finditer(pattern, line))
                 for match in matches:
                     name = match.group(1).strip()
-                    if len(name) >= 3 and not name.lower() in ['the', 'and', 'for', 'from', 'with', 'are', 'was', 'not']:
+                    if len(name) >= 3 and name.lower() not in excluded_names:
                         name = name.rstrip('.,;:')
 
 
@@ -403,12 +446,15 @@ Return results in JSON format:
                         ))
 
         # Process case-insensitive patterns (with re.IGNORECASE)
+        excluded_names = {
+            'the', 'and', 'for', 'from', 'with', 'are', 'was', 'not', 'provides', 'supplies'
+        }
         for entity_type, pattern_list in case_insensitive_patterns.items():
             for pattern in pattern_list:
-                matches = re.finditer(pattern, text, re.IGNORECASE)
+                matches = (match for line in lines for match in re.finditer(pattern, line, re.IGNORECASE))
                 for match in matches:
                     name = match.group(1).strip()
-                    if len(name) >= 3 and not name.lower() in ['the', 'and', 'for', 'from', 'with', 'are', 'was', 'not', 'provides', 'supplies']:
+                    if len(name) >= 3 and name.lower() not in excluded_names:
                         name = name.rstrip('.,;:')
 
                         entities.append(Entity(
@@ -420,6 +466,9 @@ Return results in JSON format:
         # Deduplicate by name (keep first occurrence with highest confidence)
         seen = {}
         for entity in entities:
+            # A disabled role must not win deduplication and hide an allowed one.
+            if entity.entity_type not in self.entity_types:
+                continue
             if entity.name not in seen or entity.confidence > seen[entity.name].confidence:
                 seen[entity.name] = entity
 
@@ -448,30 +497,35 @@ Return results in JSON format:
         # Escape entity name for regex
         safe_name = re.escape(entity_name)
 
+        # Bound attribute matching to the nearby entity context. This still
+        # supports adjacent lines without leaking attributes across a document.
+        entity_match = re.search(safe_name, text, re.IGNORECASE)
+        if entity_match is None:
+            return attributes
+        context = text[entity_match.start():entity_match.start() + 400]
+
         # Location extraction patterns
         location_patterns = [
-            rf'{safe_name}.*?(?:located in|based in|in)\s+([A-Z][a-z]+(?:,\s*[A-Z][a-z]+)*)',
-            rf'(?:located in|based in|in)\s+([A-Z][a-z]+(?:,\s*[A-Z][a-z]+)*?).*?{safe_name}',
+            rf'{safe_name}[\s\S]{{0,160}}?(?:located in|based in)\s+([A-Z][A-Za-z-]+(?:,\s*[A-Z][A-Za-z-]+)*)',
         ]
         for pattern in location_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
+            match = re.search(pattern, context, re.IGNORECASE)
             if match:
                 attributes['location'] = match.group(1).strip()
                 break
 
         # Founded year extraction
-        founded_pattern = rf'{safe_name}.*?founded\s+(\d{{4}})'
-        match = re.search(founded_pattern, text, re.IGNORECASE)
+        founded_pattern = rf'{safe_name}[\s\S]{{0,120}}?founded(?:\s+in)?\s+(\d{{4}})'
+        match = re.search(founded_pattern, context, re.IGNORECASE)
         if match:
             attributes['founded'] = match.group(1)
 
         # Revenue extraction
         revenue_patterns = [
-            rf'{safe_name}.*?revenue[:\s]+\$(\d+(?:\.\d+)?[MBK]?)',
-            rf'revenue[:\s]+\$(\d+(?:\.\d+)?[MBK]?).*?{safe_name}',
+            rf'{safe_name}[\s\S]{{0,300}}?revenue[:\s]+\$(\d+(?:\.\d+)?[MBK]?)',
         ]
         for pattern in revenue_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
+            match = re.search(pattern, context, re.IGNORECASE)
             if match:
                 attributes['revenue'] = f"${match.group(1)}"
                 break
@@ -591,8 +645,6 @@ Return results in JSON format:
             List of Relationship objects.
         """
         relationships = []
-        entity_names = {e.name for e in entities}
-        entity_map = {e.name: e for e in entities}
 
         import re
 
@@ -604,6 +656,7 @@ Return results in JSON format:
                 r'{entity2}\s+receives?\s+.{{0,30}}\s+(?:from\s+)?{entity1}',
                 r'{entity2}\s+(?:sources?|sourced)\s+.{{0,30}}\s+from\s+{entity1}',
                 r'{entity1}\s+provides?\s+.{{0,50}}\s+(?:to\s+)?{entity2}',
+                r'{entity1}\s*向\s*{entity2}.{{0,30}}供应',
             ],
             'manufactures': [
                 r'{entity1}\s+(?:manufactures?|produces?|makes?)\s+.{{0,30}}\s+{entity2}',
