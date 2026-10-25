@@ -1,0 +1,13 @@
+name: 'default_perplexity_llm'
+description: 'default perplexity llm powered by the Perplexity Sonar models'
+model_name: 'sonar'
+max_tokens: 1000
+temperature: 0.5
+streaming: True
+api_key: '${PERPLEXITY_API_KEY}'
+api_base: 'https://api.perplexity.ai'
+proxy: '${PERPLEXITY_PROXY}'
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.perplexity_llm'
+  class: 'PerplexityLLM'
