@@ -7,6 +7,8 @@ from agentuniverse.base.config.application_configer.application_config_manager i
 from agentuniverse.base.config.application_configer.app_configer import AppConfiger
 
 class TestAWSBedrockLLM(unittest.TestCase):
+    """Testawsbedrockllm.
+    """
     def setUp(self) -> None:
         """Set up test fixtures."""
         # Initialize ApplicationConfigManager for each test
