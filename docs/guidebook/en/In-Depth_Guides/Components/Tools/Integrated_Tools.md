@@ -675,3 +675,54 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Indent Tree Tool
+
+`IndentTreeTool` parses and transforms indentation-based hierarchies —
+file-explorer outlines, org charts, work-breakdown structures, plain-text
+trees — built purely on the Python standard library with zero network
+access. The `OutlineExtractor` knowledge component extracts markdown
+*heading* structure; this tool covers the *indentation* trees nothing else
+in the common tool set handles. `parse` mode converts indented text into a
+nested `{"text", "level", "children"}` structure, where `level` is the
+1-based indent-unit depth (a line starting at column 0 is level 1). The
+`indent_unit` option selects the unit: `auto` (default — the smallest
+observed indent width of at least 2 columns that every other observed
+indent width is a multiple of), an explicit `2` / `4` / `8` space unit,
+or `tab`; each tab counts as 4 columns with no tab-stop alignment.
+`flatten` mode produces the outline table — one
+`{"text", "level", "path", "order"}` row per node in document order with
+slash-joined `/A/B/C` paths; `paths` mode lists leaf paths with inclusive
+`min_depth` / `max_depth` filters; `depth_stats` mode reports
+`max_depth`, per-level `level_counts` and the `widest_level`; and
+`to_markdown` mode renders the tree as ATX markdown nested by level
+(heading rank = level + `min_level` - 1, clamped at six with a warning).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.indent_tree_tool import IndentTreeTool
+
+tool = IndentTreeTool()
+tree = tool.execute(mode="parse", text="Company\n  Engineering\n    Platform\n  Sales")["tree"]
+rows = tool.execute(mode="flatten", tree=tree)["rows"]        # outline table
+leaves = tool.execute(mode="paths", tree=tree)["paths"]       # leaf paths
+stats = tool.execute(mode="depth_stats", tree=tree)["level_counts"]
+markdown = tool.execute(mode="to_markdown", tree=tree)["markdown"]
+```
+
+Dedenting a line makes it a sibling of the shallower entry. Malformed
+input never raises: an indent that is not a multiple of the unit is
+floored to the nearest shallower level, a line jumping more than one
+level below its predecessor is clamped to parent + 1, and an indented
+first line is treated as level 1 — each reported as a structured warning
+entry (line number, text, type, message). As a documented convenience,
+`parse` also accepts input made purely of ATX headings (`#` to `######`
+at column 0), normalizing ranks so the smallest rank present is level 1;
+this makes `parse(to_markdown(tree)) == tree` hold for clean input.
+Parameter validation is strict: wrong types, unknown mode or
+`indent_unit`, out-of-range `min_depth` / `max_depth` / `min_level`,
+`min_depth` > `max_depth`, an empty tree, blank node text, non-list
+`children`, cyclic or shared node references, more than 10,000 nodes,
+trees deeper than 256 levels, or text over 100,000 characters raise a
+`ValueError`. Node `level` fields on input are validated but levels are
+always recomputed from the nesting position, and unknown node keys are
+ignored.
