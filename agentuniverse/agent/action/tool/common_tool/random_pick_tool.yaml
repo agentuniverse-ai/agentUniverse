@@ -1,0 +1,70 @@
+name: random_pick_tool
+description: Random pick tool — seeded selection from caller-provided lists, pure Python stdlib, no network required. Choose k items with or without replacement (mode='pick'), draw k items without replacement with zero-weight items excluded and weights renormalized after each draw (mode='weighted'), shuffle deterministically and get original indices (mode='shuffle'), or sample k distinct indices from range(n) (mode='sample_indices'). Provide a seed for a reproducible result; without one an OS-entropy source is used and seed_used is null.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.random_pick_tool
+  class: RandomPickTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Selection mode — pick, weighted, shuffle or sample_indices.
+    required: true
+  items:
+    type: array
+    description: The values to select from. Required for the pick, weighted and shuffle modes; not used by sample_indices. Any JSON-style values, duplicates allowed.
+    required: false
+  weights:
+    type: array
+    description: Per-item numbers (ints/floats >= 0) for the weighted mode; must match items in length, at least one positive. Zero-weight items are excluded from the draw.
+    required: false
+  k:
+    type: integer
+    description: How many values to pick — required for the pick, weighted and sample_indices modes. Without replacement 1 <= k <= pool size; with replacement 1 <= k <= 10000.
+    required: false
+  n:
+    type: integer
+    description: Exclusive upper bound of the index range for the sample_indices mode (1 <= n <= 10000).
+    required: false
+  with_replacement:
+    type: boolean
+    description: pick mode only — allow the same item to be drawn more than once (default false).
+    required: false
+  seed:
+    type: 
+      - integer
+      - string
+    description: Optional seed. When given, the same inputs plus seed always reproduce the same result; when omitted an OS-entropy source is used and seed_used is null.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["pick", "weighted", "shuffle", "sample_indices"]
+      description: Selection mode.
+    items:
+      type: array
+      description: Values to select from (pick, weighted, shuffle modes).
+    weights:
+      type: array
+      items:
+        type: number
+      description: Per-item draw weights, ints/floats >= 0, matching items in length (weighted mode).
+    k:
+      type: integer
+      minimum: 1
+      description: Number of values to pick (pick, weighted, sample_indices modes).
+    n:
+      type: integer
+      minimum: 1
+      maximum: 10000
+      description: Exclusive upper bound of the index range (sample_indices mode).
+    with_replacement:
+      type: boolean
+      description: Allow repeated picks of the same item (pick mode).
+    seed:
+      description: Seed for a reproducible result — an integer or a non-empty string; omit for OS entropy (seed_used null).
+  required: ["mode"]
