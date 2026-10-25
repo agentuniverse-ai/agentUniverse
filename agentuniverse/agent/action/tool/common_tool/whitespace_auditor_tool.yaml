@@ -1,0 +1,37 @@
+name: whitespace_auditor_tool
+description: Whitespace auditor tool — pure Python stdlib, no network required, and strictly report-only (the input text is never modified or returned). mode='audit' counts whitespace hygiene issues with the first three positions per category (trailing-space lines, leading-space lines, tab characters, mixed tab+space indentation lines, CRLF/LF/CR line-ending counts with a mixed-endings flag, non-breaking space U+00A0, ideographic space U+3000 and zero-width space U+200B counts, runs of 3+ consecutive blank lines, final-newline flag, BOM flag, plus a total_issues tally and clean verdict); mode='fix_preview' returns the same categories as a change plan of what normalization WOULD alter (no text returned); mode='locate' lists all positions (capped at 100) of one whitelisted category.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.whitespace_auditor_tool
+  class: WhitespaceAuditorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Audit mode — audit, fix_preview or locate.
+    required: true
+  text:
+    type: string
+    description: The text to analyse. Required by every mode; never modified and never returned. Lines are split on LF, CRLF and lone CR; line numbers are 1-based and character offsets are 0-based.
+    required: false
+  category:
+    type: string
+    description: Locate mode only — one of the locatable category names (trailing_space, leading_space, tabs, mixed_indent, crlf, lf, cr, nbsp, ideographic_space, zero_width_space, blank_run). The mixed_line_endings / final_newline / bom flags carry no positions and are rejected.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["audit", "fix_preview", "locate"]
+      description: Audit mode.
+    text:
+      type: string
+      description: Text to analyse (all modes; never modified, never returned).
+    category:
+      type: string
+      enum: ["trailing_space", "leading_space", "tabs", "mixed_indent", "crlf", "lf", "cr", "nbsp", "ideographic_space", "zero_width_space", "blank_run"]
+      description: Category to locate (locate mode only).
+  required: ["mode"]
