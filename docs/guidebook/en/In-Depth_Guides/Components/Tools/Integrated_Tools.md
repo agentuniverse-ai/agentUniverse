@@ -675,3 +675,58 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Whitespace Auditor Tool
+
+`WhitespaceAuditorTool` is a report-only whitespace hygiene analyser
+built purely on the Python standard library, with zero network access.
+It never modifies and never returns the audited text — it only counts,
+locates and plans. This makes it the inspection-side counterpart of
+the `TextNormalizer` knowledge doc pre-processing component (which
+*fixes* whitespace inside the knowledge-store pipeline): the auditor
+works on any text an agent or caller hands it and leaves the input
+byte-for-byte untouched.
+
+Three modes are available. `audit` returns the full report:
+per-category counts (trailing-space lines, leading-space lines, tab
+characters anywhere, lines whose leading whitespace mixes tabs and
+spaces, CRLF / LF / CR line-ending counts, non-breaking space U+00A0,
+ideographic space U+3000 and zero-width space U+200B character counts,
+runs of three or more consecutive blank lines), three boolean flags
+(mixed line endings, final newline present, BOM present), a
+`total_issues` tally and a `clean` verdict; every count category also
+reports its first three positions. `fix_preview` maps the same
+categories to a change plan — how many lines, characters, endings and
+markers *would* change under the documented normalization policy
+(trailing whitespace stripped, leading spaces removed, tabs converted,
+mixed indentation normalized, CR / CRLF rewritten to LF, invisible
+spaces replaced or removed, blank runs collapsed to a single blank
+line, missing final newline appended, BOM stripped) without ever
+returning text. `locate` lists all positions (capped at 100) of one
+whitelisted category.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import WhitespaceAuditorTool
+
+tool = WhitespaceAuditorTool()
+report = tool.execute(mode="audit", text="def f():\n  x = 1  \n")
+# -> counts.trailing_space == 1 (line 2), counts.leading_space == 1,
+#    flags.final_newline is False, clean is False
+
+plan = tool.execute(mode="fix_preview", text="def f():\n  x = 1  \n")
+# -> changes: 1 line stripped, 1 line de-indented, 1 newline appended
+
+hits = tool.execute(mode="locate", text="a\u00a0b\u00a0", category="nbsp")
+# -> count 2, positions [1, 3] (0-based character offsets)
+```
+
+Lines are split on LF, CRLF and lone CR only; line numbers are
+1-based and character offsets are 0-based (a leading BOM occupies
+offset 0). Trailing space means line content ending with U+0020 or
+U+0009; leading space means line content starting with U+0020. Inputs
+are validated strictly before any computation: a wrong `mode` or
+`text` type, empty text, text over 100,000 characters, or a `locate`
+`category` outside the whitelist (the `mixed_line_endings` /
+`final_newline` / `bom` flags carry no positions) raise a
+`ValueError`. Because the tool is report-only, every result is
+deterministic and the input is guaranteed unchanged.
