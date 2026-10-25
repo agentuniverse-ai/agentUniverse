@@ -42,6 +42,7 @@ The LLM model integration can be accomplished with simple configuration, current
 |<img src="https://github.com/user-attachments/assets/abb5311e-4d70-4e9c-8fca-e5129ae912fc" height="25">|chatglm|                                         chatglm3-6b、chatglm-6b-v2、…                                          |
 |<img src="https://github.com/user-attachments/assets/fe265f24-4ea6-4ff2-9b50-58ab6706a5f5" height="25">|BaiChuan|                                   baichuan2-turbo、baichuan2-13b-chat-v1、…                                    |
 |<img src="https://github.com/user-attachments/assets/41ffe268-392f-4ab9-b42d-e30dbd70d66b" height="25">|Doubao|                              Doubao-pro-128k、Doubao-pro-32k、Doubao-lite-128k、…                               |
+| |xAI| grok-4.7、grok-4.5、grok-4.3、… |
 
 For example, to use deepseek model, you can simply set DEEPSEEK_API_KEY value in the custom_key.toml file, and set the llm_model name in the agent configuration file to 'default_deepseek_llm' and you're all set. For more information about llm configuration, please refer to [switch-the-llm](https://github.com/agentuniverse-ai/agentUniverse/blob/master/docs/guidebook/en/Get_Start/2.Run_Your_First_Tutorial_Example.md#switch-the-llm).
 
