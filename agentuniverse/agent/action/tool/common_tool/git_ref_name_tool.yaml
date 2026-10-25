@@ -1,0 +1,35 @@
+name: git_ref_name_tool
+description: Validate, normalize, analyze, repair, and compare git reference names (branch, tag, any) per git-check-ref-format rules. mode selects validate, normalize, analyze, suggest, or compare; name is the refname under inspection; other_name is the second refname for compare; ref_type picks branch (--branch semantics), tag (refs/tags/), or any; allow_onelevel accepts single-level names (--allow-onelevel); refspec_pattern permits one asterisk (--refspec-pattern). Results report valid plus violations with rule, position, and char; normalize adds the normalized name; suggest returns verified repairs; compare flags case and Unicode NFC/NFD collisions.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.git_ref_name_tool
+  class: GitRefNameTool
+input_keys:
+  - mode
+  - name
+max_name_chars: 1024
+max_violations: 8
+max_suggestions: 4
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [validate, normalize, analyze, suggest, compare]
+    name:
+      type: string
+    other_name:
+      type: string
+    ref_type:
+      type: string
+      enum: [any, branch, tag]
+      default: any
+    allow_onelevel:
+      type: boolean
+      default: false
+    refspec_pattern:
+      type: boolean
+      default: false
+  required: [mode, name]
+  additionalProperties: false

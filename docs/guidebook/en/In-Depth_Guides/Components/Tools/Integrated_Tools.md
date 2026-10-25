@@ -649,3 +649,45 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Git Ref Name Tool
+
+`GitRefNameTool` validates, normalizes, analyzes, repairs, and compares git
+reference names using the `git-check-ref-format(1)` grammar: forbidden
+characters (`~ ^ : ? * [ \` and space), ASCII control bytes including DEL,
+the `@{` sequence and bare `@`, dot rules (leading component dots, `..`,
+trailing dot, the case-sensitive `.lock` suffix), slash rules (leading,
+trailing, doubled), and the default two-level requirement. The rules were
+pinned down empirically against the real `git check-ref-format` binary and
+the test suite keeps the binary as an oracle over a corpus of 835 seeded
+names, including CJK, emoji, fullwidth lookalikes, and NFC/NFD forms.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.git_ref_name_tool import GitRefNameTool
+
+tool = GitRefNameTool()
+result = tool.execute(mode="validate", name="feature/log~in", ref_type="branch")
+result = tool.execute(mode="normalize", name="//feature//login", allow_onelevel=True)
+result = tool.execute(mode="suggest", name="release/..", ref_type="branch")
+result = tool.execute(mode="compare", name="Feature", other_name="feature")
+```
+
+`validate` reports every breach as `{rule, position, char}`; `ref_type`
+selects `branch` (`--branch` semantics: no leading dash, no literal `HEAD`),
+`tag` (validated under `refs/tags/`), or `any`, with `allow_onelevel` and
+`refspec_pattern` mirroring the git options. `normalize` reproduces
+`--normalize` exactly: leading slashes are removed and runs of slashes
+collapse, while a trailing slash still fails. `suggest` returns
+deterministic minimal repairs whose `valid_now` flag is re-verified by the
+tool's own validator. `analyze` splits components, detects version, date,
+release, and ticket patterns, and flags style risks such as uppercase-heavy
+names, emoji, invisible characters, very long names, and Unicode
+confusables. `compare` reports `refs/heads/x` vs `x` equivalence, case
+collisions on case-insensitive filesystems, and NFC/NFD collisions of the
+classic macOS `café` kind.
+
+The tool is stateless and offline: it never runs git, touches a repository,
+or makes network requests. Stateful `@{-N}` and `@{upstream}` shorthands
+that git resolves from repository history are rejected through the `@{`
+grammar rule and documented as unsupported. Inputs are bounded and results
+are deterministic; only the standard library is used.
