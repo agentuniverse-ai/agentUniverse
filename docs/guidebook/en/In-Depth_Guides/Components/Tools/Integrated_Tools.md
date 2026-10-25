@@ -649,3 +649,64 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Bracket Balance Tool
+
+`BracketBalanceTool` checks whether text has balanced brackets and
+quotes, built purely on the Python standard library with zero network
+access. It tracks `()`, `[]`, `{}` and the CJK full-width pairs `（）`,
+`【】`, `《》` (each full-width pair is its own type and never matches an
+ASCII bracket). ASCII `<>` is tracked only when the `angle_brackets`
+option is enabled, using a documented inside-word generics heuristic:
+`<` counts as an opener only right after a word character
+(`List<Integer>` yes, `a < b` no), and `>` counts as a closer only
+after a word character (or `>` itself, for nested `>>`) while a `<` is
+the innermost open bracket — so the comparison in `if (x > 2)` stays
+inert. The heuristic is approximate and OFF by default.
+
+Quoted spans are handled by the `string_aware` option (ON by default):
+`'`, `"` and the backtick each open a span closed only by the same
+character, and a backslash inside a span escapes the next character
+(`\'` does not close). Brackets inside a span are inert — not counted
+and never matched. A span left open at end of text is reported as an
+`unterminated_string` error, so closing a span with a different quote
+character (a mismatched closing quote) surfaces as an error instead of
+silently corrupting the scan. Prose containing apostrophes (`don't`)
+can produce false spans — set `string_aware=False` to count every
+bracket regardless of quotes.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.bracket_balance_tool import BracketBalanceTool
+
+tool = BracketBalanceTool()
+tool.execute(mode="check", text="def f(:")["first_error"]
+# {'position': 5, 'line': 1, 'col': 6, 'kind': 'unmatched_open', 'expected': ')'}
+tool.execute(mode="check", text='("unbalanced ]" )')["balanced"]   # True — inert in quotes
+tool.execute(mode="locate", text="(] ) (")["positions"]            # all unbalanced positions
+tool.execute(mode="fix", text="[({")["fixed_text"]                 # '[({})]'
+tool.execute(mode="stats", text="(([[]]))")["overall"]["max_depth"]  # 4
+```
+
+Four modes: `check` returns `balanced`, the precise `first_error`
+(position, line, col, kind `unmatched_open` / `unmatched_close` /
+`mismatched_pair` / `unterminated_string`, plus `expected` / `found`
+characters), per-type open/close counts and the maximum stack depth —
+the first error is the first one encountered while scanning;
+`locate` returns every unbalanced position (capped at 100, sorted) with
+the total count and a `truncated` flag; `fix` repairs simple
+imbalances via `fix_modes` — `drop_orphans` removes unmatched /
+mismatched closers (drop positions refer to the original text) and
+`append_missing_closers` appends the closers still missing at end of
+text, innermost first (drops run before appends; both are applied by
+default) — returning the fixed text, the applied fixes and whether the
+repaired text now balances; `stats` profiles per-type open/close counts
+and per-type nesting depth plus overall totals.
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, empty text, unknown mode or fix mode,
+`fix_modes` outside the `fix` mode, non-boolean options, text over
+100,000 characters) raise a `ValueError`. Unbalanced text is not an
+input error — it is the tool's normal, structured output. Positions
+are 0-based character offsets; lines and columns are 1-based (columns
+count characters, not display cells, so a full-width bracket counts as
+one).
