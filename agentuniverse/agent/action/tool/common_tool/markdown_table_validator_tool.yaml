@@ -1,0 +1,39 @@
+name: markdown_table_validator_tool
+description: Markdown GFM pipe-table validator — pure Python stdlib, no network required. validate mode checks each pipe table for column count mismatches, missing / invalid / ragged alignment rows, unclosed edge pipes and empty cells (escaped \| counts as content, never as a separator); fix mode repairs short rows (padding), mismatched rows (dropping) and missing alignment rows (inserting | :--- |); stats mode reports table count, shapes, max columns and total cells. Fenced code blocks are never treated as tables.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.markdown_table_validator_tool
+  class: MarkdownTableValidatorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — validate, fix or stats.
+    required: true
+  markdown:
+    type: string
+    description: The Markdown document to check, repair or summarise. Required for every mode.
+    required: false
+  fix_modes:
+    type: array
+    description: Fix mode only — subset of pad_short_rows / drop_mismatched_rows / add_missing_alignment_row; defaults to all three.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["validate", "fix", "stats"]
+      description: Operation mode.
+    markdown:
+      type: string
+      description: The Markdown document to check (all modes).
+    fix_modes:
+      type: array
+      items:
+        type: string
+        enum: ["pad_short_rows", "drop_mismatched_rows", "add_missing_alignment_row"]
+      description: Selected repairs (fix mode).
+  required: ["mode"]
