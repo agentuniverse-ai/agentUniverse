@@ -1,0 +1,73 @@
+name: xml_lint_tool
+description: >-
+  Structural quality linting for XML documents — pure stdlib
+  ElementTree/expat, no file I/O, no network, with an XXE guard that
+  rejects DTD/ENTITY markup before any parsing (the XmlPathTool
+  #3744 policy). lint mode checks the document against a documented
+  13-rule table (mode='lint'): expat failures mapped to precise
+  1-based line/column (syntax errors, undefined entities, duplicate
+  attributes, missing root, comment/PI-only documents); UTF-8 BOM
+  (info — legal in XML); very long lines over 5,000 characters; an
+  encoding declaration that disagrees with the UTF-8 bytes the tool
+  feeds expat while the content is non-ASCII; empty elements (info —
+  often intentional); mixed content elements; nesting deeper than a
+  configurable depth (default 12); documents using more than 10
+  distinct namespaces — each finding carrying severity, line/column,
+  message and hint. profile mode reports topology statistics
+  (mode='profile'): root tag, element count, max depth with the path
+  and position of the deepest element, top 10 tags by frequency,
+  attribute count, text node/length statistics, namespaces in use,
+  and processing-instruction/comment counts. fix_hints mode computes
+  safe suggestions only, never applied (mode='fix_hints'): a BOM
+  strip note and a canonical 2-space pretty-print re-serialization
+  (an iterative, recursion-safe equivalent of ET.indent plus
+  ET.tostring, byte-identical to the stdlib output) with a
+  unified-diff summary capped at 40 lines;
+  per-line whitespace stripping is deliberately not offered because
+  trailing whitespace inside XML text content is literal.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.xml_lint_tool
+  class: XmlLintTool
+input_keys:
+  - mode
+  - xml_text
+args_model:
+  mode:
+    type: string
+    description: Tool mode — lint, profile or fix_hints.
+    required: true
+  xml_text:
+    type: string
+    description: The XML document to examine (capped at 1,000,000 characters). Empty and comment-only documents lint to root_missing / pi_or_comment_only findings instead of erroring.
+    required: true
+  max_depth:
+    type: integer
+    description: Nesting threshold for the deeply_nested rule. Default 12, range 1..128. Lint mode only.
+    required: false
+  rules:
+    type: object
+    description: Map a rule code (XML001..XML013) to false to disable that single rule for the call, e.g. {"XML010":false}. Unknown codes or non-boolean values raise ValueError. Lint mode only.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "profile", "fix_hints"]
+      description: Tool mode.
+    xml_text:
+      type: string
+      description: XML text (ElementTree/expat parsing; findings carry 1-based lines/columns).
+    max_depth:
+      type: integer
+      minimum: 1
+      maximum: 128
+      description: deeply_nested threshold (default 12).
+    rules:
+      type: object
+      description: Per-rule enable/disable map, code -> boolean.
+      additionalProperties:
+        type: boolean
+  required: ["mode", "xml_text"]
