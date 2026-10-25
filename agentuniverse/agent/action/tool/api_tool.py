@@ -18,6 +18,10 @@ from agentuniverse.base.config.component_configer.configers.tool_configer import
 class APITool(Tool):
     """The basic class for api tool model.
 
+    Untyped request-body properties, including empty schemas and schemas
+    generated for Pydantic Any fields, keep their original JSON values.
+    Properties with supported scalar types still use type conversion.
+
     Attributes:
         openapi_spec(str): The openapi schema of the api tool.
     """
@@ -66,7 +70,7 @@ class APITool(Tool):
         return value
 
     def convert_body_property_type(self, property: dict[str, Any], value: Any) -> Any:
-        """Convert a property value based on its type."""
+        """Convert typed values and preserve values without a conversion rule."""
         try:
             if 'type' in property:
                 if property['type'] == 'integer' or property['type'] == 'int':
@@ -95,8 +99,9 @@ class APITool(Tool):
                         f"Invalid type {property['type']} for property {property}")
             elif 'anyOf' in property and isinstance(property['anyOf'], list):
                 return self.convert_body_property_any_of(property, value, property['anyOf'])
-        except ValueError as e:
-            return value
+        except ValueError:
+            pass
+        return value
 
     @staticmethod
     def _convert_integer(value: Any) -> int:
