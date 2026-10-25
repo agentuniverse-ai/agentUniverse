@@ -62,9 +62,10 @@ class ReActPlanner(Planner):
         prompt: Prompt = self.handle_prompt(agent_model, planner_input)
         process_llm_token(llm, prompt.as_langchain(), agent_model.profile, planner_input)
         assemble_memory_input(memory, planner_input)
-        stop_sequence = []
-        if agent_model.plan.get('stop_sequence'):
-            stop_sequence = agent_model.profile.get('stop_sequence')
+        # gate 读 plan 但 value 读 profile——不存在任一单独配置位置能同时
+        # 通过条件并取到值：plan-only → 值为 None；profile-only → 条件不成立。
+        # 统一读 plan（与 planner/max_iterations 兄弟字段一致），profile 兜底。
+        stop_sequence = agent_model.plan.get('stop_sequence') or agent_model.profile.get('stop_sequence') or []
         agent = create_react_agent(llm.as_langchain(), tools, prompt.as_langchain(), stop_sequence=stop_sequence,
                                    bind_params=agent_model.llm_params())
         agent_executor = AgentExecutor(agent=agent, tools=tools,
