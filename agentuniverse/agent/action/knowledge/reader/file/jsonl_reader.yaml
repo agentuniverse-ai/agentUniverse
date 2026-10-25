@@ -1,0 +1,6 @@
+name: 'default_jsonl_reader'
+description: 'default JSONL and NDJSON reader'
+metadata:
+  type: 'READER'
+  module: 'agentuniverse.agent.action.knowledge.reader.file.jsonl_reader'
+  class: 'JsonlReader'
