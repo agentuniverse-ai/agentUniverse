@@ -317,3 +317,30 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [NumericRangeExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/numeric_range_extractor.yaml)
+
+This component extracts numeric ranges with units (price bands, thresholds, capacities, ...) from document text and stamps them into document metadata as `numeric_ranges` plus `range_count`. It is deterministic and offline (standard library only, exact `decimal.Decimal` arithmetic including the 万/亿 magnitude multipliers and comma digit groups). Document texts are left untouched.
+
+Recognized shapes (EN + CJK):
+- closed ranges: `X to Y`, `from X to Y`, `between X and Y`, `X up/down to Y`, `X-Y` / `X–Y` / `X—Y` / `X~Y`, `X至Y`, `X到Y`, `X降至Y` / `X升到Y`; word-connector endpoints may carry a leading sign (`-10 to -5`)
+- open lower bound: `over X`, `above X`, `at least X`, `no less than X`, `X or/and above`, `X or more`, `X at least`, `超过X`, `高于X`, `不低于X`, `X以上`, `X或以上`, `X及以上`
+- open upper bound: `up to X`, `under X`, `below X`, `at most X`, `no more than X`, `X or/and below`, `X or less`, `X at most`, `不超过X`, `低于X`, `不高于X`, `X以下`, `X及以下`
+
+Each extracted range is stored as `{kind: closed|open_lower|open_upper, min, max, unit, text, span, notes}`: `min`/`max` are exact normalized decimal strings (`null` for an open bound), `unit` is the token attached to a range endpoint (`%`, `USD`, `元`, `个`, `users`, `ms`, `$`, ...), `text` is the matched snippet and `span` its `[start, end)` character interval. When the two endpoints carry different units, the unit after the second number wins and a `unit_mismatch(left|right)` note is attached, except for recognized currency equivalences (`$`/`USD`, `€`/`EUR`, `£`/`GBP`, `¥`/`￥`/`元`). When exactly one endpoint of a closed range carries a 万/亿 multiplier, the other endpoint is scaled to match (`3到5万` becomes 30000-50000) and a `multiplier_inferred` note is attached. A closed range whose first value exceeds the second is kept with an `inverted_range` note.
+
+Guards (matching spans are skipped): URLs, emails, IP addresses, versions (`v?X.Y`, multi-dot runs, and dash ranges whose both endpoints are bare decimal numbers without a definite unit, multiplier or currency — use a word connector such as `1.5 to 2.5` for such decimal ranges), dates, phone-like digit runs, numbers glued to a preceding `.`, `/` or `:` (`p.3-5`, `f/2.8`, `1:2`), and closed ranges whose both endpoints are bare years in 1900-2100 (left to the DateExtractor).
+
+Known limitations: multi-character CJK count nouns (`用户`, `公里`) do not resolve to a unit (single CJK unit characters and ASCII word tokens do), arithmetic-looking spans such as `x = 1-2` are still extracted, and negative endpoints are not supported for symbol (`-`) connectors.
+
+The component definition file is as follows:
+```yaml
+name: 'numeric_range_extractor'
+description: 'Extract numeric ranges with units (closed, open-lower and open-upper bounds, EN + CJK) from document text into metadata'
+max_ranges: 50
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.numeric_range_extractor'
+  class: 'NumericRangeExtractor'
+```
+- max_ranges: Maximum number of ranges stored per document (default 50, must be a positive integer); when more ranges are found the list is truncated and a `range_truncated` metadata flag is set.

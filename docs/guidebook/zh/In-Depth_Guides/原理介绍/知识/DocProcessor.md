@@ -315,3 +315,30 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [NumericRangeExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/numeric_range_extractor.yaml)
+
+该组件从文档文本中抽取带单位的数值区间（价格区间、阈值、容量等），并写入文档元数据 `numeric_ranges` 与 `range_count`。该组件确定性地运行、完全离线（仅依赖标准库，使用 `decimal.Decimal` 精确计算，支持 万/亿 数级与逗号千分位），不修改文档正文。
+
+识别的形态（中英文）：
+- 闭区间：`X to Y`、`from X to Y`、`between X and Y`、`X up/down to Y`、`X-Y` / `X–Y` / `X—Y` / `X~Y`、`X至Y`、`X到Y`、`X降至Y` / `X升到Y`；词连接符两端可带正负号（如 `-10 to -5`）
+- 开下界（下限）：`over X`、`above X`、`at least X`、`no less than X`、`X or/and above`、`X or more`、`X at least`、`超过X`、`高于X`、`不低于X`、`X以上`、`X或以上`、`X及以上`
+- 开上界（上限）：`up to X`、`under X`、`below X`、`at most X`、`no more than X`、`X or/and below`、`X or less`、`X at most`、`不超过X`、`低于X`、`不高于X`、`X以下`、`X及以下`
+
+每个区间存储为 `{kind: closed|open_lower|open_upper, min, max, unit, text, span, notes}`：`min`/`max` 为精确归一化的十进制字符串（开边界为 `null`）；`unit` 为附着在区间端点上的单位词（`%`、`USD`、`元`、`个`、`users`、`ms`、`$` 等）；`text` 为命中片段，`span` 为其 `[start, end)` 字符区间。两个端点单位不同时，取第二个数字之后的单位，并附 `unit_mismatch(左|右)` 备注，但等效货币写法（`$`/`USD`、`€`/`EUR`、`£`/`GBP`、`¥`/`￥`/`元`）视为同一单位。闭区间仅一端带 万/亿 数级时，另一端按同一数级换算（`3到5万` 解析为 30000-50000）并附 `multiplier_inferred` 备注；闭区间前值大于后值时保留原样并附 `inverted_range` 备注。
+
+防护规则（命中以下形状的片段会被跳过）：URL、邮箱、IP 地址、版本号（`v?X.Y`、多点数字串，以及两端均为裸小数且不带明确单位、数级或货币的短横线区间——此类小数区间请用词连接符如 `1.5 to 2.5` 表达）、日期、电话样数字串、紧贴前导 `.`、`/` 或 `:` 的数字（`p.3-5`、`f/2.8`、`1:2`），以及两端均为 1900-2100 裸年份的闭区间（交给 DateExtractor 处理）。
+
+已知限制：多字中文计量名词（`用户`、`公里`）不解析为单位（单字中文单位与英文单词单位可解析）；形如 `x = 1-2` 的算术表达仍会被抽取；符号连接符（`-`）不支持负数端点。
+
+组件定义文件如下：
+```yaml
+name: 'numeric_range_extractor'
+description: 'Extract numeric ranges with units (closed, open-lower and open-upper bounds, EN + CJK) from document text into metadata'
+max_ranges: 50
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.numeric_range_extractor'
+  class: 'NumericRangeExtractor'
+```
+- max_ranges: 每篇文档最多存储的区间数量（默认 50，必须为正整数）；超出时列表被截断，并设置 `range_truncated` 元数据标记。

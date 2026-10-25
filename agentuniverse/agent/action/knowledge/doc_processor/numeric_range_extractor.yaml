@@ -1,0 +1,7 @@
+name: 'numeric_range_extractor'
+description: 'Extract numeric ranges with units (closed, open-lower and open-upper bounds, EN + CJK) from document text into metadata'
+max_ranges: 50
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.numeric_range_extractor'
+  class: 'NumericRangeExtractor'
