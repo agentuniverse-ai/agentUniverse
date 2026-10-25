@@ -649,3 +649,52 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Checksum Tool
+
+`ChecksumTool` computes lightweight transmission checksums purely on
+the Python standard library — `zlib` plus hand-written Fletcher and
+byte-sum code — with zero network access. It complements
+`TextCodecTool`'s cryptographic `hash` mode (MD5 / SHA families) and
+`BarcodeValidatorTool` (Luhn / ISBN / EAN / UPC) with the cheap
+non-cryptographic checksums used in file formats, serial protocols
+and documentation: `crc32` and `adler32` from `zlib` (8 hex digits),
+the classic byte-wise `fletcher16` (two running sums modulo 255, 4
+hex digits), `sum8` (byte sum mod 256, 2 hex digits) and `sum16`
+(byte sum mod 65536, 4 hex digits).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.checksum_tool import ChecksumTool
+
+tool = ChecksumTool()
+result = tool.execute(mode="compute", input="123456789", algorithm="crc32")
+# {'algorithm': 'crc32', 'hex': 'cbf43926', 'unsigned_int': 3421780262, ...}
+check = tool.execute(mode="verify", input="123456789", algorithm="crc32",
+                     expected="CBF43926")["match"]  # True — case-insensitive
+every = tool.execute(mode="all", input="Wikipedia")["results"]
+binary = tool.execute(mode="compute", input="5L2g5aW95LiW55WM",
+                      input_encoding="base64", algorithm="adler32")
+```
+
+The `compute` mode returns the zero-padded lowercase `hex` string and
+the `unsigned_int` value for one algorithm; `verify` compares the
+input's checksum against an `expected` hex string (case-insensitive,
+exact digit width for the algorithm, no `0x` prefix or whitespace)
+and returns a `match` boolean plus the computed hex; `all` computes
+every algorithm over the same input at once. The input is text whose
+UTF-8 bytes are checksummed, or — with `input_encoding="base64"` —
+Base64 text whose decoded bytes are checksummed, so binary payloads
+can be verified through a text channel. Base64 decoding is strict and
+invalid Base64 comes back as a structured `error` payload.
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, unknown mode / algorithm / input_encoding,
+missing `algorithm` in the compute / verify modes, a non-hex or
+wrong-width `expected` — with the position of the first invalid
+character reported — or input over 1 MB once decoded or UTF-8
+encoded) raise a `ValueError`. The checksum of the empty input is
+well-defined and accepted (`crc32` 0, `adler32` 1, the others 0).
+These are error-detection codes, not security mechanisms: anyone can
+forge a matching value and short checksums collide by design
+(fletcher16 maps both the empty input and `b"\xff\xff"` to `0x0000`).
+Use `TextCodecTool`'s hash mode when you need a cryptographic digest.

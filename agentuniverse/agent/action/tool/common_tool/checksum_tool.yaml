@@ -1,0 +1,52 @@
+name: checksum_tool
+description: Checksum tool — pure Python stdlib, no network required. Lightweight transmission checksums over text or Base64-decoded bytes; crc32 and adler32 via zlib (8 hex digits), classic byte-wise fletcher16 (4 hex digits), sum8 (mod 256, 2 hex digits) and sum16 (mod 65536, 4 hex digits). Compute mode returns the hex and unsigned int for one algorithm, verify mode compares a case-insensitive expected hex string and returns a match bool, and all mode computes every algorithm at once. Not cryptographic — use TextCodecTool hash mode for digests.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.checksum_tool
+  class: ChecksumTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Checksum mode — compute, verify or all.
+    required: true
+  input:
+    type: string
+    description: The text to checksum. With input_encoding='utf8-text' (default) its UTF-8 bytes are checksummed (empty string allowed); with 'base64' the decoded bytes are checksummed, so binary payloads can pass through a text channel.
+    required: false
+  algorithm:
+    type: string
+    description: Checksum algorithm — crc32, adler32, fletcher16, sum8 or sum16. Required for the compute and verify modes; not used by all mode.
+    required: false
+  input_encoding:
+    type: string
+    description: Input encoding — utf8-text (default) or base64.
+    required: false
+  expected:
+    type: string
+    description: Verify mode only — the expected checksum as a case-insensitive hex string of exactly the algorithm's digit width (8/8/4/2/4 digits for crc32/adler32/fletcher16/sum8/sum16), with no 0x prefix, sign or whitespace.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["compute", "verify", "all"]
+      description: Checksum mode.
+    input:
+      type: string
+      description: Text to checksum (UTF-8 bytes, or Base64-decoded bytes).
+    algorithm:
+      type: string
+      enum: ["crc32", "adler32", "fletcher16", "sum8", "sum16"]
+      description: Checksum algorithm (compute / verify modes).
+    input_encoding:
+      type: string
+      enum: ["utf8-text", "base64"]
+      description: How to interpret the input (default utf8-text).
+    expected:
+      type: string
+      description: Expected checksum hex, case-insensitive, exact width (verify mode).
+  required: ["mode"]
