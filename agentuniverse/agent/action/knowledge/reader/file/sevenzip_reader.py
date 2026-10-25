@@ -17,6 +17,8 @@ class SevenZipReader(Reader):
 
     def __init__(self):
         # 调用父类构造函数
+        """Initialize the sevenzip reader.
+        """
         super().__init__()
         # 初始化读取器缓存，避免重复创建相同类型的读取器
         self._reader_cache: Dict[str, Type[Reader]] = {}
