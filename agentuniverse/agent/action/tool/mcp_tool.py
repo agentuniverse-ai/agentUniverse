@@ -6,6 +6,7 @@ from typing import Any, Optional, Literal, List
 from mcp.types import CallToolResult
 
 from agentuniverse.agent.action.tool.tool import Tool, ToolInput
+from agentuniverse.agent.action.tool.utils.mcp_pagination import iter_mcp_tools
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
 from agentuniverse.base.config.component_configer.configers.tool_configer import \
@@ -92,16 +93,14 @@ class MCPTool(Tool):
         return self
 
     async def get_tool_info(self):
+        tool_info = None
         async with MCPTempClient(
             self.get_mcp_server_connect_args()
         ) as client:
-            tools_list = await client.session.list_tools()
-        tools = tools_list.tools
-        tool_info = None
-        for _tool in tools:
-            if _tool.name == self.tool_name:
-                tool_info = _tool
-                break
+            async for _tool in iter_mcp_tools(client.session):
+                if _tool.name == self.tool_name:
+                    tool_info = _tool
+                    break
         if not tool_info:
             raise Exception(f'No tool named {self.tool_name} in mcp server {self.server_name}')
         # `required` is optional in a JSON Schema; many MCP tools omit it,

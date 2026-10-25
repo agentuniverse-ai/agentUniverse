@@ -57,3 +57,17 @@ metadata:
 Complete toolkit definition examples can be referenced here: [docx_toolkit](../../../../../../examples/sample_apps/toolkit_demo_app/intelligence/agentic/toolkit/docx_toolkit.yaml).
 
 For usage examples of toolkit invocation, see: [demo_agent_with_mcp_toolkit](../../../../../../examples/sample_apps/toolkit_demo_app/intelligence/agentic/agent/agent_instance/demo_agent_with_mcp_toolkit.yaml).
+
+### Paginated tool discovery
+
+MCP services may return tools across multiple `tools/list` pages. MCPToolkit
+follows `nextCursor` in the same temporary session before registering tools,
+including when an intermediate page is empty. Leaving `include` empty selects
+all discovered tools in server order; an explicit `include` also selects tools
+from later pages. MCPTool searches subsequent pages for its remote tool name
+and stops as soon as it finds a match.
+
+Cursors are opaque strings and are forwarded unchanged. A repeated cursor or
+server pagination error aborts discovery; no tools from an incomplete toolkit
+listing are registered. No additional configuration is required. See the
+[MCP pagination specification](https://modelcontextprotocol.io/specification/2025-06-18/server/utilities/pagination).

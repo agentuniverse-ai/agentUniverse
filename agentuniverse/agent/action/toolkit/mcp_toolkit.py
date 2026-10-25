@@ -9,6 +9,7 @@ from typing import List, Literal, Optional
 
 from agentuniverse.agent.action.tool.mcp_tool import MCPTool
 from agentuniverse.agent.action.tool.tool_manager import ToolManager
+from agentuniverse.agent.action.tool.utils.mcp_pagination import iter_mcp_tools
 from agentuniverse.agent.action.toolkit.toolkit import Toolkit
 from agentuniverse.base.config.component_configer.component_configer import \
     ComponentConfiger
@@ -85,8 +86,7 @@ class MCPToolkit(Toolkit):
         async with MCPTempClient(
             self.get_mcp_server_connect_args()
         ) as client:
-            tools_list = await client.session.list_tools()
-        tools = tools_list.tools
+            tools = [tool async for tool in iter_mcp_tools(client.session)]
         if not self.include:
             self.include = [tool.name for tool in tools]
 
