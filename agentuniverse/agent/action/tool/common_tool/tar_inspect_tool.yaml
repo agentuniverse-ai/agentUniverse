@@ -1,0 +1,31 @@
+name: tar_inspect_tool
+description: Read-only tar archive inspection, extraction safety auditing, and path planning.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.tar_inspect_tool
+  class: TarInspectTool
+input_keys:
+  - mode
+base_dir: .
+max_read_bytes: 67108864
+max_base64_bytes: 16777216
+max_scan_bytes: 268435456
+max_reported_entries: 200
+max_scan_entries: 200000
+huge_entry_bytes: 1073741824
+max_compression_ratio: 100
+excessive_entry_count: 10000
+mtime_floor: 315532800
+mtime_ceiling: 2147483647
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [inspect, audit_safety, plan_extraction]
+    file_path: {type: string}
+    base64_archive: {type: string}
+    dest_dir: {type: string}
+  required: [mode]
+  additionalProperties: false
