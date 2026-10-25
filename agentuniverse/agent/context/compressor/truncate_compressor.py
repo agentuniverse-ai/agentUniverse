@@ -16,6 +16,7 @@ Use cases:
 - Fallback when other strategies fail
 """
 
+import math
 import time
 from typing import List, Optional
 
@@ -166,11 +167,23 @@ class TruncateCompressor(ContextCompressor):
             if remaining_tokens <= 0 and not preserve_all:
                 break
 
-            # Allocate tokens proportionally to importance
+            # Allocate tokens proportionally to importance, rounding *up*.
+            #
+            # Importances are nominally equal for equal-priority segments, but
+            # `_calculate_importance()` multiplies by `segment.calculate_decay()`,
+            # a time-based factor, so six such segments differ in the tenth
+            # decimal and their sum lands just below the nominal total. A slot
+            # entitled to exactly `min_segment_tokens` then computes 9.999...,
+            # and `int()` floors it to 9, which the minimum check below rejects
+            # -- the segment is dropped. With `target_tokens=60` over six
+            # 20-token segments that kept one segment instead of six.
+            #
+            # Rounding up cannot overshoot the budget: a slot's quota is capped
+            # by the segment's own `tokens`, and `remaining_tokens` stops the
+            # loop.
             importance = self._calculate_importance(seg)
-            allocated_tokens = int(
-                (importance / total_importance) * target_tokens
-            ) if total_importance > 0 else 0
+            # `math.ceil()` already returns an int, so no outer `int()` cast.
+            allocated_tokens = math.ceil((importance / total_importance) * target_tokens) if total_importance > 0 else 0
 
             # Ensure minimum tokens
             if preserve_all:
