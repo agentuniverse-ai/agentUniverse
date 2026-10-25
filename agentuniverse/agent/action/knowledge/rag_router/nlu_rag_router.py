@@ -45,9 +45,11 @@ class NluRagRouter(RagRouter):
             store.strip() for store in agent_result.output.split(",")
             if store.strip()
         ]
-        if len(target_store_list) > self.store_amount:
-            target_store_list = target_store_list[:self.store_amount]
-        filtered_store_list = [_store for _store in target_store_list if _store in store_list]
+        # Unknown and repeated model selections must not consume the budget
+        # for distinct configured stores. Keep the model's first-seen order.
+        filtered_store_list = list(dict.fromkeys(
+            store for store in target_store_list if store in store_list
+        ))[:self.store_amount]
 
         return [(query, store) for store in filtered_store_list]
 
