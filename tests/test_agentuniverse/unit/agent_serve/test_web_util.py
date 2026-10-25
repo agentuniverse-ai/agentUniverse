@@ -40,6 +40,24 @@ class TestRequestParamContentType(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.get_json(), {'a': '1'})
 
+    def test_post_with_malformed_json_returns_400(self) -> None:
+        """A malformed JSON body must yield a clean 400, not an unhandled 500."""
+        client = _build_app().test_client()
+        resp = client.post('/echo', data=b'{not valid json',
+                           content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+        body = resp.get_json()
+        self.assertFalse(body["success"])
+        self.assertIn("invalid JSON body", body["message"])
+
+    def test_post_with_empty_json_body_returns_400(self) -> None:
+        """An empty body declared as JSON must yield a clean 400, not a 500."""
+        client = _build_app().test_client()
+        resp = client.post('/echo', data=b'',
+                           content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.get_json()["success"])
+
 
 if __name__ == '__main__':
     unittest.main()
