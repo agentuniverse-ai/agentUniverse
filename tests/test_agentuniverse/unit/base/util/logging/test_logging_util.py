@@ -34,6 +34,8 @@ def test_logging_config_without_path_uses_defaults(monkeypatch):
 
 
 def test_logging_util():
+    """Test that logging util.
+    """
     LoggingConfig.log_path = "./.test_log_dir"
 
     init_loggers()
