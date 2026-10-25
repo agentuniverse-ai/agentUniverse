@@ -1,0 +1,61 @@
+name: mac_address_tool
+description: MAC / EUI-48 / EUI-64 address analysis tool — pure Python stdlib, no network required. Strict parsing of six MAC notations (colon, hyphen, Cisco dotted, bare, 0x-prefixed, dotted-pairs) with canonical forms, I/G and U/L bit semantics and precise findings (mode='parse'); OUI organization identification against an embedded curated IEEE registry table with honest unknown-oui reporting and IANA multicast block labels (mode='lookup'); EUI-64 encapsulation and RFC 4291 IPv6 link-local derivation with step-by-step math and inverse checks, plus MAC recovery from a link-local address with FF-FE marker validation (mode='derive'); same-device comparison of two addresses — identical, NIC-only, local-admin-bit or vendor-family relations (mode='compare').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.mac_address_tool
+  class: MacAddressTool
+input_keys:
+  - mode
+max_address_chars: 64
+args_model:
+  mode:
+    type: string
+    description: Analysis mode — parse, lookup, derive or compare.
+    required: true
+  address:
+    type: string
+    description: "The address to analyze, in any of the six supported notations and any case. Required for the parse, lookup and derive modes (for derivation='mac_from_ipv6' it is the IPv6 link-local address, e.g. fe80::211:22ff:fe33:4455)."
+    required: false
+  address_a:
+    type: string
+    description: First address of the compare mode.
+    required: false
+  address_b:
+    type: string
+    description: Second address of the compare mode.
+    required: false
+  derivation:
+    type: string
+    description: "derive only — one of: eui64_fffe (FF-FE marker encapsulation), eui64_ffff (IEEE FF-FF marker encapsulation), ipv6_link_local (RFC 4291 Modified EUI-64 fe80::/64 address), mac_from_ipv6 (recover the EUI-48 from a link-local address)."
+    required: false
+  eui64_marker:
+    type: string
+    description: "parse only — 'ffff' (default, the IEEE EUI-48-to-EUI-64 encapsulation marker) or 'fffe' (the IPv6 convention marker); selects which informational EUI-64 form parse reports."
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["parse", "lookup", "derive", "compare"]
+      description: Analysis mode.
+    address:
+      type: string
+      description: The address to analyze (parse, lookup, derive modes).
+    address_a:
+      type: string
+      description: First address (compare mode).
+    address_b:
+      type: string
+      description: Second address (compare mode).
+    derivation:
+      type: string
+      enum: ["eui64_fffe", "eui64_ffff", "ipv6_link_local", "mac_from_ipv6"]
+      description: Derivation kind (derive mode).
+    eui64_marker:
+      type: string
+      enum: ["ffff", "fffe"]
+      description: Informational EUI-64 marker used by parse (ffff = IEEE encapsulation, fffe = IPv6 convention).
+  required: ["mode"]
+  additionalProperties: false
