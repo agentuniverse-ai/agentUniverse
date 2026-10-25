@@ -1,0 +1,70 @@
+name: basen_encode_tool
+description: Base-N integer encoding tool — pure Python stdlib, no network required. Encode a non-negative integer into any base 2-36 with an optional custom alphabet and prefix such as 0x/0b (mode='encode'), strictly validated decode of digits in a given base back to an arbitrary-precision integer, with the position of the first invalid character (mode='decode'), direct base-to-base conversion (mode='convert', from_base + to_base), and validity info listing which bases 2-36 a string is a valid numeral in (mode='info').
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.basen_encode_tool
+  class: BaseNEncodeTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Radix mode — encode, decode, convert or info.
+    required: true
+  value:
+    type: string
+    description: The value to process. encode accepts a non-negative integer or a decimal digit string; decode/convert accept digit characters in the source base with an optional single leading +/- sign; info accepts any non-empty string.
+    required: false
+  base:
+    type: integer
+    description: Target base for encode (2-36, default 10) and source base for decode (required). Not accepted by convert (use from_base/to_base) or info.
+    required: false
+  from_base:
+    type: integer
+    description: Source base 2-36 for convert mode.
+    required: false
+  to_base:
+    type: integer
+    description: Target base 2-36 for convert mode.
+    required: false
+  alphabet:
+    type: string
+    description: Optional custom digit characters replacing the default 0-9a-z — length must equal the base, characters unique and whitespace-free; decode with a custom alphabet is case-sensitive. encode/decode modes only.
+    required: false
+  prefix:
+    type: string
+    description: Optional non-empty prefix of printable ASCII characters (e.g. 0x, 0b) prepended by encode; when given to decode the input must start with it and it is stripped before parsing. encode/decode modes only.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["encode", "decode", "convert", "info"]
+      description: Radix mode.
+    value:
+      type: string
+      description: Value to encode / decode / convert / inspect.
+    base:
+      type: integer
+      minimum: 2
+      maximum: 36
+      description: Target base (encode) or source base (decode).
+    from_base:
+      type: integer
+      minimum: 2
+      maximum: 36
+      description: Source base (convert mode).
+    to_base:
+      type: integer
+      minimum: 2
+      maximum: 36
+      description: Target base (convert mode).
+    alphabet:
+      type: string
+      description: Custom digit characters (encode/decode modes).
+    prefix:
+      type: string
+      description: Prefix prepended by encode / required and stripped by decode (encode/decode modes).
+  required: ["mode"]
