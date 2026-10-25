@@ -675,3 +675,20 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## GitignoreTool
+
+`GitignoreTool` answers gitignore questions with a faithful translation of git's own matching pipeline (wildmatch.c + dir.c + check-ignore), on the Python standard library only — no subprocess, no filesystem access, no network; case-sensitive (`core.ignoreCase=false` documented). Four modes: `match` (rules + a relative path into `{matched, rule_index, rule_line, rule_text, negated, effective, matched_on, matched_directory, matching_rules, explanation}` — each leading directory is checked like git does, so an ignored directory kills its whole subtree and later negations are dead, otherwise the LAST matching rule wins), `analyze` (rule-set hygiene: `dead_rules` with `blocked_by` proofs computed honestly per last-match-wins, `contradictions`, `duplicates`, `trailing_space_traps`, `missing_final_newline`, `any_depth_patterns`, `escaping_errors`), `lint` (ordered findings: invalid globs, never-matching patterns, reversed ranges, redundant `**` outside the special positions, duplicate rules/negations, the `/**/` zero-or-more-directories note, Windows `\`-separator mistakes) and `explain` (one rule into segments, anchored/dir_only flags and matcher-verified example matches/misses).
+
+```python
+from agentuniverse.agent.action.tool.common_tool import GitignoreTool
+
+tool = GitignoreTool()
+tool.execute(mode="match", rules="doc/\n!doc/readme.md\n", path="doc/readme.md")
+# matched via the ignored directory 'doc' — the negation is dead
+tool.execute(mode="analyze", rules="*.log\n!keep.log\n*.log\n")
+tool.execute(mode="lint", rules="a**b\n[abc\nbuild\\temp\n")
+tool.execute(mode="explain", rule="a/**/b")
+```
+
+Semantics hand-embedded from gitignore(5) and the git sources: leading `/` anchors; trailing `/` restricts to directories; slash-free rules match basenames at any depth; `*` and `?` never cross `/`; `**` is special only as leading `**/`, trailing `/**` and middle `/**/` (zero or more directories); `[abc]` classes with ranges, `!`/`^` negation, escapes and POSIX `[:alpha:]` classes never match `/`; `#` comments, `!` negation and `\` escapes; unescaped trailing spaces are dropped (`\ ` keeps one); CRLF and a UTF-8 BOM are handled like git handles them, and a missing final newline still honors the last line. Matching runs on UTF-8 bytes exactly like git's 8-bit-clean matcher, and the test suite pins parity against the real `git check-ignore -v --no-index` binary on 400 seeded (ruleset, path) pairs including the classic traps. Inputs are capped (`max_rules_chars` 65,536, `max_rule_lines` 4,096, `max_path_chars` 4,096, `max_path_segments` 64 — overridable per instance); one trailing `/` on the path (or an explicit `is_dir`) asserts a directory like the check-ignore CLI. Deterministic by construction.
