@@ -317,3 +317,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [BoilerplateRemover](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/boilerplate_remover.yaml)
+
+This component strips headers, footers and other boilerplate that is repeated across a document batch, addressing the *pre-processing* direction of issue #258 — cleaning text before splitting and embedding. Documents that arrive together usually come from the same source, and that source stamps every page with text the reader never asked for: confidentiality banners, company footers, page numbers, navigation chrome, legal disclaimers. Left in place, these lines are chunked and embedded on every single document, wasting embedding budget and polluting chunk similarity. Boilerplate is identified the way classic crawler boilerplate detection does it — by cross-document frequency, evaluated per batch: every line is whitespace-normalized (stripped, internal runs collapsed; case deliberately not folded), each normalized line is counted once per document it appears in, and a line present in at least `threshold` fraction of the batch's documents (default 0.6, boundary inclusive — 3 of 5 satisfies 0.6) or at least `min_docs` documents (absolute count, disabled by default) is boilerplate. Short lines are safe-listed: a normalized line shorter than `min_line_len` (default 4) is only removed when it appears in *every* document, which protects separators such as `---` or `***` while still catching exact-everywhere repeats.
+
+By default (`mode: remove-lines`) the boilerplate lines are dropped from the text and the remaining lines re-joined with newlines; a document's text is rewritten only when at least one of its lines was removed, so untouched documents keep their exact original string, and blank lines are never candidates and never removed. With `mode: tag-only` the text is left untouched and the detected lines are listed in `metadata['boilerplate_lines']` instead — useful for auditing a threshold change before trusting it. Every affected document is stamped with `metadata['boilerplate_removed_count']` (how many of its lines were removed, or detected in tag-only mode) and `metadata['boilerplate_sample']` (its first 5 such lines, in document order). Metadata mappings are copied before mutation, ids and document order are preserved, and no document is ever dropped — this is line-level cleanup, unlike `SimHashDedupFilter` / `SemanticDeduplicator` which remove whole near-duplicate documents. A batch of fewer than two documents passes through completely unchanged: repetition inside a single document is not evidence of boilerplate. The whole pipeline is pure Python, deterministic and offline — no model calls, no dependencies.
+
+The component definition file is as follows:
+```yaml
+name: 'boilerplate_remover'
+description: 'strip headers, footers and other lines repeated across a document batch before splitting/embedding'
+threshold: 0.6               # fraction of documents a line must repeat in
+min_docs: null               # absolute doc-count alternative; null disables
+mode: 'remove-lines'         # remove-lines | tag-only
+min_line_len: 4              # shorter lines removed only if in every doc
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.boilerplate_remover'
+  class: 'BoilerplateRemover'
+```
+- threshold: Fraction of the batch's documents a normalized line must appear in to count as boilerplate, in (0, 1]; the boundary is inclusive (3 of 5 documents satisfies 0.6). Counted once per document, so a header printed twice within one document does not inflate its own count.
+- min_docs: Alternative absolute rule — a line present in at least this many documents is boilerplate regardless of `threshold`. Null (default) disables the rule; when set it must be >= 2, because a single-document match is never cross-document evidence.
+- mode: `remove-lines` (default) drops boilerplate lines from the text; `tag-only` keeps the text untouched and records the findings in `metadata['boilerplate_lines']`.
+- min_line_len: Length of the normalized line below which it is safe-listed — removed only when it appears in every document of the batch. Protects short structural lines such as `---` or `*`; 0 disables the safe-list.

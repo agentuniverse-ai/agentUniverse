@@ -315,3 +315,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [BoilerplateRemover](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/boilerplate_remover.yaml)
+
+该组件剥离在同一批文档中反复出现的页眉、页脚等样板文本，对应 issue #258 的*知识预处理*方向——在切分与向量化之前清理文本。同批到达的文档通常来自同一来源，而该来源会在每一页都盖上读者并不需要的内容：保密横幅、公司页脚、页码、导航栏、法律声明。这些行若不被清理，会在每篇文档上被切块、向量化，既浪费向量化开销也污染块相似度。组件采用经典爬虫样板检测的思路——按跨文档频率判定，逐批计算：每行先做空白规范化（去首尾空白、内部连续空白折叠为一个空格；刻意不折叠大小写），再统计每个规范化行出现在多少篇文档中（每篇只计一次），出现比例不低于 `threshold`（默认 0.6，边界包含——5 篇中的 3 篇即满足 0.6）或文档数不低于 `min_docs`（绝对计数，默认关闭）的行即样板行。短行受安全列表保护：规范化后长度小于 `min_line_len`（默认 4）的行只有出现在*每一篇*文档中才会被移除，从而保护 `---`、`***` 这类分隔符，同时仍能捕获处处完全重复的短行。
+
+默认（`mode: remove-lines`）直接从文本中删除样板行并以换行符重新拼接剩余各行；只有当文档至少有一行被移除时才重写其文本，未受影响的文档保持原始字符串原样，空行永远不会成为候选也永远不会被移除。`mode: tag-only` 则完全不改动文本，把检测到的行列入 `metadata['boilerplate_lines']`——适合在信任新阈值之前先审计效果。每个受影响的文档都会写入 `metadata['boilerplate_removed_count']`（该文档被移除——或 tag-only 模式下检测到——的行数）和 `metadata['boilerplate_sample']`（按文档内顺序取前 5 行）。写入前会复制 metadata 映射，id 与文档顺序保持不变，且不会丢弃任何文档——这是行级清理，与移除整篇近重复文档的 `SimHashDedupFilter` / `SemanticDeduplicator` 不同。少于两篇文档的批次完全原样通过：单篇文档内部的重复不构成样板证据。整个流程纯 Python、确定性与离线——不调用模型、零额外依赖。
+
+组件定义文件如下：
+```yaml
+name: 'boilerplate_remover'
+description: 'strip headers, footers and other lines repeated across a document batch before splitting/embedding'
+threshold: 0.6               # 一行需要重复出现的文档比例
+min_docs: null               # 绝对文档数规则；null 表示关闭
+mode: 'remove-lines'         # remove-lines | tag-only
+min_line_len: 4              # 更短的行只有在每篇都出现时才移除
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.boilerplate_remover'
+  class: 'BoilerplateRemover'
+```
+- threshold：规范化行需要出现的文档比例阈值，取值 (0, 1]，边界包含（5 篇中的 3 篇满足 0.6）。每篇文档只计一次，同一文档内打印两次的页眉不会重复计数。
+- min_docs：绝对计数规则——出现文档数不低于该值的行即样板，不受 `threshold` 约束。null（默认）关闭该规则；设置时必须 >= 2，因为单篇出现不构成跨文档证据。
+- mode：`remove-lines`（默认）从文本中删除样板行；`tag-only` 保持文本不变，把检测结果记入 `metadata['boilerplate_lines']`。
+- min_line_len：规范化行长度低于该值即进入安全列表——只有出现在批次每一篇文档中才被移除。保护 `---`、`*` 等短结构行；0 表示关闭安全列表。
