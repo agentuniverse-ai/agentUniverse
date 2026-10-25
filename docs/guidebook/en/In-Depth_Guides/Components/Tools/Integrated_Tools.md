@@ -675,3 +675,80 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Timezone Tool
+
+`TimezoneTool` is an IANA timezone intelligence tool built on the
+Python standard library `zoneinfo` (it requires a system tz database
+or the `tzdata` package; no network access, and no wall clock is read
+anywhere, so every result is deterministic). `validate` mode checks a
+zone name by constructing `ZoneInfo(key)` and mapping
+`ZoneInfoNotFoundError` to a structured `{"valid": false, ...}`
+payload — the name's shape is regex-validated first, so malformed
+names raise — and reports offsets/abbreviations at four fixed 2024
+seasonal reference instants (both equinoxes, both solstices) plus a
+`has_dst` flag; validity never enumerates `available_timezones()`,
+and the `in_available_timezones` set difference is reported instead
+of pretending to resolve legacy link targets (the stdlib cannot
+distinguish `US/Eastern` from `America/New_York`; use `compare`'s
+`typically_same` for behavioural alias detection). `offset` mode
+resolves a zone at an ISO datetime — naive datetimes are interpreted
+*in the zone*, aware ones converted as instants — returning
+`utc_offset` (±HH:MM), `tzname`, the `dst` delta, `is_dst`,
+`utcoffset_seconds` and the UTC instant, plus real PEP 495
+`ambiguous` / `impossible` wall-time detection (both folds of the
+naive time are converted to UTC and back: ambiguous when both folds
+round-trip, impossible when neither does — New York `2024-03-10
+02:30` is a gap, `2024-11-03 01:30` occurs twice, and Pacific/Apia
+`2011-12-30` never existed). For naive inputs the headline fields
+(`utc_offset`/`tzname`/`dst`/`is_dst`/`local_datetime`) always
+describe the fold=0 reading of the input wall time: for a gap time
+that is the pre-gap offset, and `local_datetime` echoes the
+never-occurred input wall time. `transitions` mode lists a year's
+offset transitions (1970-2100) with the instant in zone wall time on
+the new-offset side, both wall sides, from/to offsets, deltas and
+abbreviations, plus a southern/northern hemisphere inference; it
+scans coarsely at 6-hour steps, bisects to one hour and refines to
+the second — the closest consecutive tzdata transitions 1970-2100
+are just under 7 days apart (6 d 23 h, verified sweep of the
+transition-dense zones), so nothing is missed; sub-minute LMT
+handovers (e.g. Africa/Monrovia's 1972-01-07 00:44:30 UTC
+transition) are pinned exactly by the second refinement.
+`compare` mode contrasts two zones: a fixed-reference (2026-06-15
+12:00 UTC) offset difference, DST-policy difference, the UTC hours
+of a day on which both zones sit inside a 08:00-20:00 local working
+band, a worst-case offset difference over 730 daily noon-UTC samples
+across 2026-2027 (both hemispheres' transitions included) and
+`typically_same` for alias-level identity. `window` mode takes 2-8
+zones, a local working window (`"09:00-17:00"`) and a date, and
+returns each zone's UTC interval (edges mapped with `fold=0`,
+fall-back/spring-forward edges flagged), the common UTC overlap or
+`null`, every participant's local time at the overlap start/end and
+a recommendation whether shifting the meeting by one day widens the
+overlap — adjacent dates are recomputed from their own wall edges,
+which is what makes DST weekends visible.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.timezone_tool import TimezoneTool
+
+tool = TimezoneTool()
+tool.execute(mode="validate", zone="Australia/Lord_Howe")     # valid, +10:30/+11:00, has_dst
+tool.execute(mode="offset", zone="Asia/Kolkata", datetime_str="2026-03-02T10:00")   # +05:30, IST
+tool.execute(mode="offset", zone="America/New_York", datetime_str="2024-11-03T01:30")  # ambiguous
+tool.execute(mode="transitions", zone="Europe/Berlin", year=2026)["count"]             # 2
+tool.execute(mode="compare", zone="America/New_York", other_zone="Asia/Tokyo")["worst_case_diff"]
+tool.execute(mode="window", zones=["America/New_York", "Europe/London"],
+             working_window="09:00-17:00", date="2026-06-15")["common_utc_overlap"]
+```
+
+Inputs are validated strictly before any computation: an unknown
+mode, a malformed zone name (shape, length, segment count), a
+non-canonical datetime or date, a year outside 1970..2100, a
+zone list of the wrong arity (2..8, no duplicates), or a malformed
+or reversed working window raise a `ValueError`. Well-formed zone
+names that do not resolve raise in every mode except `validate`,
+which exists to answer exactly that question. In an environment
+with no tz database at all (no system zoneinfo and no `tzdata`
+package), the failure is reported as a structured
+`tz_database_unavailable` error naming the `tzdata` fix rather than
+as a crash.
