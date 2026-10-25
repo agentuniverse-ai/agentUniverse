@@ -19,6 +19,17 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 
 logger = logging.getLogger(__name__)
 
+# Sentence boundary pattern used when splitting over-long clauses at sentence
+# boundaries (Latin and CJK sentence enders) before falling back to raw cuts.
+# The ender must follow a letter (not a digit), so clause numbers ("1.", "3.2.")
+# and years are not mistaken for sentence ends.
+_SENTENCE_BOUNDARY_RE = re.compile(r'(?<=[^\W\d_][.!?。！？])\s+')
+
+# Clause types produced by ALLCAPS boilerplate headings and their level in the
+# clause hierarchy: preamble/recitals introduce the contract, the operative
+# grant and the execution block conclude it, so all sit at the top level.
+_BOILERPLATE_LEVEL = 0
+
 
 @dataclass
 class ClauseNode:
@@ -32,6 +43,8 @@ class ClauseNode:
         parent_id: ID of parent clause (None for top-level).
         children_ids: IDs of child clauses.
         position: Position in the original document.
+        char_start: Start offset of the clause text within the source text.
+        char_end: End offset (exclusive) of the clause text within the source text.
     """
     id: str
     text: str
@@ -40,8 +53,12 @@ class ClauseNode:
     parent_id: Optional[str] = None
     children_ids: List[str] = None
     position: int = 0
+    char_start: int = 0
+    char_end: int = 0
 
     def __post_init__(self):
+        """Initialize the dataclass fields, defaulting children_ids to an empty list when it is None.
+        """
         if self.children_ids is None:
             self.children_ids = []
 
@@ -54,12 +71,28 @@ class ContractClauseFragmenter(DocProcessor):
     (Article → Section → Subsection) and creates separate documents for each clause
     with rich metadata about relationships and dependencies.
 
+    Recognized clause markers include numbered clauses (`1.`, `1.1`), `Article` /
+    `Section` headings, lettered sub-clauses (`(a)`, `(B)`), Chinese markers
+    (`第一条`, `一、`, `（一）`) and ALLCAPS boilerplate headings (`WHEREAS`,
+    `NOW, THEREFORE`, `IN WITNESS WHEREOF`). Every fragment records the exact
+    character span of its text within the source document via the
+    `char_start` / `char_end` metadata keys, so callers can always map a fragment
+    back to its origin (`source[char_start:char_end] == fragment.text`).
+
     Attributes:
         preserve_hierarchy: Whether to preserve and track clause hierarchy.
         clause_patterns: List of regex patterns for detecting clauses.
         min_clause_length: Minimum length for a valid clause (characters).
         extract_references: Whether to extract cross-references between clauses.
         skip_on_error: Whether to skip documents that fail processing.
+        keep_preamble: Whether to keep the preamble before the first clause marker
+            and the WHEREAS recital blocks as fragments (dropped by default).
+        max_fragment_chars: Maximum characters per fragment; over-long clauses are
+            split at sentence boundaries (raw character cuts as fallback for
+            run-on sentences) with `part_index` / `part_count` metadata.
+            0 (default) disables splitting.
+        boilerplate_patterns: Regex patterns for ALLCAPS boilerplate headings that
+            start a new fragment.
     """
 
     preserve_hierarchy: bool = True
@@ -67,8 +100,16 @@ class ContractClauseFragmenter(DocProcessor):
     min_clause_length: int = 10
     extract_references: bool = True
     skip_on_error: bool = True
+    keep_preamble: bool = False
+    max_fragment_chars: int = 0
+    boilerplate_patterns: List[str] = None
 
     def __init__(self, **data):
+        """Initialize the fragmenter and populate the default clause-detection regex patterns when none were provided.
+
+        Args:
+            **data: Field values for the fragmenter.
+        """
         super().__init__(**data)
         if self.clause_patterns is None:
             self.clause_patterns = [
@@ -77,8 +118,16 @@ class ContractClauseFragmenter(DocProcessor):
                 r'^Section\s+\d+(\.\d+)*\.?\s*',
                 r'^SECTION\s+\d+(\.\d+)*\.?\s*',
                 r'^\d+(\.\d+)*\.?\s+',  # Fixed: makes trailing dot optional
+                r'^\([a-zA-Z]\)\s*',  # Lettered sub-clauses: (a), (B), ...
                 r'^第[一二三四五六七八九十百千\d]+条\s*',  # Chinese: 第X条
                 r'^[一二三四五六七八九十百千\d]+、\s*',  # Chinese enumeration
+                r'^[（(][一二三四五六七八九十百千\d]+[)）]\s*',  # Chinese parenthesized: （一）, (二)
+            ]
+        if self.boilerplate_patterns is None:
+            self.boilerplate_patterns = [
+                r'^WHEREAS\b[,\s]*',  # Recital block
+                r'^NOW[,\s]+THEREFORE\b[,\s]*',  # Operative grant
+                r'^IN\s+WITNESS\s+WHEREOF\b[,\s]*',  # Execution block
             ]
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> List[Document]:
@@ -134,6 +183,12 @@ class ContractClauseFragmenter(DocProcessor):
         # Step 2: Extract clause texts
         clauses = self._extract_clauses(text, boundaries)
 
+        if not clauses:
+            # Every detected fragment was filtered out (e.g. recital blocks with
+            # keep_preamble=False, or clauses below min_clause_length).
+            logger.warning(f"All detected clauses were filtered out in document {doc.id}, returning as single clause")
+            return [self._create_single_clause_doc(doc, text, 0)]
+
         # Step 3: Build hierarchy if enabled
         if self.preserve_hierarchy:
             hierarchy = self._parse_hierarchy(clauses)
@@ -155,6 +210,7 @@ class ContractClauseFragmenter(DocProcessor):
             List of tuples: (start_pos, end_pos, clause_type, clause_id).
         """
         boundaries = []
+        boilerplate_counters: Dict[str, int] = {}
 
         lines = text.split('\n')
         current_pos = 0
@@ -166,12 +222,12 @@ class ContractClauseFragmenter(DocProcessor):
                 current_pos += len(line) + 1  # +1 for newline
                 continue
 
-            # Check each pattern
-            for pattern in self.clause_patterns:
+            # Check each pattern (clause markers plus ALLCAPS boilerplate headings)
+            for pattern in self._boundary_patterns():
                 match = re.match(pattern, line_stripped, re.IGNORECASE)
                 if match:
                     # Determine clause type and ID
-                    clause_type, clause_id = self._parse_clause_header(line_stripped)
+                    clause_type, clause_id = self._parse_clause_header(line_stripped, boilerplate_counters)
 
                     # Find the end of this clause (start of next clause or end of text)
                     end_pos = self._find_clause_end(lines, line_idx + 1, current_pos + len(line))
@@ -181,7 +237,19 @@ class ContractClauseFragmenter(DocProcessor):
 
             current_pos += len(line) + 1  # +1 for newline
 
+        # Optionally keep the preamble (text before the first marker) as its own fragment
+        if self.keep_preamble and boundaries and boundaries[0][0] > 0 and text[:boundaries[0][0]].strip():
+            boundaries.insert(0, (0, boundaries[0][0], 'preamble', 'preamble'))
+
         return boundaries
+
+    def _boundary_patterns(self) -> List[str]:
+        """Return every pattern that can start a new clause fragment.
+
+        Returns:
+            Clause marker patterns plus ALLCAPS boilerplate heading patterns.
+        """
+        return list(self.clause_patterns or []) + list(self.boilerplate_patterns or [])
 
     def _find_clause_end(self, lines: List[str], start_line_idx: int, start_pos: int) -> int:
         """Find the end position of a clause.
@@ -199,8 +267,8 @@ class ContractClauseFragmenter(DocProcessor):
         for line_idx in range(start_line_idx, len(lines)):
             line = lines[line_idx]
 
-            # Check if this line starts a new clause
-            for pattern in self.clause_patterns:
+            # Check if this line starts a new clause (marker or boilerplate heading)
+            for pattern in self._boundary_patterns():
                 if re.match(pattern, line.strip(), re.IGNORECASE):
                     return current_pos
 
@@ -209,11 +277,14 @@ class ContractClauseFragmenter(DocProcessor):
         # Reached end of document
         return current_pos
 
-    def _parse_clause_header(self, header: str) -> Tuple[str, str]:
+    def _parse_clause_header(self, header: str,
+                             boilerplate_counters: Optional[Dict[str, int]] = None) -> Tuple[str, str]:
         """Parse clause header to extract type and ID.
 
         Args:
             header: Clause header string.
+            boilerplate_counters: Mutable per-document counters used to number
+                repeated boilerplate blocks (e.g. recital_1, recital_2).
 
         Returns:
             Tuple of (clause_type, clause_id).
@@ -231,6 +302,28 @@ class ContractClauseFragmenter(DocProcessor):
             match = re.search(r'\d+(\.\d+)*', header)
             clause_id = match.group(0) if match else 'unknown'
             return ('section', f'section_{clause_id}')
+
+        # Lettered sub-clause patterns: (a), (B), ...
+        match = re.match(r'^\(([a-zA-Z])\)', header)
+        if match:
+            return ('lettered', f'lettered_{match.group(1).lower()}')
+
+        # Chinese parenthesized markers: （一）, (二), ...
+        match = re.match(r'^[（(]([一二三四五六七八九十百千\d]+)[)）]', header)
+        if match:
+            return ('lettered', f'lettered_{match.group(1)}')
+
+        # ALLCAPS boilerplate headings
+        counters = boilerplate_counters if boilerplate_counters is not None else {}
+        if re.match(r'^WHEREAS\b', header, re.IGNORECASE):
+            counters['recital'] = counters.get('recital', 0) + 1
+            return ('recital', f"recital_{counters['recital']}")
+        if re.match(r'^NOW[,\s]+THEREFORE\b', header, re.IGNORECASE):
+            counters['operative'] = counters.get('operative', 0) + 1
+            return ('operative', f"operative_{counters['operative']}")
+        if re.match(r'^IN\s+WITNESS\s+WHEREOF\b', header, re.IGNORECASE):
+            counters['execution'] = counters.get('execution', 0) + 1
+            return ('execution', f"execution_{counters['execution']}")
 
         # Numbered patterns
         match = re.match(r'^(\d+(\.\d+)*)', header)
@@ -262,7 +355,18 @@ class ContractClauseFragmenter(DocProcessor):
         clauses = []
 
         for idx, (start, end, clause_type, clause_id) in enumerate(boundaries):
-            clause_text = text[start:end].strip()
+            raw = text[start:end]
+            lead = len(raw) - len(raw.lstrip())
+            tail = len(raw) - len(raw.rstrip())
+            clause_text = raw.strip()
+            # Exact character span of the stripped clause text within the source
+            char_start = start + lead
+            char_end = end - tail
+
+            # Recital blocks are non-operative preamble text; drop them unless kept
+            if clause_type == 'recital' and not self.keep_preamble:
+                logger.debug(f"Dropping recital block (keep_preamble=False): {clause_id}")
+                continue
 
             if len(clause_text) < self.min_clause_length:
                 logger.debug(f"Skipping short clause: {clause_id} (length: {len(clause_text)})")
@@ -273,7 +377,9 @@ class ContractClauseFragmenter(DocProcessor):
                 text=clause_text,
                 clause_type=clause_type,
                 hierarchy_level=0,  # Will be determined in hierarchy parsing
-                position=idx
+                position=idx,
+                char_start=char_start,
+                char_end=char_end,
             )
 
             clauses.append(clause_node)
@@ -301,6 +407,12 @@ class ContractClauseFragmenter(DocProcessor):
                 clause.hierarchy_level = 0
             elif clause.clause_type == 'section':
                 clause.hierarchy_level = 1
+            elif clause.clause_type == 'lettered':
+                # Lettered items nest under both numbered sub-clauses ("1.1")
+                # and their ancestors ("1.", Section), so they sit below both.
+                clause.hierarchy_level = 4
+            elif clause.clause_type in ('preamble', 'recital', 'operative', 'execution'):
+                clause.hierarchy_level = _BOILERPLATE_LEVEL
             elif clause.clause_type.startswith('subsection_level_'):
                 level = int(clause.clause_type.split('_')[-1])
                 clause.hierarchy_level = 2 + level
@@ -346,6 +458,10 @@ class ContractClauseFragmenter(DocProcessor):
                 'position': clause.position,
             }
 
+            # Exact character span of the fragment within the source text
+            metadata['char_start'] = clause.char_start
+            metadata['char_end'] = clause.char_end
+
             # Add original metadata
             if original_doc.metadata:
                 metadata['original_metadata'] = original_doc.metadata
@@ -361,16 +477,90 @@ class ContractClauseFragmenter(DocProcessor):
                 if references:
                     metadata['clause_references'] = references
 
-            # Create document
-            doc = Document(
-                text=clause.text,
-                metadata=metadata,
-                keywords=original_doc.keywords
-            )
+            # Split over-long clauses (disabled when max_fragment_chars is 0)
+            parts = self._split_clause_parts(clause)
 
-            clause_docs.append(doc)
+            if len(parts) == 1:
+                doc = Document(
+                    text=clause.text,
+                    metadata=metadata,
+                    keywords=original_doc.keywords
+                )
+                clause_docs.append(doc)
+                continue
+
+            for part_index, (part_text, part_start, part_end) in enumerate(parts):
+                part_metadata = dict(metadata)
+                part_metadata['char_start'] = part_start
+                part_metadata['char_end'] = part_end
+                part_metadata['part_index'] = part_index
+                part_metadata['part_count'] = len(parts)
+                doc = Document(
+                    text=part_text,
+                    metadata=part_metadata,
+                    keywords=original_doc.keywords
+                )
+                clause_docs.append(doc)
 
         return clause_docs
+
+    def _split_clause_parts(self, clause: ClauseNode) -> List[Tuple[str, int, int]]:
+        """Split an over-long clause into bounded parts.
+
+        The clause is first split at sentence boundaries so that parts stay
+        readable; a single sentence longer than max_fragment_chars is split at
+        raw character positions as a fallback. All parts keep the clause
+        metadata and carry part_index / part_count keys.
+
+        Args:
+            clause: The clause node to split.
+
+        Returns:
+            List of (part_text, char_start, char_end) tuples with absolute
+            offsets into the source text; a single tuple when no split is
+            needed.
+        """
+        text = clause.text
+        max_chars = self.max_fragment_chars
+        if not max_chars or max_chars <= 0 or len(text) <= max_chars:
+            return [(text, clause.char_start, clause.char_end)]
+
+        # Candidate cut positions: just after each inter-sentence gap
+        cuts = [m.end() for m in _SENTENCE_BOUNDARY_RE.finditer(text)]
+        cuts.append(len(text))
+
+        spans: List[Tuple[int, int]] = []
+        start = 0
+        end = 0
+        for cut in cuts:
+            if cut <= start:
+                continue
+            if cut - start <= max_chars:
+                end = cut
+                continue
+            if end > start:
+                spans.append((start, end))
+                start = end
+            # Single sentence longer than max_chars: raw character fallback
+            while cut - start > max_chars:
+                spans.append((start, start + max_chars))
+                start += max_chars
+            end = cut
+        if end > start:
+            spans.append((start, end))
+
+        parts = []
+        for span_start, span_end in spans:
+            raw = text[span_start:span_end]
+            lead = len(raw) - len(raw.lstrip())
+            tail = len(raw) - len(raw.rstrip())
+            part_text = raw.strip()
+            if not part_text:
+                continue
+            parts.append((part_text,
+                          clause.char_start + span_start + lead,
+                          clause.char_start + span_start + len(raw) - tail))
+        return parts
 
     def _extract_references(self, text: str, all_clauses: List[ClauseNode]) -> List[str]:
         """Extract cross-references to other clauses.
@@ -436,6 +626,8 @@ class ContractClauseFragmenter(DocProcessor):
             'clause_type': 'unstructured',
             'hierarchy_level': 0,
             'position': position,
+            'char_start': 0,
+            'char_end': len(text) if text else 0,
         }
 
         if original_doc.metadata:
@@ -469,5 +661,11 @@ class ContractClauseFragmenter(DocProcessor):
             self.extract_references = doc_processor_configer.extract_references
         if hasattr(doc_processor_configer, "skip_on_error"):
             self.skip_on_error = doc_processor_configer.skip_on_error
+        if hasattr(doc_processor_configer, "keep_preamble"):
+            self.keep_preamble = doc_processor_configer.keep_preamble
+        if hasattr(doc_processor_configer, "max_fragment_chars"):
+            self.max_fragment_chars = doc_processor_configer.max_fragment_chars
+        if hasattr(doc_processor_configer, "boilerplate_patterns"):
+            self.boilerplate_patterns = doc_processor_configer.boilerplate_patterns
 
         return self

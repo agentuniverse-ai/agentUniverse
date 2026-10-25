@@ -315,3 +315,49 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ContractClauseFragmenter（合同条款切分器）](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/contract_clause_fragmenter.yaml)
+
+该组件按条款单元切分合同文本，对应 issue #258 的合同条款切分方向（"在合同条款场景中往往需要按单个条款进行切分"）。通用切分器按固定长度截断合同，会把一个条款从句中切断、又把相邻条款粘在一起，检索返回的片段跨越条款边界、无法精确引用。本组件在行首识别法律条款标记，每个条款输出一个文档，并在元数据中保留层级结构（Article → Section → 数字条款 → 字母项）。
+
+可识别的标记包括：数字条款（`1.`、`1.1`、`1.1.1`）、`Article`/`Section` 标题（罗马或阿拉伯数字）、字母子条款（`(a)`、`(B)`）以及中文标记（`第一条`、`一、`、`（一）`及半角 `(一)` 形式）。字母项与中文括号项被归类为 `lettered` 片段，并挂到最近的数字条款或 Article 祖先之下。全大写的套话标题同样作为边界：`WHEREAS` 块成为 `recital` 片段，`NOW, THEREFORE` 成为 `operative` 片段，`IN WITNESS WHEREOF` 成为 `execution` 片段。默认情况下，首个标记之前的序言和 `WHEREAS` 鉴于条款作为非操作性文本被丢弃；设置 `keep_preamble: true` 可将它们保留为 `preamble` / `recital` 片段。若所有检测到的片段都被过滤（例如仅含鉴于条款的页面且 `keep_preamble: false`），文档回退为单个 `unstructured` 片段，而不是消失。
+
+每个片段在 `metadata.char_start` / `metadata.char_end` 中记录其在原文中的精确字符区间，并保持不变式 `source[char_start:char_end] == fragment.text`，下游消费者始终能把片段映射回合同原文中的位置。`max_fragment_chars`（默认 0 = 不限制）约束片段大小：超长条款优先在句子边界（中英文句末标点）切分，对无标点的长句回退为按字符硬切；每个分片保留条款元数据并附加 `part_index` / `part_count` 及各自的精确区间。启用 `extract_references` 时，片段之间对其他条款的交叉引用（`Article 1`、`Section 3.2`、`第一条` 等）会被提取到 `clause_references`。
+
+组件定义文件如下：
+```yaml
+name: 'contract_clause_fragmenter'
+description: 'Fragment legal contracts by individual clauses while preserving hierarchical structure'
+preserve_hierarchy: true
+min_clause_length: 10
+extract_references: true
+skip_on_error: true
+keep_preamble: false            # 保留序言和 WHEREAS 鉴于条款作为片段
+max_fragment_chars: 0           # 在句子边界切分超长条款；0 表示不切分
+clause_patterns:
+  - '^Article\s+[IVX\d]+\.?\s*'
+  - '^ARTICLE\s+[IVX\d]+\.?\s*'
+  - '^Section\s+\d+(\.\d+)*\.?\s*'
+  - '^SECTION\s+\d+(\.\d+)*\.?\s*'
+  - '^\d+\.(\d+\.)*\s+'
+  - '^\([a-zA-Z]\)\s*'                                # 字母项：(a)、(B)
+  - '^第[一二三四五六七八九十百千\d]+条\s*'                  # 中文条款
+  - '^[一二三四五六七八九十百千\d]+、\s*'                    # 中文顿号枚举
+  - '^[（(][一二三四五六七八九十百千\d]+[)）]\s*'            # 中文括号项
+boilerplate_patterns:
+  - '^WHEREAS\b[,\s]*'                                 # 鉴于条款
+  - '^NOW[,\s]+THEREFORE\b[,\s]*'                      # 操作性授权
+  - '^IN\s+WITNESS\s+WHEREOF\b[,\s]*'                  # 签署块
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.contract_clause_fragmenter'
+  class: 'ContractClauseFragmenter'
+```
+- preserve_hierarchy: 为真（默认）时，片段携带 `hierarchy_level`、`parent_clause`、`children_clauses` 元数据，反映 Article → Section → 数字条款 → 字母项的嵌套关系。
+- clause_patterns: 条款标记的正则列表，在行首匹配（不区分大小写）。可覆写以加入领域特有的编号样式。
+- min_clause_length: 片段的最小字符长度；过短的检测结果被丢弃。
+- extract_references: 为真时，片段中对其他条款的交叉引用列在 `clause_references` 中。
+- skip_on_error: 为真时，处理失败的文档原样透传而不是抛出异常。
+- keep_preamble: 为真时，首个条款标记之前的序言和 `WHEREAS` 鉴于条款保留为 `preamble` / `recital` 片段；默认（假）作为非操作性文本丢弃。
+- max_fragment_chars: 每个片段的最大字符数。超长条款在句子边界切分（无标点长句按字符硬切）；每个分片保留条款元数据并附加 `part_index` / `part_count` 及各自的 `char_start` / `char_end`。0（默认）表示不切分。
+- boilerplate_patterns: 作为新片段起点的全大写套话标题正则（默认 `WHEREAS`、`NOW, THEREFORE`、`IN WITNESS WHEREOF`）。

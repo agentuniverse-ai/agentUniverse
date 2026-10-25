@@ -317,3 +317,49 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ContractClauseFragmenter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/contract_clause_fragmenter.yaml)
+
+This component fragments contract texts by individual clause units, addressing the *contract clause fragmentation* direction of issue #258 ("in contract clause scenarios it is often necessary to fragment based on individual clauses"). Generic splitters cut contracts at arbitrary lengths, splitting a clause mid-sentence and gluing neighboring clauses together; retrieval then returns fragments that cross clause boundaries and cannot be cited precisely. This fragmenter instead detects legal clause markers at line starts and emits one document per clause, preserving the hierarchy (Article → Section → numbered sub-clause → lettered item) in each fragment's metadata.
+
+Recognized markers: numbered clauses (`1.`, `1.1`, `1.1.1`), `Article`/`Section` headings (Roman or Arabic), lettered sub-clauses (`(a)`, `(B)`) and Chinese markers (`第一条`, `一、`, `（一）` and the half-width `(一)` form). Lettered and Chinese parenthesized items are classified as `lettered` fragments and nested under their nearest numbered or Article ancestor. ALLCAPS boilerplate headings are also treated as boundaries: `WHEREAS` blocks become `recital` fragments, `NOW, THEREFORE` becomes an `operative` fragment and `IN WITNESS WHEREOF` becomes an `execution` fragment. By default the preamble before the first marker and the `WHEREAS` recital blocks are dropped as non-operative text; set `keep_preamble: true` to retain them as `preamble` / `recital` fragments. If every detected fragment is filtered out (for example a recitals-only page with `keep_preamble: false`), the document falls back to a single `unstructured` fragment rather than vanishing.
+
+Every fragment records its exact source span in `metadata.char_start` / `metadata.char_end`, maintaining the invariant `source[char_start:char_end] == fragment.text`, so downstream consumers can always map a fragment back to its position in the original contract. `max_fragment_chars` (default 0 = unlimited) bounds fragment size: an over-long clause is split at sentence boundaries (Latin and CJK sentence enders), falling back to raw character cuts for run-on sentences; every part keeps the clause metadata plus `part_index` / `part_count` keys and its own exact span. Cross-references (`Article 1`, `Section 3.2`, `第一条`, ...) between fragments are extracted into `clause_references` when `extract_references` is enabled.
+
+The component definition file is as follows:
+```yaml
+name: 'contract_clause_fragmenter'
+description: 'Fragment legal contracts by individual clauses while preserving hierarchical structure'
+preserve_hierarchy: true
+min_clause_length: 10
+extract_references: true
+skip_on_error: true
+keep_preamble: false            # keep the preamble and WHEREAS recital blocks as fragments
+max_fragment_chars: 0           # split over-long clauses at sentence boundaries; 0 disables
+clause_patterns:
+  - '^Article\s+[IVX\d]+\.?\s*'
+  - '^ARTICLE\s+[IVX\d]+\.?\s*'
+  - '^Section\s+\d+(\.\d+)*\.?\s*'
+  - '^SECTION\s+\d+(\.\d+)*\.?\s*'
+  - '^\d+\.(\d+\.)*\s+'
+  - '^\([a-zA-Z]\)\s*'                                # lettered items: (a), (B)
+  - '^第[一二三四五六七八九十百千\d]+条\s*'                  # Chinese articles
+  - '^[一二三四五六七八九十百千\d]+、\s*'                    # Chinese enumeration
+  - '^[（(][一二三四五六七八九十百千\d]+[)）]\s*'            # Chinese parenthesized items
+boilerplate_patterns:
+  - '^WHEREAS\b[,\s]*'                                 # recital blocks
+  - '^NOW[,\s]+THEREFORE\b[,\s]*'                      # operative grant
+  - '^IN\s+WITNESS\s+WHEREOF\b[,\s]*'                  # execution block
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.contract_clause_fragmenter'
+  class: 'ContractClauseFragmenter'
+```
+- preserve_hierarchy: When true (default), fragments carry `hierarchy_level`, `parent_clause` and `children_clauses` metadata reflecting the Article → Section → numbered → lettered nesting.
+- clause_patterns: Regex patterns for clause markers, matched at line starts (case-insensitive). Override to add domain-specific numbering styles.
+- min_clause_length: Minimum character length for a fragment; shorter detections are merged away (dropped).
+- extract_references: When true, cross-references to other clauses found in a fragment are listed in `clause_references`.
+- skip_on_error: When true, a document that fails processing is passed through unchanged instead of raising.
+- keep_preamble: When true, the preamble before the first clause marker and the `WHEREAS` recital blocks are kept as `preamble` / `recital` fragments; by default (false) they are dropped as non-operative text.
+- max_fragment_chars: Maximum characters per fragment. Over-long clauses are split at sentence boundaries (raw character cuts for run-on sentences); every part keeps the clause metadata plus `part_index` / `part_count` and its own `char_start` / `char_end`. 0 (default) disables splitting.
+- boilerplate_patterns: Regex patterns for ALLCAPS boilerplate headings that start a new fragment (`WHEREAS`, `NOW, THEREFORE`, `IN WITNESS WHEREOF` by default).
