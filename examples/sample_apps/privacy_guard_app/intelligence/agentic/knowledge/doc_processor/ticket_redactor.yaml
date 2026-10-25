@@ -1,0 +1,22 @@
+# !/usr/bin/env python3
+# -*- coding:utf-8 -*-
+
+name: 'ticket_redactor'
+description: '工单专用脱敏处理器：内置邮箱/手机/银行卡/身份证/IP 脱敏，并自定义工号、订单号正则。'
+entities:
+    - email
+    - phone
+    - credit_card
+    - id_card
+    - ip_address
+replacement: '[REDACTED]'
+custom_patterns:
+    - name: employee_id
+      pattern: '\bEMP-\d{6}\b'
+    - name: order_no
+      pattern: '\bORD-\d{8}\b'
+log_key: 'redaction_summary'
+metadata:
+    type: 'DOC_PROCESSOR'
+    module: 'agentuniverse.agent.action.knowledge.doc_processor.sensitive_data_redactor'
+    class: 'SensitiveDataRedactor'
