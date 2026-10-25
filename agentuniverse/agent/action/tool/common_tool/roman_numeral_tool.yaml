@@ -1,0 +1,52 @@
+name: roman_numeral_tool
+description: Roman numeral tool — pure Python stdlib, no network required. Integer 1-3999 to canonical Roman numeral (mode='to_roman'), case-insensitive Roman numeral to integer with strict canonical validation by round-trip (mode='from_roman'), validity verdict with reason (mode='validate'), and numeral arithmetic add/subtract/multiply whose result must stay within 1-3999 (modes='add'/'subtract'/'multiply'). Non-canonical inputs like 'IIII', 'IM' or 'VX' are rejected with the specific violated rule.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.roman_numeral_tool
+  class: RomanNumeralTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — to_roman, from_roman, validate, add, subtract or multiply.
+    required: true
+  number:
+    type: integer
+    description: to_roman mode only — the integer to convert (1-3999), given as an integer or a pure digit string without sign, decimal point or whitespace.
+    required: false
+  numeral:
+    type: string
+    description: from_roman / validate modes only — the Roman numeral to parse or check; case-insensitive, non-empty, at most 64 characters.
+    required: false
+  a:
+    type: string
+    description: Arithmetic modes only — the first operand, a Roman numeral string (case-insensitive).
+    required: false
+  b:
+    type: string
+    description: Arithmetic modes only — the second operand, a Roman numeral string (case-insensitive).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["to_roman", "from_roman", "validate", "add", "subtract", "multiply"]
+      description: Operation mode.
+    number:
+      type: integer
+      minimum: 1
+      maximum: 3999
+      description: Integer to convert (to_roman mode).
+    numeral:
+      type: string
+      description: Roman numeral to parse or check (from_roman / validate modes).
+    a:
+      type: string
+      description: First arithmetic operand as a Roman numeral.
+    b:
+      type: string
+      description: Second arithmetic operand as a Roman numeral.
+  required: ["mode"]

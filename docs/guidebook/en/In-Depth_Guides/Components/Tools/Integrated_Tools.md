@@ -649,3 +649,42 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Roman Numeral Tool
+
+`RomanNumeralTool` is a Roman numeral conversion / validation /
+arithmetic utility built purely on the Python standard library with
+zero network access, restricted to the classical range 1..3999 in
+strict subtractive notation. `to_roman` mode converts an integer (or
+pure digit string) 1-3999 to its canonical numeral built from the
+subtractive pairs `IV`, `IX`, `XL`, `XC`, `CD`, `CM`; `from_roman`
+mode converts a case-insensitive numeral string to its integer,
+validating strictly by round-trip so non-canonical forms such as
+`IIII`, `IM` or `VX` are rejected with the specific violated rule
+cited; `validate` mode returns a verdict payload with the reason, the
+decoded value and the canonical form; and `add` / `subtract` /
+`multiply` modes do arithmetic on two numeral operands, returning the
+result as a numeral plus its integer value.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.roman_numeral_tool import RomanNumeralTool
+
+tool = RomanNumeralTool()
+numeral = tool.execute(mode="to_roman", number=1954)["result"]        # "MCMLIV"
+value = tool.execute(mode="from_roman", numeral="mcmxcix")["result"]  # 1999
+check = tool.execute(mode="validate", numeral="IIII")                 # valid=False, repetition rule
+total = tool.execute(mode="multiply", a="XL", b="XC")["result"]       # "MMMDC" (3600)
+```
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, empty strings, unknown mode, missing or
+non-string operands, numerals over 64 characters, numbers outside
+1-3999 for `to_roman`) raise a `ValueError`. Errors that depend on
+the content being processed — a numeral that breaks one of the four
+Roman numeral rules (allowed symbols; at most three `I`/`X`/`C`/`M`
+in a row and never repeated `V`/`L`/`D`; only the subtractive pairs
+`IV`/`IX`/`XL`/`XC`/`CD`/`CM`; canonical round-trip within 1-3999) or
+an arithmetic result outside 1-3999 (including zero and negative
+results) — are returned as a structured `error` payload
+(`{"type": ..., "message": ...}`) instead of raising. Input is
+case-insensitive; output is always canonical uppercase.
