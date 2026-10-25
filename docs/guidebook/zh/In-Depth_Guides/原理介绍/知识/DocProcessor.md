@@ -315,3 +315,31 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ChecklistCompletenessAnalyzer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/checklist_completeness_analyzer.yaml)
+
+该组件度量文档内复选框任务清单的完成程度，对应 issue #258 的*知识加工前处理/分析*方向。知识库和运维手册里到处是任务清单——入职指引、发布检查单、事故复盘行动项——其中危险的是那些做了一半的：一条"验证备份"仍未勾选的 runbook，一旦被索引进去就是错误信息。处理器逐文档扫描复选框式列表项，并把分析结果写入 `metadata[checklist]`：`total` / `checked` / `unchecked` / `empty_labels` 计数、`ratio`（`checked / total` 四舍五入到 4 位小数；未找到复选框时为 `null`，绝不编造分数）、`missing_items`（未勾选项的标签，按文档序，有上限）以及表示因上限截断的 `missing_truncated` 标志。
+
+识别规则刻意保守且零依赖。一个列表项是这样一个行：行首可有缩进，随后是可选的列表标记（`-`、`*`、`+`、`1.` 或 `1)`）加复选框 `[ ]`（未勾选）或 `[x]` / `[X]`（已勾选）；行首直接出现的裸复选框同样计入。括号内不是单个空格、`x` 或 `X` 的（`[o]`、`[maybe]`、`[]`）视为普通文本；句中复选框、转义形式（`\[x]`）以及围栏代码块（``` 或 `~~~`，未闭合的围栏延续到文本末尾）内的每一行都不计入，因此嵌入日志里的示例清单永远不会被误算。标签会去除尾部空白；空标签计入 `empty_labels` 但不会进入 `missing_items`，既让编写失误可见，又不污染缺失清单。
+
+默认只写入元数据。设置 `min_ratio` 和/ `max_ratio` 后进入过滤模式：完成度落在闭区间之外的文档被丢弃；没有可计算完成度（未找到复选框，此时在 `metadata[checklist_note]` 记一条 `"no checkboxes found"`）的文档始终保留，因为不存在拒绝它的证据。该组件关注的是*清单完成度*，与 `ListStructureExtractor` 等结构类处理器互补：它不重塑列表，而是给列表打完成度分，指标随文档一起进入存储。全部为纯 Python 实现，确定且离线——相同输入永远得到相同元数据。
+
+组件定义文件如下：
+```yaml
+name: 'checklist_completeness_analyzer'
+description: 'analyze checkbox task lists and stamp completeness ratio and missing items into document metadata'
+min_ratio: null               # 可选：过滤用的完成度下界
+max_ratio: null               # 可选：过滤用的完成度上界
+checklist_key: 'checklist'    # 分析结果写入的元数据键；'' 禁用
+note_key: 'checklist_note'    # 无复选框提示写入的元数据键；'' 禁用
+max_items_reported: 25        # missing_items 保留的未勾选标签上限
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.checklist_completeness_analyzer'
+  class: 'ChecklistCompletenessAnalyzer'
+```
+- min_ratio: 可选的最低完成度（0..1）；过滤模式下低于它的文档被丢弃。默认 `null` 表示不启用该边界，也就不启用过滤。
+- max_ratio: 可选的最高完成度（0..1）；过滤模式下高于它的文档被丢弃。默认 `null` 表示不启用该边界。
+- checklist_key: 分析字典写入每个文档的元数据键；空值禁用写入。字典含 `total` / `checked` / `unchecked` / `empty_labels` 整数、`ratio`（数值，未找到复选框时为 `null`）、`missing_items`（有上限的未勾选标签）和 `missing_truncated`。
+- note_key: 无复选框文档的提示写入的元数据键；空值禁用该提示。
+- max_items_reported: `missing_items` 保留的未勾选标签数量上限（`0` 表示不保留）。因该上限省略标签时，`missing_truncated` 置为 `true`。
