@@ -675,3 +675,64 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## HTTP Header Tool
+
+`HttpHeaderTool` validates, parses, and audits HTTP header fields offline
+(RFC 7230/7231/6265 plus the OWASP secure-headers checklist) using only the
+standard library. It offers four modes: `validate`, `parse_list`,
+`security_audit`, and `parse_cookie`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.http_header_tool import HttpHeaderTool
+
+tool = HttpHeaderTool()
+result = tool.execute(
+    mode="validate",
+    name="Set-Cookie",
+    value="sid=1; Secure\r\nX-Injected: yes",
+    which="response",
+)
+audit = tool.execute(
+    mode="security_audit",
+    headers="Server: nginx/1.19\nSet-Cookie: sid=abc; SameSite=None",
+)
+```
+
+`validate` checks a header name against the RFC 7230 token grammar (tchar, no
+whitespace, no CR/LF/NUL) and the value against the field-value grammar
+(visible US-ASCII plus SP/HTAB), flagging header-injection vectors (bare
+CR/LF, obs-fold line continuations, NUL truncation) with character spans.
+Known fields are categorized request-only/response-only/both, and cross-usage
+(for example a response-only `Age` on a request) is warned about.
+
+`parse_list` splits list headers (Accept, Cache-Control style) on commas
+outside quoted-strings, keeps duplicate tokens and order, parses parameters
+with or without values, unescapes quoted-pairs, and handles malformed `q`
+weights per RFC 7231. `security_audit` parses a `Name: value` text block and
+reports missing HSTS/CSP/X-Content-Type-Options/Referrer-Policy/
+Permissions-Policy with severities and mitigations, HSTS max-age checks
+(0, below the OWASP 180-day bar, overflow, quoting; per RFC 6797 a duplicated
+directive or invalid delta-seconds voids the entire header, and the audit
+reports that instead of treating the header as active), CSP directive
+inventory with `unsafe-inline`/`unsafe-eval`/plaintext-http source flags
+(honoring the CSP3 ignore rules: `unsafe-inline` is inert beside a nonce or
+hash or under `strict-dynamic`, and host sources are inert under
+`strict-dynamic`), unquoted
+`nonce-`/`sha256-` tokens flagged as host-sources that never apply, the valid
+empty `sandbox` form, report-uri deprecation and report-to without a
+Reporting-Endpoints declaration, plus default-src fallback notes, deprecated
+headers (X-Frame-Options ALLOW-FROM, X-XSS-Protection, X-WebKit-CSP),
+`no-store` checks on sensitive responses, cookie attribute checks, and
+Server/X-Powered-By version leak notes.
+
+`parse_cookie` parses one Set-Cookie line into name, value, typed attributes
+(Expires via the real lenient RFC 6265 section 5.1.1 cookie-date algorithm,
+Max-Age, Domain, Path, Secure, HttpOnly SameSite with the
+SameSite=None-requires-Secure rule), size, and RFC 6265 strict issues.
+Unlike `http.cookies`, `$Path`/`$Domain` metasyntax is not attached to the
+preceding cookie and quoted values keep their quotes, per RFC 6265.
+
+All inputs are validated strictly and bounded (name/value lengths, list
+elements, audit bytes and lines, cookie length); repeated runs are
+deterministic and everything runs offline.
