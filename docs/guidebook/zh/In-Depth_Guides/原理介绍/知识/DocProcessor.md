@@ -315,3 +315,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [StopwordRemover](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/stopword_remover.yaml)
+
+该组件在切分与向量化之前移除文档文本中的停用词，对应 issue #258 的*预处理*方向。功能词——*the*、*is*、*of*、的、了、是——几乎不携带检索信号，却占每篇文档相当大的质量比重；放任不管会稀释分块的向量表示，让套话措辞主导相似度。组件按 `languages` 门控运行两个语种通道：英文词级通道用单个正则把文本切成块（至多含一个内部撇号的拉丁词——*don't* 这类缩写保持完整——及其两侧紧贴的标点；CJK 表意文字连续段；以及其他非空白连续段），丢弃词干（小写化后）命中停用词的块，幸存块以单空格重新拼接，块之间的空白（制表符、换行、连续空格）随之归一为单个空格；中文字符通道逐字删除命中停用词集合的 CJK 表意文字——无需分词器，组件因此保持纯标准库、离线且确定性，只删除字符本身（留下的空白保留在原处，首尾残留空白会被剥除）。它与相邻组件刻意区分：`TextNormalizer` 修复 unicode/空白缺陷但不删任何词汇，`KeywordExtractor` 把高频词排进 metadata 而不改写文本——本组件才是真正给文本瘦身的那一个。
+
+内置词表刻意保持精炼——120 个英文功能词（冠词、连词、代词、be/do/have 与情态动词、介词及少量量词副词）和 81 个单个中文字符（助词、介词/coverb、代词、高频副词）——以精确率优先于召回率，让移除只稀释语法黏合剂而不改变文档主题。`custom_stopwords` 在其上追加领域词条，`replace_builtin` 则整体替换内置词表；自定义词条只在与其文字脚本匹配且该语言已启用的通道中生效。每个处理后的文档都会（经由复制的 metadata 映射）写入 `metadata['stopword_removed_count']` 与 `metadata['stopword_ratio'] = removed / considered`，其中 `considered` 在*原始*文本上、且只统计已启用语言，计数所有拉丁词块加上所有 CJK 表意字符，`removed` 为其中命中停用词集合的数目；无可统计内容的文本比率为 0.0。文档既不删除也不重排，纯停用词文档以空文本和比率 1.0 保留，`mode: 'tag'` 只写统计而不改动任何文本字节。
+
+组件定义文件如下：
+```yaml
+name: 'stopword_remover'
+description: 'strip common function words (stopwords) from document text before splitting and embedding'
+languages: ['en', 'zh']        # 运行的通道：en = 拉丁词级通道，zh = CJK 字符级通道
+custom_stopwords: []           # 并入内置词表的额外停用词
+replace_builtin: false         # true 时 custom_stopwords 整体替换内置词表
+mode: 'remove'                 # remove | tag
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.stopword_remover'
+  class: 'StopwordRemover'
+```
+- languages：启用哪些通道——'en' 启用拉丁词级通道，'zh' 启用 CJK 字符级通道。默认 `['en', 'zh']`，一次处理混合语料。
+- custom_stopwords：并入生效词表的额外停用词；拉丁词条由 'en' 词级通道匹配，单个 CJK 字符由 'zh' 字符通道匹配。默认（空/None）只用内置词表。
+- replace_builtin：为 true 时 `custom_stopwords` 整体替换内置词表而非追加；要求 `custom_stopwords` 非空。
+- mode：'remove'（默认）改写文本删除停用词；'tag' 不改动文本，只把统计写入 metadata。
