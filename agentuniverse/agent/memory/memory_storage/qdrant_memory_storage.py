@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from heapq import nlargest
 from typing import Any, Dict, List, Optional, ClassVar
 import uuid
 from qdrant_client import QdrantClient
@@ -177,7 +178,18 @@ class QdrantMemoryStorage(MemoryStorage):
     def get(
         self, session_id: str = None, agent_id: str = None, top_k=10, input: str = "", source: str = None, **kwargs
     ) -> List[Message]:
+        """Retrieve semantic matches or the latest chronological history window.
+
+        Before the first write creates the collection, return an empty history.
+        Without an input query, scan matching payloads in pages because Qdrant's
+        default scroll order is point ID, not creation time. Retain only top_k
+        messages plus one page in memory; reads still scale with full matching
+        history. This avoids requiring a new payload index on existing stores.
+        Timestamp ties use the string message ID for deterministic ordering.
+        """
         client = self._ensure_client()
+        if not client.collection_exists(self.collection_name):
+            return []
         filt = self._build_filter(
             session_id=session_id, agent_id=agent_id, source=source, type_value=kwargs.get("type")
         )
@@ -205,18 +217,32 @@ class QdrantMemoryStorage(MemoryStorage):
             else:
                 return []
 
-        scroll_result = client.scroll(
-            collection_name=self.collection_name,
-            scroll_filter=filt,
-            limit=top_k,
-            with_payload=True,
-            with_vectors=False,
+        # Scroll is ordered by point ID, not creation time. Visit every matching
+        # page while retaining only the requested latest history window.
+        def history_messages():
+            offset = None
+            while True:
+                points, offset = client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=filt,
+                    limit=100,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                yield from self.to_messages(points)
+                if offset is None:
+                    break
+
+        messages = nlargest(
+            top_k,
+            history_messages(),
+            key=lambda msg: ((msg.metadata or {}).get("gmt_created", ""), msg.id),
         )
-        points = scroll_result[0]
-        messages = self.to_messages(points)
-        messages = sorted(messages, key=lambda msg: (msg.metadata or {}).get("gmt_created", ""))
+        # Match ordinary memory history consumers: oldest to newest within the
+        # selected recent window, so pruning removes older turns first.
         messages.reverse()
-        return messages[:top_k]
+        return messages
 
     def to_messages(self, results: Any) -> List[Message]:
         message_list: List[Message] = []
