@@ -152,7 +152,7 @@ class ExcelTool(Tool):
         try:
             import openpyxl
         except ImportError:
-            raise ImportError("openpyxl is required. Install with: pip install openpyxl")
+            raise ImportError("openpyxl is required. Install with: pip install openpyxl") from None
 
         try:
             workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
@@ -216,7 +216,7 @@ class ExcelTool(Tool):
         try:
             import openpyxl
         except ImportError:
-            raise ImportError("openpyxl is required. Install with: pip install openpyxl")
+            raise ImportError("openpyxl is required. Install with: pip install openpyxl") from None
 
         try:
             # Check if file exists
@@ -285,7 +285,7 @@ class ExcelTool(Tool):
         try:
             import openpyxl
         except ImportError:
-            raise ImportError("openpyxl is required. Install with: pip install openpyxl")
+            raise ImportError("openpyxl is required. Install with: pip install openpyxl") from None
 
         try:
             if not os.path.exists(file_path):
@@ -351,7 +351,7 @@ class ExcelTool(Tool):
         try:
             import openpyxl
         except ImportError:
-            raise ImportError("openpyxl is required. Install with: pip install openpyxl")
+            raise ImportError("openpyxl is required. Install with: pip install openpyxl") from None
 
         try:
             if not os.path.exists(file_path):
