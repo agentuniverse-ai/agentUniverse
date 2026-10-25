@@ -315,3 +315,31 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [KeywordHighlighter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/keyword_highlighter.yaml)
+
+该组件将文档文本中所有命中的配置关键词用高亮标记包裹，对应 issue #258 的*知识标注*方向。它与 `KeywordInContextConcentrator`（#3512）互补：后者把关键词上下文窗口提取到 metadata 而不改动原文，本组件则直接修改文本本身——改写后的 `doc.text` 正是 RAG 前端渲染的内容，每处命中都带可见定界符，用户因此能看到关键词在切片中的*具体位置*。
+
+匹配基于正则、确定且离线：关键词经 `re.escape` 转义（它们是字面量而非模式），默认不区分大小写，并在默认开启的 `whole_words` 下加**ASCII 词边界**围栏——`new` 命中 "a new deal" 却不会命中 "renewal" 或 "newest"。围栏特意只针对 ASCII：CJK 文本没有空格，`模型` 这类中文关键词天然整词，允许串内命中（`大模型时代`）。重叠关键词按最长优先解决——同时配置 `new` 与 `New York` 时，重叠处短语获胜，独立出现的单词仍会命中。`max_highlights`（默认 200）限制携带标记的命中数量；超出上限的命中保持原样，而 `metadata['highlight_count']` 仍统计全部命中，`metadata['highlighted_keywords']` 列出实际命中过的去重关键词（按配置拼写、首次出现顺序）。
+
+对组件自身输出的重复处理是空操作：已被当前标记对包裹的命中会被识别并跳过，标记不会翻倍，文本与写入的 metadata 均保持逐字节一致。使用*不同*标记风格反复处理则不受保护。
+
+组件定义文件如下：
+```yaml
+name: 'keyword_highlighter'
+description: 'wrap configured keyword occurrences in document text with highlight markers'
+keywords: ['agent', 'knowledge']   # 字面关键词；首尾空白会被去除
+marker: 'bold'                     # bold | mark | wiki | html | custom
+case_sensitive: false             # 为假时两侧均折叠大小写
+whole_words: true                 # 对 ASCII 词边的关键词加 ASCII 词边界
+max_highlights: 200               # 携带标记的最大命中数；计数仍为总数
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.keyword_highlighter'
+  class: 'KeywordHighlighter'
+```
+- keywords：待高亮的字面关键词非空列表。大小写不敏感的重复项折叠为首次配置的拼写；重叠关键词按最长优先解决。
+- marker：标记风格——`bold`（`**kw**`）、`mark`（`==kw==`，Obsidian 风格）、`wiki`（`[[kw]]`）、`html`（`<mark>kw</mark>`）或 `custom`（使用 `marker_prefix` / `marker_suffix`，两者都必须非空）。
+- case_sensitive：为真时匹配区分大小写。默认为假。
+- whole_words：为真（默认）时，对首尾是 ASCII 词字符的关键词加 ASCII 词边界；CJK 关键词因该书写系统没有空格而不加边界。
+- max_highlights：每篇文档携带标记的最大命中数（>= 1）；超出部分保持原样，`metadata['highlight_count']` 仍统计全部命中。

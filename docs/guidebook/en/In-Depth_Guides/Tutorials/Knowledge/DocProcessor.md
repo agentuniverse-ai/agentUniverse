@@ -317,3 +317,31 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [KeywordHighlighter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/keyword_highlighter.yaml)
+
+This component rewrites document text with highlight markers around every occurrence of the configured keywords, addressing the *annotation* direction of issue #258. It complements `KeywordInContextConcentrator` (#3512): that processor extracts keyword context windows into metadata while leaving the source text untouched, whereas this one modifies the text itself — the rewritten `doc.text` is what a RAG front-end renders, with each match visibly delimited so the user can see *where in the chunk* the terms sit.
+
+Matching is regex-based, deterministic and offline: keywords are `re.escape`d (they are literals, never patterns), compared case-insensitively unless `case_sensitive`, and — under the default `whole_words` — fenced with **ASCII word boundaries**, so `new` matches inside "a new deal" but not inside "renewal" or "newest". The fences are deliberately ASCII-only: CJK scripts carry no spaces, so a CJK keyword such as `模型` is inherently whole-word and matches mid-string (`大模型时代`). Overlapping keywords resolve longest-first — with both `new` and `New York` configured, the phrase wins where they overlap and the term still matches standalone occurrences. `max_highlights` (default 200) bounds how many occurrences carry markers; matches beyond the cap are left unmarked while `metadata['highlight_count']` still reports the total, and `metadata['highlighted_keywords']` lists the unique configured keywords that actually matched (configured spelling, first-occurrence order).
+
+Re-running the processor on its own output is a no-op: a match already wrapped in the configured marker pair is recognized and skipped, so markers are never doubled and both text and stamped metadata stay byte-identical. Repeated runs with *different* marker styles are not protected against.
+
+The component definition file is as follows:
+```yaml
+name: 'keyword_highlighter'
+description: 'wrap configured keyword occurrences in document text with highlight markers'
+keywords: ['agent', 'knowledge']   # literal keywords; whitespace stripped
+marker: 'bold'                     # bold | mark | wiki | html | custom
+case_sensitive: false             # fold case on both sides when false
+whole_words: true                 # ASCII word boundaries around ASCII-edged keywords
+max_highlights: 200               # max occurrences carrying markers; count stays total
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.keyword_highlighter'
+  class: 'KeywordHighlighter'
+```
+- keywords: Non-empty list of literal keywords to highlight. Case-insensitive duplicates collapse to their first configured spelling; overlapping keywords resolve longest-first.
+- marker: Marker style — `bold` (`**kw**`), `mark` (`==kw==`, Obsidian-style), `wiki` (`[[kw]]`), `html` (`<mark>kw</mark>`) or `custom` (uses `marker_prefix` / `marker_suffix`, both required non-empty).
+- case_sensitive: When true, matching distinguishes case. Default false.
+- whole_words: When true (default), ASCII word boundaries are required around keywords with ASCII word-character edges; CJK keywords match without boundaries since the script has no spaces.
+- max_highlights: Maximum occurrences carrying markers per document (>= 1); further matches are left unmarked while `metadata['highlight_count']` still counts every match.
