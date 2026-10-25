@@ -9,8 +9,15 @@
 from typing import Any, List, Optional, ClassVar
 import uuid
 
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import Distance, PointStruct, VectorParams
+except ImportError as e:
+    raise ImportError(
+        "qdrant-client is required to use QdrantStore. "
+        "Install it with: pip install qdrant-client"
+    ) from e
+
 from agentuniverse.agent.action.knowledge.embedding.embedding_manager import (
     EmbeddingManager,
 )
