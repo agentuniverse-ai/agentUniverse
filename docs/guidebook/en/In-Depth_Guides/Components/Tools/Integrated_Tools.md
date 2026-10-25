@@ -675,3 +675,66 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## jq Lite Tool
+
+`JqLiteTool` runs a documented, strict subset of the jq query language over
+JSON text with four modes: `validate`, `execute`, `explain` and
+`transpile_check`. Behaviour is verified against the real `jq` binary
+(outputs match `jq -c` line by line, including jq's number formatting, key
+order preservation and error messages), and the runtime is standard-library
+only.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.jq_lite_tool import JqLiteTool
+
+tool = JqLiteTool()
+validated = tool.execute(mode="validate", query=".[] | select(.a != null and .b > 3)")
+explained = tool.execute(mode="explain", query='.[] | .name // "anonymous"')
+result = tool.execute(
+    mode="execute",
+    query='.[] | select(.score >= 3) | {name: .name, score: .score}',
+    json_text='[{"name": "a", "score": 5}, {"name": "b", "score": 1}]',
+)
+round_trip = tool.execute(mode="transpile_check", query="map(.a) | sort_by(.b) | first")
+```
+
+The supported subset covers identity `.`, field access `.a`, `."quoted key"`,
+`.["key"]` and optional chains `.a?` (postfix `?` also works after builtin
+calls and constructions, e.g. `add?` / `[.x]?`); iteration `.[]`; indices
+`.a[0]` (a redundant `.` before the bracket, `X.[0]`, is accepted like jq);
+slices `.[2:5]`; pipes `|`; commas `,` with jq's full multi-output stream
+semantics; array `[...]` and object `{a: .b, "k": .v}` construction
+(including `{a}` shorthand, jq's keyword/logic-word keys such as
+`{true: 1}` / `{and: 1}`, string-key shorthand `{"a"}`, and the cartesian
+product over multi-output values); number/string/boolean/null literals (jq
+1.7 canonicalizes every literal with decNumber's rule: in-range plain
+decimals are kept verbatim (`1.0`, `2.50`), `1e2` prints `1E+2`,
+`0.0000001` prints `1E-7`, a zero keeps its written exponent (`0e2` is
+`0E+2`), and negative query literals are computed unary-minus doubles
+(`[-2.50]` prints `[-2.5]`, `[-0.0]` prints `[-0]`); the JavaScript constants
+`NaN` / `Infinity` are accepted and print like jq, as `null` and
+`1.7976931348623157e+308`); the alternative operator `//` with jq's falsiness
+rule (only `null`/`false` trigger the alternative, so `false // 5` is `5`
+while `0 // 5` is `0`); comparisons `==  !=  <  <=  >  >=` under jq's total
+ordering; boolean `and`/`or`/`not`; and the builtin filters `length`,
+`keys`, `keys_unsorted`, `has("k")`, `type`, `empty`, `add`, `first`,
+`last`, `reverse`, `sort`, `sort_by(.f)`, `map(.f)`, `unique`, `min`,
+`max`, `join(",")` and `select(.f)`.
+
+Everything else (arithmetic, string interpolation, recursive descent `..`,
+`if/then/else`, `try`/`catch`, `reduce`, `def`, variables, `limit`, regex
+helpers, `@base64`-style formats, `env`/`$ENV`, `input`/`inputs`, slice
+steps `.[::2]`, the adjacent `?//` token (jq's destructuring-alternative
+operator; write `? //` with a space), comments and all other builtins) is
+rejected with a
+structured `not_in_subset` error that names the construct and its position
+instead of being silently mis-evaluated. `validate` decomposes the query
+into human-readable steps and lists any unsupported constructs; `execute`
+returns one compact JSON line per output (jq's output-per-line stream
+convention), keeps partial outputs when jq would abort with an error, and
+mirrors jq's error text exactly; `explain` renders an English walkthrough;
+`transpile_check` re-serializes the parse tree and verifies it re-parses to
+the same semantics. Query length, AST node count, nesting depth, input
+bytes, output count and trace sizes are all capped, evaluation is
+deterministic, and the tool never touches the shell, filesystem or network.

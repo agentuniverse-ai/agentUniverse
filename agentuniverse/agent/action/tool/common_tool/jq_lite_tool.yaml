@@ -1,0 +1,31 @@
+name: jq_lite_tool
+description: Validate, execute, explain and round-trip a documented, safe subset of jq queries over JSON text.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.jq_lite_tool
+  class: JqLiteTool
+input_keys:
+  - mode
+  - query
+max_query_length: 10000
+max_input_bytes: 1000000
+max_ast_nodes: 5000
+max_nesting_depth: 120
+max_outputs: 1000
+max_intermediates: 1000000
+max_trace_values: 50
+max_trace_steps: 100
+max_value_chars: 200
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [validate, execute, explain, transpile_check]
+    query:
+      type: string
+    json_text:
+      type: string
+  required: [mode, query]
+  additionalProperties: false
