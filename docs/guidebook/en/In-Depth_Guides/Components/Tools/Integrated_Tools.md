@@ -675,3 +675,63 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Log Parser Tool
+
+`LogParserTool` parses common log formats with pure Python standard
+library regex — no network access, no third-party dependencies. It
+recognizes five formats: `combined` (Apache/Nginx combined access log:
+`IP - user [time] "REQ" status bytes "ref" "ua"`), `common` (the
+Apache common access log without referrer/agent), `syslog` (RFC 3164
+style `Mon DD HH:MM:SS host proc[pid]: msg`), `leveled` (ISO-timestamp
+plus severity, e.g. `2026-10-19T10:30:00Z LEVEL name msg` with
+optional `[LEVEL]` brackets and bare `[LEVEL] msg` lines) and
+`keyvalue` (space-separated `k=v` pairs, values optionally quoted).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.log_parser_tool import LogParserTool
+
+tool = LogParserTool()
+guess = tool.execute(mode="detect", text=log_text)
+records = tool.execute(mode="parse", text=log_text, format="combined")["records"]
+errors = tool.execute(mode="filter", text=log_text, level_min="ERROR", status_min=500)
+```
+
+`detect` samples up to `sample_size` non-blank lines (default 200,
+evenly spaced and deterministic), has every line vote for the first
+format that matches it, and reports the winning `format_guess`, its
+`confidence` (winner votes / sampled lines), a `majority` flag, the
+full per-format `votes` tally plus `unparseable`, and the count of
+`mixed_lines` that voted elsewhere. `parse` structures every line with
+the explicit or auto-detected format — combined records carry `ip`,
+`ident`, `user`, `time`, `method`, `path`, `protocol`, `status`,
+`bytes`, `referrer`, `agent`; syslog records `timestamp`, `host`,
+`proc`, `pid`, `message`; leveled records `timestamp`, `level`,
+`logger`, `message`; keyvalue records are the flat `key=value`
+dictionary — and lines that do not match come back as
+`{"raw": ..., "error": ...}` entries tallied in `failed_count`, never
+as exceptions. Apache `-` placeholders become `null` for `ident`,
+`user` and `bytes`; `status` and `bytes` are integers. Quoted tail
+fields follow the Apache escaping convention — a literal quote inside
+the referrer or agent is logged as `\"` and a backslash as `\\`; such
+escapes are accepted and the record carries the unescaped value.
+`filter` parses
+first, then keeps records satisfying every given predicate: `level_min`
+(inclusive; ordering TRACE < DEBUG < INFO < WARN < ERROR < FATAL with
+`WARNING`/`CRITICAL` aliases), `status_min` (inclusive HTTP code),
+`method` (exact) and `ip` (exact); it returns the matching raw lines
+and their parsed records. Records without the field a predicate needs
+are excluded by that predicate; an unknown level string cannot be
+ordered and is excluded from `level_min` filtering.
+
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, empty text or text with no non-blank lines,
+unknown mode / format / level, out-of-range `status_min` /
+`sample_size`, text over 1,000,000 characters, over 10,000 lines, a
+single line over 10,000 characters, predicates outside `filter` mode or
+no predicate at all in `filter` mode) raise a `ValueError`. The one
+content-level failure — auto-detection finding zero parsable lines —
+returns a structured `error` payload instead of raising. Lines are
+stripped of surrounding whitespace before processing; keyvalue values
+are kept as strings with an optional pair of surrounding quotes
+removed, and a duplicate key keeps its last occurrence.
