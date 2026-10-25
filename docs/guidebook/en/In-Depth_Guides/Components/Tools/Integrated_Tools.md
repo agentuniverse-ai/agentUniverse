@@ -649,3 +649,58 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## EncodingDetectTool
+
+`EncodingDetectTool` identifies the encoding of raw byte payloads and
+diagnoses encoding accidents. It answers the question that precedes every
+text pipeline step: which encoding are these bytes actually in, and what is
+wrong with the encoding the document claims? Raw bytes are passed either as
+`payload` text produced with the latin-1 escape contract
+(`payload_bytes.decode('latin-1')` preserves each byte as exactly one code
+point) or as a `hex` string for exact bytes; exactly one of the two is
+required.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.encoding_detect_tool import EncodingDetectTool
+
+tool = EncodingDetectTool()
+result = tool.execute(
+    mode="detect",
+    payload=raw_bytes.decode("latin-1"),
+    declared="utf-8",
+)
+report = tool.execute(
+    mode="diagnose",
+    hex=raw_bytes.hex(),
+    declared="iso-8859-1",
+)
+```
+
+The `detect` mode returns BOM sniffing against the exact signature table
+(UTF-8, UTF-16LE/BE, UTF-32LE/BE, plus weaker UTF-7 and UTF-1 signatures),
+per-candidate structural validation, ranked candidates with confidence
+scores and evidence labels (`bom`, `structural`, `null-ratio`,
+`ascii-ratio`, `declared`), a winner, and a declared-versus-detected
+conflict flag. UTF-8 validation reports the first error byte offset with a
+reason (missing continuation, overlong, surrogate, above U+10FFFF);
+UTF-16 validation covers odd lengths and unpaired surrogates; UTF-32
+validation covers values above U+10FFFF. The `diagnose` mode returns
+findings: BOM-versus-declared mismatches (the BOM wins and the declaration
+is flagged as a document author error), invalid-for-declared with exact
+offsets, null-byte ratios as a UTF-16 hint, low-confidence
+windows-1252-versus-latin-1 disambiguation notes, UTF-8-read-as-latin-1
+mojibake signatures with a capped repair preview and a double-mojibake
+note, a control-character census, and line-ending counts per decoding. The
+`validate_utf8` mode returns the strict per-error list with offsets, bytes,
+and reasons, capped with an exact total; `repair_preview` decodes the
+payload under a target interpretation with U+FFFD replacement counts and
+positions.
+
+All heuristics are deterministic and evidence-labeled: no locale, model, or
+network is consulted. Structural verdicts and UTF-8 error offsets follow
+the stdlib codecs semantics exactly. Ambiguous classes such as latin-1
+versus windows-1252 are deliberately scored below 0.7 confidence with both
+candidates listed instead of guessing. Payload size, error counts, preview
+lengths, and candidate counts are bounded, and truncation is visible in the
+returned metadata.

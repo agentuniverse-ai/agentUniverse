@@ -1,0 +1,36 @@
+name: encoding_detect_tool
+description: Identify and diagnose the encoding of raw byte payloads via BOM sniffing, structural validation, and deterministic heuristics.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.encoding_detect_tool
+  class: EncodingDetectTool
+input_keys:
+  - mode
+max_payload_bytes: 4194304
+max_errors: 50
+max_preview_chars: 512
+max_candidates: 6
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [detect, diagnose, validate_utf8, repair_preview]
+    payload:
+      type: string
+      description: >
+        Raw bytes passed through the latin-1 escape contract
+        (payload_bytes.decode('latin-1') preserves each byte as one code
+        point); exactly one of payload or hex is required.
+    hex:
+      type: string
+      description: Exact payload bytes as a hex string; exactly one of payload or hex is required.
+    declared:
+      type: string
+      description: Encoding the document claims to be, compared against the detected winner.
+    target:
+      type: string
+      description: Target interpretation for repair_preview (any codec-registered encoding name).
+  required: [mode]
+  additionalProperties: false
