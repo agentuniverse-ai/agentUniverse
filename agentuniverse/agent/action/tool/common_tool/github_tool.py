@@ -70,7 +70,21 @@ class GitHubTool(Tool):
             if response is None:
                 return {"error": f"HTTP Error: {str(e)}"}
             if response.status_code == 403:
-                return {"error": "API rate limit exceeded. Please check your API key or try again later."}
+                try:
+                    payload = response.json()
+                except (ValueError, requests.RequestException):
+                    payload = None
+                message = payload.get("message", "") if isinstance(payload, dict) else ""
+                remaining = response.headers.get("x-ratelimit-remaining", "")
+                retry_after = response.headers.get("retry-after")
+                rate_limited = (
+                    remaining == "0"
+                    or retry_after is not None
+                    or "rate limit" in message.lower()
+                )
+                if rate_limited:
+                    return {"error": "API rate limit exceeded. Please check your API key or try again later."}
+                return {"error": f"HTTP Error 403: {response.text}"}
             elif response.status_code == 404:
                 return {"error": "Resource not found."}
             else:
