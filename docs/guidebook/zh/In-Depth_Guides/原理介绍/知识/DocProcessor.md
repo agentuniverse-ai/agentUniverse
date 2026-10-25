@@ -315,3 +315,27 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [CodeBlockDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/code_block_detector.yaml)
+
+该组件定位围栏代码块并把行跨度与语言写入文档 metadata，对应 issue #258 的*预处理/分析*方向。以 Markdown 为主的语料——README 集合、设计文档、issue 归档、聊天记录——携带大量围栏代码块，而下游组件大多将其视为噪声：嵌入模型在其上耗费 token，关键词提取器会索引标识符，切分器则把代码块切成无意义的碎片。现有流水线组件只是自保（`OutlineExtractor` 与 `HeadingConsistencyChecker` 解析标题时跳过围栏内的行），没有一个真正编目代码的位置。本处理器为每篇文档按 CommonMark 规则扫描围栏代码块，把每个块的语言、行跨度、规模、缩进与闭合状态记录进 `metadata[code_blocks]`，后续阶段因此可以按块、按精确坐标决定在嵌入前遮蔽、绕开或丢弃哪些内容。
+
+围栏识别遵循 CommonMark：起始行是最多缩进 3 个空格、其余部分以 3 个及以上连续反引号或波浪线开头的行，行内剩余部分是 info 字符串，取其第一个词（小写化）作为语言（缺省为空串；词仅以 ASCII 空格、制表符与回车分隔，其他 Unicode 空白属于词的一部分），反引号围栏的 info 字符串中不得再出现反引号。结束围栏必须是最多缩进 3 个空格、仅由同种围栏字符重复至少起始长度构成（围栏字符之后只允许空格、制表符与回车残留，不允许其他 Unicode 空白，也不允许 info 文本）的行——因此 3 个反引号不能闭合 4 个反引号的块，波浪线围栏永远不会闭合反引号围栏，形似嵌套的围栏只是外围块的内容。未闭合的围栏一直延伸到文档末尾，并以 `unclosed: true` 上报。一个有意的偏差：不执行 CommonMark 对 info 字符串的行内规范化（反斜杠转义与实体引用解析），直接上报原始第一个词。
+
+写入 `metadata[code_blocks]` 的摘要包含：`blocks`（每块明细——`language`、覆盖围栏本身的 1 基闭区间 `span` `[首行, 末行]`、含围栏行的 `line_count`、`unclosed`、`indent`——最多保留 `max_blocks` 条），以及对*全部*检测块（含超出上限的部分）的聚合：`block_count`、`total_code_lines`、按计数降序再按语言名排序的 `languages` 直方图、`longest_block_lines` 与 `code_ratio`（代码行数除以总行数；行数按 `\n` 切分统计，因此末尾换行会产生一个空行）。`mask: true` 时每个块（含超出上限的）还会在文档文本中被替换为单行占位符 `⟦code:python:12⟧`（语言在前、行数在后）。占位符不含围栏字符，因此遮蔽是幂等的：第二遍扫描找不到任何围栏，文本保持不变。整个流程纯 Python、确定性和离线。
+
+组件定义文件如下：
+```yaml
+name: 'code_block_detector'
+description: 'locate fenced code blocks and stamp spans plus languages into document metadata'
+mask: false                  # 同时把代码块替换为 ⟦code:<lang>:<lines>⟧ 占位符
+max_blocks: 50               # 每块明细上限；聚合始终统计全部块
+metadata_key: 'code_blocks'  # 摘要写入的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.code_block_detector'
+  class: 'CodeBlockDetector'
+```
+- mask：为真时，把每个检测到的块在文档文本中替换为 `⟦code:<lang>:<lines>⟧` 占位符行，下游嵌入或切分只看到正文。默认 false（仅检测，不改文本）。
+- max_blocks：写入 metadata 的 `blocks` 明细列表最多保留的条目数，必须 >= 1。超出上限的块仍计入所有聚合统计。默认 50。
+- metadata_key：摘要映射写入的 metadata 键；为空则不写入（适合只做遮蔽的流水线）。默认 `code_blocks`。

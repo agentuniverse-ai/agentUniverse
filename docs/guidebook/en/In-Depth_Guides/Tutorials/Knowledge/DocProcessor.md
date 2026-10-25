@@ -317,3 +317,27 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [CodeBlockDetector](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/code_block_detector.yaml)
+
+This component locates fenced code blocks and stamps spans plus languages into document metadata, addressing the *pre-processing/analysis* direction of issue #258. Markdown-heavy corpora — README dumps, design docs, issue trackers, archived chat logs — carry large fenced code blocks that downstream components mostly treat as noise: embedding models spend tokens on them, keyword extractors index identifier names, and splitters cut blocks into meaningless fragments. Existing pipeline pieces merely defend themselves (`OutlineExtractor` and `HeadingConsistencyChecker` skip fence-interior lines while parsing headings); none catalogs where the code actually lives. This processor scans every document for CommonMark fenced code blocks and records each block's language, line span, size, indentation and closure state into `metadata[code_blocks]`, so later stages can decide — per block, with exact coordinates — what to mask, split around or drop before embedding.
+
+Fence recognition follows CommonMark: an opener is a line indented by at most 3 spaces whose remainder starts with a maximal run of 3 or more backticks or tildes; the rest of the line is the info string, whose first word (lowercased) is taken as the language (empty string when absent; words are delimited by ASCII spaces, tabs and carriage returns only, so other Unicode whitespace stays part of the word), and a backtick fence may not carry backticks in its info string. A closing fence must be a line indented by at most 3 spaces consisting solely of the same fence character repeated at least as many times as the opener (only spaces, tabs or a trailing carriage return may follow the run — not other Unicode whitespace — and no info text) — so a 3-backtick fence does not close a 4-backtick block, a tilde fence never closes a backtick fence, and nested-looking fences simply remain content of the enclosing block. A fence left open runs to the end of the document and is reported with `unclosed: true`. One deliberate deviation: CommonMark's inline normalization of the info string (backslash escape and entity reference resolution) is not applied — the raw first word is reported.
+
+The summary stamped under `metadata[code_blocks]` contains: `blocks` (per-block details — `language`, `span` as 1-based inclusive `[first_line, last_line]` covering the fences themselves, `line_count` including fence lines, `unclosed`, `indent` — capped at `max_blocks` entries), plus aggregates over *every* detected block even beyond the cap: `block_count`, `total_code_lines`, a `languages` histogram ordered by descending count then language name, `longest_block_lines`, and `code_ratio` (code lines divided by total lines; lines are counted by splitting on `\n`, so a trailing newline yields one final empty line). With `mask: true` every block — capped ones included — is additionally replaced in the document text by a single placeholder line of the form `⟦code:python:12⟧` (language, then line count). Placeholders contain no fence characters, so masking is idempotent: a second pass finds no fences and leaves the text untouched. The whole pipeline is pure Python, deterministic and offline.
+
+The component definition file is as follows:
+```yaml
+name: 'code_block_detector'
+description: 'locate fenced code blocks and stamp spans plus languages into document metadata'
+mask: false                  # also replace blocks with ⟦code:<lang>:<lines>⟧ placeholders
+max_blocks: 50               # per-block details cap; aggregates always count everything
+metadata_key: 'code_blocks'  # metadata key for the summary; '' disables stamping
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.code_block_detector'
+  class: 'CodeBlockDetector'
+```
+- mask: When true, replace each detected block in the document text with a `⟦code:<lang>:<lines>⟧` placeholder line so downstream embedding or splitting sees prose only. Default false (detect only, text untouched).
+- max_blocks: Maximum number of per-block detail entries kept in the `blocks` list of the stamped metadata; must be >= 1. Blocks beyond the cap are still counted in every aggregate. Default 50.
+- metadata_key: Metadata key the summary mapping is written to; an empty value disables stamping (useful for mask-only pipelines). Default `code_blocks`.
