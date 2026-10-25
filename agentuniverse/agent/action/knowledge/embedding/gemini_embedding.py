@@ -34,7 +34,7 @@ class GeminiEmbedding(Embedding):
                 raise ImportError(
                     "genai is required. Install with: pip install google-genai"
                 ) from e
-            
+
         model_name = self.embedding_model_name or "text-embedding-004"  # default model
 
         try:
@@ -85,7 +85,7 @@ class GeminiEmbedding(Embedding):
         super()._initialize_by_component_configer(embedding_configer)
         if hasattr(embedding_configer, "gemini_api_key"):
             self.gemini_api_key = embedding_configer.gemini_api_key
-        
+
         # Initialize client if API key is available
         if self.gemini_api_key:
             try:
