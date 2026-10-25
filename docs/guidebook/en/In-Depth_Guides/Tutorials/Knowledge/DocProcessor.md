@@ -317,3 +317,42 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [TextQualityScorer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/text_quality_scorer.yaml)
+
+This component scores the content quality of each document, addressing the *content-quality* direction of issue #258. RAG pipelines ingest whatever the source hands over: well-edited prose, but also keyboard mash pasted into a form field, symbol-heavy spam, digit dumps from log scrapes and boilerplate loops repeated by a scraper bug. Embedding such junk wastes budget and pollutes recall, yet metadata-driven filters can only react to signals that are already correct. The TextQualityScorer looks at the text itself and stamps every document with a deterministic `quality_score` in [0, 100], so low-quality documents can be routed, audited or filtered before ingestion. It judges the text content and is therefore complementary to components judging *where* a document came from (source-level credibility) as well as to `ThresholdFilter`, which applies user-supplied rules to metadata this component produces.
+
+Per-document metrics, all pure-stdlib and computed in one pass: `length_chars`, `non_whitespace_chars` (the denominator the symbol/digit-soup gate is measured over), `word_count` (whitespace tokens containing Latin letters plus every CJK character — CJK text is not spaced, so characters are the natural unit and Chinese documents are not misjudged by word statistics designed for Latin scripts), `mean_word_length` (over Latin words; `None` for pure CJK), `unique_word_ratio` (distinct over total word units, Latin words lowercased and stripped of attached punctuation), `alpha_ratio` / `digit_ratio` / `punctuation_ratio` (shares of letters, digits and Unicode punctuation over non-whitespace characters), `whitespace_irregularity` (share of whitespace characters in irregular runs: 2+ spaces, 3+ newlines, tabs, carriage returns, exotic spaces, mixed runs, or whitespace touching either end), and `cjk_ratio`. At or above `cjk_threshold` (default 0.30) the document takes the CJK-aware path: CJK characters count as word units and Latin word length stops contributing.
+
+The composite score is a weighted mean of seven sub-scores in [0, 1] named by `weights` — `alpha` (alphabetic share), `structure` (enough word units and sane Latin word lengths), `punctuation` (the share band real prose sits in), `diversity` (penalises pathological repetition and, on longer texts, token-soup uniqueness near 1.0), `digit` (tolerates moderate digit share), `whitespace` and `length`. Two unambiguous pathologies then gate the result downwards: long documents whose word units repeat almost verbatim (unique ratio < 0.10 over 30+ units — spam loops, scraper boilerplate) lose half their score, and long documents that are mostly symbols or digits (alpha ratio < 0.20 over 100+ non-whitespace characters) lose 60%. Empty, whitespace-only, symbol-only and digit-only documents score exactly 0. Everything is fixed arithmetic — no randomness, no network, no model calls — so the same text always yields the same score and metrics dict.
+
+By default every document is kept and only stamped with `metadata[score_key]` and `metadata[metrics_key]`. When `min_score` is set, documents scoring below it are marked `metadata[rejected_key] = True` on their original object — so callers holding the input list can see why a document vanished — and are dropped from the output; the boundary is inclusive. Metadata mappings are copied before mutation and text, id and pre-existing metadata entries are never modified.
+
+The component definition file is as follows:
+```yaml
+name: 'text_quality_scorer'
+description: 'score document content quality (0-100) from lexical statistics and optionally drop low-quality documents'
+min_score: null               # drop threshold in [0, 100]; null keeps all
+weights:                      # sub-score name -> relative weight
+  alpha: 0.10
+  structure: 0.20
+  punctuation: 0.20
+  diversity: 0.30
+  digit: 0.05
+  whitespace: 0.05
+  length: 0.10
+cjk_threshold: 0.30           # CJK share activating the CJK-aware path
+score_key: 'quality_score'    # metadata key for the score; '' disables
+metrics_key: 'quality_metrics'  # metadata key for the metrics; '' disables
+rejected_key: 'quality_rejected'  # key set True on dropped docs; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.text_quality_scorer'
+  class: 'TextQualityScorer'
+```
+- min_score: Optional drop threshold in [0, 100]; `null` (default) keeps every document and only stamps scores. Documents scoring exactly `min_score` are kept; lower ones are dropped and marked rejected on their original object.
+- weights: Mapping of sub-score name (`alpha`, `structure`, `punctuation`, `diversity`, `digit`, `whitespace`, `length`) to a non-negative weight; the composite is the weighted mean, so only relative values matter, at least one must be positive, and a provided mapping replaces the defaults entirely.
+- cjk_threshold: CJK-character share over non-whitespace characters at which the CJK-aware path activates, in (0, 1].
+- score_key: Metadata key the numeric quality score is written to; an empty value disables stamping.
+- metrics_key: Metadata key the metrics dict is written to; an empty value disables stamping.
+- rejected_key: Metadata key set to True on dropped document objects when `min_score` filtering is active; an empty value disables stamping.

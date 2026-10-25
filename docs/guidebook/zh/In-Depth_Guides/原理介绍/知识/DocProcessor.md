@@ -315,3 +315,42 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [TextQualityScorer](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/text_quality_scorer.yaml)
+
+该组件为每篇文档的内容质量评分，对应 issue #258 的*内容质量*方向。RAG 流水线会照单全收来源给的一切：精心编辑的正文，也有表单里粘贴的键盘乱敲、符号堆砌的垃圾信息、日志抓取得到的数字串，以及爬虫故障造成的样板文本循环。向量化这些垃圾既浪费预算又污染召回，而基于元数据的过滤器只能对已经正确的信号做判断。TextQualityScorer 直接考察文本本身，为每篇文档写入 [0, 100] 的确定性 `quality_score`，低质量文档因此在入库前就能被路由、审计或过滤。它判断的是文本内容，与判断文档*来源*的组件（来源可信度）以及对该组件产出的元数据应用用户规则的 `ThresholdFilter` 互补。
+
+每篇文档的指标全部由标准库单趟计算：`length_chars`（字符数）、`non_whitespace_chars`（非空白字符数，符号/数字汤门控的计量分母）、`word_count`（含拉丁字母的空白词元数加上每个 CJK 字符——中文不使用空格分词，字符才是自然单位，中文文档因此不会被为拉丁字母设计的词统计误伤）、`mean_word_length`（仅拉丁词，纯中文为 `None`）、`unique_word_ratio`（去重词元占比，拉丁词小写化并去除附着标点）、`alpha_ratio` / `digit_ratio` / `punctuation_ratio`（字母、数字、Unicode 标点占非空白字符的比例）、`whitespace_irregularity`（不规则空白占比：连续 2 个以上空格、3 个以上换行、制表符、回车、异形空格、混合空白串，以及首尾空白）、`cjk_ratio`。CJK 占比达到 `cjk_threshold`（默认 0.30）即走中文感知路径：CJK 字符计为词元，拉丁词长不再参与评分。
+
+综合分是七个 [0, 1] 子分的加权平均，子分名由 `weights` 指定——`alpha`（字母占比）、`structure`（词元数量充足且拉丁词长正常）、`punctuation`（落在真实文章的标点占比区间）、`diversity`（惩罚病态重复，长文本同时惩罚接近 1.0 的词元汤独特度）、`digit`（容忍适度数字占比）、`whitespace`、`length`。随后两种无歧义的病态直接向下门控：词元几乎原样重复的长文档（30+ 词元中独特占比 < 0.10——垃圾循环、爬虫样板）分数减半；几乎全是符号或数字的长文档（100+ 非空白字符中字母占比 < 0.20）扣减 60%。空白、纯符号、纯数字文档得分恰为 0。全部为固定算术——无随机、无网络、无模型调用——同一文本永远得到相同分数与指标。
+
+默认保留全部文档，仅写入 `metadata[score_key]` 与 `metadata[metrics_key]`。设置 `min_score` 后，低于阈值的文档在原对象上标记 `metadata[rejected_key] = True`（持有输入列表的调用方因此能看到文档消失的原因）并从输出中移除；边界是含等于的。写入前会复制 metadata 映射，text、id 及既有元数据绝不改动。
+
+组件定义文件如下：
+```yaml
+name: 'text_quality_scorer'
+description: 'score document content quality (0-100) from lexical statistics and optionally drop low-quality documents'
+min_score: null               # 过滤阈值 [0, 100]；null 表示全保留
+weights:                      # 子分名 -> 相对权重
+  alpha: 0.10
+  structure: 0.20
+  punctuation: 0.20
+  diversity: 0.30
+  digit: 0.05
+  whitespace: 0.05
+  length: 0.10
+cjk_threshold: 0.30           # 触发中文感知路径的 CJK 占比
+score_key: 'quality_score'    # 分数写入的 metadata 键；'' 表示不写入
+metrics_key: 'quality_metrics'  # 指标写入的 metadata 键；'' 表示不写入
+rejected_key: 'quality_rejected'  # 被丢弃文档标记的键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.text_quality_scorer'
+  class: 'TextQualityScorer'
+```
+- min_score：可选过滤阈值 [0, 100]；`null`（默认）保留全部文档仅写入分数。等于 `min_score` 的文档保留，更低的被丢弃并在原对象上标记拒绝。
+- weights：子分名（`alpha`、`structure`、`punctuation`、`diversity`、`digit`、`whitespace`、`length`）到非负权重的映射；综合分为加权平均，只有相对大小起作用，至少一个为正，提供的映射会整体替换默认值。
+- cjk_threshold：触发中文感知路径的 CJK 字符占非空白字符比例，取值 (0, 1]。
+- score_key：数值质量分写入的 metadata 键；为空则不写入。
+- metrics_key：指标字典写入的 metadata 键；为空则不写入。
+- rejected_key：`min_score` 过滤生效时在被丢弃文档对象上置 True 的键；为空则不写入。
