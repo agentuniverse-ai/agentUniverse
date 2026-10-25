@@ -1,5 +1,5 @@
 name: duration_tool
-description: Duration tool — pure Python stdlib, no network required. Parse ISO-8601 durations (PT1H30M, P1DT2H) and shorthand expressions ('1d 2h 3m', '90m', '1.5h', CJK 天/时/分/秒) into total seconds, microseconds and canonical parts (mode='parse'); humanize a number of seconds as compact ('26h 30m'), long ('1 day, 2:30:00') or clock ('26:30:00') text (mode='humanize'); measure the duration between two ISO datetimes or dates (mode='between'); and add or subtract two duration strings (mode='add'). Fixed conversions: 1y=365d, 1mo=30d, 1w=7d; microsecond precision.
+description: "Duration tool — pure Python stdlib, no network required. Parse ISO-8601 durations (PT1H30M, P1DT2H) and shorthand expressions ('1d 2h 3m', '90m', '1.5h', CJK 天/时/分/秒) into total seconds, microseconds and canonical parts (mode='parse'); humanize a number of seconds as compact ('26h 30m'), long ('1 day, 2:30:00') or clock ('26:30:00') text (mode='humanize'); measure the duration between two ISO datetimes or dates (mode='between'); and add or subtract two duration strings (mode='add'). Fixed conversions: 1y=365d, 1mo=30d, 1w=7d; microsecond precision."
 tool_type: api
 metadata:
   type: TOOL
