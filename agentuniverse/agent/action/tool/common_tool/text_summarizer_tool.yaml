@@ -1,0 +1,64 @@
+name: text_summarizer_tool
+description: Text summarizer tool — offline extractive summarization and keyword extraction in pure Python, no LLM and no network required. mode='summarize' scores sentences by normalized term frequency with a position bonus and returns the top-N sentences re-ordered by original position (N from max_sentences, default 3, or ratio, 0.1-0.5); mode='keywords' returns the top_k heaviest content terms with weights. language='en'/'zh' selects tokenization stop words.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_summarizer_tool
+  class: TextSummarizerTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Summarizer mode — summarize (extractive summary) or keywords (top terms with weights).
+    required: true
+  text:
+    type: string
+    description: The text to summarize or extract keywords from. Required in both modes.
+    required: false
+  max_sentences:
+    type: integer
+    description: Summarize mode — number of sentences to keep (default 3, range 1-100). Ignored when ratio is supplied.
+    required: false
+  ratio:
+    type: number
+    description: Summarize mode — alternative selection strategy keeping ratio * sentence_count sentences (rounded down, at least 1); range 0.1-0.5. Takes precedence over max_sentences.
+    required: false
+  language:
+    type: string
+    description: Language hint — en (default) or zh; selects the stop-word list used for scoring. Tokenization understands both scripts, so mixed text is safe.
+    required: false
+  top_k:
+    type: integer
+    description: Keywords mode — number of terms to return (default 10, range 1-50).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["summarize", "keywords"]
+      description: Summarizer mode.
+    text:
+      type: string
+      description: Text to summarize or extract keywords from.
+    max_sentences:
+      type: integer
+      minimum: 1
+      maximum: 100
+      description: Sentences to keep (summarize mode).
+    ratio:
+      type: number
+      minimum: 0.1
+      maximum: 0.5
+      description: Fraction of sentences to keep (summarize mode; takes precedence over max_sentences).
+    language:
+      type: string
+      enum: ["en", "zh"]
+      description: Language hint selecting the stop-word list.
+    top_k:
+      type: integer
+      minimum: 1
+      maximum: 50
+      description: Terms to return (keywords mode).
+  required: ["mode"]
