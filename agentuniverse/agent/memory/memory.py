@@ -22,6 +22,7 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.memory_configer import MemoryConfiger
 from agentuniverse.base.util.memory_util import get_memory_tokens, get_memory_string
+from agentuniverse.llm.llm_manager import LLMManager
 
 
 class Memory(ComponentBase):
@@ -95,6 +96,11 @@ class Memory(ComponentBase):
         return []
 
     def prune(self, memories: List[Message]) -> List[Message]:
+        """Keep the newest suffix, counting default character lengths once.
+
+        Model tokenizers still measure each complete suffix because their
+        counts need not be additive across message boundaries.
+        """
         if not memories:
             return []
         new_memories = memories[:]
@@ -105,11 +111,26 @@ class Memory(ComponentBase):
         if tokens <= self.max_tokens:
             return new_memories
 
-        pruned_memories = []
+        character_lengths = None
+        rendered_count = 0
+        if LLMManager().get_instance_obj(agent_llm_name) is None:
+            character_lengths = [len(get_memory_string([message])) for message in memories]
+            rendered_count = sum(length > 0 for length in character_lengths)
+
+        cut = 0
         while tokens > self.max_tokens:
-            pruned_memory = new_memories.pop(0)
-            pruned_memories.append(pruned_memory)
-            tokens = get_memory_tokens(new_memories, agent_llm_name)
+            if character_lengths is not None:
+                length = character_lengths[cut]
+                if length:
+                    # Remove a separator only when another visible message remains.
+                    tokens -= length + (2 if rendered_count > 1 else 0)
+                    rendered_count -= 1
+            else:
+                tokens = get_memory_tokens(memories[cut + 1:], agent_llm_name)
+            cut += 1
+
+        pruned_memories = memories[:cut]
+        new_memories = memories[cut:]
 
         if pruned_memories:
             memory_compressor: MemoryCompressor = MemoryCompressorManager().get_instance_obj(self.memory_compressor)
