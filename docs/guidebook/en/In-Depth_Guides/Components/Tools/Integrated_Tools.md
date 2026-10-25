@@ -675,3 +675,55 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Relative Time Tool
+
+`RelativeTimeTool` converts between absolute datetimes and humanized
+relative expressions — "3 hours ago", "in 2 days", "3小时前", "2天后",
+"刚刚" — in both directions, built purely on the Python standard
+library with no network access. It complements `DateTimeTool`
+(absolute datetime operations) and `DurationTool` (duration unit
+conversion) by owning the humanized relative layer between them.
+
+`mode='to_relative'` renders an ISO 8601 datetime against a reference
+"now" in English (`language='en'`, default) or Chinese
+(`language='zh'`), bucketing the delta with the standard moment.js-style
+threshold ladder: < 45 s → seconds, < 90 s → "a minute", < 45 min →
+minutes, < 90 min → "an hour", < 22 h → hours, < 36 h → "a day",
+< 25 d → days, < 45 d → "a month", < 345 d → months (30-day months),
+< 548 d → "a year", otherwise years (365-day years); values round half
+away from zero, matching moment's `Math.round`.
+`mode='from_relative'` parses such expressions back — English
+(case-insensitive, "N unit ago", "in N unit", "N unit from now", "a/an
+unit", common abbreviations like "30s ago" / "2 hrs ago", plus weeks)
+and Chinese ("N秒/分钟/小时/天/周/个月/年前|后", "刚刚", "刚才") — into the
+datetime at the same offset from the reference "now". Both directions
+are inverses (`both_dirs`): every string `to_relative` emits parses
+back to `N` whole units of offset and re-renders identically, so the
+modes can be chained without drift.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.relative_time_tool import RelativeTimeTool
+
+tool = RelativeTimeTool()
+tool.execute(mode="to_relative", datetime="2026-10-19 09:00:00+00:00",
+             reference_datetime="2026-10-19 12:00:00+00:00")["result"]
+# '3 hours ago'
+tool.execute(mode="to_relative", datetime="2026-10-21 12:00:00+00:00",
+             language="zh")["result"]        # '2天后' (against the tool's now)
+tool.execute(mode="from_relative", text="in 2 days",
+             reference_datetime="2026-10-19 12:00:00+00:00")["result"]
+# '2026-10-21 12:00:00+00:00'
+```
+
+Results are deterministic: the reference "now" is the
+`reference_datetime` argument when given, otherwise the injectable
+`_now` class attribute (set it in tests to freeze the clock); the real
+UTC clock is read only when both are unset. Parameter problems (unknown
+mode or language, wrong types, missing `datetime` / `text`, oversized
+text) raise `ValueError` before any computation. Content problems — an
+unparseable datetime, mixing naive and timezone-aware values, an
+unknown unit, a malformed expression, or an offset that overflows the
+datetime range — return a structured `error` payload whose `position`
+is the 0-based index into the whitespace-collapsed input where the
+problem was detected.
