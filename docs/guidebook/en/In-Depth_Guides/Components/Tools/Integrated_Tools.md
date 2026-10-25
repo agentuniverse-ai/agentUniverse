@@ -675,3 +675,52 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Phonetic Code Tool
+
+`PhoneticCodeTool` computes phonetic codes for fuzzy name matching,
+built purely on the Python standard library with zero network access.
+Phonetic equivalence is an orthogonal axis to string similarity:
+`TextDistanceTool` measures how many characters differ, while this tool
+measures how alike two names *sound* — `Robert` and `Rupert` are far
+apart in edit distance yet share the Soundex code `R163`. Four modes
+are supported: `soundex` returns the classic 4-character American
+Soundex code (letter + 3 digits) for one or more words, implementing
+the standard NARA rules — `B F P V`→1, `C G J K Q S X Z`→2, `D T`→3,
+`L`→4, `M N`→5, `R`→6; adjacent same-code letters collapse once
+(including across an `H`/`W` bridge and including the first letter
+versus the second, so `Pfister`→`P236`); a vowel between same-code
+letters lets the second be coded again (`Tymczak`→`T522`); codes are
+zero-padded (`Lee`→`L000`); `nysiis` returns a *simplified* NYSIIS key
+following the verifiable core of the 1970 algorithm (prefix rules
+`MAC`→`MCC`, `KN`→`NN`, `SCH`→`SS`, `PH`/`PF`→`FF`, `K`→`N`; a
+character pass keeping the first character and mapping `Q`→`G`,
+`Z`/`J`→`S`, `M`→`N`, `K`→`C`, vowels→`A`, dropping `H`; suffix rules
+`AY`→`Y`, `AS`/`AH`→`A`, trailing `S` dropped; then collapsing of
+repeated characters — e.g. `Smith`→`SNAT`, `Tymczak`→`TYNCSAC`);
+`compare` compares two single words and reports `same_soundex`,
+`same_nysiis`, `soundex_distance` (0-4 Soundex positions that differ),
+`edit_distance` (Levenshtein distance between the two Soundex codes)
+and `nysiis_edit_distance`; and `batch_group` groups a word list by
+Soundex code (`{code: [words]}`) for name-dedup workflows.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import PhoneticCodeTool
+
+tool = PhoneticCodeTool()
+code = tool.execute(mode="soundex", text="Robert")["result"]            # "R163"
+codes = tool.execute(mode="soundex", text="robert rupert")["codes"]     # ["R163", "R163"]
+key = tool.execute(mode="nysiis", text="Smith")["result"]               # "SNAT"
+diff = tool.execute(mode="compare", word1="Robert", word2="Rupert")
+groups = tool.execute(mode="batch_group", words=["Robert", "Rupert", "Smith"])
+```
+
+Inputs are validated strictly before any computation: words must be
+non-empty ASCII alphabetic strings (`[A-Za-z]+`; split multi-part names
+yourself — hyphens, apostrophes and digits are rejected), `words` must
+be a non-empty list of such strings, and per-call limits are enforced
+(100 characters per word, 100 words per `text`, 1,000 entries per
+list). Every violation raises a `ValueError`. All results are
+deterministic, so codes can be cached and grouped offline. Phonetic
+codes deliberately lose information: they are a pre-filter for
+candidate name matches, not proof that two names are the same.
