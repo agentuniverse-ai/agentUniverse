@@ -1,0 +1,62 @@
+name: port_list_tool
+description: Parse, compress, expand, annotate, and combine network port specifications (ranges, well-known services, set algebra, policy checks).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.port_list_tool
+  class: PortListTool
+input_keys:
+  - mode
+  - spec
+max_spec_length: 500000
+max_spec_segments: 20000
+max_errors: 100
+max_infos: 50
+max_expand_ports: 4096
+max_input_ports: 65536
+max_service_results: 1000
+max_violation_ranges: 20
+max_overlap_reports: 50
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: [parse, expand, compress, services, algebra, check]
+    spec:
+      type: string
+      description: Comma-separated port spec, e.g. "22,80-90,443".
+    ports:
+      type: array
+      items: {type: integer, minimum: 0, maximum: 65535}
+      description: Explicit port list for compress input (alternative to spec).
+    spec_a:
+      type: string
+      description: Left operand spec for algebra mode.
+    spec_b:
+      type: string
+      description: Right operand spec for algebra mode.
+    op:
+      type: string
+      enum: [union, intersection, difference]
+      default: union
+    include_full:
+      type: boolean
+      default: false
+      description: Expand guard allowing the full 65536-port list.
+    allow_all:
+      type: boolean
+      default: false
+      description: Enable the 'all' keyword (expands to 0-65535).
+    allowed_ranges:
+      type: string
+      description: Policy spec of allowed ranges for check mode.
+    blocked_ports:
+      type: string
+      description: Policy spec of blocked ports for check mode.
+    max_ports:
+      type: integer
+      minimum: 0
+      description: Policy budget on the total port count for check mode.
+  required: [mode]
+  additionalProperties: false

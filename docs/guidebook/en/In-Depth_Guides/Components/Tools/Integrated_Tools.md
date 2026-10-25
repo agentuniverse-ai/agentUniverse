@@ -649,3 +649,51 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## PortListTool
+
+`PortListTool` is the ops-friendly port-specification layer: it converts
+between human specs such as `"22,80-90,443"` and explicit port sets, and
+combines them. It offers six modes — `parse`, `expand`, `compress`,
+`services`, `algebra`, and `check`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.port_list_tool import PortListTool
+
+tool = PortListTool()
+tool.execute(mode="parse", spec="22,80-90,443")
+tool.execute(mode="compress", ports=[80, 81, 82, 79])      # -> "79-82"
+tool.execute(mode="services", spec="22,443,514")
+tool.execute(mode="algebra", spec_a="20-30,40", spec_b="25-45", op="intersection")
+tool.execute(mode="check", spec="22,80-90", blocked_ports="23", allowed_ranges="1-1024", max_ports=100)
+```
+
+`parse` returns the ranged form with `ports_total` plus positional errors
+(non-numeric, `90-80` reversed, out-of-range, empty segments) and infos
+(`80-80` singleton collapse, duplicate or overlapping ranges with overlap
+arithmetic, reserved port 0). Whitespace around numbers, hyphens, and commas
+is tolerated; leading zeros (`080`) and unicode digits are rejected because
+port specs do not zero-pad. The `all` keyword expands to 0-65535 and requires
+`allow_all=true`.
+
+`compress` returns the minimal canonical spec: overlapping and ADJACENT runs
+merge (`80,81,82 -> 80-82`), while a one-port gap blocks merging
+(`79,81 stays 79,81`). `expand` materializes the explicit port list, capped
+at `max_expand_ports` unless the full 65536-port universe is explicitly
+requested with `include_full=true`.
+
+`services` annotates ranges from an embedded, IANA-curated table of roughly
+150 well-known ports (ssh, dns, dhcp, snmp, mssql, redis, mongodb, ...).
+The table is a curated subset: a port outside it is reported as `unknown`
+with an honest coverage note, never guessed. Where TCP and UDP differ (514 is
+shell over TCP but syslog over UDP) both protocol-specific rows are returned.
+
+`algebra` computes union, intersection, or difference of two specs and returns
+the compressed result; `check` audits a spec against `allowed_ranges`,
+`blocked_ports`, and `max_ports` for firewall reviews, listing each violation
+with its rule.
+
+All outputs are deterministic and bounded by configurable caps (spec length
+and segment count, error and info lists, expansion size, service results, and
+violation lists). The tool is stdlib-only and performs no network or
+filesystem access.
