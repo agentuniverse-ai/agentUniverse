@@ -315,3 +315,33 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ParagraphStatsProfiler](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/paragraph_stats_profiler.yaml)
+
+该组件把段落级结构统计写入文档 metadata，对应 issue #258 的*预处理/分析*方向。入库质量检查需要廉价的信号来回答"这份文本的形态是否符合预期"：PDF 转文本工具吞掉所有段落分隔、爬虫把整章倾倒成一堵文字墙、格式化器把文档打散成单行碎片——这些在内容质量打分器看来毫无差别，却都会破坏下游切分。该组件只审视每篇文档的**结构**（段落如何划分，绝不评判内容），把度量结果写入 metadata，文本本身绝不改动。它是 `TextQualityScorer` 等内容向打分器在结构维度的对应物。
+
+段落模型有精确表述：文本按 `\r\n`、`\r` 或 `\n` 切行（CRLF 文档与 LF 文档行为完全一致）；只含空白字符的行为空行；**段落**是连续非空行组成的极大片段——因此一个及以上空行的连续串都同样作为段落分隔（单个空行即已是边界），而段内单个换行仍留在段落内部（软回行的散文是一个段落而非多个）。每个段落向首尾非空白字符收边；其长度统计收边之间的所有字符（含段内单个换行），其 span 以字符偏移记录收边位置，`text[start:end]` 可精确还原该段落。首尾空行不产生段落，纯空白文本没有任何段落。
+
+`metadata[stats_key]` 收到 `paragraph_count`、`char_count`（各段落字符总数）、`mean_paragraph_chars`、`median_paragraph_chars`、`max_paragraph_chars`、`min_paragraph_chars`、`longest_paragraph_span`（首个最长段落的 `{"start", "end"}`，无段落时为 None）、`single_line_paragraph_count`（不含内部换行的段落）、`long_paragraph_count`（超过 `long_threshold`，默认 2000 字符的段落）与 `short_paragraph_count`（少于 `short_threshold`，默认 20 字符的段落）。`metadata[flag_key]` 给出一词判定：超过 `long_ratio`（默认 0.5）的段落字符总量落在超长段落中时为 `long_paragraphs`；超过 `fragmented_ratio`（默认 0.7）的段落比例低于短阈值时为 `fragmented`；两者同时成立为 `mixed`；否则为 `none`。全部计算仅用标准库——确定性（最长并列取首个、统计量稳定）、离线且零依赖。文档绝不被丢弃、重排或编辑；metadata 写入前先复制映射，空文档保持稳定的数值类型（0 / 0.0，span 为 None）。
+
+组件定义文件如下：
+```yaml
+name: 'paragraph_stats_profiler'
+description: 'profile paragraph-level structure statistics into document metadata for ingestion QA'
+long_threshold: 2000          # 超过该字符数的段落视为可疑超长
+short_threshold: 20           # 低于该字符数的段落视为可疑过短
+long_ratio: 0.5               # 超长段落占字符总量、触发标记的比例
+fragmented_ratio: 0.7         # 过短段落占段落总数、触发标记的比例
+stats_key: 'paragraph_stats'  # 统计字典写入的 metadata 键；'' 表示不写入
+flag_key: 'structure_flag'    # none|long_paragraphs|fragmented|mixed 写入的键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.paragraph_stats_profiler'
+  class: 'ParagraphStatsProfiler'
+```
+- long_threshold：段落数多长（严格多于该字符数）即视为可疑超长；整数且 >= 1。
+- short_threshold：非空段落少于该字符数即视为可疑过短；整数、>= 0 且 <= long_threshold。
+- long_ratio：超长段落中的字符占段落字符总量须严格超过该比例才触发 `long_paragraphs` 标记；取值 [0, 1]。
+- fragmented_ratio：短于 short_threshold 的段落占比须严格超过该比例才触发 `fragmented` 标记；取值 [0, 1]。
+- stats_key：统计字典写入的 metadata 键；为空则不写入。
+- flag_key：结构标记（none | long_paragraphs | fragmented | mixed）写入的 metadata 键；为空则不写入。

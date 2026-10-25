@@ -317,3 +317,33 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ParagraphStatsProfiler](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/paragraph_stats_profiler.yaml)
+
+This component profiles paragraph-level structure statistics into document metadata, addressing the *pre-processing/analysis* direction of issue #258. Ingestion QA needs cheap signals that answer "is the shape of this text what we expected?" before anything expensive runs on it: a PDF-to-text converter that swallowed every paragraph break, a crawler that dumped a whole chapter as one wall of text, or a formatter that shattered a document into one-line fragments all look identical to a content-quality scorer — yet each poisons chunking downstream. The profiler examines only the STRUCTURE of each document (how it is paragraphed, never what it says) and stamps the measurements into metadata; the text itself is never modified. It is the structural counterpart of content-oriented scorers such as `TextQualityScorer`.
+
+The paragraph model is stated precisely: the text is cut into lines on `\r\n`, `\r` or `\n` (CRLF documents behave exactly like LF ones); a line holding only whitespace is blank; a **paragraph** is a maximal run of consecutive non-blank lines — so runs of one OR MORE blank lines all separate paragraphs equally (a single blank line is already a boundary), while single line breaks inside a run stay INSIDE the paragraph (soft-wrapped prose is one paragraph, not many). Each paragraph is trimmed to its first and last non-whitespace character; its length counts every character between them (internal single line breaks included), and its span records those bounds as character offsets into the original text, so `text[start:end]` reproduces the paragraph exactly. Leading/trailing blank lines yield no paragraph, and whitespace-only text has none.
+
+`metadata[stats_key]` receives `paragraph_count`, `char_count` (total across paragraphs), `mean_paragraph_chars`, `median_paragraph_chars`, `max_paragraph_chars`, `min_paragraph_chars`, `longest_paragraph_span` (`{"start", "end"}` of the first longest paragraph, else None), `single_line_paragraph_count` (paragraphs without an internal line break), `long_paragraph_count` (paragraphs longer than `long_threshold`, default 2000 chars) and `short_paragraph_count` (paragraphs shorter than `short_threshold`, default 20 chars). `metadata[flag_key]` carries a one-word verdict: `long_paragraphs` when strictly more than `long_ratio` (default 0.5) of the total paragraph characters sits in over-long paragraphs; `fragmented` when strictly more than `fragmented_ratio` (default 0.7) of the paragraphs is under the short threshold; `mixed` when both hold; `none` otherwise. Everything is standard-library only — deterministic (first-longest tie-break, stable statistics), offline and dependency-free. Documents are never dropped, reordered or edited; metadata mappings are copied before mutation, and empty documents keep stable numeric types (0 / 0.0, span None).
+
+The component definition file is as follows:
+```yaml
+name: 'paragraph_stats_profiler'
+description: 'profile paragraph-level structure statistics into document metadata for ingestion QA'
+long_threshold: 2000          # chars above which a paragraph is suspiciously long
+short_threshold: 20           # chars below which a paragraph is suspiciously short
+long_ratio: 0.5               # char fraction in long paragraphs that raises the flag
+fragmented_ratio: 0.7         # paragraph fraction under short_threshold that raises the flag
+stats_key: 'paragraph_stats'  # metadata key for the statistics dict; '' disables
+flag_key: 'structure_flag'    # metadata key for none|long_paragraphs|fragmented|mixed; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.paragraph_stats_profiler'
+  class: 'ParagraphStatsProfiler'
+```
+- long_threshold: Paragraph length above which a paragraph counts as suspiciously long (strictly more characters); integer >= 1.
+- short_threshold: Paragraph length below which a non-empty paragraph counts as suspiciously short (strictly fewer characters); integer >= 0 and <= long_threshold.
+- long_ratio: Fraction of total paragraph characters that must sit in long paragraphs (strictly more) to raise the `long_paragraphs` flag; in [0, 1].
+- fragmented_ratio: Fraction of paragraphs that must be shorter than short_threshold (strictly more) to raise the `fragmented` flag; in [0, 1].
+- stats_key: Metadata key the statistics dict is written to; an empty value disables stamping.
+- flag_key: Metadata key the structure flag (none | long_paragraphs | fragmented | mixed) is written to; an empty value disables stamping.
