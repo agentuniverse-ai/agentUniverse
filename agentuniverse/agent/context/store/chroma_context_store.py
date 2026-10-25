@@ -25,6 +25,8 @@ from agentuniverse.agent.context.context_model import (
     ContextSegment,
     ContextType,
     ContextPriority,
+    elapsed_seconds_since,
+    timestamp_sort_key,
 )
 
 
@@ -246,7 +248,7 @@ class ChromaContextStore(ContextStore):
                     continue  # Skip corrupted entries
 
             # Sort by created_at (newest first)
-            segments.sort(key=lambda s: s.metadata.created_at, reverse=True)
+            segments.sort(key=lambda s: timestamp_sort_key(s.metadata.created_at), reverse=True)
             return segments[:limit]
 
         except Exception:
@@ -377,7 +379,6 @@ class ChromaContextStore(ContextStore):
         segments = self.get(session_id, limit=10000)
 
         to_remove = []
-        now = datetime.now()
         max_age_hours = kwargs.get("max_age_hours", self.ttl_hours)
 
         priority_order = {
@@ -399,7 +400,7 @@ class ChromaContextStore(ContextStore):
                 continue
 
             # Remove if too old
-            age_hours = (now - segment.metadata.created_at).total_seconds() / 3600
+            age_hours = elapsed_seconds_since(segment.metadata.created_at) / 3600
             if age_hours > max_age_hours:
                 to_remove.append(segment.id)
 

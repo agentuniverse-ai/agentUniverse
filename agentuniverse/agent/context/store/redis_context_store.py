@@ -18,13 +18,14 @@ Use cases:
 
 import json
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
 
 from agentuniverse.agent.context.context_store import ContextStore
 from agentuniverse.agent.context.context_model import (
     ContextSegment,
     ContextType,
     ContextPriority,
+    elapsed_seconds_since,
+    timestamp_sort_key,
 )
 
 
@@ -174,7 +175,7 @@ class RedisContextStore(ContextStore):
                 continue
 
         # Sort by created_at (newest first) and apply limit
-        segments.sort(key=lambda s: s.metadata.created_at, reverse=True)
+        segments.sort(key=lambda s: timestamp_sort_key(s.metadata.created_at), reverse=True)
         return segments[:limit]
 
     def search(
@@ -288,7 +289,6 @@ class RedisContextStore(ContextStore):
         segments = self.get(session_id, limit=10000)
 
         to_remove = []
-        now = datetime.now()
 
         for segment in segments:
             # Check TTL expiration (handled by Redis)
@@ -309,7 +309,7 @@ class RedisContextStore(ContextStore):
                     continue
 
             # Check manual TTL (from metadata)
-            age_hours = (now - segment.metadata.created_at).total_seconds() / 3600
+            age_hours = elapsed_seconds_since(segment.metadata.created_at) / 3600
             if age_hours > self.ttl_hours:
                 to_remove.append(segment.id)
 

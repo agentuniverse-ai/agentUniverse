@@ -22,7 +22,6 @@ loss by intelligently selecting which segments to preserve.
 
 import time
 from typing import List, Optional, Set
-from datetime import datetime
 
 from agentuniverse.agent.context.compressor.context_compressor import (
     ContextCompressor,
@@ -32,6 +31,7 @@ from agentuniverse.agent.context.context_model import (
     ContextSegment,
     ContextPriority,
     ContextType,
+    elapsed_seconds_since,
 )
 
 
@@ -434,7 +434,7 @@ class SelectiveCompressor(ContextCompressor):
             relevance_score = seg.calculate_decay()
 
             # Recency: time since last access (normalized)
-            time_delta = (datetime.now() - seg.metadata.last_accessed).total_seconds()
+            time_delta = elapsed_seconds_since(seg.metadata.last_accessed)
             recency_score = max(0.0, 1.0 - (time_delta / (24 * 3600)))  # 24h window
 
             # Access: normalized access count
