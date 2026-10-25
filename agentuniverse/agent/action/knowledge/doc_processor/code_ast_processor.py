@@ -19,6 +19,11 @@ from agentuniverse.base.config.component_configer.component_configer import Comp
 
 
 class CodeAstProcessor(DocProcessor):
+    """Extract code ASTs using installed tree-sitter grammar packages.
+
+    TypeScript uses tree_sitter_typescript.language_typescript(); other
+    languages retain their grammar package's language() entry point.
+    """
 
     max_depth: int = 8
     language_dir: str = None
@@ -47,7 +52,9 @@ class CodeAstProcessor(DocProcessor):
                     from importlib import import_module
                     module_name = f'tree_sitter_{language}'
                     lang_module = import_module(module_name)
-                    self._languages[language] = Language(lang_module.language())
+                    factory = (lang_module.language_typescript if language == 'typescript'
+                               else lang_module.language)
+                    self._languages[language] = Language(factory())
                 except ImportError:
                     raise ImportError(
                         f"Could not import {module_name}. Install with: pip install {module_name}")
