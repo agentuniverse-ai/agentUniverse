@@ -431,6 +431,8 @@ class SelectiveCompressor(ContextCompressor):
         """
         def calculate_score(seg: ContextSegment) -> float:
             # Relevance: decay score
+            """Calculate and return the importance score for the given input.
+            """
             relevance_score = seg.calculate_decay()
 
             # Recency: time since last access (normalized)
