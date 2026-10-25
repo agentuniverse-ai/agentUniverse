@@ -194,28 +194,31 @@ class FinancialIndicatorExtractor(DocProcessor):
         """
         metrics = []
 
+        # Scale suffixes must end before another ASCII word character, so
+        # ordinary prose such as "before" and "monthly" cannot inflate values.
+        # Keep the scale in capture group 2 for the conversion below.
         # Define metric patterns (comprehensive)
         metric_patterns = {
             'revenue': [
-                r'revenue[s]?\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
-                r'sales\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
-                r'total\s+revenue\s*(?:of\s+|:\s*|for\s+[A-Z0-9\s]+)?(?:reached\s+|was\s+|totaled\s+)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
+                r'revenue[s]?\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B|千万|亿)(?![A-Za-z0-9_]))?',
+                r'sales\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B|千万|亿)(?![A-Za-z0-9_]))?',
+                r'total\s+revenue\s*(?:of\s+|:\s*|for\s+[A-Z0-9\s]+)?(?:reached\s+|was\s+|totaled\s+)?[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?',
                 r'营收[达到]?(-?[0-9,.]+)\s*(万|亿)?',
-                r'[\$€£¥](-?[0-9,.]+)\s*(million|billion|M|B)\s+(?:in\s+)?revenue',
+                r'[\$€£¥](-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))\s+(?:in\s+)?revenue',
             ],
             'sales': [
-                r'sales\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
+                r'sales\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B|千万|亿)(?![A-Za-z0-9_]))?',
             ],
             'income': [
-                r'(?:net\s+)?income\s*(?:of\s+|was\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
+                r'(?:net\s+)?income\s*(?:of\s+|was\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?',
             ],
             'profit': [
-                r'(?:net\s+|gross\s+|operating\s+)?profit\s*(?:of\s+|was\s+|reached\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
-                r'(?:net\s+|operating\s+)?(?:loss|losses)\s*(?:of\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
-                r'earnings\s*(?:of\s+|was\s+|reached\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
+                r'(?:net\s+|gross\s+|operating\s+)?profit\s*(?:of\s+|was\s+|reached\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B|千万|亿)(?![A-Za-z0-9_]))?',
+                r'(?:net\s+|operating\s+)?(?:loss|losses)\s*(?:of\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?',
+                r'earnings\s*(?:of\s+|was\s+|reached\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B|千万|亿)(?![A-Za-z0-9_]))?',
                 r'净利润(?:达到)?[\$€£¥]?(-?[0-9,.]+)\s*(万|亿)?',
-                r'(?:negative|loss)(?:\s+of)?\s*[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
-                r'\(-?[\$€£¥]?([0-9,.]+)\s*(million|billion|M|B)?\)',  # Negative in parentheses
+                r'(?:negative|loss)(?:\s+of)?\s*[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?',
+                r'\(-?[\$€£¥]?([0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?\)',  # Negative in parentheses
             ],
             'margin': [
                 r'(?:gross|operating|net)?\s*margin[:]?\s+(?:of\s+|was\s+)?(-?[0-9,.]+)%',
@@ -241,11 +244,11 @@ class FinancialIndicatorExtractor(DocProcessor):
                 r'earnings\s+per\s+share[:]?\s+[\$€£¥]?(-?[0-9,.]+)',
             ],
             'cash_flow': [
-                r'(?:operating\s+|free\s+)?cash\s+flow\s+(?:of\s+)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
+                r'(?:operating\s+|free\s+)?cash\s+flow\s+(?:of\s+)?[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B|千万|亿)(?![A-Za-z0-9_]))?',
                 r'现金流(-?[0-9,.]+)\s*(万|亿)?',
             ],
             'free_cash_flow': [
-                r'free\s+cash\s+flow[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
+                r'free\s+cash\s+flow[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?',
             ],
             'roi': [
                 r'(?:return\s+on\s+investment|ROI)[:]?\s+(-?[0-9,.]+)%',
@@ -257,20 +260,20 @@ class FinancialIndicatorExtractor(DocProcessor):
                 r'(?:return\s+on\s+assets|ROA)[:]?\s+(-?[0-9,.]+)%',
             ],
             'debt': [
-                r'(?:total\s+)?debt[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
+                r'(?:total\s+)?debt[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?',
             ],
             'debt_ratio': [
                 r'debt[- ]to[- ]equity\s+ratio[:]?\s+(-?[0-9,.]+)',
                 r'debt\s+ratio[:]?\s+(-?[0-9,.]+)',
             ],
             'assets': [
-                r'(?:total\s+)?assets[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
+                r'(?:total\s+)?assets[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?',
             ],
             'liabilities': [
-                r'(?:total\s+)?liabilities[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
+                r'(?:total\s+)?liabilities[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?',
             ],
             'equity': [
-                r'(?:shareholders?\s+)?equity[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
+                r'(?:shareholders?\s+)?equity[:]?\s+[\$€£¥]?(-?[0-9,.]+)\s*((?:million|billion|M|B)(?![A-Za-z0-9_]))?',
             ],
             # Generic percentage-based metrics
             'growth_rate': [
@@ -589,7 +592,7 @@ class FinancialIndicatorExtractor(DocProcessor):
                 'confidence': metric.confidence,
                 'context': metric.context[:100] if len(metric.context) > 100 else metric.context,
                 'currency': self._detect_currency(metric.raw_match if metric.raw_match else metric.context),
-                'scale': self._detect_scale(metric.context),
+                'scale': self._detect_scale(metric.raw_match if metric.raw_match else metric.context),
             })
 
         metadata['financial_metrics'] = financial_metrics
@@ -655,9 +658,9 @@ class FinancialIndicatorExtractor(DocProcessor):
             Scale indicator.
         """
         context_lower = context.lower()
-        if 'billion' in context_lower or ' b' in context_lower or '亿' in context:
+        if re.search(r'(?<![A-Za-z])(?:billion|b)(?![A-Za-z0-9_])', context_lower) or '亿' in context:
             return 'billion'
-        elif 'million' in context_lower or ' m' in context_lower or '千万' in context or '百万' in context:
+        elif re.search(r'(?<![A-Za-z])(?:million|m)(?![A-Za-z0-9_])', context_lower) or '千万' in context or '百万' in context:
             return 'million'
         elif 'thousand' in context_lower or '千' in context:
             return 'thousand'
