@@ -85,6 +85,18 @@ In agentUniverse, the Model Channel (LLMChannel) class inherits from ComponentBa
 10. `model_is_openai_protocol_compatible`: (Optional) Determines whether the current channel's model supports the OpenAI protocol, default is True
 11. `_channel_model_config`: Inherits the model parameters configured in llm yaml. When llm initializes the channel, these parameters are assigned to the channel
 
+### Per-call endpoint overrides
+
+For the shared OpenAI-compatible channel, `api_base` selects the endpoint for
+one call. Omitting it, passing `None`, or passing an empty string uses the
+configured `channel_api_base`. The channel consumes this option before calling
+the SDK, for both synchronous/asynchronous and streaming/non-streaming requests.
+
+Endpoint selection uses a request-local SDK `with_options()` client. The cached
+SDK client's `base_url` remains unchanged, so concurrent calls with different
+overrides use their own endpoints. The request client reuses the existing HTTP
+transport, headers, query parameters and other SDK options.
+
 ## Specific Configuration Examples
 
 ### Official Channel

@@ -143,9 +143,10 @@ class LLMChannel(ComponentBase):
         ext_params = {**ext_params, **extra_body}
         if not streaming:
             ext_params.pop("stream_options", None)
-        self.client = self._new_client()
-        self.client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.channel_api_base
-        chat_completion = self.client.chat.completions.create(
+        client = self._new_client()
+        self.client = client
+        client = client.with_options(base_url=kwargs.pop('api_base', None) or self.channel_api_base)
+        chat_completion = client.chat.completions.create(
             messages=messages,
             model=kwargs.pop('model', self.channel_model_name),
             temperature=kwargs.pop('temperature', self.channel_model_config.get('temperature')),
@@ -181,9 +182,10 @@ class LLMChannel(ComponentBase):
         ext_params = {**ext_params, **extra_body}
         if not streaming:
             ext_params.pop("stream_options", None)
-        self.async_client = self._new_async_client()
-        self.async_client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.channel_api_base
-        chat_completion = await self.async_client.chat.completions.create(
+        client = self._new_async_client()
+        self.async_client = client
+        client = client.with_options(base_url=kwargs.pop('api_base', None) or self.channel_api_base)
+        chat_completion = await client.chat.completions.create(
             messages=messages,
             model=kwargs.pop('model', self.channel_model_name),
             temperature=kwargs.pop('temperature', self.channel_model_config.get('temperature')),

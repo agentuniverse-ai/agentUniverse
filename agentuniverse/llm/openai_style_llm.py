@@ -140,9 +140,9 @@ class OpenAIStyleLLM(LLM):
             ext_params["stream_options"] = {
                 "include_usage": True
             }
-        self.client = self._new_client()
-        self.client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.api_base
-        client = self.client
+        client = self._new_client()
+        self.client = client
+        client = client.with_options(base_url=kwargs.pop('api_base', None) or self.api_base)
         chat_completion = client.chat.completions.create(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
@@ -170,9 +170,9 @@ class OpenAIStyleLLM(LLM):
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
         if 'stream' in kwargs:
             streaming = kwargs.pop('stream')
-        self.async_client: AsyncOpenAI = self._new_async_client()
-        self.async_client.base_url = kwargs.pop('api_base') if kwargs.get('api_base') else self.api_base
-        async_client = self.async_client
+        async_client: AsyncOpenAI = self._new_async_client()
+        self.async_client = async_client
+        async_client = async_client.with_options(base_url=kwargs.pop('api_base', None) or self.api_base)
         ext_params = self.ext_params.copy()
         extra_body = kwargs.pop("extra_body", {})
         ext_params = {**ext_params, **extra_body}
