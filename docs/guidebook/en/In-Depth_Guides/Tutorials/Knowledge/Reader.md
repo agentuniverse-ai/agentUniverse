@@ -52,7 +52,13 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml): Reads text content from local PDF files.
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml): Reads text content from local PPTX files.
 - [default_txt_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/txt_reader.yaml): Reads text content from TXT files.
+- [default_xml_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/xml_reader.yaml): Reads validated XML files while preserving source text and root-tag metadata.
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml): Reads ZIP archive files, supports nested ZIP structures and multiple file formats.
 - [default_web_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/web_pdf_reader.yaml): Reads text content from PDF files found on the web.
 - [default_markdown_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/markdown_reader.yaml): Reads text content from local Markdown files.
 - [default_rar_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/rar_reader.yaml): Reads text content from RAR archive files (.rar).
+
+`default_xml_reader` validates `.xml` files with Python's standard XML parser
+and returns one source-preserving Document. The root tag is available as
+`metadata["root_tag"]`; malformed XML is reported with the parser exception as
+the chained cause.
