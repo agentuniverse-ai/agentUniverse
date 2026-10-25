@@ -675,3 +675,54 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Character Set Analyzer Tool
+
+`CharacterSetAnalyzerTool` profiles *which characters* a string is
+made of, built purely on the Python standard library (`unicodedata`)
+with zero network access. It is the whole-string counterpart to
+`UnicodeInspectorTool` (which inspects individual characters): `blocks`
+mode counts characters per Unicode block via a compact, documented
+34-block range table — Basic Latin, Latin-1 Supplement, Latin
+Extended-A/B, IPA Extensions, Spacing Modifier Letters, Combining
+Diacritical Marks, Greek, Cyrillic, Armenian, Hebrew, Arabic,
+Devanagari, Thai, the common punctuation and symbol blocks (General
+Punctuation, Currency, Letterlike, Number Forms, Arrows, Math
+Operators, Miscellaneous Technical, Box Drawing, Block Elements,
+Geometric Shapes, Miscellaneous Symbols, Dingbats), CJK Symbols and
+Punctuation, Hiragana, Katakana, CJK Unified Ideographs (+ Extension
+A), Hangul Syllables, Private Use Area and Halfwidth/Fullwidth Forms.
+Characters outside every table range — notably astral-plane
+characters such as emoji — are counted in an `Other` bucket instead
+of being misattributed. `categories` mode counts `unicodedata`
+general categories (`Ll`, `Lu`, `Lo`, `Nd`, punctuation, symbols,
+`Zs`, `Cc`, ...) with human-readable labels plus one-letter group
+subtotals (Letter / Mark / Number / Punctuation / Symbol / Separator
+/ Other). `summary` mode returns a quick fingerprint: `ascii_only`
+and `latin1_only` flags, distinct character count, the top-5 most
+frequent characters, a `has_emoji` flag (heuristic: any character of
+general category `So`, which over-approximates — it also fires for
+non-emoji symbols such as ⚠ and misses emoji in other categories)
+and the control-character count.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.character_set_analyzer_tool import CharacterSetAnalyzerTool
+
+tool = CharacterSetAnalyzerTool()
+blocks = tool.execute(mode="blocks", text="Hello 世界 🌍")
+categories = tool.execute(mode="categories", text="Hello 世界 🌍")
+summary = tool.execute(mode="summary", text="Hello 世界 🌍")
+```
+
+Rows are sorted by count (descending) then name / category code /
+code point (ascending) and carry percentages of the total rounded to
+two decimals, so results are fully deterministic. Inputs are
+validated strictly before any computation: an unknown or
+non-lowercase `mode`, a missing / empty / non-string `text`, or text
+over 100,000 characters raises a `ValueError`. There are no
+content-level failure modes — every well-formed string can be
+profiled — so the tool never returns error payloads. The block table
+favors the blocks that dominate real-world text over completeness;
+use `categories` mode (complete by construction, since it delegates
+to `unicodedata`) when precise coverage matters more than block
+names.
