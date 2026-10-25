@@ -38,6 +38,8 @@ class KnowledgeConfiger(ComponentConfiger):
 
     @property
     def ext_info(self) -> Optional[Dict]:
+        """Return the ext info dict of the knowledge configuration.
+        """
         return self.__ext_info
 
     def load(self) -> 'KnowledgeConfiger':
