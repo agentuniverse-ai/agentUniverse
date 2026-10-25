@@ -38,6 +38,8 @@ class BAICHUANOpenAIStyleLLM(OpenAIStyleLLM):
     organization: Optional[str] = Field(default_factory=lambda: get_from_env("BAICHUAN_ORGANIZATION"))
 
     def max_context_length(self) -> int:
+        """Return the maximum context length supported by this LLM.
+        """
         if super().max_context_length():
             return super().max_context_length()
         return BAICHUAN_Max_CONTEXT_LENGTH.get(self.model_name, 8000)
