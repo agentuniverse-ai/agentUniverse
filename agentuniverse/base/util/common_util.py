@@ -144,7 +144,7 @@ def parse_json_markdown(
     Parse a JSON string from a Markdown string.
 
     Args:
-        json_string: The Markdown string.
+        json_string: The Markdown string. JSON fence labels are case-insensitive.
         parser: The parser to use. Defaults to `parse_partial_json`.
 
     Returns:
@@ -154,7 +154,7 @@ def parse_json_markdown(
         return _parse_json(json_string, parser=parser)
     except json.JSONDecodeError:
         # Try to find JSON string within triple backticks
-        match = re.search(r"```(json)?(.*)", json_string, re.DOTALL)
+        match = re.search(r"```(json)?(.*)", json_string, re.DOTALL | re.IGNORECASE)
 
         # If no match found, assume the entire string is a JSON string
         if match is None:
