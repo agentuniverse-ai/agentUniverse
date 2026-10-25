@@ -649,3 +649,45 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Number To Words Tool
+
+`NumberToWordsTool` converts between numbers and their English or Chinese
+word forms, built purely on the Python standard library with zero network
+access. `number_to_words` mode renders a number as words — English uses
+the American short scale (thousand / million / billion), hyphenated
+compounds (`forty-two`) and no `and` (`1234` → `one thousand two hundred
+thirty-four`); Chinese uses the standard 万 / 亿 grouping with canonical
+零 insertion (`1234` → `一千二百三十四`, `10001` → `一万零一`). Negatives
+are `minus` / `negative` (EN) and `负` (ZH); fractional digits are read
+one by one after `point` / `点` (`3.14` → `three point one four` /
+`三点一四`). `words_to_number` mode parses such words back into an exact
+number with a strict grammar — it accepts the canonical forms plus common
+variants (space or hyphen compounds, `minus` or `negative`, `〇` for `零`
+and `两` for `二`) and rejects anything ambiguous (bare digit sequences
+such as `一二三`, truncated forms such as `一万二`, unknown words,
+repeated scale words, dangling `point`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.number_to_words_tool import NumberToWordsTool
+
+tool = NumberToWordsTool()
+words = tool.execute(mode="number_to_words", number=1234, lang="en")["result"]
+zh = tool.execute(mode="number_to_words", number="1234", lang="zh")["result"]
+back = tool.execute(mode="words_to_number", words="one thousand two hundred thirty-four")["result"]
+```
+
+Range: the integer part is limited to 12 digits (absolute value at most
+999,999,999,999) and the fractional part to 12 digits. Both directions
+round-trip exactly for every value in range:
+`words_to_number(number_to_words(n)) == n`. `words_to_number` returns an
+`int` for integers and an exact decimal string (e.g. `"3.14"`) for
+fractional values, so binary-float rounding never enters the result.
+Inputs are validated strictly before any computation: malformed
+parameters (wrong types, unknown mode or language, a number that is
+neither an `int` nor a digit string, leading zeros, `+` signs,
+thousands separators, a second decimal point, an empty or oversized
+words string) raise a `ValueError`. Errors that depend on the content
+being parsed — an unparseable words string or a words value outside
+the supported range — are returned as a structured `error` payload
+(`{"type": ..., "message": ...}`) instead of raising.
