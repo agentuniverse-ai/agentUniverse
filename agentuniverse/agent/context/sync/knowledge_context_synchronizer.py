@@ -414,6 +414,19 @@ class KnowledgeContextSynchronizer:
     def _compute_hash(self, documents: List[str]) -> str:
         """Compute hash of documents for change detection.
 
+        The documents are joined with a separator and each one is length
+        prefixed, because a plain ``"".join(documents)`` gives the same input
+        to the digest for different document sets:
+
+            ["ab", "c"]  ->  "abc"
+            ["a", "bc"]  ->  "abc"      same hash, different documents
+
+        ``sync_knowledge_to_context()`` skips the whole sync when the hash is
+        unchanged, so a knowledge update that only moves a boundary between
+        documents was reported as "No content changes detected" and dropped.
+        Length prefixing also keeps a document that itself contains the
+        separator from colliding with a different split.
+
         Args:
             documents: List of document contents
 
@@ -421,7 +434,7 @@ class KnowledgeContextSynchronizer:
             Hash string
         """
         import hashlib
-        content = "".join(documents)
+        content = "|".join(f"{len(doc)}:{doc}" for doc in documents)
         return hashlib.sha256(content.encode()).hexdigest()
 
     def get_knowledge_version(self, knowledge_id: str) -> Optional[KnowledgeVersion]:
