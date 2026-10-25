@@ -675,3 +675,48 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Base-N Encode Tool
+
+`BaseNEncodeTool` performs arbitrary-base INTEGER radix conversion built
+purely on the Python standard library, with zero network access. It is
+deliberately distinct from `TextCodecTool`'s `base64` mode: that mode
+encodes UTF-8 text into the Base64 binary-to-text transport format,
+while this tool converts one integer between positional numeral systems
+from base 2 to base 36. `encode` renders a non-negative integer (or a
+decimal digit string) as digits of the target base, with an optional
+custom `alphabet` (length equal to the base, unique whitespace-free
+characters; decoding is then case-sensitive) and an optional `prefix`
+such as `0x` / `0b` prepended to the result; `decode` strictly parses
+digits of a given base back to the integer they represent — a single
+leading `+` / `-` sign is allowed, the first invalid character is
+reported with its position, and a `prefix` given here is required on
+the input and stripped, so prefixed encodings round-trip; `convert`
+parses `from_base` and renders `to_base` directly; and `info` lists
+which of the bases 2-36 a string is a valid numeral in, with its
+smallest valid base.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.basen_encode_tool import BaseNEncodeTool
+
+tool = BaseNEncodeTool()
+tool.execute(mode="encode", value=255, base=16, prefix="0x")["result"]   # '0xff'
+tool.execute(mode="decode", value="0xff", base=16, prefix="0x")["result"]  # 255
+tool.execute(mode="convert", value="11111111", from_base=2, to_base=16)["result"]  # 'ff'
+tool.execute(mode="info", value="12.5")["valid_bases"]                  # []
+```
+
+Malformed parameters (unknown mode, wrong types, empty value, base
+outside 2-36, alphabets whose length differs from the base or that
+repeat or contain whitespace, non-printable prefixes, parameters not
+used by the requested mode) raise `ValueError` before any computation.
+Content-level failures return a structured `error` payload instead:
+`invalid_value` (encode input is not a decimal numeral, with the first
+offending character and its position), `invalid_digit` (decode charset
+violation, with the position), `negative_value` (encode is for
+non-negative integers; decode and convert accept a `-` sign),
+`prefix_mismatch`, `missing_digits`, and `value_too_large`. Big
+integers are supported natively up to a documented magnitude cap of
+`10**10000` inclusive — parsing uses direct Horner accumulation, so it
+never trips CPython's default 4300-digit int-string conversion limit.
+All outputs are deterministic.
