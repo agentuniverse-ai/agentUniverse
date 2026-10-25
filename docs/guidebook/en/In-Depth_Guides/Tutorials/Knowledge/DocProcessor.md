@@ -317,3 +317,32 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ContactEntityExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/contact_entity_extractor.yaml)
+
+This component lifts contact entities — emails, URLs and phone numbers — out of document text into structured metadata, addressing the *knowledge extraction* direction of issue #258. A large share of ingested business documents (supplier notices, CRM notes, due-diligence folders, support threads) carry their most queryable facts as contact entities rather than prose: who to email, which portal to open, which number to call. Downstream stages want those facts as structured data — routing documents by mailbox domain, filtering recall results by company site, counting contact points per supplier — which is impossible while the entities stay buried in free text. Each document is scanned with high-precision regular expressions, and the findings are stamped into metadata; the text itself is never modified.
+
+Extraction is shape-based, deterministic and offline, and precision is preferred over recall: emails need a letter TLD, URLs need a scheme or a `www.` host, and phones need a mainland-China mobile shape, separator-structured North-American digits, or a leading-plus international form — so long digit runs, bare order ids, IPv4 addresses and bare `@domain` mentions are not mistaken for entities. Raw matches are trimmed of sentence punctuation the regex drags along (`Visit https://example.com.` yields the bare URL); a closing bracket is trimmed only when unbalanced within the match, so the final `)` of a Wikipedia-style path survives while the `)` of prose-wrapped `(see https://example.com)` does not. Full-width CJK punctuation is handled too, since Chinese sentences end without spaces — the URL pattern simply stops at CJK blocks instead of swallowing the rest of the sentence. Values are optionally deduplicated (case-insensitively for emails/URLs, digit-wise for phones, so `(555) 123-4567` and `555-123-4567` count as one contact) and capped per kind. Results land in `metadata[entities_key]` (a `{kind: [values]}` mapping; empty lists mean "extraction ran and found nothing") and `metadata[counts_key]`; metadata mappings are copied before mutation, every document survives processing, and order is preserved. The component is the constructive counterpart of `SensitiveDataRedactor`: that processor destroys contact-shaped PII in recalled text for privacy, while this one preserves the text and lifts the same shapes into metadata at pre-processing time for routing and aggregation.
+
+The component definition file is as follows:
+```yaml
+name: 'contact_entity_extractor'
+description: 'lift contact entities (emails, URLs, phone numbers) into document metadata via high-precision regexes'
+entity_types:                   # kinds to extract, non-empty subset
+  - 'email'
+  - 'url'
+  - 'phone'
+entities_key: 'entities'        # metadata key for {kind: [values]}; '' disables
+counts_key: 'entity_counts'     # metadata key for {kind: count}; '' disables
+dedupe: true                    # collapse repeats (case-fold / digit-wise)
+max_per_type: 0                 # max values per kind after dedupe; 0 = all
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.contact_entity_extractor'
+  class: 'ContactEntityExtractor'
+```
+- entity_types: Entity kinds to extract — a non-empty subset of `email`, `url`, `phone`; the order defines the stamped mapping's key order.
+- entities_key: Metadata key the `{kind: [values]}` mapping is written to; an empty value disables stamping. Lists are empty-but-present when nothing is found, so callers can tell "extraction ran, found nothing" from "extraction never ran".
+- counts_key: Metadata key the `{kind: count}` mapping is written to (counts after dedupe and capping); an empty value disables stamping.
+- dedupe: When true (default), repeated contacts collapse to their first spelling — case-insensitive comparison for emails/URLs, digit-wise for phones.
+- max_per_type: Maximum values kept per kind after dedupe; 0 (default) means unlimited.

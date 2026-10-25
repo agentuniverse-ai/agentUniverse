@@ -315,3 +315,32 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ContactEntityExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/contact_entity_extractor.yaml)
+
+该组件将联系方式实体——邮箱、URL、电话号码——从文档文本中提取并写入结构化 metadata，对应 issue #258 的*知识提取*方向。大量入库的业务文档（供应商通知、CRM 备注尽调材料、客服往来）最有价值的可检索事实往往不是正文内容而是联系方式：该找谁、开哪个门户、打哪个号码。下游阶段需要把这些事实变成结构化数据——按邮箱域名路由文档、按公司站点过滤召回结果、统计每个供应商的联系渠道——而实体埋在自由文本里时这些都无从谈起。该组件用高精度正则逐篇扫描文档，把结果写入 metadata，文本本身绝不改动。
+
+提取基于结构形状、确定性且离线，宁缺毋滥：邮箱必须有字母顶级域，URL 必须带 scheme 或 `www.` 主机，电话必须形如中国大陆手机号、带分隔符的北美号码或加号开头的国际格式——因此长数字串、裸订单号、IPv4 地址、光秃秃的 `@domain` 提及都不会被误判为实体。原始匹配会去掉正则顺带吞入的句读标点（`Visit https://example.com.` 得到干净的 URL）；闭括号仅在匹配内部不配对时才去除，因此维基百科风格路径结尾的 `)` 得以保留，而行文括号 `(see https://example.com)` 包出的 `)` 会被去掉。中文句读同样处理——中文句尾没有空格，URL 模式遇到 CJK 字符块即停止，不会吞掉后面的整句话。提取值可去重（邮箱/URL 忽略大小写、电话按数字比较，`(555) 123-4567` 与 `555-123-4567` 视为同一联系点），并可按类别截断。结果写入 `metadata[entities_key]`（`{类别: [值]}` 映射；空列表表示"提取已运行但未发现"）与 `metadata[counts_key]`；写入前会复制 metadata 映射，所有文档全部保留、顺序不变。该组件与 `SensitiveDataRedactor` 恰为互补：后者为隐私在召回文本中销毁联系方式形态的 PII，本组件在预处理阶段保留文本、把同样的形态提升为 metadata 以供路由与聚合。
+
+组件定义文件如下：
+```yaml
+name: 'contact_entity_extractor'
+description: 'lift contact entities (emails, URLs, phone numbers) into document metadata via high-precision regexes'
+entity_types:                   # 提取哪些类别，非空子集
+  - 'email'
+  - 'url'
+  - 'phone'
+entities_key: 'entities'        # {类别: [值]} 写入的 metadata 键；'' 表示不写入
+counts_key: 'entity_counts'     # {类别: 数量} 写入的 metadata 键；'' 表示不写入
+dedupe: true                    # 重复联系方式折叠（忽略大小写/按数字）
+max_per_type: 0                 # 去重后每类保留的最大数量；0 表示不限
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.contact_entity_extractor'
+  class: 'ContactEntityExtractor'
+```
+- entity_types：提取的实体类别——`email`、`url`、`phone` 的非空子集；顺序决定写入 metadata 映射的键顺序。
+- entities_key：`{类别: [值]}` 映射写入的 metadata 键；为空则不写入。未发现实体时列表为空但键仍在，调用方因此能区分"提取已运行但未发现"与"提取从未运行"。
+- counts_key：`{类别: 数量}` 映射写入的 metadata 键（数量为去重与截断之后的值）；为空则不写入。
+- dedupe：为真（默认）时重复联系方式折叠为首次拼写——邮箱/URL 比较忽略大小写，电话按数字比较。
+- max_per_type：去重后每类保留的最大数量；0（默认）表示不限。
