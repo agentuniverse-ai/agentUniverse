@@ -1,0 +1,38 @@
+name: email_validator_tool
+description: Email validator tool — pure Python stdlib, no network access. mode='validate' checks one address or a list against an RFC 5322-lite profile and returns per-address verdicts with reasons (length limits 64 local / 254 total, quoted-local support, dot and LDH label rules, single-label and IP-literal flags); mode='parse' decomposes into local/domain, display name, +tag and local kind; mode='normalize' returns a canonical idempotent form (lowercased domain, stripped redundant quotes, folded display name). Deliverability (DNS/MX/SMTP) is out of scope.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.email_validator_tool
+  class: EmailValidatorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — validate, parse or normalize.
+    required: true
+  address:
+    type: string
+    description: A single address — bare addr-spec (user@example.com), quoted local ("john smith"@example.com) or display-name form (Jane Doe <jane@example.com>). Exactly one of address / addresses is required.
+    required: false
+  addresses:
+    type: array
+    description: A list of up to 100 addresses (same grammar per item); the result carries per-item verdicts plus summary counts.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["validate", "parse", "normalize"]
+      description: Operation mode.
+    address:
+      type: string
+      description: A single address to validate / parse / normalize.
+    addresses:
+      type: array
+      items:
+        type: string
+      description: A batch of addresses (max 100 items).
+  required: ["mode"]
