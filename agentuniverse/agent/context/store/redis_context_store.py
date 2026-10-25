@@ -77,9 +77,9 @@ class RedisContextStore(ContextStore):
         except ImportError:
             raise RuntimeError(
                 "Redis library not installed. Install with: pip install redis"
-            )
+            ) from None
         except Exception as e:
-            raise RuntimeError(f"Failed to connect to Redis: {e}")
+            raise RuntimeError(f"Failed to connect to Redis: {e}") from e
 
         return self
 
