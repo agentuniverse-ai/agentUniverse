@@ -176,16 +176,32 @@ class Neo4jStore(Store):
         )
 
 
+    @staticmethod
+    def _serialize_metadata(metadata: Optional[dict]) -> Optional[str]:
+        """Encode a metadata map as a Neo4j-compatible string property.
+
+        None retains Cypher's property-removal semantics. Unsupported JSON
+        values raise ValueError rather than being silently converted to text.
+        """
+        if metadata is None:
+            return None
+        try:
+            return json.dumps(metadata, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Neo4j document metadata must be JSON-serializable") from exc
+
     def insert_document(self, documents: List[Document], **kwargs: Any):
+        # Validate the entire batch before the first auto-commit write.
+        prepared = [(doc, self._serialize_metadata(doc.metadata)) for doc in documents]
         session = self.driver.session()
         try:
-            for doc in documents:
+            for doc, metadata in prepared:
                 cypher = """
                 MERGE (d:Document {id: $id})
                 SET d.text = $text,
                     d.metadata = $metadata
                 """
-                session.run(cypher, id=doc.id, text=doc.text, metadata=doc.metadata)
+                session.run(cypher, id=doc.id, text=doc.text, metadata=metadata)
         finally:
             session.close()
 
@@ -195,15 +211,16 @@ class Neo4jStore(Store):
         self.insert_document(documents, **kwargs)
 
     def update_document(self, documents: List[Document], **kwargs):
+        prepared = [(doc, self._serialize_metadata(doc.metadata)) for doc in documents]
         session = self.driver.session()
         try:
-            for doc in documents:
+            for doc, metadata in prepared:
                 cypher = """
                 MATCH (d:Document {id: $id})
                 SET d.text = $text,
                     d.metadata = $metadata
                 """
-                session.run(cypher, id=doc.id, text=doc.text, metadata=doc.metadata)
+                session.run(cypher, id=doc.id, text=doc.text, metadata=metadata)
         finally:
             session.close()
 
