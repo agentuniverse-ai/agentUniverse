@@ -649,3 +649,58 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## SRT Tool
+
+`SrtTool` is a SubRip (SRT) subtitle utility built purely on the Python
+standard library — no network, no external subtitle dependencies. It covers
+the re-timing and QA work media preparation agents need: `parse` mode splits
+raw SRT text into structured cues (`{"index", "start", "end", "text"}` with
+integer millisecond timestamps); `shift` mode moves every cue by a constant
+millisecond offset (negative allowed) and re-serializes the result as
+canonical SRT; `renumber` mode re-indexes cues from 1 while preserving the
+order-as-found; and `stats` mode reports cue count, total / min / max / mean
+cue duration, overlapping cue pairs (a cue whose end is later than the next
+cue's start, with the overlap amount), and too-long-to-read warnings using a
+documented heuristic — a cue is flagged when it lasts longer than 7 seconds
+or when its reading speed exceeds 42 characters per second.
+
+```python
+from agentuniverse.agent.action.tool.common_tool import SrtTool
+
+tool = SrtTool()
+cues = tool.execute(mode="parse", text=srt_text)["cues"]
+# -> [{"index": 1, "start": 1500, "end": 4000, "text": "Hello there."}, ...]
+
+shifted = tool.execute(mode="shift", text=srt_text, milliseconds=-2000)["result"]
+renumbered = tool.execute(mode="renumber", text=srt_text)["result"]
+report = tool.execute(mode="stats", text=srt_text)
+```
+
+Parsing is tolerant where real-world files are messy: both the
+specification's `,` and the common `.` millisecond separator are accepted,
+a UTF-8 BOM is ignored, CRLF and LF line endings are both handled,
+whitespace-only lines separate cues, trailing positional metadata (for
+example `X1:` / `Y1:` coordinates) after the end timestamp is dropped, and
+1-3 digit fractions are right-padded (`00:00:01,5` means 1500 ms). Cue
+numbers that do not match their position (gaps, duplicates, out of order)
+produce warnings in the parse result — not errors — because the cues
+themselves are still usable. Timestamps live in the representable SRT range
+up to 99:59:59.999; components outside it (minutes or seconds over 59,
+three-digit hours) are rejected.
+
+Strict validation happens before any computation: malformed parameters
+(unknown mode, non-string or empty `text`, text over 1,000,000 characters,
+more than 10,000 cues, a non-integer `milliseconds` or a shift beyond
+±359,999,999 ms) raise a `ValueError`. Content-level failures — a cue that
+does not start with a number, a missing or malformed timing line,
+out-of-range timestamp components, and a cue that ends before it starts —
+return a structured `error` payload carrying the offending cue's position
+and claimed number instead of raising. `shift` clamps shifted timestamps
+into [0, 99:59:59.999] (documented: a large negative shift pins cues to
+00:00:00,000) and reports which cue positions were clamped. Re-serialized
+output is canonical SRT: comma millisecond separator, `-->` surrounded by
+single spaces, LF line endings, one blank line between cues and a trailing
+newline. The reading-speed heuristic is advisory: 42 characters per second
+and 7 seconds per cue are rough subtitling guidelines, not hard limits —
+treat flagged cues as review candidates, not defects.
