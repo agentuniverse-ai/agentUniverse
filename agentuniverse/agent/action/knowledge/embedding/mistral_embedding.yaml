@@ -1,0 +1,7 @@
+name: 'mistral_embedding'
+description: 'embedding use mistral api with support for the mistral-embed model (1024 dimensions)'
+embedding_model_name: 'mistral-embed'
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.mistral_embedding'
+  class: 'MistralEmbedding'
