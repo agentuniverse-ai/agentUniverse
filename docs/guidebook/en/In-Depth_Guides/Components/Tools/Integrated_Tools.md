@@ -675,3 +675,18 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## ApiDocTool
+
+`ApiDocTool` inspects OpenAPI documents fully offline (stdlib JSON plus core PyYAML) — no request is ever sent. `mode="inventory"` summarizes a spec: `openapi_version`, `info.title`, and an endpoint list (method, path, operation_id, summary, tags, params_count, has_request_body, responses_count) sorted by path+method, plus counts; path-item `$ref`s are resolved and OpenAPI 3.1 webhooks are included. `mode="lint"` returns structured findings `{code, severity, path, message}` covering invalid openapi/swagger version strings, missing info title/version, empty paths and webhooks, missing responses, missing or duplicate operationIds, path template parameters undeclared or defined-but-unused, responses without description, duplicate parameter names per in-type, security referencing undefined schemes, deprecated operations without description, operations without error responses, missing servers, and dangling schema `$ref`s found via a cycle-guarded walk. `mode="diff"` compares two spec versions (`document` = new, `document_old` = previous) and reports added/removed/changed endpoints with parameter and response deltas plus a `breaking` flag that is true when endpoints, parameters, or responses were removed.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.api_doc_tool import ApiDocTool
+
+tool = ApiDocTool()
+inventory = tool.execute(mode="inventory", document=openapi_text)
+findings = tool.execute(mode="lint", document=openapi_text)
+drift = tool.execute(mode="diff", document=new_text, document_old=old_text)
+```
+
+Documents may be JSON or YAML text and are capped at the `max_text` configuration field (1,000,000 characters by default). Parameter-level mistakes (unknown mode, non-text or oversized input, unparseable text, non-object root) raise `ValueError` before any analysis. The focus is OpenAPI 3.x, with documented best-effort handling of 2.0 (swagger) shapes.
