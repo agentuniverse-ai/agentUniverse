@@ -160,8 +160,13 @@ class Memory(ComponentBase):
                     segments = ctx_mgr.get_context(
                         session_id,
                         context_type=ContextType.CONVERSATION,
-                        limit=1000,  # Get all conversation segments
+                        limit=None,  # Order all candidates before selecting recent turns.
                         **kwargs
+                    )
+                    # Access times change on reads and belong to LRU eviction,
+                    # not conversation chronology. IDs break creation-time ties.
+                    segments = sorted(
+                        segments, key=lambda segment: (segment.metadata.created_at, segment.id), reverse=True
                     )
 
                     # Convert segments to Messages
