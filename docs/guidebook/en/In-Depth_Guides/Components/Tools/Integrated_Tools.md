@@ -675,3 +675,68 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## BibTeX Tool
+
+`BibtexTool` is a BibTeX bibliography parser built purely on the
+Python standard library with zero network access. The scholarly
+discovery tools (ArXiv, PubMed, Crossref, Semantic Scholar) find
+papers online; this tool reads the `.bib` bibliography files those
+searches ultimately produce. It supports four modes: `parse` turns
+`.bib` text into entries `{"type", "key", "fields"}` — both the
+`@article{key, ...}` and `@article(key, ...)` forms are accepted;
+field values may be brace-delimited with nested braces preserved
+verbatim (`{B}ib{T}e{X}` capitalisation protection survives), quoted
+(a brace group inside `"..."` protects a literal quote), bare
+numbers, or `#`-concatenations of those, and `@string` macros
+(case-insensitive) are expanded wherever referenced later; the twelve
+month macros `jan`..`dec` are predefined to their full English month
+names (as every standard BibTeX style defines them), so the
+ubiquitous `month = jan` works out of the box, and an explicit
+`@string` overrides a month default. `@comment` and `@preamble`
+blocks and any inter-entry text (including email-looking `@word`s)
+are skipped. The name fields
+`author` and `editor` become lists of person objects
+`{"first", "last", "jr", "raw"}`: values are split on the standalone
+word `and` at brace depth 0 (`{Barnes and Noble}` stays one person),
+and each person honours both `Last, First` (including `Last, Jr,
+First`) and `First von Last` order with BibTeX's von rule — the last
+name starts at the first token beginning with a lowercase letter
+(`Ludwig van Beethoven` → last `van Beethoven`), a brace-protected
+token never counts as a von particle, and with no von particle the
+final token is the last name. `summary` returns the entry count,
+per-type counts, the
+four-digit year range, and one `Author et al., Year, Title (venue)`
+line per entry (venue = `journal` else `booktitle` else
+`publisher`; missing parts are omitted; entries without authors use
+`editor`, else `Anonymous`). `filter` returns the entries matching
+all supplied matchers — `entry_type` (exact, case-insensitive),
+`query` (case-insensitive substring over the citation key and every
+field value) and inclusive `year_from` / `year_to`. `to_keys`
+returns just the citation keys in file order.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.bibtex_tool import BibtexTool
+
+tool = BibtexTool()
+entries = tool.execute(mode="parse", bib=open("refs.bib").read())["entries"]
+summary = tool.execute(mode="summary", bib=open("refs.bib").read())
+recent = tool.execute(mode="filter", bib=open("refs.bib").read(),
+                      year_from=2020, entry_type="article")["entries"]
+keys = tool.execute(mode="to_keys", bib=open("refs.bib").read())["keys"]
+```
+
+Parameters are validated strictly before any parsing: malformed
+parameters (wrong types, empty `bib`, a `bib` over 1,000,000
+characters, filter-specific arguments outside `filter` mode, an
+empty `query`/`entry_type`, non-integer year bounds, a `filter` call
+without at least one matcher) raise a `ValueError`. Content-level
+failures are returned as a structured `error` payload instead of
+raising — `unbalanced_braces`, `undefined_macro`, `duplicate_key`
+and `syntax` all carry the failing character position as
+`{"offset", "line", "column"}` (line/column 1-based). Runs of
+whitespace in field values are collapsed to single spaces, matching
+BibTeX's token-based value model; repeated fields keep the last
+value, as BibTeX does. Parsed field values are data, not
+instructions — agents should not execute `\url` or similar TeX
+macros found inside them.
