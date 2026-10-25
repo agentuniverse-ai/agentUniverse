@@ -6,13 +6,33 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: plugin_util.py
 import re
+from collections.abc import Mapping
 from typing import Dict, List
 import uuid
 
-from yaml import safe_load
+from yaml import YAMLError, safe_load
+
 from agentuniverse_product.base.product_manager import ProductManager
 from agentuniverse_product.service.model.plugin_dto import PluginDTO
 from agentuniverse_product.service.util.common_util import validate_component_id
+
+
+class OpenAPIParseError(ValueError):
+    """Raised when a plugin OpenAPI YAML document cannot be parsed."""
+
+
+_OPENAPI_ERROR_MESSAGES = {
+    'empty': 'Invalid openapi yaml.',
+    'root': 'OpenAPI YAML root must be a mapping.',
+    'servers_missing': "OpenAPI field 'servers' is required; add a server entry with a 'url'.",
+    'servers_type': "OpenAPI field 'servers' must be a list of server mappings.",
+    'servers_empty': 'No server found in the openapi yaml.',
+    'server_type': "OpenAPI field 'servers[0]' must be a mapping containing a 'url'.",
+    'url_missing': "OpenAPI field 'servers[0].url' is required; add a server URL.",
+    'url_type': "OpenAPI field 'servers[0].url' must be a non-empty string.",
+    'paths_missing': "OpenAPI field 'paths' is required; use a mapping of endpoint paths.",
+    'paths_type': "OpenAPI field 'paths' must be a mapping of endpoint paths.",
+}
 
 
 def validate_create_plugin_parameters(plugin_dto: PluginDTO) -> None:
@@ -55,6 +75,58 @@ def assemble_plugin_product_config_data(plugin_dto: PluginDTO, tool_id_list: Lis
     }
 
 
+def _load_openapi_yaml(yaml: str) -> Mapping:
+    """Load an OpenAPI YAML document and validate its root value."""
+    try:
+        openapi = safe_load(yaml)
+    except YAMLError as error:
+        location = ''
+        problem_mark = getattr(error, 'problem_mark', None)
+        if problem_mark is not None:
+            # YAML marks are zero-based; show the user one-based line and column numbers.
+            location = f' at line {problem_mark.line + 1}, column {problem_mark.column + 1}'
+        message = f'Invalid OpenAPI YAML syntax{location}: {error}'
+        raise OpenAPIParseError(message) from error
+
+    if openapi is None:
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['empty'])
+    if not isinstance(openapi, Mapping):
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['root'])
+    return openapi
+
+
+def _get_openapi_server_url(openapi: Mapping) -> str:
+    """Return the first OpenAPI server URL after validating its structure."""
+    if 'servers' not in openapi:
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['servers_missing'])
+
+    servers = openapi['servers']
+    if not isinstance(servers, list):
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['servers_type'])
+    if not servers:
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['servers_empty'])
+    if not isinstance(servers[0], Mapping):
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['server_type'])
+    if 'url' not in servers[0]:
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['url_missing'])
+
+    server_url = servers[0]['url']
+    if not isinstance(server_url, str) or not server_url.strip():
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['url_type'])
+    return server_url
+
+
+def _get_openapi_paths(openapi: Mapping) -> Mapping:
+    """Return the OpenAPI paths mapping after validating its structure."""
+    if 'paths' not in openapi:
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['paths_missing'])
+
+    paths = openapi['paths']
+    if not isinstance(paths, Mapping):
+        raise OpenAPIParseError(_OPENAPI_ERROR_MESSAGES['paths_type'])
+    return paths
+
+
 def parse_openapi_yaml_to_tool_bundle(yaml: str) -> list:
     """Parse the openapi schema yaml to tool bundles.
 
@@ -65,18 +137,13 @@ def parse_openapi_yaml_to_tool_bundle(yaml: str) -> list:
         list: The list of tool bundles.
     """
 
-    openapi: dict = safe_load(yaml)
-    if openapi is None:
-        raise Exception('Invalid openapi yaml.')
-
-    if len(openapi['servers']) == 0:
-        raise Exception('No server found in the openapi yaml.')
-
-    server_url = str(openapi['servers'][0]['url'])
+    openapi = _load_openapi_yaml(yaml)
+    server_url = _get_openapi_server_url(openapi)
+    paths = _get_openapi_paths(openapi)
 
     # list all interfaces
     interfaces = []
-    for path, path_item in openapi['paths'].items():
+    for path, path_item in paths.items():
         methods = ['get', 'post', 'put', 'delete',
                    'patch', 'head', 'options', 'trace']
         for method in methods:
