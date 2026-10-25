@@ -8,6 +8,7 @@
 
 import hashlib
 import logging
+import re
 from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -529,9 +530,12 @@ Summary:"""
         # Simple extractive: concatenate first sentences from each document
         summary_parts = []
         for doc in docs[:5]:  # Limit to first 5 docs
-            # Extract first sentence
-            first_sentence = doc.text.split('.')[0] + '.'
-            if first_sentence.strip('. \t\r\n'):
+            # Keep short but meaningful sentences and support common punctuation
+            # without splitting decimal numbers such as 3.14.
+            text = doc.text.strip()
+            boundary = re.search(r'(?<!\d)[.!?](?=\s|$)|[。！？]', text)
+            first_sentence = text[:boundary.end()] if boundary else text
+            if first_sentence:
                 summary_parts.append(first_sentence)
 
         summary = ' '.join(summary_parts)
