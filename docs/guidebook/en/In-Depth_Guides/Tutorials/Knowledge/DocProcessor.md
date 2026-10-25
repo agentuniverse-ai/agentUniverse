@@ -317,3 +317,31 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ParagraphRoleTagger](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/paragraph_role_tagger.yaml)
+
+This component classifies each paragraph's discourse role — `intro`, `transition`, `contrast`, `conclusion` or `elaboration` — addressing the *knowledge extraction* direction of issue #258. Long-form documents follow a discourse structure (framing openings, chained arguments, pivoting contrasts, closing summaries) and downstream stages such as context assembly, summarization or chunk weighting benefit from knowing which paragraph plays which part. Unlike heading-keyword or sentence-position approaches, the tagger keys on cue phrases inside the paragraph text: roles follow what the writing says, not where a splitter placed a heading or a sentence. Each document is split into paragraphs on blank lines, and every paragraph is scored against a fixed bilingual cue table — English and Chinese phrases per role (`in this article` / `we will` / `first of all` / `本文将` / `首先` for intro; `in addition` / `furthermore` / `moreover` / `next` / `second` / `此外` / `其次` / `接下来` for transition; `however` / `on the other hand` / `nevertheless` / `in contrast` / sentence-initial `but` / `但是` / `然而` for contrast; `in conclusion` / `in summary` / `to sum up` / `finally` / `因此` / `总之` / `最后` for conclusion).
+
+A cue earns weight 2 when its first character starts within the early window — the first `early_words` word units (default 8), where each whitespace token counts as one word and each CJK ideograph counts individually, keeping the window tight for both scripts — and weight 1 anywhere else in the paragraph. English cues match case-insensitively and only on word boundaries (`Secondhand` never fires `second`, `crew will` never fires `we will`); `but` counts only at a sentence start. Each role sums the weights of its matched cues; the highest score wins and ties resolve through the documented priority `contrast > conclusion > transition > intro > elaboration`. The first paragraph receives a `positional_bonus` (default 0.5) added to intro's score and the last paragraph the same bonus added to conclusion's — applied only when that role already matched at least one cue, so a cue-free boundary paragraph still falls through to the default. Elaboration is that default: it carries no cues and zero score, and wins exactly when every other role scored zero; example markers (`for example` / `such as` / `e.g.` / `例如`) and colon-lists are recorded as evidence without contributing score, so a pure narrative document comes out uniformly elaboration. Results land in document metadata: `metadata[paragraph_roles]` holds `{paragraph_index, role, cue, span}` entries in paragraph order (cue is the canonical matched phrase or `null`; span is the paragraph's `[start, end)` character range in the original text), capped at `max_role_entries` (default 50) to bound metadata size; `metadata[role_counts]` counts every paragraph per role; `metadata[dominant_pattern]` is `'<role>-heavy'` when one role covers strictly more than half of the paragraphs and `balanced` otherwise (exactly half counts as balanced). Metadata mappings are copied before mutation and text/id are never touched. The whole pipeline is pure Python, offline, dependency-free and deterministic.
+
+The component definition file is as follows:
+```yaml
+name: 'paragraph_role_tagger'
+description: 'classify each paragraph discourse role (intro/transition/contrast/conclusion/elaboration) via cue phrases'
+early_words: 8                # word units forming the early weight-2 window
+positional_bonus: 0.5         # first->intro / last->conclusion bonus, cue-gated
+max_role_entries: 50          # cap on metadata[paragraph_roles] entries
+roles_key: 'paragraph_roles'  # metadata key for the per-paragraph list; '' disables
+counts_key: 'role_counts'     # metadata key for per-role counts; '' disables
+pattern_key: 'dominant_pattern'  # metadata key for the dominant pattern; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.paragraph_role_tagger'
+  class: 'ParagraphRoleTagger'
+```
+- early_words: Number of leading word units (whitespace tokens; CJK ideographs count individually) within which a cue phrase earns weight 2 instead of 1; must be >= 1.
+- positional_bonus: Bonus added to intro for the first paragraph and to conclusion for the last paragraph, applied only when that role already matched at least one cue; must be >= 0.
+- max_role_entries: Maximum number of per-paragraph entries written to `metadata[paragraph_roles]`; counts always cover every paragraph; must be >= 1.
+- roles_key: Metadata key for the per-paragraph role list; an empty value disables the stamp.
+- counts_key: Metadata key for the per-role counts; an empty value disables the stamp.
+- pattern_key: Metadata key for the dominant pattern label; an empty value disables the stamp.

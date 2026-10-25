@@ -1,0 +1,29 @@
+name: 'paragraph_role_tagger'
+description: 'classify each paragraph discourse role (intro/transition/contrast/conclusion/elaboration) via cue phrases'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.paragraph_role_tagger'
+  class: 'ParagraphRoleTagger'
+
+# Number of leading word units (whitespace tokens; CJK ideographs count
+# individually) within which a matched cue phrase earns the early weight
+# 2 instead of the anywhere weight 1. Must be >= 1.
+early_words: 8
+
+# Bonus added to intro for the first paragraph and to conclusion for the
+# last paragraph, applied only when that role already matched at least
+# one cue (cue-free boundary paragraphs keep the elaboration default).
+# Must be >= 0.
+positional_bonus: 0.5
+
+# Maximum number of per-paragraph entries written to
+# metadata[roles_key]; counts always cover every paragraph.
+# Must be >= 1.
+max_role_entries: 50
+
+# Metadata keys for the per-paragraph role list, the per-role counts and
+# the dominant pattern; '' disables the respective stamp.
+roles_key: 'paragraph_roles'
+counts_key: 'role_counts'
+pattern_key: 'dominant_pattern'

@@ -315,3 +315,31 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [ParagraphRoleTagger](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/paragraph_role_tagger.yaml)
+
+该组件为每个段落判定篇章角色——`intro`（引入）、`transition`（过渡）、`contrast`（转折）、`conclusion`（总结）或 `elaboration`（阐述）——对应 issue #258 的*知识提取*方向。长文档遵循篇章结构：开篇铺垫、论证衔接、转折对比、收尾总结，下游的上下文组装、摘要与分块加权都能从“每段扮演什么角色”中获益。与基于标题关键词或句子位置的方法不同，该组件依据段落文本内部的提示语判定角色：角色取决于写作内容本身，而非切分器把标题或句子放在哪里。文档先按空行切分为段落，再对每个段落按固定的中英双语提示语表打分——每个角色一组短语（引入：`in this article` / `we will` / `first of all` / `本文将` / `首先`；过渡：`in addition` / `furthermore` / `moreover` / `next` / `second` / `此外` / `其次` / `接下来`；转折：`however` / `on the other hand` / `nevertheless` / `in contrast` / 句首 `but` / `但是` / `然而`；总结：`in conclusion` / `in summary` / `to sum up` / `finally` / `因此` / `总之` / `最后`）。
+
+提示语首字符落在早期窗口内——前 `early_words` 个词元（默认 8；空白分隔的词记一个词元，中日韩表意字符逐字计一个词元，两种书写体系都能得到紧凑窗口）——得权重 2，落在段落其他位置仍得权重 1。英文提示语大小写不敏感且只在词边界匹配（`Secondhand` 不会触发 `second`，`crew will` 不会触发 `we will`）；`but` 只在句首生效。各角色累加其命中提示语的权重，得分最高者胜出，并列时按文档化的优先级 `contrast > conclusion > transition > intro > elaboration` 决胜。首段在 intro 得分上加 `positional_bonus`（默认 0.5），末段在 conclusion 得分上加同样的加分——仅当该角色已命中至少一个提示语时生效，因此没有任何提示语的首末段仍落入默认角色。elaboration 即该默认角色：不携带提示语、得分为零，恰在其他角色全部为零时胜出；例证标记（`for example` / `such as` / `e.g.` / `例如`）与冒号列举作为证据记录但不计分，因此纯叙述型文档会整体判为 elaboration（这是文档化的预期行为）。结果写入文档 metadata：`metadata[paragraph_roles]` 按段落顺序保存 `{paragraph_index, role, cue, span}` 条目（cue 为命中的规范提示语或 `null`；span 为段落在原文中的 `[start, end)` 字符区间），并用 `max_role_entries`（默认 50）封顶以约束 metadata 体积；`metadata[role_counts]` 覆盖全部段落的逐角色计数；`metadata[dominant_pattern]` 在某角色占比严格过半时为 `'<role>-heavy'`，否则为 `balanced`（恰好半数计为 balanced）。写入前复制 metadata 映射，text/id 绝不改动。整个流程纯 Python、离线、零依赖且确定性。
+
+组件定义文件如下：
+```yaml
+name: 'paragraph_role_tagger'
+description: 'classify each paragraph discourse role (intro/transition/contrast/conclusion/elaboration) via cue phrases'
+early_words: 8                # 权重 2 的早期窗口词元数
+positional_bonus: 0.5         # 首段 intro / 末段 conclusion 加分（需已有提示语）
+max_role_entries: 50          # metadata[paragraph_roles] 条目上限
+roles_key: 'paragraph_roles'  # 逐段落列表的 metadata 键；'' 表示不写入
+counts_key: 'role_counts'     # 逐角色计数的 metadata 键；'' 表示不写入
+pattern_key: 'dominant_pattern'  # 主导模式的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.paragraph_role_tagger'
+  class: 'ParagraphRoleTagger'
+```
+- early_words：构成早期权重 2 窗口的前导词元数（空白分隔词；中日韩表意字符逐字计数），必须 >= 1。
+- positional_bonus：首段加到 intro、末段加到 conclusion 的加分，仅当该角色已命中至少一个提示语时生效；必须 >= 0。
+- max_role_entries：写入 `metadata[paragraph_roles]` 的条目上限；计数始终覆盖全部段落；必须 >= 1。
+- roles_key：逐段落角色列表写入的 metadata 键；为空则不写入。
+- counts_key：逐角色计数写入的 metadata 键；为空则不写入。
+- pattern_key：主导模式标签写入的 metadata 键；为空则不写入。
