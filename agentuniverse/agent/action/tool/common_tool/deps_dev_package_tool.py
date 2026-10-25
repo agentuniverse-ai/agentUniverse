@@ -486,9 +486,13 @@ class DepsDevPackageTool(Tool):
 
     @classmethod
     def _safe_http_url(cls, value: Any) -> str:
+        """Omit malformed metadata URLs without rejecting the whole response."""
         if not isinstance(value, str) or len(value) > cls.MAX_URL_CHARS:
             return ""
-        parsed = urlparse(value)
+        try:
+            parsed = urlparse(value)
+        except ValueError:
+            return ""
         return value if parsed.scheme.lower() in {"http", "https"} and parsed.netloc else ""
 
     @classmethod
