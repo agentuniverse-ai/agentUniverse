@@ -1,0 +1,84 @@
+name: ngram_suggester_tool
+description: N-gram suggester tool — pure Python stdlib, no network required. Build a word n-gram continuation model with <START>/<END> sentence markers from a sample text (mode='model', n 1-5, optional lowercasing and minimum token length), suggest the most likely next words for a context phrase (mode='next'), list character n-gram frequencies (mode='char_ngrams', n 2-5, optional cross-word n-grams), and score a text under a model with a Laplace-smoothed average negative log probability (mode='perplexity-lite' — not true perplexity).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.ngram_suggester_tool
+  class: NgramSuggesterTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — model, next, char_ngrams or perplexity-lite.
+    required: true
+  text:
+    type: string
+    description: The sample text. Required for the model, char_ngrams and perplexity-lite modes; not used by next.
+    required: false
+  n:
+    type: integer
+    description: N-gram order — 1 to 5 for the model mode and 2 to 5 for char_ngrams. The next and perplexity-lite modes read n from the model.
+    required: false
+  model:
+    type: object
+    description: The model-mode output dict or its JSON string. Required for the next and perplexity-lite modes; not used by the other modes.
+    required: false
+  context:
+    type: string
+    description: Next mode only — the context phrase, exactly n-1 whitespace-separated words (the empty string for a unigram model).
+    required: false
+  lowercase:
+    type: boolean
+    description: Model mode only — lowercase the text before tokenizing (default false).
+    required: false
+  min_token_length:
+    type: integer
+    description: Model mode only — drop tokens shorter than this length before modeling (1 to 50, default 1 keeps everything).
+    required: false
+  top_k:
+    type: integer
+    description: Rows kept per context (model and next modes) or table length (char_ngrams); 1 to 1000, default 10.
+    required: false
+  cross_word:
+    type: boolean
+    description: char_ngrams mode only — allow character n-grams to cross word boundaries over whitespace-normalized text, so n-grams may contain spaces (default false keeps n-grams within words).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["model", "next", "char_ngrams", "perplexity-lite"]
+      description: Operation mode.
+    text:
+      type: string
+      description: Sample text (model, char_ngrams, perplexity-lite modes).
+    n:
+      type: integer
+      minimum: 1
+      maximum: 5
+      description: N-gram order (model and char_ngrams modes).
+    model:
+      type: object
+      description: Model-mode output dict or JSON string (next and perplexity-lite modes).
+    context:
+      type: string
+      description: Context phrase of exactly n-1 words (next mode).
+    lowercase:
+      type: boolean
+      description: Lowercase the text before tokenizing (model mode).
+    min_token_length:
+      type: integer
+      minimum: 1
+      maximum: 50
+      description: Minimum token length kept when modeling (model mode).
+    top_k:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      description: Rows kept per context / table length (model, next, char_ngrams modes).
+    cross_word:
+      type: boolean
+      description: Allow character n-grams to cross word boundaries (char_ngrams mode).
+  required: ["mode"]
