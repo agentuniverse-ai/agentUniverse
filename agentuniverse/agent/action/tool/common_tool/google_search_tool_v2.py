@@ -69,6 +69,8 @@ class GoogleSearchTool(Tool):
         k = _resolve_result_count(k, self.default_k)
         gl = gl or self.default_gl
         hl = hl or self.default_hl
+        request_kwargs = dict(kwargs)
+        tbs = request_kwargs.pop("tbs", None)
         
         try:
             search = GoogleSerperAPIWrapper(
@@ -76,9 +78,10 @@ class GoogleSearchTool(Tool):
                 k=k, 
                 gl=gl, 
                 hl=hl, 
-                type=search_type
+                type=search_type,
+                tbs=tbs,
             )
-            result = search.run(query=query)
+            result = search.run(query=query, **request_kwargs)
             return self._format_search_result(result, query, search_type)
         except Exception as e:
             return f"搜索出错: {str(e)}"
@@ -94,6 +97,8 @@ class GoogleSearchTool(Tool):
         k = _resolve_result_count(k, self.default_k)
         gl = gl or self.default_gl
         hl = hl or self.default_hl
+        request_kwargs = dict(kwargs)
+        tbs = request_kwargs.pop("tbs", None)
         
         try:
             search = GoogleSerperAPIWrapper(
@@ -101,9 +106,10 @@ class GoogleSearchTool(Tool):
                 k=k, 
                 gl=gl, 
                 hl=hl, 
-                type=search_type
+                type=search_type,
+                tbs=tbs,
             )
-            result = await search.arun(query=query)
+            result = await search.arun(query=query, **request_kwargs)
             return self._format_search_result(result, query, search_type)
         except Exception as e:
             return f"搜索出错: {str(e)}"
@@ -190,6 +196,10 @@ class GoogleScholarSearchTool(Tool):
             return self._get_mock_scholar_result(query)
             
         k = _resolve_result_count(k, self.default_k)
+        request_kwargs = dict(kwargs)
+        gl = request_kwargs.pop("gl", "us")
+        hl = request_kwargs.pop("hl", "en")
+        tbs = request_kwargs.pop("tbs", None)
         
         # 构建学术搜索查询
         scholar_query = self._build_scholar_query(query, year, author, journal)
@@ -198,11 +208,12 @@ class GoogleScholarSearchTool(Tool):
             search = GoogleSerperAPIWrapper(
                 serper_api_key=self.serper_api_key, 
                 k=k, 
-                gl="us", 
-                hl="en", 
-                type="search"
+                gl=gl,
+                hl=hl,
+                type="search",
+                tbs=tbs,
             )
-            result = search.run(query=scholar_query)
+            result = search.run(query=scholar_query, **request_kwargs)
             return self._format_scholar_result(result, query, scholar_query)
         except Exception as e:
             return f"学术搜索出错: {str(e)}"
@@ -214,17 +225,22 @@ class GoogleScholarSearchTool(Tool):
             return self._get_mock_scholar_result(query)
             
         k = _resolve_result_count(k, self.default_k)
+        request_kwargs = dict(kwargs)
+        gl = request_kwargs.pop("gl", "us")
+        hl = request_kwargs.pop("hl", "en")
+        tbs = request_kwargs.pop("tbs", None)
         scholar_query = self._build_scholar_query(query, year, author, journal)
         
         try:
             search = GoogleSerperAPIWrapper(
                 serper_api_key=self.serper_api_key, 
                 k=k, 
-                gl="us", 
-                hl="en", 
-                type="search"
+                gl=gl,
+                hl=hl,
+                type="search",
+                tbs=tbs,
             )
-            result = await search.arun(query=scholar_query)
+            result = await search.arun(query=scholar_query, **request_kwargs)
             return self._format_scholar_result(result, query, scholar_query)
         except Exception as e:
             return f"学术搜索出错: {str(e)}"
