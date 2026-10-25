@@ -24,6 +24,11 @@ class Query(BaseModel):
         ext_info (dict): extra information used in query.
     """
     class Config:
+        """Pydantic model configuration for the Query model.
+
+        Allows arbitrary types, such as PIL Image, to be used in the model fields.
+        """
+
         arbitrary_types_allowed = True
 
     query_str: Optional[str] = None
