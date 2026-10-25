@@ -675,3 +675,48 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Text Pad Tool
+
+`TextPadTool` is a display-width-aware padding, zero-fill, truncation
+and measurement utility built purely on the Python standard library
+(`unicodedata`) with zero network access. It complements the wrapping
+and table-rendering tools: instead of reflowing paragraphs or drawing
+borders it pads, zero-fills, hard-truncates and measures single chunks
+of text in *display columns* rather than characters. `pad` mode pads
+the text to a total display width with left / right / center alignment
+and a single one-column fill character (default one space); `zfill`
+mode zero-pads to the width while preserving a leading `+` / `-` sign;
+`truncate_to_width` mode hard-cuts the text at the display width,
+appending an optional marker (default `…`) kept within the width; and
+`width` mode reports the display width of a text in columns.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.text_pad_tool import TextPadTool
+
+tool = TextPadTool()
+left = tool.execute(mode="pad", text="hi", width=10)["result"]                  # "hi        "
+right = tool.execute(mode="pad", text="中文", width=10, align="right")["result"] # "      中文"
+zero = tool.execute(mode="zfill", text="-42", width=6)["result"]                # "-00042"
+cut = tool.execute(mode="truncate_to_width", text="hello world", width=8)["result"]  # "hello w…"
+cols = tool.execute(mode="width", text="a中b")["result"]                        # 4
+```
+
+Widths follow the Unicode east-asian width rules: wide and fullwidth
+characters (CJK ideographs, kana, hangul, fullwidth forms, and nearly
+all emoji including astral-plane ones such as 🌍) count as two columns,
+combining marks and format characters as zero, everything else —
+including ambiguous-width characters such as `…` — as one. Rules worth
+knowing: `pad` and `zfill` return the text unchanged when it is
+already at least as wide as the requested width (mirroring
+`str.ljust` / `str.zfill`); a `center` call that cannot split the
+padding evenly puts the extra column on the right; a hard cut never
+splits a wide character in half, so a plain cut may end one column
+short of the request; the fill character must be exactly one character
+occupying one column; and the truncation marker must be visible, at
+most 10 characters and 10 columns wide, and no wider than the width
+itself (pass `marker=""` for a plain hard cut). Inputs are validated
+strictly before any computation — malformed parameters (wrong types,
+empty text, unknown mode or align, missing / non-integer /
+out-of-range width, illegal fill character or marker, text over
+100,000 characters) raise a `ValueError`.

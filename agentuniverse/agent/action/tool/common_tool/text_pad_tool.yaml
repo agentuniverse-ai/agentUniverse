@@ -1,0 +1,60 @@
+name: text_pad_tool
+description: Text pad tool — pure Python stdlib, no network required, with east-asian (CJK) display-width awareness. Pad text to a total display width with left/right/center alignment and a single-character fill (mode='pad'), zero-pad to the width while preserving a leading + / - sign (mode='zfill'), hard-cut text at a display width with an optional '…' marker kept within the width (mode='truncate_to_width'), or report the display width of a text in columns (mode='width'). Wide CJK/fullwidth characters count as two columns and combining marks as zero, so padded CJK and latin text aligns in terminal columns.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.text_pad_tool
+  class: TextPadTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Pad mode — pad, zfill, truncate_to_width or width.
+    required: true
+  text:
+    type: string
+    description: The text to process (non-empty string, at most 100,000 characters).
+    required: true
+  width:
+    type: integer
+    description: Total display width in columns — 0 to 10,000. Required for the pad, zfill and truncate_to_width modes; not used by width mode. Wide (CJK / fullwidth) characters count as two columns.
+    required: false
+  align:
+    type: string
+    description: pad mode only — left (default), right or center alignment of the text within the padded result.
+    required: false
+  fill_char:
+    type: string
+    description: pad mode only — exactly one character occupying one display column (default " "); combining and wide characters are rejected.
+    required: false
+  marker:
+    type: string
+    description: truncate_to_width mode only — string appended within the width when content is dropped (default "…"); an empty string disables it.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["pad", "zfill", "truncate_to_width", "width"]
+      description: Pad mode.
+    text:
+      type: string
+      description: Text to process.
+    width:
+      type: integer
+      minimum: 0
+      maximum: 10000
+      description: Total display width in columns (pad, zfill, truncate_to_width modes); wide characters count as two columns.
+    align:
+      type: string
+      enum: ["left", "right", "center"]
+      description: Alignment within the padded result (pad mode).
+    fill_char:
+      type: string
+      description: Single one-column fill character (pad mode).
+    marker:
+      type: string
+      description: Truncation marker kept within the width (truncate_to_width mode).
+  required: ["mode", "text"]
