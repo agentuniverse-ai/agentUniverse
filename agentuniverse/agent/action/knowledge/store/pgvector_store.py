@@ -29,6 +29,8 @@ class PGVectorStore(Store):
     create_hnsw_index: bool = True
     client: Any = None
     async_client: Any = None
+    _schema_ready: tuple[Any, tuple[str, ...]] | None = None
+    _async_schema_ready: tuple[Any, tuple[str, ...]] | None = None
 
     _IDENTIFIER: ClassVar[re.Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
     _DISTANCES: ClassVar[dict[str, tuple[str, str]]] = {
@@ -131,14 +133,30 @@ class PGVectorStore(Store):
         return statements
 
     def _ensure_table(self, dimensions: int) -> None:
+        """Cache successful DDL for this connection and schema configuration.
+
+        Concurrent first uses may both perform idempotent setup. Out-of-band
+        schema deletion remains a backend error; replacing the client retries setup.
+        """
         connection = self._ensure_client()
-        for statement in self._table_sql(dimensions):
+        statements = tuple(self._table_sql(dimensions))
+        ready = self._schema_ready
+        if ready is not None and ready[0] is connection and ready[1] == statements:
+            return
+        for statement in statements:
             connection.execute(statement)
+        self._schema_ready = (connection, statements)
 
     async def _async_ensure_table(self, dimensions: int) -> None:
+        """Keep asynchronous readiness separate from the synchronous connection."""
         connection = await self._ensure_async_client()
-        for statement in self._table_sql(dimensions):
+        statements = tuple(self._table_sql(dimensions))
+        ready = self._async_schema_ready
+        if ready is not None and ready[0] is connection and ready[1] == statements:
+            return
+        for statement in statements:
             await connection.execute(statement)
+        self._async_schema_ready = (connection, statements)
 
     def _embedding_for_query(self, query: Query) -> list[float]:
         if query.embeddings:
