@@ -675,3 +675,18 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## FreezeDiffTool
+
+`FreezeDiffTool` compares installed-environment snapshots on the Python standard library only — no network, no subprocess. Three modes: `installed` (inventory of the live interpreter via `importlib.metadata`, or of a pip-freeze text parsed into `name==version` pins), `compare` (a requirements.txt text judged against a freeze text or the live environment — per-requirement satisfied verdicts, `missing_not_installed`, `undeclared_installed` after a `pip`/`setuptools`/`wheel` exempt list) and `snapshot_diff` (two freeze snapshots diffed into upgraded/downgraded/added/removed/unchanged with PEP 440 ordering).
+
+```python
+from agentuniverse.agent.action.tool.common_tool import FreezeDiffTool
+
+tool = FreezeDiffTool()
+tool.execute(mode="installed")  # live importlib.metadata inventory
+tool.execute(mode="compare", requirements="requests>=2.0\n", freeze="requests==2.31.0\n")
+tool.execute(mode="snapshot_diff", freeze_old=old_freeze, freeze_new=new_freeze)
+```
+
+Names are PEP 503 normalized (`Foo.bar` and `foo-bar` are one package). Specifier evaluation (`==`, `!=`, `>=`, `<=`, `>`, `<`, `~=`, `===`, wildcards) uses `packaging` when importable and otherwise a documented minimal PEP 440 evaluator; the ASCII-only version grammar, PEP 508 parenthesized clause lists and the single-trailing-comma rule all mirror `packaging`. Environment markers are listed but never evaluated; editable / URL / path lines are reported as non-version lines; text inputs are capped (10,000 lines / 10,000 chars per line / 4,000,000 chars, overridable via the `max_lines`, `max_line_chars` and `max_text_chars` fields).
