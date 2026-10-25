@@ -18,7 +18,7 @@ import decimal
 import json
 import time
 import traceback
-from typing import Any, Dict, Optional, AsyncGenerator, Generator
+from typing import Any, Dict, Optional, AsyncGenerator, Generator, AsyncIterator, Iterator
 
 from opentelemetry import trace, metrics, context
 from opentelemetry.instrumentation.instrumentor import BaseInstrumentor
@@ -30,6 +30,7 @@ from agentuniverse.base.tracing.au_trace_manager import init_new_token_usage, \
     add_current_token_usage
 from agentuniverse.base.util.monitor.monitor import Monitor
 from agentuniverse.llm.llm_output import LLMOutput, TokenUsage
+from agentuniverse.base.util.stream_util import ClosingIterator, ClosingAsyncIterator
 from .consts import (
     INSTRUMENTOR_NAME, INSTRUMENTOR_VERSION,
     MetricNames, SpanAttributes, MetricLabels
@@ -233,7 +234,11 @@ class StreamingResultProcessor:
         self.labels = labels
         self.metrics_recorder = metrics_recorder
 
-    async def process_async_stream(self,
+    def process_async_stream(self, result: AsyncIterator) -> AsyncIterator:
+        """Keep source closure available before the processing generator starts."""
+        return ClosingAsyncIterator(self._process_async_stream(result), result)
+
+    async def _process_async_stream(self,
                                    result: AsyncGenerator) -> AsyncGenerator:
         """Process async streaming result."""
         llm_output = []
@@ -264,7 +269,11 @@ class StreamingResultProcessor:
             # Clean up span and context after streaming is complete
             self.span_manager.cleanup()
 
-    def process_sync_stream(self, result) -> Generator:
+    def process_sync_stream(self, result) -> Iterator:
+        """Forward close() through the processing layer to the source stream."""
+        return ClosingIterator(self._process_sync_stream(result), result)
+
+    def _process_sync_stream(self, result) -> Generator:
         """Process sync streaming result."""
         llm_output = []
         usage = None

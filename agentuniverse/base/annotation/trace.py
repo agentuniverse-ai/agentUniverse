@@ -17,6 +17,7 @@ from agentuniverse.base.config.application_configer.application_config_manager i
     ApplicationConfigManager
 from agentuniverse.base.util.monitor.monitor import Monitor
 from agentuniverse.llm.llm_output import LLMOutput
+from agentuniverse.base.util.stream_util import ClosingIterator, ClosingAsyncIterator
 
 
 def get_caller_info(instance: object = None):
@@ -120,7 +121,7 @@ async def _default_llm_wrapper_async(func, *args, **kwargs):
             # add llm invocation info to monitor
             Monitor.pop_invocation_chain()
 
-        return gen_iterator()
+        return ClosingAsyncIterator(gen_iterator(), result)
 
 
 def _default_llm_wrapper_sync(func, *args, **kwargs):
@@ -142,7 +143,7 @@ def _default_llm_wrapper_sync(func, *args, **kwargs):
                 yield chunk
             Monitor.pop_invocation_chain()
 
-        return gen_iterator()
+        return ClosingIterator(gen_iterator(), result)
 
 
 _llm_wrapper_async = _default_llm_wrapper_async
