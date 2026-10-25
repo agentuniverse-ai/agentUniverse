@@ -50,6 +50,14 @@ class SQLiteStore(Store):
                     FOREIGN KEY (doc_id) REFERENCES documents (id)
                 )
             ''')
+            self.conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_inverted_index_term_doc_id '
+                'ON inverted_index (term, doc_id)'
+            )
+            self.conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_inverted_index_doc_id '
+                'ON inverted_index (doc_id)'
+            )
 
     def _initialize_by_component_configer(self,
                                           sqlite_store_configer: ComponentConfiger) -> 'DocProcessor':
@@ -197,12 +205,22 @@ class SQLiteStore(Store):
         doc_scores = []
         total_doc_count = self._get_all_docs_count()
         total_word_count = self._get_all_docs_words_count()
-        for doc_id in relevant_docs:
-            cursor = self.conn.cursor()
-            cursor.execute('SELECT text FROM documents WHERE id = ?',
-                           (doc_id,))
-            doc_text = cursor.fetchone()[0]
+        # Stay below SQLite's legacy 999-variable limit, even for large recalls.
+        doc_ids = list(relevant_docs)
+        doc_texts = {}
+        for offset in range(0, len(doc_ids), 500):
+            batch = doc_ids[offset:offset + 500]
+            placeholders = ','.join('?' for _ in batch)
+            cursor = self.conn.execute(
+                f'SELECT id, text FROM documents WHERE id IN ({placeholders})',
+                batch,
+            )
+            doc_texts.update(cursor.fetchall())
             cursor.close()
+        for doc_id in relevant_docs:
+            if doc_id not in doc_texts:
+                continue
+            doc_text = doc_texts[doc_id]
 
             bm25_score = self.compute_bm25(query.query_str, doc_text,
                                            inverted_index, total_doc_count, total_word_count)
@@ -211,18 +229,29 @@ class SQLiteStore(Store):
         # Order the docs with bm25, and return top k.
         doc_scores.sort(key=lambda x: x[1], reverse=True)
         top_docs = doc_scores[:self.similarity_top_k]
+        # Fetch metadata only for the retained documents and reuse scored text.
+        top_ids = [doc_id for doc_id, _ in top_docs]
+        doc_metadata = {}
+        for offset in range(0, len(top_ids), 500):
+            batch = top_ids[offset:offset + 500]
+            placeholders = ','.join('?' for _ in batch)
+            cursor = self.conn.execute(
+                f'SELECT id, word_count, metadata FROM documents '
+                f'WHERE id IN ({placeholders})',
+                batch,
+            )
+            doc_metadata.update((row[0], row[1:]) for row in cursor.fetchall())
+            cursor.close()
         results = []
         for doc_id, score in top_docs:
-            cursor = self.conn.cursor()
-            cursor.execute('SELECT * FROM documents WHERE id = ?',
-                           (doc_id,))
-            doc_row = cursor.fetchone()
-            cursor.close()
+            if doc_id not in doc_metadata:
+                continue
+            word_count, metadata = doc_metadata[doc_id]
 
-            document = Document(id=doc_row[0], text=doc_row[1],
-                                word_count=doc_row[2],
-                                metadata=json.loads(doc_row[3])
-                                if doc_row[3] else None)
+            document = Document(id=doc_id, text=doc_texts[doc_id],
+                                word_count=word_count,
+                                metadata=json.loads(metadata)
+                                if metadata else None)
             results.append(document)
 
         return results
