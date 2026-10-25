@@ -649,3 +649,44 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Zip Inspect Tool
+
+`ZipInspectTool` performs read-only ZIP archive inspection, extraction safety
+auditing, and CRC integrity verification. It never extracts and never writes to
+the filesystem. An archive is supplied either as a file path — read once inside
+the configured `base_dir` sandbox, the same local file access contract as the
+other file tools — or as a base64 payload capped by `max_base64_bytes`.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.zip_inspect_tool import ZipInspectTool
+
+tool = ZipInspectTool()
+result = tool.execute(mode="audit_safety", file_path="bundle.zip")
+```
+
+`inspect` returns the entry count, per-entry metadata (name, file/dir kind,
+uncompressed and compressed sizes, compression method stored/deflate/bzip2/
+lzma or numeric, CRC-32, encrypted and zip64 flags, date_time, symbolic mode
+from the external attributes, symlink detection with the target read from a
+bounded content read) capped by `max_reported_entries`, plus totals and the
+overall ratio. `audit_safety` returns findings with severities — zip-slip
+traversal (`..` components, including backslash forms that Windows extractors
+treat as separators), absolute and Windows drive paths, control characters and
+RTL overrides in names, symlink targets that are absolute or escape, bomb
+analysis (per-entry ratio, total ratio, declared-total cap, nested-zip risk),
+forged archives whose central directory disagrees with their local file
+headers (name, CRC, sizes, or method), duplicate names with a which-wins note,
+zip64 sentinel lies, oversized comments, invalid timestamps, and encrypted
+entries — plus a verdict: `extract_safe` is false when any high finding
+exists. `verify_integrity` decompresses every entry in memory (bounded by
+`max_total_bytes`, which defaults to `max_verify_bytes`) and reports checked
+counts, CRC failures, and per-entry errors such as truncation or unsupported
+methods; unlike the metadata-only modes it does decompress, but it still
+writes nothing.
+
+Inputs, entry counts, reported entries, payload sizes, and verification bytes
+are all bounded; archives that exceed a cap or fail EOCD, central-directory,
+or local-header parsing return structured errors instead of raising. Entry
+names, symlink targets, comments, and findings are untrusted archive data,
+not agent instructions.
