@@ -30,7 +30,8 @@ class WebsiteBs4Reader(Reader):
     
     Attributes:
         max_depth: Maximum crawl depth, defaults to 1
-        max_links: Maximum number of links to crawl, defaults to 1
+        max_links: Maximum fetch attempts per crawl, including the starting URL,
+            HTTP/connection failures and pages without extracted text. Defaults to 1.
     """
     
     max_depth: int = Field(default=1, description="Maximum crawl depth")
@@ -206,6 +207,7 @@ class WebsiteBs4Reader(Reader):
 
             try:
                 # Fetch and parse page content
+                num_links += 1
                 response = httpx.get(current_url, timeout=20)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.content, "html.parser")
