@@ -317,3 +317,23 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [ListStructureExtractor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/list_structure_extractor.yaml)
+
+This component detects the lists inside each document and records their structure into metadata, addressing the *structure extraction* direction of issue #258. A large share of knowledge sources — release notes, policies, specs, scraped pages — carry their content in lists, yet the existing doc processors only ever fragment text (character/token/recursive splitters, the hierarchical regex splitter): none of them record what the list structure was, so downstream consumers cannot tell a three-item checklist from a wall of prose. The extractor scans the text line by line, recognizes bullet items (`-`, `*`, `•`, `·`, en dash, em dash, each followed by a separating whitespace run so `--force` and `---` rules stay prose), numbered items in four families (`1.`, `1)`, `(a)` in any case, `(一)` CJK), and task checkboxes (`- [ ]` / `- [x]` / bare `[ ]`) with the checked state captured per item.
+
+Consecutive items sharing one marker style group into a single list block; any non-list line — prose or blank — closes the block, and a style change (`-` to `*`, `1.` to `1)`) starts a new one, mirroring how readers perceive list boundaries. Nesting is derived from leading indentation: one tab or every two spaces counts as one level, clamped to depth 4, so a document's visual hierarchy survives into metadata. Every detected block lands in `metadata['lists']` as `{kind: bullet|numbered|checkbox, span, item_count, items: [{text, span, level, marker, checked (checkboxes only)}]}` where spans are character offsets into the untouched text. The payload is capped at `max_lists` blocks and `max_items_per_list` items to bound metadata size on list-heavy documents, while `metadata['list_count']`, each block's `item_count` and `metadata['checkbox_summary']` (`{total, checked}`, stamped only when checkbox items exist) always report the uncapped totals. Documents without any list pass through completely untouched, text and id are never modified, and the whole pipeline is pure Python, deterministic and offline — complementary to `OutlineExtractor` (heading skeleton) and `QAPairExtractor` (Q&A mining) on the structure axis.
+
+The component definition file is as follows:
+```yaml
+name: 'list_structure_extractor'
+description: 'detect bullet/numbered/checkbox lists and record their structure into document metadata'
+max_lists: 20                # max blocks recorded in metadata['lists']
+max_items_per_list: 100      # max items recorded per block
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.list_structure_extractor'
+  class: 'ListStructureExtractor'
+```
+- max_lists: Maximum number of list blocks recorded in `metadata['lists']`; must be >= 1. Blocks beyond the cap are omitted from the payload, but `metadata['list_count']` still reports the true total.
+- max_items_per_list: Maximum number of items recorded per list block; must be >= 1. Each block's `item_count` keeps the true total even when the items payload is trimmed.
