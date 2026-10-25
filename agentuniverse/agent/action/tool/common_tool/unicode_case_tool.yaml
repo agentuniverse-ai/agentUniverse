@@ -1,0 +1,24 @@
+name: unicode_case_tool
+description: Offline Unicode case analysis - case mappings, casefold equivalence, and identifier naming styles.
+tool_type: api
+metadata: {type: TOOL, module: agentuniverse.agent.action.tool.common_tool.unicode_case_tool, class: UnicodeCaseTool}
+input_keys: [mode]
+max_text_chars: 1048576
+max_per_char_entries: 200
+max_interesting_mappings: 50
+max_differences: 100
+max_words: 200
+args_model_schema:
+  type: object
+  properties:
+    mode: {type: string, enum: [case_map, equivalence, style_audit, char_case_info]}
+    text: {type: string}
+    target: {type: string, enum: [upper, lower, title, casefold, swapcase], default: upper}
+    text_a: {type: string}
+    text_b: {type: string}
+    identifier: {type: string}
+    target_style: {type: string, enum: [snake_case, camelCase, PascalCase, SCREAMING_SNAKE, kebab-case]}
+    char: {type: string}
+    codepoint: {type: integer, minimum: 0, maximum: 1114111}
+  required: [mode]
+  additionalProperties: false
