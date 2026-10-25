@@ -14,7 +14,7 @@ The ContextManager is responsible for:
 - Task-adaptive configuration
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timedelta
 
 from agentuniverse.base.component.component_base import ComponentBase
@@ -24,6 +24,7 @@ from agentuniverse.agent.context.context_model import (
     ContextWindow,
     ContextType,
     ContextPriority,
+    ContextMetadata,
 )
 from agentuniverse.agent.context.context_store import ContextStore
 
@@ -211,6 +212,11 @@ class ContextManager(ComponentBase):
         content: str,
         context_type: ContextType,
         priority: ContextPriority = ContextPriority.MEDIUM,
+        metadata: Optional[Union[Dict[str, Any], ContextMetadata]] = None,
+        parent_id: Optional[str] = None,
+        related_ids: Optional[List[str]] = None,
+        agent_id: Optional[str] = None,
+        task_id: Optional[str] = None,
         **kwargs
     ) -> ContextSegment:
         """Add context with proactive budget management.
@@ -218,18 +224,36 @@ class ContextManager(ComponentBase):
         This is the core innovation: we check budget BEFORE adding and
         make room if needed through compression/eviction.
 
+        The returned object is the exact :class:`ContextSegment` instance that
+        was handed to the storage backend. Callers that later need to reference
+        a stored segment (to invalidate or replace it) must use the returned
+        id: the id is generated when the segment is built here and never equals
+        an id a caller may have generated on its own.
+
         Args:
             session_id: Session identifier
             content: Context content to add
             context_type: Type of context
             priority: Priority level
-            **kwargs: Additional segment metadata
+            metadata: Optional segment metadata. Either a ContextMetadata
+                instance (deep-copied so a stored segment never aliases
+                caller-owned state) or a plain mapping. For a mapping, keys
+                that name a ContextMetadata field populate that field and all
+                remaining keys are folded into ContextMetadata.custom, so the
+                documented ``metadata={'role': 'user'}`` shorthand works and no
+                caller-supplied value is silently dropped.
+            parent_id: Optional id of a parent segment
+            related_ids: Optional ids of related segments
+            agent_id: Optional agent that owns this segment
+            task_id: Optional task this segment belongs to
+            **kwargs: Reserved for future segment attributes
 
         Returns:
-            Created ContextSegment
+            The created ContextSegment, i.e. the instance stored in the store
 
         Raises:
             ValueError: If session has no context window
+            TypeError: If metadata is neither a mapping nor a ContextMetadata
         """
         # Get or create window
         window = self._windows.get(session_id)
@@ -245,14 +269,21 @@ class ContextManager(ComponentBase):
             self._make_room(window, tokens)
 
         # Create segment
+        # The metadata normaliser is what makes the public ``metadata=``
+        # argument actually stick to the stored segment instead of being
+        # ignored, which is how the knowledge synchronizer used to lose the
+        # knowledge_id it attached to every segment.
         segment = ContextSegment(
             type=context_type,
             priority=priority,
             content=content,
             tokens=tokens,
             session_id=session_id,
-            parent_id=kwargs.get("parent_id"),
-            related_ids=kwargs.get("related_ids", []),
+            parent_id=parent_id,
+            related_ids=list(related_ids) if related_ids else [],
+            agent_id=agent_id,
+            task_id=task_id,
+            metadata=self._build_segment_metadata(metadata),
         )
 
         # Store in hot storage
@@ -264,6 +295,64 @@ class ContextManager(ComponentBase):
         window.update_total_tokens(tokens, operation="add")
 
         return segment
+
+    @staticmethod
+    def _build_segment_metadata(
+        metadata: Optional[Union[Dict[str, Any], ContextMetadata]]
+    ) -> ContextMetadata:
+        """Normalise the ``metadata`` argument accepted by add_context.
+
+        Two shapes are supported because both already belong to the public API:
+        a ready-made :class:`ContextMetadata` (what the knowledge/context
+        synchronizer builds) and a plain mapping of ad-hoc annotations (what
+        the integration guide advertises, e.g. ``{'role': 'user'}``).
+
+        The mapping form is interpreted field-aware: keys that name a
+        ``ContextMetadata`` field populate that field, and every other key is
+        merged into ``ContextMetadata.custom``. Without this, dict callers
+        would either lose their annotations or be rejected outright.
+
+        Args:
+            metadata: ``None``, a ContextMetadata instance or a mapping
+
+        Returns:
+            A ContextMetadata instance owned by the newly created segment
+
+        Raises:
+            TypeError: If metadata is neither ``None``, a mapping nor a
+                ContextMetadata instance
+        """
+        if metadata is None:
+            return ContextMetadata()
+
+        if isinstance(metadata, ContextMetadata):
+            # Deep copy so mutating the caller's object (or the caller mutating
+            # ours) can never leak across the storage boundary.
+            return metadata.model_copy(deep=True)
+
+        if not isinstance(metadata, dict):
+            raise TypeError(
+                "metadata must be a ContextMetadata instance or a dict, "
+                f"got {type(metadata).__name__}"
+            )
+
+        field_names = set(ContextMetadata.model_fields.keys())
+        model_values: Dict[str, Any] = {}
+        extra_custom: Dict[str, Any] = {}
+        for key, value in metadata.items():
+            if key in field_names:
+                model_values[key] = value
+            else:
+                extra_custom[key] = value
+
+        base_custom = model_values.pop("custom", None) or {}
+        if not isinstance(base_custom, dict):
+            raise TypeError("The 'custom' metadata entry must be a mapping.")
+        model_values["custom"] = {**base_custom, **extra_custom}
+
+        # Pydantic validates the assembled values, so a malformed field raises
+        # a descriptive error instead of being silently discarded.
+        return ContextMetadata(**model_values)
 
     def get_context(
         self,
