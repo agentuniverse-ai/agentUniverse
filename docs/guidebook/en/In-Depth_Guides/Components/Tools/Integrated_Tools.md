@@ -649,3 +649,76 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## CLI Schema Tool
+
+`CliSchemaTool` is the contract layer of the shell-argument family: given an
+`argv` list and a declared command schema, it answers *does this argv match
+the arguments the command ACCEPTS* — flags, positionals, types, choices —
+and it can render the usage text for that schema. It is built purely on the
+Python standard library, needs no network access, and never executes
+anything: `CommandArgLexerTool` *tokenizes* a command line into `argv` and
+`ContextEscapeTool` *quotes* text for a shell, but neither knows what a
+command accepts; this tool does. A typical chain is
+`CommandArgLexerTool.lex` → `CliSchemaTool.check`.
+
+Three modes:
+
+- `check` — argv (program included as `argv[0]`, matched exactly or by
+  basename) + schema → `{"passed", "parsed", "missing", "unknown",
+  "type_mismatches", "defaults_applied", "separator_seen"}`. Flags accept
+  `--flag value` and `--flag=value` (same for `-alias`); short-flag bundles
+  are NOT expanded (`-abc` is one lookup, matched only by a declared alias
+  like `la` for `ls -la`); single-character flags map to long names via the
+  `alias` field; `--` terminates flag parsing with the overflow collected
+  under `parsed["_args"]`; repeated flags keep the last value unless
+  `multiple: true` collects a list; flag-like negative numbers (`-5`,
+  `-3.14`, `-1e-3`, the lone `-`) are positional values, and a value-taking
+  flag consumes them from the next token; a value-less flag falls back to
+  its declared default or is reported in `missing`. Types follow the family
+  rules (`int`/`float`/`bool` coercion with the same regexes and boolean
+  words as `EnvSchemaTool`, `path` as non-empty text without control
+  characters, `string` for anything); `choices` is checked on the raw token.
+- `usage` — schema → the one-line usage string
+  `program [--flag VALUE] POS1 [POS2] ...` plus the full help text with one
+  aligned per-argument line and the schema's `epilog`.
+- `suggested_schema` — sample invocations → an inferred schema merged
+  across the samples (the bootstrap mode): value-vs-switch decisions, types,
+  `choices`, `required`/`multiple`, positional slots — round-trip safe, so
+  every input sample passes `check` against its own suggestion.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.cli_schema_tool import CliSchemaTool
+
+tool = CliSchemaTool()
+schema = {
+    "program": "grep",
+    "arguments": [
+        {"name": "color", "kind": "flag", "type": "string",
+         "choices": ["auto", "always", "never"], "default": "auto"},
+        {"name": "ignore-case", "kind": "flag", "alias": "i", "has_value": False},
+        {"name": "count", "kind": "flag", "alias": "c", "type": "int", "multiple": True},
+        {"name": "pattern", "kind": "positional", "type": "string"},
+        {"name": "file", "kind": "positional", "type": "path",
+         "required": False, "multiple": True},
+    ],
+}
+tool.execute(mode="check", argv=["grep", "--color=always", "-i", "-c", "2",
+                                 "pat", "a.txt"], schema=schema)
+# {'mode': 'check', 'passed': True, 'parsed': {'color': 'always',
+#  'ignore-case': True, 'count': [2], 'pattern': 'pat', 'file': ['a.txt']},
+#  'missing': [], 'unknown': [], 'type_mismatches': [],
+#  'defaults_applied': [], 'separator_seen': False}
+tool.execute(mode="usage", schema=schema)["usage"]
+# 'grep [--color VALUE] [--ignore-case] [--count VALUE ...] PATTERN [FILE ...]'
+tool.execute(mode="suggested_schema",
+             samples=[["grep", "--color", "auto", "pat"],
+                      ["grep", "--color=always", "pat", "a.txt"]])["schema"]
+# {'program': 'grep', 'arguments': [{'name': 'color', ..., 'choices': ['auto', 'always']}, ...]}
+```
+
+Input validation is strict and raises `ValueError` on malformed schemas
+(bad names, aliases or types, duplicates, invalid defaults or choices,
+a repeatable positional that is not last, size caps); a program token that
+does not match the schema is returned as a structured `error` payload with
+`passed=False`.
