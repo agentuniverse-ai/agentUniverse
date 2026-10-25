@@ -675,3 +675,66 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Secret Scan Tool
+
+`SecretScanTool` detects secrets and credentials in text: published vendor
+formats, context-gated AWS secrets, JWT structure analysis, URL
+credentials, and generic assignment / entropy heuristics — with
+ALWAYS-masked output. It runs in four modes: `scan`, `scan_entropy_profile`,
+`explain_rule`, and `validate_token`, stdlib-only (`re`, `base64`, `math`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.secret_scan_tool import SecretScanTool
+
+tool = SecretScanTool()
+result = tool.execute(
+    mode="scan",
+    text="aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+)
+```
+
+`scan` returns findings `[{rule, kind, span, preview_MASKED, confidence,
+reasons, line, meta}]` with a summary of counts by confidence, kind and
+rule. The rule set embeds equivalents of the public truffleHog / gitleaks
+rules, each hand-verified against the vendor's format documentation and
+cited per rule: AWS access key ids (`AKIA[0-9A-Z]{16}` prefixes and
+family), classic and fine-grained GitHub tokens (`ghp_`/`gho_`/`ghu_`/
+`ghs_`+36, `ghr_`+76, `github_pat_`+22+`_`+59), Google API keys
+(`AIza`+35), Slack tokens (`xox[baprs]-` segments), Stripe live keys
+(`sk_live_`/`rk_live_`/`pk_live_`+24, test keys intentionally excluded),
+PEM private key blocks (RFC 7468 marker grammar, paired forward-only so
+unterminated texts stay linear), JWTs (RFC 7515/7519 compact form: the
+HEADER is decoded for `alg`/`typ`, whether a signature is present and
+whether the payload PARSES — payload contents are never decoded into the
+report), and `scheme://user:pass@` URL credentials. The 40-character AWS
+secret body is context-gated: it only reports near an
+aws/amazon/secret/access-key keyword (160 characters per side, the
+candidate excluded from its own gate window), because a bare base64 run
+is usually encoded data. Generic rules — keyword assignment with an
+~200-entry non-secret allowlist (placeholders like `${ENV_VAR}`,
+`<your-api-key>`, trailing-digit variants of common words) and standalone
+high-entropy tokens (>=40 chars, all four charset classes, Shannon
+entropy > 4.5 bits/char) — top up the coverage at medium/low confidence
+only.
+
+Masking is an invariant, enforced by an oracle test: previews reveal at
+most the first 4 and last 4 characters (`AKIA****MPLE`), URL credentials
+mask both userinfo parts, private key previews show marker dashes only
+with the key type in `meta`, and generic previews reveal nothing but the
+length. `validate_token` never echoes its input either — it validates one
+candidate against one kind with checksum notes (GitHub PATs embed no
+checksum; AWS key ids and secrets are format-only; JWTs report signature
+presence plus the decoded header `alg`).
+
+`scan_entropy_profile` reports a per-line entropy summary (capped) with
+the hottest >=20-character token per line as length + entropy only, for
+forensic triage. `explain_rule` returns a rule's pattern, its source
+citation, safe true-positive examples (vendor documentation material like
+the AWS docs key (prefix `AKIA`, 20-char body) or the RFC 7515 appendix A.2
+token — never real leaked secrets), false-positive notes, and the masking
+applied.
+
+All inputs are bounded (`max_input_bytes`, `max_findings`,
+`max_profile_lines`, `max_candidates`, `max_token_chars`), every regex
+avoids nested unbounded quantifiers, and every result is deterministic.
