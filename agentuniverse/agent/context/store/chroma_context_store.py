@@ -65,8 +65,13 @@ class ChromaContextStore(ContextStore):
             import chromadb
             from chromadb.config import Settings
 
-            # Create persistent client
+            # Create persistent client. ``is_persistent`` must be set
+            # explicitly: chromadb derives it only from ``Settings(...)``
+            # arguments, and a bare ``persist_directory`` leaves it False, so
+            # the client silently becomes an in-memory EphemeralClient and
+            # nothing is written to the directory this store advertises.
             self._chroma_client = chromadb.Client(Settings(
+                is_persistent=True,
                 persist_directory=self.persist_directory,
                 anonymized_telemetry=False
             ))
