@@ -24,6 +24,8 @@ class ReaderManager(ComponentManagerBase[Reader]):
         "md": "default_markdown_reader",
         "markdown": "default_markdown_reader",
         "csv": "default_csv_reader",
+        "yaml": "default_yaml_reader",
+        "yml": "default_yaml_reader",
         "json": "default_json_reader",
         "rar": "default_rar_reader",
         "zip": "default_zip_reader",
