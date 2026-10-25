@@ -675,3 +675,65 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Journal Parser Tool
+
+`JournalParserTool` parses dated journal / worklog / diary /
+meeting-notes text into structured records, built purely on the
+Python standard library with zero network access. It complements
+in-text date extraction: instead of finding dates mentioned anywhere
+in prose, it recognises lines that *start* an entry — the date is the
+heading — and splits the text at those lines.
+
+An entry delimiter is a line that begins (after at most three leading
+spaces/tabs and an optional Markdown heading of one to six `#` marks)
+with an ISO date (`2026-10-19`), a year-first slash date (`2026/10/19`),
+a US month-first slash date (`10/19/2026`), a CJK date
+(`2026年10月19日`), or a full English weekday name (`Monday` …
+`Sunday`, case-insensitive). The token must end cleanly at whitespace,
+punctuation or end of line, so prose like `2026-10-19abc` is not
+mistaken for a heading. The remainder of the delimiter line becomes
+the entry `title`; entry content runs until the next delimiter and the
+delimiter line itself is the first line of the entry `text`.
+
+Weekday headings carry no year, so their dates are inferred
+(documented heuristic): by default a weekday entry attaches to the
+Monday-based week of the most recent explicit-date entry — `Tuesday`
+after `2026-10-19` (a Monday) resolves to `2026-10-20` — and may land
+before its anchor, which shows up as a negative gap flagged by
+`summary`. With the injectable `reference_year` option, weekday
+headings that appear before any explicit date resolve forward from
+January 1 of that year, each resolution advancing the anchor (first
+`Monday` of 2026: `2026-01-05`; a later `Monday`: `2026-01-12`).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.journal_parser_tool import JournalParserTool
+
+tool = JournalParserTool()
+result = tool.execute(mode="parse", text=JOURNAL)
+summary = tool.execute(mode="summary", text=JOURNAL)
+hits = tool.execute(mode="filter", text=JOURNAL, substring="deploy")
+range_hits = tool.execute(
+    mode="filter", text=JOURNAL, start_date="2026-10-01", end_date="2026-10-31"
+)
+```
+
+`parse` returns every entry as `{index, line_start, line_end, date,
+raw_date, inferred, title, lines, text, next_date_gap_days}` together
+with the preamble before the first heading and the tolerated
+look-alike lines; `summary` returns the entry count, date range,
+mean/max gap in days, per-entry line counts, and the out-of-order
+entries; `filter` returns the entries whose date falls inside an
+inclusive `start_date`/`end_date` range and/or whose text contains
+`substring` (`case_sensitive` option; both criteria AND together).
+
+Lines that merely look like delimiters are tolerated as plain content
+and reported, never fatal: regex-shaped but impossible dates
+(`2026-13-01`, `2026-02-30`, `13/45/2026`, `2026年13月1日`), date
+skeletons glued to letters or digits (`2026-10-19abc`), and
+unresolvable weekday headings (no preceding explicit date and no
+`reference_year`). Inputs are validated strictly before any parsing —
+wrong `mode`, non-string / empty / oversized `text` (100,000-character
+limit), malformed `reference_year`, a filter with no criteria,
+unparseable or inverted date bounds, or a non-string `substring`
+raise a `ValueError`. All output is deterministic.
