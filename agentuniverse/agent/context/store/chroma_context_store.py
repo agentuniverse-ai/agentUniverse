@@ -511,20 +511,34 @@ class ChromaContextStore(ContextStore):
         """Clear all stored context (use with caution).
 
         This removes all context data from Chroma collection.
+
+        A failure to remove the data is raised instead of swallowed. Reporting
+        success while the archived segments are still stored and readable makes
+        a retention request look satisfied when it is not, and the other stores
+        (`RamContextStore`, `RedisContextStore`) let their errors propagate too.
         """
         if not self._collection:
             return
 
-        try:
-            # Delete the entire collection and recreate
+        # Deleting a collection that is already gone is the one outcome that is
+        # not an error: the data is clear either way, so just recreate.
+        #
+        # Presence is checked first instead of matching the error message.
+        # chromadb 0.4.24 has no dedicated exception for a missing collection --
+        # it raises a bare `ValueError("Collection X does not exist.")` -- so
+        # inspecting the text would also swallow an unrelated failure whose
+        # message happens to contain the same words, and would break on any
+        # release that rewords it.
+        if self.collection_name in [
+            collection.name for collection in self._chroma_client.list_collections()
+        ]:
             self._chroma_client.delete_collection(name=self.collection_name)
-            self._collection = self._chroma_client.create_collection(
-                name=self.collection_name,
-                embedding_function=self._embedding_function,
-                metadata={"description": "agentUniverse context storage"}
-            )
-        except Exception:
-            pass  # Silently fail if collection doesn't exist
+
+        self._collection = self._chroma_client.create_collection(
+            name=self.collection_name,
+            embedding_function=self._embedding_function,
+            metadata={"description": "agentUniverse context storage"}
+        )
 
     def _metadata_to_segment(
         self,
