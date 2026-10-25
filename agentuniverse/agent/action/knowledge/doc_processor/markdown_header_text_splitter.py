@@ -130,7 +130,9 @@ class MarkdownHeaderTextSplitter(DocProcessor):
         fence_char: Optional[str] = None  # current fence char, or None if outside
         fence_len: int = 0                # length of the opening fence run
 
-        for raw_line in text.splitlines():
+        # Markdown line endings are CRLF, CR, or LF. Other Unicode line
+        # separators remain content and must not create headings or fences.
+        for raw_line in re.split(r"\r\n|\r|\n", text):
             if fence_char is not None:
                 # Inside a fenced code block: every line is content, but watch
                 # for the matching closing fence.
