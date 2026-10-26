@@ -197,7 +197,7 @@ class ChromaContextStore(ContextStore):
         session_id: str,
         context_type: Optional[ContextType] = None,
         priority: Optional[ContextPriority] = None,
-        limit: int = 100,
+        limit: int | None = 100,
         **kwargs
     ) -> List[ContextSegment]:
         """Retrieve segments from Chroma.
@@ -206,7 +206,7 @@ class ChromaContextStore(ContextStore):
             session_id: Session identifier
             context_type: Optional type filter
             priority: Optional priority filter
-            limit: Maximum number of segments to return
+            limit: Maximum number of segments to return; None retrieves all
             **kwargs: Additional parameters (e.g., min_created_at)
 
         Returns:

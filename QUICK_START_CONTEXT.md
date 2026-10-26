@@ -69,6 +69,19 @@ print(f"总 tokens: {metrics['total_tokens']}")
 
 **就是这么简单！** 系统会自动处理压缩、存储和检索。
 
+#### 长会话与检索数量
+
+直接调用 `ContextStore.get(session_id)` 默认最多返回 100 个片段；传入
+`limit=None` 可读取该会话的全部可检索片段。自定义 ContextStore 也应遵守这个约定。
+ContextManager 在压缩整个会话、prune 后重算 token 和选择淘汰候选时使用完整结果，
+不会将默认的 100 条检索限制当成整个会话。普通限量检索行为保持不变。
+
+`ContextStore.get(session_id)` returns at most 100 segments by default. Pass
+`limit=None` to retrieve all matching, retrievable segments; custom stores should
+support this contract too. ContextManager uses the complete result for session
+compression, post-prune accounting, and eviction selection. This does not make
+the read/replace sequence transactional or change existing expiration policies.
+
 ---
 
 ### 步骤 2: 知识同步（可选，3 分钟）
@@ -423,6 +436,25 @@ print(f"系统健康: {health}")  # HEALTHY, WARNING, CRITICAL
 5. **使用知识同步保持知识库最新**
 
 ---
+
+## RAM 容量淘汰与窗口记账
+
+通过 `ContextManager.add_context()` 写入 RAM 存储时，超过 `max_segments` 的容量淘汰
+会同步移除窗口中对应的片段 ID 和 token 数。新写入的 EPHEMERAL 片段也可能立即被淘汰；
+此时 `add_context()` 仍返回该片段，但不会将其计入窗口。处理过程不额外调用检索，
+因此不会为了重算而改变 LRU 顺序。
+
+`RamContextStore.add()` 现在返回本次写入淘汰的 `ContextSegment` 列表；没有淘汰时返回空列表。
+直接调用且忽略返回值的代码不需要改变。没有容量淘汰的自定义存储仍可返回 `None`；
+有容量淘汰的存储应返回实际淘汰的片段及其 token 数，让管理器维护记账。
+通过其他路径直接修改存储、并发写入、TTL 清理和预算压缩不在本次记账修复的保证范围内。
+
+When writing through `ContextManager.add_context()`, RAM capacity evictions are
+reported back to the window without a second retrieval. `RamContextStore.add()`
+returns the evicted segments (an empty list when none); non-evicting stores may
+continue returning `None`. An incoming EPHEMERAL segment can evict itself and is
+then excluded from window accounting, although `add_context()` still returns it.
+This is a serial-write accounting contract, not a concurrency or transaction guarantee.
 
 ## 🚀 开始使用
 

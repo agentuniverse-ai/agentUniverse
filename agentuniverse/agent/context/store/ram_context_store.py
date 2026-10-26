@@ -41,12 +41,17 @@ class RamContextStore(ContextStore):
         if self.enable_metrics:
             self.initialize_metrics()
 
-    def add(self, segments: List[ContextSegment], **kwargs) -> None:
+    def add(self, segments: List[ContextSegment], **kwargs) -> list[ContextSegment]:
         """Store context segments with LRU eviction.
 
         Args:
             segments: List of context segments to store
             **kwargs: Must include 'session_id'
+
+        Returns:
+            Segments evicted during this write, in eviction order. This can
+            include an incoming EPHEMERAL segment. Callers that do not maintain
+            window accounting can ignore the report.
         """
         start_time = time.time() if self.enable_metrics else None
 
@@ -59,6 +64,7 @@ class RamContextStore(ContextStore):
             self._storage[session_id] = OrderedDict()
 
         session_storage = self._storage[session_id]
+        evicted_segments = []
 
         for segment in segments:
             # Update session_id if not set
@@ -73,18 +79,22 @@ class RamContextStore(ContextStore):
 
             # LRU eviction if exceeded max_segments
             if len(session_storage) > self.max_segments:
-                self._evict_lru(session_storage)
+                evicted = self._evict_lru(session_storage)
+                if evicted is not None:
+                    evicted_segments.append(evicted)
 
         if self.enable_metrics:
             elapsed_ms = (time.time() - start_time) * 1000
             self._metrics["add_count"] += 1
             self._metrics["total_add_time_ms"] += elapsed_ms
 
+        return evicted_segments
+
     def get(
         self,
         session_id: str,
         context_type: Optional[ContextType] = None,
-        limit: int = 100,
+        limit: int | None = 100,
         **kwargs
     ) -> List[ContextSegment]:
         """Retrieve segments with filtering.
@@ -92,7 +102,7 @@ class RamContextStore(ContextStore):
         Args:
             session_id: Session identifier
             context_type: Optional filter by context type
-            limit: Maximum number of segments to return
+            limit: Maximum number of segments to return; None retrieves all
             **kwargs: Additional filters (priority, min_decay_score, etc.)
 
         Returns:
@@ -334,7 +344,7 @@ class RamContextStore(ContextStore):
 
     # Private helper methods
 
-    def _evict_lru(self, session_storage: OrderedDict) -> None:
+    def _evict_lru(self, session_storage: OrderedDict) -> ContextSegment | None:
         """Evict least recently used segment.
 
         Priority order (evict first):
@@ -345,28 +355,32 @@ class RamContextStore(ContextStore):
 
         Args:
             session_storage: Session's OrderedDict storage
+
+        Returns:
+            The removed segment, or None when storage is empty.
         """
         # Try to evict EPHEMERAL first
         for segment_id, segment in session_storage.items():
             if segment.priority == ContextPriority.EPHEMERAL:
                 del session_storage[segment_id]
-                return
+                return segment
 
         # Try to evict LOW priority with low decay score
         for segment_id, segment in session_storage.items():
             if segment.priority == ContextPriority.LOW and segment.calculate_decay() < 0.3:
                 del session_storage[segment_id]
-                return
+                return segment
 
         # Try to evict MEDIUM priority with low decay score
         for segment_id, segment in session_storage.items():
             if segment.priority == ContextPriority.MEDIUM and segment.calculate_decay() < 0.5:
                 del session_storage[segment_id]
-                return
+                return segment
 
         # Fallback: evict oldest (first in OrderedDict)
         if len(session_storage) > 0:
-            session_storage.popitem(last=False)
+            return session_storage.popitem(last=False)[1]
+        return None
 
     def _calculate_keyword_score(
         self,
