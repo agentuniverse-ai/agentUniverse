@@ -24,6 +24,16 @@ metadata:
 - keyword_extractor: The tool designated for keyword extraction, specified here as jieba_keyword_extractor.
 - similarity_top_k: Returns the top k most similar documents based on the BM25 score.
 
+### Keyword extractor configuration errors
+
+`keyword_extractor` must name a registered `DOC_PROCESSOR` component, such as
+`jieba_keyword_extractor`. Load that component's configuration before inserting or
+upserting documents, or querying without explicit keywords. An unset extractor or
+an unregistered name raises `ValueError`; the unregistered-name error includes the
+SQLite store name and the configured `keyword_extractor` value. Check the spelling
+and that the processor configuration is included in your application's component
+scan paths. Queries with explicit, nonempty keywords do not require extraction.
+
 ### Usage
 You can query with explicit keywords even when no query text is available:
 

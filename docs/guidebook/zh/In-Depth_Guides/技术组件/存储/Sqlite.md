@@ -24,5 +24,14 @@ metadata:
 - keyword_extractor: 用于提取关键词的工具名称，这里指定为 jieba_keyword_extractor。
 - similarity_top_k: 根据BM25分数返回的最相关的top k。
 
+### 关键词提取器配置错误
+
+`keyword_extractor` 必须填写已注册的 `DOC_PROCESSOR` 组件名称，例如
+`jieba_keyword_extractor`。在插入、更新插入文档或未显式提供关键词的查询之前，
+请先加载该组件的配置。未配置提取器或组件名称未注册时会抛出 `ValueError`；
+名称未注册的错误信息会包含 SQLite 存储名称和配置的 `keyword_extractor` 值。
+请检查名称拼写，并确认处理器配置已包含在应用的组件扫描路径中。
+显式提供非空关键词的查询无需调用提取器。
+
 ### 使用方式
 [知识定义与使用](../../原理介绍/知识/知识定义与使用.md)
