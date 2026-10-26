@@ -99,11 +99,11 @@ class KnowledgeContextSynchronizer:
         self.conflict_strategy = conflict_strategy
         self.enable_versioning = enable_versioning
 
-        # Track knowledge versions if enabled
-        self._knowledge_versions: Dict[str, KnowledgeVersion] = {}
+        # Track successfully applied versions independently in each session.
+        self._knowledge_versions: dict[tuple[str, str], KnowledgeVersion] = {}
 
         # Track knowledge-to-context mappings
-        self._knowledge_context_map: Dict[str, List[str]] = {}
+        self._knowledge_context_map: dict[tuple[str, str], list[str]] = {}
 
     def sync_knowledge_to_context(
         self,
@@ -117,7 +117,12 @@ class KnowledgeContextSynchronizer:
         """Sync knowledge documents to context storage.
 
         This adds or updates context segments based on knowledge documents,
-        handling conflicts and version tracking.
+        handling conflicts and version tracking. Change detection and segment
+        mappings are scoped to the target session. Versions are committed only
+        after all writes succeed; failed attempts roll back completed writes.
+        This guarantees retry cleanup for serial calls with acknowledged writes,
+        not an atomic durable transaction. Unacknowledged writes, concurrent
+        syncs, manager-side eviction, and partial invalidation are not rolled back.
 
         Args:
             knowledge_id: Unique identifier for this knowledge
@@ -133,6 +138,7 @@ class KnowledgeContextSynchronizer:
             SyncResult with operation statistics
         """
         result = SyncResult()
+        knowledge_key = (session_id, knowledge_id)
         force_update = kwargs.get("force_update", False)
         invalidate_old = kwargs.get("invalidate_old", True)
 
@@ -146,57 +152,67 @@ class KnowledgeContextSynchronizer:
             )
 
             # Check if content changed
-            old_version = self._knowledge_versions.get(knowledge_id)
-            if old_version and not force_update:
-                if old_version.hash == version.hash:
-                    # No changes, skip sync
-                    result.details["skipped"] = "No content changes detected"
-                    return result
-
-            self._knowledge_versions[knowledge_id] = version
-            result.version = version
-
-        # Invalidate old segments if requested
-        if invalidate_old:
-            old_segment_ids = self._knowledge_context_map.get(knowledge_id, [])
-            if old_segment_ids:
-                result.segments_invalidated = self._invalidate_segments(
-                    session_id, old_segment_ids
-                )
+            old_version = self._knowledge_versions.get(knowledge_key)
+            if old_version and not force_update and old_version.hash == version.hash:
+                # No changes, skip sync
+                result.details["skipped"] = "No content changes detected"
+                return result
 
         # Add new segments
         new_segment_ids = []
-        for i, doc in enumerate(documents):
-            segment = ContextSegment(
-                type=ContextType.BACKGROUND,
-                priority=priority,
-                content=doc,
-                tokens=len(doc.split()),  # Rough estimate
-                session_id=session_id,
-                metadata=ContextMetadata(
-                    created_at=datetime.now(),
-                    custom={
-                        "knowledge_id": knowledge_id,
-                        "version_id": version.version_id if self.enable_versioning else None,
-                        "document_index": i,
-                        "source": source,
-                    }
+        try:
+            for i, doc in enumerate(documents):
+                segment = ContextSegment(
+                    type=ContextType.BACKGROUND,
+                    priority=priority,
+                    content=doc,
+                    tokens=len(doc.split()),  # Rough estimate
+                    session_id=session_id,
+                    metadata=ContextMetadata(
+                        created_at=datetime.now(),
+                        custom={
+                            "knowledge_id": knowledge_id,
+                            "version_id": version.version_id if self.enable_versioning else None,
+                            "document_index": i,
+                            "source": source,
+                        }
+                    )
                 )
-            )
 
-            self.context_manager.add_context(
-                session_id,
-                segment.content,
-                segment.type,
-                segment.priority,
-                metadata=segment.metadata.model_dump()
-            )
+                stored_segment = self.context_manager.add_context(
+                    session_id,
+                    segment.content,
+                    segment.type,
+                    segment.priority,
+                    metadata=segment.metadata.model_dump()
+                )
 
-            new_segment_ids.append(segment.id)
-            result.segments_added += 1
+                new_segment_ids.append(stored_segment.id)
+                result.segments_added += 1
+
+            # Invalidate old segments only after all new writes succeed
+            if invalidate_old:
+                old_segment_ids = self._knowledge_context_map.get(knowledge_key, [])
+                if old_segment_ids:
+                    result.segments_invalidated = self._invalidate_segments(
+                        session_id, old_segment_ids
+                    )
+        except Exception as sync_error:
+            # Delete only writes completed by this attempt. Never pass an empty
+            # ID list: ContextManager interprets it as deleting the whole session.
+            # A rollback error propagates with the original write error chained.
+            if new_segment_ids:
+                try:
+                    self.context_manager.delete_context(session_id, segment_ids=new_segment_ids)
+                except Exception as rollback_error:
+                    raise rollback_error from sync_error
+            raise
 
         # Update mapping
-        self._knowledge_context_map[knowledge_id] = new_segment_ids
+        self._knowledge_context_map[knowledge_key] = new_segment_ids
+        if self.enable_versioning:
+            self._knowledge_versions[knowledge_key] = version
+            result.version = version
 
         result.details["knowledge_id"] = knowledge_id
         result.details["documents_processed"] = len(documents)
@@ -226,9 +242,10 @@ class KnowledgeContextSynchronizer:
             SyncResult with operation statistics
         """
         result = SyncResult()
+        knowledge_key = (session_id, knowledge_id)
 
         # Get existing segments for this knowledge
-        old_segment_ids = self._knowledge_context_map.get(knowledge_id, [])
+        old_segment_ids = self._knowledge_context_map.get(knowledge_key, [])
         existing_segments = self._get_segments_by_ids(session_id, old_segment_ids)
 
         if not new_documents:
@@ -424,21 +441,40 @@ class KnowledgeContextSynchronizer:
         content = "".join(documents)
         return hashlib.sha256(content.encode()).hexdigest()
 
-    def get_knowledge_version(self, knowledge_id: str) -> Optional[KnowledgeVersion]:
-        """Get version information for a knowledge ID.
+    def get_knowledge_version(
+        self, knowledge_id: str, session_id: str | None = None
+    ) -> KnowledgeVersion | None:
+        """Get the last successfully applied version for a knowledge ID.
 
         Args:
             knowledge_id: Knowledge identifier
+            session_id: Restrict lookup to this session. If omitted, return the
+                latest successfully applied version across sessions.
 
         Returns:
             KnowledgeVersion if exists, None otherwise
         """
-        return self._knowledge_versions.get(knowledge_id)
+        if session_id is not None:
+            return self._knowledge_versions.get((session_id, knowledge_id))
+        return self.list_knowledge_versions().get(knowledge_id)
 
-    def list_knowledge_versions(self) -> Dict[str, KnowledgeVersion]:
-        """List all tracked knowledge versions.
+    def list_knowledge_versions(
+        self, session_id: str | None = None
+    ) -> dict[str, KnowledgeVersion]:
+        """List successfully applied versions, optionally restricted to a session.
+
+        Args:
+            session_id: Session to query. If omitted, preserve the knowledge-ID
+                keyed view with the latest version of each knowledge ID.
 
         Returns:
             Dictionary mapping knowledge_id to version info
         """
-        return self._knowledge_versions.copy()
+        versions = {}
+        for (tracked_session, knowledge_id), version in self._knowledge_versions.items():
+            if session_id is not None and tracked_session != session_id:
+                continue
+            previous = versions.get(knowledge_id)
+            if previous is None or version.timestamp >= previous.timestamp:
+                versions[knowledge_id] = version
+        return versions
