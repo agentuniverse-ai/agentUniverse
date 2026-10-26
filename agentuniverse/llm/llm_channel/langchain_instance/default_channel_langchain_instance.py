@@ -24,13 +24,22 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
     llm_channel: Optional[BaseModel] = None
 
     def __init__(self, llm_channel):
+        # channels carry per-model values in channel_model_config; the
+        # temperature/max_tokens/... attributes are LLM-class fields that do
+        # not exist on LLMChannel unless the config happens to inject them.
+        # is-not-None also keeps explicit falsy values (temperature=0,
+        # max_retries=0) intact.
+        config = llm_channel.channel_model_config or {}
+        temperature = config.get('temperature')
+        max_retries = config.get('max_retries')
+        streaming = config.get('streaming')
         init_params = dict()
         init_params['model_name'] = llm_channel.channel_model_name
-        init_params['temperature'] = llm_channel.temperature if llm_channel.temperature else 0.7
-        init_params['request_timeout'] = llm_channel.request_timeout
-        init_params['max_tokens'] = llm_channel.max_tokens
-        init_params['max_retries'] = llm_channel.max_retries if llm_channel.max_retries else 2
-        init_params['streaming'] = llm_channel.streaming if llm_channel.streaming else False
+        init_params['temperature'] = temperature if temperature is not None else 0.7
+        init_params['request_timeout'] = config.get('request_timeout')
+        init_params['max_tokens'] = config.get('max_tokens')
+        init_params['max_retries'] = max_retries if max_retries is not None else 2
+        init_params['streaming'] = streaming if streaming is not None else False
         init_params['openai_api_key'] = llm_channel.channel_api_key if llm_channel.channel_api_key else 'blank'
         init_params['openai_organization'] = llm_channel.channel_organization
         init_params['openai_api_base'] = llm_channel.channel_api_base
