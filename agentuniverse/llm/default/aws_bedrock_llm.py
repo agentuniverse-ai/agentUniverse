@@ -12,6 +12,7 @@ from pydantic import Field
 
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.llm.llm import LLM, LLMOutput
+from agentuniverse.llm.llm_output import TokenUsage
 
 # Define maximum context lengths for different AWS Bedrock models
 AWS_BEDROCK_MAX_CONTEXT_LENGTH = {
@@ -90,10 +91,9 @@ class AWSBedrockLLM(LLM):
             role = msg.get('role')
             content = msg.get('content')
             
-            # Bedrock uses 'user' and 'assistant' roles
+            # System instructions belong in Converse's top-level system field.
             if role == 'system':
-                # System messages need to be converted to user messages in Bedrock
-                role = 'user'
+                continue
             
             # Convert content to Bedrock format
             if isinstance(content, str):
@@ -108,6 +108,33 @@ class AWSBedrockLLM(LLM):
         
         return bedrock_messages
 
+    @staticmethod
+    def _convert_system_messages(messages: list) -> list:
+        """Collect system blocks in order without changing caller messages.
+
+        System-prompt support depends on the selected Bedrock model. Forward
+        instructions through the API's system field; never downgrade them to
+        user turns for models that do not support system prompts.
+        """
+        system_messages = []
+        for message in messages:
+            if message.get('role') != 'system':
+                continue
+            content = message.get('content')
+            if isinstance(content, str):
+                system_messages.append({'text': content})
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get('type') == 'text':
+                        system_messages.append({'text': block['text']})
+                    else:
+                        # Preserve native Bedrock blocks and SDK validation.
+                        system_messages.append(block)
+            else:
+                error = 'System message content must be a string or content-block list'
+                raise TypeError(error)
+        return system_messages
+
     def _call(self, messages: list, **kwargs: Any) -> Union[LLMOutput, Iterator[LLMOutput]]:
         """Call the AWS Bedrock LLM.
 
@@ -120,6 +147,7 @@ class AWSBedrockLLM(LLM):
         
         # Convert messages to Bedrock format
         bedrock_messages = self._convert_messages_format(messages)
+        system_messages = self._convert_system_messages(messages)
         
         # Prepare inference config
         inference_config = {
@@ -129,23 +157,23 @@ class AWSBedrockLLM(LLM):
         
         if "top_p" in kwargs:
             inference_config["topP"] = kwargs.pop("top_p")
+
+        request = {
+            'modelId': self.model_name,
+            'messages': bedrock_messages,
+            'inferenceConfig': inference_config,
+        }
+        if system_messages:
+            request['system'] = system_messages
         
         try:
             if streaming:
                 # Streaming response
-                response = client.converse_stream(
-                    modelId=self.model_name,
-                    messages=bedrock_messages,
-                    inferenceConfig=inference_config,
-                )
+                response = client.converse_stream(**request)
                 return self._generate_stream_result(response)
             else:
                 # Non-streaming response
-                response = client.converse(
-                    modelId=self.model_name,
-                    messages=bedrock_messages,
-                    inferenceConfig=inference_config,
-                )
+                response = client.converse(**request)
                 
                 # Extract response text
                 output_message = response['output']['message']
@@ -184,8 +212,29 @@ class AWSBedrockLLM(LLM):
                     if 'text' in delta:
                         yield LLMOutput(text=delta['text'], raw=event)
                 elif 'messageStop' in event:
-                    # End of message
-                    break
+                    # messageStop precedes metadata; it is not the end of the stream.
+                    finish_reason = {
+                        "end_turn": "stop",
+                        "stop_sequence": "stop",
+                        "max_tokens": "length",
+                        "tool_use": "tool_calls",
+                        "guardrail_intervened": "content_filter",
+                        "content_filtered": "content_filter",
+                        "malformed_model_output": "error",
+                        "malformed_tool_use": "error",
+                        "model_context_window_exceeded": "length",
+                    }.get(event['messageStop'].get('stopReason'))
+                    yield LLMOutput(text="", finish_reason=finish_reason, raw=event)
+                elif 'metadata' in event:
+                    usage = event['metadata'].get('usage')
+                    yield LLMOutput(
+                        text="",
+                        usage=TokenUsage(
+                            text_in=usage['inputTokens'],
+                            text_out=usage['outputTokens'],
+                        ) if usage is not None else None,
+                        raw=event,
+                    )
         except Exception as e:
             raise RuntimeError(f"Error in streaming response: {e}")
 
