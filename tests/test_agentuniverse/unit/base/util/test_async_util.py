@@ -1,5 +1,7 @@
 """Regression coverage for values and failures crossing the sync bridge."""
 
+import asyncio
+
 import pytest
 
 from agentuniverse.base.util.async_util import run_async_from_sync
@@ -24,3 +26,11 @@ def test_reraises_coroutine_failure_unchanged():
         run_async_from_sync(fail(), timeout=1)
 
     assert caught.value is failure
+
+
+def test_reraises_coroutine_cancellation():
+    async def cancel():
+        raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        run_async_from_sync(cancel(), timeout=0.1)
