@@ -33,8 +33,12 @@ class OllamaLLMChannel(LLMChannel):
         if self.client:
             return self.client
         from ollama import Client
+        # channels have no request_timeout attribute: read it from the model
+        # config like the default channel does, and pass it to the HTTP
+        # client - as a generate option the ollama server ignores it.
         return Client(
             host=self.channel_api_base,
+            timeout=self.channel_model_config.get('request_timeout'),
         )
 
     def _new_async_client(self):
@@ -43,19 +47,26 @@ class OllamaLLMChannel(LLMChannel):
         from ollama import AsyncClient
         return AsyncClient(
             host=self.channel_api_base,
+            timeout=self.channel_model_config.get('request_timeout'),
         )
 
     def _options(self):
+        # channels resolve per-model values through channel_model_config
+        # (the base-class pattern); temperature/max_tokens/ext_info are
+        # LLM-class attributes that do not exist here, and "timeout" is not
+        # a server-side generate option at all - see _new_client()
         return Options(**{
             "num_ctx": self.max_context_length(),
-            "num_predict": self.max_tokens,
-            "temperature": self.temperature,
-            "timeout": self.request_timeout,
-            **(self.ext_info if self.ext_info else {}),
+            "num_predict": self.channel_model_config.get('max_tokens'),
+            "temperature": self.channel_model_config.get('temperature'),
+            **(self.ext_params if self.ext_params else {}),
         })
 
     def _call(self, messages, stop=None, **kwargs) -> Union[LLMOutput, Iterator[LLMOutput]]:
-        should_stream = kwargs.pop("stream", kwargs.pop("streaming", self.streaming))
+        # channels have no streaming attribute: resolve it from the model
+        # config like LLMChannel._call does
+        should_stream = kwargs.pop("stream",
+                                   kwargs.pop("streaming", self.channel_model_config.get('streaming')))
         client = self._new_client()
         options = self._options()
         options.setdefault("stop", stop)
@@ -68,7 +79,8 @@ class OllamaLLMChannel(LLMChannel):
 
     async def _acall(self, messages, stop=None, **kwargs) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         client = self._new_async_client()
-        should_stream = kwargs.pop("stream", kwargs.pop("streaming", self.streaming))
+        should_stream = kwargs.pop("stream",
+                                   kwargs.pop("streaming", self.channel_model_config.get('streaming')))
         options = self._options()
         options.setdefault("stop", stop)
         res = await client.chat(model=self.channel_model_name, messages=messages, options=options, stream=should_stream)
