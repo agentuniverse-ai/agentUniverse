@@ -6,6 +6,7 @@
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_configer.py
 import importlib
+from collections.abc import Mapping
 from typing import Optional
 
 from agentuniverse.base.component.component_enum import ComponentEnum
@@ -87,8 +88,26 @@ class ComponentConfiger(object):
             configer(Configer): the Configer object
         Returns:
             ComponentConfiger: the ComponentConfiger object
+        Raises:
+            ValueError: If the configuration root or non-null metadata is not
+                a mapping. The message identifies the source and invalid field.
         """
         self.__configer = configer
+
+        source = configer.path or "<in-memory>"
+        if not isinstance(configer.value, Mapping):
+            raise ValueError(
+                f"Invalid component configuration '{source}': document root must "
+                f"be a mapping, got {type(configer.value).__name__}. "
+                "Use key: value entries for one component."
+            )
+        metadata = configer.value.get('metadata')
+        if metadata is not None and not isinstance(metadata, Mapping):
+            raise ValueError(
+                f"Invalid component configuration '{source}': metadata must be "
+                f"a mapping, got {type(metadata).__name__}. "
+                "Use type, module and class keys under metadata."
+            )
 
         try:
             for k, v in configer.value.items():
