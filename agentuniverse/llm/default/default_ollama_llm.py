@@ -26,8 +26,13 @@ class OllamaLLM(LLM):
         if self.client:
             return self.client
         from ollama import Client
+        # request_timeout is an HTTP-level concern: passed as a generate
+        # option the ollama server silently ignores it, and the ollama
+        # client disables the httpx default timeout entirely, so a hung
+        # server would block the call forever despite the configuration.
         return Client(
             host=self.base_url,
+            timeout=self.request_timeout,
         )
 
     def _new_async_client(self):
@@ -36,14 +41,17 @@ class OllamaLLM(LLM):
         from ollama import AsyncClient
         return AsyncClient(
             host=self.base_url,
+            timeout=self.request_timeout,
         )
 
     def _options(self):
+        # generate options are forwarded to the ollama server, which only
+        # understands modelfile parameters (num_ctx, temperature, ...); the
+        # timeout belongs to the HTTP client, see _new_client()
         return Options(**{
             "num_ctx": self.max_context_length(),
             "num_predict": self.max_tokens,
             "temperature": self.temperature,
-            "timeout": self.request_timeout,
             **(self.ext_info if self.ext_info else {}),
         })
 
