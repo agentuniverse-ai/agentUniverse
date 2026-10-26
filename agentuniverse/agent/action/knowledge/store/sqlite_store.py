@@ -114,14 +114,23 @@ class SQLiteStore(Store):
 
 
     def _get_document_keyword(self, document: Document) -> Set[str]:
+        """Extract keywords using the configured document processor.
+
+        Raises:
+            ValueError: If keyword_extractor is unset or is not registered.
+        """
         if not self.keyword_extractor:
-            raise Exception(
+            raise ValueError(
                 "You must specify a keyword extractor in sqlite store query")
-        else:
-            _doc = DocProcessorManager().get_instance_obj(
-                self.keyword_extractor) \
-                .process_docs([document])
-            return _doc[0].keywords
+        extractor = DocProcessorManager().get_instance_obj(self.keyword_extractor)
+        if extractor is None:
+            raise ValueError(
+                f"SQLiteStore '{self.name or '<unnamed>'}' keyword_extractor "
+                f"'{self.keyword_extractor}' is not registered. Set keyword_extractor "
+                "to a registered DOC_PROCESSOR name and load its configuration "
+                "before using this store."
+            )
+        return extractor.process_docs([document])[0].keywords
 
     def insert_document(self, documents: List[Document], **kwargs):
         with self.conn:
