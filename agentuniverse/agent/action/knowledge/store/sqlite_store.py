@@ -85,10 +85,17 @@ class SQLiteStore(Store):
 
     def compute_bm25(self, query_text, doc_text, inverted_index,
                      total_doc_count, total_word_count):
+        """Compute BM25; documents without text tokens have a zero score.
+
+        Such documents can still be recalled through their preset keywords.
+        They contribute no term frequencies, even in an all-empty corpus.
+        """
         k1 = self.k1
         b = self.b
         query_words = jieba.lcut(query_text)
         doc_words = jieba.lcut(doc_text)
+        if not doc_words:
+            return 0.0
         doc_length = len(doc_words)
         # Keyword-only documents are valid recall candidates, but they have no
         # text length to normalize. They contribute no BM25 text score.
