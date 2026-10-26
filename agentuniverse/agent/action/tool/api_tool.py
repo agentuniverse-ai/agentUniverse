@@ -148,6 +148,10 @@ class APITool(Tool):
 
         Returns:
             httpx.Response: The response from the request.
+
+        Note:
+            Cookie parameters are scoped to the endpoint domain. Cookies for
+            HTTPS endpoints are secure and are not sent on HTTP redirects.
         """
         method = method.lower()
         params = {}
@@ -209,10 +213,28 @@ class APITool(Tool):
                 body = body
         if method in ('get', 'head', 'post', 'put', 'delete', 'patch'):
             response = getattr(ssrf_proxy, method)(url, params=params, headers=headers, data=body,
+                                                   cookies=self._request_cookies(url, cookies),
                                                    follow_redirects=True)
             return response
         else:
             raise ValueError('Invalid http method')
+
+    @staticmethod
+    def _request_cookies(url: str, cookies: dict[str, Any]) -> httpx.Cookies:
+        """Build endpoint-scoped cookies rather than HTTPX domainless cookies."""
+        target_url = httpx.URL(url)
+        domain = target_url.host
+        if ':' in domain:
+            domain = f'[{domain}]'
+        if '.' not in domain:
+            # CookieJar uses an effective .local host for localhost and IPv6.
+            domain += '.local'
+        jar = httpx.Cookies()
+        for name, value in cookies.items():
+            jar.set(name, value, domain=domain)
+        for cookie in jar.jar:
+            cookie.secure = target_url.scheme == 'https'
+        return jar
 
     @staticmethod
     def get_parameter_value(parameter, parameters):
