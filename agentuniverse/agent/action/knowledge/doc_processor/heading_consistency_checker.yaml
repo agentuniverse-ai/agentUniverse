@@ -1,0 +1,35 @@
+name: 'heading_consistency_checker'
+description: 'validate ATX heading structure and record findings into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.heading_consistency_checker'
+  class: 'HeadingConsistencyChecker'
+
+# Deepest allowed ATX heading level, in [1, 6]. The default 6 disables the
+# max_depth_exceeded check — ATX itself stops at 6, so nothing can exceed
+# it until a style guide configures a tighter bound (e.g. 3).
+max_level: 6
+
+# When true, report the document's first heading starting at level 2 or
+# deeper as 'first_heading_not_h1'. Off by default: many valid documents
+# legitimately start at h2 after a title page is stripped.
+flag_first_not_h1: false
+
+# Maximum number of findings kept in the metadata list, >= 1. Counts,
+# total and score always reflect every finding, capped list or not.
+max_findings: 100
+
+# Metadata key for the capped finding list [{kind, line, text, detail}];
+# '' disables stamping.
+issues_key: 'heading_issues'
+
+# Metadata key for the per-kind finding counts; '' disables stamping.
+counts_key: 'heading_issue_counts'
+
+# Metadata key for the uncapped finding total; '' disables stamping.
+total_key: 'heading_issue_total'
+
+# Metadata key for the heading score (1.0 clean, -0.1 per finding,
+# floored at 0.0; None when the document has no headings); '' disables.
+score_key: 'heading_score'
