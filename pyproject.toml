@@ -60,6 +60,9 @@ ollama = '^0.2.1'
 langchain-anthropic = '^0.1.13'
 numpy = '^1.26.0'
 pandas = "^2.2.2"
+xarray = { version = ">=2024.10,<2025.0", optional = true }
+netCDF4 = { version = "^1.7.2", optional = true }
+cftime = { version = "^1.6.4", optional = true }
 pyarrow = "^16.1.0"
 duckduckgo-search = "^6.3.5"
 primp = "^0.6.5"
@@ -84,6 +87,7 @@ redis = { version = "^5.0.0", optional = true }
 [tool.poetry.extras]
 log_ext = ["aliyun-log-python-sdk"]
 store_ext = ["pymilvus", "psycopg", "pgvector", "redis"]
+netcdf_ext = ["xarray", "netCDF4", "cftime"]
 office_ext = ["python-docx", "python-pptx"]
 pdf_ext = ["pypdf"]
 

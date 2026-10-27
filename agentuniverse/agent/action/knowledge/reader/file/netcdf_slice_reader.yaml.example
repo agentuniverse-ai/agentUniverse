@@ -1,0 +1,18 @@
+name: netcdf_slice_reader
+description: Explicit local numeric variable projection with labelled coordinate tiles
+variables: [temperature]
+coordinate_ranges:
+  latitude: [10, 30]
+index_slices:
+  time: [0, 2]
+max_file_bytes: 512000000
+max_coordinate_values: 100000
+max_values: 100000
+max_chunk_values: 1000
+max_documents: 1000
+max_document_chars: 200000
+max_total_chars: 10000000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.netcdf_slice_reader
+  class: NetcdfSliceReader
