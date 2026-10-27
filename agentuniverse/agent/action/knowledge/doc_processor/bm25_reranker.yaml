@@ -1,0 +1,10 @@
+name: bm25_reranker
+description: Offline lexical BM25 reranking over recalled candidates.
+k1: 1.2
+b: 0.75
+top_n: 5
+score_field: bm25_score
+metadata:
+  type: DOC_PROCESSOR
+  module: agentuniverse.agent.action.knowledge.doc_processor.bm25_reranker
+  class: BM25Reranker
