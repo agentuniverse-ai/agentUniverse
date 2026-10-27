@@ -20,5 +20,19 @@ In the Knowledge injection process, `Reader` is used to read raw data and conver
 ### Knowledge Query Process
 When querying Knowledge, the user needs to construct a `Query`. Like `Document`, the content of a Query can also be diverse, ranging from simple strings to vectors or images——as long as the Store containing the Knowledge supports that query format. After passing the Query into the Knowledge component, similar to `DocProcessor`, the `QueryParaphraser` is used to process the Query. You can extract keywords from the original query string to query paragraphs with specific tags, or split the original query into multiple sub-queries that are easier to search, among other possibilities. After that, the RagRouter component is responsible for pairing the Query with the appropriate `Store`, generating multiple [Query, Store] query tasks. This pairing can be based on the LLM's understanding of the match between the query text and the Store descriptions, or it can be based on specific rules to select certain Stores. If resources allow, queries can even be performed on all Stores directly. The content returned from `Store` queries is still in the Document format, so we can continue to use `DocProcessor` for a series of post-processing tasks on the retrieved Documents. The difference here is that the `Query` will also be passed as a default parameter to the `DocProcessor`, allowing for processing tasks like reranking that require comparing the retrieved content with the `Query`. Finally, you can convert the retrieved Documents into a string format that is more understandable by the LLM using the default or custom to_llm method, which serves as the final output.
 
+### Recall query ownership
+
+Each routed task receives a deep copy of its `Query` before any store is dispatched.
+A store may derive its own keywords or modify nested query fields without affecting
+another store or the query passed to post-processors. This matters, for example,
+when SQLite stores use different keyword extractors. Router task order, store codes
+and result deduplication/fusion are unchanged.
+
+All routed queries must be deep-copyable. A custom payload that cannot be copied
+raises before dispatch instead of falling back to unsafe shared state. Copying
+vectors/images adds memory proportional to the routed payloads; routers should
+bound fan-out. This isolates query data, not store clients/connections or returned
+documents, and does not synchronize external mutations by custom router threads.
+
 # Conclusion
 By now, you should have a basic understanding of the design principles behind knowledge components. In the next section, we will introduce you to the standard definitions of knowledge components, how to customize and create your own knowledge, and how to utilize knowledge.
