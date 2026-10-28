@@ -6,6 +6,8 @@ compression_ratio: 0.6  # Target 40% reduction (0.6 = 60% retained)
 min_quality_threshold: 0.9  # Minimum 90% information preservation
 
 # Enable hybrid strategy (combines multiple approaches)
+# When the summarize LLM is unavailable, LLM-dependent choices fall back to
+# selective compression rather than failing the context request.
 enable_hybrid: true
 
 # Available strategies with weights

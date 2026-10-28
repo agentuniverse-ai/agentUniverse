@@ -22,7 +22,10 @@ default_max_tokens: 8000
 default_reserved_tokens: 1000
 
 # Task-specific configurations
-# These override defaults based on task_type
+# These override defaults based on task_type. An unknown task_type uses the
+# adaptive strategy and the default token budget above.
+# A summarize or hybrid choice that needs an unavailable LLM falls back to
+# selective compression; metrics report an adaptive_selective_fallback strategy.
 task_configs:
   code_generation:
     max_tokens: 10000
