@@ -24,6 +24,13 @@ Note - 对于版本的额外说明。
 ***************************************************
 
 # 版本更新记录
+## [Unreleased]
+### Added
+- 新增 `default_tar_reader` 知识读取器，基于标准库 `tarfile` 支持 `.tar`/`.tar.gz`/`.tgz` 压缩包，无需额外本地依赖即可完成 TAR 归档的知识入库。
+- TAR 读取器与 ZIP/RAR/7z 读取器保持一致：支持嵌套归档、按扩展名分发子读取器，并沿用相同的安全限制（`max_file_size`、`max_total_size`、`max_files`、`max_depth`、`max_compression_ratio`）。
+### Fixed
+- 修复 `FileReader` 与 `Knowledge` 的复合扩展名解析：优先匹配 `bundle.tar.gz` 这类复合后缀，避免被截断为 `gz` 而无法命中 `default_tar_reader`。
+
 ## [0.0.19] - 2025-11-17
 ### Added
 - 新增AWS Bedrock模型支持
