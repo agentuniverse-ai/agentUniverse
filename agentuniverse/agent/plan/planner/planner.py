@@ -7,7 +7,8 @@
 """Base class for Planner."""
 from abc import abstractmethod
 import logging
-from queue import Queue
+from queue import Full, Queue
+from asyncio import QueueFull
 from typing import Optional, List, Any
 
 from langchain_core.runnables import RunnableSerializable
@@ -195,13 +196,21 @@ class Planner(ComponentBase):
             res = chain.invoke(input=planner_input, config={"configurable": {"session_id": "unused"}})
             return res
         result = []
+        output_stream = input_object.get_data('output_stream')
+        stream_available = True
         for token in chain.stream(input=planner_input, config={"configurable": {"session_id": "unused"}}):
-            self.stream_output(input_object, {
-                'type': 'token',
-                'data': {
-                    'chunk': token,
-                    'agent_info': agent_model.info
-                }
-            })
+            if stream_available:
+                event = {'type': 'token', 'data': {'chunk': token, 'agent_info': agent_model.info}}
+                try:
+                    if isinstance(output_stream, Queue):
+                        # Give a slow consumer a short chance to drain the
+                        # bounded queue; do not block generation indefinitely.
+                        output_stream.put(event, timeout=0.2)
+                    else:
+                        self.stream_output(input_object, event)
+                except (Full, QueueFull):
+                    # The request's final result still contains every token.
+                    # Stop emitting partial stream events after backpressure.
+                    stream_available = False
             result.append(token)
         return "".join(result)
