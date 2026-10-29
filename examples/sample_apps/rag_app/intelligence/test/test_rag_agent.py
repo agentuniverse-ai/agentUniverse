@@ -19,6 +19,11 @@ class RagAgentTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
+        """Set up the test case.
+
+        Starts the AgentUniverse runtime with the sample app configuration in
+        core mode so the rag agent can be instantiated by the tests.
+        """
         AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
     def test_rag_agent(self):
