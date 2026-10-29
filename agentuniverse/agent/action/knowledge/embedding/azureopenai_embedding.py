@@ -21,7 +21,7 @@ class AzureOpenAIEmbedding(Embedding):
 
     azure_api_key: Optional[str] = Field(
         default_factory=lambda: get_from_env("AZURE_OPENAI_API_KEY"))
-    
+
     resource_name: Optional[str] = Field(
         default_factory=lambda: get_from_env("AZURE_OPENAI_RESOURCE_NAME"))
 
@@ -46,7 +46,7 @@ class AzureOpenAIEmbedding(Embedding):
             Exception: If the API call fails or if required configuration is missing.
         """
         self._initialize_clients()
-        
+
         try:
             if self.embedding_dims is not None:
                 response = self.client.embeddings.create(
@@ -110,7 +110,7 @@ class AzureOpenAIEmbedding(Embedding):
         Initialize the embedding by the ComponentConfiger object.
         Args:
             embedding_configer(ComponentConfiger): A configer contains embedding configuration.
-        Returns:    
+        Returns:
             Embedding: A AzureOpenAIEmbedding instance.
         """
         super()._initialize_by_component_configer(embedding_configer)
