@@ -28,6 +28,11 @@ class Product(ComponentBase):
 
     @property
     def instance(self) -> ComponentBase:
+        """Get the specific component instance corresponding to the product.
+
+        Returns:
+            ComponentBase: The underlying component instance.
+        """
         return self._instance
 
     def get_ctime(self) -> float:
