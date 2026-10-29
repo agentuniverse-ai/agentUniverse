@@ -11,6 +11,14 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 class LlmDTO(BaseModel):
+    """DTO (data transfer object) describing an LLM (large language model) configuration.
+
+    Attributes:
+        id (str): The unique LLM id.
+        nickname (Optional[str]): The LLM nickname.
+        temperature (Optional[float]): The LLM sampling temperature.
+        model_name (Optional[List[str]]): The LLM model names.
+    """
     id: str = Field(description="ID")
     nickname: Optional[str] = Field(description="llm nickname", default="")
     temperature: Optional[float] = Field(description="llm temperature", default=None)
