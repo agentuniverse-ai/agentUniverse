@@ -4,6 +4,7 @@ from agentuniverse.agent.action.knowledge.reader.utils import detect_file_encodi
 
 
 def test_detect_file_encoding_gb18030(tmp_path):
+    """GB18030-encoded text is detected as gb18030 or gbk."""
     sample_text = "示例文本"
     file_path = tmp_path / "sample.txt"
     file_path.write_text(sample_text, encoding="gb18030")
@@ -13,6 +14,7 @@ def test_detect_file_encoding_gb18030(tmp_path):
 
 
 def test_txt_reader_handles_gbk(tmp_path):
+    """TxtReader decodes GBK content and reports the file name in metadata."""
     content = "第一行\n第二行"
     file_path = tmp_path / "gbk.txt"
     file_path.write_text(content, encoding="gb18030")
@@ -26,6 +28,7 @@ def test_txt_reader_handles_gbk(tmp_path):
 
 
 def test_csv_reader_handles_utf8_bom(tmp_path):
+    """CSVReader handles a UTF-8 BOM file and exposes the parsed cell text."""
     rows = ["col1,col2", "值1,值2"]
     file_path = tmp_path / "data.csv"
     file_path.write_text("\n".join(rows), encoding="utf-8-sig")
@@ -39,6 +42,7 @@ def test_csv_reader_handles_utf8_bom(tmp_path):
 
 
 def test_csv_reader_preserves_empty_middle_fields(tmp_path):
+    """Empty fields between commas are preserved in the parsed CSV output."""
     file_path = tmp_path / "empty_middle.csv"
     file_path.write_text("name,middle,last\nAlice,,Smith\n", encoding="utf-8")
 
