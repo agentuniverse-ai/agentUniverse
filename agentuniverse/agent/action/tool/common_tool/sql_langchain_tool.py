@@ -14,6 +14,11 @@ from langchain_core.tools import BaseTool, Tool as LangchainTool
 
 
 class SqlLangchainTool(LangChainTool):
+    """A lazy SQL tool whose callbacks are optional runtime instrumentation.
+
+    Ordinary framework and LangChain calls need only the SQL input. Explicit
+    callbacks are forwarded to the wrapped tool in both execution modes.
+    """
     db_wrapper_name: Optional[str] = ""
     clz: Type[BaseTool] = BaseTool
 
