@@ -18,12 +18,14 @@ class EmbeddingTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:        
+        """Configure a DoubaoEmbedding instance for the test methods."""
         self.embedding = DoubaoEmbedding()
         self.embedding.ark_api_key = "replace with your api key"
         self.embedding.endpoint_id = "replace with your endpoint id :)"
         self.embedding.embedding_dims = 1024
 
     def test_get_embeddings(self) -> None:
+        """Verify that get_embeddings returns a 1024-dim vector for one text."""
         res = self.embedding.get_embeddings(texts=["hello world"])
         print(res)
         self.assertIsInstance(res, list)
@@ -31,6 +33,7 @@ class EmbeddingTest(unittest.TestCase):
         self.assertEqual(len(res[0]), 1024)
 
     def test_async_get_embeddings(self) -> None:
+        """Verify that async_get_embeddings returns a 1024-dim vector for one text."""
         res = asyncio.run(
             self.embedding.async_get_embeddings(texts=["hello world"]))
         print(res)
