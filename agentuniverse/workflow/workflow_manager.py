@@ -15,4 +15,5 @@ class WorkflowManager(ComponentManagerBase):
     """The WorkflowManager class, which is used to manage workflow."""
 
     def __init__(self):
+        """Initialize the WorkflowManager with the workflow component type."""
         super().__init__(ComponentEnum.WORKFLOW)
