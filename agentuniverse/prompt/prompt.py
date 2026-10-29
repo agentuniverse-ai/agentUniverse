@@ -25,6 +25,7 @@ class Prompt(ComponentBase):
     input_variables: Optional[list[str]] = None
 
     def __init__(self, **kwargs):
+        """Initialize the prompt component with the given keyword arguments."""
         super().__init__(component_type=ComponentEnum.PROMPT, **kwargs)
 
     def as_langchain(self):
