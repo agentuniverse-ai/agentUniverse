@@ -177,6 +177,36 @@ metadata:
 ```
 This component requires configuring DASHSCOPE_API_KEY in the environment variables.
 
+### [CrossEncoderReranker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/cross_encoder_reranker.yaml)
+
+This component reranks recalled documents with a **local** CrossEncoder model — `BAAI/bge-reranker-base` by default; any sentence-transformers CrossEncoder-compatible checkpoint works (`BAAI/bge-reranker-v2-m3`, `jinaai/jina-reranker-v1-tiny-en`, a fine-tuned local path, ...). Unlike the DashScope / Jina cloud rerankers, scoring happens fully in-process: no API key, no network call at query time, and recalled text never leaves the machine — the standard requirement for offline and private-deployment scenarios.
+
+The heavy `sentence-transformers` dependency (which pulls in torch) is optional and lazily imported: the shipped definition loads without the package installed, and a missing package raises an `ImportError` carrying the exact install command (`pip install 'agentuniverse[rerank_ext]'`). The model itself is loaded on first use and cached.
+
+Scoring follows the existing reranker conventions: one `(query, document text)` pair per document, scored in a single batched call (`batch_size` bounds peak memory); documents are sorted by descending score with a **stable** sort, so tied scores keep the incoming recall order (a preceding fusion processor's ranking is respected, not shuffled); `top_n` optionally truncates the result (`null` keeps every document and only reorders); and each kept document's score is stamped under `score_key` (`relevance_score` by default, matching DashscopeReranker — set `''` to skip stamping).
+
+A configured reranker is relevance-critical, so failures are loud: a missing query string raises (same contract as DashscopeReranker), model/predict errors propagate instead of silently returning the unreranked list, and static configuration errors fail at component-load time.
+
+The component definition file is as follows:
+```yaml
+name: 'cross_encoder_reranker'
+description: 'local cross-encoder reranking (e.g. BAAI/bge-reranker-*), fully offline'
+model_name: 'BAAI/bge-reranker-base'
+top_n: null                    # null keeps every document and only reorders
+score_key: 'relevance_score'   # '' skips stamping
+batch_size: 32
+device: ''                     # '' lets sentence-transformers pick
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cross_encoder_reranker'
+  class: 'CrossEncoderReranker'
+```
+- model_name: CrossEncoder model identifier or local checkpoint path.
+- top_n: Number of documents to keep after reranking; `null` keeps all and only reorders.
+- score_key: Metadata key receiving each kept document's relevance score; `''` skips stamping so scores from earlier processors (e.g. RRF) are preserved.
+- batch_size: Batch size passed to `CrossEncoder.predict`, bounding peak memory for large recall lists.
+- device: Device string (`cpu`, `cuda`, `mps`, ...); `''` lets sentence-transformers auto-select.
+
 ### [HierarchicalRegexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/hierarchical_regex_text_splitter.py)
 
 This component splits the original text into multiple hierarchical levels using specified regex rules, forming a tree-like document structure. Users need to create a custom definition file, with an example as follows:

@@ -1,0 +1,31 @@
+name: 'cross_encoder_reranker'
+description: 'Local cross-encoder reranking (e.g. BAAI/bge-reranker-*) via the optional sentence-transformers dependency. Fully in-process scoring — no API key, no network at query time. Complements the DashScope/Jina cloud rerankers for offline and private-deployment scenarios.'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cross_encoder_reranker'
+  class: 'CrossEncoderReranker'
+
+# --- Model ---
+# Any sentence-transformers CrossEncoder-compatible model id or local path,
+# e.g. 'BAAI/bge-reranker-v2-m3', 'jinaai/jina-reranker-v1-tiny-en'.
+# Loaded lazily on first use; install the optional dependency with:
+#   pip install 'agentuniverse[rerank_ext]'
+model_name: 'BAAI/bge-reranker-base'
+
+# --- Output size ---
+# Number of documents to keep after reranking; null keeps every document
+# and only reorders.
+top_n: null
+
+# --- Score stamping ---
+# Metadata key receiving each kept document's relevance score (same key as
+# DashscopeReranker by default). Set to '' to skip stamping so scores from
+# earlier processors (e.g. RRF fusion) are preserved.
+score_key: 'relevance_score'
+
+# --- Runtime bounds ---
+# Batch size passed to CrossEncoder.predict, bounding peak memory.
+batch_size: 32
+# Device string ('cpu', 'cuda', 'mps', ...); '' lets sentence-transformers pick.
+device: ''

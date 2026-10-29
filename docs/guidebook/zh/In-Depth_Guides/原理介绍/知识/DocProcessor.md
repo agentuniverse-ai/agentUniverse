@@ -176,6 +176,36 @@ metadata:
 ```
 该组件需要在环境变量中配置`DASHSCOPE_API_KEY`。
 
+### [CrossEncoderReranker](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/cross_encoder_reranker.yaml)
+
+该组件使用**本地** CrossEncoder 模型对召回文档重排——默认 `BAAI/bge-reranker-base`，任何 sentence-transformers CrossEncoder 兼容的模型都可以（`BAAI/bge-reranker-v2-m3`、`jinaai/jina-reranker-v1-tiny-en`、微调后的本地路径等）。与 DashScope / Jina 云端重排器不同，打分完全在进程内完成：无需 API Key、查询时无网络调用、召回文本不出本机——这是离线与私有化部署场景的标准要求。
+
+重量级的 `sentence-transformers` 依赖（会引入 torch）是可选且懒加载的：未安装时内置定义依然可以正常加载；缺包时抛出带有准确安装命令的 `ImportError`（`pip install 'agentuniverse[rerank_ext]'`）。模型本体在首次使用时加载并缓存。
+
+打分遵循既有重排器约定：每篇文档构造一个 `(query, 文档文本)` 对，单次批量调用完成打分（`batch_size` 约束峰值内存）；按分数降序做**稳定**排序，同分文档保持召回顺序（前置融合处理器的排序被尊重而非打乱）；`top_n` 可选截断结果（`null` 保留全部文档、仅重排）；每个保留文档的分数写入 `score_key`（默认 `relevance_score`，与 DashscopeReranker 一致——设为 `''` 跳过写入）。
+
+已配置的重排器是相关性关键路径，因此失败是显式的：缺少查询字符串直接报错（与 DashscopeReranker 相同契约）；模型/打分错误向上传播而不是静默返回未重排列表；静态配置错误在组件加载时即失败。
+
+组件定义文件如下：
+```yaml
+name: 'cross_encoder_reranker'
+description: '本地 cross-encoder 重排（如 BAAI/bge-reranker-*），完全离线'
+model_name: 'BAAI/bge-reranker-base'
+top_n: null                    # null 保留全部文档、仅重排
+score_key: 'relevance_score'   # '' 跳过分数写入
+batch_size: 32
+device: ''                     # '' 由 sentence-transformers 自动选择
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.cross_encoder_reranker'
+  class: 'CrossEncoderReranker'
+```
+- model_name: CrossEncoder 模型标识或本地模型路径。
+- top_n: 重排后保留的文档数量；`null` 保留全部、仅重排。
+- score_key: 接收每个保留文档相关性分数的 metadata 键；`''` 跳过写入（从而保留前置处理器如 RRF 写入的分数）。
+- batch_size: 传给 `CrossEncoder.predict` 的批大小，约束大召回列表下的峰值内存。
+- device: 设备字符串（`cpu`、`cuda`、`mps` 等）；`''` 由 sentence-transformers 自动选择。
+
 ### [HierarchicalRegexTextSplitter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/hierarchical_regex_text_splitter.py)
 
 该组件使用通过指定的正则规则对原始文本进行多层级的拆分，形成树状的文档结构。
