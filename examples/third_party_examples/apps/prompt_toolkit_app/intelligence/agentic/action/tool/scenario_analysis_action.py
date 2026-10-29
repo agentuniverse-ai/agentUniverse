@@ -15,25 +15,25 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 class ScenarioAnalysisAction(Tool):
     """Action for analyzing user scenarios and extracting context information.
-    
+
     This action demonstrates how to use the ScenarioAnalyzer to analyze
     user scenarios and extract relevant context information for prompt generation.
     """
-    
+
     def __init__(self):
         """Initialize the ScenarioAnalysisAction."""
         super().__init__()
         self.toolkit = PromptToolkit()
         self.analyzer = ScenarioAnalyzer()
-    
+
     def run(
-        self, 
-        scenario_description: str, 
+        self,
+        scenario_description: str,
         content: Optional[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Analyze a scenario and extract context information.
-        
+
         Args:
             scenario_description: Description of the scenario to analyze.
             content: Additional content to analyze.
@@ -41,7 +41,7 @@ class ScenarioAnalysisAction(Tool):
                 - target_audience: Target audience information
                 - domain: Domain or field information
                 - user_role: User role information
-        
+
         Returns:
             Dict[str, Any]: Analysis result and extracted context.
         """
@@ -56,16 +56,16 @@ class ScenarioAnalysisAction(Tool):
                 additional_context["domain"] = kwargs['domain']
             if kwargs.get('user_role'):
                 additional_context["user_role"] = kwargs['user_role']
-            
+
             # Analyze scenario
             analysis_result = self.analyzer.analyze_scenario(
-                scenario_description, 
+                scenario_description,
                 additional_context if additional_context else None
             )
-            
+
             # Extract context
             context = self.analyzer.extract_context_from_content(scenario_description)
-            
+
             # Format response
             response = {
                 "success": True,
@@ -94,27 +94,27 @@ class ScenarioAnalysisAction(Tool):
                     for ctx in analysis_result.extracted_contexts
                 ]
             }
-            
+
             return response
-            
+
         except Exception as e:
             return {
                 "success": False,
                 "error": str(e),
                 "message": "Failed to analyze scenario"
             }
-    
+
     def get_description(self) -> str:
         """Get description of the action.
-        
+
         Returns:
             str: Description of the action.
         """
         return "Analyze user scenarios and extract context information for prompt generation."
-    
+
     def get_parameters(self) -> Dict[str, Any]:
         """Get parameters for the action.
-        
+
         Returns:
             Dict[str, Any]: Parameter definitions.
         """
