@@ -48,6 +48,14 @@ class ChineseDocumentClassifier(DocumentClassifier):
     ]
     
     def __init__(self, **kwargs):
+        """Initialize the Chinese document classifier.
+
+        Initializes the default Chinese stop words when none are configured,
+        and initializes the jieba tokenizer when enabled.
+
+        Args:
+            **kwargs: Keyword arguments forwarded to the parent classifier.
+        """
         super().__init__(**kwargs)
         # 初始化停用词
         if not self.stop_words:
