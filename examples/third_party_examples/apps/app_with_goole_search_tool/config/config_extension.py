@@ -10,6 +10,8 @@ from agentuniverse.base.config.configer import Configer
 
 class ConfigExtension:
 
+    """Config Extension.
+    """
     def __init__(self, configer: Configer) -> None:
         """
         This method is automatically executed during the initialization of the agentUniverse.
