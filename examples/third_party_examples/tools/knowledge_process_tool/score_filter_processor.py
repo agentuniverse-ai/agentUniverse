@@ -30,6 +30,20 @@ class ScoreThresholdFilter(DocProcessor):
     top_k: Optional[int] = None
 
     def _process_docs(self, origin_docs: List[Document], query: Query | None = None) -> List[Document]:
+        """Filter documents by their relevance score.
+
+        Documents whose ``metadata['relevance_score']`` is lower than
+        ``min_score`` are dropped; documents without a score are kept only
+        when ``keep_no_score`` is True. Optionally caps the result to the
+        first ``top_k`` documents.
+
+        Args:
+            origin_docs (List[Document]): Documents to filter.
+            query (Optional[Query]): The retrieval query, currently unused.
+
+        Returns:
+            List[Document]: The filtered document list.
+        """
         if not origin_docs:
             return origin_docs
         filtered: List[Document] = []
@@ -47,6 +61,18 @@ class ScoreThresholdFilter(DocProcessor):
         return filtered
 
     def _initialize_by_component_configer(self, doc_processor_configer: ComponentConfiger) -> "DocProcessor":
+        """Initialize the filter parameters from a component configer.
+
+        Reads the optional ``min_score``, ``keep_no_score`` and ``top_k``
+        fields from the configer when present.
+
+        Args:
+            doc_processor_configer (ComponentConfiger): Configer holding the
+                filter settings.
+
+        Returns:
+            DocProcessor: This filter instance.
+        """
         super()._initialize_by_component_configer(doc_processor_configer)
         if hasattr(doc_processor_configer, "min_score"):
             self.min_score = float(doc_processor_configer.min_score)
