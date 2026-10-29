@@ -11,6 +11,15 @@ from pydantic import BaseModel, Field
 
 
 class MessageDTO(BaseModel):
+    """DTO (data transfer object) representing a chat message within a session.
+
+    Attributes:
+        id (int): The unique message id.
+        session_id (str): The id of the session the message belongs to.
+        content (Optional[str]): The message content.
+        gmt_created (Optional[str]): The message create time.
+        gmt_modified (Optional[str]): The message update time.
+    """
     id: int = Field(description="ID")
     session_id: str = Field(description="Session ID")
     content: Optional[str] = Field(description="message content", default="")
