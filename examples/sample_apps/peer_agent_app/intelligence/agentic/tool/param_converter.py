@@ -10,6 +10,12 @@ from agentuniverse.agent.output_object import OutputObject
 
 
 class ParamConverterTool(Tool):
+    """Tool that converts input parameters into a nested dictionary structure.
+
+    The key ending with 'result' becomes the outer dictionary key, and the
+    remaining parameters form the inner dictionary wrapped in an
+    :class:`OutputObject`.
+    """
 
     def execute(self, params: dict):
         """
