@@ -9,11 +9,15 @@ DOCX_AVAILABLE = importlib.util.find_spec("docx") is not None
 
 
 class WriteWordDocumentToolTest(unittest.TestCase):
+    """Tests for the WriteWordDocumentTool covering .docx writing behaviors."""
+
     def setUp(self):
+        """Create a WriteWordDocumentTool instance and a scratch temp directory."""
         self.tool = WriteWordDocumentTool()
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
+        """Remove the scratch temp directory and all files created inside it."""
         for root, dirs, files in os.walk(self.temp_dir, topdown=False):
             for name in files:
                 os.unlink(os.path.join(root, name))
@@ -23,6 +27,7 @@ class WriteWordDocumentToolTest(unittest.TestCase):
 
     @unittest.skipUnless(DOCX_AVAILABLE, "python-docx is required")
     def test_write_new_word_file(self):
+        """Verify a new .docx file is written successfully from given content."""
         file_path = os.path.join(self.temp_dir, "test_new.docx")
         content = "***This is a test paragraph.***"
 
@@ -35,6 +40,7 @@ class WriteWordDocumentToolTest(unittest.TestCase):
 
     @unittest.skipUnless(DOCX_AVAILABLE, "python-docx is required")
     def test_append_to_word_file(self):
+        """Verify content can be appended to an existing .docx file."""
         file_path = os.path.join(self.temp_dir, "test_append.docx")
 
         initial_content = "Initial paragraph."
@@ -48,6 +54,7 @@ class WriteWordDocumentToolTest(unittest.TestCase):
         self.assertEqual(result["append_mode"], True)
 
     def test_invalid_file_extension(self):
+        """Verify non-.docx targets are rejected with a helpful error."""
         file_path = os.path.join(self.temp_dir, "invalid_file.txt")
         content = "This should fail."
 
@@ -59,6 +66,7 @@ class WriteWordDocumentToolTest(unittest.TestCase):
 
     @unittest.skipUnless(DOCX_AVAILABLE, "python-docx is required")
     def test_create_directory_structure(self):
+        """Verify missing parent directories are created for the target file."""
         file_path = os.path.join(self.temp_dir, "nested/dir/structure/test.docx")
         content = "Test content in nested directory."
 
@@ -70,9 +78,11 @@ class WriteWordDocumentToolTest(unittest.TestCase):
         self.assertTrue(os.path.isdir(os.path.join(self.temp_dir, "nested/dir/structure")))
 
     def test_missing_dependency(self):
+        """Verify a clear error is returned when python-docx is unavailable."""
         original_import = __import__
 
         def mock_import(name, *args):
+            """Simulate a missing docx module for the duration of the test."""
             if name == "docx":
                 raise ImportError("No module named 'docx'")
             return original_import(name, *args)

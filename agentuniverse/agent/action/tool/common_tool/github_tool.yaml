@@ -1,6 +1,11 @@
 name: github_tool
 description: GitHub仓库、用户、问题和代码搜索工具
-class_path: agentuniverse.agent.action.tool.common_tool.github_tool.GitHubTool
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.github_tool
+  class: GitHubTool
+input_keys: [mode, query, owner, repo, sort, order]
 args_model:
   mode:
     type: string

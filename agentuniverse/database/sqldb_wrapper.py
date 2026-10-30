@@ -54,6 +54,10 @@ class SQLDBWrapper(ComponentBase):
         self.name = db_wrapper_configer.name
         self.description = db_wrapper_configer.description
         self.db_wrapper_configer = db_wrapper_configer
+        # Cached handles belong to the previous configuration. Rebuild lazily
+        # so both direct queries and new ORM sessions use the new settings.
+        self.__sql_database = None
+        self.db_session = None
         return self
 
     def run(self, command: str) -> Sequence[Dict[str, Any]]:

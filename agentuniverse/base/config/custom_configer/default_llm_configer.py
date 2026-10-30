@@ -31,5 +31,7 @@ class DefaultLLMConfiger(Configer):
                 print(f"Configuration file not found at path: {config_path}. "
                       f"The default LLM configuration will not be loaded. "
                       f"Error is {str(e)}")
-        if self.value:
-            self.default_llm = self.value.get('DEFAULT', {}).get('default_llm', None)
+        if isinstance(self.value, dict):
+            default_config = self.value.get('DEFAULT')
+            if isinstance(default_config, dict):
+                self.default_llm = default_config.get('default_llm')

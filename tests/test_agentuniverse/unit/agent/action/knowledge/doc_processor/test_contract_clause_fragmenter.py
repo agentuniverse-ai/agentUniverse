@@ -127,6 +127,25 @@ Subsection content.
         # Should detect Chinese clauses
         self.assertGreaterEqual(len(result), 2)
 
+    def test_chinese_enumeration_retains_distinct_clause_ids(self):
+        """Chinese enumeration markers should not share the fallback ID."""
+        contract_text = (
+            "第一条 双方约定如下付款与开票安排。\n"
+            "一、甲方应在三十日内按时付款。\n"
+            "二、乙方应在收到款项后按时开票。\n"
+            "1、双方另行确认补充付款说明。"
+        )
+        result = self.fragmenter.process_docs([Document(text=contract_text)])
+
+        self.assertEqual(
+            [doc.metadata['clause_id'] for doc in result],
+            ['article_一', 'enumeration_一', 'enumeration_二', 'clause_1']
+        )
+        self.assertEqual(
+            [doc.metadata['parent_clause'] for doc in result[1:]],
+            ['article_一'] * 3
+        )
+
     def test_metadata_structure(self):
         """Test that metadata is correctly structured."""
         contract_text = """
