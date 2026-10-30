@@ -6,6 +6,7 @@
 # @FileName: threshold_filter.py
 
 import math
+from collections import Counter
 from typing import List, Dict, Any, Optional, Literal
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -29,7 +30,8 @@ class ThresholdFilter(DocProcessor):
         logic_operator: Logic operator for combining multiple filters ('AND' or 'OR').
         score_field: Metadata field name containing relevance scores.
         default_score: Default score for documents without score metadata.
-        preserve_order: Whether to maintain original document order in results.
+        preserve_order: Whether to restore original document order in results.
+            When False, combined results follow the first filter's order.
 
     Example:
         ```yaml
@@ -163,7 +165,7 @@ class ThresholdFilter(DocProcessor):
         Returns:
             List[Document]: Top K documents by score.
         """
-        k = config.get("k", len(docs))
+        k = max(0, config.get("k", len(docs)))
 
         # Score each document
         scored_docs = [(doc, self._get_score(doc)) for doc in docs]
@@ -215,14 +217,19 @@ class ThresholdFilter(DocProcessor):
             float: Document score or default_score if not found.
         """
         if not doc.metadata:
-            return self.default_score
+            return float(self.default_score)
 
-        return doc.metadata.get(self.score_field, self.default_score)
+        value = doc.metadata.get(self.score_field, self.default_score)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float(self.default_score)
 
     def _combine_results(self, results: List[List[Document]], logic: str) -> List[Document]:
         """Combine filter results using AND/OR logic.
 
-        AND logic: Returns intersection - documents present in ALL result sets.
+        AND logic: Returns intersection - documents present in ALL result sets,
+        ordered by the first filter's results.
         OR logic: Returns union - documents present in ANY result set.
 
         Args:
@@ -245,10 +252,15 @@ class ThresholdFilter(DocProcessor):
             for result in results[1:]:
                 result_set &= set(id(doc) for doc in result)
 
-            # Reconstruct documents preserving metadata
-            # Build map from all results to ensure we get the document objects
-            doc_map = {id(doc): doc for result in results for doc in result}
-            return [doc_map[doc_id] for doc_id in result_set if doc_id in doc_map]
+            # Keep the first filter's ranking while returning each object once.
+            seen = set()
+            combined = []
+            for doc in results[0]:
+                doc_id = id(doc)
+                if doc_id in result_set and doc_id not in seen:
+                    seen.add(doc_id)
+                    combined.append(doc)
+            return combined
 
         else:  # OR
             # Union: documents present in ANY result set
@@ -265,8 +277,9 @@ class ThresholdFilter(DocProcessor):
     def _restore_order(self, filtered_docs: List[Document], original_docs: List[Document]) -> List[Document]:
         """Restore original document order.
 
-        Iterates through original documents in order and includes those
-        present in the filtered set.
+        Iterates through original documents in order, retaining only the
+        occurrence counts selected by filtering. Repeated references must
+        not reintroduce occurrences that top-k or percentile filtering removed.
 
         Args:
             filtered_docs: Documents after filtering.
@@ -275,8 +288,14 @@ class ThresholdFilter(DocProcessor):
         Returns:
             List[Document]: Filtered documents in original order.
         """
-        filtered_ids = set(id(doc) for doc in filtered_docs)
-        return [doc for doc in original_docs if id(doc) in filtered_ids]
+        remaining = Counter(id(doc) for doc in filtered_docs)
+        ordered = []
+        for doc in original_docs:
+            identity = id(doc)
+            if remaining[identity] > 0:
+                ordered.append(doc)
+                remaining[identity] -= 1
+        return ordered
 
     def _initialize_by_component_configer(self, doc_processor_configer: ComponentConfiger) -> 'ThresholdFilter':
         """Initialize filter parameters from component configuration.

@@ -35,6 +35,20 @@ class TestExtractiveSummarization(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0].text, "One sentence. Two sentence.")
 
+    def test_nonpositive_sentence_limit_returns_empty_short_summary(self) -> None:
+        for limit in (0, -1):
+            with self.subTest(limit=limit):
+                proc = SummarizationProcessor(max_sentences=limit)
+                out = proc._process_docs([Document(text="A. I. X.")])
+                self.assertEqual(out[0].text, "")
+
+    def test_zero_sentence_limit_returns_empty_for_normal_prose(self) -> None:
+        proc = SummarizationProcessor(max_sentences=0)
+
+        out = proc._process_docs([Document(text="Alpha improves accuracy. Beta reduces cost.")])
+
+        self.assertEqual(out[0].text, "")
+
     def test_extractive_reduces_length(self) -> None:
         """More sentences than max_sentences are compressed to fewer."""
         text = ". ".join(f"sentence number {i}" for i in range(20))

@@ -10,10 +10,16 @@ import json
 
 
 class MockOutPut:
+    """Mockoutput.
+    """
     def __init__(self, output: dict):
+        """Initialize the __init__ instance.
+        """
         self.__output = output
 
     def to_json_str(self) -> str:
+        """Serialize this object to a json string.
+        """
         try:  
             return json.dumps(self.__output, ensure_ascii=False)  
         except (TypeError, ValueError) as e:  
@@ -21,8 +27,14 @@ class MockOutPut:
 
 
 class MockAgent:
+    """Mockagent.
+    """
     def __init__(self, run_result: dict):
+        """Initialize the __init__ instance.
+        """
         self.__run_result = MockOutPut(run_result)
 
     def run(self, **kwargs):
+        """Run the mocked behavior.
+        """
         return self.__run_result

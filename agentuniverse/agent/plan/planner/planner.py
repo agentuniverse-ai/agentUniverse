@@ -135,7 +135,7 @@ class Planner(ComponentBase):
                                             for key in agent.output_keys()
                                             if output_object.get_data(key) is not None]))
 
-        planner_input['background'] = planner_input['background'] or '' + "\n".join(action_result)
+        planner_input['background'] = (planner_input['background'] or '') + "\n".join(action_result)
 
     def handle_prompt(self, agent_model: AgentModel, planner_input: dict):
         """Prompt module processing.

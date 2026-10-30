@@ -140,6 +140,11 @@ When calling the `demo_rag_agent` in the sample project of agentUniverse, using 
 
 agentUniverse implements the `@trace_agent` decorator. When an agent calls its run method, this decorator collects the agent's input and output parameters, serializes the information into JSON format, and stores it in the local storage directory that corresponds to the monitor configuration. The data is stored in the form of jsonl files, divided by both the hour and the specific agent.
 
+When writing agent invocation JSONL, `Monitor` recursively filters dictionary and list
+values that cannot be JSON-serialized. A dictionary inside a list containing an unsupported field,
+such as a runtime callback, keeps its remaining serializable fields. The filtering
+preserves list order and does not modify the original dictionaries or lists.
+
 #### Demo Effect
 
 When you call the `demo_rag_agent`  in the sample project of agentUniverse, using the gpt-4o model with a query to analyze the reasons behind Warren Buffett's reduction of his stake in BYD, the agent invocation tracking function captures the following data:
