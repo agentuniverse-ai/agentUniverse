@@ -5,7 +5,7 @@
 # @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: character_util.py
-
+import os
 
 def show_au_start_banner():
     python_art_text = """
@@ -23,6 +23,10 @@ def show_au_start_banner():
 
 
 def print_gradient_text(text, colors_range):
+    if os.environ.get("NO_COLOR"):
+        print(text)
+        return
+        
     length = len(text)
     result = []
 
