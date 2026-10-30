@@ -531,6 +531,73 @@ All paths are confined to `base_dir`. Extraction rejects absolute/traversal path
 
 The built-in `PDFTool` supports bounded `merge`, `split`, `rotate`, `extract`, and `info` operations. Install `agentUniverse[pdf_ext]` or `pypdf`. All source and destination paths are confined to `base_dir`; page, input-file, read/write-size, and extracted-text budgets are enforced. Writes are atomic and never replace an existing file unless `overwrite=true` is explicit.
 
+## 5. Technical Q&A Tools
+
+### 5.1 Stack Exchange Research
+
+`StackExchangeTool` uses [Stack Exchange API v2.3](https://api.stackexchange.com/docs)
+to search technical questions. It defaults to Stack Overflow and returns compact,
+structured question metadata plus accepted and top-voted answer excerpts.
+Anonymous use does not require an API key.
+
+The built-in component configuration is
+[`stack_exchange_tool.yaml`](../../../../../../agentuniverse/agent/action/tool/common_tool/stack_exchange_tool.yaml).
+
+```python
+from agentuniverse.agent.action.tool.common_tool.stack_exchange_tool import StackExchangeTool
+
+tool = StackExchangeTool()
+result = tool.execute(
+    query="pydantic validate assignment",
+    site="stackoverflow",
+    tags=["python", "pydantic"],
+    sort="votes",
+    order="desc",
+    page=1,
+    page_size=5,
+    from_date="2023-01-01",
+    to_date="2026-12-31",
+    answers_per_question=2,
+)
+```
+
+Parameters:
+
+- `query`: Required keywords, normalized and limited to 300 characters.
+- `site`: Stack Exchange API site parameter, limited to 64 characters. The default is
+  `stackoverflow`.
+- `tags`: Up to five tags supplied as a list or comma/semicolon-delimited string.
+- `sort`: `relevance`, `activity`, `creation`, or `votes`.
+- `order`: `desc` or `asc`.
+- `page`: One-based page from 1 to 100.
+- `page_size`: Questions per page from 1 to 8.
+- `from_date`, `to_date`: Optional inclusive creation-date bounds in `YYYY-MM-DD`
+  format.
+- `answers_per_question`: Accepted/top-voted answers retained for each question,
+  from 1 to 3.
+
+The response includes the normalized search context, `has_more`, quota fields,
+`backoff_seconds`, answer-fetch status, and a `questions` list. Questions preserve
+IDs, links, tags, scores, view and answer counts, dates, owner attribution, content
+license, accepted-answer ID, and a plain-text body excerpt. Answers preserve the same
+research and attribution metadata and explicitly identify accepted answers. HTML,
+scripts, unsafe links, and oversized text are not passed through; page size, answer
+count, excerpt size, and the serialized result are all bounded.
+
+Accepted answers are fetched explicitly when present, followed by one bounded,
+top-voted answer request across the returned questions. If that answer page still has
+more data, `answers_has_more` is `true` and `answer_fetch_status` is `partial`; the
+tool is intended for focused Agent research, not bulk Stack Exchange export.
+
+HTTP, network, JSON, response-shape, and Stack Exchange API failures use structured
+`error` or `answer_error` fields. A partial answer failure does not discard valid
+question results. The tool reports remaining quota and honors API `backoff`: it stops
+follow-up answer requests and rejects another call on the same instance until the
+backoff period expires.
+
+For higher quota or authenticated calls, set `STACKEXCHANGE_KEY` and optionally
+`STACKEXCHANGE_ACCESS_TOKEN`. An access token requires the matching key. Credentials
+are excluded from model serialization and error output.
 ## NVD CVE Tool
 
 `NvdCveTool` queries the official National Vulnerability Database CVE API 2.0. A
