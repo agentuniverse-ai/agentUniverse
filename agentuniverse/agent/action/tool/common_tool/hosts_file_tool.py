@@ -320,12 +320,28 @@ class HostsFileTool(Tool):
         registry (lowercase hostname -> occurrence list, file order)
         and per-line name metadata used by ``lookup``.
         """
+        state = self._new_state()
+        if text.startswith("\ufeff"):
+            # A Windows-authored hosts file commonly starts with a UTF-8
+            # BOM; strip it once so the first line parses like every other
+            # resolver does, and surface the fact as an informational
+            # finding instead of swallowing it silently.
+            text = text[1:]
+            state["findings"].append(
+                {
+                    "line": 1,
+                    "code": "bom_stripped",
+                    "severity": "info",
+                    "message": (
+                        "a UTF-8 byte-order mark at the start of the file "
+                        "was stripped before parsing"
+                    ),
+                }
+            )
         lines = text.split("\n")
         if len(lines) > 1 and lines[-1] == "":
             # A terminating newline does not create an extra blank line.
             lines.pop()
-
-        state = self._new_state()
         for index, raw_line in enumerate(lines, start=1):
             line = raw_line
             if line.endswith("\r"):
@@ -530,7 +546,9 @@ class HostsFileTool(Tool):
         for position, token in enumerate(hostname_tokens):
             verdict, code, reason = self._check_hostname(token)
             if verdict == "invalid":
-                entry["invalid_hostnames"].append({"token": token, "code": code})
+                entry["invalid_hostnames"].append(
+                    {"token": self._snippet(token, self._raw_snippet_chars), "code": code}
+                )
                 label = "canonical hostname" if position == 0 else f"alias #{position}"
                 self._add_finding(
                     state,
