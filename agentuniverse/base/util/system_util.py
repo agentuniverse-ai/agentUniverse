@@ -53,7 +53,8 @@ def parse_dynamic_str(param: str):
         return param
 
 
-def get_module_path(yaml_path: str, root_name: str) -> str:
+def get_module_path(yaml_path: str, root_name: str,
+                    root_path: str | Path | None = None) -> str:
     """
     Convert a YAML file path to its corresponding Python module path.
     This function takes a YAML file path and a root package name, and returns the full Python module path.
@@ -63,6 +64,8 @@ def get_module_path(yaml_path: str, root_name: str) -> str:
     Args:
         yaml_path: The full path to the YAML file
         root_name: The name of the root package that serves as the starting point for the module path
+        root_path: The exact project directory, when known. This avoids ambiguity
+            if an ancestor or a nested package has the same name as root_name.
 
     Returns:
         str: The full Python module path corresponding to the YAML file location
@@ -82,6 +85,15 @@ def get_module_path(yaml_path: str, root_name: str) -> str:
 
     # Get the absolute path of the directory and split it into components
     abs_dir_path = os.path.abspath(dir_path)
+    if root_path is not None:
+        try:
+            relevant_dirs = Path(abs_dir_path).relative_to(
+                Path(os.path.abspath(root_path))).parts
+        except ValueError as e:
+            raise FileNotFoundError(
+                f"YAML file is outside the project root: {yaml_path}") from e
+        return ".".join([root_name, *relevant_dirs, file_name])
+
     path_parts = abs_dir_path.split(os.sep)
 
     try:
@@ -116,7 +128,7 @@ def process_yaml_func(func_expr: str, yaml_func_instance: Any) -> str:
         Exception: If an error occurs while calling the method.
     """
     # Return an empty string if the function expression is None
-    if not func_expr or yaml_func_instance is None:
+    if not func_expr:
         return func_expr
 
     if func_expr.startswith('@FUNC(') and yaml_func_instance is None:
@@ -179,7 +191,15 @@ def process_dict_with_funcs(input_dict: dict, yaml_func_instance: Any) -> dict:
         ValueError: If @FUNC expression is provided but `yaml_func_instance` is None.
         Exception: If an error occurs while calling the method.
     """
-    if not input_dict or yaml_func_instance is None:
+    if not input_dict:
+        return input_dict
+
+    if yaml_func_instance is None:
+        for value in input_dict.values():
+            if isinstance(value, str) and value.startswith('@FUNC('):
+                process_yaml_func(value, yaml_func_instance)
+            elif isinstance(value, dict):
+                process_dict_with_funcs(value, yaml_func_instance)
         return input_dict
 
     processed_dict = {}
@@ -227,14 +247,20 @@ def is_system_builtin(component_instance: ComponentBase) -> bool:
         if not path_components:
             return False
 
-        # Join the path components using OS-specific separator
-        system_path = os.path.join(*path_components)
-
         # Normalize the config path to handle platform-specific separators
         normalized_config_path = os.path.normpath(component_instance.component_config_path)
-
-        # Check if the system path is part of the normalized config path
-        return system_path in normalized_config_path
+        normalized_parts = tuple(
+            os.path.normcase(part)
+            for part in Path(normalized_config_path).parts
+        )
+        normalized_system_parts = tuple(
+            os.path.normcase(part) for part in path_components
+        )
+        width = len(normalized_system_parts)
+        return any(
+            normalized_parts[index:index + width] == normalized_system_parts
+            for index in range(len(normalized_parts) - width + 1)
+        )
     except Exception as e:
         print(f"An error occurred while checking if the component is system-built-in: {str(e)}")
         return False

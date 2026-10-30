@@ -5,22 +5,34 @@ from agentuniverse.base.context.framework_context_manager import FrameworkContex
 
 
 class _StubConversationMemoryModule:
+    """ stubconversationmemorymodule.
+    """
     def add_agent_input_info(self, *args, **kwargs):
+        """Add agent input info.
+        """
         pass
 
     def add_agent_result_info(self, *args, **kwargs):
+        """Add agent result info.
+        """
         pass
 
 
 class _StubAgent:
+    """ stubagent.
+    """
     agent_model = None
 
 
 async def _run_agent(self, **kwargs):
+    """ run agent.
+    """
     return "done"
 
 
 def test_async_agent_wrapper_restores_parent_invocation_chain(monkeypatch):
+    """Test that async agent wrapper restores parent invocation chain.
+    """
     trace_module = importlib.import_module("agentuniverse.base.annotation.trace")
     monkeypatch.setattr(
         trace_module,
@@ -29,6 +41,8 @@ def test_async_agent_wrapper_restores_parent_invocation_chain(monkeypatch):
     )
 
     async def run_in_parent_context():
+        """Run in parent context.
+        """
         context_manager = FrameworkContextManager()
         context_manager.clear_all_contexts()
         parent = {"source": "parent-agent", "type": "agent"}

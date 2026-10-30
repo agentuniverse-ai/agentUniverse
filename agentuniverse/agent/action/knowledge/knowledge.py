@@ -118,7 +118,7 @@ class Knowledge(ComponentBase):
         if url_pattern.match(source_path):
             source_type = "url"
         elif os.path.isfile(source_path):
-            source_type = os.path.splitext(source_path)[1][1:]
+            source_type = os.path.splitext(source_path)[1][1:].lower()
         else:
             raise Exception(f"Knowledge load data error: Unknown source type:{source_path}")
         if source_type in self.readers:
@@ -355,7 +355,7 @@ class Knowledge(ComponentBase):
         """
         return LangchainTool(
             name=self.name,
-            description=self.description or '' + args_description,
+            description=(self.description or '') + args_description,
             func=self.langchain_query,
         )
 
@@ -376,7 +376,7 @@ class Knowledge(ComponentBase):
         """
         return LangchainTool(
             name=self.name,
-            description=self.description or '' + args_description,
+            description=(self.description or '') + args_description,
             func=self.async_langchain_query,
         )
 

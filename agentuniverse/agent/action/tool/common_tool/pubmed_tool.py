@@ -123,6 +123,13 @@ class PubMedTool(Tool):
             total_results = int(search_result.get("count", 0))
 
             papers = self._fetch_articles(pmids) if pmids else []
+            # ESearch owns the requested sort order. Do not let a reordered,
+            # partial or duplicate EFetch response change this result window.
+            papers_by_id = {}
+            for paper in papers:
+                if paper.get("pmid"):
+                    papers_by_id.setdefault(paper["pmid"], paper)
+            papers = [papers_by_id[pmid] for pmid in dict.fromkeys(pmids) if pmid in papers_by_id]
             return {
                 "query": query,
                 "max_results": max_results,
@@ -334,6 +341,11 @@ class PubMedTool(Tool):
 
     @classmethod
     def _parse_article(cls, article: ElementTree.Element) -> Dict[str, Any]:
+        """Parse article metadata, using only valid fallback DOI identifiers.
+
+        PubMed's ELocationID ValidYN defaults to Y; N marks a retained
+        incorrect value and must not become the article's DOI.
+        """
         pmid = cls._element_text(article.find(".//MedlineCitation/PMID"))
         title = cls._element_text(article.find(".//Article/ArticleTitle"))
         journal = cls._element_text(article.find(".//Article/Journal/Title"))
@@ -345,9 +357,11 @@ class PubMedTool(Tool):
             if collective_name:
                 authors.append(collective_name)
                 continue
-            fore_name = cls._element_text(author.find("ForeName"))
+            fore_name = (cls._element_text(author.find("ForeName"))
+                         or cls._element_text(author.find("Initials")))
             last_name = cls._element_text(author.find("LastName"))
-            full_name = " ".join(part for part in (fore_name, last_name) if part)
+            suffix = cls._element_text(author.find("Suffix"))
+            full_name = " ".join(part for part in (fore_name, last_name, suffix) if part)
             if full_name:
                 authors.append(full_name)
 
@@ -364,6 +378,13 @@ class PubMedTool(Tool):
             if article_id.attrib.get("IdType") == "doi":
                 doi = cls._element_text(article_id)
                 break
+        if not doi:
+            for location_id in article.findall(".//MedlineCitation/Article/ELocationID"):
+                if (location_id.attrib.get("EIdType") == "doi"
+                        and location_id.attrib.get("ValidYN", "Y") == "Y"):
+                    doi = cls._element_text(location_id)
+                    if doi:
+                        break
 
         return {
             "pmid": pmid,
