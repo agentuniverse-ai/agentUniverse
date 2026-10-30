@@ -284,7 +284,8 @@ class Agent(ComponentBase, ABC):
         """
         return LangchainTool(
             name=self.agent_model.info.get("name"),
-            func=self.async_langchain_run,
+            func=self.langchain_run,
+            coroutine=self.async_langchain_run,
             description=self.agent_model.info.get("description") + args_description
         )
 
