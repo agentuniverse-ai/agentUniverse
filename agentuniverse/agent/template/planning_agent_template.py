@@ -5,6 +5,7 @@
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: planning_agent_template.py
+import json
 from queue import Queue
 
 from langchain_core.utils.json import parse_json_markdown
@@ -65,7 +66,7 @@ class PlanningAgentTemplate(AgentTemplate):
             return
         try:
             output = parse_json_markdown(agent_output).get('framework')
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             output = agent_output
         # add planning agent final result into the stream output.
         stream_output(output_stream,
