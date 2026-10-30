@@ -320,3 +320,31 @@ metadata:
 - counter: 计量每个文档大小的方式：`estimate`（字符数/4，默认）、`tiktoken`（BPE token）、`char`、`word`。
 - truncate: 为真时，第一个会超出预算的文档被截断到不超过剩余预算并作为最后一个结果保留；为假时遇到该文档即停止。使用 `word` 时，截断保留已选词前方和词间的原始空白。使用 `tiktoken` 时，截断结果保持为原文前缀并重新校验 token 数；若剩余预算放不下完整字符，则不保留该文档。
 - tiktoken_encoding: 当 `counter` 为 `tiktoken` 时使用的 tiktoken 编码。
+
+### [SimHashDedupFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/simhash_dedup_filter.yaml)
+
+该组件通过 SimHash 指纹移除近重复文档，对应 issue #258 的*知识去重*方向。入库语料很少是干净的：同一条新闻被多个渠道转载时只改动了一个词，镜像站点逐字重发文章，多次爬取之间相互重叠。近重复文档既浪费写入时的向量化开销，也会在召回时挤掉真正不同的命中。该组件为每篇文档计算 64 位 SimHash 指纹——一种局部敏感草图，文本只有微小差异时指纹也只差几个比特：先将文本（默认小写化）切成词元 shingle（n 元组，默认 2 个词元），每个 shingle 用 MD5 哈希（取摘要前 8 字节；特意不用带进程盐的 Python `hash()`，保证指纹跨进程可复现），再对 64 个比特位逐 shingle 投 +1/-1 票，取多数符号作为该位取值。
+
+两篇文档的指纹汉明距离不超过 `hamming_threshold`（默认 3——成段文本中改写一个词通常落在 3 比特以内，而无关文本相距几十比特）即视为近重复。匹配按批内顺序单趟贪心进行：文档加入第一个当前代表在阈值内的簇，否则新开一簇，因此每个簇只保留一个幸存者——`keep_policy: first`（默认）保留首次出现，`keep_policy: longest` 保留文本最长的成员（并列取最早），输出按簇首次出现的顺序排列。注意近重复不具有传递性，横跨两个簇的文档归入它先匹配到的簇。幸存文档把指纹写入 `metadata[simhash_key]`（16 位十六进制串），每个被移除的文档对象以幸存者的 id 标记 `metadata[dedup_of_key]`，持有原始列表的调用方因此能看到文档消失的原因——写入前会复制 metadata 映射，text/id 及其他字段绝不改动。整个流程纯 Python、离线且确定性，与 `SemanticDeduplicator` 互补：后者依赖嵌入模型做语义相似度，本组件零依赖且快速——适合在近重复文本本身就是问题的写入前清理场景。
+
+组件定义文件如下：
+```yaml
+name: 'simhash_dedup_filter'
+description: 'remove near-duplicate documents via SimHash fingerprints and Hamming distance'
+hamming_threshold: 3          # 判定为近重复的最大差异比特数
+shingle_size: 2               # 每个 shingle 的词元数（n 元组）
+keep_policy: 'first'          # first | longest
+case_sensitive: false         # 切分前是否保留大小写
+simhash_key: 'simhash'        # 指纹写入的 metadata 键；'' 表示不写入
+dedup_of_key: 'dedup_of'      # 标记被移除文档的 metadata 键；'' 表示不写入
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.simhash_dedup_filter'
+  class: 'SimHashDedupFilter'
+```
+- hamming_threshold：两个 64 位指纹判定为近重复的最大汉明距离，取值 [0, 64]。0 表示只合并（大小写折叠后）完全相同的文本。
+- shingle_size：每个词元 shingle 包含的词元数，必须 >= 1。短于窗口的文档退化为一个整段 shingle。
+- keep_policy：近重复簇保留哪个成员——`first` 保留批内首次出现；`longest` 保留文本最长的成员（并列取最早）。
+- case_sensitive：为假（默认）时词元先小写化再切分，仅大小写不同的改写会被去重。
+- simhash_key：幸存文档的指纹十六进制串写入的 metadata 键；为空则不写入。
+- dedup_of_key：被移除文档对象上写入幸存代表 id 的 metadata 键；为空则不写入。

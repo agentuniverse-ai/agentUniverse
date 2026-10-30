@@ -323,3 +323,31 @@ metadata:
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
 - truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.
+
+### [SimHashDedupFilter](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/simhash_dedup_filter.yaml)
+
+This component removes near-duplicate documents via SimHash fingerprints, addressing the *deduplication* direction of issue #258. Ingested corpora are rarely clean: the same story is picked up by several feeds with a word rewritten, mirror sites republish articles verbatim, and crawls overlap between runs. Near-duplicates waste embedding budget at insertion time and let duplicate chunks crowd out distinct hits at recall time. Each document is fingerprinted with a 64-bit SimHash — a locality-sensitive sketch in which texts differing only slightly produce fingerprints differing in only a few bits: the (lowercased) text is cut into word shingles (n-grams, default 2 tokens), every shingle is hashed with MD5 (first 8 digest bytes; deliberately not Python's salted `hash()`, so fingerprints are reproducible across processes), and each of the 64 bits takes a +1/-1 vote per shingle with the majority sign winning.
+
+Two documents count as near-duplicates when the Hamming distance between their fingerprints is at most `hamming_threshold` (default 3 — on prose-length documents a single-word rewrite lands within 3 bits while unrelated texts sit dozens of bits apart). Matching is a single greedy pass in batch order: a document joins the first cluster whose current representative is within the threshold, otherwise it starts a new cluster, so each cluster reduces to one survivor — the first occurrence under `keep_policy: first` (default) or the member with the longest text under `keep_policy: longest` (earliest wins ties), emitted in order of the cluster's first occurrence. Note that near-duplication is not transitive; documents bridging two clusters join the first one they match. Survivors carry their fingerprint in `metadata[simhash_key]` (16 hex chars), and each removed document object is marked with its representative's id in `metadata[dedup_of_key]` so callers holding the original list can see why it vanished — metadata mappings are copied before mutation and text/id/other fields are never touched. The whole pipeline is pure Python, offline and deterministic, making it complementary to `SemanticDeduplicator`: that component needs an embedding model for semantic similarity, while this one is dependency-free and fast — suited to pre-insertion cleanup where near-identical text is the problem.
+
+The component definition file is as follows:
+```yaml
+name: 'simhash_dedup_filter'
+description: 'remove near-duplicate documents via SimHash fingerprints and Hamming distance'
+hamming_threshold: 3          # max differing bits to count as near-duplicates
+shingle_size: 2               # tokens per word shingle (n-gram)
+keep_policy: 'first'          # first | longest
+case_sensitive: false         # lowercase tokens before shingling
+simhash_key: 'simhash'        # metadata key for the fingerprint; '' disables
+dedup_of_key: 'dedup_of'      # metadata key marking removed docs; '' disables
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.simhash_dedup_filter'
+  class: 'SimHashDedupFilter'
+```
+- hamming_threshold: Maximum Hamming distance between two 64-bit fingerprints for the documents to count as near-duplicates, in [0, 64]. 0 collapses only identical (post case-folding) texts.
+- shingle_size: Number of tokens per word shingle; must be >= 1. Documents shorter than the window fall back to one whole-text shingle.
+- keep_policy: Which member of a near-duplicate cluster survives — `first` keeps the first occurrence in batch order; `longest` keeps the member with the most text (earliest wins ties).
+- case_sensitive: When false (default) tokens are lowercased before shingling, so case-only rewrites deduplicate.
+- simhash_key: Metadata key the fingerprint hex string is written to on kept documents; an empty value disables stamping.
+- dedup_of_key: Metadata key the surviving representative's id is written to on removed document objects; an empty value disables stamping.
