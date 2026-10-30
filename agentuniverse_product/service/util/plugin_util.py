@@ -6,6 +6,7 @@
 # @Email   : wangchongshi.wcs@antgroup.com
 # @FileName: plugin_util.py
 import re
+import copy
 from typing import Dict, List
 import uuid
 
@@ -81,10 +82,24 @@ def parse_openapi_yaml_to_tool_bundle(yaml: str) -> list:
                    'patch', 'head', 'options', 'trace']
         for method in methods:
             if method in path_item:
+                operation = copy.deepcopy(path_item[method])
+                path_parameters = path_item.get('parameters', [])
+                operation_parameters = operation.get('parameters', [])
+                overridden = {
+                    (parameter.get('name'), parameter.get('in'))
+                    for parameter in operation_parameters
+                }
+                inherited_parameters = [
+                    copy.deepcopy(parameter)
+                    for parameter in path_parameters
+                    if (parameter.get('name'), parameter.get('in')) not in overridden
+                ]
+                if inherited_parameters:
+                    operation['parameters'] = inherited_parameters + operation_parameters
                 interfaces.append({
                     'path': path,
                     'method': method,
-                    'operation': path_item[method],
+                    'operation': operation,
                     'url': server_url + path,
                 })
     # create tool bundle
