@@ -167,12 +167,12 @@ class PeerPlanner(Planner):
             LOGGER.warn("no planning agent.")
             planning_result = OutputObject({"framework": [agent_input.get('input')]})
         else:
-            LOGGER.info(f"Starting planning agent.")
+            LOGGER.info("Starting planning agent.")
             planning_result = planning_agent.run(**input_object.to_dict())
 
         input_object.add_data('planning_result', planning_result)
         # add planning agent log info
-        logger_info = f"\nPlanning agent execution result is :\n"
+        logger_info = "\nPlanning agent execution result is :\n"
         for index, one_framework in enumerate(planning_result.get_data('framework')):
             logger_info += f"[{index + 1}] {one_framework} \n"
         LOGGER.info(logger_info)
@@ -206,12 +206,12 @@ class PeerPlanner(Planner):
             LOGGER.warn("no executing agent.")
             executing_result = OutputObject({})
         else:
-            LOGGER.info(f"Starting executing agent.")
+            LOGGER.info("Starting executing agent.")
             executing_result = executing_agent.run(**input_object.to_dict())
 
         input_object.add_data('executing_result', executing_result)
         # add executing agent log info
-        logger_info = f"\nExecuting agent execution result is :\n"
+        logger_info = "\nExecuting agent execution result is :\n"
         if executing_result.get_data('executing_result'):
             for index, one_exec_res in enumerate(executing_result.get_data('executing_result')):
                 one_exec_log_info = f"[{index + 1}] input: {one_exec_res['input']}\n"
@@ -248,12 +248,12 @@ class PeerPlanner(Planner):
             LOGGER.warn("no expressing agent.")
             expressing_result = OutputObject({})
         else:
-            LOGGER.info(f"Starting expressing agent.")
+            LOGGER.info("Starting expressing agent.")
             expressing_result = expressing_agent.run(**input_object.to_dict())
 
         input_object.add_data('expressing_result', expressing_result)
         # add expressing agent log info
-        logger_info = f"\nExpressing agent execution result is :\n"
+        logger_info = "\nExpressing agent execution result is :\n"
         logger_info += f"{expressing_result.get_data('output')}"
         LOGGER.info(logger_info)
         # add expressing agent intermediate steps
@@ -287,12 +287,12 @@ class PeerPlanner(Planner):
             LOGGER.warn("no reviewing agent.")
             reviewing_result = OutputObject({})
         else:
-            LOGGER.info(f"Starting reviewing agent.")
+            LOGGER.info("Starting reviewing agent.")
             reviewing_result = reviewing_agent.run(**input_object.to_dict())
 
         input_object.add_data('reviewing_result', reviewing_result)
         # add reviewing agent log info
-        logger_info = f"\nReviewing agent execution result is :\n"
+        logger_info = "\nReviewing agent execution result is :\n"
         reviewing_info_str = f"review suggestion: {reviewing_result.get_data('suggestion')} \n"
         reviewing_info_str += f"review score: {reviewing_result.get_data('score')} \n"
         LOGGER.info(logger_info + reviewing_info_str)

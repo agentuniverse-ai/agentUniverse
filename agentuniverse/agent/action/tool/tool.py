@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 import asyncio
 import inspect
+import logging
 # @Time    : 2024/3/13 14:29
 # @Author  : wangchongshi
 # @Email   : wangchongshi.wcs@antgroup.com
@@ -20,6 +21,9 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.configers.tool_configer import ToolConfiger
 from agentuniverse.base.util.common_util import parse_and_check_json_markdown
+
+
+logger = logging.getLogger(__name__)
 
 
 class ToolInput(BaseModel):
@@ -100,7 +104,7 @@ class Tool(ComponentBase):
             """Deprecated in future, use kwargs as tool input instead of ToolInput."""
             tool_input = ToolInput(kwargs)
             parse_result = self.parse_react_input(args[0])
-            for key in self.input_keys:
+            for key in self.input_keys or []:
                 tool_input.add_data(key, parse_result[key])
             return self.execute(tool_input)
         else:
@@ -116,7 +120,7 @@ class Tool(ComponentBase):
         if self.check_execute_signature_deprecated():
             tool_input = ToolInput(kwargs)
             parse_result = self.parse_react_input(args[0])
-            for key in self.input_keys:
+            for key in self.input_keys or []:
                 tool_input.add_data(key, parse_result[key])
             return await asyncio.to_thread(self.execute, tool_input)
         try:
@@ -130,6 +134,8 @@ class Tool(ComponentBase):
             parse react string to you input
             you can define your own logic here by override this function
         """
+        if not self.input_keys:
+            return {}
         return {
             self.input_keys[0]: input_str
         }
@@ -172,7 +178,7 @@ class Tool(ComponentBase):
                 if key != 'metadata' and key != 'meta_class':  # Skip metadata field
                     setattr(self, key, value)
         except Exception as e:
-            print(f"Error during configuration initialization: {str(e)}")
+            logger.error("Tool configuration initialization failed", exc_info=True)
         self.name = component_configer.name
         self.description = component_configer.description
         if component_configer.tool_type:

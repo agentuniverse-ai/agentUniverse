@@ -140,7 +140,7 @@ class YouTubeToolTest(unittest.TestCase):
     """
     def setUp(self) -> None:
         self.tool = YouTubeTool(service=FakeYouTubeService(), api_key="test-key")
-    
+
     def test_search_videos(self) -> None:
         tool_input = ToolInput({
             'mode': Mode.VIDEO_SEARCH.value,
@@ -148,6 +148,31 @@ class YouTubeToolTest(unittest.TestCase):
         })
         result = self.tool.execute(tool_input.mode, tool_input.input)
         self.assertTrue(result != [])
+
+    def test_search_keeps_relevance_order_when_video_details_are_reordered(self) -> None:
+        class _Search:
+            def list(self, **kwargs):
+                return FakeRequest({"items": [
+                    {"id": {"videoId": "most-relevant"}},
+                    {"id": {"videoId": "second"}},
+                ]})
+
+        class _Videos:
+            def list(self, **kwargs):
+                return FakeRequest({"items": [
+                    {"id": video_id, "snippet": {"title": video_id},
+                     "statistics": {}, "contentDetails": {"duration": "PT1M"}}
+                    for video_id in ("second", "most-relevant")
+                ]})
+
+        service = FakeYouTubeService()
+        service.search = lambda: _Search()
+        service.videos = lambda: _Videos()
+        tool = YouTubeTool(service=service, api_key="test-key")
+
+        result = tool.execute(Mode.VIDEO_SEARCH.value, "agent framework")
+
+        self.assertEqual([video["id"] for video in result], ["most-relevant", "second"])
 
     def test_analyze_channel(self) -> None:
         tool_input = ToolInput({

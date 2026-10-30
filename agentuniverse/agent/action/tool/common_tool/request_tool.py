@@ -25,8 +25,13 @@ class RequestTool(Tool):
 
     @staticmethod
     def _clean_url(url: str) -> str:
-        """Strips quotes from the url."""
-        return url.strip("\"'")
+        """Validate a URL value and strip surrounding whitespace/quotes."""
+        if not isinstance(url, str):
+            raise ValueError("url must be a non-empty string")
+        cleaned = url.strip().strip("\"'").strip()
+        if not cleaned:
+            raise ValueError("url must be a non-empty string")
+        return cleaned
 
     def _normalized_method(self) -> str:
         if not isinstance(self.method, str):
@@ -34,13 +39,14 @@ class RequestTool(Tool):
         return self.method.strip().upper()
 
     def execute(self, input: str):
+        """Execute the configured HTTP method from a URL or JSON payload."""
         input_params: str = input
         if self.json_parser:
             try:
                 parse_data = parse_json_markdown(input_params)
                 return self.execute_by_method(**parse_data)
             except Exception as e:
-                LOGGER.error(f'execute request error input{input_params} error{e}')
+                LOGGER.error("RequestTool {} failed with {}", self._normalized_method(), type(e).__name__)
                 return str(e)
         else:
             return self.execute_by_method(input_params)
@@ -53,11 +59,12 @@ class RequestTool(Tool):
                 parse_data = parse_json_markdown(input_params)
                 return await self.async_execute_by_method(**parse_data)
             except Exception as e:
-                LOGGER.error(f'execute request error input{input_params} error{e}')
+                LOGGER.error("RequestTool {} failed with {}", self._normalized_method(), type(e).__name__)
                 return str(e)
         return await self.async_execute_by_method(input_params)
 
     async def async_execute_by_method(self, url: str, data: dict = None, **kwargs):
+        """Dispatch an asynchronous request through the configured wrapper."""
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
@@ -72,6 +79,7 @@ class RequestTool(Tool):
             raise ValueError(f"Unsupported method: {method or self.method}")
 
     def execute_by_method(self, url: str, data: dict = None, **kwargs):
+        """Dispatch a synchronous request through the configured wrapper."""
         url = self._clean_url(url)
         method = self._normalized_method()
         if method == 'GET':
@@ -90,9 +98,9 @@ class RequestTool(Tool):
         :param component_configer:
         :return:
         """
-        self.headers = component_configer.configer.value.get('headers')
-        self.method = component_configer.configer.value.get('method')
-        self.response_content_type = component_configer.configer.value.get('response_content_type')
+        self.headers = component_configer.configer.value.get('headers', self.headers)
+        self.method = component_configer.configer.value.get('method', self.method)
+        self.response_content_type = component_configer.configer.value.get('response_content_type', self.response_content_type)
         if 'json_parser' in component_configer.configer.value:
             self.json_parser = component_configer.configer.value.get('json_parser')
         self.requests_wrapper = GenericRequestsWrapper(

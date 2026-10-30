@@ -7,6 +7,7 @@
 # @FileName: hierarchical_regex_text_splitter.py
 import re
 import uuid
+from copy import deepcopy
 from typing import List, Optional
 
 from agentuniverse.agent.agent_manager import AgentManager
@@ -19,7 +20,16 @@ from agentuniverse.base.config.component_configer.component_configer import \
 
 
 class HierarchicalRegexTextSplitter(DocProcessor):
-    """Splits text into hierarchical structure based on regex patterns."""
+    """Split text into a hierarchy using the nearest active shallower heading.
+
+    A new heading closes deeper levels from the previous branch. Missing
+    intermediate levels do not create synthetic nodes; without a shallower
+    heading, the node's parent is ``root``.
+
+    Each heading chunk receives an independent deep copy of its source
+    document's metadata. Generated hierarchy fields override source fields
+    with the same names.
+    """
     merge_first: bool = False
     hierarchical_index: List[dict] = [
         {
@@ -66,15 +76,21 @@ class HierarchicalRegexTextSplitter(DocProcessor):
                 match = pattern.match(line)
                 if match:
                     _ptr = levels.index((level_name, pattern))
-                    parent_level = \
-                        levels[_ptr - 1][0] if _ptr > 0 else 'root'
-                    parent_id = current_level[parent_level].id if \
-                        current_level[parent_level] else 'root'
+                    # A sibling/ancestor heading closes the old deeper branch.
+                    for deeper_level, _ in levels[_ptr + 1:]:
+                        current_level[deeper_level] = None
+                    parent_id = 'root'
+                    for ancestor_level, _ in reversed(levels[:_ptr]):
+                        ancestor = current_level[ancestor_level]
+                        if ancestor is not None:
+                            parent_id = ancestor.id
+                            break
                     # use uuid4 to generate a random id, because chapter name can always duplicate
                     node = Document(
                         id=str(uuid.uuid4()),
                         text=line,
                         metadata={
+                            **deepcopy(doc.metadata or {}),
                             'hierarchical_parent': parent_id,
                             'hierarchical_info': match.group(0) if match else '',
                             'hierarchical_level': _ptr
@@ -121,9 +137,12 @@ class HierarchicalRegexTextSplitter(DocProcessor):
         Returns:
             List of hierarchically structured documents.
         """
+        if not origin_docs:
+            return []
+
         # merge all documents first
         merged_docs = origin_docs
-        if self.merge_first and len(origin_docs) > 0:
+        if self.merge_first:
             for _doc in origin_docs[1:]:
                 origin_docs[0].text += "\n" + _doc.text
             merged_docs = [origin_docs[0]]
