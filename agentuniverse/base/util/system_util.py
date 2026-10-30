@@ -151,7 +151,14 @@ def process_yaml_func(func_expr: str, yaml_func_instance: Any) -> str:
         # Extract function name and arguments
         func_name = parsed_expr.body.func.id
         args = [ast.literal_eval(arg) for arg in parsed_expr.body.args]
-        kwargs = {kw.arg: ast.literal_eval(kw.value) for kw in parsed_expr.body.keywords}
+        kwargs = {}
+        for kw in parsed_expr.body.keywords:
+            if kw.arg in kwargs:
+                raise ValueError(
+                    f"Duplicate keyword argument '{kw.arg}' in method {func_name}"
+                )
+            kwargs[kw.arg] = ast.literal_eval(kw.value)
+
 
         # Check if the method exists in the yaml function instance
         if hasattr(yaml_func_instance, func_name):
