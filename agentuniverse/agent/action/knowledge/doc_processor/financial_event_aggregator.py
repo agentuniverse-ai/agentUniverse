@@ -8,6 +8,7 @@
 
 import hashlib
 import logging
+import re
 from typing import List, Optional, Dict, Any, Set
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -53,7 +54,7 @@ class FinancialEventAggregator(DocProcessor):
     4. Tracks source attribution and credibility
 
     Attributes:
-        similarity_threshold: Similarity threshold for clustering (0.0-1.0).
+        similarity_threshold: Inclusive minimum similarity for clustering (0.0-1.0).
         use_embeddings: Whether to use embeddings for similarity.
         embedding_name: Name of embedding model to use.
         clustering_method: Clustering algorithm ('dbscan', 'hierarchical').
@@ -249,7 +250,7 @@ class FinancialEventAggregator(DocProcessor):
                 continue
 
             # Find neighbors
-            neighbors = [j for j in range(n) if distance_matrix[i][j] < eps and j != i]
+            neighbors = [j for j in range(n) if distance_matrix[i][j] <= eps and j != i]
 
             if len(neighbors) < 1:
                 # Singleton cluster
@@ -271,7 +272,7 @@ class FinancialEventAggregator(DocProcessor):
                     cluster_docs.append(docs[j])
 
                     # Find neighbors of j
-                    j_neighbors = [k for k in range(n) if distance_matrix[j][k] < eps and k != j]
+                    j_neighbors = [k for k in range(n) if distance_matrix[j][k] <= eps and k != j]
                     queue.extend([k for k in j_neighbors if k not in visited])
 
                 cluster = self._create_cluster(cluster_docs)
@@ -376,7 +377,8 @@ class FinancialEventAggregator(DocProcessor):
         """
         # Create hash from sorted document IDs
         doc_ids = sorted([doc.id for doc in docs])
-        hash_input = '|'.join(doc_ids)
+        escaped_doc_ids = [doc_id.replace('\\', '\\\\').replace('|', '\\|') for doc_id in doc_ids]
+        hash_input = '|'.join(escaped_doc_ids)
         event_hash = hashlib.md5(hash_input.encode()).hexdigest()[:12]
         return f"event_{event_hash}"
 
@@ -517,6 +519,8 @@ Summary:"""
     def _generate_extractive_summary(self, docs: List[Document]) -> str:
         """Generate extractive summary (fallback method).
 
+        Keep short non-empty sentences as well as longer news excerpts.
+
         Args:
             docs: Documents to summarize.
 
@@ -526,9 +530,12 @@ Summary:"""
         # Simple extractive: concatenate first sentences from each document
         summary_parts = []
         for doc in docs[:5]:  # Limit to first 5 docs
-            # Extract first sentence
-            first_sentence = doc.text.split('.')[0] + '.'
-            if len(first_sentence) > 20:
+            # Keep short but meaningful sentences and support common punctuation
+            # without splitting decimal numbers such as 3.14.
+            text = doc.text.strip()
+            boundary = re.search(r'(?<!\d)[.!?](?=\s|$)|[。！？]', text)
+            first_sentence = text[:boundary.end()] if boundary else text
+            if first_sentence:
                 summary_parts.append(first_sentence)
 
         summary = ' '.join(summary_parts)
@@ -632,8 +639,10 @@ Summary:"""
         keywords = set(['financial_event', cluster.event_type])
         keywords.update(cluster.entities_involved)
 
-        # Create aggregated document
+        # Source-cluster identity stays stable when the summary changes and
+        # separates independent events that happen to have identical summaries.
         aggregated_doc = Document(
+            id=cluster.event_id,
             text=summary,
             metadata=metadata,
             keywords=keywords

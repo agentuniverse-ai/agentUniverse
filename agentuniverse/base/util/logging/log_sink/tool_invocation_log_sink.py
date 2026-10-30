@@ -16,11 +16,13 @@ class ToolInvocationLogSink(BaseFileLogSink):
     log_type: LogTypeEnum = LogTypeEnum.tool_invocation
 
     def process_record(self, record):
+        """Replace the record message with formatted tool completion details."""
         record["message"] = self.generate_log(
             cost_time=record['extra'].get('cost_time'),
             tool_output=record['extra'].get('tool_output')
         )
 
     def generate_log(self, cost_time: float, tool_output) -> str:
+        """Format tool duration and output with the invocation chain."""
         log_str = f" Tool cost {cost_time:.2f} seconds"
         return Monitor.get_invocation_chain_str() + log_str + f" Tool output is {tool_output}"

@@ -55,6 +55,13 @@ class ViewFileTool(Tool):
                 "status": "error"
             })
 
+        if end_line is not None and start_line > end_line:
+            return json.dumps({
+                "error": "start_line must be less than or equal to end_line",
+                "file_path": file_path,
+                "status": "error"
+            })
+
         try:
             safe_file_path = resolve_safe_path(file_path, self.base_dir)
         except ValueError as e:
@@ -72,21 +79,25 @@ class ViewFileTool(Tool):
             })
 
         try:
+            content_lines = []
+            total_lines = 0
             with open(file_path, 'r', encoding='utf-8') as file:
-                all_lines = file.readlines()
+                for line_number, line in enumerate(file):
+                    total_lines = line_number + 1
+                    if line_number >= start_line and (end_line is None or line_number < end_line):
+                        content_lines.append(line)
             if end_line is None:
-                end_line = len(all_lines)
+                end_line = total_lines
             start_line = max(0, start_line)
-            end_line = min(len(all_lines), end_line)
+            end_line = min(total_lines, end_line)
 
-            content_lines = all_lines[start_line:end_line]
             content = ''.join(content_lines)
             return json.dumps({
                 "file_path": file_path,
                 "content": content,
                 "start_line": start_line,
                 "end_line": end_line - 1 if end_line > 0 else 0,
-                "total_lines": len(all_lines),
+                "total_lines": total_lines,
                 "status": "success"
             })
 

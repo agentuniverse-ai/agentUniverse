@@ -24,10 +24,15 @@ class QueryKeywordExtractor(QueryParaphraser):
 
         keyword_extractor_instance = DocProcessorManager().get_instance_obj(self.keyword_extractor)
 
-        keywords = keyword_extractor_instance.process_docs(
+        processed_docs = keyword_extractor_instance.process_docs(
             [Document(text=origin_query.query_str)]
-        )[0].keywords
+        )
+        if not processed_docs:
+            return origin_query
+        keywords = processed_docs[0].keywords or set()
 
+        if origin_query.keywords is None:
+            origin_query.keywords = set()
         origin_query.keywords.update(keywords)
         return origin_query
 

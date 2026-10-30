@@ -13,8 +13,9 @@ from agentuniverse.base.util.logging.log_type_enum import LogTypeEnum
 class FlaskResponseLogSink(BaseFileLogSink):
     log_type: LogTypeEnum = LogTypeEnum.flask_response
 
-      
+
     def process_record(self, record):
+        """Format the Flask response and remove it from record extras."""
         record["message"] = self.generate_log(
             flask_response=record['extra'].get('flask_response'),
             elapsed_time=record['extra']['elapsed_time']
@@ -22,4 +23,5 @@ class FlaskResponseLogSink(BaseFileLogSink):
         record['extra'].pop('flask_response', None)
 
     def generate_log(self, flask_response, elapsed_time) -> str:
+        """Provide the Flask response formatting hook for subclasses."""
         pass

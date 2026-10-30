@@ -110,8 +110,8 @@ class TestGraphBuild(unittest.TestCase):
 
     def test_build_raises_on_unsupported_node_type(self):
         config = {
-            "nodes": [{"id": "1", "type": "unsupported"}],
-            "edges": [_edge("1", "1")],
+            "nodes": [_start_node_config("1"), {"id": "2", "type": "unsupported"}],
+            "edges": [_edge("1", "2")],
         }
         with self.assertRaises(ValueError) as ctx:
             Graph().build("wf", config)
@@ -119,8 +119,8 @@ class TestGraphBuild(unittest.TestCase):
 
     def test_build_raises_on_cyclic_graph(self):
         config = {
-            "nodes": [_start_node_config("1"), _end_node_config("2")],
-            "edges": [_edge("1", "2"), _edge("2", "1")],
+            "nodes": [_start_node_config("1"), _end_node_config("2"), _end_node_config("3")],
+            "edges": [_edge("1", "2"), _edge("2", "3"), _edge("3", "2")],
         }
         with self.assertRaises(ValueError) as ctx:
             Graph().build("wf", config)
@@ -143,7 +143,7 @@ class TestGraphBuild(unittest.TestCase):
 
     def test_build_skips_duplicate_node_id(self):
         config = {
-            "nodes": [_start_node_config("1"), _start_node_config("1"), _end_node_config("2")],
+            "nodes": [_start_node_config("1"), _end_node_config("2"), _end_node_config("2")],
             "edges": [_edge("1", "2")],
         }
         graph = Graph().build("wf", config)
