@@ -7,11 +7,13 @@
 # @FileName: sql_alchemy_memory_storage.py
 from abc import abstractmethod
 import json
+from contextlib import contextmanager
 from typing import Optional, List, Any
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, func
+from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, func, inspect, or_, select, text, update
+from sqlalchemy.exc import SQLAlchemyError
 
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
 from agentuniverse.agent.memory.message import Message
@@ -66,12 +68,17 @@ def create_memory_model(table_name: str, DynamicBase: Any) -> Any:
         session_id = Column(String(100), default='')
         agent_id = Column(String(100), default='')
         source = Column(String(500), default='')
+        # Message type used to be stored only inside the JSON payload.  Keep it
+        # in a dedicated column as well so ``get(type=...)`` can filter in SQL
+        # instead of reading an attribute that does not exist on the model.
+        type = Column(String(50), default='')
         message = Column(Text)
         gmt_created = Column(DateTime, default=func.now())
 
         __table_args__ = (
             Index('idx_session_id_source', 'session_id', 'agent_id', 'source'),
             Index('idx_agent_id_source', 'agent_id', 'source'),
+            Index('idx_session_id_agent_id_type', 'session_id', 'agent_id', 'type'),
             Index('idx_gmt_created', 'gmt_created'),
         )
 
@@ -86,13 +93,24 @@ class DefaultMemoryConverter(BaseMemoryConverter):
         self.model_class = create_memory_model(table_name, declarative_base())
 
     def from_sql_model(self, sql_message: Any) -> Message:
-        """Convert a SQLAlchemy model to a Message instance."""
-        return Message.from_dict({'id': sql_message.id, **json.loads(sql_message.message)})
+        """Convert a SQLAlchemy model to a Message instance.
+
+        The dedicated ``type`` column is authoritative when it is populated.
+        Rows written before the column existed only carry the type in their
+        JSON payload, so fall back to it to keep those messages readable even
+        if the one-time backfill has not run yet.
+        """
+        payload = json.loads(sql_message.message)
+        persisted_type = getattr(sql_message, 'type', None)
+        if persisted_type:
+            payload['type'] = persisted_type
+        return Message.from_dict({'id': sql_message.id, **payload})
 
     def to_sql_model(self, message: Message, session_id: str = None, agent_id: str = None, source: str = None) -> Any:
         """Convert a Message instance to a SQLAlchemy model."""
         return self.model_class(
             session_id=session_id, agent_id=agent_id, source=source,
+            type=message.type or '',
             message=json.dumps(message.to_dict(), ensure_ascii=False)
         )
 
@@ -145,11 +163,134 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
                             ' please check the `sqldb_wrapper_name`.')
         self._create_table_if_not_exists()
 
+    @contextmanager
+    def _migration_connection(self, engine: Any):
+        """Open a short migration transaction, serialized on SQLite.
+
+        SQLite begins transactions lazily, so two workers can otherwise inspect
+        the same legacy schema before either ``ALTER TABLE`` commits.  BEGIN
+        IMMEDIATE takes the write lock before the inspection, turning the check
+        and the change into one atomic step for file-backed databases.
+        """
+        with engine.begin() as conn:
+            if conn.dialect.name == 'sqlite':
+                conn.exec_driver_sql('BEGIN IMMEDIATE')
+            yield conn
+
+    @staticmethod
+    def _column_names(source: Any, table: Any) -> set:
+        return {column['name'] for column in inspect(source).get_columns(table.name)}
+
     def _create_table_if_not_exists(self) -> None:
-        """Create the db table if it does not exist."""
-        with self._sqldb_wrapper.sql_database._engine.connect() as conn:
-            if not conn.dialect.has_table(conn, self.sqldb_table_name):
-                self.memory_converter.get_sql_model_class().__table__.create(conn)
+        """Create the db table or upgrade an existing table's schema."""
+        model_class = self.memory_converter.get_sql_model_class()
+        table = model_class.__table__
+        engine = self._sqldb_wrapper.sql_database._engine
+        if not inspect(engine).has_table(self.sqldb_table_name):
+            with engine.begin() as conn:
+                table.create(conn)
+            return
+        # Custom converters own their schema; never force the default model's
+        # columns onto a table that a caller manages itself.
+        if not isinstance(self.memory_converter, DefaultMemoryConverter):
+            return
+        self._ensure_type_column(engine, table)
+        self._ensure_indexes(engine, table)
+
+    def _ensure_type_column(self, engine: Any, table: Any) -> None:
+        """Add the ``type`` column and backfill it, tolerating other workers.
+
+        Another process may finish the same migration between the inspection
+        and the ``ALTER TABLE``.  The database then reports a duplicate column;
+        re-inspecting proves the schema is already correct, so startup can
+        continue instead of failing.
+        """
+        if 'type' in self._column_names(engine, table):
+            return
+        try:
+            with self._migration_connection(engine) as conn:
+                if 'type' in self._column_names(conn, table):
+                    return
+                self._add_type_column(conn, table)
+                self._backfill_type_column(conn, table)
+        except SQLAlchemyError:
+            if 'type' not in self._column_names(engine, table):
+                raise
+
+    def _ensure_indexes(self, engine: Any, table: Any) -> None:
+        """Create missing indexes, tolerating a concurrent worker."""
+        try:
+            with self._migration_connection(engine) as conn:
+                existing = {index['name'] for index in inspect(conn).get_indexes(table.name)}
+                for index in table.indexes:
+                    if index.name not in existing:
+                        index.create(conn)
+        except SQLAlchemyError:
+            existing = {index['name'] for index in inspect(engine).get_indexes(table.name)}
+            missing = {index.name for index in table.indexes} - existing
+            if missing:
+                raise
+
+    @staticmethod
+    def _add_type_column(conn: Any, table: Any) -> None:
+        """Add the ``type`` column to a table created by an older release."""
+        column = table.c.type
+        quoted_table = conn.dialect.identifier_preparer.quote(table.name)
+        quoted_column = conn.dialect.identifier_preparer.quote(column.name)
+        column_type = column.type.compile(dialect=conn.dialect)
+        # Table and column names are quoted through the dialect's preparer;
+        # the type is compiled from the model definition, so no user input is
+        # interpolated into this DDL statement.
+        conn.execute(text(
+            f"ALTER TABLE {quoted_table} ADD COLUMN {quoted_column} {column_type} DEFAULT ''"
+        ))
+
+    @staticmethod
+    def _backfill_type_column(conn: Any, table: Any) -> None:
+        """Copy message types from the JSON payload into the new column.
+
+        Existing deployments have summaries whose type only exists inside the
+        serialized message.  Without this backfill, ``get(type='summarize')``
+        would silently stop returning them after the schema upgrade.
+        """
+        rows = conn.execute(
+            select(table.c.id, table.c.message).where(
+                or_(table.c.type.is_(None), table.c.type == '')
+            )
+        ).all()
+        for row in rows:
+            try:
+                payload = json.loads(row.message)
+            except (TypeError, ValueError):
+                # A malformed legacy payload must not prevent the storage from
+                # starting; it simply has no type to copy.
+                continue
+            if not isinstance(payload, dict):
+                continue
+            message_type = payload.get('type')
+            if not isinstance(message_type, str) or not message_type:
+                continue
+            conn.execute(
+                update(table).where(table.c.id == row.id).values(type=message_type)
+            )
+
+    @staticmethod
+    def _normalize_memory_types(memory_types: Any) -> List[str]:
+        """Normalize the ``type`` argument accepted by :meth:`get`.
+
+        Callers pass either a single type name (``'summarize'``) or a group of
+        names (``['human', 'ai']``).  Empty values are dropped so that an
+        omitted or blank filter keeps the previous "return everything"
+        behaviour, while unsupported container types are rejected instead of
+        being silently converted into a filter that can never match.
+        """
+        if memory_types is None:
+            return []
+        if isinstance(memory_types, str):
+            return [memory_types] if memory_types else []
+        if isinstance(memory_types, (list, tuple, set, frozenset)):
+            return [memory_type for memory_type in memory_types if memory_type]
+        raise ValueError('type must be a list or a string')
 
     def delete(self, session_id: str = None, agent_id: str = None, **kwargs) -> None:
         """Delete the memory from the database.
@@ -202,8 +343,11 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
         Args:
             session_id (str): The session id of the memory to get.
             agent_id (str): The agent id of the memory to get.
-            top_k (int): The number of messages to get.
+            top_k (int): The number of messages to get after filtering.
             source (str): The source of the messages to get.
+            **kwargs: ``type`` accepts a single message type or a list of
+                message types.  An empty value keeps every type; other argument
+                types raise ``ValueError``.
 
         Returns:
             List[Message]: The list of messages retrieved from the memory.
@@ -231,13 +375,16 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             if source:
                 source_col = getattr(model_class, 'source')
                 conditions.append(source_col == source)
-            if kwargs.get('type'):
-                if isinstance(kwargs['type'], list):
-                    types = kwargs['type']
-                if not isinstance(kwargs['type'], str):
-                    types = [kwargs['type']]
-                type_col = getattr(model_class, 'type')
-                conditions.append(conditions.append(type_col.in_(types)))
+            # A single type is normalized to a one-element list so the SQL
+            # condition is identical for both supported call styles.  An empty
+            # filter (None, '' or []) intentionally keeps all message types.
+            types = self._normalize_memory_types(kwargs.get('type'))
+            # A custom converter may keep the type only in its payload and may
+            # not expose a column for it.  Filter those messages in Python
+            # instead of touching a schema the converter does not own.
+            type_col = getattr(model_class, 'type', None)
+            if types and type_col is not None:
+                conditions.append(type_col.in_(types))
 
             # build the query with dynamic conditions
             query = session.query(self.memory_converter.model_class)
@@ -248,9 +395,10 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             # Execute the query and fetch the results
             records = query.all()
 
-            records = records[-top_k:]
-
-            messages = []
-            for record in records:
-                messages.append(self.memory_converter.from_sql_model(record))
-            return messages
+            messages = [self.memory_converter.from_sql_model(record) for record in records]
+            if types and type_col is None:
+                messages = [message for message in messages if getattr(message, 'type', None) in types]
+            # top_k is applied after the type filter so that a limit of one
+            # returns the newest matching message, not the newest message of
+            # any type.
+            return messages[-top_k:]

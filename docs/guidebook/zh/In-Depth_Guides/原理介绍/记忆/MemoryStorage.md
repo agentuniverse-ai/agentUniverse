@@ -128,6 +128,8 @@ metadata:
 
 其中`sqldb_table_name`为sqlalchemy的table名称，`sqldb_wrapper_name`为sqldb_wrapper领域组件的实例名称。
 
+存储器把消息 `type` 保存在独立列中，并在 SQL 层完成过滤，因此 `get(..., type='summarize')` 和 `get(..., type=['human', 'ai'])` 只返回指定类型的消息。`top_k` 在过滤并按时间排序后应用，所以 `top_k=1` 返回最新的匹配消息，而不是最新的一条任意类型消息。打开由旧版本创建的 `memory` 表时，存储器会自动补充 `type` 列和 `idx_session_id_agent_id_type` 索引，并从已保存的 JSON 内容回填类型，使旧摘要仍可检索。
+
 mysql_sqldb_wrapper的示例配置如下：
 
 ```yaml
