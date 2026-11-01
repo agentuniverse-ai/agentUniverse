@@ -1,0 +1,11 @@
+pytest==7.4.4
+pydantic==2.11.9
+langchain-community==0.0.38
+sqlalchemy==2.0.43
+psycopg2-binary==2.9.10
+loguru==0.7.3
+tomli
+pyyaml
+python-dotenv
+opentelemetry-sdk==1.25.0
+flask
