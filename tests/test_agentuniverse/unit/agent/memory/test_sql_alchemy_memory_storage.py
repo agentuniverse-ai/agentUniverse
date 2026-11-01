@@ -1,5 +1,4 @@
 # !/usr/bin/env python3
-# -*- coding:utf-8 -*-
 """Regression tests for type filtering in ``SqlAlchemyMemoryStorage``.
 
 The default converter used to persist the message type only inside the JSON
@@ -18,13 +17,15 @@ from threading import Barrier
 from unittest.mock import MagicMock, patch
 
 from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, Text, inspect
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import declarative_base
 
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.memory.memory_storage.memory_storage_manager import MemoryStorageManager
 from agentuniverse.agent.memory.memory_storage.sql_alchemy_memory_storage import (
-    BaseMemoryConverter, SqlAlchemyMemoryStorage,
+    BaseMemoryConverter,
+    SqlAlchemyMemoryStorage,
 )
 from agentuniverse.agent.memory.message import Message
 from agentuniverse.agent.output_object import OutputObject
@@ -365,6 +366,53 @@ class SqlAlchemyMemoryStorageTest(unittest.TestCase):
                           {index['name'] for index in inspect(conn).get_indexes('memory')})
         self.assertEqual(storages[0].get(type='summarize')[0].content, 'old summary')
 
+    def test_duplicate_type_column_from_another_worker_is_ignored(self) -> None:
+        metadata = MetaData()
+        Table(
+            'memory', metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('session_id', String(100)),
+            Column('agent_id', String(100)),
+            Column('source', String(500)),
+            Column('message', Text),
+            Column('gmt_created', DateTime),
+        )
+        engine = self.storage._sqldb_wrapper.sql_database._engine
+        metadata.drop_all(engine, checkfirst=True)
+        metadata.create_all(engine)
+        with engine.begin() as conn:
+            conn.exec_driver_sql(
+                "ALTER TABLE memory ADD COLUMN type VARCHAR(50) DEFAULT ''"
+            )
+
+        storage = self._build_storage(wrapper=self._new_wrapper(), initialize=False)
+        real_column_names = SqlAlchemyMemoryStorage.__dict__['_column_names'].__func__
+        calls = {'count': 0}
+
+        def stale_column_names(source, table):
+            # Mimic a worker whose first two inspections ran before another
+            # worker committed the column.
+            calls['count'] += 1
+            if calls['count'] <= 2:
+                return set()
+            return real_column_names(source, table)
+
+        def duplicate_column(conn, table):
+            raise OperationalError(  # noqa: TRY003 - mirror the driver's message
+                'ALTER TABLE memory ADD COLUMN type VARCHAR(50)',
+                {},
+                Exception('duplicate column name: type'),
+            )
+
+        with patch.object(SqlAlchemyMemoryStorage, '_column_names', staticmethod(stale_column_names)), \
+                patch.object(SqlAlchemyMemoryStorage, '_add_type_column', staticmethod(duplicate_column)):
+            storage._create_table_if_not_exists()
+
+        with engine.connect() as conn:
+            self.assertIn('type', {column['name'] for column in inspect(conn).get_columns('memory')})
+            self.assertIn('idx_session_id_agent_id_type',
+                          {index['name'] for index in inspect(conn).get_indexes('memory')})
+
     def test_legacy_custom_converter_without_type_column_still_works(self) -> None:
         base = declarative_base()
 
@@ -402,6 +450,11 @@ class SqlAlchemyMemoryStorageTest(unittest.TestCase):
         storage._create_table_if_not_exists()
         storage.add([Message(type='human', content='hello')], session_id='session-1')
         self.assertEqual(storage.get(session_id='session-1')[0].content, 'hello')
+        # The converter keeps the type in its payload only.  Filtering must
+        # still work there without requiring the default converter's column.
+        self.assertEqual(storage.get(session_id='session-1', type='human')[0].content, 'hello')
+        self.assertEqual(storage.get(session_id='session-1', type=['ai', 'human'])[0].content, 'hello')
+        self.assertEqual(storage.get(session_id='session-1', type='summarize'), [])
         with engine.connect() as conn:
             self.assertNotIn('type', {column['name'] for column in inspect(conn).get_columns('custom_memory')})
 

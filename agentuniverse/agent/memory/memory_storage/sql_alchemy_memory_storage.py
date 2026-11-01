@@ -7,11 +7,13 @@
 # @FileName: sql_alchemy_memory_storage.py
 from abc import abstractmethod
 import json
+from contextlib import contextmanager
 from typing import Optional, List, Any
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import Integer, String, DateTime, Text, Column, Index, and_, func, inspect, or_, select, text, update
+from sqlalchemy.exc import SQLAlchemyError
 
 from agentuniverse.agent.memory.memory_storage.memory_storage import MemoryStorage
 from agentuniverse.agent.memory.message import Message
@@ -161,46 +163,73 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
                             ' please check the `sqldb_wrapper_name`.')
         self._create_table_if_not_exists()
 
-    def _create_table_if_not_exists(self) -> None:
-        """Create the db table or upgrade an existing table's schema.
+    @contextmanager
+    def _migration_connection(self, engine: Any):
+        """Open a short migration transaction, serialized on SQLite.
 
-        Tables created by older releases do not have the ``type`` column, so
-        the storage cannot filter summaries after an upgrade unless the column
-        is added here.  ``engine.begin()`` is used instead of ``connect()`` so
-        that the schema change is committed consistently on every dialect.
+        SQLite begins transactions lazily, so two workers can otherwise inspect
+        the same legacy schema before either ``ALTER TABLE`` commits.  BEGIN
+        IMMEDIATE takes the write lock before the inspection, turning the check
+        and the change into one atomic step for file-backed databases.
         """
+        with engine.begin() as conn:
+            if conn.dialect.name == 'sqlite':
+                conn.exec_driver_sql('BEGIN IMMEDIATE')
+            yield conn
+
+    @staticmethod
+    def _column_names(source: Any, table: Any) -> set:
+        return {column['name'] for column in inspect(source).get_columns(table.name)}
+
+    def _create_table_if_not_exists(self) -> None:
+        """Create the db table or upgrade an existing table's schema."""
         model_class = self.memory_converter.get_sql_model_class()
         table = model_class.__table__
         engine = self._sqldb_wrapper.sql_database._engine
-        with engine.begin() as conn:
-            if conn.dialect.name == 'sqlite' and isinstance(self.memory_converter, DefaultMemoryConverter):
-                # SQLite's deferred transactions allow two workers to inspect
-                # the same old schema before either ALTER runs. Obtain the
-                # write lock before inspecting so the second worker sees the
-                # completed migration instead of trying to add the column twice.
-                conn.exec_driver_sql('BEGIN IMMEDIATE')
-            if not conn.dialect.has_table(conn, self.sqldb_table_name):
+        if not inspect(engine).has_table(self.sqldb_table_name):
+            with engine.begin() as conn:
                 table.create(conn)
-                return
-            if isinstance(self.memory_converter, DefaultMemoryConverter):
-                self._upgrade_existing_table(conn, table)
+            return
+        # Custom converters own their schema; never force the default model's
+        # columns onto a table that a caller manages itself.
+        if not isinstance(self.memory_converter, DefaultMemoryConverter):
+            return
+        self._ensure_type_column(engine, table)
+        self._ensure_indexes(engine, table)
 
-    def _upgrade_existing_table(self, conn: Any, table: Any) -> None:
-        """Add missing columns/indexes and backfill data for legacy tables."""
-        existing_columns = {column['name'] for column in inspect(conn).get_columns(table.name)}
-        column_added = False
-        if table.c.type.name not in existing_columns:
-            self._add_type_column(conn, table)
-            column_added = True
+    def _ensure_type_column(self, engine: Any, table: Any) -> None:
+        """Add the ``type`` column and backfill it, tolerating other workers.
 
-        # ``create`` with ``checkfirst`` keeps this method idempotent because
-        # initialization can run more than once for the same storage instance
-        # and every process performs it on startup.
-        for index in table.indexes:
-            index.create(conn, checkfirst=True)
+        Another process may finish the same migration between the inspection
+        and the ``ALTER TABLE``.  The database then reports a duplicate column;
+        re-inspecting proves the schema is already correct, so startup can
+        continue instead of failing.
+        """
+        if 'type' in self._column_names(engine, table):
+            return
+        try:
+            with self._migration_connection(engine) as conn:
+                if 'type' in self._column_names(conn, table):
+                    return
+                self._add_type_column(conn, table)
+                self._backfill_type_column(conn, table)
+        except SQLAlchemyError:
+            if 'type' not in self._column_names(engine, table):
+                raise
 
-        if column_added:
-            self._backfill_type_column(conn, table)
+    def _ensure_indexes(self, engine: Any, table: Any) -> None:
+        """Create missing indexes, tolerating a concurrent worker."""
+        try:
+            with self._migration_connection(engine) as conn:
+                existing = {index['name'] for index in inspect(conn).get_indexes(table.name)}
+                for index in table.indexes:
+                    if index.name not in existing:
+                        index.create(conn)
+        except SQLAlchemyError:
+            existing = {index['name'] for index in inspect(engine).get_indexes(table.name)}
+            missing = {index.name for index in table.indexes} - existing
+            if missing:
+                raise
 
     @staticmethod
     def _add_type_column(conn: Any, table: Any) -> None:
@@ -350,8 +379,11 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             # condition is identical for both supported call styles.  An empty
             # filter (None, '' or []) intentionally keeps all message types.
             types = self._normalize_memory_types(kwargs.get('type'))
-            if types:
-                type_col = getattr(model_class, 'type')
+            # A custom converter may keep the type only in its payload and may
+            # not expose a column for it.  Filter those messages in Python
+            # instead of touching a schema the converter does not own.
+            type_col = getattr(model_class, 'type', None)
+            if types and type_col is not None:
                 conditions.append(type_col.in_(types))
 
             # build the query with dynamic conditions
@@ -363,12 +395,10 @@ class SqlAlchemyMemoryStorage(MemoryStorage):
             # Execute the query and fetch the results
             records = query.all()
 
+            messages = [self.memory_converter.from_sql_model(record) for record in records]
+            if types and type_col is None:
+                messages = [message for message in messages if getattr(message, 'type', None) in types]
             # top_k is applied after the type filter so that a limit of one
             # returns the newest matching message, not the newest message of
             # any type.
-            records = records[-top_k:]
-
-            messages = []
-            for record in records:
-                messages.append(self.memory_converter.from_sql_model(record))
-            return messages
+            return messages[-top_k:]
