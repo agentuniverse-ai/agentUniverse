@@ -5,6 +5,8 @@
 # @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_base.py
+import copy
+import logging
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -12,6 +14,10 @@ from pydantic import BaseModel, ConfigDict
 from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
+
+# Stdlib logger: the project LOGGER imports this module through system_util,
+# so using it here would cycle. Callers still see the failure.
+logger = logging.getLogger(__name__)
 
 
 class ComponentBase(BaseModel):
@@ -52,7 +58,29 @@ class ComponentBase(BaseModel):
         return self.default_symbol
 
     def create_copy(self):
+        """Return an isolated copy of this component.
+
+        ``ComponentManagerBase.get_instance_obj(..., new_instance=True)`` uses
+        this so a caller cannot mutate the registered instance.
+
+        Prefer ``model_copy(deep=True)``. If that fails, fall back to
+        ``copy.deepcopy`` and log the original error. A shallow
+        ``model_copy()`` is not used: it would share mutable fields with the
+        original. If both deep-copy paths fail, the ``copy.deepcopy`` error
+        propagates.
+
+        Returns:
+            ComponentBase: an independent copy of this component.
+
+        Raises:
+            Exception: If neither deep-copy path can copy this component.
+        """
         try:
             return self.model_copy(deep=True)
-        except Exception:
-            return self.model_copy()
+        except Exception as e:
+            # Broad catch by design: deep model_copy can fail for varied field
+            # types. Log it, then try stdlib deepcopy before giving up.
+            logger.warning(
+                "deep model_copy failed (%s); using deepcopy fallback", e
+            )
+            return copy.deepcopy(self)
