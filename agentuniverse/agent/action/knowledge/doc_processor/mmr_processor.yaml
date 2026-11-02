@@ -19,8 +19,11 @@ top_n: null
 # --- Embeddings ---
 # Query / document embeddings are read from Query.embeddings and
 # Document.embedding when present. Set embedding_name to a registered embedding
-# component so any missing embeddings are computed on demand; leave null to rely
-# only on embeddings already carried by the query / documents.
+# component to recompute all document vectors and the query in one model's
+# space; leave empty to rely only on precomputed vectors. Model batches must
+# contain exactly one vector per input. Vectors must be finite, non-empty and
+# dimensionally consistent. If either batch fails, input order (up to top_n)
+# and existing document embeddings/metadata are preserved; no scores are stamped.
 embedding_name: ''            # e.g. 'default_openai_embedding'
 
 # --- Optional score stamping ---

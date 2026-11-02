@@ -100,28 +100,19 @@ class MMRProcessor(DocProcessor):
 
         doc_embeddings, query_embedding = self._resolve_embeddings(
             origin_docs, query)
-        if query_embedding is None or any(e is None for e in doc_embeddings):
+        if not self._valid_embeddings(doc_embeddings, query_embedding):
             logger.warning(
-                "MMR: embeddings unavailable (set embedding_name or ensure the "
-                "store populates Document.embedding / Query.embeddings); "
+                "MMR: embeddings unavailable or invalid (expected finite, "
+                "non-empty vectors with one shared dimension); "
                 "returning documents in input order.")
             return origin_docs[:self.top_n] if self.top_n else list(origin_docs)
 
-        # Guarantee a homogeneous embedding space before ranking. Documents
-        # recalled from multiple stores can carry vectors from different models
-        # or dimensions; comparing them with cosine would silently truncate to
-        # the shortest vector and produce a plausible but meaningless ranking.
-        # Require one shared dimension, else degrade to input order.
-        dims = {len(e) for e in doc_embeddings} | {len(query_embedding)}
-        if len(dims) > 1:
-            logger.warning(
-                f"MMR: embeddings have inconsistent dimensions {sorted(dims)}; "
-                "cannot compute meaningful similarities. Returning documents in "
-                "input order. Set embedding_name to recompute all embeddings "
-                "with a single model.")
-            return origin_docs[:self.top_n] if self.top_n else list(origin_docs)
-
         order = self._select(doc_embeddings, query_embedding)
+        if self.embedding_name:
+            # Publish the batch only after both document and query vectors
+            # validate and ranking succeeds. Fallback must not corrupt inputs.
+            for doc, embedding in zip(origin_docs, doc_embeddings):
+                doc.embedding = embedding
         if self.score_key:
             for i in order:
                 meta = dict(origin_docs[i].metadata or {})
@@ -133,6 +124,23 @@ class MMRProcessor(DocProcessor):
     # ------------------------------------------------------------------ #
     # Embedding resolution
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _valid_embeddings(doc_embeddings, query_embedding) -> bool:
+        """Require non-empty, finite numeric vectors of the same dimension."""
+        try:
+            if query_embedding is None or len(query_embedding) == 0:
+                return False
+            dimension = len(query_embedding)
+            for vector in [query_embedding, *doc_embeddings]:
+                if vector is None or len(vector) != dimension:
+                    return False
+                if any(isinstance(value, bool) or not math.isfinite(value)
+                       for value in vector):
+                    return False
+        except (TypeError, ValueError, OverflowError):
+            return False
+        return True
+
     def _resolve_embeddings(
             self, docs: List[Document], query: Query
     ) -> Tuple[List[Optional[List[float]]], Optional[List[float]]]:
@@ -181,18 +189,20 @@ class MMRProcessor(DocProcessor):
         try:
             model = EmbeddingManager().get_instance_obj(self.embedding_name)
             if docs:
-                computed = model.get_embeddings([doc.text or "" for doc in docs])
-                for idx, emb in enumerate(computed):
-                    doc_embeddings[idx] = emb
-                    docs[idx].embedding = emb
+                computed = list(model.get_embeddings([doc.text or "" for doc in docs]))
+                if len(computed) != len(docs):
+                    raise ValueError("MMR requires exactly one embedding per document.")
+                doc_embeddings = [list(embedding) for embedding in computed]
             if query is not None and query.query_str:
                 # Only a freshly computed embedding shares the configured model's
                 # space; a precomputed Query.embeddings value has no verifiable
                 # provenance (equal dimension does NOT imply same model).
-                # Asymmetric embedding models distinguish search queries from
-                # documents; the default role is usually document.
-                query_embedding = model.get_embeddings(
-                    [query.query_str], text_type="query")[0]
+                # Preserve the query role required by asymmetric models.
+                computed_query = list(model.get_embeddings(
+                    [query.query_str], text_type="query"))
+                if len(computed_query) != 1:
+                    raise ValueError("MMR requires exactly one query embedding.")
+                query_embedding = list(computed_query[0])
             elif query is not None and not query.query_str and query.embeddings:
                 logger.warning(
                     "MMR: embedding_name is configured but the query carries no "
@@ -258,13 +268,17 @@ class MMRProcessor(DocProcessor):
                 f"Cannot compute cosine similarity between vectors of different "
                 f"dimensions ({len(a)} vs {len(b)}); ensure all embeddings come "
                 f"from a single model, or set embedding_name to recompute them.")
-        dot = 0.0
-        for x, y in zip(a, b):
-            dot += x * y
-        norm_a = math.sqrt(sum(x * x for x in a))
-        norm_b = math.sqrt(sum(y * y for y in b))
-        if norm_a == 0.0 or norm_b == 0.0:
+        # Cosine is invariant to positive scaling. Scale before multiplying
+        # so finite large/tiny vectors do not overflow/underflow into NaN/zero.
+        scale_a = max((abs(x) for x in a), default=0.0)
+        scale_b = max((abs(y) for y in b), default=0.0)
+        if scale_a == 0.0 or scale_b == 0.0:
             return 0.0
+        scaled_a = [x / scale_a for x in a]
+        scaled_b = [y / scale_b for y in b]
+        dot = sum(x * y for x, y in zip(scaled_a, scaled_b))
+        norm_a = math.sqrt(sum(x * x for x in scaled_a))
+        norm_b = math.sqrt(sum(y * y for y in scaled_b))
         return dot / (norm_a * norm_b)
 
     def _initialize_by_component_configer(self,
