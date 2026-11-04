@@ -176,7 +176,9 @@ class RamContextStore(ContextStore):
 
         # Score each segment
         scored_segments = []
-        query_lower = query.lower()
+        query_lower = query.strip().lower()
+        if not query_lower:
+            return []
         query_terms = set(re.findall(r'\w+', query_lower))
 
         for segment in segments:
@@ -412,6 +414,11 @@ class RamContextStore(ContextStore):
 
         score += len(matching_terms) * 2.0
         score += len(matching_keywords) * 5.0
+
+        # Priority and recency must only rank relevant matches. Applying these
+        # bonuses to a zero-match segment makes every live segment searchable.
+        if score == 0.0:
+            return 0.0
 
         # Priority bonus
         priority_bonus = {
