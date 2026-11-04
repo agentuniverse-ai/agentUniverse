@@ -3,6 +3,7 @@ import tempfile
 import os
 import shutil
 import time
+from unittest import mock
 from pathlib import Path
 from agentuniverse.agent.action.knowledge.reader.file.sevenzip_reader import SevenZipReader
 
@@ -203,7 +204,7 @@ class TestSevenZipReaderComplexScenarios(unittest.TestCase):
         sevenzip_path = os.path.join(self.temp_dir, "complex_project.7z")
         try:
             with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
-                archive.writeall(project_dir, '')
+                archive.writeall(project_dir, Path(project_dir).name)
         except Exception as e:
             self.skipTest(f"Failed to create project 7Z: {e}")
         documents = self.reader._load_data(sevenzip_path)
@@ -253,7 +254,7 @@ class TestSevenZipReaderComplexScenarios(unittest.TestCase):
         sevenzip_path = os.path.join(self.temp_dir, "mixed_files.7z")
         try:
             with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
-                archive.writeall(files_dir, '')
+                archive.writeall(files_dir, Path(files_dir).name)
         except Exception as e:
             self.skipTest(f"Failed to create mixed files 7Z: {e}")
         documents = self.reader._load_data(sevenzip_path)
@@ -329,7 +330,7 @@ class TestSevenZipReaderSizeLimits(unittest.TestCase):
         sevenzip_path = os.path.join(self.temp_dir, "many_files.7z")
         try:
             with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
-                archive.writeall(files_dir, '')
+                archive.writeall(files_dir, Path(files_dir).name)
         except Exception as e:
             self.skipTest(f"Failed to create many files 7Z: {e}")
         documents = self.reader._load_data(sevenzip_path, max_files=10)
@@ -427,7 +428,7 @@ class TestSevenZipReaderRealWorldScenarios(unittest.TestCase):
         sevenzip_path = os.path.join(self.temp_dir, "documentation.7z")
         try:
             with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
-                archive.writeall(doc_dir, '')
+                archive.writeall(doc_dir, Path(doc_dir).name)
         except Exception as e:
             self.skipTest(f"Failed to create documentation 7Z: {e}")
         project_metadata = {"project": "SevenZipReader", "category": "documentation", "version": "2.0.0", "author": "Test Team", "description": "测试文档存档"}
@@ -482,7 +483,7 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
         sevenzip_path = os.path.join(self.temp_dir, "special_names.7z")
         try:
             with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
-                archive.writeall(files_dir, '')
+                archive.writeall(files_dir, Path(files_dir).name)
         except Exception as e:
             self.skipTest(f"Failed to create special names 7Z: {e}")
         documents = self.reader._load_data(sevenzip_path)
@@ -510,7 +511,9 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
         sevenzip_path = os.path.join(self.temp_dir, "deep_structure.7z")
         try:
             with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
-                archive.writeall(self.temp_dir, '')
+                archive.writeall(
+                    Path(self.temp_dir) / "level_00", "level_00"
+                )
         except Exception as e:
             self.skipTest(f"Failed to create deep structure 7Z: {e}")
         documents = self.reader._load_data(sevenzip_path)
@@ -539,6 +542,135 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
         if docs_str and docs_path:
             self.assertEqual(docs_str[0].text, docs_path[0].text)
             self.assertEqual(docs_str[0].metadata['file_name'], docs_path[0].metadata['file_name'])
+
+    def test_unsafe_member_is_never_written(self):
+        try:
+            import py7zr
+        except ImportError:
+            self.skipTest("py7zr not available")
+        source = Path(self.temp_dir) / "source.txt"
+        source.write_text("safe content", encoding="utf-8")
+        archive_path = Path(self.temp_dir) / "unsafe.7z"
+        with py7zr.SevenZipFile(archive_path, "w") as archive:
+            archive.write(source, "../escaped.txt")
+            archive.write(source, "safe.txt")
+
+        extraction_root = Path(self.temp_dir) / "extract-root"
+        extraction_root.mkdir()
+        escaped_path = extraction_root.parent / "escaped.txt"
+        with mock.patch(
+            "agentuniverse.agent.action.knowledge.reader.file."
+            "sevenzip_reader.tempfile.mkdtemp",
+            return_value=str(extraction_root),
+        ):
+            documents = self.reader._load_data(archive_path)
+
+        self.assertEqual(
+            [document.metadata["file_name"] for document in documents],
+            ["safe.txt"],
+        )
+        self.assertFalse(escaped_path.exists())
+
+    def test_extractall_is_not_used(self):
+        try:
+            import py7zr
+        except ImportError:
+            self.skipTest("py7zr not available")
+        source = Path(self.temp_dir) / "source.txt"
+        source.write_text("bounded", encoding="utf-8")
+        archive_path = Path(self.temp_dir) / "bounded.7z"
+        with py7zr.SevenZipFile(archive_path, "w") as archive:
+            archive.write(source, "source.txt")
+
+        with mock.patch.object(
+            py7zr.SevenZipFile,
+            "extractall",
+            side_effect=AssertionError("unbounded extraction called"),
+        ):
+            documents = self.reader._load_data(archive_path)
+
+        self.assertEqual(len(documents), 1)
+        self.assertEqual(documents[0].text, "bounded")
+
+    def test_long_archive_name_uses_short_temporary_path(self):
+        try:
+            import py7zr
+        except ImportError:
+            self.skipTest("py7zr not available")
+        source = Path(self.temp_dir) / "source.txt"
+        source.write_text("long name", encoding="utf-8")
+        long_name = "a" * 200 + ".txt"
+        archive_path = Path(self.temp_dir) / "long-name.7z"
+        with py7zr.SevenZipFile(archive_path, "w") as archive:
+            archive.write(source, long_name)
+
+        documents = self.reader._load_data(archive_path)
+
+        self.assertEqual(len(documents), 1)
+        self.assertEqual(documents[0].metadata["file_name"], long_name)
+
+    def test_member_name_validation_is_cross_platform(self):
+        invalid_names = [
+            "../escape.txt",
+            "folder/../../escape.txt",
+            "/absolute.txt",
+            r"C:\absolute.txt",
+            r"\\server\share\escape.txt",
+            "folder/has:colon.txt",
+        ]
+        for name in invalid_names:
+            with self.subTest(name=name):
+                self.assertIsNone(self.reader._normalize_entry_name(name))
+        self.assertEqual(
+            self.reader._normalize_entry_name("safe/folder/file.txt"),
+            "safe/folder/file.txt",
+        )
+
+    def test_invalid_limits_fail_before_extraction(self):
+        try:
+            import py7zr
+        except ImportError:
+            self.skipTest("py7zr not available")
+        archive_path = Path(self.temp_dir) / "limits.7z"
+        with py7zr.SevenZipFile(archive_path, "w"):
+            pass
+
+        invalid_options = [
+            {"max_file_size": 0},
+            {"max_total_size": -1},
+            {"max_files": True},
+            {"max_depth": -1},
+            {"max_compression_ratio": 0},
+        ]
+        for options in invalid_options:
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                self.reader._load_data(archive_path, **options)
+
+    def test_nested_archives_share_file_count_limit(self):
+        try:
+            import py7zr
+        except ImportError:
+            self.skipTest("py7zr not available")
+
+        first = Path(self.temp_dir) / "first.txt"
+        second = Path(self.temp_dir) / "second.txt"
+        first.write_text("first", encoding="utf-8")
+        second.write_text("second", encoding="utf-8")
+
+        inner_archive = Path(self.temp_dir) / "inner.7z"
+        with py7zr.SevenZipFile(inner_archive, "w") as archive:
+            archive.write(first, "first.txt")
+            archive.write(second, "second.txt")
+
+        outer_archive = Path(self.temp_dir) / "outer.7z"
+        with py7zr.SevenZipFile(outer_archive, "w") as archive:
+            archive.write(inner_archive, "inner.7z")
+
+        documents = self.reader._load_data(outer_archive, max_files=2)
+
+        self.assertEqual(len(documents), 1)
+        self.assertIn(documents[0].metadata["file_name"], {"first.txt", "second.txt"})
+
     def test_mixed_text_encodings_and_formats(self):
         try:
             import py7zr
@@ -555,7 +687,7 @@ class TestSevenZipReaderEdgeCases(unittest.TestCase):
         sevenzip_path = os.path.join(self.temp_dir, "mixed_encodings.7z")
         try:
             with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
-                archive.writeall(files_dir, '')
+                archive.writeall(files_dir, Path(files_dir).name)
         except Exception as e:
             self.skipTest(f"Failed to create mixed encodings 7Z: {e}")
         documents = self.reader._load_data(sevenzip_path)
@@ -588,7 +720,7 @@ class TestSevenZipReaderPerformance(unittest.TestCase):
         sevenzip_path = os.path.join(self.temp_dir, "many_small_files.7z")
         try:
             with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
-                archive.writeall(files_dir, '')
+                archive.writeall(files_dir, Path(files_dir).name)
         except Exception as e:
             self.skipTest(f"Failed to create many small files 7Z: {e}")
         start_time = time.time()
@@ -611,7 +743,7 @@ class TestSevenZipReaderPerformance(unittest.TestCase):
         sevenzip_path = os.path.join(self.temp_dir, "cache_test.7z")
         try:
             with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
-                archive.writeall(files_dir, '')
+                archive.writeall(files_dir, Path(files_dir).name)
         except Exception as e:
             self.skipTest(f"Failed to create cache test 7Z: {e}")
         self.reader._reader_cache.clear()
