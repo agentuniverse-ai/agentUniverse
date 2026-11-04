@@ -1,0 +1,70 @@
+name: 'openalex_tool'
+description: |
+  Search OpenAlex for scholarly works or retrieve one work by identifier.
+
+  Input parameters:
+    - query (required): Search text in search mode, or an OpenAlex work ID, DOI,
+      DOI URL, or PMID identifier in work mode. Search text is limited to 3000
+      UTF-8 bytes so the request stays below OpenAlex's URL-size limit.
+    - mode (optional): Operation mode, either search or work. Defaults to search.
+    - max_results (optional): Results per page in search mode, from 1 to 20.
+      Defaults to 5. Work mode returns one result.
+    - page (optional): One-based page for basic paging. Defaults to 1. OpenAlex
+      basic paging is limited to page 500 and the first 10,000 results.
+    - cursor (optional): Cursor for deep paging. Start with *, then pass the
+      returned next_cursor to the next call. Cursor requests require page 1 and
+      are limited to 4096 UTF-8 bytes.
+    - sort (optional): One of relevance, citation_count, cited_by_count,
+      publication_date, publication_year, title, or display_name. Defaults to
+      relevance. Aliases are normalized to OpenAlex field names.
+    - order (optional): Sort direction, either asc or desc. Defaults to desc.
+    - from_publication_date (optional): Inclusive lower publication-date bound.
+    - to_publication_date (optional): Inclusive upper publication-date bound.
+      Dates accept YYYY, YYYY-MM, or YYYY-MM-DD. Partial lower bounds expand to
+      their first day and partial upper bounds expand to their last day.
+    - work_type (optional): OpenAlex work type such as article, book, dataset,
+      dissertation, or review.
+    - open_access_only (optional): Set true to require open-access works.
+    - min_citation_count (optional): Inclusive non-negative citation threshold.
+
+  Filtered search example:
+    {
+      "query": "multi-agent systems",
+      "mode": "search",
+      "max_results": 5,
+      "page": 1,
+      "sort": "citation_count",
+      "order": "desc",
+      "from_publication_date": "2020",
+      "to_publication_date": "2025-12",
+      "work_type": "article",
+      "open_access_only": true,
+      "min_citation_count": 10
+    }
+
+  Work lookup examples:
+    {"query": "W2741809807", "mode": "work"}
+    {"query": "10.7717/peerj.4375", "mode": "work"}
+    {"query": "https://doi.org/10.7717/peerj.4375", "mode": "work"}
+    {"query": "pmid:29456894", "mode": "work"}
+
+  Responses use a normalized works list. Each work may include OpenAlex ID, DOI,
+  title, reconstructed abstract, publication year and date, type, language,
+  authors with affiliations, venue, open-access status and URL, citation and
+  reference counts, topics, keywords, landing-page URL, and PDF URL. To keep Agent
+  context bounded, abstracts are limited to 4000 characters and at most 25
+  authors, 10 topics, 10 keywords, and 5 institutions per author are returned;
+  abstract_truncated, author_count, and authors_truncated expose truncation.
+  Missing metadata uses empty values. This tool returns metadata and links only;
+  it does not download or summarize full text.
+
+  Network, API, and response failures use a structured error field and preserve
+  operation context. Basic calls work without an API key but have a smaller daily
+  allowance. Set OPENALEX_API_KEY for the larger free allowance and optionally set
+  OPENALEX_EMAIL to identify requests.
+tool_type: 'api'
+input_keys: ['query']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.openalex_tool'
+  class: 'OpenAlexTool'
