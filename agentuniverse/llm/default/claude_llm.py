@@ -43,6 +43,7 @@ class ClaudeLLM(LLM):
     api_url: Optional[str] = Field(default_factory=lambda: get_from_env('ANTHROPIC_API_URL'))
     proxy: Optional[str] = Field(default_factory=lambda: get_from_env('ANTHROPIC_PROXY'))
     connection_pool_limits: Optional[int] = None
+    temperature: Optional[float] = None
 
     def _new_client(self):
         client = anthropic.Anthropic(
@@ -75,10 +76,11 @@ class ClaudeLLM(LLM):
         """
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
         self.client = self._new_client()
+        temperature = kwargs.pop('temperature', self.temperature)
         chat_completion = self.client.messages.create(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
+            temperature=temperature if temperature is not None else anthropic.NOT_GIVEN,
             stream=kwargs.pop('stream', streaming),
             max_tokens=kwargs.pop('max_tokens', self.max_tokens),
             **kwargs,
@@ -91,10 +93,11 @@ class ClaudeLLM(LLM):
     async def _acall(self, messages: list, **kwargs: Any) -> Union[LLMOutput, AsyncIterator[LLMOutput]]:
         streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
         self.async_client = self._new_async_client()
+        temperature = kwargs.pop('temperature', self.temperature)
         chat_completion = await self.async_client.messages.create(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
-            temperature=kwargs.pop('temperature', self.temperature),
+            temperature=temperature if temperature is not None else anthropic.NOT_GIVEN,
             stream=kwargs.pop('stream', streaming),
             max_tokens=kwargs.pop('max_tokens', self.max_tokens),
             **kwargs,
