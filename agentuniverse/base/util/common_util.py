@@ -58,6 +58,9 @@ def _custom_parser(multiline_string: str) -> str:
 def parse_partial_json(s: str, *, strict: bool = False) -> Any:
     """Parse a JSON string that may be missing closing braces.
 
+    If the final string ends in an incomplete Unicode escape, discard only
+    that escape and retain the recoverable string prefix.
+
     Args:
         s: The JSON string to parse.
         strict: Whether to use strict parsing. Defaults to False.
@@ -112,6 +115,8 @@ def parse_partial_json(s: str, *, strict: bool = False) -> Any:
         if escaped:
             # Drop the incomplete escape so it cannot escape the closing quote.
             new_s = new_s[:-1]
+        # Preserve literal backslash pairs before an incomplete Unicode escape.
+        new_s = re.sub(r'(?<!\\)((?:\\\\)*)\\u[0-9a-fA-F]{0,3}$', r'\1', new_s)
         new_s += '"'
 
     # Try to parse mods of string until we succeed or run out of characters.
