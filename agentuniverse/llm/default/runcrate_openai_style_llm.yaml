@@ -1,0 +1,8 @@
+name: 'default_runcrate_llm'
+description: 'default runcrate llm with spi'
+model_name: 'deepseek-ai/DeepSeek-V4.1-Flash'
+max_tokens: 1000
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.runcrate_openai_style_llm'
+  class: 'DefaultRuncrateLLM'

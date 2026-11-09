@@ -69,7 +69,8 @@
     * 3.1.2.7 [Ollama Usage Instructions](In-Depth_Guides/Components/LLMs/Ollama_LLM_Use.md)
     * 3.1.2.8 [DeepSeek Usage Instructions](In-Depth_Guides/Components/LLMs/DeepSeek_LLM_Use.md)
     * 3.1.2.9 [GLM Usage Instructions](In-Depth_Guides/Components/LLMs/GLM_LLM_Use.md)
-    * 3.1.2.10 [General OpenAI Protocol Style Wrapper](In-Depth_Guides/Components/LLMs/OpenAIStyleLLM_Use.md)
+    * 3.1.2.10 [Runcrate Usage Instructions](In-Depth_Guides/Components/LLMs/Runcrate_LLM_Use.md)
+    * 3.1.2.11 [General OpenAI Protocol Style Wrapper](In-Depth_Guides/Components/LLMs/OpenAIStyleLLM_Use.md)
   * 3.1.3 List of Tools
     * 3.1.3.1 [Integration Tool Details](In-Depth_Guides/Components/Tools/Integrated_Tools.md)
     * 3.1.3.2 [LangChain Tool Wrapper](In-Depth_Guides/Components/Tools/Integrated_LangChain_Tools.md)
