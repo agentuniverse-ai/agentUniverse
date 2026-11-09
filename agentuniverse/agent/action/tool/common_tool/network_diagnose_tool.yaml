@@ -1,0 +1,50 @@
+name: network_diagnose_tool
+description: DNS resolution, reverse PTR lookup and TLS certificate inspection using only the Python standard library.
+tool_type: func
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.network_diagnose_tool
+  class: NetworkDiagnoseTool
+input_keys: [mode, target]
+args_model:
+  mode:
+    type: string
+    description: dns(resolve a host into IPv4/IPv6 addresses), reverse(resolve an IP into its PTR record), tls(inspect the served TLS certificate)
+    required: true
+  target:
+    type: string
+    description: Host name for dns/tls, IPv4 or IPv6 address for reverse
+    required: true
+  port:
+    type: integer
+    description: TCP port used by tls, 1-65535, defaults to 443
+    required: false
+    default: 443
+  timeout:
+    type: number
+    description: Socket timeout in seconds used by tls, greater than 0 and at most 30, defaults to 5
+    required: false
+    default: 5
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["dns", "reverse", "tls"]
+      description: Diagnostic mode
+    target:
+      type: string
+      description: Host name for dns/tls, IPv4 or IPv6 address for reverse
+    port:
+      type: integer
+      minimum: 1
+      maximum: 65535
+      default: 443
+      description: TCP port used by tls
+    timeout:
+      type: number
+      exclusiveMinimum: 0
+      maximum: 30
+      default: 5
+      description: Socket timeout in seconds used by tls
+  required: ["mode", "target"]

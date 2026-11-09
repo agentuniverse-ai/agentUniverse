@@ -675,3 +675,45 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Network Diagnose Tool
+
+`NetworkDiagnoseTool` resolves names, looks up PTR records and inspects the TLS
+certificate a host serves. It uses only the Python standard library, needs no
+API key, never scans ports and never sends HTTP requests: `tls` performs one
+ordinary handshake and reads the certificate the server already serves.
+
+```python
+from agentuniverse.agent.action.tool.common_tool.network_diagnose_tool import NetworkDiagnoseTool
+
+tool = NetworkDiagnoseTool()
+tool.execute(mode="dns", target="github.com")
+tool.execute(mode="reverse", target="140.82.112.3")
+tool.execute(mode="tls", target="www.python.org", port=443, timeout=5)
+```
+
+| mode | target | returns |
+| --- | --- | --- |
+| `dns` | host name | `addresses` (IPv4 first, then IPv6, deduplicated), `canonical_name`, `aliases` |
+| `reverse` | IPv4 or IPv6 address | `hostname`, `aliases`, `family` |
+| `tls` | host name | `tls_version`, `cipher`, and `certificate` with subject, issuer, serial number, validity window, `days_remaining`, `expired` and subject alternative names |
+
+`port` defaults to `443` and must be between 1 and 65535. `timeout` defaults to
+5 seconds and must be greater than 0 and at most 30. Both accept numeric strings
+such as `"443"` and `"2.5"`, because LLM tool calls frequently serialize numbers
+as strings.
+
+Resolver failures, missing PTR records, refused connections, timeouts and
+handshake errors are returned in `error` instead of being raised, so an agent
+can report the cause and keep the run alive. Certificate validation is on by
+default; when it fails the tool reconnects once without verification and returns
+the served certificate's SHA-256 fingerprint and PEM, which helps diagnose
+expired or self-signed endpoints without hiding the reason.
+
+Invalid call-site arguments raise `ValueError`: an unknown `mode`, an empty
+`target`, a target containing whitespace or control characters, a `port` outside
+1-65535, or a `timeout` outside `(0, 30]`.
+
+The tool ships as `agentuniverse/agent/action/tool/common_tool/network_diagnose_tool.yaml`
+and is registered for the sample application in
+`examples/sample_standard_app/intelligence/agentic/tool/buildin/network_diagnose_tool.yaml`.
