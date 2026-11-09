@@ -183,8 +183,10 @@ class NetworkDiagnoseTool(Tool):
                 is out of range, ``timeout`` is out of range, or ``reverse``
                 is asked for a value that is not an IP address.
         """
-        if mode not in VALID_MODES:
+        normalized_mode = mode.strip().lower() if isinstance(mode, str) else mode
+        if normalized_mode not in VALID_MODES:
             raise ValueError(f"Invalid mode: {mode}. Must be one of {list(VALID_MODES)}")
+        mode = normalized_mode
         if not isinstance(target, str) or not target.strip():
             raise ValueError("The target must be a non-empty host name or IP address.")
         target = target.strip()

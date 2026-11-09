@@ -1,0 +1,36 @@
+name: 'network_diagnose_tool'
+description: |
+  该工具用于诊断域名解析、IP 反向解析与站点 TLS 证书状态，仅使用 Python 标准库，
+  无需 API key，不做端口扫描，也不发起 HTTP 请求。
+
+  工具支持三种操作模式：
+  1. 域名解析：把域名解析为 IPv4/IPv6 地址并给出别名
+  2. IP 反向解析：把 IP 地址解析为 PTR 记录
+  3. 证书检查：与目标建立一次普通 TLS 握手，返回证书主题、签发者、有效期与剩余天数
+
+  工具输入示例：
+    模式1 - 域名解析：
+      mode: "dns"
+      target: "github.com"
+      # 返回 ipv4 / ipv6 / aliases / address_count
+
+    模式2 - IP 反向解析：
+      mode: "reverse"
+      target: "140.82.112.3"
+      # 返回 ptr / aliases
+
+    模式3 - 证书检查：
+      mode: "tls"
+      target: "www.python.org"
+      port: 443        # 可选，默认 443
+      timeout: 5       # 可选，默认 5 秒，最大 30 秒
+      # 返回 subject / issuer / not_before / not_after / days_remaining / expired / protocol / cipher / subject_alt_names
+
+  解析失败、连接失败、握手失败都会返回 error 字段而不抛出异常，便于 agent 解释原因；
+  参数本身非法（模式未知、目标为空、端口越界）时抛出 ValueError。
+tool_type: 'func'
+input_keys: ['mode', 'target']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.network_diagnose_tool'
+  class: 'NetworkDiagnoseTool'

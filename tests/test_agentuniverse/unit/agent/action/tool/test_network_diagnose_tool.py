@@ -8,14 +8,24 @@ Every test replaces the socket/SSL objects the tool touches, so the suite
 runs without network access and without an API key.
 """
 
+import pathlib
 import socket
 import unittest
 from unittest.mock import patch
 
+import yaml
+
+import agentuniverse
 from agentuniverse.agent.action.tool.common_tool import network_diagnose_tool
 from agentuniverse.agent.action.tool.common_tool.network_diagnose_tool import NetworkDiagnoseTool
 
 TOOL_PATH = network_diagnose_tool.__name__
+
+REPO_ROOT = pathlib.Path(agentuniverse.__file__).resolve().parent.parent
+COMPONENT_YAML = (REPO_ROOT / "agentuniverse" / "agent" / "action" / "tool" / "common_tool"
+                  / "network_diagnose_tool.yaml")
+EXAMPLE_YAML = (REPO_ROOT / "examples" / "sample_standard_app" / "intelligence"
+                / "agentic" / "tool" / "buildin" / "network_diagnose_tool.yaml")
 
 
 class FakeTlsSocket:
@@ -192,6 +202,43 @@ class NetworkDiagnoseToolTest(unittest.TestCase):
         """A timeout outside (0, 30] is rejected before connecting."""
         with self.assertRaises(ValueError):
             self.tool.execute(mode="tls", target="example.com", timeout=60)
+
+    def test_mode_is_trimmed_and_case_insensitive(self) -> None:
+        """A mode coming from a JSON tool call may carry padding or casing."""
+        with patch(f"{TOOL_PATH}._resolve_addresses", return_value=(["1.2.3.4"], [], [])):
+            result = self.tool.execute(mode="  DNS  ", target="example.com")
+
+        self.assertEqual(result["mode"], "dns")
+        self.assertEqual(result["ipv4"], ["1.2.3.4"])
+        self.assertNotIn("error", result)
+
+    def test_boolean_port_raises(self) -> None:
+        """A boolean is not a port, even though bool subclasses int."""
+        with self.assertRaises(ValueError):
+            self.tool.execute(mode="tls", target="example.com", port=True)
+
+    def test_component_yaml_matches_the_tool_class(self) -> None:
+        """The shipped component yaml must point at the real module and class."""
+        config = yaml.safe_load(COMPONENT_YAML.read_text(encoding="utf-8"))
+
+        self.assertEqual(config["tool_type"], "func")
+        self.assertEqual(config["input_keys"], ["mode", "target"])
+        self.assertEqual(config["metadata"]["module"], NetworkDiagnoseTool.__module__)
+        self.assertEqual(config["metadata"]["class"], NetworkDiagnoseTool.__name__)
+        self.assertEqual(set(config["args_model"]), {"mode", "target", "port", "timeout"})
+        self.assertEqual(config["args_model_schema"]["required"], ["mode", "target"])
+
+    def test_example_config_documents_every_argument(self) -> None:
+        """The example agent config stays in step with the tool's arguments."""
+        example = yaml.safe_load(EXAMPLE_YAML.read_text(encoding="utf-8"))
+
+        self.assertEqual(example["name"], "network_diagnose_tool")
+        self.assertEqual(example["tool_type"], "func")
+        self.assertEqual(example["input_keys"], ["mode", "target"])
+        self.assertEqual(example["metadata"]["module"], NetworkDiagnoseTool.__module__)
+        self.assertEqual(example["metadata"]["class"], NetworkDiagnoseTool.__name__)
+        for keyword in ("dns", "reverse", "tls", "target", "port", "timeout"):
+            self.assertIn(keyword, example["description"])
 
 
 if __name__ == '__main__':
