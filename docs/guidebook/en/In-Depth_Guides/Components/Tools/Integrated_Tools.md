@@ -675,3 +675,36 @@ own handles and do not replace earlier results.
 Handles and results are local to the current Python process and do not survive
 restarts or transfer between server processes. Command execution requires the
 existing `allow_command_execution=True` opt-in.
+
+## Network Diagnose Tool
+
+`NetworkDiagnoseTool` answers the three questions an agent usually asks when a
+host looks unreachable. It uses the standard library only: no API key and no
+extra dependency.
+
+| mode | required args | what it returns |
+|---|---|---|
+| `dns` | `target` | `ipv4`, `ipv6`, `aliases` and `address_count` |
+| `reverse` | `target` (an IP address) | the `ptr` record and its `aliases` |
+| `tls` | `target`; optional `port` (default `443`) and `timeout` (default `5`, max `30`) | certificate `subject`, `issuer`, `not_before`, `not_after`, `days_remaining`, `expired`, `protocol`, `cipher` and `subject_alt_names` |
+
+Network failures come back as an `{"error": "..."}` dictionary instead of an
+exception, so the agent can explain what went wrong rather than failing the
+whole run. Invalid arguments (an unknown `mode`, an empty `target`, a port
+outside `1-65535`, a timeout outside `(0, 30]`) raise `ValueError`, because
+those are call-site bugs rather than network conditions.
+
+The tool never scans ports and never sends HTTP requests: `tls` performs one
+ordinary TLS handshake and reads the certificate the server already serves.
+
+```python
+from agentuniverse.agent.action.tool.tool_manager import ToolManager
+
+tool = ToolManager().get_instance_obj("network_diagnose_tool")
+tool.execute(mode="dns", target="example.com")
+tool.execute(mode="reverse", target="93.184.216.34")
+tool.execute(mode="tls", target="example.com", port=443, timeout=10)
+```
+
+The tool is shipped as
+`agentuniverse/agent/action/tool/common_tool/network_diagnose_tool.yaml`.
