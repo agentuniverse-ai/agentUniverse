@@ -82,15 +82,6 @@ class ContextualIterationAgentTemplate(AgentTemplate):
             continue_res = self.invoke_chain(continue_chain, agent_input, input_object, **kwargs)
             res = res + '\n' + continue_res
 
-            if i==self.iteration-1:
-                break
-            # judge whether loop
-            if not self.if_loop_prompt_version:
-                continue
-            loop_res = self.invoke_chain(if_loop_prompt_chain, agent_input, input_object, **kwargs)
-            if not self.if_loop(loop_res):
-                break
-
             lc_prompt_template = continue_prompt.as_langchain()
             prompt_input_dict = {key: agent_input[key] for key in
                                  lc_prompt_template.input_variables
@@ -101,6 +92,14 @@ class ContextualIterationAgentTemplate(AgentTemplate):
             })
             agent_input['chat_history'] = json.dumps(conversation_history,
                                                      ensure_ascii=False)
+
+            if i == self.iteration - 1:
+                break
+            # judge whether loop
+            if self.if_loop_prompt_version:
+                loop_res = self.invoke_chain(if_loop_prompt_chain, agent_input, input_object, **kwargs)
+                if not self.if_loop(loop_res):
+                    break
 
         assemble_memory_output(memory=memory,
                                agent_input=agent_input,
@@ -155,16 +154,6 @@ class ContextualIterationAgentTemplate(AgentTemplate):
                                              input_object, **kwargs)
             res = res + '\n' + continue_res
 
-            if i == self.iteration - 1:
-                break
-            # judge whether loop
-            if not self.if_loop_prompt_version:
-                continue
-            loop_res = await self.async_invoke_chain(if_loop_prompt_chain, agent_input,
-                                         input_object, **kwargs)
-            if not self.if_loop(loop_res):
-                break
-
             lc_prompt_template = continue_prompt.as_langchain()
             prompt_input_dict = {key: agent_input[key] for key in
                                  lc_prompt_template.input_variables
@@ -175,6 +164,15 @@ class ContextualIterationAgentTemplate(AgentTemplate):
             })
             agent_input['chat_history'] = json.dumps(conversation_history,
                                                      ensure_ascii=False)
+
+            if i == self.iteration - 1:
+                break
+            # judge whether loop
+            if self.if_loop_prompt_version:
+                loop_res = await self.async_invoke_chain(if_loop_prompt_chain, agent_input,
+                                             input_object, **kwargs)
+                if not self.if_loop(loop_res):
+                    break
 
         assemble_memory_output(memory=memory,
                                agent_input=agent_input,
