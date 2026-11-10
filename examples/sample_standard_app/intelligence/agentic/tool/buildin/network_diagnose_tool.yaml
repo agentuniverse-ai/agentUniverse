@@ -1,0 +1,32 @@
+name: 'network_diagnose_tool'
+description: |
+  Diagnose network name resolution and the TLS endpoint a server presents,
+  using only the Python standard library. It never scans ports and never sends
+  HTTP requests: tls performs one ordinary handshake and reads the certificate
+  the server already serves.
+
+  Input parameters:
+    - mode (required): dns resolves a host into IPv4/IPv6 addresses and aliases,
+      reverse resolves an IP into its PTR record, tls reports the certificate,
+      issuer, validity window and remaining days.
+    - target (required): host name for dns/tls, IPv4 or IPv6 address for reverse.
+    - port (optional): TCP port used by tls, 1 to 65535. Defaults to 443.
+    - timeout (optional): socket timeout for tls in seconds, greater than 0 and
+      at most 30. Defaults to 5.
+
+  Examples:
+    {"mode": "dns", "target": "github.com"}
+    {"mode": "reverse", "target": "140.82.112.3"}
+    {"mode": "tls", "target": "www.python.org", "port": 443, "timeout": 5}
+
+  Resolver, connection, handshake and certificate-verification failures return
+  an error object instead of raising, so an agent can explain the cause. When
+  certificate validation fails the tool reconnects once without verification
+  and reports the served certificate's SHA-256 fingerprint and PEM, which an
+  operator can compare against an expected certificate.
+tool_type: 'func'
+input_keys: ['mode', 'target']
+metadata:
+  type: 'TOOL'
+  module: 'agentuniverse.agent.action.tool.common_tool.network_diagnose_tool'
+  class: 'NetworkDiagnoseTool'
