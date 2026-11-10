@@ -9,6 +9,7 @@ import os
 import re
 import traceback
 from copy import deepcopy
+from time import perf_counter
 from typing import Optional, Dict, List, Any
 from concurrent.futures import wait, ALL_COMPLETED
 
@@ -18,6 +19,10 @@ from langchain.tools import Tool as LangchainTool
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.agent.action.knowledge.store.document import Document
 from agentuniverse.agent.action.knowledge.store.query import Query
+from agentuniverse.agent.action.knowledge.store.query_result import (
+    KnowledgeQueryResult,
+    StoreQueryDiagnostic,
+)
 from agentuniverse.agent.action.knowledge.store.store_manager import StoreManager
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor_manager import DocProcessorManager
@@ -233,17 +238,28 @@ class Knowledge(ComponentBase):
 
         Query documents from the store and return the results.
         """
+        return self._query_knowledge_with_diagnostics(**kwargs).documents
+
+    @trace_knowledge
+    def query_knowledge_with_diagnostics(self, **kwargs) -> KnowledgeQueryResult:
+        """Query knowledge and expose the outcome of every routed store."""
+        return self._query_knowledge_with_diagnostics(**kwargs)
+
+    def _query_knowledge_with_diagnostics(self, **kwargs) -> KnowledgeQueryResult:
         query = Query(**kwargs)
         query = self._paraphrase_query(query)
         query_tasks = self._route_rag(query)
 
         futures = []
-        for query_task in query_tasks:
+        for store_query, store_code in query_tasks:
+            store = StoreManager().get_instance_obj(store_code, strict=True)
             futures.append((
                 self.query_executor.submit(
-                    StoreManager().get_instance_obj(query_task[1], strict=True).query,
-                    query_task[0]),
-                query_task[1],
+                    self._execute_store_query,
+                    store,
+                    store_query,
+                ),
+                store_code,
             ))
         wait([future for future, _ in futures], return_when=ALL_COMPLETED)
         # Channel-aware recall is opt-in: only when a configured post-processor
@@ -255,32 +271,60 @@ class Knowledge(ComponentBase):
         # changes the output of pipelines that do not use it.
         preserve_channels = self._channel_fusion_enabled()
         retrieved_docs = {}
+        diagnostics = []
         for future, store_code in futures:
-            try:
-                task_result = future.result()
-                for _doc in task_result:
-                    if preserve_channels:
-                        # Stamp the store code that recalled this document and
-                        # de-duplicate per channel (id + channel): a document
-                        # recalled by several stores is kept once per store,
-                        # while a duplicate within the same store is dropped.
-                        metadata = dict(_doc.metadata or {})
-                        metadata[RECALL_CHANNEL_KEY] = store_code
-                        _doc.metadata = metadata
-                        dedup_identity = (_doc.id, store_code)
-                    else:
-                        # Default contract: collapse cross-store duplicates to
-                        # a single document (first recall wins) and stamp no
-                        # extra metadata, so the output matches master.
-                        dedup_identity = _doc.id
-                    if dedup_identity not in retrieved_docs:
-                        retrieved_docs[dedup_identity] = _doc
-            except Exception as e:
-                traceback.print_exc()
-                LOGGER.error(f"Exception occurred in knowledge query: {e}")
+            task_result, duration_ms, error = future.result()
+            diagnostics.append(StoreQueryDiagnostic(
+                store_code=store_code,
+                succeeded=error is None,
+                duration_ms=duration_ms,
+                document_count=len(task_result),
+                error=(f'{type(error).__name__}: {error}' if error else None),
+            ))
+            if error:
+                LOGGER.error(f"Exception occurred in knowledge query: {error}")
+                continue
+            for _doc in task_result:
+                if preserve_channels:
+                    # Stamp the store code that recalled this document and
+                    # de-duplicate per channel (id + channel): a document
+                    # recalled by several stores is kept once per store,
+                    # while a duplicate within the same store is dropped.
+                    metadata = dict(_doc.metadata or {})
+                    metadata[RECALL_CHANNEL_KEY] = store_code
+                    _doc.metadata = metadata
+                    dedup_identity = (_doc.id, store_code)
+                else:
+                    # Default contract: collapse cross-store duplicates to
+                    # a single document (first recall wins) and stamp no
+                    # extra metadata, so the output matches master.
+                    dedup_identity = _doc.id
+                if dedup_identity not in retrieved_docs:
+                    retrieved_docs[dedup_identity] = _doc
         retrieved_docs = list(retrieved_docs.values())
         retrieved_docs = self._rag_post_process(retrieved_docs, query)
-        return retrieved_docs
+        return KnowledgeQueryResult(
+            documents=retrieved_docs,
+            diagnostics=diagnostics,
+        )
+
+    @staticmethod
+    def _execute_store_query(store, query: Query):
+        """Execute one store query and retain timing for success or failure."""
+        started_at = perf_counter()
+        try:
+            documents = store.query(query)
+            if documents is None:
+                documents = []
+                error = TypeError('Knowledge stores must return an iterable of documents.')
+            else:
+                documents = list(documents)
+                error = None
+        except Exception as query_error:  # noqa: BLE001 - reported as a diagnostic
+            documents = []
+            error = query_error
+        duration_ms = max(0.0, (perf_counter() - started_at) * 1000)
+        return documents, duration_ms, error
 
     def to_llm(self, retrieved_docs: List[Document]) -> Any:
         """Transfer list docs to llm input"""
