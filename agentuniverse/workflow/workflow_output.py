@@ -22,3 +22,12 @@ class WorkflowOutput(BaseModel):
     workflow_node_results: Optional[Dict[str, NodeOutput]] = dict()
     workflow_start_params: Optional[Dict[str, Any]] = dict()
     workflow_end_params: Optional[Dict[str, Any]] = dict()
+
+    def to_checkpoint_json(self) -> str:
+        """Serialize the complete workflow state for durable storage."""
+        return self.model_dump_json()
+
+    @classmethod
+    def from_checkpoint_json(cls, checkpoint: str | bytes) -> 'WorkflowOutput':
+        """Restore a workflow state previously serialized as JSON."""
+        return cls.model_validate_json(checkpoint)
