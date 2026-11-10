@@ -14,6 +14,7 @@ from typing import Optional, Any, List
 
 from langchain_core.runnables import RunnableSerializable, RunnableConfig
 from langchain_core.utils.json import parse_json_markdown
+from pydantic import BaseModel
 
 from agentuniverse.agent.action.knowledge.knowledge import Knowledge
 from agentuniverse.agent.action.knowledge.knowledge_manager import \
@@ -74,6 +75,15 @@ class Agent(ComponentBase, ABC):
         """Return the output keys of the Agent."""
         pass
 
+    def output_model(self) -> Optional[type[BaseModel]]:
+        """Return an optional Pydantic model for structured output validation.
+
+        Subclasses can override this hook to make their public output a typed
+        contract. Returning ``None`` preserves the legacy ``output_keys``-only
+        validation behavior.
+        """
+        return None
+
     @abstractmethod
     def parse_input(self, input_object: InputObject, agent_input: dict) -> dict:
         """Agent parameter parsing.
@@ -124,7 +134,7 @@ class Agent(ComponentBase, ABC):
 
         agent_result = self.parse_result(planner_result)
 
-        self.output_check(agent_result)
+        agent_result = self.validate_output(agent_result)
         output_object = OutputObject(agent_result)
         return output_object
 
@@ -140,7 +150,7 @@ class Agent(ComponentBase, ABC):
 
         agent_result = self.parse_result(agent_result)
 
-        self.output_check(agent_result)
+        agent_result = self.validate_output(agent_result)
         output_object = OutputObject(agent_result)
         return output_object
 
@@ -200,6 +210,25 @@ class Agent(ComponentBase, ABC):
         for key in self.output_keys():
             if key not in kwargs.keys():
                 raise Exception(f'Output must have key: {key}.')
+
+    def validate_output(self, agent_result: dict) -> dict:
+        """Validate and normalize an agent result before exposing it.
+
+        A configured Pydantic model may coerce values and populate defaults.
+        The normalized dictionary is then checked against ``output_keys`` so
+        the existing public output contract remains in force.
+        """
+        if not isinstance(agent_result, dict):
+            raise Exception('Output type must be dict.')
+
+        output_model = self.output_model()
+        if output_model is not None:
+            if not isinstance(output_model, type) or not issubclass(output_model, BaseModel):
+                raise TypeError('output_model() must return a Pydantic BaseModel subclass or None.')
+            agent_result = output_model.model_validate(agent_result).model_dump()
+
+        self.output_check(agent_result)
+        return agent_result
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'Agent':
         """Initialize the Agent by the AgentConfiger object.
