@@ -5,8 +5,7 @@
 # @Email   : lc299034@antgroup.com
 # @FileName: prompt.py
 """Prompt base module."""
-import re
-from typing import Optional
+from typing import List, Optional
 
 from langchain_core.prompts import PromptTemplate
 
@@ -15,6 +14,41 @@ from agentuniverse.base.component.component_enum import ComponentEnum
 from agentuniverse.base.config.component_configer.configers.prompt_configer import PromptConfiger
 from agentuniverse.base.util.prompt_util import generate_template
 from agentuniverse.prompt.prompt_model import AgentPromptModel
+
+
+def iter_placeholders(template: str) -> List[str]:
+    """Return the field names of an f-string style template.
+
+    Escaped braces (``{{`` ... ``}}``) are literal text and are not fields, so a
+    prompt that shows a JSON example or a literal brace pair does not gain bogus
+    input variables. Format specifications (``{name:>10}``) and conversions
+    (``{name!r}``) belong to the field, so only the field name is returned, and
+    an empty ``{}`` is not a field.
+
+    Args:
+        template (str): The template text.
+
+    Returns:
+        List[str]: The field names, in the order they appear.
+    """
+    variables: List[str] = []
+    index = 0
+    length = len(template)
+    while index < length:
+        if template[index] != '{':
+            index += 1
+            continue
+        if template.startswith('{{', index):
+            index += 2
+            continue
+        end = template.find('}', index + 1)
+        if end == -1:
+            break
+        field = template[index + 1:end].split('!', 1)[0].split(':', 1)[0].strip()
+        if field:
+            variables.append(field)
+        index = end + 1
+    return variables
 
 
 class Prompt(ComponentBase):
@@ -47,7 +81,7 @@ class Prompt(ComponentBase):
             Prompt: The prompt object.
         """
         self.prompt_template = generate_template(agent_prompt_model, prompt_assemble_order)
-        self.input_variables = re.findall(r'\{(.*?)}', self.prompt_template)
+        self.input_variables = iter_placeholders(self.prompt_template)
         return self
 
     def get_instance_code(self) -> str:
@@ -76,5 +110,5 @@ class Prompt(ComponentBase):
 
         self.prompt_template = '\n'.join(prompt_values)
 
-        self.input_variables = re.findall(r'\{(.*?)}', self.prompt_template)
+        self.input_variables = iter_placeholders(self.prompt_template)
         return self
