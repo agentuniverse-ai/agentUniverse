@@ -119,6 +119,20 @@ class TestContextManager:
         assert window is not None
         assert window.session_id == "session_2"
 
+    def test_get_context_records_one_access(self, manager):
+        """One manager read should be recorded once by the backing store."""
+        segment = manager.add_context(
+            "session_1",
+            "System prompt",
+            ContextType.SYSTEM,
+            ContextPriority.CRITICAL,
+        )
+
+        result = manager.get_context("session_1")
+
+        assert result == [segment]
+        assert segment.metadata.access_count == 1
+
     def test_get_context_all(self, manager):
         """Test retrieving all context for a session."""
         manager.create_context_window("session_1")
