@@ -61,9 +61,9 @@ class RamContextStore(ContextStore):
         session_storage = self._storage[session_id]
 
         for segment in segments:
-            # Update session_id if not set
-            if not segment.session_id:
-                segment.session_id = session_id
+            # The explicit storage scope is authoritative. Keeping a stale
+            # segment scope would make cross-session reads inconsistent.
+            segment.session_id = session_id
 
             # Add or update segment (move to end for LRU)
             if segment.id in session_storage:
