@@ -69,6 +69,7 @@ class AdaptiveCompressor(ContextCompressor):
     truncate_weight: float = 1.0
     selective_weight: float = 1.0
     summarize_weight: float = 1.0
+    llm_name: str = "default_llm"
 
     def __init__(self, **kwargs):
         """Initialize adaptive compressor."""
@@ -99,7 +100,7 @@ class AdaptiveCompressor(ContextCompressor):
         self._summarize_compressor = SummarizeCompressor(
             name=f"{self.name}_summarize",
             compression_ratio=self.compression_ratio,
-            llm_name=kwargs.get("llm_name", "default_llm")
+            llm_name=self.llm_name
         )
 
         return self
