@@ -63,7 +63,10 @@ class Prompt(ComponentBase):
             Prompt: the prompt object
         """
         prompt_values = []
-        for k, v in component_configer.configer.value.items():
+        config_value = getattr(component_configer.configer, "value", {})
+        if not isinstance(config_value, dict):
+            config_value = {}
+        for k, v in config_value.items():
             # ignore metadata values
             if k == 'metadata':
                 continue
