@@ -1,0 +1,50 @@
+name: json_patch_tool
+description: RFC 6902 JSON Patch tool — pure Python stdlib, no network required. Apply a JSON Patch (mode='apply') to a document with the add/remove/replace/move/copy/test operations addressed by RFC 6901 JSON-Pointer paths (~0/~1 escapes, '-' append marker, whole-document empty path; lenient mode applies what is valid and reports failures, atomic=true aborts on the first failure and leaves the document untouched), generate the patch transforming one document into another (mode='diff', LCS-based, round-trip exact but not guaranteed minimal), and check a patch's well-formedness without a document (mode='validate_patch' — op whitelist, per-op required members, pointer syntax).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.json_patch_tool
+  class: JsonPatchTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — apply, diff or validate_patch.
+    required: true
+  document:
+    type: object
+    description: The JSON document (required for apply and diff) — a JSON text or an already-parsed JSON value. For apply it is the patch target; for diff the source 'a'.
+    required: false
+  document_b:
+    type: object
+    description: The second document of the diff mode — the target 'b' the generated patch must transform 'a' into.
+    required: false
+  patch:
+    type: array
+    description: The JSON Patch (required for apply and validate_patch) — a list of {"op", "path", "value"?, "from"?} operation objects, or a JSON text of such a list. Ops are add/remove/replace/move/copy/test; paths are RFC 6901 JSON Pointers.
+    required: false
+  atomic:
+    type: boolean
+    description: apply mode only. false (default) is lenient — failing operations are skipped and reported while the rest of the patch still runs; true is all-or-nothing — the first failure aborts the run and the original document is returned untouched.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["apply", "diff", "validate_patch"]
+      description: Operation mode.
+    document:
+      description: JSON document (apply target / diff source 'a') as text or parsed value.
+    document_b:
+      description: Second document of the diff mode (target 'b').
+    patch:
+      type: array
+      items:
+        type: object
+      description: JSON Patch operation list (or JSON text of one).
+    atomic:
+      type: boolean
+      description: All-or-nothing application for the apply mode (default false — lenient).
+  required: ["mode"]
