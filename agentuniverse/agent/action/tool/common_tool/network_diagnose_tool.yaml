@@ -1,0 +1,50 @@
+name: network_diagnose_tool
+description: 网络诊断工具：域名解析（IPv4/IPv6/别名）、IP 反向解析（PTR）、站点 TLS 证书有效期检查。仅使用 Python 标准库，无需 API key，不做端口扫描。
+tool_type: func
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.network_diagnose_tool
+  class: NetworkDiagnoseTool
+input_keys: [mode, target]
+args_model:
+  mode:
+    type: string
+    description: 诊断模式，可选 dns（域名解析）、reverse（IP 反向解析）、tls（证书检查）
+    required: true
+  target:
+    type: string
+    description: 待诊断的域名、主机名或 IP 地址
+    required: true
+  port:
+    type: integer
+    description: tls 模式使用的 TCP 端口，默认 443
+    required: false
+    default: 443
+  timeout:
+    type: number
+    description: tls 模式 TLS 握手的超时秒数，默认 5，最大 30
+    required: false
+    default: 5.0
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["dns", "reverse", "tls"]
+      description: 诊断模式
+    target:
+      type: string
+      description: 待诊断的域名、主机名或 IP 地址
+    port:
+      type: integer
+      minimum: 1
+      maximum: 65535
+      default: 443
+      description: tls 模式使用的 TCP 端口
+    timeout:
+      type: number
+      exclusiveMinimum: 0
+      maximum: 30
+      default: 5.0
+      description: TLS 握手超时秒数
+  required: ["mode", "target"]
