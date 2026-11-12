@@ -1,0 +1,26 @@
+info:
+  name: 'demo_debate_agent'
+  description: 'Demo debate agent for consensus-driven problem solving'
+
+profile:
+  # Sub-agent configuration
+  proposer: 'demo_proposer_agent'
+  critic: 'demo_critic_agent'
+  judge: 'demo_judge_agent'
+
+  # Debate configuration
+  debate_rounds: 2
+  consensus_threshold: 60
+
+  # LLM configuration - not used by the debate coordinator directly
+  llm_model:
+    name: 'default_openai_llm'
+
+  # Memory configuration
+  memory:
+    name: 'demo_memory'
+
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.debate_agent_template'
+  class: 'DebateAgentTemplate'
