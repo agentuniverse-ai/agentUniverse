@@ -1,0 +1,100 @@
+name: sql_format_tool
+description: Deterministic configurable SQL pretty-printing tool — pure Python stdlib, no database, no execution. Formats a single SQL statement (mode='format') under a full option table — keyword case upper/lower/preserve (never applied inside string literals, quoted identifiers or comments, which are byte-preserved), identifier case preserve/lower for unquoted identifiers, indent width 2 or 4, trailing or leading comma style for clause-level lists, newline-before-major-clause switch (FROM/WHERE/GROUP/ORDER/LIMIT/HAVING/joins/CTEs on their own lines or a single-line compact form), select-list wrapping at a column of 80..120 and per-line AND/OR grouping in WHERE/HAVING/JOIN-ON; subqueries and CTE bodies indent as blocks with closing parens returned to their opener's indent. Check mode (mode='check') is the CI companion — it reports whether the text already matches its formatted form, with a unified-diff-style line summary and the first divergence as {line, col, expected, actual}. Styles mode (mode='styles') lists the default, compact and pythonic presets with each preset's options and a rendered sample. Idempotent by construction (format(format(x)) == format(x)); single-statement contract enforced strictly. Sibling of SqlLintTool's basic fixed-rule format mode, not a duplicate.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.sql_format_tool
+  class: SqlFormatTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Tool mode — format, check or styles.
+    required: true
+  sql:
+    type: string
+    description: The single SQL statement to format or check. Comments (--, #, /* */) are preserved byte-exactly, one trailing semicolon is tolerated and preserved, anything beyond that violates the single-statement contract and raises ValueError. Required for format and check; must be absent for styles.
+    required: false
+  style:
+    type: string
+    description: Preset name (default, compact, pythonic). Options not explicitly supplied resolve to this preset's values. Default resolves to the 'default' preset.
+    required: false
+  keyword_case:
+    type: string
+    description: Keyword letter case — upper, lower or preserve. Default upper (via the default preset). Never applied inside strings, quoted identifiers or comments.
+    required: false
+  identifier_case:
+    type: string
+    description: Unquoted identifier letter case — preserve or lower (function names are identifiers, not keywords). Default preserve. Quoted identifiers and strings are always verbatim.
+    required: false
+  indent:
+    type: integer
+    description: Indentation width per nesting level — 2 or 4. Default 2.
+    required: false
+  comma_style:
+    type: string
+    description: Clause-level comma style — trailing (a, b) or leading (comma-first lines at one indent unit). Commas inside parentheses always stay inline. Default trailing. Leading commas force per-item newlines even when newline_before_major is false.
+    required: false
+  newline_before_major:
+    type: boolean
+    description: Major clauses and subquery blocks on their own lines (true) or the whole statement on one line (false). Default true.
+    required: false
+  select_wrap:
+    type: string
+    description: Select-list wrapping — none or at_width (wrap at wrap_column when the single-line rendering of the select list exceeds it). Default none.
+    required: false
+  wrap_column:
+    type: integer
+    description: at_width threshold, range 80..120. Default 100 (88 in the pythonic preset).
+    required: false
+  and_newline_group:
+    type: boolean
+    description: One AND/OR connector per line (at one indent unit) inside WHERE / HAVING / JOIN-ON; the AND of BETWEEN never breaks. Default false.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["format", "check", "styles"]
+      description: Tool mode.
+    sql:
+      type: string
+      description: Single SQL statement (single-statement contract; required for format/check, absent for styles).
+    style:
+      type: string
+      enum: ["default", "compact", "pythonic"]
+      description: Named style preset supplying defaults for the options.
+    keyword_case:
+      type: string
+      enum: ["upper", "lower", "preserve"]
+      description: Keyword case (default upper).
+    identifier_case:
+      type: string
+      enum: ["preserve", "lower"]
+      description: Unquoted identifier case (default preserve).
+    indent:
+      type: integer
+      enum: [2, 4]
+      description: Indent width (default 2).
+    comma_style:
+      type: string
+      enum: ["trailing", "leading"]
+      description: Clause-level comma style (default trailing).
+    newline_before_major:
+      type: boolean
+      description: Vertical layout switch (default true).
+    select_wrap:
+      type: string
+      enum: ["none", "at_width"]
+      description: Select-list wrap policy (default none).
+    wrap_column:
+      type: integer
+      minimum: 80
+      maximum: 120
+      description: at_width threshold (default 100).
+    and_newline_group:
+      type: boolean
+      description: Per-line AND/OR grouping (default false).
+  required: ["mode"]
