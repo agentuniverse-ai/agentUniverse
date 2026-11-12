@@ -1,0 +1,101 @@
+name: csv_lint_tool
+description: RFC 4180 compliance and data-quality linting for CSV text — pure Python stdlib csv module in strict mode, no file I/O, no network. lint mode checks structure against a documented 14-rule table (mode='lint' — UTF-8 BOM, mixed line terminators, ragged short/long rows, inconsistent field counts, empty or duplicate header cells, cell whitespace, empty rows, header-only files, unclosed or stray quotes reported at the failing record, mixed number locales 1.234 vs 1,234, opt-in field-length and column-count caps), each finding carrying severity, 1-based row/column and a capped escaped value preview masked under secret-named headers; profile mode infers per-column types int/float/bool/date/datetime/string with nullability, fill rate, distinct count, top values and numeric min/max (mode='profile'); fix mode re-emits the table with BOM strip, empty-row drop, short-row padding, cell whitespace strip and lf/crlf terminator normalization, listing every applied repair and re-linting what remains (mode='fix'). Delimiter is auto-sniffed by counting candidates outside quoted sections (comma wins ties) or set explicitly among , ; tab |.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.csv_lint_tool
+  class: CsvLintTool
+input_keys:
+  - mode
+  - csv_text
+args_model:
+  mode:
+    type: string
+    description: Tool mode — lint, profile or fix.
+    required: true
+  csv_text:
+    type: string
+    description: The CSV text to examine. A single leading UTF-8 BOM is stripped before any parsing or sniffing and reported by rule CSV001. Required for every mode.
+    required: true
+  delimiter:
+    type: string
+    description: Optional explicit delimiter, one of "," ";" tab "|". When omitted the delimiter is sniffed by counting candidates outside double-quoted sections (highest count wins, ties prefer comma; no candidate at all sniffs to comma).
+    required: false
+  has_header:
+    type: boolean
+    description: Treat record 1 as a header. Default true. With false the expected width is the modal data width (ties to the smaller) and profile columns are named col_1..col_N.
+    required: false
+  max_field_len:
+    type: integer
+    description: Turn rule CSV013 on with this field length threshold. Default null (off), range 1..1000000. Lint mode only.
+    required: false
+  max_columns:
+    type: integer
+    description: Turn rule CSV014 on with this column count threshold. Default null (off), range 1..1000. Lint mode only.
+    required: false
+  rules:
+    type: object
+    description: Map a rule code (CSV001..CSV014) to false to disable that single rule for the call, e.g. {"CSV008":false}. Unknown codes or non-boolean values raise ValueError. Lint mode only.
+    required: false
+  strip_whitespace:
+    type: boolean
+    description: Strip leading/trailing whitespace from every cell. Default true. Fix mode only.
+    required: false
+  drop_empty_rows:
+    type: boolean
+    description: Drop blank records (no fields or a single whitespace-only field). Default true. Fix mode only.
+    required: false
+  pad_short_rows:
+    type: boolean
+    description: Pad rows narrower than the expected width with empty cells. Default true. Fix mode only.
+    required: false
+  terminator:
+    type: string
+    description: Line terminator of the fixed text — lf or crlf. Default lf. Fix mode only.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lint", "profile", "fix"]
+      description: Tool mode.
+    csv_text:
+      type: string
+      description: CSV text (strict csv parsing; a single leading BOM is tolerated and reported).
+    delimiter:
+      type: string
+      enum: [",", ";", "\t", "|"]
+      description: Explicit delimiter (default auto-sniffed).
+    has_header:
+      type: boolean
+      description: Record 1 is a header (default true).
+    max_field_len:
+      type: integer
+      minimum: 1
+      maximum: 1000000
+      description: CSV013 field length threshold (default off).
+    max_columns:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      description: CSV014 column count threshold (default off).
+    rules:
+      type: object
+      description: Per-rule enable/disable map, code -> boolean.
+      additionalProperties:
+        type: boolean
+    strip_whitespace:
+      type: boolean
+      description: Trim every cell when fixing (default true).
+    drop_empty_rows:
+      type: boolean
+      description: Drop blank records when fixing (default true).
+    pad_short_rows:
+      type: boolean
+      description: Pad short rows when fixing (default true).
+    terminator:
+      type: string
+      enum: ["lf", "crlf"]
+      description: Fixed-text line terminator (default lf).
+  required: ["mode", "csv_text"]
