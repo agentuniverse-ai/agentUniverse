@@ -12,28 +12,7 @@ from pydantic import Field
 from agentuniverse.base.annotation.trace import trace_llm
 from agentuniverse.base.util.env_util import get_from_env
 from agentuniverse.llm.llm_output import LLMOutput
-from agentuniverse.llm.openai_style_llm import OpenAIStyleLLM
-
-OPENAI_MAX_CONTEXT_LENGTH = {
-    "gpt-3.5-turbo": 4096,
-    "gpt-3.5-turbo-0301": 4096,
-    "gpt-3.5-turbo-0613": 4096,
-    "gpt-3.5-turbo-16k": 16384,
-    "gpt-3.5-turbo-16k-0613": 16384,
-    "gpt-35-turbo": 4096,
-    "gpt-35-turbo-16k": 16384,
-    "gpt-3.5-turbo-1106": 16384,
-    "gpt-3.5-turbo-0125": 16384,
-    "gpt-4-0314": 8192,
-    "gpt-4": 8192,
-    "gpt-4-32k": 32768,
-    "gpt-4-32k-0613": 32768,
-    "gpt-4-0613": 8192,
-    "gpt-4-1106-preview": 128000,
-    "gpt-4-turbo": 128000,
-    "gpt-4o": 128000,
-    "gpt-4o-2024-05-13": 128000,
-}
+from agentuniverse.llm.openai_style_llm import OPENAI_MAX_CONTEXT_LENGTH, OpenAIStyleLLM
 
 
 class DefaultOpenAILLM(OpenAIStyleLLM):
@@ -74,4 +53,6 @@ class DefaultOpenAILLM(OpenAIStyleLLM):
 
           The total length of input tokens and generated tokens is limited by the openai model's context length.
           """
+        if self._max_context_length:
+            return self._max_context_length
         return OPENAI_MAX_CONTEXT_LENGTH.get(self.model_name, 4096)

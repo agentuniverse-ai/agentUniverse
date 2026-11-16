@@ -8,7 +8,8 @@
 
 import hashlib
 import logging
-from typing import List, Optional, Set, Dict, Tuple
+from copy import deepcopy
+from typing import List, Optional, Dict, Tuple
 from datetime import datetime
 
 from agentuniverse.agent.action.knowledge.doc_processor.doc_processor import DocProcessor
@@ -92,7 +93,7 @@ class SemanticDeduplicator(DocProcessor):
             Tuple of (unique documents, hash map of duplicates).
         """
         hash_map: Dict[str, List[Document]] = {}
-        seen_hashes: Set[str] = set()
+        hash_to_index: Dict[str, int] = {}
         unique_docs: List[Document] = []
 
         for doc in docs:
@@ -103,21 +104,19 @@ class SemanticDeduplicator(DocProcessor):
                     hash_map[content_hash] = []
                 hash_map[content_hash].append(doc)
 
-                if content_hash not in seen_hashes:
-                    seen_hashes.add(content_hash)
+                if content_hash not in hash_to_index:
+                    hash_to_index[content_hash] = len(unique_docs)
                     unique_docs.append(doc)
                 else:
                     # Handle duplicate based on merge strategy
                     if self.merge_strategy == 'keep_best':
                         # Replace if current doc is "better" (e.g., has more metadata)
-                        existing_idx = next(i for i, d in enumerate(unique_docs)
-                                          if self._compute_hash(d.text) == content_hash)
+                        existing_idx = hash_to_index[content_hash]
                         if self._is_better_doc(doc, unique_docs[existing_idx]):
                             unique_docs[existing_idx] = doc
                     elif self.merge_strategy == 'merge':
                         # Merge metadata from duplicate
-                        existing_idx = next(i for i, d in enumerate(unique_docs)
-                                          if self._compute_hash(d.text) == content_hash)
+                        existing_idx = hash_to_index[content_hash]
                         unique_docs[existing_idx] = self._merge_docs(unique_docs[existing_idx], doc)
             except Exception as e:
                 logger.error(f"Failed to process document {doc.id}: {e}")
@@ -149,6 +148,11 @@ class SemanticDeduplicator(DocProcessor):
             # Compute embeddings for all documents
             texts = [doc.text for doc in docs]
             embeddings = embedding_model.get_embeddings(texts)
+            if len(embeddings) != len(docs):
+                raise ValueError(
+                    "Semantic deduplication requires one embedding per document "
+                    f"(expected {len(docs)}, got {len(embeddings)})"
+                )
 
             # Update document embeddings
             for doc, embedding in zip(docs, embeddings):
@@ -177,7 +181,7 @@ class SemanticDeduplicator(DocProcessor):
 
                         # Handle duplicate based on merge strategy
                         if self.merge_strategy == 'keep_best':
-                            if self._is_better_doc(docs[j], doc):
+                            if self._is_better_doc(docs[j], unique_docs[-1]):
                                 # Replace with better document
                                 unique_docs[-1] = docs[j]
                         elif self.merge_strategy == 'merge':
@@ -260,14 +264,20 @@ class SemanticDeduplicator(DocProcessor):
             return doc1
 
         # Merge metadata
-        merged_metadata = doc1.metadata.copy() if doc1.metadata else {}
+        merged_metadata = deepcopy(doc1.metadata) if doc1.metadata else {}
         if doc2.metadata:
             for key, value in doc2.metadata.items():
                 if key not in merged_metadata:
-                    merged_metadata[key] = value
+                    merged_metadata[key] = deepcopy(value)
                 elif isinstance(value, list) and isinstance(merged_metadata[key], list):
                     # Merge lists
-                    merged_metadata[key] = list(set(merged_metadata[key] + value))
+                    # JSON lists may contain unhashable dictionaries or lists.
+                    # Equality also preserves the first-seen order of values.
+                    combined = []
+                    for item in merged_metadata[key] + value:
+                        if item not in combined:
+                            combined.append(deepcopy(item))
+                    merged_metadata[key] = combined
 
         # Merge keywords
         merged_keywords = doc1.keywords.union(doc2.keywords)

@@ -15,14 +15,19 @@ from agentuniverse.agent.action.knowledge.reader.file.zip_reader import ZipReade
 
 
 class TestZipReader(unittest.TestCase):
+    """Unit tests for ZipReader covering nesting, limits, and safety."""
+
     def setUp(self) -> None:
+        """Create a temporary directory and a fresh ZipReader for each test."""
         self.temp_dir = tempfile.TemporaryDirectory()
         self.reader = ZipReader()
 
     def tearDown(self) -> None:
+        """Clean up the temporary directory created in setUp."""
         self.temp_dir.cleanup()
 
     def _create_docx_file(self, text: str) -> bytes:
+        """Build an in-memory .docx file containing text; b'' if python-docx is missing."""
         try:
             from docx import Document
             doc = Document()
@@ -35,6 +40,7 @@ class TestZipReader(unittest.TestCase):
             return b""
 
     def _create_pdf_file(self, text: str) -> bytes:
+        """Build an in-memory PDF page with text; b'' if reportlab is missing."""
         try:
             from reportlab.pdfgen import canvas
             from reportlab.lib.pagesizes import letter
@@ -48,6 +54,7 @@ class TestZipReader(unittest.TestCase):
             return b""
 
     def _create_pptx_file(self, text: str) -> bytes:
+        """Build an in-memory .pptx slide with a text title; b'' if python-pptx is missing."""
         try:
             from pptx import Presentation
             prs = Presentation()
@@ -62,6 +69,7 @@ class TestZipReader(unittest.TestCase):
             return b""
 
     def _create_xlsx_file(self) -> bytes:
+        """Build an in-memory .xlsx workbook; b'' if openpyxl is missing."""
         try:
             from openpyxl import Workbook
             wb = Workbook()
@@ -80,6 +88,7 @@ class TestZipReader(unittest.TestCase):
             return b""
 
     def test_complex_nested_zip_structure(self) -> None:
+        """Deeply nested archives are unpacked with correct depth metadata."""
         archive_path = Path(self.temp_dir.name) / "complex_archive.zip"
         
         level3_zip = io.BytesIO()
@@ -159,6 +168,7 @@ class TestZipReader(unittest.TestCase):
         self.assertIn(2, depths)
 
     def test_load_text_file(self) -> None:
+        """A plain text member is loaded with correct text and archive metadata."""
         archive_path = Path(self.temp_dir.name) / "sample.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("docs/readme.txt", "hello world")
@@ -171,6 +181,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(doc.metadata["archive_path"], "docs/readme.txt")
 
     def test_nested_zip(self) -> None:
+        """A zip inside a zip is expanded and its archive_path records both levels."""
         archive_path = Path(self.temp_dir.name) / "nested.zip"
         nested_buffer = io.BytesIO()
         with zipfile.ZipFile(nested_buffer, "w") as nested:
@@ -184,6 +195,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(doc.metadata["archive_path"], "folder/archive.zip/inner/data.txt")
 
     def test_multiple_file_types(self) -> None:
+        """Multiple supported file extensions are all extracted."""
         archive_path = Path(self.temp_dir.name) / "mixed.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("document.txt", "文本内容")
@@ -203,6 +215,7 @@ class TestZipReader(unittest.TestCase):
         self.assertIn("json", extensions)
 
     def test_exceeds_file_size_limit(self) -> None:
+        """Loading raises ValueError when a member exceeds max_file_size."""
         archive_path = Path(self.temp_dir.name) / "limit.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("large.txt", "a" * 4096)
@@ -211,6 +224,7 @@ class TestZipReader(unittest.TestCase):
             limited_reader._load_data(archive_path)
 
     def test_exceeds_depth_limit(self) -> None:
+        """Loading raises ValueError when nesting exceeds max_depth."""
         archive_path = Path(self.temp_dir.name) / "deep.zip"
         
         current = io.BytesIO()
@@ -231,6 +245,7 @@ class TestZipReader(unittest.TestCase):
             shallow_reader._load_data(archive_path)
 
     def test_compression_ratio_limit(self) -> None:
+        """Highly compressible content trips the max_compression_ratio guard."""
         archive_path = Path(self.temp_dir.name) / "compressed.zip"
         highly_compressible = "a" * 100000
         
@@ -242,6 +257,7 @@ class TestZipReader(unittest.TestCase):
             strict_reader._load_data(archive_path)
 
     def test_custom_metadata(self) -> None:
+        """Custom ext_info metadata is attached to the extracted document."""
         archive_path = Path(self.temp_dir.name) / "meta.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("file.txt", "content")
@@ -260,6 +276,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(doc.metadata["priority"], "高")
 
     def test_empty_files_ignored(self) -> None:
+        """Whitespace/empty members do not yield text documents."""
         archive_path = Path(self.temp_dir.name) / "empty.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("empty.txt", "")
@@ -272,6 +289,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(non_empty_docs[0].text, "有内容")
 
     def test_special_characters_in_path(self) -> None:
+        """Members with Chinese or space-containing paths are handled."""
         archive_path = Path(self.temp_dir.name) / "special.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("中文目录/文件名.txt", "中文内容")
@@ -284,6 +302,7 @@ class TestZipReader(unittest.TestCase):
         self.assertIn("file name.txt", file_names)
 
     def test_ultra_complex_nested_structure(self) -> None:
+        """Four-level nested archives are fully unpacked with depth tracking."""
         archive_path = Path(self.temp_dir.name) / "ultra_complex.zip"
         
         level4_zip = io.BytesIO()
@@ -350,6 +369,7 @@ class TestZipReader(unittest.TestCase):
         self.assertGreater(len(md_files), 3)
 
     def test_code_files_extraction(self) -> None:
+        """Source-code members are extracted with correct language metadata."""
         archive_path = Path(self.temp_dir.name) / "code_archive.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("main.py", "#!/usr/bin/env python3\nprint('Python')")
@@ -377,6 +397,7 @@ class TestZipReader(unittest.TestCase):
         self.assertIn("shell", languages)
 
     def test_mixed_documents_extraction(self) -> None:
+        """A mix of text and binary documents is extracted with type coverage."""
         archive_path = Path(self.temp_dir.name) / "docs_archive.zip"
         
         with zipfile.ZipFile(archive_path, "w") as archive:
@@ -408,6 +429,7 @@ class TestZipReader(unittest.TestCase):
         self.assertIn("json", file_types)
 
     def test_deeply_nested_directories(self) -> None:
+        """Deep directory trees inside a zip preserve full archive paths."""
         archive_path = Path(self.temp_dir.name) / "deep_dirs.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("level1/file1.txt", "内容1")
@@ -425,6 +447,7 @@ class TestZipReader(unittest.TestCase):
         self.assertTrue(any("a/b/c/d/e/f/g" in p for p in paths))
 
     def test_duplicate_filenames_different_paths(self) -> None:
+        """Same-named files in different directories are all kept apart."""
         archive_path = Path(self.temp_dir.name) / "duplicates.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("dir1/config.txt", "配置1")
@@ -445,6 +468,7 @@ class TestZipReader(unittest.TestCase):
         self.assertIn("dir3/config.txt", paths)
 
     def test_file_count_limit(self) -> None:
+        """Loading raises ValueError when member count exceeds max_files."""
         archive_path = Path(self.temp_dir.name) / "many_files.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             for i in range(100):
@@ -456,6 +480,7 @@ class TestZipReader(unittest.TestCase):
         self.assertIn("maximum file count", str(context.exception))
 
     def test_total_size_limit(self) -> None:
+        """Loading raises ValueError when the sum of sizes exceeds max_total_size."""
         archive_path = Path(self.temp_dir.name) / "large_total.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             for i in range(20):
@@ -467,6 +492,7 @@ class TestZipReader(unittest.TestCase):
         self.assertIn("maximum total size", str(context.exception))
 
     def test_path_traversal_protection(self) -> None:
+        """Path-traversal members never surface archive paths containing '..'."""
         archive_path = Path(self.temp_dir.name) / "traversal.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("../../../etc/passwd", "should be blocked")
@@ -481,6 +507,7 @@ class TestZipReader(unittest.TestCase):
             self.assertNotIn("..", path)
 
     def test_unsafe_members_are_skipped_not_normalized(self) -> None:
+        """Unsafe members are dropped outright while safe members still load."""
         archive_path = Path(self.temp_dir.name) / "unsafe_members.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("../outside.txt", "blocked")
@@ -494,6 +521,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(docs[0].text, "allowed")
 
     def test_hidden_and_system_files(self) -> None:
+        """Hidden and system files inside the archive are tolerated."""
         archive_path = Path(self.temp_dir.name) / "hidden.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr(".hidden", "隐藏文件")
@@ -506,6 +534,7 @@ class TestZipReader(unittest.TestCase):
         self.assertGreater(len(docs), 0)
 
     def test_unicode_content(self) -> None:
+        """Multilingual and emoji text is preserved verbatim."""
         archive_path = Path(self.temp_dir.name) / "unicode.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("chinese.txt", "这是中文内容：你好世界！")
@@ -521,6 +550,7 @@ class TestZipReader(unittest.TestCase):
         self.assertIn("你好世界", chinese_doc.text)
 
     def test_various_compression_levels(self) -> None:
+        """Stored and deflated members both load under a loose ratio limit."""
         content = "重复内容 " * 100
         
         for compression in [zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED]:
@@ -534,6 +564,7 @@ class TestZipReader(unittest.TestCase):
             self.assertIn("重复内容", docs[0].text)
 
     def test_empty_zip(self) -> None:
+        """An archive with no members produces no documents."""
         archive_path = Path(self.temp_dir.name) / "empty.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             pass
@@ -542,6 +573,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(len(docs), 0)
 
     def test_zip_with_only_directories(self) -> None:
+        """Directory-only archives yield no documents."""
         archive_path = Path(self.temp_dir.name) / "only_dirs.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("dir1/", "")
@@ -552,6 +584,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(len(docs), 0)
 
     def test_mixed_empty_and_content_files(self) -> None:
+        """Empty members coexist with content-bearing ones without failing."""
         archive_path = Path(self.temp_dir.name) / "mixed_empty.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("empty1.txt", "")
@@ -565,6 +598,7 @@ class TestZipReader(unittest.TestCase):
         self.assertLessEqual(len(docs), 5)
 
     def test_very_long_filenames(self) -> None:
+        """Members with very long names still load."""
         archive_path = Path(self.temp_dir.name) / "long_names.zip"
         long_name = "a" * 200 + ".txt"
         with zipfile.ZipFile(archive_path, "w") as archive:
@@ -575,6 +609,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(len(docs), 2)
 
     def test_multiple_nested_zips_same_level(self) -> None:
+        """Several nested archives at the same level are each expanded."""
         archive_path = Path(self.temp_dir.name) / "multi_nested.zip"
         
         nested1 = io.BytesIO()
@@ -602,6 +637,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(len(nested_docs), 3)
 
     def test_csv_parsing_in_zip(self) -> None:
+        """CSV members inside a zip are extracted as documents."""
         archive_path = Path(self.temp_dir.name) / "csv_test.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("data/sales.csv", "产品,数量,价格\n笔记本,100,5000\n鼠标,200,50")
@@ -611,6 +647,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(len(docs), 2)
 
     def test_json_and_yaml_in_nested_zip(self) -> None:
+        """JSON and YAML files inside a nested archive are all extracted."""
         archive_path = Path(self.temp_dir.name) / "config_archive.zip"
         
         nested = io.BytesIO()
@@ -629,6 +666,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(len(json_docs), 2)
 
     def test_metadata_propagation_through_nesting(self) -> None:
+        """Custom metadata propagates to documents from nested archives too."""
         archive_path = Path(self.temp_dir.name) / "meta_nest.zip"
         
         nested = io.BytesIO()
@@ -653,6 +691,7 @@ class TestZipReader(unittest.TestCase):
             self.assertEqual(doc.metadata.get("author"), "测试者")
 
     def test_archive_root_and_path_metadata(self) -> None:
+        """Root, path, file name, and depth metadata are reported correctly."""
         archive_path = Path(self.temp_dir.name) / "test_archive.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("level1/file.txt", "内容")
@@ -666,6 +705,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(doc.metadata.get("archive_depth"), 0)
 
     def test_nested_archive_path_construction(self) -> None:
+        """Nested archive paths are joined across both archive levels."""
         archive_path = Path(self.temp_dir.name) / "path_test.zip"
         
         level2 = io.BytesIO()
@@ -683,6 +723,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(doc.metadata.get("archive_depth"), 1)
 
     def test_large_number_of_small_files(self) -> None:
+        """Hundreds of small members in subfolders are all extracted."""
         archive_path = Path(self.temp_dir.name) / "many_small.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             for i in range(500):
@@ -692,6 +733,7 @@ class TestZipReader(unittest.TestCase):
         self.assertEqual(len(docs), 500)
 
     def test_whitespace_only_files(self) -> None:
+        """Whitespace-only members are treated as empty and skipped."""
         archive_path = Path(self.temp_dir.name) / "whitespace.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("spaces.txt", "   ")
@@ -705,6 +747,7 @@ class TestZipReader(unittest.TestCase):
         self.assertLessEqual(len(docs), 5)
 
     def test_binary_files_skipped(self) -> None:
+        """Binary members are skipped while text members still load."""
         archive_path = Path(self.temp_dir.name) / "binary.zip"
         with zipfile.ZipFile(archive_path, "w") as archive:
             archive.writestr("image.png", bytes([0x89, 0x50, 0x4E, 0x47] + [0] * 100))

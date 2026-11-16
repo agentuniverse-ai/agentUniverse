@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/13 12:01
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: agent_configer.py
 from typing import Optional
@@ -67,7 +67,9 @@ class AgentConfiger(ComponentConfiger):
         try:
             configer_value: dict = configer.value
             if self.metadata_module is None and self.meta_class is None:
-                self.metadata_module = get_module_path(configer.path, get_project_root_path().name)
+                project_root = get_project_root_path()
+                self.metadata_module = get_module_path(
+                    configer.path, project_root.name, root_path=project_root)
             self.__info = configer_value.get('info') or self.__info
             self.__profile = configer_value.get('profile') or self.__profile
             self.__plan = configer_value.get('plan') or self.__plan

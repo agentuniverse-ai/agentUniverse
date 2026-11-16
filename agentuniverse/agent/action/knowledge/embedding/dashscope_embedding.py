@@ -86,6 +86,8 @@ class DashscopeEmbedding(Embedding):
             data = resp_json.get("output")
             if data:
                 data = data["embeddings"]
+                # text_index identifies the input within this request batch.
+                data = sorted(data, key=lambda item: item.get("text_index", 0))
                 batch_result = [d['embedding'] for d in data if 'embedding' in d]
                 result += batch_result
             else:
@@ -154,6 +156,7 @@ class DashscopeEmbedding(Embedding):
             data = resp_json.get("output")
             if data:
                 data = data["embeddings"]
+                data = sorted(data, key=lambda item: item.get("text_index", 0))
                 batch_result = [d['embedding'] for d in data if
                                 'embedding' in d]
                 result += batch_result

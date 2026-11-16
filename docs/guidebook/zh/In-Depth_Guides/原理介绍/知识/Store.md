@@ -82,6 +82,8 @@ store = ['sample_standard_app.intelligence.agentic.knowledge.store']
 - [Sqlite](../../技术组件/存储/Sqlite.md)
 ### RedisVectorStore
 
+查询或写入发出 Redis 命令前，会按实际 `FLOAT32` 传输表示校验向量。`1e39` 等有限 Python 数值转换后会溢出，因此与 NaN、无穷值一样抛出 `ValueError`。正常舍入、带符号零以及下溢为零的既有行为保持不变，不裁剪或归一化向量。同步、异步及模型生成的向量均执行此检查；它不提供模型侧文档修改的事务回滚。
+
 `RedisVectorStore` 使用 Redis Stack/RediSearch HNSW 索引提供同步和异步向量增删改查。通过 `pip install 'agentUniverse[store_ext]'` 安装可选依赖，并使用 Redis Stack；不含 Search 模块的普通 Redis 无法使用该组件。
 
 复制 `redis_vector_store.yaml.example`，配置向量维度、距离度量、键前缀，以及需要精确过滤的 TAG 元数据字段。连接凭证也可通过 `REDIS_VECTOR_URL` 注入，避免写入 YAML。

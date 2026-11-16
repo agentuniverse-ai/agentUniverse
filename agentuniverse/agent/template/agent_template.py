@@ -16,7 +16,7 @@ from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.input_object import InputObject
 from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
-from agentuniverse.base.util.agent_util import assemble_memory_input, assemble_memory_output
+from agentuniverse.base.util.agent_util import assemble_memory_input
 from agentuniverse.base.util.memory_util import get_memory_string
 from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
@@ -61,10 +61,7 @@ class AgentTemplate(Agent, ABC):
         chain = prompt.as_langchain() | llm.as_langchain_runnable(
             self.agent_model.llm_params()) | StrOutputParser()
         res = await self.async_invoke_chain(chain, agent_input, input_object, **kwargs)
-        if self.memory_name:
-            assemble_memory_output(memory=memory,
-                                   agent_input=agent_input,
-                                   content=f"Human: {agent_input.get('input')}, AI: {res}")
+        self.add_memory(memory, f"Human: {agent_input.get('input')}, AI: {res}", agent_input=agent_input)
         self.add_output_stream(input_object.get_data('output_stream'), res)
         return {**agent_input, 'output': res}
 

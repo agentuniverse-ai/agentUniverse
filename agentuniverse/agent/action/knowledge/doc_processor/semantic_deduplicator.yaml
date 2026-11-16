@@ -7,6 +7,9 @@ use_embeddings: true
 embedding_name: 'default_embedding'
 preserve_metadata: true
 skip_on_error: true
+# Embedding batches must contain one vector per document remaining after exact
+# matching. A count mismatch is handled before assigning document vectors:
+# skip_on_error=true retains the exact-deduplicated set; false raises ValueError.
 metadata:
   type: 'DOC_PROCESSOR'
   module: 'agentuniverse.agent.action.knowledge.doc_processor.semantic_deduplicator'

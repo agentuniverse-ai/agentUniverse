@@ -3,13 +3,15 @@ description: 'Fragment legal contracts by individual clauses while preserving hi
 preserve_hierarchy: true
 min_clause_length: 10
 extract_references: true
+# References resolve to a complete target heading identifier. Section 1 does
+# not match Section 10 or 1.1; mentions in another clause's body are not targets.
 skip_on_error: true
 clause_patterns:
   - '^Article\s+[IVX\d]+\.?\s*'
   - '^ARTICLE\s+[IVX\d]+\.?\s*'
   - '^Section\s+\d+(\.\d+)*\.?\s*'
   - '^SECTION\s+\d+(\.\d+)*\.?\s*'
-  - '^\d+\.(\d+\.)*\s+'
+  - '^\d+(\.\d+)*\.?\s+'
   - '^第[一二三四五六七八九十百千\d]+条\s*'
   - '^[一二三四五六七八九十百千\d]+、\s*'
 metadata:

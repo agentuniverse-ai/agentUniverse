@@ -28,7 +28,7 @@ class BAICHUANOpenAIStyleLLM(OpenAIStyleLLM):
     BAICHUAN OpenAI Style LLM
     Args:
         api_key (Optional[str]): API key for the model. Defaults to None.
-        api_base (Optional[str]): API base URL for the model. Defaults to "https://api.openai.com/v1".
+        api_base (Optional[str]): API base URL for the model. Defaults to "https://api.baichuan-ai.com/v1".
     """
 
     api_key: Optional[str] = Field(default_factory=lambda: get_from_env("BAICHUAN_API_KEY"))

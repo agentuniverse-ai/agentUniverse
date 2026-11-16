@@ -207,9 +207,19 @@ class ContextWindow(BaseModel):
         """Update total token count.
 
         Args:
-            segment_tokens: Number of tokens to add/remove
+            segment_tokens: Nonnegative integer number of tokens to add/remove
             operation: "add" or "remove"
+
+        Raises:
+            ValueError: If the count is not a nonnegative integer or the
+                operation is unsupported. Invalid updates leave state unchanged.
         """
+        if (isinstance(segment_tokens, bool)
+                or not isinstance(segment_tokens, int) or segment_tokens < 0):
+            raise ValueError("segment_tokens must be a nonnegative integer")
+        if operation not in ("add", "remove"):
+            raise ValueError("operation must be 'add' or 'remove'")
+
         if operation == "add":
             self.total_tokens += segment_tokens
         elif operation == "remove":

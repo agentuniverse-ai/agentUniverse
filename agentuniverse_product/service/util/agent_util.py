@@ -40,7 +40,7 @@ from agentuniverse_product.service.model.llm_dto import LlmDTO
 from agentuniverse_product.service.model.planner_dto import PlannerDTO
 from agentuniverse_product.service.model.prompt_dto import PromptDTO
 from agentuniverse_product.service.model.tool_dto import ToolDTO
-from agentuniverse_product.service.util.common_util import dict_does_not_contain_keys
+from agentuniverse_product.service.util.common_util import dict_does_not_contain_keys, validate_component_id
 
 
 def assemble_product_config_data(agent_dto: AgentDTO) -> Dict:
@@ -72,8 +72,7 @@ def validate_create_agent_parameters(agent_dto: AgentDTO) -> None:
     Args:
         agent_dto (AgentDTO): The agent DTO.
     """
-    if agent_dto.id is None:
-        raise ValueError("Agent id cannot be None.")
+    validate_component_id(agent_dto.id)
     agent = AgentManager().get_instance_obj(agent_dto.id, new_instance=False)
     if agent:
         raise ValueError("Agent instance corresponding to the agent id already exists.")
@@ -274,6 +273,8 @@ def get_tool_dto_list(agent_model: AgentModel) -> List[ToolDTO]:
     for tool_name in tool_name_list:
         product: Product = ProductManager().get_instance_obj(tool_name, new_instance=False)
         tool: Tool = ToolManager().get_instance_obj(tool_name, new_instance=False)
+        if tool is None:
+            continue
         tool_dto = ToolDTO(nickname=product.nickname if product is not None else '',
                            avatar=product.avatar if product is not None else '',
                            id=tool.name)

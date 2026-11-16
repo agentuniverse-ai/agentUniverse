@@ -92,17 +92,19 @@ class OpenAILLM(LLM):
             messages (list): The messages to send to the LLM.
             **kwargs: Arbitrary keyword arguments.
         """
-        streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
+        streaming = kwargs.pop("stream", kwargs.pop("streaming", self.streaming))
         self.client = self._new_client()
         chat_completion = self.client.chat.completions.create(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
             temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
+            stream=streaming,
             max_tokens=kwargs.pop('max_tokens', self.max_tokens),
             **kwargs,
         )
         if not streaming:
+            if not chat_completion.choices:
+                raise ValueError("OpenAI completion returned no choices")
             text = chat_completion.choices[0].message.content
             return LLMOutput(text=text, raw=chat_completion.model_dump())
         return self.generate_stream_result(chat_completion)
@@ -114,17 +116,19 @@ class OpenAILLM(LLM):
             messages (list): The messages to send to the LLM.
             **kwargs: Arbitrary keyword arguments.
         """
-        streaming = kwargs.pop("streaming") if "streaming" in kwargs else self.streaming
+        streaming = kwargs.pop("stream", kwargs.pop("streaming", self.streaming))
         self.async_client = self._new_async_client()
         chat_completion = await self.async_client.chat.completions.create(
             messages=messages,
             model=kwargs.pop('model', self.model_name),
             temperature=kwargs.pop('temperature', self.temperature),
-            stream=kwargs.pop('stream', streaming),
+            stream=streaming,
             max_tokens=kwargs.pop('max_tokens', self.max_tokens),
             **kwargs,
         )
         if not streaming:
+            if not chat_completion.choices:
+                raise ValueError("OpenAI completion returned no choices")
             text = chat_completion.choices[0].message.content
             return LLMOutput(text=text, raw=chat_completion.model_dump())
         return self.agenerate_stream_result(chat_completion)

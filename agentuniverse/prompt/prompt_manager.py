@@ -18,4 +18,8 @@ class PromptManager(ComponentManagerBase):
         super().__init__(ComponentEnum.PROMPT)
 
     def get_instance_obj(self, component_instance_name: str, appname: str = None, new_instance: bool = False):
-        return self._instance_obj_map.get(component_instance_name)
+        """Return the shared prompt by default, or an independent copy on request."""
+        instance = self._instance_obj_map.get(component_instance_name)
+        if instance is not None and new_instance:
+            return instance.create_copy()
+        return instance

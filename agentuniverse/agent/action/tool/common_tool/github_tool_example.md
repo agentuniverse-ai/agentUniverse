@@ -12,6 +12,10 @@ GitHub工具提供了强大的GitHub API集成功能，支持搜索仓库、用�
 - **代码搜索**: 搜索GitHub代码片段
 - **仓库信息**: 获取特定仓库的详细信息
 
+仓库信息中的 `stars` 表示星标数，`watchers` 表示订阅仓库通知的人数。
+GitHub REST API 的 `watchers_count` 实际上也是星标数；通知订阅数来自
+[`subscribers_count`](https://docs.github.com/en/rest/activity/watching)。
+
 ## 配置
 
 ### 环境变量

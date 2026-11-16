@@ -65,8 +65,13 @@ class ChromaContextStore(ContextStore):
             import chromadb
             from chromadb.config import Settings
 
-            # Create persistent client
+            # Create persistent client. ``is_persistent`` must be set
+            # explicitly: chromadb derives it only from ``Settings(...)``
+            # arguments, and a bare ``persist_directory`` leaves it False, so
+            # the client silently becomes an in-memory EphemeralClient and
+            # nothing is written to the directory this store advertises.
             self._chroma_client = chromadb.Client(Settings(
+                is_persistent=True,
                 persist_directory=self.persist_directory,
                 anonymized_telemetry=False
             ))
@@ -226,7 +231,7 @@ class ChromaContextStore(ContextStore):
         # Query Chroma
         try:
             results = self._collection.get(
-                where=where,
+                where=self._combine_filters(where),
                 limit=limit,
             )
 
@@ -289,7 +294,7 @@ class ChromaContextStore(ContextStore):
             results = self._collection.query(
                 query_texts=[query],
                 n_results=top_k,
-                where=where,
+                where=self._combine_filters(where),
             )
 
             if not results or not results["ids"] or not results["ids"][0]:
@@ -322,6 +327,13 @@ class ChromaContextStore(ContextStore):
 
         except Exception:
             return []
+
+    @staticmethod
+    def _combine_filters(filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Combine metadata predicates using Chroma's explicit AND syntax."""
+        if len(filters) == 1:
+            return filters
+        return {"$and": [{key: value} for key, value in filters.items()]}
 
     def delete(
         self,
@@ -459,11 +471,13 @@ class ChromaContextStore(ContextStore):
             return 0
 
         try:
+            # Chroma has no filtered count(), so fetch only the ids of this
+            # session and count them instead of using the collection-wide total.
             results = self._collection.get(
                 where={"session_id": session_id},
-                limit=1  # We only need count, not data
+                include=[]
             )
-            return self._collection.count()
+            return len(results["ids"])
         except Exception:
             return 0
 

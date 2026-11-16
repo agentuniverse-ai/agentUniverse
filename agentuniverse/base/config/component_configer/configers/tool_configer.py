@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/13 12:01
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: tool_configer.py
 from typing import Optional, List
@@ -33,10 +33,12 @@ class ToolConfiger(ComponentConfiger):
 
     @property
     def tool_type(self) -> Optional[str]:
+        """Return the configured tool type."""
         return self.__tool_type
 
     @property
     def input_keys(self) -> Optional[List]:
+        """Return the configured required input keys."""
         return self.__input_keys
 
     def load(self) -> 'ToolConfiger':

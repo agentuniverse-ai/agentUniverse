@@ -48,7 +48,7 @@ class ProductConfiger(ComponentConfiger):
     def avatar(self) -> Optional[str]:
         """Avatar field."""
         return self.__avatar
-    
+
     @property
     def description(self) -> Optional[str]:
         """Description field."""

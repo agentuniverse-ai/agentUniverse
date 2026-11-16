@@ -86,16 +86,13 @@ def _get_llm_info(func, *args, **kwargs):
     caller_info = get_caller_info()
 
 
-    if kwargs.get('temperature'):
-        temperature = kwargs.get('temperature')
-    else:
-        temperature = None
-        if self and hasattr(self, 'channel_model_config'):
-            temperature = self.channel_model_config.get('temperature')
-        if not temperature and hasattr(self, 'temperature'):
-            temperature = self.temperature or -1
-        else:
-            temperature = -1
+    temperature = kwargs.get('temperature')
+    if temperature is None and self and hasattr(self, 'channel_model_config'):
+        temperature = self.channel_model_config.get('temperature')
+    if temperature is None and self and hasattr(self, 'temperature'):
+        temperature = self.temperature
+    if temperature is None:
+        temperature = -1
 
     params = {
         'temperature': temperature,
@@ -434,7 +431,7 @@ def trace_knowledge(func):
     async def wrapper_async(*args, **kwargs):
         impl = globals().get('_knowledge_wrapper_async',
                              _default_knowledge_wrapper_async)
-        return impl(func, *args, **kwargs)
+        return await impl(func, *args, **kwargs)
 
     @functools.wraps(func)
     def wrapper_sync(*args, **kwargs):

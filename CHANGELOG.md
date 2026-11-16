@@ -194,9 +194,9 @@ This version introduces new capabilities such as intelligent agent canvas orches
 
 ### Note 
 - Default path optimization for system_db_uri
-The default path is already compatible with the Windows platform, for more details, please refer to [issue142](https://github.com/antgroup/agentUniverse/issues/142)
+The default path is already compatible with the Windows platform, for more details, please refer to [issue142](https://github.com/agentuniverse-ai/agentUniverse/issues/142)
 - Support for configurable chain stop words in ReactAgent
-The ReactAgent YAML configuration now supports the stop_sequence keyword, allowing users to customize chain stop words. For more details, please refer to [issue127](https://github.com/antgroup/agentUniverse/issues/127)
+The ReactAgent YAML configuration now supports the stop_sequence keyword, allowing users to customize chain stop words. For more details, please refer to [issue127](https://github.com/agentuniverse-ai/agentUniverse/issues/127)
 - Added an introduction to RAG principles and a quick guide for building RAG, please pay attention to the corresponding parts in the README and user guide.
 - Added advanced guidance documents for the intelligent agent productization platform, please pay attention to the corresponding parts in the README and user guide.
 - Various code optimizations and documentation updates.

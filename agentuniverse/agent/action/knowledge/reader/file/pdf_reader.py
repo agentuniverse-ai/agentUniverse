@@ -20,6 +20,8 @@ class PdfReader(Reader):
 
         Note:
             `pypdf` is required to read PDF files: `pip install pypdf`
+            Resolve the document's page labels once, rather than scanning all
+            page labels again for each extracted page.
         """
         try:
             import pypdf
@@ -35,13 +37,14 @@ class PdfReader(Reader):
 
             # Get the number of pages in the PDF document
             num_pages = len(pdf.pages)
+            page_labels = pdf.page_labels
 
             # Iterate over every page
             docs = []
             for page in range(num_pages):
                 # Extract the text from the page
                 page_text = pdf.pages[page].extract_text()
-                page_label = pdf.page_labels[page]
+                page_label = page_labels[page]
 
                 metadata = {"page_label": page_label, "file_name": file.name}
                 if ext_info is not None:

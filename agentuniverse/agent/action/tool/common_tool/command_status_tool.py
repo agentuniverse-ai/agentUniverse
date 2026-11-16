@@ -23,6 +23,14 @@ class CommandStatusTool(Tool):
         raise ValueError("thread_id must be an integer")
 
     def execute(self, thread_id: int | ToolInput) -> str:
+        """Return the latest result for a background command thread.
+
+        Args:
+            thread_id: Integer thread identifier or a legacy ``ToolInput``.
+
+        Returns:
+            The command result message, or a JSON validation/not-found response.
+        """
         if isinstance(thread_id, ToolInput):
             thread_id = thread_id.get_data("thread_id")
         try:

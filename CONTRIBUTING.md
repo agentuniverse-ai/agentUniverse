@@ -2,7 +2,7 @@
 Thank you for your interest in agentUniverse and your willingness to contribute. We welcome you to join the agentUniverse community family. As an open-source project in the field of artificial intelligence, your contributions are important to the development and improvement of our project. We welcome all types of contributions, such as introducing new features, fixing code issues, improving documentation, submitting issues, and adding examples.
 
 ### Communicate with Us
-If you have any ideas or questions related to contributions, feel free to reach out to us in advance. You can communicate through the [issue](https://github.com/antgroup/agentUniverse/issues) section of the agentUniverse project, send us an email, or join our community for discussions. For more detailed communication methods, please refer to the [Contact Information](docs/guidebook/en/Contact_Us.md)。
+If you have any ideas or questions related to contributions, feel free to reach out to us in advance. You can communicate through the [issue](https://github.com/agentuniverse-ai/agentUniverse/issues) section of the agentUniverse project, send us an email, or join our community for discussions. For more detailed communication methods, please refer to the [Contact Information](docs/guidebook/en/Contact_Us.md)。
 
 ### Guidelines
 #### Contributing to the Code & Docs
@@ -23,7 +23,7 @@ During the PR submission process, we follow the aforementioned commit types. You
 
 Please ensure that you meet the following requirements when submitting your PR:
 
-- Read and understand the requirements outlined in the [Contributor Guidelines](https://github.com/antgroup/agentUniverse/blob/master/CONTRIBUTING.md).
+- Read and understand the requirements outlined in the [Contributor Guidelines](https://github.com/agentuniverse-ai/agentUniverse/blob/master/CONTRIBUTING.md).
 - Check for any duplicate features related to this request and communicated with the project maintainers.
 - Accept the suggestion of the maintainers to make changes to or close this PR.
 - Submit the test files and can provide screenshots of the test results (required for feature or bug fixes).

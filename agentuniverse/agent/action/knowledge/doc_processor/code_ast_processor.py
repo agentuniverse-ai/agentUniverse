@@ -55,8 +55,9 @@ class CodeAstProcessor(DocProcessor):
 
         result_docs: List[Document] = []
         self._parser.language = self._languages[language]
-        tree = self._parser.parse(bytes(code, "utf8"))
-        ast_json: AstNode = self._convert_tree_to_json(tree.root_node, code)
+        code_bytes = code.encode("utf8")
+        tree = self._parser.parse(code_bytes)
+        ast_json: AstNode = self._convert_tree_to_json(tree.root_node, code, code_bytes=code_bytes)
         features: CodeFeatures = self._extract_features(tree.root_node, code, language)
         repr: CodeRepresentation = {
             "ast": ast_json,
@@ -76,14 +77,17 @@ class CodeAstProcessor(DocProcessor):
             result_docs.extend(chunk_docs)
         return result_docs
 
-    def _convert_tree_to_json(self, node, code: str, depth: int = 0) -> AstNode:
+    def _convert_tree_to_json(self, node, code: str, depth: int = 0,
+                              code_bytes: Optional[bytes] = None) -> AstNode:
         if depth > self.max_depth:
             return cast(AstNode, {"type": "max_depth_reached"})
         if not node:
             return cast(AstNode, {})
 
+        if code_bytes is None:
+            code_bytes = code.encode("utf8")
         start_byte, end_byte = node.start_byte, node.end_byte
-        text = code[start_byte:end_byte] if end_byte <= len(code) else ""
+        text = code_bytes[start_byte:end_byte].decode("utf8")
 
         start_point: AstNodePoint = {"row": node.start_point[0], "column": node.start_point[1]}
         end_point: AstNodePoint = {"row": node.end_point[0], "column": node.end_point[1]}
@@ -102,7 +106,7 @@ class CodeAstProcessor(DocProcessor):
         if node.child_count > 0:
             children = []
             for child in node.children:
-                child_json = self._convert_tree_to_json(child, code, depth + 1)
+                child_json = self._convert_tree_to_json(child, code, depth + 1, code_bytes)
                 if child_json:
                     children.append(child_json)
             result["children"] = children
@@ -182,6 +186,7 @@ class CodeAstProcessor(DocProcessor):
         chunks = []
         lines = code.splitlines()
         boundaries = []
+        code_bytes = code.encode("utf8")
 
         def _collect_declarations(node, path=""):
 
@@ -196,7 +201,7 @@ class CodeAstProcessor(DocProcessor):
 
                     for child in node.children:
                         if child.type == "identifier":
-                            name = code[child.start_byte:child.end_byte]
+                            name = code_bytes[child.start_byte:child.end_byte].decode("utf8")
                             break
 
                     boundary: CodeBoundary = {
@@ -242,8 +247,10 @@ class CodeAstProcessor(DocProcessor):
                 chunk_metadata["document_type"] = "code_chunk"
 
                 try:
-                    tree = self._parser.parse(bytes(chunk_code, "utf8"))
-                    ast_json = self._convert_tree_to_json(tree.root_node, chunk_code)
+                    chunk_bytes = chunk_code.encode("utf8")
+                    tree = self._parser.parse(chunk_bytes)
+                    ast_json = self._convert_tree_to_json(
+                        tree.root_node, chunk_code, code_bytes=chunk_bytes)
 
                     representation: ChunkRepresentation = {
                         "ast": ast_json,

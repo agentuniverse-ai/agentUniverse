@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/11/21 16:55
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: conversation_memory_module.py
 
@@ -11,6 +11,7 @@ import json
 import queue
 import traceback
 import uuid
+from collections.abc import Mapping
 from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Thread
 from typing import List, Optional
@@ -59,7 +60,6 @@ def generate_relation_str(source: str, target: str, source_type: str, target_typ
         return f"{source} 回答了 {target} 的问题"
     elif type == 'summary':
         return f"{source} 的摘要"
-    return None
 
 
 def generate_relation_str_en(source: str, target: str, source_type: str, target_type: str, type: str):
@@ -93,7 +93,6 @@ def generate_relation_str_en(source: str, target: str, source_type: str, target_
         return f"{target} answered {source}'s question"
     elif type == 'summary':
         return f"{source} summary"
-    return None
 
 
 def sync_to_sub_agent_memory(message: ConversationMessage, session_id: str, memory_name: str):
@@ -215,12 +214,12 @@ class ConversationMemoryModule:
 
     def _add_trace(self, start_info, target_info: dict, type: str, params: dict, session_id: str, trace_id: str,
                    pair_id: str):
-        if "kwargs" in params:
-            params = params['kwargs']
-        if params is str:
+        if isinstance(params, str):
             params = {
                 type: params
             }
+        elif isinstance(params, Mapping) and "kwargs" in params:
+            params = params['kwargs']
 
         kwargs = {'source': start_info['source'], 'source_type': start_info['type'], 'target': target_info['source'],
                   'target_type': target_info['type'], 'type': type, 'params': params, 'trace_id': trace_id,

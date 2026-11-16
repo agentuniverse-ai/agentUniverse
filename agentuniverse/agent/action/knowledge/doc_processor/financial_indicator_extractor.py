@@ -186,7 +186,11 @@ class FinancialIndicatorExtractor(DocProcessor):
             text: Financial report text.
 
         Returns:
-            List of extracted FinancialMetric objects.
+            List of extracted FinancialMetric objects. Monetary values include
+            the matched million/billion scale, including amount-before-revenue
+            phrases such as "$3 billion in revenue". Terminal full stops are
+            removed from captured numbers before conversion, so sentence-final
+            decimal facts are retained.
         """
         metrics = []
 
@@ -197,7 +201,7 @@ class FinancialIndicatorExtractor(DocProcessor):
                 r'sales\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
                 r'total\s+revenue\s*(?:of\s+|:\s*|for\s+[A-Z0-9\s]+)?(?:reached\s+|was\s+|totaled\s+)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B)?',
                 r'营收[达到]?(-?[0-9,.]+)\s*(万|亿)?',
-                r'[\$€£¥](-?[0-9,.]+)\s*(?:million|billion|M|B)\s+(?:in\s+)?revenue',
+                r'[\$€£¥](-?[0-9,.]+)\s*(million|billion|M|B)\s+(?:in\s+)?revenue',
             ],
             'sales': [
                 r'sales\s*(?:of\s+|was\s+|reached\s+|totaled\s+|:\s*)?[\$€£¥]?(-?[0-9,.]+)\s*(million|billion|M|B|千万|亿)?',
@@ -289,7 +293,7 @@ class FinancialIndicatorExtractor(DocProcessor):
 
                 for match in matches:
                     try:
-                        value_str = match.group(1).replace(',', '')
+                        value_str = match.group(1).replace(',', '').rstrip('.')
                         value = float(value_str)
 
                         # Check if in parentheses (accounting negative)
@@ -448,14 +452,10 @@ class FinancialIndicatorExtractor(DocProcessor):
                 try:
                     # Extract the percentage value (might be in group 1 or 2)
                     change_percent_str = None
-                    for i in range(1, match.lastindex + 1 if match.lastindex else 1):
-                        try:
-                            val = match.group(i)
-                            if val and re.match(r'^[0-9,.]+$', val):
-                                change_percent_str = val
-                                break
-                        except:
-                            continue
+                    for val in match.groups():
+                        if val and re.match(r'^[0-9,.]+$', val):
+                            change_percent_str = val
+                            break
 
                     if not change_percent_str:
                         continue
@@ -522,6 +522,8 @@ class FinancialIndicatorExtractor(DocProcessor):
 
         Note:
             Modifies metrics in place. Currently uses fixed exchange rates.
+            Explicit currency markers in a metric match take precedence over
+            surrounding text; context is the fallback for unmarked matches.
         """
         # Fixed exchange rates (simplified)
         exchange_rates = {
@@ -532,14 +534,19 @@ class FinancialIndicatorExtractor(DocProcessor):
         }
 
         for metric in metrics:
-            # Check context for currency indicators
-            if '¥' in metric.context or '元' in metric.context or 'CNY' in metric.context:
+            # A neighboring metric must not override an explicit matched currency.
+            markers = ('$', '€', '£', '¥', 'USD', 'EUR', 'GBP', 'CNY', '元')
+            currency_context = (
+                metric.raw_match if any(marker in metric.raw_match for marker in markers)
+                else metric.context
+            )
+            if '¥' in currency_context or '元' in currency_context or 'CNY' in currency_context:
                 metric.value *= exchange_rates.get('CNY', 1.0)
                 metric.unit = 'USD'
-            elif '€' in metric.context or 'EUR' in metric.context:
+            elif '€' in currency_context or 'EUR' in currency_context:
                 metric.value *= exchange_rates.get('EUR', 1.0)
                 metric.unit = 'USD'
-            elif '£' in metric.context or 'GBP' in metric.context:
+            elif '£' in currency_context or 'GBP' in currency_context:
                 metric.value *= exchange_rates.get('GBP', 1.0)
                 metric.unit = 'USD'
 

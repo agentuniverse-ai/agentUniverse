@@ -1,5 +1,9 @@
 name: 'jina_reranker'
 description: 'reranker use jina api'
+# Response handling: malformed envelopes raise ValueError. Invalid individual
+# rows (non-integer/out-of-range index or non-finite/non-numeric score) are
+# skipped. Duplicate indexes keep the first valid row in API order. Missing
+# or empty results produce an empty list; valid scores may be zero.
 metadata:
   type: 'DOC_PROCESSOR'
   module: 'agentuniverse.agent.action.knowledge.doc_processor.jina_reranker'

@@ -29,7 +29,7 @@ from agentuniverse.agent.memory.memory import Memory
 from agentuniverse.agent.plan.planner.planner import Planner
 from agentuniverse.agent.plan.planner.react_planner.stream_callback import StreamOutPutCallbackHandler, \
     InvokeCallbackHandler
-from agentuniverse.base.util.agent_util import assemble_memory_input
+from agentuniverse.base.util.agent_util import assemble_memory_input, resolve_tool_names
 from agentuniverse.base.util.prompt_util import process_llm_token
 from agentuniverse.llm.llm import LLM
 from agentuniverse.prompt.chat_prompt import ChatPrompt
@@ -89,7 +89,7 @@ class ReActPlanner(Planner):
 
     @staticmethod
     def acquire_tools(action) -> list[LangchainTool]:
-        tool_names: list = action.get('tool') or list()
+        tool_names: list = resolve_tool_names(action)
         lc_tools: list[LangchainTool] = list()
         for tool_name in tool_names:
             tool: Tool = ToolManager().get_instance_obj(tool_name)

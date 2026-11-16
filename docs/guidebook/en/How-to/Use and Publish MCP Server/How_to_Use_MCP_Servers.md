@@ -76,9 +76,9 @@ metadata:
 ```
 
 Additional Resources:  
-* Sample Application Code: Refer to the [MCP Sample App](/examples/sample_apps/toolkit_demo_app).
-* MCPToolkit Configuration: See the [configuration file](/examples/sample_apps/toolkit_demo_app/intelligence/agentic/toolkit/docx_toolkit.yaml).
-* Agent Configuration: See the [agent configuration file](/examples/sample_apps/toolkit_demo_app/intelligence/agentic/agent/agent_instance/demo_agent_with_mcp_toolkit.yaml).  
-* Test File: Check the [run script](/examples/sample_apps/toolkit_demo_app/intelligence/test/run_demo_agent_with_mcp_toolkit.py).
+* Sample Application Code: Refer to the [MCP Sample App](../../../../../examples/sample_apps/toolkit_demo_app).
+* MCPToolkit Configuration: See the [configuration file](../../../../../examples/sample_apps/toolkit_demo_app/intelligence/agentic/toolkit/docx_toolkit.yaml).
+* Agent Configuration: See the [agent configuration file](../../../../../examples/sample_apps/toolkit_demo_app/intelligence/agentic/agent/agent_instance/demo_agent_with_mcp_toolkit.yaml).  
+* Test File: Check the [run script](../../../../../examples/sample_apps/toolkit_demo_app/intelligence/test/run_demo_agent_with_mcp_toolkit.py).
 
-For more details, consult the following documentation: [MCP Toolkit Guide](/docs/guidebook/en/In-Depth_Guides/Tutorials/Toolkit/MCP_Toolkit_Guide.md), [MCP Tool Guide](/docs/guidebook/en/In-Depth_Guides/Tutorials/Tool/MCP_Tool_Guide.md).
+For more details, consult the following documentation: [MCP Toolkit Guide](../../In-Depth_Guides/Tutorials/Toolkit/MCP_Toolkit_Guide.md), [MCP Tool Guide](../../In-Depth_Guides/Tutorials/Tool/MCP_Tool_Guide.md).

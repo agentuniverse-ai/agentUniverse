@@ -116,6 +116,12 @@ metadata:
   module: 'agentuniverse.agent.action.knowledge.doc_processor.token_text_splitter'
   class: 'TokenTextSplitter'
 ```
+
+Token splitting treats tokenizer marker spellings such as `<|endoftext|>`
+inside a document as ordinary text. This allows tokenizer documentation and
+exported examples to be ingested without interpreting those spellings as
+special token IDs. The selected encoding/model and token overlap still apply.
+
 - chunk_size: The number of tokens in the text after splitting.
 - chunk_overlap: The number of overlapping tokens between adjacent chunks.
 - tokenizer: The specified tokenizer used to split the text into tokens.
@@ -196,6 +202,14 @@ metadata:
 - hierarchical_index: Represents the splitting rules for different levels. `reg_exp` is the regular expression, and if `need_summary` is set to True, the summary text will replace the original text at that level.
 - summary_agent: The Agent responsible for generating the summary text when `need_summary` is set to True in `hierarchical_index`. The default is simple_summary_agent.
 - llm: If specified, it will replace the original LLM in the `summary_agent`.
+
+Heading levels follow the order of `hierarchical_index`. A new heading closes
+the previous branch at the same or deeper level. If an intermediate level is
+missing, the heading attaches to the nearest active shallower heading, or to
+`root` when none exists. For example, `chapter A → section A → chapter B →
+subsection B` attaches subsection B to chapter B, never to section A. Its text
+is included only in its active ancestors' content and summary inputs; no
+synthetic section node is created.
 
 ### [SummarizationProcessor](../../../../../../agentuniverse/agent/action/knowledge/doc_processor/summarization_processor.yaml)
 
@@ -307,5 +321,5 @@ metadata:
 ```
 - budget: Maximum cumulative size of the kept documents, measured in the unit of `counter`.
 - counter: How each document's size is measured: `estimate` (chars/4, default), `tiktoken` (BPE tokens), `char`, or `word`.
-- truncate: When true, the first document that would exceed the budget is shortened to the remaining budget and kept as the last result; when false, processing stops at that document.
+- truncate: When true, the first document that would exceed the budget is shortened to fit the remaining budget and kept as the last result; when false, processing stops at that document. With `word`, truncation keeps the original whitespace before and between retained words. With `tiktoken`, truncation keeps a valid text prefix and rechecks its token count. If no complete character fits, the boundary document is omitted.
 - tiktoken_encoding: tiktoken encoding used when `counter` is `tiktoken`.

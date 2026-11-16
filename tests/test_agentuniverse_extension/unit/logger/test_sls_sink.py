@@ -21,7 +21,7 @@ from tests.test_agentuniverse_extension.mock.logger.mock_log_client import LogCl
 
 
 
-@patch('agentuniverse.logger.sls_sink.LogClient', new=LogClient)
+@patch('agentuniverse_extension.logger.sls_sink.LogClient', new=LogClient)
 def test_sls_log():
     sls_sender = SlsSender(LoggingConfig.sls_project,
                            LoggingConfig.sls_log_store,

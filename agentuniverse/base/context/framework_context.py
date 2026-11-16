@@ -11,7 +11,10 @@ from agentuniverse.base.context.framework_context_manager import FrameworkContex
 
 
 class FrameworkContext:
-    """A context class that provides a thread level variable dictionary."""
+    """A context class that provides a thread level variable dictionary.
+
+    Sequential reuse captures a fresh restoration snapshot on each entry.
+    """
 
     def __init__(self, context: Dict[str, Any]):
         """Save context dict and init an empty dict to save prior context.
@@ -26,6 +29,7 @@ class FrameworkContext:
 
     def __enter__(self):
         """Preserve the prior context and set a new one."""
+        self.old_state = {}
         for key, value in self.context.items():
             if FrameworkContextManager().is_context_exist(key):
                 self.old_state[key] = FrameworkContextManager().get_context(key)

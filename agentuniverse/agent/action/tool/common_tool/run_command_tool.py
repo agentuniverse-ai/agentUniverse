@@ -12,6 +12,7 @@ import time
 import threading
 import subprocess
 from enum import Enum
+from itertools import count
 from typing import Dict, Optional
 from dataclasses import dataclass
 
@@ -70,6 +71,14 @@ class CommandResult:
 
 
 _command_results: Dict[int, CommandResult] = {}
+_command_ids = count(1)
+_command_id_lock = threading.Lock()
+
+
+def _next_command_id() -> int:
+    """Allocate a process-local lookup handle independent of worker identity."""
+    with _command_id_lock:
+        return next(_command_ids)
 
 
 class RunCommandTool(Tool):
@@ -94,6 +103,8 @@ class RunCommandTool(Tool):
             integrator acknowledges the risk above.
     """
 
+    # The legacy thread_id response field is an opaque command handle, unique
+    # within this process. Pass it unchanged to CommandStatusTool for polling.
     allow_command_execution: bool = False
 
     def execute(self, command: str | ToolInput, cwd: str = None, blocking: bool = True) -> str:
@@ -109,7 +120,7 @@ class RunCommandTool(Tool):
                 "sandboxing; set allow_command_execution=True to opt in only for "
                 "trusted environments.")
             disabled = CommandResult(
-                thread_id=threading.get_ident(),
+                thread_id=_next_command_id(),
                 status=CommandStatus.ERROR,
                 stdout="",
                 stderr=("RunCommandTool is disabled by default because it executes "
@@ -133,7 +144,7 @@ class RunCommandTool(Tool):
 
     def _run_command(self, command: str, cwd: str, blocking: bool = True) -> str:
         result = CommandResult(
-            thread_id=threading.get_ident(),
+            thread_id=_next_command_id(),
             status=CommandStatus.RUNNING,
             stdout="",
             stderr="",
@@ -143,7 +154,6 @@ class RunCommandTool(Tool):
         thread_started = threading.Event()
 
         def __run() -> None:
-            result.thread_id = threading.get_ident()
             _command_results[result.thread_id] = result
             thread_started.set()
             try:

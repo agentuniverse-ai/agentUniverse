@@ -17,9 +17,11 @@ class AgentFirstTokenLogSink(BaseFileLogSink):
     log_type: LogTypeEnum = LogTypeEnum.agent_first_token
 
     def process_record(self, record):
+        """Replace the record message with formatted first-token latency."""
         record["message"] = self.generate_log(
             cost_time=record['extra'].get('cost_time')
         )
 
     def generate_log(self, cost_time) -> str:
+        """Format first-token latency with the current invocation chain."""
         return Monitor.get_invocation_chain_str() + f" Agent first token cost {cost_time:.2f} seconds."

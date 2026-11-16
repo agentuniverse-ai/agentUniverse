@@ -27,9 +27,9 @@ def get_current_context_archive():
         """
     context_archive = FrameworkContextManager().get_context(
         'context_archive', None)
-    if not context_archive:
+    if context_archive is None:
         context_archive = {}
-        FrameworkContextManager().set_context('context_archive', {})
+        FrameworkContextManager().set_context('context_archive', context_archive)
 
     return context_archive
 

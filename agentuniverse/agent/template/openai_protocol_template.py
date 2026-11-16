@@ -1,7 +1,7 @@
 # !/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # @Time    : 2025/2/26 09:47
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: openai_protocol_template.py
 import datetime
@@ -77,7 +77,7 @@ class OpenAIProtocolTemplate(AgentTemplate):
                 text = ""
                 for item in content:
                     if item.get('type') == 'text':
-                        text = item.get('text')
+                        text += item.get('text') or ''
                     elif item.get('type') == 'image_url':
                         image_urls.append(item.get('image_url'))
                 message['content'] = text

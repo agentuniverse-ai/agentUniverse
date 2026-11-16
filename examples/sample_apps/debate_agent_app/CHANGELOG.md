@@ -103,7 +103,7 @@ All notable changes to the Debate Agent Application will be documented in this f
 ### Features
 
 #### 多轮辩论机制
-- 可配置的辩论轮数 (1-10 轮)
+- 可配置的辩论轮数
 - 每轮依次执行提案、批评、评审
 - 自动记录每轮结果
 - 支持轮次间的上下文传递

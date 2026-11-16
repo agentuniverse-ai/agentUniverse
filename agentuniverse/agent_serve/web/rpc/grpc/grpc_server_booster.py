@@ -108,8 +108,14 @@ class AgentUniverseService(agentuniverse_service_pb2_grpc.AgentUniverseService):
 
 
 def set_grpc_config(configer):
-    GRPC_CONFIG["server_port"] = configer.value.get('GRPC', {}).get('server_port', 50051)
-    GRPC_CONFIG["max_workers"] = configer.value.get('GRPC', {}).get('max_workers', 10)
+    config_value = getattr(configer, "value", {})
+    if not isinstance(config_value, dict):
+        config_value = {}
+    grpc_config = config_value.get('GRPC')
+    if not isinstance(grpc_config, dict):
+        grpc_config = {}
+    GRPC_CONFIG["server_port"] = grpc_config.get('server_port', 50051)
+    GRPC_CONFIG["max_workers"] = grpc_config.get('max_workers', 10)
 
 
 def start_grpc_server():

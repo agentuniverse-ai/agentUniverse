@@ -5,6 +5,7 @@ index_name: agentuniverse_documents
 key_prefix: "agentuniverse:document:"
 dimensions: 1536
 distance: cosine
+# Query.similarity_top_k=None uses this default; explicit limits must be positive.
 similarity_top_k: 10
 create_index: true
 filter_tag_fields: [tenant, category]

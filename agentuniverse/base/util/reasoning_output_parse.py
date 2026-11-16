@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2025/2/14 14:47
-# @Author  : weizjajj 
+# @Author  : weizjajj
 # @Email   : weizhongjie.wzj@antgroup.com
 # @FileName: reasoning_output_parse.py
 
@@ -18,15 +18,15 @@ class ReasoningOutputParser(StrOutputParser):
         if not result:
             return ""
 
-        reasoning_text = ""
-        if result[0].message.additional_kwargs:
-            additional_kwargs = getattr(result[0].message, "additional_kwargs")
-            if additional_kwargs and "reasoning_content" in additional_kwargs:
-                reasoning_text = result[0].message.additional_kwargs.get("reasoning_content")
+        generation = result[0]
+        message = getattr(generation, "message", None)
+        additional_kwargs = getattr(message, "additional_kwargs", None) or {}
+        if additional_kwargs:
+            reasoning_text = additional_kwargs.get("reasoning_content", "")
             return {
-                "text": result[0].text,
+                "text": generation.text,
                 "reasoning_content": reasoning_text
             }
         return {
-            "text": result[0].text,
+            "text": generation.text,
         }

@@ -55,13 +55,14 @@ class MCPTool(Tool):
 
 
     def get_mcp_server_connect_args(self) -> dict:
+        """Merge connection overrides for every supported transport."""
         if self.transport == "sse":
             connect_args = {
                 'transport': self.transport,
                 'url': self.url
             }
         elif self.transport == "stdio":
-            return {
+            connect_args = {
                 'transport': self.transport,
                 "command": self.command,
                 "args": self.args,
@@ -103,7 +104,9 @@ class MCPTool(Tool):
                 break
         if not tool_info:
             raise Exception(f'No tool named {self.tool_name} in mcp server {self.server_name}')
-        self.input_keys = tool_info.inputSchema['required']
+        # `required` is optional in a JSON Schema; many MCP tools omit it,
+        # which means "no required arguments", not a registration failure.
+        self.input_keys = tool_info.inputSchema.get('required') or []
         self.args_model_schema = tool_info.inputSchema
         if not self.description:
             self.description = f'{tool_info.description}\n{str(tool_info.inputSchema)}'

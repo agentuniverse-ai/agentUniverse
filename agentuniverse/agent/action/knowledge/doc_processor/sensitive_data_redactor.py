@@ -55,7 +55,9 @@ _BUILTIN_PATTERNS: Dict[str, str] = {
     "id_card": r"\b[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])"
                r"(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]\b",
     "ssn": r"\b\d{3}-\d{2}-\d{4}\b",
-    "ip_address": r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+    # Do not redact a four-part substring of a longer dotted numeric token.
+    # A sentence-ending dot is still allowed when no digit follows it.
+    "ip_address": r"(?<!\d\.)\b(?:\d{1,3}\.){3}\d{1,3}\b(?!\.\d)",
     "api_key": r"(?:sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|"
                r"gh[pousr]_[A-Za-z0-9]{36,}|glpat-[A-Za-z0-9_-]{20,})",
     # Opt-in: phone matching is fuzzier, so it is not on by default.
@@ -117,11 +119,13 @@ class SensitiveDataRedactor(DocProcessor):
     Attributes:
         entities: Built-in entity types to redact. Defaults to a high-precision
             set; add ``"phone"`` to enable phone redaction.
-        replacement: Text substituted for every match.
+        replacement: Literal text substituted for every match. Backslashes and
+            regex backreferences are not expanded, including in custom patterns.
         custom_patterns: Extra ``{"name": ..., "pattern": ...}`` regex entries
             for domain-specific identifiers.
         log_key: Metadata key under which a ``{entity: count}`` summary is
-            stamped on each document; set to ``None`` to omit it.
+            stamped on each document; counts from rules sharing an entity name
+            are accumulated. Set to ``None`` to omit it.
     """
 
     entities: List[str] = [
@@ -149,7 +153,9 @@ class SensitiveDataRedactor(DocProcessor):
             summary: Dict[str, int] = {}
             for name, pattern, validator in patterns:
                 if validator is None:
-                    text, count = pattern.subn(self.replacement, text)
+                    # Replacement is literal text, not a regex template:
+                    # backreferences must not reinsert the sensitive match.
+                    text, count = pattern.subn(lambda match: self.replacement, text)
                 else:
                     # Only redact matches that pass the semantic check; leave
                     # structurally invalid values (e.g. a non-Luhn digit run,
@@ -165,7 +171,7 @@ class SensitiveDataRedactor(DocProcessor):
 
                     text = pattern.sub(_repl, text)
                 if count:
-                    summary[name] = count
+                    summary[name] = summary.get(name, 0) + count
             doc.text = text
             if self.log_key is not None:
                 metadata = dict(doc.metadata or {})

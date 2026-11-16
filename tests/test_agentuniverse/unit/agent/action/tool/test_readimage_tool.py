@@ -30,39 +30,51 @@ READIMAGE_TOOL_FILE = (
 
 
 class FakeImageArray:
+    """Minimal stand-in for a numpy image array exposing shape, size, copy and item access."""
     def __init__(self, shape=(100, 100, 3), size=1):
+        """Store the array shape and element size."""
         self.shape = shape
         self.size = size
 
     def copy(self):
+        """Return a new FakeImageArray with the same shape and element size."""
         return FakeImageArray(self.shape, self.size)
 
     def __getitem__(self, _):
+        """Return a small FakeImageArray slice carrying the same element size."""
         return FakeImageArray((1, 1, 3), self.size)
 
 
 class FakeScores:
+    """Fake EAST text-detection scores output with a 1x1x1x1 shape."""
     shape = (1, 1, 1, 1)
 
     def __getitem__(self, _):
+        """Return a list containing a single zero score value."""
         return [0.0]
 
 
 class FakeGeometry:
+    """Fake EAST text-detection geometry output with a 1x5x1x1 shape."""
     shape = (1, 5, 1, 1)
 
     def __getitem__(self, _):
+        """Return a list containing a single zero geometry value."""
         return [0.0]
 
 
 class FakeNet:
+    """Fake OpenCV DNN net exposing setInput and forward mocks that return fake scores and geometry."""
     def __init__(self):
+        """Create the net with a mocked setInput and a forward returning fake scores and geometry."""
         self.setInput = Mock()
         self.forward = Mock(return_value=(FakeScores(), FakeGeometry()))
 
 
 class FakeDnn:
+    """Fake OpenCV dnn module exposing net, readNet, blobFromImage and NMSBoxes mocks."""
     def __init__(self):
+        """Wire the dnn mocks around a shared FakeNet instance."""
         self.net = FakeNet()
         self.readNet = Mock(return_value=self.net)
         self.blobFromImage = Mock(return_value="blob")
@@ -70,11 +82,14 @@ class FakeDnn:
 
 
 class FakeClahe:
+    """Fake CLAHE object whose apply returns a grayscale FakeImageArray."""
     def apply(self, _):
+        """Return a grayscale FakeImageArray derived from the input image."""
         return FakeImageArray((100, 100))
 
 
 class FakeCv2:
+    """Fake cv2 module providing color constants and mocked image functions returning FakeImageArray values."""
     COLOR_BGR2GRAY = 1
     COLOR_GRAY2BGR = 2
     COLOR_BGRA2BGR = 3
@@ -83,6 +98,7 @@ class FakeCv2:
     IMREAD_UNCHANGED = -1
 
     def __init__(self):
+        """Set up the mocked dnn module and image functions backed by FakeImageArray values."""
         self.dnn = FakeDnn()
         self.imread = Mock(return_value=FakeImageArray())
         self.imwrite = Mock(return_value=True)
@@ -93,18 +109,22 @@ class FakeCv2:
         self.bilateralFilter = Mock(side_effect=lambda image, *_: image)
 
     def _cvt_color(self, image, code):
+        """Return a grayscale FakeImageArray for BGR2GRAY conversions and the input image otherwise."""
         if code == self.COLOR_BGR2GRAY:
             return FakeImageArray((100, 100), image.size)
         return image
 
 
 class FakePillowImage:
+    """Fake PIL.Image wrapper whose fromarray returns a SimpleNamespace carrying the source image."""
     @staticmethod
     def fromarray(image):
+        """Wrap the given image array in a SimpleNamespace exposing it as the source."""
         return SimpleNamespace(source=image)
 
 
 def unload_readimage_tool():
+    """Remove the readimage_tool module from sys.modules and drop it from its parent package."""
     sys.modules.pop(READIMAGE_TOOL_MODULE, None)
     parent_name, _, module_name = READIMAGE_TOOL_MODULE.rpartition(".")
     parent = sys.modules.get(parent_name)
@@ -113,6 +133,7 @@ def unload_readimage_tool():
 
 
 def import_readimage_tool_without(blocked=()):
+    """Import readimage_tool from source with fake optional dependencies, optionally blocking real modules."""
     blocked = set(blocked)
     fake_modules = {
         "cv2": FakeCv2(),
@@ -123,6 +144,7 @@ def import_readimage_tool_without(blocked=()):
     original_import = builtins.__import__
 
     def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        """Import hook that serves fake modules for stubbed dependencies, raises ImportError for blocked names and defers to the real import otherwise."""
         root_name = name.split(".", 1)[0]
         if name in blocked or root_name in blocked:
             raise ImportError(f"No module named {name}")
@@ -140,10 +162,13 @@ def import_readimage_tool_without(blocked=()):
 
 
 class TestReadImageTool(unittest.TestCase):
+    """Unit tests for readimage_tool helpers exercised against fake optional dependencies."""
     def tearDown(self):
+        """Unload the imported readimage_tool module so each test starts from a clean state."""
         unload_readimage_tool()
 
     def test_enhance_image(self):
+        """Verify enhance_image returns a two-dimensional grayscale image."""
         readimage_tool, _ = import_readimage_tool_without()
 
         enhanced = readimage_tool.enhance_image(FakeImageArray())
@@ -151,6 +176,7 @@ class TestReadImageTool(unittest.TestCase):
         self.assertEqual(len(enhanced.shape), 2)
 
     def test_clean_extracted_text(self):
+        """Verify clean_extracted_text collapses newlines and runs of spaces."""
         readimage_tool, _ = import_readimage_tool_without()
 
         dirty_text = "This   is   a   test.\nNew    line."
@@ -161,6 +187,7 @@ class TestReadImageTool(unittest.TestCase):
         self.assertEqual(clean_text, "This is a test. New line.")
 
     def test_save_text_to_file(self):
+        """Verify save_text_to_file writes the given text to the target file."""
         readimage_tool, _ = import_readimage_tool_without()
         test_text = "Sample text for testing."
 
@@ -174,6 +201,7 @@ class TestReadImageTool(unittest.TestCase):
             self.assertEqual(content, test_text)
 
     def test_extract_text_from_image_without_east(self):
+        """Verify text extraction without EAST delegates to pytesseract with the requested language."""
         readimage_tool, fake_modules = import_readimage_tool_without()
 
         text = readimage_tool.extract_text_from_image("input.png", use_east=False, lang="eng")
@@ -183,6 +211,7 @@ class TestReadImageTool(unittest.TestCase):
         self.assertEqual(fake_modules["pytesseract"].image_to_string.call_args.kwargs["lang"], "eng")
 
     def test_detect_text_regions_no_text(self):
+        """Verify detect_text_regions drives the EAST dnn pipeline and returns no regions when none are found."""
         readimage_tool, fake_modules = import_readimage_tool_without()
 
         regions = readimage_tool.detect_text_regions(FakeImageArray())
@@ -197,6 +226,7 @@ class TestReadImageTool(unittest.TestCase):
         )
 
     def test_import_succeeds_and_runtime_error_is_clear_when_optional_dependency_is_absent(self):
+        """Verify the module imports without an optional dependency but raises a clear ImportError when the affected helper is used."""
         cases = [
             ("cv2", "cv2", "enhance_image", (FakeImageArray(),), "opencv-python is required"),
             ("numpy", "np", "detect_text_regions", (FakeImageArray(),), "numpy is required"),

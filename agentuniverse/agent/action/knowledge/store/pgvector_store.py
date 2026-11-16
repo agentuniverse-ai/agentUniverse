@@ -152,12 +152,15 @@ class PGVectorStore(Store):
         return vector
 
     def _vectors_for_documents(self, documents: list[Document]) -> list[list[float]]:
+        """Check generated batch length before assigning any source embeddings."""
         missing = [index for index, document in enumerate(documents) if not document.embedding]
         if missing:
             if not self.embedding_model:
                 raise ValueError("documents without embeddings require embedding_model")
             model = EmbeddingManager().get_instance_obj(self.embedding_model, strict=True)
             generated = model.get_embeddings([documents[index].text or "" for index in missing])
+            if len(generated) != len(missing):
+                raise ValueError("embedding count must match the number of documents without embeddings")
             for index, vector in zip(missing, generated, strict=True):
                 documents[index].embedding = vector
         vectors = [document.embedding for document in documents]
@@ -180,7 +183,7 @@ class PGVectorStore(Store):
             )
 
     def _top_k(self, query: Query) -> int:
-        top_k = query.similarity_top_k or self.similarity_top_k
+        top_k = self.similarity_top_k if query.similarity_top_k is None else query.similarity_top_k
         if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0:
             raise ValueError("similarity_top_k must be a positive integer")
         return top_k

@@ -2,10 +2,9 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2024/3/14 15:46
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: component_manager_base.py
-import copy
 from typing import TypeVar, Generic
 
 from agentuniverse.base.config.application_configer.application_config_manager import ApplicationConfigManager
@@ -83,10 +82,11 @@ class ComponentManagerBase(Generic[ComponentTypeVar]):
         return instance
 
     def get_default_instance(self, new_instance: bool = False) -> ComponentTypeVar:
-        """Return the default instance of component."""
-        if new_instance:
-            return copy.deepcopy(self._instance_obj_map.get("__default_instance__"))
-        return self._instance_obj_map.get("__default_instance__")
+        """Return the default component, honoring its copy policy when requested."""
+        instance = self._instance_obj_map.get("__default_instance__")
+        if new_instance and instance is not None:
+            return instance.create_copy()
+        return instance
 
     def get_instance_name_list(self) -> list[str]:
         """Return the component instance list."""

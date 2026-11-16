@@ -74,6 +74,8 @@ class ISWorkPattern(WorkPattern):
 
             # Check if correction is needed
             needs_correction = supervision_result.get('needs_correction', False)
+            corrected = False
+            final_implementation_result = implementation_result
 
             if needs_correction and execution_context['corrections_made'] < max_corrections:
                 # Execute correction
@@ -86,13 +88,19 @@ class ISWorkPattern(WorkPattern):
                     execution_context
                 )
                 execution_context['corrections_made'] += 1
+                corrected = True
+                if correction_result:
+                    # Feed the corrected content back so the next supervision round
+                    # reviews the corrected implementation instead of the original one.
+                    input_object.add_data('implementation_result', OutputObject(correction_result))
+                    final_implementation_result = correction_result
 
             # Store checkpoint history
             execution_context['checkpoint_history'].append({
                 'checkpoint': checkpoint_idx,
-                'implementation': implementation_result,
+                'implementation': final_implementation_result,
                 'supervision': supervision_result,
-                'corrected': needs_correction
+                'corrected': corrected
             })
 
             is_results.append(checkpoint_result)
@@ -148,6 +156,8 @@ class ISWorkPattern(WorkPattern):
 
             # Check if correction is needed
             needs_correction = supervision_result.get('needs_correction', False)
+            corrected = False
+            final_implementation_result = implementation_result
 
             if needs_correction and execution_context['corrections_made'] < max_corrections:
                 # Execute correction
@@ -160,13 +170,19 @@ class ISWorkPattern(WorkPattern):
                     execution_context
                 )
                 execution_context['corrections_made'] += 1
+                corrected = True
+                if correction_result:
+                    # Feed the corrected content back so the next supervision round
+                    # reviews the corrected implementation instead of the original one.
+                    input_object.add_data('implementation_result', OutputObject(correction_result))
+                    final_implementation_result = correction_result
 
             # Store checkpoint history
             execution_context['checkpoint_history'].append({
                 'checkpoint': checkpoint_idx,
-                'implementation': implementation_result,
+                'implementation': final_implementation_result,
                 'supervision': supervision_result,
-                'corrected': needs_correction
+                'corrected': corrected
             })
 
             is_results.append(checkpoint_result)

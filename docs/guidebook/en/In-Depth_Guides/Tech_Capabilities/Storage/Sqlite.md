@@ -25,4 +25,17 @@ metadata:
 - similarity_top_k: Returns the top k most similar documents based on the BM25 score.
 
 ### Usage
+You can query with explicit keywords even when no query text is available:
+
+```python
+from agentuniverse.agent.action.knowledge.store.query import Query
+
+documents = store.query(Query(keywords={"alpha"}))
+```
+
+Here `store` is an initialized SQLiteStore. If `query_str` is missing, empty,
+or whitespace-only, the supplied keywords are also used for BM25 scoring.
+A nonblank `query_str` remains the scoring text; keywords determine candidate
+documents. The query object's text is not modified.
+
 [Knowledge_Define_And_Use](../../../In-Depth_Guides/Tutorials/Knowledge/Knowledge_Define_And_Use.md)

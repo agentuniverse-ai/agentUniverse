@@ -2,13 +2,13 @@
 # -*- coding:utf-8 -*-
 
 # @Time    : 2025/10/28 12:17
-# @Author  : jerry.zzw 
+# @Author  : jerry.zzw
 # @Email   : jerry.zzw@antgroup.com
 # @FileName: character_util.py
 
 
 def show_au_start_banner():
-    python_art_text = f"""
+    python_art_text = """
 ╔═════════════════════════════════════════════════════════╗
 ║   █ █ █▀▀ █   █▀▀ █▀█ █▄█ █▀▀   ▀█▀ █▀█                 ║
 ║   █▄█ █▀▀ █   █   █ █ █ █ █▀▀    █  █ █                 ║

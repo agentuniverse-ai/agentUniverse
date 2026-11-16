@@ -88,3 +88,19 @@ traffic are deliberately omitted from this report.
 No repository files were deleted. Tests write logs/database state into pytest's
 temporary application directory, outside the source checkout. No API keys are
 part of the committed source or public verification evidence.
+
+## Final compatibility review
+
+On 2026-11-16, merged upstream master
+`f69b130bacaa784289ec8dc2a9798d122cd8fe5a` and reran the same combined
+offline suite: **11 passed in 2.37s**. This exercises current framework
+configuration loading, memory storage and HTTP client integration.
+The earlier live-model results above remain evidence for the follow-up source
+`b25e83700cd91aec0ab647f690a343eafa967a33`; no additional model calls were
+needed for the upstream merge. The shared OpenAI client still sends the same
+Chat Completions requests for these nonstreaming cases.
+
+Also corrected the changelog's unsupported 1–10-round range claim; runtime
+configuration remains as implemented, including the tested zero-round case.
+No repository files were deleted by this follow-up. Other files brought in by
+the merge are upstream changes, outside the feature diff against current master.

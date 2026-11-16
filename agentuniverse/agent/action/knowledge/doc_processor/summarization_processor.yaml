@@ -1,4 +1,6 @@
 name: 'summarization_processor'
+# Extractive sentence splitting preserves dots between digits, so decimal
+# values and numeric version strings are not broken into separate facts.
 description: 'Recall post-processor that summarizes retrieved documents (LLM abstractive or extractive fallback), addressing the summarization direction of issue #248.'
 
 metadata:

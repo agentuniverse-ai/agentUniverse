@@ -36,7 +36,7 @@ class SlaveRagAgentTemplate(AgentTemplate):
         context_archive = get_current_context_archive()
 
         # get archive data from context
-        agent_input.update(agent_input.get('prompt_params'))
+        agent_input.update(agent_input.get('prompt_params') or {})
         for k, v in agent_input.items():
             result = v
             if isinstance(v, str):

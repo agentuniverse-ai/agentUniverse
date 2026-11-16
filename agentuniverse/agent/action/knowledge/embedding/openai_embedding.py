@@ -27,7 +27,7 @@ class OpenAIEmbedding(Embedding):
     async_client: Any = None
     dimensions: Optional[int] = None
 
-    def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def get_embeddings(self, texts: List[str], text_type: str = "document") -> List[List[float]]:
         """Get the OpenAI embeddings.
 
         Note:
@@ -36,6 +36,8 @@ class OpenAIEmbedding(Embedding):
 
          Args:
              texts (List[str]): A list of texts that need to be embedded.
+             text_type (str): Framework query/document role. OpenAI uses the same
+                 embedding request for both roles; this is not sent to the SDK.
 
          Returns:
              List[List[float]]: Each text gets a float list, and the result is a list of the results for each text.
@@ -61,7 +63,7 @@ class OpenAIEmbedding(Embedding):
         except BadRequestError as e:
             raise ValueError(e.message)
 
-    async def async_get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    async def async_get_embeddings(self, texts: List[str], text_type: str = "document") -> List[List[float]]:
         """Asynchronously get the OpenAI embeddings.
 
         Note:
@@ -70,6 +72,7 @@ class OpenAIEmbedding(Embedding):
 
          Args:
              texts (List[str]): A list of texts that need to be embedded.
+             text_type (str): Framework role, accepted without changing the SDK request.
 
          Returns:
              List[List[float]]: Each text gets a float list, and the result is a list of the results for each text.
@@ -97,8 +100,14 @@ class OpenAIEmbedding(Embedding):
         """Convert the agentUniverse(aU) openai embedding class to the langchain openai embedding class."""
         client = self.client.embeddings if self.client else None
         async_client = self.async_client.embeddings if self.async_client else None
+        request_options = {}
+        if self.embedding_model_name is not None:
+            request_options['model'] = self.embedding_model_name
+        if self.dimensions:
+            request_options['model_kwargs'] = {'dimensions': self.dimensions}
         return OpenAIEmbeddings(openai_api_key=self.openai_api_key,
-                                client=client, async_client=async_client)
+                                client=client, async_client=async_client,
+                                **request_options)
 
     def _initialize_by_component_configer(self,
                                           embedding_configer: ComponentConfiger) \

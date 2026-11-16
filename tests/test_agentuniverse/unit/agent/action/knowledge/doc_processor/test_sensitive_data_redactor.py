@@ -27,6 +27,7 @@ _YAML_PATH = os.path.join(os.path.dirname(sdr_module.__file__),
 
 
 def _run(text, **kwargs):
+    """Process a single text doc through SensitiveDataRedactor with kwargs."""
     out = SensitiveDataRedactor(**kwargs).process_docs([Document(text=text)])
     return out[0]
 
@@ -35,48 +36,57 @@ class TestSensitiveDataEntities(unittest.TestCase):
     """Each built-in entity is detected and replaced."""
 
     def test_redacts_email(self) -> None:
+        """Email addresses are detected and replaced."""
         doc = _run("contact alice@example.com please")
         self.assertNotIn("alice@example.com", doc.text)
         self.assertIn("[REDACTED]", doc.text)
         self.assertEqual(doc.metadata["redaction_summary"], {"email": 1})
 
     def test_redacts_credit_card(self) -> None:
+        """Valid credit card numbers are detected and replaced."""
         doc = _run("card 4111111111111111 done")
         self.assertNotIn("4111111111111111", doc.text)
         self.assertEqual(doc.metadata["redaction_summary"], {"credit_card": 1})
 
     def test_redacts_china_id_card(self) -> None:
+        """China ID card numbers are detected and replaced."""
         doc = _run("id 110101199003073917 end")
         self.assertNotIn("110101199003073917", doc.text)
         self.assertEqual(doc.metadata["redaction_summary"], {"id_card": 1})
 
     def test_redacts_ssn(self) -> None:
+        """SSN values are detected and replaced."""
         doc = _run("ssn 123-45-6789 here")
         self.assertNotIn("123-45-6789", doc.text)
         self.assertEqual(doc.metadata["redaction_summary"], {"ssn": 1})
 
     def test_redacts_ip_address(self) -> None:
+        """IP addresses are detected and replaced."""
         doc = _run("server 10.0.0.1 ready")
         self.assertNotIn("10.0.0.1", doc.text)
         self.assertEqual(doc.metadata["redaction_summary"], {"ip_address": 1})
 
     def test_redacts_api_key(self) -> None:
+        """API keys are detected and replaced."""
         doc = _run("key sk-abcdefghijklmnopqrstuvwxyz end")
         self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz", doc.text)
         self.assertEqual(doc.metadata["redaction_summary"], {"api_key": 1})
 
     def test_phone_not_redacted_by_default(self) -> None:
+        """Phone numbers stay untouched unless the entity is enabled."""
         # phone is opt-in: absent from the default entity set.
         doc = _run("call 13812345678 now")
         self.assertIn("13812345678", doc.text)
         self.assertEqual(doc.metadata["redaction_summary"], {})
 
     def test_phone_redacted_when_enabled(self) -> None:
+        """Phone numbers are replaced when the phone entity is enabled."""
         doc = _run("call 13812345678 now", entities=["phone"])
         self.assertNotIn("13812345678", doc.text)
         self.assertEqual(doc.metadata["redaction_summary"], {"phone": 1})
 
     def test_multiple_entities_in_one_doc(self) -> None:
+        """Several entity types in one doc are each redacted."""
         text = "mail alice@example.com or ip 10.0.0.1"
         doc = _run(text)
         self.assertNotIn("alice@example.com", doc.text)
@@ -85,6 +95,7 @@ class TestSensitiveDataEntities(unittest.TestCase):
                          {"email": 1, "ip_address": 1})
 
     def test_no_pii_leaves_text_unchanged_but_stamps_empty_summary(self) -> None:
+        """Text without PII is unchanged but still gets an empty summary."""
         doc = _run("just a plain sentence with nothing sensitive")
         self.assertEqual(doc.text, "just a plain sentence with nothing sensitive")
         self.assertEqual(doc.metadata["redaction_summary"], {})
@@ -98,6 +109,7 @@ class TestSensitiveDataSemanticValidation(unittest.TestCase):
     """
 
     def test_credit_card_requires_luhn_checksum(self) -> None:
+        """Credit card candidates failing the Luhn check are left untouched."""
         valid = _run("card 4111111111111111 end")
         self.assertNotIn("4111111111111111", valid.text)
         self.assertEqual(valid.metadata["redaction_summary"], {"credit_card": 1})
@@ -106,6 +118,7 @@ class TestSensitiveDataSemanticValidation(unittest.TestCase):
         self.assertEqual(invalid.metadata["redaction_summary"], {})
 
     def test_ip_address_requires_valid_octets(self) -> None:
+        """IP candidates with out-of-range octets are left untouched."""
         valid = _run("ip 10.0.0.1 ok")
         self.assertNotIn("10.0.0.1", valid.text)
         for bad in ("999.999.999.999", "1.2.3.256"):
@@ -114,6 +127,7 @@ class TestSensitiveDataSemanticValidation(unittest.TestCase):
             self.assertEqual(doc.metadata["redaction_summary"], {}, bad)
 
     def test_china_id_card_requires_valid_checksum(self) -> None:
+        """China ID candidates failing the checksum are left untouched."""
         valid = _run("id 110101199003073917 end")
         self.assertNotIn("110101199003073917", valid.text)
         invalid = _run("id 110101199003073999 end")  # bad check digit
@@ -121,6 +135,7 @@ class TestSensitiveDataSemanticValidation(unittest.TestCase):
         self.assertEqual(invalid.metadata["redaction_summary"], {})
 
     def test_ssn_rejects_invalid_area_group_serial(self) -> None:
+        """SSN candidates with invalid area/group/serial parts are untouched."""
         valid = _run("ssn 123-45-6789 here")
         self.assertNotIn("123-45-6789", valid.text)
         for bad in ("000-12-3456", "666-12-3456", "900-12-3456",
@@ -134,11 +149,13 @@ class TestSensitiveDataConfig(unittest.TestCase):
     """Replacement, custom patterns, summary, and graceful degradation."""
 
     def test_custom_replacement(self) -> None:
+        """A custom replacement string is used instead of the default."""
         doc = _run("mail alice@example.com", replacement="[HIDDEN]")
         self.assertIn("[HIDDEN]", doc.text)
         self.assertNotIn("alice@example.com", doc.text)
 
     def test_custom_pattern_redacts(self) -> None:
+        """Custom regex patterns redact and appear in the summary."""
         doc = _run("emp EMP-123456 here", custom_patterns=[
             {"name": "employee_id", "pattern": r"\bEMP-\d{6}\b"}])
         self.assertNotIn("EMP-123456", doc.text)
@@ -146,21 +163,25 @@ class TestSensitiveDataConfig(unittest.TestCase):
                          {"employee_id": 1})
 
     def test_invalid_custom_regex_raises(self) -> None:
+        """An invalid custom regex raises a ValueError at load/run time."""
         # A privacy component must not silently skip a bad regex; it fails loud.
         with self.assertRaises(ValueError):
             _run("mail alice@example.com", custom_patterns=[
                 {"name": "bad", "pattern": "("}])
 
     def test_custom_pattern_missing_fields_raises(self) -> None:
+        """A custom pattern missing required fields raises a ValueError."""
         with self.assertRaises(ValueError):
             _run("mail alice@example.com", custom_patterns=[
                 {"name": "no_pattern"}])
 
     def test_unknown_entity_raises(self) -> None:
+        """An unknown entity name raises a ValueError."""
         with self.assertRaises(ValueError):
             _run("mail alice@example.com", entities=["email", "mystery"])
 
     def test_bad_config_raises_at_load_time(self) -> None:
+        """Misconfiguration fails eagerly when initializing from config."""
         # Eager validation: a misconfiguration fails when the component is
         # initialized from config, not silently at processing time.
         for bad in (
@@ -174,11 +195,13 @@ class TestSensitiveDataConfig(unittest.TestCase):
                 SensitiveDataRedactor()._initialize_by_component_configer(bad)
 
     def test_log_key_none_omits_summary(self) -> None:
+        """A None log_key skips writing the redaction_summary metadata."""
         doc = _run("mail alice@example.com", log_key=None)
         self.assertNotIn("alice@example.com", doc.text)
         self.assertNotIn("redaction_summary", doc.metadata or {})
 
     def test_preserves_existing_metadata(self) -> None:
+        """Pre-existing doc metadata survives the redaction pass."""
         original = Document(text="ip 10.0.0.1", metadata={"source": "log.txt"})
         out = SensitiveDataRedactor().process_docs([original])
         self.assertEqual(out[0].metadata["source"], "log.txt")
@@ -186,6 +209,7 @@ class TestSensitiveDataConfig(unittest.TestCase):
                          {"ip_address": 1})
 
     def test_attributes_loaded_from_configer(self) -> None:
+        """Component config values populate the redactor attributes."""
         configer = SimpleNamespace(
             name="sdr", description="d",
             entities=["email"], replacement="<H>",
@@ -202,6 +226,7 @@ class TestSensitiveDataRegistration(unittest.TestCase):
     """The shipped yaml resolves through the real framework loader."""
 
     def test_yaml_resolves_to_doc_processor_type(self) -> None:
+        """The shipped yaml registers as a DOC_PROCESSOR component type."""
         configer = Configer(path=os.path.abspath(_YAML_PATH)).load()
         component_configer = ComponentConfiger().load_by_configer(configer)
         self.assertEqual(
@@ -209,6 +234,7 @@ class TestSensitiveDataRegistration(unittest.TestCase):
             ComponentEnum.DOC_PROCESSOR.value)
 
     def test_yaml_exposes_module_and_class(self) -> None:
+        """The shipped yaml points at the SensitiveDataRedactor class."""
         configer = Configer(path=os.path.abspath(_YAML_PATH)).load()
         component_configer = ComponentConfiger().load_by_configer(configer)
         self.assertEqual(
@@ -223,13 +249,17 @@ class TestSensitiveDataThroughKnowledgePipeline(unittest.TestCase):
     """The redactor runs as a real post_processor through query_knowledge."""
 
     def test_redacts_in_the_pipeline(self) -> None:
+        """The redactor runs as a post_processor in query_knowledge."""
         from agentuniverse.agent.action.knowledge import knowledge as \
             knowledge_module
         from agentuniverse.agent.action.knowledge.knowledge import Knowledge
         import agentuniverse.base.annotation.trace as trace_module
 
         class _FakeStore:
+            """Store double returning a doc containing email and IP PII."""
+
             def query(self, query):
+                """Return one canned document with sensitive content."""
                 return [Document(text="reach alice@example.com or 10.0.0.1")]
 
         redactor = SensitiveDataRedactor()

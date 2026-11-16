@@ -16,6 +16,15 @@ from langchain_community.utilities.google_serper import GoogleSerperAPIWrapper
 from pydantic import Field
 
 
+def _resolve_result_count(value: int | None, default: int) -> int:
+    result_count = default if value is None else value
+    if isinstance(result_count, bool) or not isinstance(result_count, int):
+        raise ValueError("k must be an integer between 1 and 100")
+    if not 1 <= result_count <= 100:
+        raise ValueError("k must be between 1 and 100")
+    return result_count
+
+
 class GoogleSearchTool(Tool):
     """增强的Google搜索工具。
 
@@ -52,10 +61,12 @@ class GoogleSearchTool(Tool):
         Returns:
             格式化的搜索结果字符串
         """
+        if not isinstance(query, str) or not query.strip():
+            return "搜索查询不能为空"
         if not self.serper_api_key:
             return self._get_mock_result(query)
             
-        k = k or self.default_k
+        k = _resolve_result_count(k, self.default_k)
         gl = gl or self.default_gl
         hl = hl or self.default_hl
         
@@ -75,10 +86,12 @@ class GoogleSearchTool(Tool):
     async def async_execute(self, query: str, search_type: str = "search", k: int = None,
                            gl: str = None, hl: str = None, **kwargs) -> str:
         """异步执行Google搜索"""
+        if not isinstance(query, str) or not query.strip():
+            return "搜索查询不能为空"
         if not self.serper_api_key:
             return self._get_mock_result(query)
             
-        k = k or self.default_k
+        k = _resolve_result_count(k, self.default_k)
         gl = gl or self.default_gl
         hl = hl or self.default_hl
         
@@ -176,7 +189,7 @@ class GoogleScholarSearchTool(Tool):
         if not self.serper_api_key:
             return self._get_mock_scholar_result(query)
             
-        k = k or self.default_k
+        k = _resolve_result_count(k, self.default_k)
         
         # 构建学术搜索查询
         scholar_query = self._build_scholar_query(query, year, author, journal)
@@ -200,7 +213,7 @@ class GoogleScholarSearchTool(Tool):
         if not self.serper_api_key:
             return self._get_mock_scholar_result(query)
             
-        k = k or self.default_k
+        k = _resolve_result_count(k, self.default_k)
         scholar_query = self._build_scholar_query(query, year, author, journal)
         
         try:

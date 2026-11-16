@@ -61,6 +61,8 @@ SAMPLE_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 
 
 def response_mock(*, json_data=None, content=b""):
+    """Response mock.
+    """
     response = Mock()
     response.json.return_value = json_data
     response.content = content
@@ -69,11 +71,17 @@ def response_mock(*, json_data=None, content=b""):
 
 
 class PubMedToolTest(unittest.TestCase):
+    """Pubmedtooltest.
+    """
     def setUp(self) -> None:
+        """Set up the test fixture before each test.
+        """
         self.tool = PubMedTool()
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_search_returns_structured_metadata(self, mock_get: Mock) -> None:
+        """Test that search returns structured metadata.
+        """
         mock_get.side_effect = [
             response_mock(json_data={"esearchresult": {"count": "42", "idlist": ["12345678"]}}),
             response_mock(content=SAMPLE_XML),
@@ -126,7 +134,27 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(search_call.kwargs["params"]["tool"], "agentuniverse_pubmed_tool")
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
+    def test_search_uses_article_elocation_doi_when_article_id_is_absent(self, mock_get: Mock) -> None:
+        xml = SAMPLE_XML.replace(
+            b"<ArticleTitle>",
+            b'<ELocationID EIdType="doi">10.1000/elocation</ELocationID><ArticleTitle>',
+        ).replace(
+            b'<ArticleId IdType="doi">10.1000/example</ArticleId>',
+            b'<ArticleId IdType="pubmed">12345678</ArticleId>',
+        )
+        mock_get.side_effect = [
+            response_mock(json_data={"esearchresult": {"count": "1", "idlist": ["12345678"]}}),
+            response_mock(content=xml),
+        ]
+
+        result = self.tool.execute(query="AI medicine")
+
+        self.assertEqual(result["papers"][0]["doi"], "10.1000/elocation")
+
+    @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_search_supports_paging_and_sorting(self, mock_get: Mock) -> None:
+        """Test that search supports paging and sorting.
+        """
         mock_get.side_effect = [
             response_mock(json_data={"esearchresult": {"count": "42", "idlist": ["12345678"]}}),
             response_mock(content=SAMPLE_XML),
@@ -151,6 +179,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_search_normalizes_sort_aliases(self, mock_get: Mock) -> None:
+        """Test that search normalizes sort aliases.
+        """
         mock_get.return_value = response_mock(
             json_data={"esearchresult": {"count": "0", "idlist": []}}
         )
@@ -162,6 +192,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_search_keeps_canonical_sort_values_in_result(self, mock_get: Mock) -> None:
+        """Test that search keeps canonical sort values in result.
+        """
         mock_get.return_value = response_mock(
             json_data={"esearchresult": {"count": "0", "idlist": []}}
         )
@@ -175,6 +207,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_search_supports_date_range_filters(self, mock_get: Mock) -> None:
+        """Test that search supports date range filters.
+        """
         mock_get.return_value = response_mock(
             json_data={"esearchresult": {"count": "0", "idlist": []}}
         )
@@ -196,6 +230,8 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(params["datetype"], "pdat")
 
     def test_search_rejects_incomplete_date_range(self) -> None:
+        """Test that search rejects incomplete date range.
+        """
         for date_filter in ({"mindate": "2024"}, {"maxdate": "2024"}):
             with self.subTest(date_filter=date_filter):
                 with self.assertRaisesRegex(ValueError, "must be provided together"):
@@ -203,6 +239,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_search_enforces_pubmed_paging_limit(self, mock_get: Mock) -> None:
+        """Test that search enforces pubmed paging limit.
+        """
         mock_get.return_value = response_mock(
             json_data={"esearchresult": {"count": "100000", "idlist": []}}
         )
@@ -217,6 +255,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_empty_search_does_not_fetch_articles(self, mock_get: Mock) -> None:
+        """Test that empty search does not fetch articles.
+        """
         mock_get.return_value = response_mock(
             json_data={"esearchresult": {"count": "0", "idlist": []}}
         )
@@ -229,6 +269,8 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(mock_get.call_args.kwargs["params"]["retmax"], 3)
 
     def test_invalid_input(self) -> None:
+        """Test that invalid input.
+        """
         with self.assertRaisesRegex(ValueError, "query must not be empty"):
             self.tool.execute(query="  ")
         with self.assertRaisesRegex(ValueError, "between 1 and 20"):
@@ -252,6 +294,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_error_result_preserves_date_filters(self, mock_get: Mock) -> None:
+        """Test that error result preserves date filters.
+        """
         mock_get.side_effect = requests.Timeout("timed out")
 
         result = self.tool.execute(query="cancer", mindate="2024-01", maxdate="2024-12")
@@ -263,6 +307,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_timeout_returns_structured_error(self, mock_get: Mock) -> None:
+        """Test that timeout returns structured error.
+        """
         mock_get.side_effect = requests.Timeout("timed out")
 
         result = self.tool.execute(query="cancer")
@@ -272,6 +318,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_http_error_returns_structured_error(self, mock_get: Mock) -> None:
+        """Test that http error returns structured error.
+        """
         response = Mock(status_code=429)
         mock_get.side_effect = requests.HTTPError(response=response)
 
@@ -282,6 +330,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_connection_error_returns_structured_error(self, mock_get: Mock) -> None:
+        """Test that connection error returns structured error.
+        """
         mock_get.side_effect = requests.ConnectionError("connection failed")
 
         result = self.tool.execute(query="cancer")
@@ -291,6 +341,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_esearch_api_errors_return_structured_error(self, mock_get: Mock) -> None:
+        """Test that esearch api errors return structured error.
+        """
         responses = (
             ({"error": "API rate limit exceeded", "count": "11"}, "API rate limit exceeded"),
             ({"esearchresult": {"ERROR": "Search backend failed"}}, "Search backend failed"),
@@ -309,6 +361,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_efetch_api_error_returns_structured_error(self, mock_get: Mock) -> None:
+        """Test that efetch api error returns structured error.
+        """
         mock_get.side_effect = [
             response_mock(json_data={"esearchresult": {"count": "1", "idlist": ["1"]}}),
             response_mock(content=b"<eFetchResult><ERROR>Unable to obtain query</ERROR></eFetchResult>"),
@@ -321,6 +375,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_invalid_esearch_json_returns_structured_error(self, mock_get: Mock) -> None:
+        """Test that invalid esearch json returns structured error.
+        """
         response = response_mock()
         response.json.side_effect = requests.JSONDecodeError("invalid JSON", "", 0)
         mock_get.return_value = response
@@ -331,6 +387,8 @@ class PubMedToolTest(unittest.TestCase):
         self.assertIn("invalid ESearch JSON response", result["error"]["message"])
 
     def test_missing_extended_metadata_returns_empty_values(self) -> None:
+        """Test that missing extended metadata returns empty values.
+        """
         article = ElementTree.fromstring(
             b"""<PubmedArticle>
               <MedlineCitation>
@@ -349,6 +407,8 @@ class PubMedToolTest(unittest.TestCase):
         self.assertEqual(paper["languages"], [])
 
     def test_shipped_config_exposes_supported_parameters_and_metadata(self) -> None:
+        """Test that shipped config exposes supported parameters and metadata.
+        """
         config_path = (
             Path(__file__).resolve().parents[6]
             / "examples"
@@ -403,6 +463,8 @@ class PubMedToolTest(unittest.TestCase):
 
     @patch("agentuniverse.agent.action.tool.common_tool.pubmed_tool.requests.get")
     def test_invalid_xml_returns_structured_error(self, mock_get: Mock) -> None:
+        """Test that invalid xml returns structured error.
+        """
         mock_get.side_effect = [
             response_mock(json_data={"esearchresult": {"count": "1", "idlist": ["1"]}}),
             response_mock(content=b"<not-valid"),

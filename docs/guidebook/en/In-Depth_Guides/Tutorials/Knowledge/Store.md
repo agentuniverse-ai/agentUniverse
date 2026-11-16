@@ -82,6 +82,8 @@ store = ['sample_standard_app.intelligence.agentic.knowledge.store']
 - [Sqlite](../../../In-Depth_Guides/Tech_Capabilities/Storage/Sqlite.md)
 ### RedisVectorStore
 
+Vectors are validated in their actual `FLOAT32` wire representation before query/upsert issues Redis commands. Finite Python values such as `1e39` overflow that representation and raise `ValueError`, as do NaN and infinities. Valid float32 rounding, signed zero, and underflow to zero retain their existing behavior; vectors are not clipped or normalized. The same check covers sync/async operations and provider-generated vectors. This is numeric validation, not transactional rollback of provider-side mutations.
+
 `RedisVectorStore` uses Redis Stack/RediSearch HNSW indexes for synchronous and asynchronous vector CRUD and search. Install the optional dependency with `pip install 'agentUniverse[store_ext]'` and run Redis Stack (classic Redis without the Search module is insufficient).
 
 Copy `redis_vector_store.yaml.example` and configure the vector dimension, distance metric, key prefix, and any metadata fields that must be indexed as exact-match TAG fields. Credentials may be supplied through `REDIS_VECTOR_URL` instead of YAML.
