@@ -42,16 +42,24 @@ Debate (辩论) 是一种多智能体协作模式，通过提案、批评和评�
 ### 1. 安装依赖
 
 ```bash
-pip install agentuniverse
+# 在仓库根目录安装当前分支（已发布的版本可能尚未包含 Debate 模式）
+pip install -e . pytest "httpx==0.27.2"
 ```
 
 ### 2. 配置环境
 
-设置您的 LLM API 密钥:
+示例使用 `DefaultOpenAILLM` 的 OpenAI 兼容接口，三个角色共用一份模型配置。
+模型由 `DEBATE_MODEL_NAME` 指定，`simple_example.py` 默认使用 `gpt-4o-2024-11-20`；
+请按服务实际支持的模型设置。密钥从环境变量读取，不要写入 YAML 或提交到仓库：
 
 ```bash
 export OPENAI_API_KEY="your_api_key_here"
+export OPENAI_API_BASE="https://api.openai.com/v1"
+export DEBATE_MODEL_NAME="gpt-4o-2024-11-20"
 ```
+
+使用 DeepSeek 时，可将 `OPENAI_API_BASE` 设置为 `https://api.deepseek.com/v1`，
+并选择该服务当前可用的模型；本示例继续通过同一 OpenAI 兼容适配器调用。
 
 ### 3. 运行示例
 
@@ -63,9 +71,18 @@ python simple_example.py
 ### 4. 运行测试
 
 ```bash
-cd examples/sample_apps/debate_agent_app
-python intelligence/test/test_debate_agent.py
+# 在仓库根目录运行；默认使用本地 HTTP 服务，无需 API 密钥
+python -m pytest tests/test_agentuniverse/unit/agent/work_pattern/test_debate_work_pattern.py \
+  examples/sample_apps/debate_agent_app/intelligence/test/test_debate_agent.py -q
+
+# 使用上面配置的真实服务（会产生模型调用费用）
+RUN_LIVE_LLM_TESTS=1 python -m pytest \
+  examples/sample_apps/debate_agent_app/intelligence/test/test_debate_agent.py -q -s
 ```
+
+集成测试实际启动 TOML/YAML 应用配置，验证同步与异步的三角色调用、
+评审 JSON 解析和按会话存储的记忆。本地 HTTP 用例还验证两轮执行、评分阈值和上一轮批评的传递。
+真实服务用例允许模型在第一轮达标后结束，不要求生成固定文字。测试记录见 [VERIFICATION.md](VERIFICATION.md)。
 
 ## 使用示例
 
@@ -90,7 +107,7 @@ result = agent.run(
 )
 
 # 获取结果
-output = result.get('output', '')
+output = result.get_data('output', '')
 print(output)
 ```
 
@@ -98,7 +115,7 @@ print(output)
 
 ```python
 # 获取包含每轮辩论过程的完整输出
-full_output = result.get('full_output', '')
+full_output = result.get_data('full_output', '')
 print(full_output)
 ```
 
@@ -192,7 +209,7 @@ debate_agent_app/
     │           └── demo_judge_agent/
     │               └── cn.yaml         # 评审智能体中文提示词
     └── test/
-        └── test_debate_agent.py        # 单元测试
+        └── test_debate_agent.py        # 应用集成测试
 ```
 
 ## 配置说明

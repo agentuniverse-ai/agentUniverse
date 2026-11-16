@@ -16,9 +16,9 @@ profile:
   llm_model:
     name: 'default_openai_llm'
 
-  # Memory configuration
-  memory:
-    name: 'demo_memory'
+# Memory configuration
+memory:
+  name: 'demo_memory'
 
 metadata:
   type: 'AGENT'

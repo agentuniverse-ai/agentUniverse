@@ -13,6 +13,8 @@ consensus-driven problem solving through proposal, critique and judgment.
 # Chinese example input intentionally uses full-width punctuation.
 # ruff: noqa: RUF001
 
+import os
+
 from agentuniverse.agent.agent import Agent
 from agentuniverse.agent.agent_manager import AgentManager
 from agentuniverse.base.agentuniverse import AgentUniverse
@@ -22,6 +24,7 @@ def simple_example():
     """Run a simple Debate agent example."""
 
     # Step 1: Start AgentUniverse
+    os.environ.setdefault("DEBATE_MODEL_NAME", "gpt-4o-2024-11-20")
     AgentUniverse().start(config_path="config/config.toml")
 
     # Step 2: Get Debate agent instance

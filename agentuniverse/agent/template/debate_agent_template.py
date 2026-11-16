@@ -231,7 +231,7 @@ class DebateAgentTemplate(AgentTemplate):
             dict: The execution result.
         """
         # Add memory to input object if available
-        memory: Memory = self.agent_model.memory
+        memory: Memory = self.process_memory(agent_input, **kwargs)
         if memory:
             input_object.add_data("memory", memory)
 
@@ -265,7 +265,7 @@ class DebateAgentTemplate(AgentTemplate):
             dict: The execution result.
         """
         # Add memory to input object if available
-        memory: Memory = self.agent_model.memory
+        memory: Memory = self.process_memory(agent_input, **kwargs)
         if memory:
             input_object.add_data("memory", memory)
 
@@ -297,14 +297,11 @@ class DebateAgentTemplate(AgentTemplate):
         # Parse result for storage
         parsed_result = self.parse_result(work_pattern_result)
 
-        # Create message objects for memory
-        user_message = {"role": "user", "content": agent_input.get("input", "")}
-
-        assistant_message = {"role": "assistant", "content": parsed_result.get("output", "")}
-
-        # Add to memory
-        memory.add_message(user_message)
-        memory.add_message(assistant_message)
+        self.add_memory(
+            memory,
+            f"Human: {agent_input.get('input', '')}, AI: {parsed_result.get('output', '')}",
+            agent_input=agent_input,
+        )
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> "DebateAgentTemplate":
         """Initialize the debate agent template by component configer.

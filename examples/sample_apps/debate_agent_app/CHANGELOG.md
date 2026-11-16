@@ -2,6 +2,14 @@
 
 All notable changes to the Debate Agent Application will be documented in this file.
 
+## [Unreleased]
+
+- 修复协调器的 Memory 实例获取与写入，使用框架标准记忆接口。
+- 将示例 memory 配置移到 Agent 根节点，配置 RAM 记忆检索存储。
+- 三个角色继承统一的 `DEBATE_MODEL_NAME`，支持切换 OpenAI 兼容服务。
+- 用可离线运行的同步、异步应用集成测试替换原来的手工调用测试，保留显式启用的真实服务验证。
+- 补充当前分支安装、模型配置、测试命令与验证结果文档。
+
 ## [1.0.0] - 2026-10-18
 
 ### Added - 初始发布
