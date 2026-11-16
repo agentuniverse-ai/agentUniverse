@@ -87,7 +87,13 @@ class DefaultMemoryConverter(BaseMemoryConverter):
 
     def from_sql_model(self, sql_message: Any) -> Message:
         """Convert a SQLAlchemy model to a Message instance."""
-        return Message.from_dict({'id': sql_message.id, **json.loads(sql_message.message)})
+        message_dict = json.loads(sql_message.message)
+        # Messages created before persistence may not have an application-level
+        # id. In that case, retain the database-generated id instead of letting
+        # the serialized ``None`` value overwrite it.
+        if message_dict.get('id') is None:
+            message_dict['id'] = sql_message.id
+        return Message.from_dict(message_dict)
 
     def to_sql_model(self, message: Message, session_id: str = None, agent_id: str = None, source: str = None) -> Any:
         """Convert a Message instance to a SQLAlchemy model."""
