@@ -1,0 +1,12 @@
+name: 'demo_memory'
+description: 'Demo memory for debate agent app'
+type: 'long_term'
+memory_key: 'chat_history'
+max_tokens: 3000
+memory_retrieval_storage: ram_memory_storage
+memory_storages:
+  - ram_memory_storage
+metadata:
+  type: 'MEMORY'
+  module: 'agentuniverse.agent.memory.memory'
+  class: 'Memory'

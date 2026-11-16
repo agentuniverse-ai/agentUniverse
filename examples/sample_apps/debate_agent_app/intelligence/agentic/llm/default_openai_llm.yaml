@@ -1,0 +1,9 @@
+name: 'default_openai_llm'
+description: 'OpenAI LLM configuration for debate agent app'
+model_name: '${DEBATE_MODEL_NAME}'
+max_tokens: 2048
+temperature: 0.7
+metadata:
+  type: 'LLM'
+  module: 'agentuniverse.llm.default.default_openai_llm'
+  class: 'DefaultOpenAILLM'
