@@ -121,27 +121,50 @@ class Knowledge(ComponentBase):
             source_type = os.path.splitext(source_path)[1][1:].lower()
         else:
             raise Exception(f"Knowledge load data error: Unknown source type:{source_path}")
+        reader_manager = ReaderManager()
         if source_type in self.readers:
-            reader = ReaderManager().get_instance_obj(self.readers[source_type])
+            reader_code = self.readers[source_type]
         else:
-            reader = ReaderManager().get_file_default_reader(source_type)
+            reader_code = reader_manager.DEFAULT_READER.get(source_type)
+            if reader_code is None:
+                raise ValueError(
+                    f"No reader is configured for source type '{source_type}'. "
+                    f"Add a reader mapping for '{source_type}' to Knowledge.readers "
+                    "and ensure the referenced READER component is registered before loading data."
+                )
+        try:
+            registered_reader = reader_manager.get_instance_obj(
+                reader_code, new_instance=False, strict=True)
+            if registered_reader is None:
+                raise ValueError(
+                    f"READER component '{reader_code}' is not registered."
+                )
+        except ValueError as error:
+            raise ValueError(
+                f"Unable to load source type '{source_type}': {error} "
+                f"Configure Knowledge.readers['{source_type}'] with a registered READER component."
+            ) from error
+        reader = registered_reader.create_copy()
         return reader.load_data(source_path)
 
     def _insert_process(self, origin_docs: List[Document]) -> List[Document]:
         for _processor_code in self.insert_processors:
-            doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
+            doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(
+                _processor_code, strict=True)
             origin_docs = doc_processor.process_docs(origin_docs)
         return origin_docs
 
     def _update_process(self, origin_docs: List[Document]) -> List[Document]:
         for _processor_code in self.update_processors:
-            doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
+            doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(
+                _processor_code, strict=True)
             origin_docs = doc_processor.process_docs(origin_docs)
         return origin_docs
 
     def _rag_post_process(self, origin_docs: List[Document], query: Query):
         for _processor_code in self.post_processors:
-            doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(_processor_code)
+            doc_processor: DocProcessor = DocProcessorManager().get_instance_obj(
+                _processor_code, strict=True)
             origin_docs = doc_processor.process_docs(origin_docs, query=query)
         return origin_docs
 
@@ -168,7 +191,7 @@ class Knowledge(ComponentBase):
     def _paraphrase_query(self, origin_query: Query) -> Query:
         for _paraphraser_code in self.query_paraphrasers:
             query_paraphraser: QueryParaphraser = QueryParaphraserManager().get_instance_obj(
-                _paraphraser_code)
+                _paraphraser_code, strict=True)
             origin_query = query_paraphraser.query_paraphrase(origin_query)
         return origin_query
 

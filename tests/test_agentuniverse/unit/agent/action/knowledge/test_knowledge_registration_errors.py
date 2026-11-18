@@ -13,8 +13,8 @@ later attribute access on the result crashed with a cryptic
 ``AttributeError: 'NoneType' object has no attribute 'query'`` (issues #207 and
 #203). The ``strict=True`` path now raises a descriptive ``ValueError`` instead.
 
-These tests cover both the generic base-manager behaviour and the end-to-end
-``Knowledge.query_knowledge`` path that originally surfaced the bug.
+These tests cover the generic base-manager behaviour and Knowledge pipeline
+lookups for stores, readers, document processors, and query paraphrasers.
 """
 
 import unittest
@@ -104,6 +104,124 @@ class TestKnowledgeRegistrationErrors(unittest.TestCase):
         msg = str(ctx.exception)
         self.assertIn("definitely_unregistered_store", msg)
         self.assertIn(ComponentEnum.STORE.value, msg)
+
+
+class TestKnowledgePipelineRegistrationErrors(unittest.TestCase):
+    """Knowledge pipeline components fail with actionable registration errors."""
+
+    def _knowledge(self, **kwargs) -> Knowledge:
+        knowledge = Knowledge(**kwargs)
+        self.addCleanup(knowledge.insert_executor.shutdown, wait=True)
+        self.addCleanup(knowledge.query_executor.shutdown, wait=True)
+        return knowledge
+
+    @staticmethod
+    def _set_test_app(acm: MagicMock) -> None:
+        acm.return_value.app_configer.base_info_appname = "test_app"
+
+    def test_load_data_reports_unregistered_custom_reader(self) -> None:
+        knowledge = self._knowledge(
+            readers={"url": "definitely_unregistered_custom_reader"})
+
+        with patch.object(cmb_module, "ApplicationConfigManager") as acm:
+            self._set_test_app(acm)
+            with self.assertRaises(ValueError) as ctx:
+                knowledge._load_data(source_path="https://example.com/article")
+
+        message = str(ctx.exception)
+        self.assertIn("url", message)
+        self.assertIn("definitely_unregistered_custom_reader", message)
+        self.assertIn(ComponentEnum.READER.value, message)
+        self.assertIn("Knowledge.readers", message)
+        self.assertNotIn("NoneType", message)
+
+    def test_load_data_reports_unregistered_default_reader(self) -> None:
+        source_type = "q2default"
+        reader_code = "definitely_unregistered_default_reader"
+        knowledge = self._knowledge()
+
+        with patch.dict(knowledge_module.ReaderManager.DEFAULT_READER,
+                        {source_type: reader_code}), \
+                patch.object(knowledge_module.os.path, "isfile", return_value=True), \
+                patch.object(cmb_module, "ApplicationConfigManager") as acm:
+            self._set_test_app(acm)
+            with self.assertRaises(ValueError) as ctx:
+                knowledge._load_data(source_path=f"/tmp/document.{source_type}")
+
+        message = str(ctx.exception)
+        self.assertIn(source_type, message)
+        self.assertIn(reader_code, message)
+        self.assertIn(ComponentEnum.READER.value, message)
+        self.assertIn("Knowledge.readers", message)
+        self.assertNotIn("NoneType", message)
+
+    def test_load_data_reports_source_type_without_reader_mapping(self) -> None:
+        source_type = "q2unknown"
+        knowledge = self._knowledge()
+
+        with patch.object(knowledge_module.os.path, "isfile", return_value=True):
+            with self.assertRaises(ValueError) as ctx:
+                knowledge._load_data(source_path=f"/tmp/document.{source_type}")
+
+        message = str(ctx.exception)
+        self.assertIn(source_type, message)
+        self.assertIn(ComponentEnum.READER.value, message)
+        self.assertIn("Knowledge.readers", message)
+        self.assertIn("registered", message)
+        self.assertNotIn("NoneType", message)
+
+    def test_load_data_preserves_registered_reader_copy_error(self) -> None:
+        reader_code = "registered_but_invalid_reader"
+        knowledge = self._knowledge(readers={"url": reader_code})
+        registered_reader = MagicMock()
+        registered_reader.create_copy.side_effect = ValueError("reader copy failed")
+        reader_manager = MagicMock()
+        reader_manager.get_instance_obj.return_value = registered_reader
+
+        with patch.object(knowledge_module, "ReaderManager",
+                          return_value=reader_manager):
+            with self.assertRaisesRegex(ValueError, "reader copy failed"):
+                knowledge._load_data(source_path="https://example.com/article")
+
+        reader_manager.get_instance_obj.assert_called_once_with(
+            reader_code, new_instance=False, strict=True)
+
+    def test_doc_processing_stages_report_unregistered_processor(self) -> None:
+        query = Query(query_str="q")
+        cases = (
+            ("insert", "insert_processors", "_insert_process", ([],)),
+            ("update", "update_processors", "_update_process", ([],)),
+            ("post", "post_processors", "_rag_post_process", ([], query)),
+        )
+
+        with patch.object(cmb_module, "ApplicationConfigManager") as acm:
+            self._set_test_app(acm)
+            for stage, config_field, method_name, args in cases:
+                processor_code = f"definitely_unregistered_{stage}_processor"
+                knowledge = self._knowledge(**{config_field: [processor_code]})
+                with self.subTest(stage=stage), self.assertRaises(ValueError) as ctx:
+                    getattr(knowledge, method_name)(*args)
+
+                message = str(ctx.exception)
+                self.assertIn(processor_code, message)
+                self.assertIn(ComponentEnum.DOC_PROCESSOR.value, message)
+                self.assertIn("configuration", message)
+                self.assertNotIn("NoneType", message)
+
+    def test_paraphrase_query_reports_unregistered_paraphraser(self) -> None:
+        paraphraser_code = "definitely_unregistered_query_paraphraser"
+        knowledge = self._knowledge(query_paraphrasers=[paraphraser_code])
+
+        with patch.object(cmb_module, "ApplicationConfigManager") as acm:
+            self._set_test_app(acm)
+            with self.assertRaises(ValueError) as ctx:
+                knowledge._paraphrase_query(Query(query_str="q"))
+
+        message = str(ctx.exception)
+        self.assertIn(paraphraser_code, message)
+        self.assertIn(ComponentEnum.QUERY_PARAPHRASER.value, message)
+        self.assertIn("configuration", message)
+        self.assertNotIn("NoneType", message)
 
 
 class TestStrictLookupWithChannelFusion(unittest.TestCase):
