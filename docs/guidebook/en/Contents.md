@@ -39,8 +39,8 @@
     * 2.2.5.2 [Related Domain Objects](In-Depth_Guides/Tutorials/Plan/Planner_Related_Domain_Objects.md)
 * 2.3 Technical Components
   * 2.3.1 [RAG](In-Depth_Guides/Tutorials/RAG.md) 
-    * 2.3.1.1 [How to Build Knowledge Base](How-to/Build%20and%20Use%20a%20Knowledge%20Base/How_to_Build_Knowledge_Base.md) 
-    * 2.3.1.1 [How to Use Knowledge Base](How-to/Build%20and%20Use%20a%20Knowledge%20Base/How_to_Use_Knowledge_Base.md) 
+    * 2.3.1.1 [How to Build Knowledge Base](How-to/Build and Use a Knowledge Base/How_to_Build_Knowledge_Base.md) 
+    * 2.3.1.1 [How to Use Knowledge Base](How-to/Build and Use a Knowledge Base/How_to_Use_Knowledge_Base.md) 
 * 2.4 Others
   * 2.4.1 Service
     * 2.4.1.1 [Registration and Usage](In-Depth_Guides/Tech_Capabilities/Service/Service_Registration_and_Usage.md)
@@ -106,8 +106,8 @@
 * 6.5 [Andrew Ng's Reflexive Workflow Translation Agent Replication](Examples/Translation_Assistant.md)
 
 **7.Product Platform**
-* 7.1 [Quick Use](How-to/Guide%20to%20Visual%20Agentic%20Workflow%20Platform/Product_Platform_Quick_Start.md)
-* 7.2 [Advancement Guide](How-to/Guide%20to%20Visual%20Agentic%20Workflow%20Platform/Product_Platform_Advancement_Guide.md)
+* 7.1 [Quick Use](How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Quick_Start.md)
+* 7.2 [Advancement Guide](How-to/Guide to Visual Agentic Workflow Platform/Product_Platform_Advancement_Guide.md)
 
 **8. Series of Articles**
 
