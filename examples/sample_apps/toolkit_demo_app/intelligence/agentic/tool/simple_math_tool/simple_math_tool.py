@@ -22,29 +22,35 @@ class AddTool(Tool):
 
 class SubtractTool(Tool):
     def execute(self, a: float, b: float):
+        """Return the first float operand minus the second."""
         result = a - b
         return result
 
     async def async_execute(self, a: float, b: float):
+        """Return the first float operand minus the second."""
         result = a - b
         return result
 
 
 class MultiplyTool(Tool):
     def execute(self, a: float, b: float):
+        """Return the product of the two float operands."""
         result = a * b
         return result
 
     async def async_execute(self, a: float, b: float):
+        """Return the product of the two float operands."""
         result = a * b
         return result
 
 
 class DivideTool(Tool):
     def execute(self, a: float, b: float):
+        """Return the first float operand divided by the second."""
         result = a / b
         return result
 
     async def async_execute(self, a: float, b: float):
+        """Return the first float operand divided by the second."""
         result = a / b
         return result
