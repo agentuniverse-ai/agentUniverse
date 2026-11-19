@@ -25,7 +25,7 @@ from agentuniverse.prompt.prompt_model import AgentPromptModel
 class TestPromptToolkit(unittest.TestCase):
     """Test cases for PromptToolkit class."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.config = PromptToolkitConfig()
         self.toolkit = PromptToolkit(self.config)
@@ -39,14 +39,14 @@ class TestPromptToolkit(unittest.TestCase):
             tone="友好"
         )
     
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test toolkit initialization."""
         self.assertIsNotNone(self.toolkit.config)
         self.assertIsNotNone(self.toolkit.generator)
         self.assertIsNotNone(self.toolkit.optimizer)
         self.assertIsNotNone(self.toolkit.analyzer)
     
-    def test_initialization_with_config(self):
+    def test_initialization_with_config(self) -> None:
         """Test toolkit initialization with custom config."""
         custom_config = PromptToolkitConfig(
             enable_auto_optimization=False,
@@ -57,7 +57,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertEqual(toolkit.config.enable_auto_optimization, False)
         self.assertEqual(toolkit.config.default_scenario, PromptScenario.CREATIVE)
     
-    def test_generate_prompt_from_request(self):
+    def test_generate_prompt_from_request(self) -> None:
         """Test prompt generation from request."""
         result = self.toolkit.generate_prompt_from_request(self.sample_request)
         
@@ -70,7 +70,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertLessEqual(result.confidence_score, 1.0)
         self.assertIsInstance(result.metadata, dict)
     
-    def test_generate_prompt_from_request_with_optimization(self):
+    def test_generate_prompt_from_request_with_optimization(self) -> None:
         """Test prompt generation with optimization enabled."""
         result = self.toolkit.generate_prompt_from_request(self.sample_request)
         
@@ -78,7 +78,7 @@ class TestPromptToolkit(unittest.TestCase):
         if self.config.enable_auto_optimization:
             self.assertIsNotNone(result.optimization_result)
     
-    def test_generate_prompt_from_request_without_optimization(self):
+    def test_generate_prompt_from_request_without_optimization(self) -> None:
         """Test prompt generation without optimization."""
         config = PromptToolkitConfig(enable_auto_optimization=False)
         toolkit = PromptToolkit(config)
@@ -88,7 +88,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIsInstance(result, PromptToolkitResult)
         self.assertIsNone(result.optimization_result)
     
-    def test_optimize_existing_prompt(self):
+    def test_optimize_existing_prompt(self) -> None:
         """Test optimization of existing prompt."""
         prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -104,7 +104,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIsInstance(result.improvements, list)
         self.assertIsInstance(result.confidence_score, float)
     
-    def test_optimize_existing_prompt_with_strategies(self):
+    def test_optimize_existing_prompt_with_strategies(self) -> None:
         """Test optimization with specific strategies."""
         prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -118,7 +118,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result.optimization_strategies, strategies)
     
-    def test_analyze_prompt_quality(self):
+    def test_analyze_prompt_quality(self) -> None:
         """Test prompt quality analysis."""
         prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -137,7 +137,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIsInstance(result["overall_score"], float)
         self.assertIsInstance(result["recommendations"], list)
     
-    def test_batch_generate_prompts(self):
+    def test_batch_generate_prompts(self) -> None:
         """Test batch prompt generation."""
         requests = [
             PromptGenerationRequest(
@@ -159,7 +159,7 @@ class TestPromptToolkit(unittest.TestCase):
             self.assertIsInstance(result, PromptToolkitResult)
             self.assertIsInstance(result.generated_prompt, AgentPromptModel)
     
-    def test_batch_generate_prompts_with_error(self):
+    def test_batch_generate_prompts_with_error(self) -> None:
         """Test batch generation with error handling."""
         # Create a request that might cause an error
         requests = [
@@ -178,7 +178,7 @@ class TestPromptToolkit(unittest.TestCase):
         result = results[0]
         self.assertIsInstance(result, PromptToolkitResult)
     
-    def test_compare_prompts(self):
+    def test_compare_prompts(self) -> None:
         """Test prompt comparison."""
         prompt1 = AgentPromptModel(
             introduction="你是一个助手",
@@ -207,7 +207,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIsInstance(result["score_difference"], float)
         self.assertIsInstance(result["detailed_comparison"], dict)
     
-    def test_export_prompt_config_yaml(self):
+    def test_export_prompt_config_yaml(self) -> None:
         """Test prompt export as YAML."""
         prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -223,7 +223,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIn("instruction:", yaml_config)
         self.assertIn("metadata:", yaml_config)
     
-    def test_export_prompt_config_json(self):
+    def test_export_prompt_config_json(self) -> None:
         """Test prompt export as JSON."""
         prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -239,7 +239,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIn("instruction", json_config)
         self.assertIn("metadata", json_config)
     
-    def test_export_prompt_config_unsupported_format(self):
+    def test_export_prompt_config_unsupported_format(self) -> None:
         """Test export with unsupported format."""
         prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -250,7 +250,7 @@ class TestPromptToolkit(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.toolkit.export_prompt_config(prompt, "xml")
     
-    def test_generate_recommendations(self):
+    def test_generate_recommendations(self) -> None:
         """Test recommendations generation."""
         # Mock analysis result
         analysis_result = Mock()
@@ -276,7 +276,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIsInstance(recommendations, list)
         self.assertGreater(len(recommendations), 0)
     
-    def test_calculate_overall_confidence(self):
+    def test_calculate_overall_confidence(self) -> None:
         """Test overall confidence calculation."""
         # Mock analysis result
         analysis_result = Mock()
@@ -295,7 +295,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertGreaterEqual(confidence, 0.0)
         self.assertLessEqual(confidence, 1.0)
     
-    def test_calculate_overall_confidence_without_optimization(self):
+    def test_calculate_overall_confidence_without_optimization(self) -> None:
         """Test confidence calculation without optimization."""
         # Mock analysis result
         analysis_result = Mock()
@@ -308,7 +308,7 @@ class TestPromptToolkit(unittest.TestCase):
         
         self.assertEqual(confidence, 0.8)
     
-    def test_export_as_yaml(self):
+    def test_export_as_yaml(self) -> None:
         """Test YAML export functionality."""
         prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -324,7 +324,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIn("instruction:", yaml_content)
         self.assertIn("metadata:", yaml_content)
     
-    def test_export_as_json(self):
+    def test_export_as_json(self) -> None:
         """Test JSON export functionality."""
         prompt = AgentPromptModel(
             introduction="你是一个助手",
@@ -340,7 +340,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIn("instruction", json_content)
         self.assertIn("metadata", json_content)
     
-    def test_prompt_toolkit_config_defaults(self):
+    def test_prompt_toolkit_config_defaults(self) -> None:
         """Test default configuration values."""
         config = PromptToolkitConfig()
         
@@ -350,7 +350,7 @@ class TestPromptToolkit(unittest.TestCase):
         self.assertIsNotNone(config.optimization_strategies)
         self.assertEqual(config.confidence_threshold, 0.6)
     
-    def test_prompt_generation_request_defaults(self):
+    def test_prompt_generation_request_defaults(self) -> None:
         """Test default request values."""
         request = PromptGenerationRequest(
             scenario_description="测试场景"
