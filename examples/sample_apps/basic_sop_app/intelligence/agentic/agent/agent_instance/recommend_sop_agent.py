@@ -23,6 +23,11 @@ from basic_sop_app.intelligence.utils.constant import product_info
 
 
 class RecommendSopAgent(AgentTemplate):
+    """Agent template that runs the product recommendation SOP end to end.
+
+    It orchestrates the choose-product-info and choose-product agents plus the
+    product-info tool, then asks the LLM to produce the final recommendation.
+    """
 
     def input_keys(self) -> list[str]:
         """Return the input keys of the Agent."""
@@ -57,12 +62,35 @@ class RecommendSopAgent(AgentTemplate):
         return {**agent_result}
 
     def execute(self, input_object: InputObject, agent_input: dict, **kwargs) -> dict:
+        """Run the recommendation SOP by resolving memory and LLM first.
+
+        Args:
+            input_object (InputObject): input parameters passed by the user.
+            agent_input (dict): agent input preparsed by the agent.
+            **kwargs: additional agent execution arguments.
+        Returns:
+            dict: The agent result dict.
+        """
         memory: Memory = self.process_memory(agent_input, **kwargs)
         llm: LLM = self.process_llm(**kwargs)
         return self.customized_execute(input_object, agent_input, memory, llm, **kwargs)
 
     def customized_execute(self, input_object: InputObject, agent_input: dict, memory: Memory,
                            llm: LLM, **kwargs) -> dict:
+        """Execute the full product recommendation workflow.
+
+        The method gathers candidate items, enriches them with product info,
+        selects the final products, and generates the recommendation output.
+
+        Args:
+            input_object (InputObject): input parameters passed by the user.
+            agent_input (dict): agent input dict mutated with the recommendation data.
+            memory (Memory): the memory instance resolved by the agent.
+            llm (LLM): the LLM instance resolved by the agent.
+            **kwargs: additional agent execution arguments.
+        Returns:
+            dict: The agent result dict containing the output text.
+        """
 
         # invoke choose_product_info_agent to target required items
         choose_product_info_agent: Agent = AgentManager().get_instance_obj('choose_product_info_agent')
