@@ -1,0 +1,13 @@
+name: lancedb_store
+description: LanceDB embedded vector store for knowledge retrieval
+db_path: ./lancedb
+table_name: agentuniverse_documents
+embedding_model: openai_embedding
+dimensions: 1536
+distance: cosine
+similarity_top_k: 10
+max_insert_batch: 500
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.lancedb_store
+  class: LanceDBStore
