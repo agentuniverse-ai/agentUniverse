@@ -308,9 +308,10 @@ class RedisContextStore(ContextStore):
                     to_remove.append(segment.id)
                     continue
 
-            # Check manual TTL (from metadata)
+            # Check manual TTL (from metadata). Nonpositive TTL disables
+            # age pruning, matching ContextStore._is_expired().
             age_hours = (now - segment.metadata.created_at).total_seconds() / 3600
-            if age_hours > self.ttl_hours:
+            if self.ttl_hours > 0 and age_hours > self.ttl_hours:
                 to_remove.append(segment.id)
 
         if to_remove:
