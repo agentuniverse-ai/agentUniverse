@@ -9,6 +9,11 @@ from agentuniverse.base.config.configer import Configer
 
 
 class ConfigExtension:
+    """Extension hook for custom application configuration.
+
+    Its ``__init__`` is invoked during agentUniverse initialization, allowing
+    users to load extra configuration or initialize external services.
+    """
 
     def __init__(self, configer: Configer) -> None:
         """
