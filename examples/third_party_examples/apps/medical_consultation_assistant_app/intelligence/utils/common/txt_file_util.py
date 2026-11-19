@@ -16,7 +16,7 @@ class TxtFileOps(object):
         return
 
     @classmethod
-    def is_file_exist(cls, file_path):
+    def is_file_exist(cls, file_path) -> bool:
         file_name, ext = os.path.splitext(file_path)
         if ext.lower() != '.txt':
             raise Exception('Unsupported file extension')
@@ -40,7 +40,7 @@ class TxtFileReader(object):
         else:
             return None
 
-    def read_txt_obj_list(self):
+    def read_txt_obj_list(self) -> list:
         obj_list = []
         while True:
             obj = self.read_txt_obj()
