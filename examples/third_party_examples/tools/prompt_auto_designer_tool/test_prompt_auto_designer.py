@@ -12,9 +12,11 @@ from agentuniverse.prompt.prompt_model import AgentPromptModel
 
 
 def test_generate_prompt_success(monkeypatch):
+    """Test that a valid LLM JSON response yields a parsed prompt result."""
     captured: dict = {}
 
     def fake_invoke(self, version, payload):
+        """Capture the invocation and return a valid generation payload."""
         captured["version"] = version
         captured["payload"] = payload
         return json.dumps(
@@ -55,6 +57,7 @@ def test_generate_prompt_success(monkeypatch):
 
 
 def test_optimize_prompt_merges_fallback(monkeypatch):
+    """Test that optimize_prompt merges LLM output while keeping fallbacks."""
     base_prompt = AgentPromptModel(
         introduction="你是一名财务分析助手。",
         target="帮助分析季度营收表现。",
@@ -62,6 +65,7 @@ def test_optimize_prompt_merges_fallback(monkeypatch):
     )
 
     def fake_invoke(self, version, payload):
+        """Return an optimization payload for the fixed fallback prompt."""
         assert version == "auto_prompt.optimizer_cn"
         assert "季度营收" in payload["current_prompt"]
         return json.dumps(
@@ -97,6 +101,7 @@ def test_optimize_prompt_merges_fallback(monkeypatch):
 
 
 def test_generate_prompt_invalid_json(monkeypatch):
+    """Test that malformed LLM output raises PromptAutoDesignerError."""
     monkeypatch.setattr(PromptAutoDesigner, "_invoke_llm", lambda self, version, payload: "not-json")
     designer = PromptAutoDesigner()
     request = PromptGenerationRequest(
