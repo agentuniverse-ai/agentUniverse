@@ -242,7 +242,7 @@ class FAISSStore(Store):
                 return []
             embedding = [self._get_embedding(query.query_str, text_type="query")]
 
-        if not embedding or len(embedding[0]) == 0:
+        if not embedding or not embedding[0]:
             return []
 
         # Convert to numpy array
