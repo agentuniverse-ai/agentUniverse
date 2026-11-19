@@ -195,6 +195,9 @@ class RedisContextStore(ContextStore):
         Returns:
             List of matching segments ranked by relevance
         """
+        if not isinstance(query, str) or not query.strip():
+            return []
+
         # Get all segments and do in-memory search
         # For production, consider Redis full-text search module
         segments = self.get(session_id, limit=1000)
