@@ -10,6 +10,11 @@ AgentUniverse().start(config_path='../../config/config.toml', core_mode=True)
 
 
 def chat(question: str):
+    """Run the primary Chinese teacher agent on the question and print the answer.
+
+    Args:
+        question: The user question to send to the agent.
+    """
     instance: Agent = AgentManager().get_instance_obj('primary_chinese_teacher_agent')
     output_object: OutputObject = instance.run(input=question)
     print(output_object.get_data('output'))
