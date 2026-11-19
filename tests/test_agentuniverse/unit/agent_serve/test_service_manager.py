@@ -16,6 +16,8 @@ from tests.test_agentuniverse.mock.agent_serve.mock_application_config_manager i
 @patch("agentuniverse.agent_serve.service_manager.Service", new=SimpleService)
 @patch("agentuniverse.base.component.component_manager_base.ApplicationConfigManager", new=MockApplicationConfigManager)
 def test_service_manager():
+    """Test that service manager.
+    """
     service_manager: ServiceManager = ServiceManager()
     mock_service = MagicMock()
     mock_service.name = "test_service_1"
