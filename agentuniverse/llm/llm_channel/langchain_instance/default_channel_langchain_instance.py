@@ -154,7 +154,7 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
         @retry_decorator
         async def _completion_with_retry(**kwargs: Any) -> Any:
             # Use OpenAI's async api https://github.com/openai/openai-python#async-api
-            return await llm.llm.acall(**kwargs)
+            return await llm.llm_channel.acall(**kwargs)
 
         return await _completion_with_retry(**kwargs)
 
