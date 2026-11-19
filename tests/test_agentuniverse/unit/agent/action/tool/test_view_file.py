@@ -90,6 +90,37 @@ class ViewFileToolTest(unittest.TestCase):
         self.assertEqual(result['start_line'], 1)
         self.assertEqual(result['end_line'], 2)
 
+    def test_bounded_range_streams_without_readlines(self):
+        """A bounded view should not materialize every line before slicing."""
+        with open(self.temp_file_path, 'a', encoding='utf-8') as temp_file:
+            temp_file.write('Line 6\nLine 7\n')
+
+        real_file = open(self.temp_file_path, 'r', encoding='utf-8')
+
+        class IterationOnlyFile:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                real_file.close()
+
+            def __iter__(self):
+                return iter(real_file)
+
+            def readlines(self):
+                raise AssertionError('bounded reads must not call readlines')
+
+        with patch('builtins.open', return_value=IterationOnlyFile()):
+            result = json.loads(self.tool.execute(
+                file_path=self.temp_file_path,
+                start_line=2,
+                end_line=4,
+            ))
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['content'], 'Line 3\nLine 4\n')
+        self.assertEqual(result['total_lines'], 7)
+
     def test_invalid_line_number_returns_error(self):
         """Verify a non-numeric start_line yields an error."""
         result_json = self.tool.execute(
