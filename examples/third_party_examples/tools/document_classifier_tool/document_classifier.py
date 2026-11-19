@@ -62,6 +62,12 @@ class DocumentClassifier(DocProcessor):
     confidence_key: str = "classification_confidence"
     
     class Config:
+        """Pydantic model configuration for the document classifier.
+
+        Attributes:
+            arbitrary_types_allowed: Permit arbitrary (non-pydantic) types
+                in model fields.
+        """
         arbitrary_types_allowed = True
 
     def _process_docs(self, origin_docs: List[Document], query: Query = None) -> List[Document]:
