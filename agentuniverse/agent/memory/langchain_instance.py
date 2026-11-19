@@ -61,7 +61,7 @@ class AuConversationSummaryBufferMemory(ConversationSummaryBufferMemory):
             buffer = self.moving_summary_buffer + buffer
         return buffer
 
-    def build_memory(self):
+    def build_memory(self) -> None:
         """Save the memory context from messages in `messages` attribute to the memory buffer.
 
         Note:
@@ -94,7 +94,7 @@ class AuConversationSummaryBufferMemory(ConversationSummaryBufferMemory):
     def save_context(self, inputs: Dict[str, Any], outputs: Dict[str, str]) -> None:
         """Save context from the conversation to buffer and prune memories"""
 
-        def message_to_dict(message):
+        def message_to_dict(message) -> dict:
             return {
                 "content": message.content,
                 "type": message.type
@@ -152,7 +152,7 @@ class AuConversationTokenBufferMemory(ConversationTokenBufferMemory):
         """ General method: load the memory context from the memory buffer as string format."""
         return get_buffer_string(self.chat_memory.messages)
 
-    def build_memory(self):
+    def build_memory(self) -> None:
         """Save the memory context from messages in `messages` attribute to the memory buffer.
 
         Note:
@@ -184,7 +184,7 @@ class AuConversationTokenBufferMemory(ConversationTokenBufferMemory):
     def save_context(self, inputs: Dict[str, Any], outputs: Dict[str, str]) -> None:
         """Save context from the conversation to buffer and truncate part of memories."""
 
-        def message_to_dict(message):
+        def message_to_dict(message) -> dict:
             return {
                 "content": message.content,
                 "type": message.type
