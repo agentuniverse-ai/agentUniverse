@@ -13,13 +13,13 @@ class InputObject(object):
         for k, v in self.__params.items():
             self.__dict__[k] = v
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return self.__params.copy()
 
-    def to_json_str(self):
+    def to_json_str(self) -> str:
         return json.dumps(self.__params)
 
-    def add_data(self, key, value):
+    def add_data(self, key, value) -> None:
         self.__params[key] = value
         self.__dict__[key] = value
 
