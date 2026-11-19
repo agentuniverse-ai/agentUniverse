@@ -49,6 +49,7 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 
 ## Prebuilt Readers in agentUniverse:
 - [default_docx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/docx_reader.yaml): Reads text content from local Docx files.
+- [PDF annotation evidence](PDF_Annotation_Reader.md): Review comments with page-space anchors.
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml): Reads text content from local PDF files.
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml): Reads text content from local PPTX files.
 - [default_txt_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/txt_reader.yaml): Reads text content from TXT files.
