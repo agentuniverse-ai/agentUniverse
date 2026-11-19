@@ -234,7 +234,7 @@ class FAISSStore(Store):
 
         # Get query embedding
         embedding = query.embeddings
-        if len(embedding) == 0:
+        if not embedding:
             if not query.query_str:
                 return []
             if self.embedding_model is None:
