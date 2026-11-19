@@ -15,6 +15,7 @@ from flask import request, make_response, jsonify
 from ..service_instance import ServiceInstance
 from ...agent.agent import Agent
 from ...agent.agent_manager import AgentManager
+from ...base.util.common_util import stream_output
 from ...base.util.logging.logging_util import LOGGER
 from ...base.annotation.singleton import singleton
 
@@ -80,7 +81,7 @@ def service_run_queue(service_id, **kwargs):
         return res
     finally:
         if stream:
-            stream.put_nowait('{"type": "EOF"}')
+            stream_output(stream, '{"type": "EOF"}', block_timeout=60)
 
 
 def agent_run_queue(agent_id, **kwargs):
@@ -97,7 +98,7 @@ def agent_run_queue(agent_id, **kwargs):
         return res
     finally:
         if stream:
-            stream.put_nowait('{"type": "EOF"}')
+            stream_output(stream, '{"type": "EOF"}', block_timeout=60)
 
 
 async def async_agent_run_queue(agent_id, **kwargs):
@@ -108,7 +109,10 @@ async def async_agent_run_queue(agent_id, **kwargs):
         return res
     finally:
         if stream:
-            await asyncio.to_thread(stream.put_nowait, '{"type": "EOF"}')
+            try:
+                await asyncio.wait_for(stream.put('{"type": "EOF"}'), timeout=60)
+            except asyncio.TimeoutError:
+                LOGGER.error("async output stream stalled, EOF signal dropped")
 
 
 def make_standard_response(success: bool,
