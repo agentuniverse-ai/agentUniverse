@@ -1,0 +1,8 @@
+name: sentence_window_expander
+description: Expand sentence hits into original context and merge consistent overlaps.
+max_window_chars: 2000
+score_fields: [relevance_score, bm25_score, rrf_score]
+metadata:
+  type: DOC_PROCESSOR
+  module: agentuniverse.agent.action.knowledge.doc_processor.sentence_window
+  class: SentenceWindowExpander
