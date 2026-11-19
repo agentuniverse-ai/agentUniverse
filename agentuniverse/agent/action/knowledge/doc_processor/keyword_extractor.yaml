@@ -1,0 +1,10 @@
+name: 'keyword_extractor'
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.keyword_extractor'
+  class: 'KeywordExtractor'
+description: 'Extracts top-N keywords from documents using a dependency-free YAKE-like algorithm.'
+top_k: 10
+ngram_size: 3
+keywords_key: 'keywords'
+min_term_freq: 1
