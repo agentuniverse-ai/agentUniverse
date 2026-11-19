@@ -1,0 +1,9 @@
+name: 'abab6.5s-chat'
+description: 'abab6.5s-chat'
+model_name: 'abab6.5s-chat'
+max_tokens: 2000
+temperature: 0.5
+streaming: True
+max_context_length: 8000
+channel: abab6.5s-chat-official
+meta_class: 'agentuniverse.llm.default.minimax_openai_style_llm.MiniMaxOpenAIStyleLLM'

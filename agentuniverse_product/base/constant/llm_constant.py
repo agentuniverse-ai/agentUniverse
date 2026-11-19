@@ -32,4 +32,8 @@ LLM_MODEL_NAME = {
     'baichuan_llm': ['Baichuan4', 'Baichuan3-Turbo', 'Baichuan3-Turbo-128k', 'Baichuan2-Turbo', 'Baichuan2-Turbo-192k'],
     'default_baichuan_llm': ['Baichuan4', 'Baichuan3-Turbo', 'Baichuan3-Turbo-128k', 'Baichuan2-Turbo',
                              'Baichuan2-Turbo-192k'],
+    'minimax_llm': ['MiniMax-Text-01', 'MiniMax-VL-01', 'abab6.5s-chat', 'abab6.5-chat',
+                    'abab5.5s-chat', 'abab5.5-chat'],
+    'default_minimax_llm': ['MiniMax-Text-01', 'MiniMax-VL-01', 'abab6.5s-chat', 'abab6.5-chat',
+                            'abab5.5s-chat', 'abab5.5-chat'],
 }
