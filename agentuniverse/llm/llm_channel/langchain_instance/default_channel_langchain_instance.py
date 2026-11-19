@@ -76,6 +76,22 @@ class DefaultChannelLangchainInstance(ChatOpenAI):
         return await agenerate_from_stream(stream_iter)
 
     def as_langchain_chunk(self, stream, run_manager=None):
+        """Yield LangChain ``ChatGenerationChunk`` objects from an LLM result stream.
+
+        Each result's ``raw`` payload is converted to a dict when needed,
+        and results with no choices are skipped. The first choice's delta
+        is converted into a message chunk and yielded, and
+        ``run_manager.on_llm_new_token`` is called for each chunk when a
+        run manager is provided.
+
+        Args:
+            stream: Iterable of LLM results whose ``raw`` field holds the
+                raw OpenAI-style response.
+            run_manager: Optional LangChain run manager for token events.
+
+        Yields:
+            ChatGenerationChunk: One per non-empty choice in the stream.
+        """
         default_chunk_class = AIMessageChunk
         for llm_result in stream:
             chunk = llm_result.raw
