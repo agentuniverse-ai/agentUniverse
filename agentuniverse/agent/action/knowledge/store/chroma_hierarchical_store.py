@@ -46,7 +46,7 @@ class ChromaHierarchicalStore(ChromaStore):
         """
 
         embedding = query.embeddings
-        if self.embedding_model is not None and len(embedding) == 0:
+        if self.embedding_model is not None and not embedding:
             embedding = EmbeddingManager().get_instance_obj(
                 self.embedding_model
             ).get_embeddings([query.query_str], text_type="query")[0]
