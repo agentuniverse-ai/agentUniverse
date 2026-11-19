@@ -16,7 +16,7 @@ from examples.third_party_examples.apps.prompt_toolkit_app.prompt.prompt_optimiz
 class TestPromptOptimizer(unittest.TestCase):
     """Test cases for PromptOptimizer class."""
     
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures."""
         self.optimizer = PromptOptimizer()
         self.sample_prompt = AgentPromptModel(
@@ -25,7 +25,7 @@ class TestPromptOptimizer(unittest.TestCase):
             instruction="请按照以下步骤回答问题：1. 理解问题 2. 分析问题 3. 提供解决方案"
         )
     
-    def test_optimize_prompt_basic(self):
+    def test_optimize_prompt_basic(self) -> None:
         """Test basic prompt optimization."""
         result = self.optimizer.optimize_prompt(self.sample_prompt)
         
@@ -40,7 +40,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIsInstance(result.suggestions, list)
         self.assertIsInstance(result.optimization_strategies, list)
     
-    def test_optimize_prompt_with_strategies(self):
+    def test_optimize_prompt_with_strategies(self) -> None:
         """Test prompt optimization with specific strategies."""
         strategies = [OptimizationStrategy.CLARITY, OptimizationStrategy.STRUCTURE]
         
@@ -52,7 +52,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIsInstance(result, OptimizationResult)
         self.assertEqual(result.optimization_strategies, strategies)
     
-    def test_optimize_prompt_with_custom_rules(self):
+    def test_optimize_prompt_with_custom_rules(self) -> None:
         """Test prompt optimization with custom rules."""
         custom_rule = OptimizationRule(
             name="test_rule",
@@ -70,7 +70,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIsInstance(result, OptimizationResult)
         self.assertIn("专业助手", result.optimized_prompt)
     
-    def test_analyze_prompt_quality(self):
+    def test_analyze_prompt_quality(self) -> None:
         """Test prompt quality analysis."""
         quality_scores = self.optimizer.analyze_prompt_quality(self.sample_prompt)
         
@@ -86,7 +86,7 @@ class TestPromptOptimizer(unittest.TestCase):
             self.assertIsInstance(score.feedback, str)
             self.assertIsInstance(score.suggestions, list)
     
-    def test_suggest_improvements(self):
+    def test_suggest_improvements(self) -> None:
         """Test improvement suggestions."""
         suggestions = self.optimizer.suggest_improvements(self.sample_prompt)
         
@@ -97,7 +97,7 @@ class TestPromptOptimizer(unittest.TestCase):
     
     
     
-    def test_get_applicable_rules(self):
+    def test_get_applicable_rules(self) -> None:
         """Test getting applicable rules."""
         strategies = [OptimizationStrategy.CLARITY]
         rules = self.optimizer._get_applicable_rules(strategies, None)
@@ -106,7 +106,7 @@ class TestPromptOptimizer(unittest.TestCase):
         # Should have some rules for clarity strategy
         self.assertGreater(len(rules), 0)
     
-    def test_get_applicable_rules_with_custom(self):
+    def test_get_applicable_rules_with_custom(self) -> None:
         """Test getting applicable rules with custom rules."""
         custom_rule = OptimizationRule(
             name="custom_rule",
@@ -127,7 +127,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIn(custom_rule, rules)
     
     
-    def test_calculate_metric_score(self):
+    def test_calculate_metric_score(self) -> None:
         """Test metric score calculation."""
         patterns = {
             "positive_patterns": [r"助手", r"帮助"],
@@ -150,7 +150,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIsInstance(score, float)
         self.assertLess(score, 0.5)  # Should be negative
     
-    def test_generate_feedback(self):
+    def test_generate_feedback(self) -> None:
         """Test feedback generation."""
         # Test high score
         feedback = self.optimizer._generate_feedback(
@@ -168,7 +168,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIsInstance(feedback, str)
         self.assertIn("较差", feedback)
     
-    def test_generate_suggestions_for_metric(self):
+    def test_generate_suggestions_for_metric(self) -> None:
         """Test suggestions generation for metrics."""
         # Test clarity suggestions
         suggestions = self.optimizer._generate_suggestions_for_metric(
@@ -186,7 +186,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIsInstance(suggestions_high, list)
         self.assertLessEqual(len(suggestions_high), len(suggestions))
     
-    def test_generate_improvements(self):
+    def test_generate_improvements(self) -> None:
         """Test improvements generation."""
         improvements = self.optimizer._generate_improvements(
             self.sample_prompt,
@@ -199,7 +199,7 @@ class TestPromptOptimizer(unittest.TestCase):
         # Should have improvements since we changed all sections
         self.assertGreater(len(improvements), 0)
     
-    def test_generate_suggestions(self):
+    def test_generate_suggestions(self) -> None:
         """Test suggestions generation."""
         quality_scores = [
             QualityScore(
@@ -218,7 +218,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIsInstance(suggestions, list)
         self.assertGreater(len(suggestions), 0)
     
-    def test_calculate_confidence_score(self):
+    def test_calculate_confidence_score(self) -> None:
         """Test confidence score calculation."""
         quality_scores = [
             QualityScore(
@@ -238,7 +238,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertGreaterEqual(score, 0.0)
         self.assertLessEqual(score, 1.0)
     
-    def test_format_prompt(self):
+    def test_format_prompt(self) -> None:
         """Test prompt formatting."""
         formatted = self.optimizer._format_prompt(self.sample_prompt)
         
@@ -247,7 +247,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIn("目标：", formatted)
         self.assertIn("指令：", formatted)
     
-    def test_format_optimized_prompt(self):
+    def test_format_optimized_prompt(self) -> None:
         """Test optimized prompt formatting."""
         formatted = self.optimizer._format_optimized_prompt(
             "优化介绍",
@@ -260,7 +260,7 @@ class TestPromptOptimizer(unittest.TestCase):
         self.assertIn("目标：", formatted)
         self.assertIn("指令：", formatted)
     
-    def test_optimization_rules_initialization(self):
+    def test_optimization_rules_initialization(self) -> None:
         """Test optimization rules initialization."""
         rules = self.optimizer._optimization_rules
         
@@ -275,7 +275,7 @@ class TestPromptOptimizer(unittest.TestCase):
             self.assertIsInstance(rule.description, str)
             self.assertIsInstance(rule.priority, int)
     
-    def test_quality_patterns_initialization(self):
+    def test_quality_patterns_initialization(self) -> None:
         """Test quality patterns initialization."""
         patterns = self.optimizer._quality_patterns
         
@@ -289,7 +289,7 @@ class TestPromptOptimizer(unittest.TestCase):
             self.assertIn("negative_patterns", pattern_data)
             self.assertIn("weight", pattern_data)
     
-    def test_context_keywords_initialization(self):
+    def test_context_keywords_initialization(self) -> None:
         """Test context keywords initialization."""
         keywords = self.optimizer._context_keywords
         
