@@ -4,6 +4,8 @@ similarity_threshold: 0.85
 use_embeddings: true
 embedding_name: 'default_embedding'
 clustering_method: 'dbscan'  # Options: 'dbscan', 'hierarchical'
+# 'extractive' needs no LLM; 'map_reduce' makes one map call per source plus
+# reduction calls over batches of up to eight source summaries.
 summarization_mode: 'map_reduce'  # Options: 'extractive', 'map_reduce'
 use_llm: true
 llm_name: 'default_llm'
