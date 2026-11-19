@@ -1,0 +1,11 @@
+name: 'azure-gpt-4o'
+description: 'Azure OpenAI gpt-4o deployment'
+model_name: 'gpt-4o'
+api_base: '${AZURE_OPENAI_ENDPOINT}'
+api_key: '${AZURE_OPENAI_API_KEY}'
+api_version: '2024-08-01-preview'
+temperature: 0.7
+max_tokens: 2048
+streaming: false
+max_context_length: 128000
+meta_class: 'agentuniverse.llm.default.azure_openai_llm.AzureOpenAIStyleLLM'
