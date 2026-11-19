@@ -12,6 +12,8 @@ from agentuniverse.base.tracing import au_trace_context as new_module
 
 
 def __getattr__(name):
+    """Forward attribute access to the re-exported module with a deprecation warning.
+    """
     if hasattr(new_module, name):
         warnings.warn(
             f"Importing {name} from 'agentuniverse.base.util.tracing.au_trace_context' "
