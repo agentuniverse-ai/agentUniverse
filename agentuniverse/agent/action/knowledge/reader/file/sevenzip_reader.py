@@ -10,7 +10,7 @@ from agentuniverse.agent.action.knowledge.store.document import Document
 class SevenZipReader(Reader):
     """
     7Z (.7z) archive reader.
-    
+
     Supports reading various file formats from 7Z archives with security limits,
     nested 7Z handling, and automatic format detection.
     """
@@ -113,11 +113,11 @@ class SevenZipReader(Reader):
             with py7zr.SevenZipFile(str(sevenzip_path), 'r') as archive:
                 # 获取7Z文件中的所有条目
                 entries = archive.getnames()
-                
+
                 # 获取每个文件的详细信息
                 file_info_map = {}
                 files_info = archive.list()
-                
+
                 for file_info in files_info:
                     file_info_map[file_info.filename] = file_info
 
@@ -173,7 +173,7 @@ class SevenZipReader(Reader):
                         # 解压当前条目
                         #archive.extract(path=extract_dir, targets=[entry_name])
                         #archive.extract(entry_name,extract_dir)
-                        
+
                         # 构建提取后的完整路径
                         extracted_path = Path(extract_dir) / entry_name
                         total_extracted += uncompressed_size
@@ -236,7 +236,7 @@ class SevenZipReader(Reader):
 
         # 根据文件扩展名获取对应的读取器
         reader = self._get_reader_for_file(file_path)
-        
+
         if not reader:
             return []
 
