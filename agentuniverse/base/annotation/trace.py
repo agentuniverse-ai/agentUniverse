@@ -80,8 +80,6 @@ def _get_llm_info(func, *args, **kwargs):
     channel_name = 'default_channel'
     if self and hasattr(self, 'channel_name'):
         channel_name = self.channel_name
-        if channel_name is not None:
-            channel_name = channel_name
 
     caller_info = get_caller_info()
 
