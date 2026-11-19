@@ -136,7 +136,7 @@ CPU使用率: 45%
     return zip_path
 
 
-def demo_basic_usage(zip_path):
+def demo_basic_usage(zip_path) -> None:
     """演示基础用法"""
     print("\n" + "=" * 80)
     print("演示1: 基础用法")
@@ -169,7 +169,7 @@ def demo_basic_usage(zip_path):
         print(f"    内容: {content_preview}")
 
 
-def demo_nested_zip(zip_path):
+def demo_nested_zip(zip_path) -> None:
     """演示嵌套ZIP处理"""
     print("\n" + "=" * 80)
     print("演示2: 嵌套ZIP处理")
@@ -189,7 +189,7 @@ def demo_nested_zip(zip_path):
         print(f"     内容长度: {len(doc.text)} 字符")
 
 
-def demo_file_type_filtering(zip_path):
+def demo_file_type_filtering(zip_path) -> None:
     """演示按文件类型过滤"""
     print("\n" + "=" * 80)
     print("演示3: 按文件类型过滤")
@@ -216,7 +216,7 @@ def demo_file_type_filtering(zip_path):
         print(f"  - {doc.metadata.get('archive_path', 'Unknown')}")
 
 
-def demo_custom_metadata(zip_path):
+def demo_custom_metadata(zip_path) -> None:
     """演示自定义元数据"""
     print("\n" + "=" * 80)
     print("演示4: 自定义元数据")
@@ -242,7 +242,7 @@ def demo_custom_metadata(zip_path):
             print(f"  {key}: {value}")
 
 
-def demo_custom_configuration(zip_path):
+def demo_custom_configuration(zip_path) -> None:
     """演示自定义配置"""
     print("\n" + "=" * 80)
     print("演示5: 自定义Reader配置")
@@ -268,7 +268,7 @@ def demo_custom_configuration(zip_path):
     print(f"\n使用自定义配置成功读取 {len(documents)} 个文档")
 
 
-def demo_file_reader_integration(zip_path):
+def demo_file_reader_integration(zip_path) -> None:
     """演示与FileReader的集成"""
     print("\n" + "=" * 80)
     print("演示6: 与FileReader集成")
@@ -282,7 +282,7 @@ def demo_file_reader_integration(zip_path):
     print(f"\nFileReader会自动调用ZipReader处理.zip文件")
 
 
-def demo_error_handling():
+def demo_error_handling() -> None:
     """演示错误处理和安全限制"""
     print("\n" + "=" * 80)
     print("演示7: 错误处理和安全限制")
@@ -312,7 +312,7 @@ def demo_error_handling():
         print(f"  正确捕获异常: {type(e).__name__}")
 
 
-def demo_content_search(zip_path):
+def demo_content_search(zip_path) -> None:
     """演示内容搜索"""
     print("\n" + "=" * 80)
     print("演示8: 内容搜索")
@@ -333,7 +333,7 @@ def demo_content_search(zip_path):
             print(f"    - {file_name} ({path})")
 
 
-def demo_statistics(zip_path):
+def demo_statistics(zip_path) -> None:
     """演示统计信息"""
     print("\n" + "=" * 80)
     print("演示9: 统计信息")
@@ -369,7 +369,7 @@ def demo_statistics(zip_path):
         print(f"  最小: {smallest_doc.metadata.get('file_name', 'Unknown')} ({len(smallest_doc.text):,} 字符)")
 
 
-def cleanup(zip_path):
+def cleanup(zip_path) -> None:
     """清理示例文件"""
     print("\n" + "=" * 80)
     print("清理示例文件")
@@ -380,7 +380,7 @@ def cleanup(zip_path):
         print(f"已删除: {zip_path}")
 
 
-def main():
+def main() -> None:
     """主函数：运行所有演示"""
     print("\n")
     print("=" * 80)
