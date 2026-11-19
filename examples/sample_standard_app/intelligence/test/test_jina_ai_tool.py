@@ -20,6 +20,8 @@ class JinaAIToolTest(unittest.TestCase):
     url = "https://github.com/antgroup/agentUniverse"
 
     def test_jina_ai_tool(self):
+        """Test that jina ai tool.
+        """
         jina_ai_tool = ToolManager().get_instance_obj("jina_ai_tool")
 
         print("\n-------------read url---------------")
