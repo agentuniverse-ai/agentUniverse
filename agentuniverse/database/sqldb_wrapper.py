@@ -32,6 +32,8 @@ class SQLDBWrapper(ComponentBase):
     db_wrapper_configer: Optional[SQLDBWrapperConfiger] = None
 
     class Config:
+        """Pydantic model configuration for this component, allowing arbitrary types.
+        """
         arbitrary_types_allowed = True
 
     def get_instance_code(self) -> str:
