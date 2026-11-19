@@ -11,6 +11,10 @@ from functools import lru_cache
 
 
 class LLMModelEnum(Enum):
+    """Enumeration of supported LLM providers.
+
+    The values correspond to the provider keys used in YAML configurations.
+    """
     QWEN = "qwen"
     DEEPSEEK = "deepseek"
     OPENAI = "openai"
