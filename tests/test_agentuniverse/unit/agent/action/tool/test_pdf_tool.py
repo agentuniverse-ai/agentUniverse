@@ -19,16 +19,20 @@ YAML_PATH = os.path.join(os.path.dirname(pdf_module.__file__), "pdf_tool.yaml")
 
 
 class PDFToolTest(unittest.TestCase):
+    """Unit tests for PDFTool file operations running against a temp working directory."""
     def setUp(self):
+        """Create a temp directory, a PDFTool scoped to it, and two blank sample PDFs."""
         self.directory = tempfile.TemporaryDirectory()
         self.tool = PDFTool(base_dir=self.directory.name)
         self.make_pdf("one.pdf", 1)
         self.make_pdf("two.pdf", 2)
 
     def tearDown(self):
+        """Remove the temporary working directory."""
         self.directory.cleanup()
 
     def make_pdf(self, name, pages):
+        """Write a blank PDF with the given name and page count into the temp directory."""
         writer = PdfWriter()
         for _ in range(pages):
             writer.add_blank_page(width=100, height=200)
@@ -37,11 +41,13 @@ class PDFToolTest(unittest.TestCase):
             writer.write(output)
 
     def test_info(self):
+        """Verify info mode reports page count and metadata of a PDF."""
         result = self.tool.execute(mode="info", file_path="two.pdf")
         self.assertEqual(result["page_count"], 2)
         self.assertEqual(result["metadata"]["/Title"], "two.pdf")
 
     def test_merge(self):
+        """Verify merge mode combines input PDFs into a new file with combined page count."""
         result = self.tool.execute(
             mode="merge", file_path="merged.pdf", input_paths=["one.pdf", "two.pdf"], metadata={"Title": "Merged"}
         )
@@ -49,11 +55,13 @@ class PDFToolTest(unittest.TestCase):
         self.assertEqual(len(PdfReader(result["file_path"]).pages), 3)
 
     def test_split_selected_pages(self):
+        """Verify split mode extracts the selected pages into a new PDF."""
         result = self.tool.execute(mode="split", file_path="two.pdf", output_dir="parts", pages=[2])
         self.assertEqual(result["page_count"], 1)
         self.assertTrue(result["output_paths"][0].endswith("two-page-2.pdf"))
 
     def test_split_preflights_all_destinations(self):
+        """Verify split preflights every destination and refuses to overwrite existing files."""
         parts = os.path.join(self.directory.name, "parts")
         os.makedirs(parts)
         existing = os.path.join(parts, "two-page-2.pdf")
@@ -66,6 +74,7 @@ class PDFToolTest(unittest.TestCase):
             self.assertEqual(unchanged.read(), b"existing")
 
     def test_rotate(self):
+        """Verify rotate mode rotates the selected pages by the requested rotation."""
         result = self.tool.execute(
             mode="rotate", file_path="two.pdf", output_path="rotated.pdf", pages=[1], rotation=90
         )
@@ -73,44 +82,54 @@ class PDFToolTest(unittest.TestCase):
         self.assertEqual(PdfReader(result["output_path"]).pages[0].rotation, 90)
 
     def test_extract_blank_pages(self):
+        """Verify extract mode returns blank text for pages with no content."""
         result = self.tool.execute(mode="extract", file_path="two.pdf", pages=[1])
         self.assertEqual(result["pages"], [{"page": 1, "text": ""}])
 
     def test_refuses_overwrite(self):
+        """Verify merge refuses to overwrite an existing output file unless overwrite=true."""
         result = self.tool.execute(mode="merge", file_path="one.pdf", input_paths=["two.pdf"])
         self.assertIn("overwrite=true", result["error"])
 
     def test_invalid_page(self):
+        """Verify an out-of-range page number is reported as an error."""
         result = self.tool.execute(mode="extract", file_path="one.pdf", pages=[2])
         self.assertIn("between 1 and 1", result["error"])
 
     def test_invalid_rotation(self):
+        """Verify an unsupported rotation value is reported as an error."""
         result = self.tool.execute(mode="rotate", file_path="one.pdf", output_path="r.pdf", rotation=45)
         self.assertIn("90, 180, or 270", result["error"])
 
     def test_path_escape(self):
+        """Verify paths escaping the allowed directory are rejected."""
         result = self.tool.execute(mode="info", file_path="../one.pdf")
         self.assertIn("escapes the allowed directory", result["error"])
 
     def test_non_pdf_signature(self):
+        """Verify a file without the PDF signature is reported as not a PDF."""
         with open(os.path.join(self.directory.name, "bad.pdf"), "wb") as output:
             output.write(b"hello")
         result = self.tool.execute(mode="info", file_path="bad.pdf")
         self.assertIn("not a PDF", result["error"])
 
     def test_page_limit(self):
+        """Verify documents exceeding max_pages are rejected."""
         self.tool.max_pages = 1
         result = self.tool.execute(mode="info", file_path="two.pdf")
         self.assertIn("max_pages", result["error"])
 
     def test_missing_dependency_hint(self):
+        """Verify a missing pypdf dependency yields an install hint."""
         with patch.object(self.tool, "_classes", side_effect=ImportError("missing")):
             result = self.tool.execute(mode="info", file_path="one.pdf")
         self.assertIn("pip install pypdf", result["error"])
 
 
 class PDFToolRegistrationTest(unittest.TestCase):
+    """Unit tests for registering the shipped pdf_tool.yaml as a tool component."""
     def setUp(self):
+        """Load the shipped yaml config and snapshot the current app configer state."""
         self.config = Configer(path=os.path.abspath(YAML_PATH)).load()
         try:
             self.previous = ApplicationConfigManager().app_configer
@@ -118,14 +137,17 @@ class PDFToolRegistrationTest(unittest.TestCase):
             self.previous = None
 
     def tearDown(self):
+        """Restore the app configer snapshot taken in setUp."""
         ApplicationConfigManager().app_configer = self.previous
 
     def test_schema(self):
+        """Verify the shipped yaml resolves to a tool component exposing the PDFTool class."""
         component = ComponentConfiger().load_by_configer(self.config)
         self.assertEqual(component.get_component_config_type(), ComponentEnum.TOOL.value)
         self.assertEqual(component.metadata_class, "PDFTool")
 
     def test_manager(self):
+        """Verify the PDFTool is resolvable and correctly configured via ToolManager."""
         configer = ToolConfiger().load_by_configer(self.config)
         app = AppConfiger()
         app.tool_configer_map = {configer.name: configer}
