@@ -1,0 +1,15 @@
+name: cached_query_store
+description: Opt-in process-local exact-query cache with explicit revision and TTL.
+backend_store: underlying_store
+cache_revision: corpus-and-retrieval-config-v1
+enabled: false
+ttl_seconds: 30.0
+max_entries: 128
+max_cache_bytes: 16777216
+max_entry_bytes: 262144
+max_key_bytes: 65536
+max_documents: 100
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.cached_query_store
+  class: CachedQueryStore
