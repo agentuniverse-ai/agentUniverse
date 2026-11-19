@@ -1,0 +1,36 @@
+name: 'keyword_highlighter'
+description: 'wrap configured keyword occurrences in document text with highlight markers'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.keyword_highlighter'
+  class: 'KeywordHighlighter'
+
+# Literal keywords to highlight (never interpreted as regexes). Surrounding
+# whitespace is stripped; case-insensitive duplicates collapse to their first
+# spelling. Overlapping keywords resolve longest-first ("New York" beats
+# "new" where they overlap).
+keywords: ['agent', 'knowledge']
+
+# Marker style: 'bold' (**kw**), 'mark' (==kw==), 'wiki' ([[kw]]),
+# 'html' (<mark>kw</mark>) or 'custom' (use marker_prefix/marker_suffix).
+marker: 'bold'
+
+# Opening/closing markers, used only when marker is 'custom'; both must be
+# non-empty strings.
+marker_prefix: '[['
+marker_suffix: ']]'
+
+# When false (default) matching folds case on both sides.
+case_sensitive: false
+
+# When true (default) ASCII word boundaries fence keywords with ASCII
+# word-character edges: 'new' matches 'a new deal' but not 'renewal'.
+# CJK keywords match without boundaries — CJK text has no spaces, so an
+# occurrence is inherently whole-word.
+whole_words: true
+
+# Maximum occurrences carrying markers per document; matches beyond the cap
+# are left unmarked while metadata['highlight_count'] still counts them all.
+# Must be >= 1.
+max_highlights: 200
