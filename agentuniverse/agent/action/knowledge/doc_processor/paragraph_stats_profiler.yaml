@@ -1,0 +1,33 @@
+name: 'paragraph_stats_profiler'
+description: 'profile paragraph-level structure statistics into document metadata for ingestion QA'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.paragraph_stats_profiler'
+  class: 'ParagraphStatsProfiler'
+
+# Paragraph length above which a paragraph counts as suspiciously long
+# (strictly more characters than the threshold). Integer >= 1.
+long_threshold: 2000
+
+# Paragraph length below which a non-empty paragraph counts as
+# suspiciously short (strictly fewer characters than the threshold).
+# Integer >= 0 and <= long_threshold.
+short_threshold: 20
+
+# The 'long_paragraphs' structure flag is raised when strictly more than
+# this fraction of the total paragraph characters sits in long
+# paragraphs. Range [0, 1].
+long_ratio: 0.5
+
+# The 'fragmented' structure flag is raised when strictly more than this
+# fraction of the paragraphs is shorter than short_threshold.
+# Range [0, 1].
+fragmented_ratio: 0.7
+
+# Metadata key the statistics dict is written to; '' disables stamping.
+stats_key: 'paragraph_stats'
+
+# Metadata key the structure flag (none | long_paragraphs | fragmented |
+# mixed) is written to; '' disables stamping.
+flag_key: 'structure_flag'
