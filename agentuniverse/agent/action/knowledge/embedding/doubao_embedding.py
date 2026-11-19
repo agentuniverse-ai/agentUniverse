@@ -49,7 +49,7 @@ class DoubaoEmbedding(Embedding):
                 )
             self.client = Ark(api_key=self.ark_api_key)
         if not self.endpoint_id:
-            raise ValueError("endpoint_id is required but not set")
+            raise ValueError("endpoint_id is required but not set") from None
 
         def sliced_norm_l2(vec: List[float]) -> List[float]:
             if self.embedding_dims not in SUPPORTED_DIMENSIONS:
