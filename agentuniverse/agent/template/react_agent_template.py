@@ -109,6 +109,12 @@ class ReActAgentTemplate(AgentTemplate):
             stop_sequence: Union[bool, List[str]] = True,
             bind_params: Optional[dict],
     ) -> Runnable:
+        """Compose and return a ReAct runnable chain from the llm, tools and prompt,
+        binding the stop sequence and parsing the model output.
+
+        Returns:
+            Runnable: The assembled ReAct agent chain.
+        """
         missing_vars = {"tools", "tool_names", "agent_scratchpad"}.difference(
             prompt.input_variables + list(prompt.partial_variables)
         )
@@ -136,6 +142,11 @@ class ReActAgentTemplate(AgentTemplate):
         return agent
 
     def build_tools_context(self) -> tuple[str, str]:
+        """Render the configured tools into a text description for the prompt.
+
+        Returns:
+            (tools text, '|'-joined tool names) tuple.
+        """
         lc_tools: [LangchainTool] = self._convert_to_langchain_tool()
         tools_context = ''
         if not lc_tools:
@@ -147,6 +158,11 @@ class ReActAgentTemplate(AgentTemplate):
         return tools_context, "|".join(tool_names)
 
     def _convert_to_langchain_tool(self) -> list[LangchainTool]:
+        """Convert the configured tool, knowledge and agent instances into langchain tools.
+
+        Returns:
+            list: The converted langchain tools.
+        """
         lc_tools = []
         if self.tool_names:
             for tool_name in self.tool_names:
@@ -163,6 +179,12 @@ class ReActAgentTemplate(AgentTemplate):
         return lc_tools
 
     async def _async_convert_to_langchain_tool(self) -> list[LangchainTool]:
+        """Asynchronously convert the configured tool, knowledge and agent instances
+        into langchain tools.
+
+        Returns:
+            list: The converted langchain tools.
+        """
         lc_tools = []
         if self.tool_names:
             for tool_name in self.tool_names:
@@ -179,6 +201,12 @@ class ReActAgentTemplate(AgentTemplate):
         return lc_tools
 
     def _get_run_config(self, input_object: InputObject) -> RunnableConfig:
+        """Build a RunnableConfig that wires up the streaming output and invocation
+        callback handlers.
+
+        Returns:
+            RunnableConfig: The run configuration with callbacks attached.
+        """
         config = RunnableConfig()
         callbacks = []
         output_stream = input_object.get_data('output_stream')
@@ -189,6 +217,9 @@ class ReActAgentTemplate(AgentTemplate):
         return config
 
     def initialize_by_component_configer(self, component_configer: AgentConfiger) -> 'ReActAgentTemplate':
+        """Initialize this template from the agent configer, reading the prompt
+        version, stop sequence, max iterations and configured agent names.
+        """
         super().initialize_by_component_configer(component_configer)
         self.prompt_version = self.agent_model.profile.get('prompt_version', 'default_react_agent.cn')
         self.stop_sequence = self.agent_model.profile.get('stop_sequence')
