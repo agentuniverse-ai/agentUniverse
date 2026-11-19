@@ -1,0 +1,15 @@
+{
+  "feature": "feat(knowledge): add verified offline Document bundles",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4217",
+  "tested_code_commit": "fe29420bb49d5f58c27c43edde8021f6b68f4274",
+  "tests": [
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_corpus_bundle.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_reader_lookup.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_registration_errors.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
