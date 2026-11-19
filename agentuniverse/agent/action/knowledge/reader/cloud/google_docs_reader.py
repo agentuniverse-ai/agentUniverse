@@ -51,7 +51,7 @@ class GoogleDocsReader(Reader):
             from google.oauth2.service_account import Credentials  # type: ignore
             from googleapiclient.discovery import build  # type: ignore
         except Exception:
-            raise ImportError("Install Google API deps: `pip install google-api-python-client google-auth google-auth-oauthlib`")
+            raise ImportError("Install Google API deps: `pip install google-api-python-client google-auth google-auth-oauthlib`") from None
 
         import os
         scopes = ['https://www.googleapis.com/auth/drive.readonly']
@@ -78,7 +78,7 @@ class GoogleDocsReader(Reader):
         try:
             from bs4 import BeautifulSoup  # type: ignore
         except Exception:
-            raise ImportError("Install beautifulsoup4 and lxml for GoogleDocsReader")
+            raise ImportError("Install beautifulsoup4 and lxml for GoogleDocsReader") from None
         soup = BeautifulSoup(html, "lxml")
         for tag in soup(["script", "style", "noscript"]):
             tag.extract()
