@@ -7,6 +7,7 @@
 # @FileName: knowledge_service.py
 import os
 import shutil
+import tempfile
 
 from typing import List
 
@@ -193,18 +194,29 @@ class KnowledgeService:
 
         upload_file_path = get_resources_path()
 
+        temporary_path = None
         try:
             if not os.path.exists(upload_file_path):
                 os.makedirs(upload_file_path, exist_ok=True)
 
             file_location = os.path.join(upload_file_path, filename)
 
-            with open(file_location, "wb") as buffer:
+            # Finish the transfer before replacing an existing resource.
+            with tempfile.NamedTemporaryFile(mode="wb", dir=upload_file_path,
+                                             prefix=".upload-", suffix=".tmp", delete=False) as buffer:
+                temporary_path = buffer.name
                 shutil.copyfileobj(file.file, buffer)
+            if os.path.isfile(file_location):
+                shutil.copymode(file_location, temporary_path)
+            os.replace(temporary_path, file_location)
+            temporary_path = None
 
         except Exception as e:
             print(f"upload file failed: {e}")
             raise e
+        finally:
+            if temporary_path is not None:
+                os.unlink(temporary_path)
 
         knowledge_store_file_path = path / 'store' / f"{knowledge_id}_store.yaml" if path\
             else str(os.path.join("..", "..", "intelligence",
