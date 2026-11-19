@@ -37,6 +37,22 @@ class SearchAPITool(Tool):
     search_api_wrapper: Optional[SearchApiAPIWrapper] = None
     search_type: str = "common"
 
+    def _build_query_and_params(self, input: str | ToolInput = None, **kwargs):
+        if isinstance(input, ToolInput):
+            input_params = input.to_dict()
+            query = input.get_data("input")
+        else:
+            input_params = kwargs
+            query = input
+
+        search_params = {}
+        for k, v in self.search_params.items():
+            if k in input_params:
+                search_params[k] = input_params.get(k)
+                continue
+            search_params[k] = v
+        return query, search_params
+
     def _load_api_wapper(self):
         if not self.search_api_key:
             raise ValueError("Please set the SEARCHAPI_API_KEY environment variable.")
@@ -44,30 +60,19 @@ class SearchAPITool(Tool):
             self.search_api_wrapper = SearchApiAPIWrapper(searchapi_api_key=self.search_api_key, engine=self.engine)
         return self.search_api_wrapper
 
-    def execute(self, input: str, **kwargs):
+    def execute(self, input: str | ToolInput = None, **kwargs):
         self._load_api_wapper()
-        search_params = {}
-        for k, v in self.search_params.items():
-            if k in kwargs:
-                search_params[k] = kwargs.get(k)
-                continue
-            search_params[k] = v
+        query, search_params = self._build_query_and_params(input, **kwargs)
         if self.search_type == "json":
-            return self.search_api_wrapper.results(query=input, **search_params)
-        return self.search_api_wrapper.run(query=input, **search_params)
+            return self.search_api_wrapper.results(query=query, **search_params)
+        return self.search_api_wrapper.run(query=query, **search_params)
 
-    async def async_execute(self, tool_input: ToolInput):
+    async def async_execute(self, input: str | ToolInput = None, **kwargs):
         self._load_api_wapper()
-        search_params = {}
-        for k, v in self.search_params.items():
-            if k in tool_input.to_dict():
-                search_params[k] = tool_input.get_data(k)
-                continue
-            search_params[k] = v
-        input = tool_input.get_data("input")
+        query, search_params = self._build_query_and_params(input, **kwargs)
         if self.search_type == "json":
-            return await self.search_api_wrapper.aresults(query=input, **search_params)
-        return await self.search_api_wrapper.arun(query=input, **search_params)
+            return await self.search_api_wrapper.aresults(query=query, **search_params)
+        return await self.search_api_wrapper.arun(query=query, **search_params)
 
     def initialize_by_component_configer(self, component_configer: ToolConfiger) -> 'Tool':
         """Initialize the tool by the component configer."""
