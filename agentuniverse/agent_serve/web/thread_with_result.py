@@ -66,28 +66,53 @@ class ThreadPoolExecutorWithReturnValue(ThreadPoolExecutor):
     """A ThreadPoolExecutor that preserves context across threads."""
 
     def submit(self, fn: Callable, *args, **kwargs) -> ContextAwareFuture:
-        """Submit a callable to be executed with context preservation."""
+        """Submit a callable with context preservation and normal Future states.
+
+        Cancellation before execution skips the callable; a running callable
+        cannot be cancelled. Queue cancellation during shutdown also completes
+        the returned future. Task and worker-initialization failures remain
+        available through result(). Cancellation does not interrupt running work.
+        """
         context_pack = ContextCoordinator.save_context()
         future = ContextAwareFuture()
         future._context_pack = context_pack
 
         def context_wrapper():
+            if not future.set_running_or_notify_cancel():
+                return
             otel_token = None
             try:
                 otel_token = ContextCoordinator.recover_context(context_pack)
 
                 result = fn(*args, **kwargs)
-                future.set_result(result)
-
-            except Exception as e:
+            except BaseException as e:
                 future.error = e
                 future.set_exception(e)
-
+            else:
+                # Completion callbacks are not part of the submitted callable.
+                # Do not try to overwrite a completed result if a callback fails.
+                future.set_result(result)
             finally:
                 if otel_token:
                     otel_context.detach(otel_token)
 
-        super().submit(context_wrapper)
+        worker_future = super().submit(context_wrapper)
+
+        def propagate_worker_completion(completed):
+            """Mirror terminal states when the wrapper never started."""
+            if completed.cancelled() and future.cancel():
+                # No worker will call this for a cancelled queue entry. Notify
+                # wait()/as_completed() waiters as well as result() callers.
+                future.set_running_or_notify_cancel()
+            elif not future.done() or future.cancelled():
+                error = completed.exception()
+                # A failed ThreadPoolExecutor initializer completes its queue
+                # futures without ever entering context_wrapper.
+                if error is not None and future.set_running_or_notify_cancel():
+                    future.error = error
+                    future.set_exception(error)
+
+        worker_future.add_done_callback(propagate_worker_completion)
 
         return future
 
