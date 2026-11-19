@@ -51,8 +51,9 @@ class RewritingAgentTemplate(AgentTemplate):
 
         # Get the generated content
         generating_result = input_object.get_data('generating_result')
-        if generating_result:
-            agent_input['generated_content'] = generating_result.get_data('output', '')
+        agent_input['generated_content'] = (
+            generating_result.get_data('output', '') if generating_result else ''
+        )
 
         # Get review feedback and suggestions
         reviewing_result = input_object.get_data('reviewing_result')
@@ -60,9 +61,14 @@ class RewritingAgentTemplate(AgentTemplate):
             agent_input['review_score'] = reviewing_result.get_data('score', 0)
             agent_input['review_suggestion'] = reviewing_result.get_data('suggestion', '')
             agent_input['review_output'] = reviewing_result.get_data('output', '')
+        else:
+            agent_input['review_score'] = 0
+            agent_input['review_suggestion'] = ''
+            agent_input['review_output'] = ''
 
         # Get expert framework guidance if available
-        agent_input['expert_framework'] = input_object.get_data('expert_framework', {}).get('rewriting', '')
+        expert_framework = input_object.get_data('expert_framework') or {}
+        agent_input['expert_framework'] = expert_framework.get('rewriting', '')
 
         return agent_input
 
