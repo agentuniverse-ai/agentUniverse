@@ -365,7 +365,7 @@ class ContextManager(ComponentBase):
         # Get window to update token count
         window = self._windows.get(session_id)
 
-        if segment_ids and window:
+        if segment_ids is not None and window:
             # Calculate tokens to remove
             segments = self._hot_store.get_by_ids(session_id, segment_ids)
             tokens_removed = sum(seg.tokens for seg in segments)
