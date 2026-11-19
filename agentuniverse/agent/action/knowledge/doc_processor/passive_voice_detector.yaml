@@ -1,0 +1,24 @@
+name: 'passive_voice_detector'
+description: 'measure passive-voice density per document and record it as metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.passive_voice_detector'
+  class: 'PassiveVoiceDetector'
+
+# Fraction of sentences containing at least one passive construction at or
+# above which style_flag becomes 'moderate'. Default 0.10; range [0, 1].
+moderate_threshold: 0.10
+
+# Fraction strictly above which style_flag becomes 'heavy'. Default 0.25;
+# range [0, 1]; must be strictly greater than moderate_threshold.
+heavy_threshold: 0.25
+
+# Maximum number of per-hit records written into metadata (earliest spans
+# kept). Detection keeps counting past the cap and passive_count stays
+# exact. Must be >= 1.
+max_hits: 50
+
+# Metadata key the passive-voice report dict is written to; '' disables
+# stamping (documents pass through with metadata untouched).
+output_key: 'passive_voice'
