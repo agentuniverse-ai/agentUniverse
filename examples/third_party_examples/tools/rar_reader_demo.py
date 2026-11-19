@@ -122,7 +122,7 @@ def process_data():
         return None, temp_dir
 
 
-def demo_rar_reader_direct(rar_path):
+def demo_rar_reader_direct(rar_path) -> None:
     """直接使用 RarReader"""
     print("\n" + "=" * 80)
     print("演示 1: 直接使用 RarReader")
@@ -153,7 +153,7 @@ def demo_rar_reader_direct(rar_path):
         print(f"读取 RAR 文件错误: {e}")
 
 
-def demo_file_reader_integration(rar_path):
+def demo_file_reader_integration(rar_path) -> None:
     """FileReader 自动检测演示"""
     print("\n" + "=" * 80)
     print("演示 2: FileReader 集成")
@@ -173,7 +173,7 @@ def demo_file_reader_integration(rar_path):
         print(f"FileReader 错误: {e}")
 
 
-def demo_custom_metadata(rar_path):
+def demo_custom_metadata(rar_path) -> None:
     """自定义元数据演示"""
     print("\n" + "=" * 80)
     print("演示 3: 自定义元数据")
@@ -205,7 +205,7 @@ def demo_custom_metadata(rar_path):
         print(f"错误: {e}")
 
 
-def demo_custom_config(rar_path):
+def demo_custom_config(rar_path) -> None:
     """自定义配置演示"""
     print("\n" + "=" * 80)
     print("演示 4: 自定义读取器配置")
@@ -236,7 +236,7 @@ def demo_custom_config(rar_path):
         print(f"错误: {e}")
 
 
-def demo_filter_by_type(rar_path):
+def demo_filter_by_type(rar_path) -> None:
     """按文件类型过滤文档"""
     print("\n" + "=" * 80)
     print("演示 5: 按文件类型过滤")
@@ -264,7 +264,7 @@ def demo_filter_by_type(rar_path):
         print(f"错误: {e}")
 
 
-def demo_content_search(rar_path):
+def demo_content_search(rar_path) -> None:
     """在 RAR 压缩包中搜索内容"""
     print("\n" + "=" * 80)
     print("演示 6: 内容搜索")
@@ -296,7 +296,7 @@ def demo_content_search(rar_path):
         print(f"错误: {e}")
 
 
-def demo_statistics(rar_path):
+def demo_statistics(rar_path) -> None:
     """显示压缩包统计信息"""
     print("\n" + "=" * 80)
     print("演示 7: 压缩包统计信息")
@@ -337,7 +337,7 @@ def demo_statistics(rar_path):
         print(f"错误: {e}")
 
 
-def demo_nested_rar(temp_dir):
+def demo_nested_rar(temp_dir) -> None:
     """多层嵌套 RAR 演示"""
     print("\n" + "=" * 80)
     print("演示 8: 多层嵌套 RAR 压缩包")
@@ -442,7 +442,7 @@ def demo_nested_rar(temp_dir):
         print(f"\n错误: {e}")
 
 
-def cleanup(temp_dir):
+def cleanup(temp_dir) -> None:
     """清理临时文件"""
     print("\n" + "=" * 80)
     print("清理演示文件")
