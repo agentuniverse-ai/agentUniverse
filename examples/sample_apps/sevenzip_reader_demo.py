@@ -44,18 +44,18 @@ def create_sample_7z_archive():
                 def main():
                     print("7Z 读取器演示程序")
                     process_data()
-                    
+
                 def process_data():
                     data = load_data()
                     result = analyze(data)
                     return result
-                    
+
                 def load_data():
                     return {"sample": "data"}
-                    
+
                 def analyze(data):
                     return f"分析结果: {data}"
-                    
+
                 if __name__ == "__main__":
                     main()
                 """)
@@ -97,7 +97,7 @@ def create_sample_7z_archive():
                 app:
                 name: "7Z Reader Demo"
                 version: "2.0.0"
-                
+
                 database:
                 host: "localhost"
                 port: 5432
@@ -155,18 +155,18 @@ def create_sample_7z_archive():
 
     try:
         import py7zr
-        
+
         # 使用py7zr创建7Z压缩包
         with py7zr.SevenZipFile(sevenzip_path, 'w') as archive:
             # 添加所有文件和目录到压缩包
             archive.writeall(temp_dir, '')
-        
+
         print(f"示例7Z压缩包已创建: {sevenzip_path}")
         print("包含的文件:")
         with py7zr.SevenZipFile(sevenzip_path, 'r') as archive:
             for file_info in archive.files:
                 print(f"  - {file_info.filename} ({file_info.uncompressed} 字节)")
-        
+
         return sevenzip_path, temp_dir
 
     except ImportError:
@@ -203,7 +203,7 @@ def demo_sevenzip_reader_direct(sevenzip_path):
             print(f"    深度: {metadata.get('archive_depth')}")
             print(f"    后缀: {metadata.get('file_suffix')}")
             print(f"    内容长度: {len(doc.text)} 字符")
-            
+
             # 显示内容预览（针对不同文件类型）
             if metadata.get('file_suffix') in ['.json', '.yaml', '.yml', '.xml']:
                 # 结构化文件显示更多内容
@@ -241,14 +241,14 @@ def demo_file_reader_integration(sevenzip_path):
         print(f"提取的文档数: {len(documents)}")
 
         print("\nFileReader 会自动为 .7z 文件调用 SevenZipReader")
-        
+
         # 显示一些统计信息
         if documents:
             file_types = {}
             for doc in documents:
                 suffix = doc.metadata.get('file_suffix', 'unknown')
                 file_types[suffix] = file_types.get(suffix, 0) + 1
-            
+
             print("\n文件类型分布:")
             for suffix, count in sorted(file_types.items()):
                 print(f"  {suffix}: {count} 个文件")
@@ -527,7 +527,7 @@ def demo_nested_7z(temp_dir):
                 - name: "技术部"
                     employees: 25
                     budget: 500000
-                - name: "销售部" 
+                - name: "销售部"
                     employees: 18
                     budget: 300000
                 - name: "人事部"
@@ -641,10 +641,10 @@ def demo_advanced_features(sevenzip_path):
         # 2. 内容关键词提取
         print("\n2. 内容关键词统计:")
         common_keywords = {
-            '配置': 0, '数据': 0, '文件': 0, '项目': 0, 
+            '配置': 0, '数据': 0, '文件': 0, '项目': 0,
             '处理': 0, '读取': 0, '压缩': 0, '演示': 0
         }
-        
+
         for doc in documents:
             text_lower = doc.text.lower()
             for keyword in common_keywords.keys():
@@ -660,9 +660,9 @@ def demo_advanced_features(sevenzip_path):
         config_docs = [doc for doc in documents if 'config' in doc.metadata.get('archive_path', '').lower()]
         code_docs = [doc for doc in documents if any(ext in doc.metadata.get('file_suffix', '') for ext in ['.py', '.json', '.yaml', '.xml'])]
         data_docs = [doc for doc in documents if 'data' in doc.metadata.get('archive_path', '').lower()]
-        
+
         print(f"   配置文件: {len(config_docs)} 个")
-        print(f"   代码文件: {len(code_docs)} 个") 
+        print(f"   代码文件: {len(code_docs)} 个")
         print(f"   数据文件: {len(data_docs)} 个")
 
     except Exception as e:
