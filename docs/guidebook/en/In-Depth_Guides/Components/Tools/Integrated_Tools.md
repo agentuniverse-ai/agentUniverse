@@ -4,6 +4,23 @@ In the current agentUniverse's sample project, the following tools are integrate
 
 HTTP-based API tools use the SSRF proxy helper for outbound requests. See [SSRF proxy environment variables](./SSRF_Proxy.md) for `SSRF_PROXY_*` configuration.
 
+## 2. JSON Output Validator
+
+`JsonOutputValidatorTool` parses plain or fenced JSON objects and validates
+required keys and primitive type expectations. It returns structured issue codes
+instead of executing or rewriting model output, so callers can decide whether
+to retry, repair, or reject a response.
+
+[Tool configuration](../../../../../../agentuniverse/agent/action/tool/common_tool/json_output_validator_tool.yaml)
+
+```python
+result = tool.execute(
+    text='```json{"answer":"ok","score":3```',
+    required_keys=["answer", "score"],
+    type_expectations={"answer": "string", "score": "integer"},
+)
+```
+
 ## 1. Search Tools
 
 ### 1.1 Google Search
