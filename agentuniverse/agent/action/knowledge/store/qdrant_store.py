@@ -55,6 +55,7 @@ class QdrantStore(Store):
     VECTOR_NAME: ClassVar[str] = "embedding"
 
     def _metric_from_str(self) -> Distance:
+        """Map the configured distance name onto the matching Qdrant Distance metric, defaulting to COSINE. Returns: Distance: The Qdrant metric."""
         return {
             "COSINE": Distance.COSINE,
             "EUCLID": Distance.EUCLID,
@@ -63,11 +64,13 @@ class QdrantStore(Store):
         }.get((self.distance or "COSINE").upper(), Distance.COSINE)
 
     def _new_client(self) -> Any:
+        """Create the Qdrant client from the configured connection arguments (or the defaults) and cache it on the store. Returns: Any: The Qdrant client."""
         args = self.connection_args or DEFAULT_CONNECTION_ARGS
         self.client = QdrantClient(**args)
         return self.client
 
     def _initialize_by_component_configer(self, qdrant_store_configer: ComponentConfiger) -> "QdrantStore":
+        """Apply the store configuration (connection arguments, collection name, distance, embedding model and related fields) onto the store. Args: qdrant_store_configer (ComponentConfiger): The store configuration. Returns: QdrantStore: self."""
         super()._initialize_by_component_configer(qdrant_store_configer)
         if hasattr(qdrant_store_configer, "connection_args"):
             self.connection_args = qdrant_store_configer.connection_args
@@ -86,6 +89,7 @@ class QdrantStore(Store):
         return self
 
     def _ensure_collection(self, dim: int):
+        """Create the Qdrant collection with the configured metric and the given vector dimension when it does not exist yet. Args: dim (int): The embedding dimension."""
         if self.client is None:
             self.client = self._new_client()
         if not self.client.collection_exists(self.collection_name):
@@ -96,6 +100,7 @@ class QdrantStore(Store):
             )
 
     def query(self, query: Query, **kwargs) -> List[Document]:
+        """Retrieve the top-k documents for the query from the Qdrant collection. Returns an empty list when no client is configured. Args: query (Query): The retrieval query. **kwargs: Extra options. Returns: List[Document]: The retrieved documents."""
         if self.client is None:
             return []
 
