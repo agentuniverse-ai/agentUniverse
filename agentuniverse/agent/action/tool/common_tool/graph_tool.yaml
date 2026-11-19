@@ -1,0 +1,105 @@
+name: graph_tool
+description: >-
+  Graph analysis tool — pure Python stdlib, no network required.
+  Analyzes arbitrary edge lists [{source, target, weight?, directed?}]
+  with five modes: build (adjacency dict + node/edge counts +
+  isolated/self-loop/duplicate-edge reports, undirected by default and
+  merging a-b with b-a), degree (per-node degree sorted descending,
+  in/out/total for directed graphs, top_n option, hubs flagged at
+  degree > mean + stdev), bfs (reachable set with per-node depths and
+  deterministic visit order, max_depth option), path (unweighted BFS
+  shortest path between two nodes or a no-path verdict, all_shortest
+  option capped at 10), and components (connected components sorted by
+  size, weakly-connected for directed graphs, capped member lists).
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.graph_tool
+  class: GraphTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Graph mode — build, degree, bfs, path or components.
+    required: true
+  edges:
+    type: array
+    description: The edge list — dicts with required non-empty string source/target and optional numeric weight (default 1, summed when duplicates merge) and boolean directed (overrides the global option per edge). Between 1 and 10,000 edges.
+    required: false
+  directed:
+    type: boolean
+    description: Global direction flag (default false). When any edge resolves to directed the graph is treated as directed throughout (in/out degrees, out-edge traversal, weakly-connected components).
+    required: false
+  start:
+    type: string
+    description: Required for bfs and path modes — the node to start from (must exist in the edge list).
+    required: false
+  end:
+    type: string
+    description: Required for path mode — the node to reach (must exist in the edge list).
+    required: false
+  top_n:
+    type: integer
+    description: degree mode only — return only the first top_n degree entries (positive integer).
+    required: false
+  max_depth:
+    type: integer
+    description: bfs mode only — stop expanding beyond this depth (non-negative integer; the start node is depth 0). Omit for unbounded traversal.
+    required: false
+  all_shortest:
+    type: boolean
+    description: path mode only — enumerate every shortest path in lexicographic order (capped at 10, truncated flag when more exist) instead of just the first one.
+    required: false
+  max_members:
+    type: integer
+    description: components mode only — cap on the member list reported per component (positive integer, default 50; the full size is always reported).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["build", "degree", "bfs", "path", "components"]
+      description: Graph analysis mode.
+    edges:
+      type: array
+      items:
+        type: object
+        properties:
+          source:
+            type: string
+            description: Edge source node id.
+          target:
+            type: string
+            description: Edge target node id.
+          weight:
+            type: number
+            description: Edge weight (default 1; summed when duplicate edges merge; ignored by the unweighted path mode).
+          directed:
+            type: boolean
+            description: Per-edge direction override of the global directed option.
+        required: ["source", "target"]
+      description: Edge list to analyze.
+    directed:
+      type: boolean
+      description: Treat edges as directed (default false).
+    start:
+      type: string
+      description: Start node (bfs, path modes).
+    end:
+      type: string
+      description: End node (path mode).
+    top_n:
+      type: integer
+      description: Truncate the degree ranking (degree mode).
+    max_depth:
+      type: integer
+      description: Maximum BFS depth (bfs mode).
+    all_shortest:
+      type: boolean
+      description: Enumerate all shortest paths, capped at 10 (path mode).
+    max_members:
+      type: integer
+      description: Cap on members listed per component (components mode, default 50).
+  required: ["mode"]
