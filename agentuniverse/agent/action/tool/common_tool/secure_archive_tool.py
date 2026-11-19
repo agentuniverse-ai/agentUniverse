@@ -171,6 +171,7 @@ class SecureArchiveTool(Tool):
         return entries
 
     def _validate_entries(self, entries: list[dict[str, Any]], archive_size: int) -> None:
+        """Validate the archive entries against the configured limits: entry count, duplicate names, per-member bytes, total uncompressed bytes and compression ratio. Raises: ValueError when a limit is exceeded. Args: entries (list[dict[str, Any]]): The archive entries. archive_size (int): The on-disk archive size."""
         if len(entries) > self.max_entries:
             raise ValueError(f"archive exceeds max_entries ({self.max_entries})")
         names: set[str] = set()
@@ -192,7 +193,8 @@ class SecureArchiveTool(Tool):
         if total and total / max(archive_size, 1) > self.max_compression_ratio:
             raise ValueError("archive exceeds max_compression_ratio")
 
-    def _collect_inputs(self, values: Any, archive_path: str) -> list[tuple[str, str]]:  # noqa: C901
+    def _collect_inputs(self, values: Any, archive_path: str) -> list[tuple[str, str]]:
+        """Resolve the input paths into (archive_name, absolute_path) pairs, enforcing the configured input count, per-member byte and total byte limits. Raises: ValueError/TypeError on invalid input. Args: values (Any): The raw input path list. archive_path (str): The target archive path. Returns: list[tuple[str, str]]: (member name, source path) pairs."""  # noqa: C901
         if not isinstance(values, list) or not values:
             raise ValueError("input_paths must be a non-empty list")
         base = os.path.realpath(os.path.abspath(self.base_dir))
@@ -228,6 +230,7 @@ class SecureArchiveTool(Tool):
         return files
 
     def _create(self, path: str, values: Any, overwrite: Any, compression: Any) -> dict[str, Any]:
+        """Create a new archive at path from the collected inputs, enforcing overwrite and compression settings and write limits. Args: path (str): Target archive path. values (Any): Raw input paths. overwrite (Any): Whether to replace an existing file. compression (Any): Compression method. Returns: dict[str, Any]: A success result."""
         if not isinstance(overwrite, bool):
             raise TypeError("overwrite must be a boolean")
         if os.path.exists(path) and not overwrite:
@@ -272,6 +275,7 @@ class SecureArchiveTool(Tool):
 
     @staticmethod
     def _list(path: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
+        """Build a structured list result exposing the public fields of the archive entries. Args: path (str): The archive path. entries (list[dict[str, Any]]): The archive entries. Returns: dict[str, Any]: The list result."""
         public_entries = [{key: item[key] for key in ("name", "size", "compressed_size", "is_dir")} for item in entries]
         return {
             "status": "success",
@@ -282,6 +286,7 @@ class SecureArchiveTool(Tool):
         }
 
     def _info(self, path: str, entries: list[dict[str, Any]]) -> dict[str, Any]:
+        """Build a structured info result with archive format, entry count and size statistics. Args: path (str): The archive path. entries (list[dict[str, Any]]): The archive entries. Returns: dict[str, Any]: The info result."""
         return {
             "status": "success",
             "mode": "info",
@@ -294,6 +299,7 @@ class SecureArchiveTool(Tool):
         }
 
     def _selected(self, entries: list[dict[str, Any]], members: Any) -> list[dict[str, Any]]:
+        """Select the requested archive members, returning all entries when members is None. Raises: ValueError when a requested member is missing. Args: entries (list[dict[str, Any]]): The archive entries. members (Any): The member selection. Returns: list[dict[str, Any]]: The selected entries."""
         if members is None:
             return entries
         if not isinstance(members, list) or not members or any(not isinstance(item, str) for item in members):
@@ -313,6 +319,7 @@ class SecureArchiveTool(Tool):
         members: Any,
         overwrite: Any,
     ) -> dict[str, Any]:
+        """Extract the selected members of the archive into the output directory with atomic per-member copies and overwrite handling. Args: path (str): The archive path. entries (list[dict[str, Any]]): The archive entries. output_dir (Any): Target directory. members (Any): Member selection. overwrite (Any): Whether to overwrite existing files. Returns: dict[str, Any]: The extract result."""
         if not isinstance(overwrite, bool):
             raise TypeError("overwrite must be a boolean")
         directory = self._directory(output_dir)
@@ -355,6 +362,7 @@ class SecureArchiveTool(Tool):
 
     @staticmethod
     def _atomic_copy(source: Any, destination: str, expected_size: int) -> None:
+        """Copy source to destination via a temporary file atomically, verifying the resulting size matches the expectation. Raises: ValueError when the size changed during extraction. Args: source (Any): The source stream. destination (str): Target path. expected_size (int): The expected byte size."""
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         temporary = None
         try:
