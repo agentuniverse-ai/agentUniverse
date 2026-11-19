@@ -1,0 +1,39 @@
+name: 'question_type_classifier'
+description: 'classify detected questions into a ten-type taxonomy (what/who/when/where/why/how/quantity/which/yes_no/choice) and stamp the types into document metadata'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.question_type_classifier'
+  class: 'QuestionTypeClassifier'
+
+# Maximum number of typed question hits kept in
+# metadata['question_types']. The question_type_counts metadata always
+# reports uncapped totals over the whole document, so capping the list
+# never hides the true magnitude. Must be >= 0.
+max_question_types: 50
+
+# Minimum number of words (whitespace tokens containing at least one
+# alphanumeric character) for a segment to count as a sentence; segments
+# below the threshold are ignored entirely. The default 1 keeps
+# single-word questions such as 'Why?' (one word) and only drops
+# punctuation husks like a bare '?'. Must be >= 1.
+min_words: 1
+
+# Maximum number of characters of each question kept in its 'text'
+# field; spans always reference the full sentence in the original
+# document text. Must be >= 1.
+preview_chars: 100
+
+# Metadata key the (capped) list of typed hits is written to; each hit is
+# {'text', 'span': (start, end), 'type': what|who|when|where|why|how|
+# quantity|which|yes_no|choice}. An empty value disables this stamp.
+question_types_key: 'question_types'
+
+# Metadata key the uncapped per-type count mapping is written to; ''
+# disables this stamp.
+counts_key: 'question_type_counts'
+
+# Metadata key the dominant (most frequent, ties alphabetical) question
+# type is written to; None when the document asks nothing; '' disables
+# this stamp.
+dominant_key: 'dominant_question_type'
