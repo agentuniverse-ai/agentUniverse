@@ -17,6 +17,8 @@ KIMI_MAX_CONTEXT_LENGTH = {
 
 
 class KimiOfficialLLMChannel(LLMChannel):
+    """Kimi official llm channel.
+    """
     channel_api_base: Optional[str] = "https://api.moonshot.cn/v1"
 
     def max_context_length(self) -> int:
