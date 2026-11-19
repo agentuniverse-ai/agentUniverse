@@ -25,6 +25,7 @@ from agentuniverse.base.component.component_configer_util import ComponentConfig
 from agentuniverse.base.config.component_configer.component_configer import ComponentConfiger
 from agentuniverse.base.config.component_configer.configers.agent_configer import AgentConfiger
 from agentuniverse.base.config.configer import Configer
+from agentuniverse.base.util.logging.logging_util import LOGGER
 from agentuniverse.llm.llm import LLM
 from agentuniverse.llm.llm_manager import LLMManager
 from agentuniverse.prompt.prompt import Prompt
@@ -228,7 +229,8 @@ def assemble_peer_planner_members(planner: dict, agent_model: AgentModel) -> lis
         for i, member_key in enumerate(member_keys):
             planner_data.setdefault(member_key, default_member_names[i])
         return assemble_planner_members(planner_data, member_keys)
-    except:
+    except (KeyError, TypeError, ValueError) as e:
+        LOGGER.warn(f"assemble_peer_planner_members failed, falling back to []: {e}")
         return []
 
 
