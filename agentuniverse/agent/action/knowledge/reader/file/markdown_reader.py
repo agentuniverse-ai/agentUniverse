@@ -38,6 +38,8 @@ class MarkdownReader(Reader):
         if isinstance(file, str):
             file = Path(file)
         data = UnstructuredMarkdownLoader(file).load()
+        if not data:
+            return []
         metadata = {"file_name": file.name}
         if ext_info is not None:
             metadata.update(ext_info)
