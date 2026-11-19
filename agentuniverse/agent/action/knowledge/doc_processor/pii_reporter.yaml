@@ -1,0 +1,38 @@
+name: 'pii_reporter'
+description: 'detect personally identifiable information in documents and report it via metadata without modifying text'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.pii_reporter'
+  class: 'PIIReporter'
+
+# Detector kinds to run. Available kinds: email, phone, card, numeric_id,
+# cn_id, iban, passport_candidate. 'card' and 'numeric_id' share one
+# digit-run scan: 13-19 digit runs that pass the Luhn checksum are
+# reported as 'card', failing runs as 'numeric_id'. cn_id, iban and card
+# are checksum-validated (GB 11643 / ISO 13616 mod-97 / Luhn).
+kinds:
+  - 'email'
+  - 'phone'
+  - 'card'
+  - 'numeric_id'
+  - 'cn_id'
+  - 'iban'
+  - 'passport_candidate'
+
+# Maximum number of findings kept in metadata['pii']. Counts in
+# metadata['pii_counts'] and the metadata['pii_risk'] level always
+# reflect every finding, even beyond this cap. Must be >= 1.
+max_findings: 100
+
+# Metadata key for the capped list of findings, each entry carrying only
+# a masked value (first two + last two characters), its span, kind and
+# confidence; '' disables stamping. The document text is never modified.
+pii_key: 'pii'
+
+# Metadata key for the per-kind finding totals; '' disables stamping.
+counts_key: 'pii_counts'
+
+# Metadata key for the overall risk level: none | low | medium | high
+# (card numbers, resident IDs and IBANs rate high); '' disables stamping.
+risk_key: 'pii_risk'
