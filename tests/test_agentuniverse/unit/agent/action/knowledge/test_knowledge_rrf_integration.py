@@ -131,6 +131,23 @@ class TestKnowledgeRrfIntegration(unittest.TestCase):
         self.assertAlmostEqual(
             out[0].metadata["relevance_score"], 2.0 / 61)
 
+    def test_custom_channel_key_is_stamped_before_fusion(self) -> None:
+        """A configured RRF key, rather than the default key, separates stores."""
+        stores = {
+            "vector_store": _FakeStore([Document(text="shared")]),
+            "keyword_store": _FakeStore([Document(text="shared")]),
+        }
+        custom_key = "retrieval_source"
+        rrf = ReciprocalRankFusionProcessor(channel_key=custom_key, k=60)
+        knowledge = self._build_knowledge(stores)
+
+        out = self._run_query(knowledge, stores, rrf)
+
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].metadata[custom_key], "vector_store")
+        self.assertAlmostEqual(
+            out[0].metadata["relevance_score"], 2.0 / 61)
+
     def test_no_rrf_collapses_cross_store_duplicates(self) -> None:
         """Without a channel-fusion post-processor, Knowledge keeps the default
         retrieval contract: a document recalled by several stores is returned
