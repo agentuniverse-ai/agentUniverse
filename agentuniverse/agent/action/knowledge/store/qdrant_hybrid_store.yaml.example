@@ -1,0 +1,16 @@
+name: qdrant_hybrid_store
+description: Qdrant native dense/sparse prefetch fusion with explicit vectors
+connection_args:
+  url: https://localhost:6333
+collection_name: agentuniverse_hybrid
+dimensions: 384
+create_collection: false
+mode: hybrid
+similarity_top_k: 10
+candidate_k: 50
+with_vectors: false
+timeout_seconds: 30
+metadata:
+  type: STORE
+  module: agentuniverse.agent.action.knowledge.store.qdrant_hybrid_store
+  class: QdrantHybridStore
