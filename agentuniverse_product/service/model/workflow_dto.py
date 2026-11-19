@@ -11,6 +11,14 @@ from pydantic import BaseModel, Field
 
 
 class WorkflowDTO(BaseModel):
+    """Data transfer object for a workflow.
+
+    Attributes:
+        id: Workflow ID.
+        name: Workflow name.
+        description: Workflow description.
+        graph: Workflow graph configuration.
+    """
     id: Optional[str] = Field(description="ID", default=None)
     name: Optional[str] = Field(description="workflow name", default="")
     description: Optional[str] = Field(description="workflow description", default="")
