@@ -26,6 +26,14 @@ class RecursiveCharacterTextSplitter(DocProcessor):
 
     @property
     def splitter(self) -> Splitter:
+        """Lazily create and return the underlying recursive character splitter.
+
+        The splitter is built once from the configured separators, chunk size and
+        chunk overlap, then cached for subsequent accesses.
+
+        Returns:
+            Splitter: The configured LangChain RecursiveCharacterTextSplitter.
+        """
         if not self.__splitter:
             self.__splitter = Splitter(separators=self.separators,
                                        chunk_size=self.chunk_size,
