@@ -1,0 +1,10 @@
+name: 'cohere_embedding'
+description: 'Embedding component backed by the Cohere Embed API (embed-v3 family).'
+embedding_model_name: 'embed-multilingual-v3.0'
+api_key: ''
+input_type: 'document'
+request_timeout: 30
+metadata:
+  type: 'EMBEDDING'
+  module: 'agentuniverse.agent.action.knowledge.embedding.cohere_embedding'
+  class: 'CohereEmbedding'
