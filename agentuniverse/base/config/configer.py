@@ -17,7 +17,10 @@ from agentuniverse.base.config.config_type_enum import ConfigTypeEnum
 
 @singleton
 class PlaceholderResolver:
+    """Resolver that replaces ${PLACEHOLDER} patterns in configuration values using registered resolver functions."""
+
     def __init__(self):
+        """Initialize the resolver with an empty resolver list and register the default environment-variable resolver."""
         self._resolvers = []
         self.register_resolver(r'\${(.+?)}',
                                lambda match: os.getenv(match.group(1), ''))
