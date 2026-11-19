@@ -460,6 +460,8 @@ class ContextManager(ComponentBase):
 
         # Sort by: priority (lower first), decay score (lower first), last_accessed (older first)
         def eviction_key(seg):
+            """Return the metadata key used as the eviction criterion.
+            """
             priority_order = {
                 ContextPriority.EPHEMERAL: 0,
                 ContextPriority.LOW: 1,
