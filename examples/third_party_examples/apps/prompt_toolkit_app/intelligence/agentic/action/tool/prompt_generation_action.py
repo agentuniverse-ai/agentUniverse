@@ -18,19 +18,19 @@ from agentuniverse.agent.action.tool.tool import Tool
 
 class PromptGenerationAction(Tool):
     """Action for generating prompts using the prompt toolkit.
-    
+
     This action demonstrates how to use the PromptToolkit to generate
     high-quality prompts based on user scenarios and requirements.
     """
-    
+
     def __init__(self):
         """Initialize the PromptGenerationAction."""
         super().__init__()
         self.toolkit = PromptToolkit()
-    
+
     def run(self, scenario_description: str, **kwargs) -> Dict[str, Any]:
         """Generate a prompt based on scenario description.
-        
+
         Args:
             scenario_description: Description of the scenario for prompt generation.
             **kwargs: Additional parameters including:
@@ -42,7 +42,7 @@ class PromptGenerationAction(Tool):
                 - tone: Desired tone for the prompt
                 - complexity: Desired complexity level
                 - custom_requirements: Additional custom requirements
-        
+
         Returns:
             Dict[str, Any]: Generated prompt information and metadata.
         """
@@ -59,10 +59,10 @@ class PromptGenerationAction(Tool):
                 complexity=kwargs.get('complexity'),
                 custom_requirements=kwargs.get('custom_requirements')
             )
-            
+
             # Generate prompt using toolkit
             result = self.toolkit.generate_prompt_from_request(request)
-            
+
             # Format response
             response = {
                 "success": True,
@@ -85,27 +85,27 @@ class PromptGenerationAction(Tool):
                 "overall_confidence": result.confidence_score,
                 "metadata": result.metadata
             }
-            
+
             return response
-            
+
         except Exception as e:
             return {
                 "success": False,
                 "error": str(e),
                 "message": "Failed to generate prompt"
             }
-    
+
     def get_description(self) -> str:
         """Get description of the action.
-        
+
         Returns:
             str: Description of the action.
         """
         return "Generate high-quality prompts based on user scenarios and requirements using the prompt toolkit."
-    
+
     def get_parameters(self) -> Dict[str, Any]:
         """Get parameters for the action.
-        
+
         Returns:
             Dict[str, Any]: Parameter definitions.
         """
