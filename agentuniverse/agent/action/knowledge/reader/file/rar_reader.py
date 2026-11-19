@@ -18,7 +18,7 @@ from agentuniverse.agent.action.knowledge.store.document import Document
 class RarReader(Reader):
     """
     RAR (.rar) archive reader.
-    
+
     Supports reading various file formats from RAR archives with security limits,
     nested RAR handling, and automatic format detection.
     """
