@@ -50,6 +50,7 @@ reader = ['sample_standard_app.intelligence.agentic.knowledge.reader']
 ## Prebuilt Readers in agentUniverse:
 - [default_docx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/docx_reader.yaml): Reads text content from local Docx files.
 - [default_pdf_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pdf_reader.yaml): Reads text content from local PDF files.
+- [XBRL fact contexts](XBRL_Context_Reader.md): Flat instance facts with units and dimensions.
 - [default_pptx_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/pptx_reader.yaml): Reads text content from local PPTX files.
 - [default_txt_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/txt_reader.yaml): Reads text content from TXT files.
 - [default_zip_reader](../../../../../../agentuniverse/agent/action/knowledge/reader/file/zip_reader.yaml): Reads ZIP archive files, supports nested ZIP structures and multiple file formats.

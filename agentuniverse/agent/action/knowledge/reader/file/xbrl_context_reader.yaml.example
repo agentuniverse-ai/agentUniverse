@@ -1,0 +1,10 @@
+name: xbrl_context_reader
+description: Local XBRL facts with entity, period, dimensions and units
+max_file_bytes: 20000000
+max_facts: 20000
+max_document_chars: 200000
+max_total_chars: 10000000
+metadata:
+  type: READER
+  module: agentuniverse.agent.action.knowledge.reader.file.xbrl_context_reader
+  class: XbrlContextReader
