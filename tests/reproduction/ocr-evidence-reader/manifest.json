@@ -1,0 +1,17 @@
+{
+  "feature": "feat(reader): preserve OCR word geometry and confidence evidence",
+  "pr": "https://github.com/agentuniverse-ai/agentUniverse/pull/4214",
+  "tested_code_commit": "405f080f1fdc20f9093eee8884397664d80ed6d9",
+  "tests": [
+    "tests/test_agentuniverse/integration/test_ocr_evidence_live.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/reader/test_ocr_evidence_reader.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_rrf_integration.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_registration_errors.py",
+    "tests/test_agentuniverse/unit/agent/action/knowledge/test_knowledge_reader_lookup.py"
+  ],
+  "required_environment": [],
+  "environment_defaults": {},
+  "variants": {
+    "default": "requirements.txt"
+  }
+}
