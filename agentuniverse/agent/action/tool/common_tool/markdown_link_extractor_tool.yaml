@@ -1,0 +1,36 @@
+name: markdown_link_extractor_tool
+description: Markdown link extractor tool — pure Python stdlib, no network required. Scans markdown SOURCE text for link constructs: inline links/images [text](url "title"), reference links [text][ref] resolved against [ref]: url definitions (case-insensitive labels, undefined references flagged), autolinks <https://...> and optional bare URLs. mode='extract' returns every link with kind, text, url, title and an exact [start, end) source span; mode='audit' additionally classifies each link (ok/anchor/relative/empty/undefined/dangerous/unknown_scheme, with http/https/mailto whitelisted and javascript:/data:/vbscript: dangerous) and counts duplicate URLs; mode='references' returns the reference-definition table with unused/undefined analysis. Links inside fenced code blocks are never extracted.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.markdown_link_extractor_tool
+  class: MarkdownLinkExtractorTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Scan mode — extract (list all links), audit (extract plus per-link verdicts and duplicate counting) or references (the reference-definition table with unused/undefined analysis).
+    required: true
+  text:
+    type: string
+    description: The markdown source text to scan. The empty string is valid and yields an empty result.
+    required: false
+  include_bare_urls:
+    type: boolean
+    description: Also report bare http(s):// URLs found in plain text outside any link construct (default false). Applies to the extract and audit modes.
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["extract", "audit", "references"]
+      description: Scan mode.
+    text:
+      type: string
+      description: Markdown source text to scan.
+    include_bare_urls:
+      type: boolean
+      description: Also report bare http(s):// URLs in plain text (extract/audit modes).
+  required: ["mode"]
