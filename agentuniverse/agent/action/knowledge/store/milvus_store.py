@@ -39,6 +39,8 @@ DEFAULT_INDEX_PARAMS = {
 
 
 class MilvusStore(Store):
+    """Milvus-backed vector store that connects to a Milvus server and loads the target collection for similarity search.
+    """
     connection_args: Optional[dict] = None
     search_args: Optional[dict] = None
     index_params: Optional[dict] = None
@@ -58,6 +60,8 @@ class MilvusStore(Store):
             )
 
     def _new_client(self) -> Any:
+        """Connect to Milvus using connection_args and load the target collection when it already exists.
+        """
         host = self.connection_args["host"]
         port = self.connection_args["port"]
         db_name = self.connection_args.get("db_name", "default")
@@ -72,6 +76,14 @@ class MilvusStore(Store):
 
     def _initialize_by_component_configer(self,
                                           milvus_store_configer: ComponentConfiger) -> 'DocProcessor':
+        """Initialize the milvus store fields from the store configer, applying the built-in defaults when options are absent.
+
+        Args:
+            milvus_store_configer(ComponentConfiger): The configer containing the store settings.
+
+        Returns:
+            DocProcessor: The initialized store instance.
+        """
         super()._initialize_by_component_configer(milvus_store_configer)
         if hasattr(milvus_store_configer, "connection_args"):
             self.connection_args = milvus_store_configer.connection_args
