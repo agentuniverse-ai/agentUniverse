@@ -24,7 +24,6 @@ from agentuniverse.agent.action.knowledge.doc_processor.doc_processor_manager im
 from agentuniverse.agent.action.knowledge.query_paraphraser.query_paraphraser import QueryParaphraser
 from agentuniverse.agent.action.knowledge.query_paraphraser.query_paraphraser_manager import QueryParaphraserManager
 from agentuniverse.agent.action.knowledge.rag_router.rag_router_manager import RagRouterManager
-from agentuniverse.agent.action.knowledge.reader.reader import Reader
 from agentuniverse.agent.action.knowledge.reader.reader_manager import ReaderManager
 from agentuniverse.base.annotation.trace import trace_knowledge
 from agentuniverse.base.component.component_base import ComponentBase
@@ -176,6 +175,8 @@ class Knowledge(ComponentBase):
         """Insert the knowledge.
 
         Load data by the reader and insert the documents into the store.
+        Each store receives a deep copy of the processed batch so that its
+        embedding and metadata mutations cannot affect another store.
         """
         document_list: List[Document] = self._load_data(**kwargs)
         document_list = self._insert_process(document_list)
@@ -188,7 +189,7 @@ class Knowledge(ComponentBase):
             futures.append(
                 self.insert_executor.submit(
                     StoreManager().get_instance_obj(_store_code, strict=True).insert_document,
-                    document_list))
+                    deepcopy(document_list)))
         wait(futures, return_when=ALL_COMPLETED)
         for future in futures:
             try:
@@ -202,6 +203,7 @@ class Knowledge(ComponentBase):
         """Update the knowledge.
 
         Load data by the reader and update the documents into the store.
+        Each store receives an independent copy of the processed batch.
         """
         document_list: List[Document] = self._load_data(**kwargs)
         document_list = self._update_process(document_list)
@@ -214,7 +216,7 @@ class Knowledge(ComponentBase):
             futures.append(
                 self.insert_executor.submit(
                     StoreManager().get_instance_obj(_store_code, strict=True).update_document,
-                    document_list))
+                    deepcopy(document_list)))
         wait(futures, return_when=ALL_COMPLETED)
         for future in futures:
             try:
