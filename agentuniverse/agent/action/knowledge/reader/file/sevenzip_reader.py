@@ -1,7 +1,7 @@
 import os
 import tempfile
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import List, Union, Optional, Dict, Type
 
 from agentuniverse.agent.action.knowledge.reader.reader import Reader
@@ -45,6 +45,10 @@ class SevenZipReader(Reader):
         Note:
             需要py7zr库来读取7Z文件：`pip install py7zr`
         """
+        file = Path(file)
+        if not file.exists():
+            raise FileNotFoundError(f"7Z file not found: {file}")
+
         # 尝试导入py7zr库
         try:
             import py7zr
@@ -54,14 +58,6 @@ class SevenZipReader(Reader):
                 "py7zr is required to read 7Z files: "
                 "`pip install py7zr`"
             )
-
-        # 将字符串路径转换为Path对象
-        if isinstance(file, str):
-            file = Path(file)
-
-        # 检查文件是否存在
-        if not file.exists():
-            raise FileNotFoundError(f"7Z file not found: {file}")
 
         # 创建临时目录用于解压文件
         temp_dir = tempfile.mkdtemp(prefix="7z_reader_")
@@ -102,53 +98,32 @@ class SevenZipReader(Reader):
         """递归处理7Z归档文件"""
         import py7zr
 
-        documents = []  # 存储提取的文档
-        total_extracted = 0  # 已提取文件总大小
-        file_count = 0  # 已处理文件计数
-        with py7zr.SevenZipFile(str(sevenzip_path), 'r') as archive:
-            archive.extractall(path=temp_dir)
-
         try:
-            # 以只读模式打开7Z文件
             with py7zr.SevenZipFile(str(sevenzip_path), 'r') as archive:
-                # 获取7Z文件中的所有条目
-                entries = archive.getnames()
-                
-                # 获取每个文件的详细信息
-                file_info_map = {}
-                files_info = archive.list()
-                
-                for file_info in files_info:
-                    file_info_map[file_info.filename] = file_info
+                selected_entries = []
+                total_extracted = 0
 
-                # 遍历每个条目
-                for entry_name in entries:
-                    # 检查是否达到最大文件数限制
-                    if file_count >= max_files:
+                # Validate every candidate from metadata before extracting any
+                # archive data. This keeps path and resource limits effective.
+                for file_info in archive.list():
+                    if len(selected_entries) >= max_files:
                         break
 
-                    # 跳过目录条目（7z中目录以/结尾）
-                    if entry_name.endswith('/'):
+                    entry_name = file_info.filename
+                    if getattr(file_info, "is_directory", False):
+                        continue
+                    if not getattr(file_info, "is_file", True):
+                        continue
+                    if getattr(file_info, "is_symlink", False):
                         continue
                     if '.' not in entry_name:
                         continue
-                    if entry_name=='.':
+                    if self._is_unsafe_entry_name(entry_name):
                         continue
 
-                    # 安全检查：跳过包含".."或绝对路径的文件名
-                    if '..' in entry_name or entry_name.startswith('/'):
-                        continue
-
-                    # 获取文件信息
-                    file_info = file_info_map.get(entry_name)
-                    if not file_info:
-                        continue
-
-                    # 获取压缩后大小和未压缩大小
                     compressed_size = file_info.compressed or 0
                     uncompressed_size = file_info.uncompressed or 0
 
-                    # 检查压缩比，防止压缩炸弹攻击
                     if compressed_size > 0:
                         ratio = uncompressed_size / compressed_size
                         if ratio > max_compression_ratio:
@@ -156,70 +131,78 @@ class SevenZipReader(Reader):
                                 f"7Z entry has suspicious compression ratio: {entry_name}"
                             )
 
-                    # 跳过超过单文件大小限制的文件
                     if uncompressed_size > max_file_size:
                         continue
 
-                    # 检查是否超过总大小限制
                     if total_extracted + uncompressed_size > max_total_size:
                         break
 
-                    # 为每个文件创建独立的解压目录
-                    #extract_dir = os.path.join(temp_dir, f"extract_{file_count}")
-                    extract_dir = temp_dir
-                    os.makedirs(extract_dir, exist_ok=True)
+                    selected_entries.append((entry_name, uncompressed_size))
+                    total_extracted += uncompressed_size
 
-                    try:
-                        # 解压当前条目
-                        #archive.extract(path=extract_dir, targets=[entry_name])
-                        #archive.extract(entry_name,extract_dir)
-                        
-                        # 构建提取后的完整路径
-                        extracted_path = Path(extract_dir) / entry_name
-                        total_extracted += uncompressed_size
-                        file_count += 1
-
-                        # 构建完整路径（包含父路径信息）
-                        full_path = os.path.join(parent_path, entry_name) if parent_path else entry_name
-
-                        # 如果是嵌套的7Z文件且未达到最大深度，递归处理
-                        if extracted_path.suffix.lower() == '.7z' and current_depth < max_depth:
-                            nested_docs = self._process_7z(
-                                sevenzip_path=extracted_path,
-                                temp_dir=temp_dir,
-                                current_depth=current_depth + 1,
-                                max_depth=max_depth,
-                                max_file_size=max_file_size,
-                                max_total_size=max_total_size - total_extracted,
-                                max_files=max_files - file_count,
-                                max_compression_ratio=max_compression_ratio,
-                                base_metadata=base_metadata,
-                                archive_root=archive_root,
-                                parent_path=full_path,
-                            )
-                            documents.extend(nested_docs)
-                        else:
-                            # 处理普通文件
-                            doc = self._process_file(
-                                file_path=extracted_path,
-                                archive_path=full_path,
-                                archive_root=archive_root,
-                                archive_depth=current_depth,
-                                base_metadata=base_metadata,
-                            )
-                            if doc:
-                                documents.extend(doc)
-
-                    except Exception as e:
-                        # 跳过处理失败的文件，继续处理其他文件
-                        continue
+                if selected_entries:
+                    archive.extract(
+                        path=temp_dir,
+                        targets=[entry_name for entry_name, _ in selected_entries],
+                    )
 
         except (py7zr.Bad7zFile, py7zr.exceptions.Bad7zFile) as e:
             raise ValueError(f"Failed to read 7Z file: {str(e)}")
+        except ValueError:
+            raise
         except Exception as e:
             raise ValueError(f"Error processing 7Z file: {str(e)}")
 
+        documents = []
+        file_count = len(selected_entries)
+        for entry_name, _ in selected_entries:
+            extracted_path = Path(temp_dir) / entry_name
+            full_path = os.path.join(parent_path, entry_name) if parent_path else entry_name
+
+            try:
+                if extracted_path.suffix.lower() == '.7z' and current_depth < max_depth:
+                    nested_docs = self._process_7z(
+                        sevenzip_path=extracted_path,
+                        temp_dir=temp_dir,
+                        current_depth=current_depth + 1,
+                        max_depth=max_depth,
+                        max_file_size=max_file_size,
+                        max_total_size=max_total_size - total_extracted,
+                        max_files=max_files - file_count,
+                        max_compression_ratio=max_compression_ratio,
+                        base_metadata=base_metadata,
+                        archive_root=archive_root,
+                        parent_path=full_path,
+                    )
+                    documents.extend(nested_docs)
+                else:
+                    doc = self._process_file(
+                        file_path=extracted_path,
+                        archive_path=full_path,
+                        archive_root=archive_root,
+                        archive_depth=current_depth,
+                        base_metadata=base_metadata,
+                    )
+                    if doc:
+                        documents.extend(doc)
+            except Exception:
+                continue
+
         return documents
+
+    @staticmethod
+    def _is_unsafe_entry_name(entry_name: str) -> bool:
+        """Return whether an archive entry can escape the extraction root."""
+        if not entry_name or entry_name == ".":
+            return True
+
+        posix_path = PurePosixPath(entry_name)
+        windows_path = PureWindowsPath(entry_name)
+        if posix_path.is_absolute() or windows_path.is_absolute():
+            return True
+        if ".." in posix_path.parts or ".." in windows_path.parts:
+            return True
+        return False
 
     def _process_file(
         self,
