@@ -1,0 +1,39 @@
+name: 'dangling_reference_detector'
+description: 'flag references to figures/tables/equations whose anchor is missing from the document'
+
+metadata:
+  type: 'DOC_PROCESSOR'
+  module: 'agentuniverse.agent.action.knowledge.doc_processor.dangling_reference_detector'
+  class: 'DanglingReferenceDetector'
+
+# Maximum number of entries kept in metadata['dangling_references'] and
+# metadata['unreferenced_anchors']. The dangling_count and
+# unreferenced_anchor_count fields always carry the full totals. 0 disables
+# both lists. Must be >= 0.
+max_report: 30
+
+# Number of context characters kept on each side of every dangling
+# reference span. Must be >= 0.
+context_chars: 30
+
+# Maximum number of ids a range mention such as "Figures 3-5" expands to;
+# longer ranges are clamped to this many ids starting at the lower bound.
+# Must be >= 1.
+max_range_span: 50
+
+# When true (default) anchors that are never referenced ("unreferenced
+# anchors") are collected into metadata['unreferenced_anchors']. They are
+# informational and never affect reference_integrity.
+include_unreferenced: true
+
+# Metadata key for the dangling reference list; '' disables the list
+# (dangling_count is always written).
+dangling_key: 'dangling_references'
+
+# Metadata key for the unreferenced anchor list; '' disables the list
+# (unreferenced_anchor_count is always written).
+unreferenced_key: 'unreferenced_anchors'
+
+# Metadata key for the overall verdict, 'ok' when nothing dangles and
+# 'dangling' otherwise; '' disables the verdict.
+integrity_key: 'reference_integrity'
