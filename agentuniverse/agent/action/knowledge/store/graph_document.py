@@ -13,7 +13,7 @@ except ImportError:
     raise ImportError(
         "The functionality you are trying to use requires the pandas and pandas package. "
         "You can install it by running: pip install pandas"
-    )
+    ) from None
 
 
 class GraphDocument(Document):

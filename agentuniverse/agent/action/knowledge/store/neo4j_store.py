@@ -15,7 +15,7 @@ except ImportError:
     raise ImportError(
         "The functionality you are trying to use requires the neo4j and pandas package. "
         "You can install it by running: pip install neo4j pandas"
-    )
+    ) from None
 
 
 from agentuniverse.agent.action.knowledge.store.graph_document import GraphDocument
