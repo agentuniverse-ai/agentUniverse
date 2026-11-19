@@ -1,0 +1,23 @@
+name: resilient_search
+description: Search wrapped with bounded retry, timeout, fallback, and circuit-breaker policies.
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.resilient_tool
+  class: ResilientTool
+input_keys: [input]
+target_tool: google_search_tool
+max_attempts: 3
+timeout_seconds: 10
+initial_delay_seconds: 0.25
+backoff_multiplier: 2
+max_delay_seconds: 2
+jitter_seconds: 0.1
+idempotent: true
+allow_retry_non_idempotent: false
+retry_exception_names: [TimeoutError, ConnectionError]
+retry_on_error_result: false
+circuit_failure_threshold: 5
+circuit_recovery_seconds: 30
+fallback_enabled: false
+fallback_value: null
