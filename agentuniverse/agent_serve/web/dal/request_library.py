@@ -124,7 +124,7 @@ class RequestLibrary:
         finally:
             session.close()
 
-    def update_request(self, request_do: RequestDO):
+    def update_request(self, request_do: RequestDO) -> None:
         """Update the request data with same request id as the given
         RequestDO."""
         session = self.get_session()
@@ -140,7 +140,7 @@ class RequestLibrary:
         finally:
             session.close()
 
-    def update_gmt_modified(self, request_id: str):
+    def update_gmt_modified(self, request_id: str) -> None:
         """Update the request task latest active time."""
         session = self.get_session()
         try:
