@@ -123,17 +123,22 @@ class SummarizeCompressor(ContextCompressor):
             if seg.priority != ContextPriority.CRITICAL and seg.id not in preserve_ids
         ]
 
-        critical_tokens = self.calculate_total_tokens(critical_segments)
+        # Types outside summarize_types are passthrough content, not disposable.
+        passthrough_segments = [
+            seg for seg in summarizable if seg.type not in self.summarize_types
+        ]
+        preserved_segments = critical_segments + passthrough_segments
+        preserved_tokens = self.calculate_total_tokens(preserved_segments)
 
-        if critical_tokens >= target_tokens:
-            # CRITICAL alone exceeds target, return as-is
+        if preserved_tokens >= target_tokens:
+            # Content not eligible for summarization is returned as-is.
             elapsed_ms = (time.time() - start_time) * 1000
             metrics = self.create_metrics(
-                original_segments, critical_segments, elapsed_ms, "summarize"
+                original_segments, preserved_segments, elapsed_ms, "summarize"
             )
-            return critical_segments, metrics
+            return preserved_segments, metrics
 
-        available_tokens = target_tokens - critical_tokens
+        available_tokens = target_tokens - preserved_tokens
 
         # Step 2: Group segments for summarization
         groups = self._group_for_summarization(summarizable)
@@ -167,7 +172,7 @@ class SummarizeCompressor(ContextCompressor):
                 tokens_used += summary_seg.tokens
 
         # Step 4: Combine results
-        result = critical_segments + summarized
+        result = preserved_segments + summarized
 
         elapsed_ms = (time.time() - start_time) * 1000
         metrics = self.create_metrics(
