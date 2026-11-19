@@ -63,7 +63,7 @@ class ExecutingAgentTemplate(AgentTemplate):
         _context_values: dict = FrameworkContextManager().get_all_contexts()
         framework = agent_input.get('framework', [])
 
-        if len(framework) == 0:
+        if not framework:
             return {'executing_result': [],
                     'output_stream': input_object.get_data('output_stream', None)}
 
