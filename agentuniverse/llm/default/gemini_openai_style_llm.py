@@ -61,8 +61,8 @@ class GeminiOpenAIStyleLLM(OpenAIStyleLLM):
             return super().max_context_length()
         return GEMINI_MAX_CONTEXT_LENGTH.get(self.model_name, 8000)  # Default context length if model not found
 
-    """ 
-        The current Google client does not support setting a proxy, 
+    """
+        The current Google client does not support setting a proxy,
         therefore local debugging is not supported.
     """
     # def get_num_tokens(self, text: str) -> int:
