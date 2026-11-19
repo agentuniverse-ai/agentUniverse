@@ -42,7 +42,7 @@ class ComponentConfiger(object):
         return self.__metadata_module
 
     @metadata_module.setter
-    def metadata_module(self, metadata_module: str):
+    def metadata_module(self, metadata_module: str) -> None:
         self.__metadata_module = metadata_module
 
     @property
@@ -51,7 +51,7 @@ class ComponentConfiger(object):
         return self.__metadata_class
 
     @metadata_class.setter
-    def metadata_class(self, metadata_class: str):
+    def metadata_class(self, metadata_class: str) -> None:
         self.__metadata_class = metadata_class
 
     @property
@@ -59,7 +59,7 @@ class ComponentConfiger(object):
         return self.__yaml_func_instance
 
     @yaml_func_instance.setter
-    def yaml_func_instance(self, value):
+    def yaml_func_instance(self, value) -> None:
         self.__yaml_func_instance = value
 
     @property
@@ -67,7 +67,7 @@ class ComponentConfiger(object):
         return self.__default_llm_configer
 
     @default_llm_configer.setter
-    def default_llm_configer(self, value: DefaultLLMConfiger):
+    def default_llm_configer(self, value: DefaultLLMConfiger) -> None:
         self.__default_llm_configer = value
 
     @property
