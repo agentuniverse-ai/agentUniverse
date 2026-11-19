@@ -1,0 +1,67 @@
+name: http_status_tool
+description: "HTTP status-code semantics tool — pure stdlib with the IANA status registry embedded, no network required. Look up one code's full record (mode='lookup': IANA name or 'Unassigned', reason phrase, 1xx-5xx category with RFC 9110 meaning, retryability policy 408/429 + 5xx-except-501/505, RFC 9111 default cacheability, common causes), aggregate a list of codes (mode='batch': category histogram, retryable and unregistered counts, top codes), get the complete retry decision for a code and optional method (mode='is_retryable': retryable + reason, RFC 9110 method idempotency, safe_to_retry with a POST note, deterministic backoff recommendation), and list a class (mode='category': all registered codes of 1xx-5xx plus the class description)."
+tool_type: api
+metadata:
+  type: TOOL
+  module: agentuniverse.agent.action.tool.common_tool.http_status_tool
+  class: HttpStatusTool
+input_keys:
+  - mode
+args_model:
+  mode:
+    type: string
+    description: Operation mode — lookup, batch, is_retryable or category.
+    required: true
+  code:
+    type: integer
+    description: Single HTTP status code (100..599) for lookup and is_retryable modes.
+    required: false
+  codes:
+    type: array
+    description: List of HTTP status codes (100..599 each) for batch mode; duplicates count once per occurrence, at most 10000 entries.
+    required: false
+  method:
+    type: string
+    description: Optional HTTP method (uppercase token, e.g. GET, POST) for is_retryable mode; controls the idempotency verdict and safe_to_retry.
+    required: false
+  category:
+    type: string
+    description: Status class for category mode — one of 1xx, 2xx, 3xx, 4xx, 5xx.
+    required: false
+  top_k:
+    type: integer
+    description: Batch mode only — how many top codes to report (1..10, default 3, ties broken by ascending code).
+    required: false
+args_model_schema:
+  type: object
+  properties:
+    mode:
+      type: string
+      enum: ["lookup", "batch", "is_retryable", "category"]
+      description: Operation mode.
+    code:
+      type: integer
+      minimum: 100
+      maximum: 599
+      description: Single status code (lookup / is_retryable modes).
+    codes:
+      type: array
+      items:
+        type: integer
+        minimum: 100
+        maximum: 599
+      description: Status code list (batch mode).
+    method:
+      type: string
+      pattern: "^[A-Z][A-Z0-9-]*$"
+      description: Optional uppercase HTTP method token (is_retryable mode).
+    category:
+      type: string
+      enum: ["1xx", "2xx", "3xx", "4xx", "5xx"]
+      description: Status class (category mode).
+    top_k:
+      type: integer
+      minimum: 1
+      maximum: 10
+      description: Number of top codes to report (batch mode, default 3).
+  required: ["mode"]
