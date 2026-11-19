@@ -1,0 +1,2 @@
+# Please save your own secret key (e.g. openai api key) here.
+# DO NOT commit this file to git (it is listed in .gitignore).

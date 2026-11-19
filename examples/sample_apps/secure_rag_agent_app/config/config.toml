@@ -1,0 +1,44 @@
+[BASE_INFO]
+appname = 'secure_rag_agent_app'
+
+[PACKAGE_PATH_INFO]
+ROOT_PACKAGE = 'secure_rag_agent_app'
+
+[CORE_PACKAGE]
+default = ['secure_rag_agent_app.intelligence.agentic']
+agent = ['secure_rag_agent_app.intelligence.agentic.agent']
+knowledge = ['secure_rag_agent_app.intelligence.agentic.knowledge']
+llm = ['secure_rag_agent_app.intelligence.agentic.llm']
+planner = []
+tool = ['secure_rag_agent_app.intelligence.agentic.tool']
+memory = ['secure_rag_agent_app.intelligence.agentic.memory']
+service = ['secure_rag_agent_app.intelligence.service.agent_service']
+prompt = ['secure_rag_agent_app.intelligence.agentic.prompt']
+product = []
+workflow = ['secure_rag_agent_app.intelligence.agentic.work_pattern']
+store = []
+rag_router = []
+doc_processor = []
+query_paraphraser = []
+memory_compressor = []
+memory_storage = []
+
+[SUB_CONFIG_PATH]
+log_config_path = './log_config.toml'
+custom_key_path = './custom_key.toml'
+
+[DB]
+system_db_uri = ''
+
+[GUNICORN]
+activate = 'false'
+gunicorn_config_path = './gunicorn_config.toml'
+
+[GRPC]
+activate = 'false'
+max_workers = 10
+server_port = 50051
+
+[MONITOR]
+activate = false
+dir = './monitor'

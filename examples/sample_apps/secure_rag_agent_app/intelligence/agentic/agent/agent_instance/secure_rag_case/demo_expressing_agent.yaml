@@ -1,0 +1,15 @@
+info:
+  name: 'demo_secure_expressor'
+  description: 'demo secure expressor instance for secure RAG workflow'
+profile:
+  prompt_version: demo_secure_expressor.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.1
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'secure_rag_agent_app.intelligence.agentic.agent.agent_template.demo_secure_expressor'
+  class: 'ExpressingAgentTemplate'

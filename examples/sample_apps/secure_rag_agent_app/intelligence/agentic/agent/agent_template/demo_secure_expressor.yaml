@@ -1,0 +1,15 @@
+info:
+  name: 'demo_secure_expressor'
+  description: 'demo secure expressor for secure RAG work pattern'
+profile:
+  prompt_version: demo_secure_expressor.cn
+  llm_model:
+    name: 'qwen_llm'
+    model_name: 'qwen-max'
+    temperature: 0.1
+memory:
+  name: 'demo_memory'
+metadata:
+  type: 'AGENT'
+  module: 'agentuniverse.agent.template.expressing_agent_template'
+  class: 'ExpressingAgentTemplate'
