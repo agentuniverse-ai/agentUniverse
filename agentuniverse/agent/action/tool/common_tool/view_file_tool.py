@@ -14,10 +14,25 @@ from agentuniverse.agent.action.tool.common_tool.file_path_utils import resolve_
 
 
 class ViewFileTool(Tool):
+    """Tool that returns a selected line range of a file inside the configured base directory as a JSON string.
+    """
     base_dir: str = "."
 
     @staticmethod
     def _normalize_line_number(value, field_name: str, allow_none: bool = False):
+        """Normalize a line number value into an int, allowing None only when allow_none is set.
+
+        Args:
+            value: The raw line number.
+            field_name(str): Field name used in error messages.
+            allow_none(bool): Whether None is allowed.
+
+        Returns:
+            The normalized int or None.
+
+        Raises:
+            ValueError: If the value is not a canonical integer.
+        """
         if value is None and allow_none:
             return None
         if isinstance(value, bool):
@@ -39,6 +54,16 @@ class ViewFileTool(Tool):
                 start_line: int = 0,
                 end_line: int = None
                 ) -> str:
+        """Read the requested line range of the file and return it as a JSON string with status information.
+
+        Args:
+            file_path(str | ToolInput): Path of the file, or a ToolInput holding it.
+            start_line(int): First line to read (0-based).
+            end_line(int): Exclusive end line.
+
+        Returns:
+            str: A JSON string with the content and status.
+        """
         if isinstance(file_path, ToolInput):
             params = file_path.to_dict()
             start_line = params.get('start_line', start_line)
