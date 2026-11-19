@@ -93,6 +93,12 @@ class FinancialIndicatorExtractor(DocProcessor):
     skip_on_error: bool = True
 
     def __init__(self, **data):
+        """Initialize the extractor, defaulting metrics to the built-in list.
+
+        Args:
+            **data: Keyword arguments forwarded to the base component
+                configuration.
+        """
         super().__init__(**data)
         if self.metrics is None:
             self.metrics = [
