@@ -26,7 +26,7 @@ class ApplicationConfigManager(object):
         return self.__app_configer
 
     @app_configer.setter
-    def app_configer(self, app_configer: AppConfiger):
+    def app_configer(self, app_configer: AppConfiger) -> None:
         """Set the AppConfiger object."""
         self.__app_configer = app_configer
 
