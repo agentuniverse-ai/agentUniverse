@@ -277,8 +277,6 @@ class SevenZipReader(Reader):
             self._reader_cache[suffix] = reader_class
             return reader_class()
 
-        return None
-
     def _get_reader_class(self, suffix: str) -> Optional[Type[Reader]]:
         """将文件扩展名映射到读取器类"""
         # 定义文件扩展名到读取器名称的映射
