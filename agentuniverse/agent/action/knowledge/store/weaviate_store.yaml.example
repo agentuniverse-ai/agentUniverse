@@ -1,0 +1,18 @@
+name: 'weaviate_store'
+description: 'Weaviate vector store'
+collection_name: 'agentuniverse'
+distance: 'COSINE'
+similarity_top_k: 10
+with_vectors: false
+connection_args:
+  http_host: 'localhost'
+  http_port: 8080
+  http_secure: false
+  grpc_host: 'localhost'
+  grpc_port: 50051
+  grpc_secure: false
+# api_key: 'your-weaviate-api-key'
+metadata:
+  type: 'STORE'
+  module: 'agentuniverse.agent.action.knowledge.store.weaviate_store'
+  class: 'WeaviateStore'
